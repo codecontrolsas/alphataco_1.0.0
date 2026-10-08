@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { toast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import { Logger } from '@/lib/logger';
 import moment from 'moment';
 import { useEffect, useState } from 'react';
@@ -50,11 +50,7 @@ export function BulkStatusModal({ isOpen, onClose, selectedRows, onSuccess }: Bu
 
   const handleSave = async () => {
     if (!isFormValid()) {
-      toast({
-        title: 'Error',
-        description: 'Por favor selecciona un estado.',
-        variant: 'destructive',
-      });
+      toast.error('Error', { description: 'Por favor selecciona un estado.', duration: Infinity });
       return;
     }
 
@@ -67,10 +63,7 @@ export function BulkStatusModal({ isOpen, onClose, selectedRows, onSuccess }: Bu
       // Actualizar el estado de todos los partes diarios seleccionados
       await updateMultipleDailyReportStatus(selectedIds, status);
 
-      toast({
-        title: 'Éxito',
-        description: `Se actualizó el estado de ${selectedRows.length} parte${selectedRows.length > 1 ? 's' : ''} diario${selectedRows.length > 1 ? 's' : ''} a "${status}".`,
-      });
+      toast.success('Éxito', { description: `Se actualizó el estado de ${selectedRows.length} parte${selectedRows.length > 1 ? 's' : ''} diario${selectedRows.length > 1 ? 's' : ''} a "${status}".` });
 
       // Llamar onSuccess para refrescar la tabla
       if (onSuccess) {
@@ -80,11 +73,7 @@ export function BulkStatusModal({ isOpen, onClose, selectedRows, onSuccess }: Bu
       onClose();
     } catch (error) {
       logger.error('Error al actualizar los estados seleccionados', { data: { error } });
-      toast({
-        title: 'Error',
-        description: 'Ocurrió un error al actualizar los estados.',
-        variant: 'destructive',
-      });
+      toast.error('Error', { description: 'Ocurrió un error al actualizar los estados.', duration: Infinity });
     } finally {
       setIsLoading(false);
     }

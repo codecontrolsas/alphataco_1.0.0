@@ -13,7 +13,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useToast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import { Logger } from '@/lib/logger';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, Eye, FileSpreadsheet, FileText, ImageIcon, Loader2, Trash2, Upload } from 'lucide-react';
@@ -47,7 +47,6 @@ export default function ContractDocuments({ id }: ContractDocumentsProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [documentToDelete, setDocumentToDelete] = useState<ContractDocument | null>(null);
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const queryKey = ['contract-documents', id] as const;
 
@@ -74,16 +73,12 @@ export default function ContractDocuments({ id }: ContractDocumentsProps) {
       setDocDescription('');
       setDocType('Contrato');
       queryClient.invalidateQueries({ queryKey });
-      toast({ title: '¡Éxito!', description: 'Los documentos se han subido correctamente.' });
+      toast.success('¡Éxito!', { description: 'Los documentos se han subido correctamente.' });
     },
     onError: (error: Error) => {
       logger.error('Error al subir documentos', { data: { error } });
       queryClient.invalidateQueries({ queryKey });
-      toast({
-        title: 'Error',
-        description: error.message || 'Ocurrió un error al subir los documentos. Intenta de nuevo.',
-        variant: 'destructive',
-      });
+      toast.error('Error', { description: error.message || 'Ocurrió un error al subir los documentos. Intenta de nuevo.', duration: Infinity });
     },
   });
 
@@ -94,15 +89,11 @@ export default function ContractDocuments({ id }: ContractDocumentsProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey });
-      toast({ title: 'Documento eliminado', description: 'El documento se ha eliminado correctamente.' });
+      toast.success('Documento eliminado', { description: 'El documento se ha eliminado correctamente.' });
     },
     onError: (error: Error) => {
       logger.error('Error al eliminar documento', { data: { error } });
-      toast({
-        title: 'Error',
-        description: error.message || 'No se pudo eliminar el documento. Intenta de nuevo.',
-        variant: 'destructive',
-      });
+      toast.error('Error', { description: error.message || 'No se pudo eliminar el documento. Intenta de nuevo.', duration: Infinity });
     },
     onSettled: () => setDocumentToDelete(null),
   });
@@ -128,10 +119,7 @@ export default function ContractDocuments({ id }: ContractDocumentsProps) {
     const newFiles = Array.from(files);
     setSelectedFiles((prev) => [...prev, ...newFiles]);
     if (fileInputRef.current) fileInputRef.current.value = '';
-    toast({
-      title: 'Archivos seleccionados',
-      description: `Se han seleccionado ${newFiles.length} archivo(s). Presiona "Subir documento" para completar la carga.`,
-    });
+    toast('Archivos seleccionados', { description: `Se han seleccionado ${newFiles.length} archivo(s). Presiona "Subir documento" para completar la carga.` });
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -149,7 +137,7 @@ export default function ContractDocuments({ id }: ContractDocumentsProps) {
 
   const uploadSelectedFiles = () => {
     if (selectedFiles.length === 0) {
-      toast({ title: 'No hay archivos', description: 'Selecciona al menos un archivo para subir.' });
+      toast.warning('No hay archivos', { description: 'Selecciona al menos un archivo para subir.' });
       return;
     }
     uploadMutation.mutate(selectedFiles);
@@ -158,7 +146,7 @@ export default function ContractDocuments({ id }: ContractDocumentsProps) {
   const handleDownload = async (doc: ContractDocument) => {
     const result = await getContractDocumentDownloadUrl(doc.id);
     if (!result.ok) {
-      toast({ title: 'Error', description: result.error, variant: 'destructive' });
+      toast.error('Error', { description: result.error, duration: Infinity });
       return;
     }
     window.open(result.data.url, '_blank');

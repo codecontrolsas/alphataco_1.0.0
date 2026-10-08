@@ -1,11 +1,26 @@
 'use strict';
 import { formatDocumentTypeName, formatPathSegment } from '@/shared/utils/legacy-mappers';
 import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { extendTailwindMerge } from 'tailwind-merge';
 
 // Persistencia de documentos (Prisma) y rol del usuario en la empresa: server actions.
 export { getActualRole } from '@/shared/actions/shared-users.server';
 export { getAllDocumentsByIdDocumentTypeCientSide, uploadDocument } from '@/shared/actions/documents.server';
+
+// tailwind-merge trata cualquier `text-<desconocido>` como color: sin este grupo,
+// `cn('text-overline', 'text-muted-foreground')` borraría la clase de rol tipográfico.
+const twMerge = extendTailwindMerge({
+  extend: {
+    classGroups: {
+      'font-size': [
+        { text: ['display', 'page-title', 'section', 'overline', 'body', 'cell', 'label', 'caption', 'kpi'] },
+      ],
+      // Sin estos, `shadow-overlay` y `ease-out-quick` se toman como color / no chocan con su grupo.
+      shadow: [{ shadow: ['overlay'] }],
+      ease: [{ ease: ['out-quick'] }],
+    },
+  },
+});
 
 // eslint-disable-next-line react-hooks/rules-of-hooks
 export function cn(...inputs: ClassValue[]) {

@@ -49,7 +49,7 @@ export function getDocTypeColumns(
     {
       accessorKey: 'name',
       id: 'name',
-      meta: { title: 'Nombre' },
+      meta: { title: 'Nombre', mobile: { role: 'title', priority: 1 } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
       cell: ({ row }) => (
         <div className={`font-medium ${!row.original.is_active ? 'text-muted-foreground line-through' : ''}`}>
@@ -62,7 +62,7 @@ export function getDocTypeColumns(
     {
       accessorKey: 'mandatory',
       id: 'mandatory',
-      meta: { title: 'Obligatorio' },
+      meta: { title: 'Obligatorio', mobile: { role: 'field', priority: 1 } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Obligatorio" />,
       cell: ({ row }) => <BoolBadge value={row.original.mandatory} />,
       filterFn: (row, id, value: string[]) => {
@@ -75,7 +75,7 @@ export function getDocTypeColumns(
     {
       accessorKey: 'explired',
       id: 'explired',
-      meta: { title: 'Con vencimiento' },
+      meta: { title: 'Con vencimiento', mobile: { role: 'field', priority: 2 } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Con vencimiento" />,
       cell: ({ row }) => <BoolBadge value={row.original.explired} />,
       filterFn: (row, id, value: string[]) => {
@@ -88,7 +88,7 @@ export function getDocTypeColumns(
     {
       accessorKey: 'special',
       id: 'special',
-      meta: { title: 'Condicional' },
+      meta: { title: 'Condicional', mobile: { role: 'field', priority: 3 } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Condicional" />,
       cell: ({ row }) => <BoolBadge value={row.original.special} />,
       filterFn: (row, id, value: string[]) => {
@@ -183,7 +183,7 @@ export function getDocTypeColumns(
   cols.push({
     accessorKey: 'is_active',
     id: 'is_active',
-    meta: { title: 'Estado' },
+    meta: { title: 'Estado', mobile: { role: 'status' } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
     cell: ({ row }) => (
       <Badge variant={row.original.is_active ? 'success' : 'secondary'}>

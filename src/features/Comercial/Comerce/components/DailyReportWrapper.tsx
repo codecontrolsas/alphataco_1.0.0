@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { Skeleton } from '@/components/ui/skeleton';
-import { toast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import { getFilteredDailyReportRows } from '@/features/Operaciones/Certificacion/actions/queries.server';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import { DataTableDatePicker } from '@/shared/components/data-table/filters/data-table-date-picker';
@@ -157,11 +157,11 @@ export default function DailyReportWrapper() {
   }, [refetchTableData]);
 
   const handleViewRow = useCallback((row: TableRow) => {
-    toast({ title: 'Detalle del servicio', description: `${row.customer} - ${row.services}` });
+    toast('Detalle del servicio', { description: `${row.customer} - ${row.services}` });
   }, []);
 
   const handleViewHistory = useCallback((row: TableRow) => {
-    toast({ title: 'Historial del servicio', description: `${row.customer} - ${row.services}` });
+    toast('Historial del servicio', { description: `${row.customer} - ${row.services}` });
   }, []);
 
   // Ya no necesitamos este useEffect, los datos se cargan automáticamente con useQuery

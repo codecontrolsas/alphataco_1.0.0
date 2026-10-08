@@ -250,7 +250,7 @@ export function AsignarTallerDialog({ desvio, open, onClose, workshops, sectors 
             {hasWorkOrder ? (
               <span className="flex items-center gap-2">
                 Este ítem ya tiene una Orden de Trabajo asignada:
-                <Badge variant="default" className="bg-blue-600">
+                <Badge variant="info">
                   {desvio.workOrderNumber}
                 </Badge>
               </span>

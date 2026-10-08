@@ -3,6 +3,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Mapeos a variables (cambian con .dark). Ver docs/rediseno-ui/DISENO.md §2. */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -36,18 +37,8 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  /* `max(0px, ...)`: con --radius: 0 el calc daria negativo, que es un border-radius
-     invalido y el navegador descarta la declaracion entera. Clamp explicito. */
-  --radius-sm: max(0px, calc(var(--radius) - 4px));
-  --radius-md: max(0px, calc(var(--radius) - 2px));
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
-  --radius-4xl: calc(var(--radius) + 16px);
 
-  /* Colores de marca. `brand` es el color de accion principal de la plataforma y
-     sigue al theme: cambiar `--primary` mas abajo lo cambia en toda la app. */
+  /* Colores de marca heredados (siguen en uso): `brand` = `primary`. */
   --color-brand: var(--primary);
   --color-brand-foreground: var(--primary-foreground);
   --color-surface: var(--card);
@@ -55,149 +46,406 @@
   --color-surface-muted: var(--muted);
   --color-surface-muted-foreground: var(--muted-foreground);
 
-  /* Custom widths */
-  --width-sidebar-open: 16rem;
-  --width-sidebar-close: 6rem;
+  /* Superficies, líneas y texto */
+  --color-canvas: var(--canvas);
+  --color-panel-2: var(--panel-2);
+  --color-border-strong: var(--border-strong);
+  --color-fg-subtle: var(--fg-subtle);
 
-  /* Custom breakpoints */
-  --breakpoint-cardMedia: 1227px;
+  /* Marca */
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-text: var(--primary-text);
+
+  /* Estados: solid, soft (fondo), border y text */
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-border: var(--success-border);
+  --color-success-text: var(--success-text);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-border: var(--warning-border);
+  --color-warning-text: var(--warning-text);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-border: var(--danger-border);
+  --color-danger-text: var(--danger-text);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-info-border: var(--info-border);
+  --color-info-text: var(--info-text);
+  --color-neutral: var(--neutral);
+  --color-neutral-soft: var(--neutral-soft);
+  --color-neutral-border: var(--neutral-border);
+  --color-neutral-text: var(--neutral-text);
+
+  /* Gráficos */
+  --color-chart-6: var(--chart-6);
+  --color-chart-other: var(--chart-other);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-axis: var(--chart-axis);
+
+  /* Familias (las variables las inyecta next/font en <html>, ver src/app/fonts.ts) */
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+
+  /* Sombra solo para capas flotantes; el valor cambia en .dark */
+  --shadow-overlay: var(--shadow-overlay-value);
+}
+
+/* Valores estáticos */
+@theme {
+  /* Radios: todo 0. `rounded-full` no sale de acá: queda en 9999px (avatar, punto de estado, switch). */
+  --radius: 0; /* `rounded` a secas (sin esto Tailwind lo deja en 0.25rem) */
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-2xl: 0;
+  --radius-3xl: 0;
+  --radius-4xl: 0;
+
+  /* Escala tipográfica por rol (DISENO.md §3), base 16px */
+  --text-display: 2rem;
+  --text-display--line-height: 1.15;
+  --text-display--font-weight: 600;
+  --text-display--letter-spacing: -0.02em;
+  --text-page-title: 1.25rem;
+  --text-page-title--line-height: 1.3;
+  --text-page-title--font-weight: 600;
+  --text-page-title--letter-spacing: -0.01em;
+  --text-section: 0.9375rem;
+  --text-section--line-height: 1.35;
+  --text-section--font-weight: 600;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.5;
+  --text-body--font-weight: 400;
+  --text-cell: 0.8125rem;
+  --text-cell--line-height: 1.4;
+  --text-cell--font-weight: 400;
+  --text-label: 0.8125rem;
+  --text-label--line-height: 1.3;
+  --text-label--font-weight: 500;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.4;
+  --text-caption--font-weight: 400;
+  --text-kpi: 1.75rem;
+  --text-kpi--line-height: 1.1;
+  --text-kpi--font-weight: 600;
+  --text-kpi--letter-spacing: -0.02em;
+
+  /* Motion */
+  --ease-out-quick: cubic-bezier(0.23, 1, 0.32, 1);
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-panel: 240ms;
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.148 0.004 228.8);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.148 0.004 228.8);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.148 0.004 228.8);
-  --primary: oklch(0.508 0.118 165.612);
-  --primary-foreground: oklch(0.979 0.021 166.113);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.963 0.002 197.1);
-  --muted-foreground: oklch(0.56 0.021 213.5);
-  --accent: oklch(0.963 0.002 197.1);
-  --accent-foreground: oklch(0.218 0.008 223.9);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.925 0.005 214.3);
-  --input: oklch(0.925 0.005 214.3);
-  --ring: oklch(0.723 0.014 214.4);
-  --chart-1: oklch(0.845 0.143 164.978);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.596 0.145 163.225);
-  --chart-4: oklch(0.508 0.118 165.612);
-  --chart-5: oklch(0.432 0.095 166.913);
   --radius: 0;
-  --sidebar: oklch(0.987 0.002 197.1);
-  --sidebar-foreground: oklch(0.148 0.004 228.8);
-  --sidebar-primary: oklch(0.596 0.145 163.225);
-  --sidebar-primary-foreground: oklch(0.979 0.021 166.113);
-  --sidebar-accent: oklch(0.963 0.002 197.1);
-  --sidebar-accent-foreground: oklch(0.218 0.008 223.9);
-  --sidebar-border: oklch(0.925 0.005 214.3);
-  --sidebar-ring: oklch(0.723 0.014 214.4);
-  /* No viene en el theme, pero `--color-destructive-foreground` esta mapeado y en uso. */
-  --destructive-foreground: oklch(0.985 0 0);
+
+  /* Superficies (canvas gris + paneles blancos separados por hairline) */
+  --canvas: oklch(0.975 0.003 240);
+  --background: oklch(0.975 0.003 240);
+  --card: oklch(1 0 0);
+  --panel-2: oklch(0.985 0.002 240);
+  --popover: oklch(1 0 0);
+  --muted: oklch(0.955 0.004 240);
+
+  /* Texto: 4 niveles */
+  --foreground: oklch(0.205 0.012 245);
+  --card-foreground: oklch(0.205 0.012 245);
+  --popover-foreground: oklch(0.205 0.012 245);
+  --muted-foreground: oklch(0.50 0.016 245);
+  --fg-subtle: oklch(0.60 0.014 245); /* solo placeholders/íconos/disabled */
+
+  /* Líneas */
+  --border: oklch(0.905 0.006 245);
+  --border-strong: oklch(0.82 0.008 245);
+  --input: oklch(0.64 0.014 245);
+
+  /* Marca */
+  --primary: oklch(0.505 0.11 163);
+  --primary-foreground: oklch(0.99 0.01 165);
+  --primary-hover: oklch(0.445 0.10 163);
+  --primary-text: oklch(0.47 0.10 163);
+  --primary-soft: oklch(0.965 0.025 163);
+  --ring: oklch(0.56 0.12 163);
+
+  /* Neutro de acción (shadcn) */
+  --secondary: oklch(1 0 0);
+  --secondary-foreground: oklch(0.205 0.012 245);
+  --accent: oklch(0.955 0.004 240);
+  --accent-foreground: oklch(0.205 0.012 245);
+
+  /* Estados */
+  --success: oklch(0.55 0.14 145);
+  --success-soft: oklch(0.965 0.035 145);
+  --success-border: oklch(0.85 0.07 145);
+  --success-text: oklch(0.44 0.11 145);
+
+  --warning: oklch(0.65 0.135 70);
+  --warning-soft: oklch(0.968 0.04 85);
+  --warning-border: oklch(0.86 0.08 80);
+  --warning-text: oklch(0.47 0.10 65);
+
+  --danger: oklch(0.525 0.19 27);
+  --danger-soft: oklch(0.965 0.022 25);
+  --danger-border: oklch(0.86 0.06 25);
+  --danger-text: oklch(0.48 0.17 27);
+
+  --info: oklch(0.55 0.15 250);
+  --info-soft: oklch(0.965 0.022 250);
+  --info-border: oklch(0.86 0.05 250);
+  --info-text: oklch(0.47 0.13 250);
+
+  --neutral: oklch(0.55 0.014 245);
+  --neutral-soft: oklch(0.955 0.004 245);
+  --neutral-border: oklch(0.88 0.006 245);
+  --neutral-text: oklch(0.45 0.015 245);
+
+  /* Compatibilidad shadcn */
+  --destructive: var(--danger);
+  --destructive-foreground: oklch(0.99 0 0);
+
+  /* Gráficos (validados, DISENO.md §2.5) */
+  --chart-1: oklch(0.562 0.117 163.8);
+  --chart-2: oklch(0.575 0.163 255.5);
+  --chart-3: oklch(0.671 0.175 40.6);
+  --chart-4: oklch(0.433 0.167 283.6);
+  --chart-5: oklch(0.716 0.141 357.4);
+  --chart-6: oklch(0.764 0.161 75.1);
+  --chart-other: oklch(0.70 0.01 245);
+  --chart-grid: oklch(0.92 0.004 245);
+  --chart-axis: oklch(0.82 0.008 245);
+
+  /* Sidebar: mismo plano que el canvas, separado por hairline */
+  --sidebar: oklch(0.975 0.003 240);
+  --sidebar-foreground: oklch(0.205 0.012 245);
+  --sidebar-primary: oklch(0.505 0.11 163);
+  --sidebar-primary-foreground: oklch(0.99 0.01 165);
+  --sidebar-accent: oklch(0.945 0.03 163);
+  --sidebar-accent-foreground: oklch(0.205 0.012 245);
+  --sidebar-border: oklch(0.905 0.006 245);
+  --sidebar-ring: oklch(0.56 0.12 163);
+
+  /* Layout y sombra de capas flotantes */
+  --page-max: 1440px;
+  --shadow-overlay-value: 0 0 0 1px oklch(0 0 0 / 0.04), 0 8px 24px -8px oklch(0 0 0 / 0.18);
 }
 
 .dark {
-  --background: oklch(0.148 0.004 228.8);
-  --foreground: oklch(0.987 0.002 197.1);
-  --card: oklch(0.218 0.008 223.9);
-  --card-foreground: oklch(0.987 0.002 197.1);
-  --popover: oklch(0.218 0.008 223.9);
-  --popover-foreground: oklch(0.987 0.002 197.1);
-  --primary: oklch(0.432 0.095 166.913);
-  --primary-foreground: oklch(0.979 0.021 166.113);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.275 0.011 216.9);
-  --muted-foreground: oklch(0.723 0.014 214.4);
-  --accent: oklch(0.275 0.011 216.9);
-  --accent-foreground: oklch(0.987 0.002 197.1);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.56 0.021 213.5);
-  --chart-1: oklch(0.845 0.143 164.978);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.596 0.145 163.225);
-  --chart-4: oklch(0.508 0.118 165.612);
-  --chart-5: oklch(0.432 0.095 166.913);
-  --sidebar: oklch(0.218 0.008 223.9);
-  --sidebar-foreground: oklch(0.987 0.002 197.1);
-  --sidebar-primary: oklch(0.696 0.17 162.48);
-  --sidebar-primary-foreground: oklch(0.262 0.051 172.552);
-  --sidebar-accent: oklch(0.275 0.011 216.9);
-  --sidebar-accent-foreground: oklch(0.987 0.002 197.1);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.56 0.021 213.5);
-  --destructive-foreground: oklch(0.985 0 0);
+  --canvas: oklch(0.165 0.006 245);
+  --background: oklch(0.165 0.006 245);
+  --card: oklch(0.195 0.007 245);
+  --panel-2: oklch(0.215 0.008 245);
+  --popover: oklch(0.225 0.008 245);
+  --muted: oklch(0.25 0.008 245);
+
+  --foreground: oklch(0.955 0.004 240);
+  --card-foreground: oklch(0.955 0.004 240);
+  --popover-foreground: oklch(0.955 0.004 240);
+  --muted-foreground: oklch(0.715 0.014 245);
+  --fg-subtle: oklch(0.60 0.012 245);
+
+  --border: oklch(0.30 0.008 245);
+  --border-strong: oklch(0.36 0.01 245);
+  --input: oklch(0.52 0.012 245);
+
+  --primary: oklch(0.73 0.14 163);
+  --primary-foreground: oklch(0.17 0.03 165);
+  --primary-hover: oklch(0.79 0.13 163);
+  --primary-text: oklch(0.76 0.14 163);
+  --primary-soft: oklch(0.26 0.035 163);
+  --ring: oklch(0.72 0.14 163);
+
+  --secondary: oklch(0.195 0.007 245);
+  --secondary-foreground: oklch(0.955 0.004 240);
+  --accent: oklch(0.25 0.008 245);
+  --accent-foreground: oklch(0.955 0.004 240);
+
+  --success: oklch(0.70 0.15 145);
+  --success-soft: oklch(0.26 0.045 145);
+  --success-border: oklch(0.40 0.07 145);
+  --success-text: oklch(0.82 0.13 145);
+  --warning: oklch(0.78 0.15 75);
+  --warning-soft: oklch(0.27 0.045 70);
+  --warning-border: oklch(0.42 0.07 70);
+  --warning-text: oklch(0.85 0.13 80);
+  --danger: oklch(0.58 0.19 25);
+  --danger-soft: oklch(0.27 0.06 25);
+  --danger-border: oklch(0.42 0.09 25);
+  --danger-text: oklch(0.80 0.11 25);
+  --info: oklch(0.70 0.13 250);
+  --info-soft: oklch(0.27 0.055 255);
+  --info-border: oklch(0.42 0.08 255);
+  --info-text: oklch(0.81 0.09 250);
+  --neutral: oklch(0.60 0.012 245);
+  --neutral-soft: oklch(0.27 0.008 245);
+  --neutral-border: oklch(0.38 0.01 245);
+  --neutral-text: oklch(0.80 0.012 245);
+
+  --destructive: var(--danger);
+  --destructive-foreground: oklch(0.99 0 0);
+
+  --chart-1: oklch(0.621 0.128 163.1);
+  --chart-2: oklch(0.622 0.161 255.1);
+  --chart-3: oklch(0.622 0.173 40.1);
+  --chart-4: oklch(0.670 0.145 286.8);
+  --chart-5: oklch(0.622 0.171 0.8);
+  --chart-6: oklch(0.670 0.143 73.2);
+  --chart-other: oklch(0.50 0.01 245);
+  --chart-grid: oklch(0.27 0.008 245);
+  --chart-axis: oklch(0.38 0.01 245);
+
+  --sidebar: oklch(0.165 0.006 245);
+  --sidebar-foreground: oklch(0.955 0.004 240);
+  --sidebar-primary: oklch(0.73 0.14 163);
+  --sidebar-primary-foreground: oklch(0.17 0.03 165);
+  --sidebar-accent: oklch(0.26 0.035 163);
+  --sidebar-accent-foreground: oklch(0.955 0.004 240);
+  --sidebar-border: oklch(0.30 0.008 245);
+  --sidebar-ring: oklch(0.72 0.14 163);
+
+  /* En oscuro la sombra no se lee: alcanza con el ring */
+  --shadow-overlay-value: 0 0 0 1px oklch(1 0 0 / 0.08);
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring;
+  }
+  html {
+    scroll-padding-top: 3.5rem; /* = h-14 del header sticky de la app */
   }
   body {
-    @apply bg-muted/90;
+    @apply bg-canvas text-foreground antialiased font-sans;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 1ms !important;
+      /* Sin esto, las animaciones infinitas (pulse, spin) parpadean a 1ms sin fin. */
+      animation-iteration-count: 1 !important;
+      transition-duration: 1ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
-html {
-  scroll-behavior: smooth;
+/* Overline / label de sección: 11px, 500, mayúsculas por CSS (el texto se escribe en caso natural). */
+@utility text-overline {
+  font-size: 0.6875rem;
+  line-height: 1.3;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
-details[open] summary ~ * {
-  animation: sweep 0.5s ease-in-out;
+/* Datos codificados: legajo, CUIT, patente, nº de comprobante, IDs. */
+@utility data-code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  font-variant-numeric: tabular-nums slashed-zero;
 }
 
-@keyframes sweep {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
+/*
+ * Máscara lateral que aparece solo cuando hay desborde horizontal (DISENO.md §4.6): el borde que tiene
+ * contenido oculto se desvanece. Usa una scroll timeline: sin desborde la timeline está inactiva, la animación
+ * no aplica y los dos bordes quedan en 0 (sin máscara). Navegadores sin `animation-timeline` (Firefox): sin
+ * máscara gracias al `@supports`; sin él, la animación corría por tiempo con duración 0 y `both` dejaba fijo el
+ * último keyframe (borde izquierdo desvanecido aunque no hubiera desborde).
+ */
+@property --scroll-fade-start {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --scroll-fade-end {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@keyframes scroll-fade-x {
+  0% {
+    --scroll-fade-start: 0px;
+    --scroll-fade-end: 24px;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+  8%,
+  92% {
+    --scroll-fade-start: 24px;
+    --scroll-fade-end: 24px;
+  }
+  100% {
+    --scroll-fade-start: 24px;
+    --scroll-fade-end: 0px;
+  }
+}
+@utility scroll-fade-x {
+  @supports (animation-timeline: scroll()) {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      var(--foreground) var(--scroll-fade-start),
+      var(--foreground) calc(100% - var(--scroll-fade-end)),
+      transparent
+    );
+    animation: scroll-fade-x linear both;
+    animation-timeline: scroll(x self);
   }
 }
 
-summary::after {
-  content: '';
-  width: 18px;
-  height: 10px;
-  background: url('https://uploads.sitepoint.com/wp-content/uploads/2023/10/1697699669arrow.svg') no-repeat;
-  background-size: cover;
-  transition: 0.2s;
+/*
+ * Fade de un solo lado, para scrollers con una columna fija en el borde opuesto (una máscara en los dos
+ * lados enmascararía esa columna). `scroll-fade-start`: solo el borde izquierdo (DataTable, acciones fijas a
+ * la derecha). `scroll-fade-end`: solo el borde derecho (SimpleTable, primera columna fija a la izquierda).
+ * Mismo `@property` y mismo `@supports` que `scroll-fade-x`.
+ */
+@keyframes scroll-fade-start {
+  0% {
+    --scroll-fade-start: 0px;
+  }
+  8%,
+  100% {
+    --scroll-fade-start: 24px;
+  }
+}
+@keyframes scroll-fade-end {
+  0%,
+  92% {
+    --scroll-fade-end: 24px;
+  }
+  100% {
+    --scroll-fade-end: 0px;
+  }
+}
+@utility scroll-fade-start {
+  @supports (animation-timeline: scroll()) {
+    mask-image: linear-gradient(to right, transparent, var(--foreground) var(--scroll-fade-start));
+    animation: scroll-fade-start linear both;
+    animation-timeline: scroll(x self);
+  }
+}
+@utility scroll-fade-end {
+  @supports (animation-timeline: scroll()) {
+    mask-image: linear-gradient(to left, transparent, var(--foreground) var(--scroll-fade-end));
+    animation: scroll-fade-end linear both;
+    animation-timeline: scroll(x self);
+  }
 }
 
-details[open] > summary::after {
-  transform: rotate(180deg);
-}
-
+/* El Manual usa <summary> con su propio ícono: se oculta el marcador nativo en Safari. */
 summary::-webkit-details-marker {
   display: none;
-}
-
-@layer components {
-  input[type='checkbox']:checked ~ label span svg {
-    @apply inline-flex;
-  }
-
-  .sticky .header-logo {
-    @apply py-5 lg:py-2;
-  }
-
-  .sticky .menu-scroll.active {
-    @apply opacity-70;
-  }
-
-  input#togglePlan:checked ~ .dot {
-    @apply translate-x-full;
-  }
-
-  input#checkboxLabel:checked ~ .box span {
-    @apply opacity-100;
-  }
 }

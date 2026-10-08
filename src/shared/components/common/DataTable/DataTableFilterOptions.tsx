@@ -1,13 +1,16 @@
 'use client';
 
-import { SlidersHorizontal } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import * as React from 'react';
 
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -17,25 +20,32 @@ import { saveTableFilterVisibility } from '@/shared/actions/table-preferences';
 import { useDataTablePending } from './DataTablePendingContext';
 import type { DataTableFacetedFilterConfig } from './types';
 
-interface DataTableFilterOptionsProps {
+export interface DataTableFilterOptionsProps {
   filters: DataTableFacetedFilterConfig[];
   filterVisibility: Record<string, boolean>;
   onFilterVisibilityChange: (visibility: Record<string, boolean>) => void;
   tableId: string;
+  /** Cantidad de filtros activos (incluye fechas y columnas ocultas). Con 0 el botón dice solo "Filtros". */
+  activeCount?: number;
+  /** Si se pasa, suma "Limpiar filtros" al pie del menú. */
+  onClearFilters?: () => void;
 }
 
-export function DataTableFilterOptions({
-  filters,
+/**
+ * Alterna la visibilidad de un filtro y la persiste. Es la lógica de siempre, compartida entre el
+ * menú de desktop y la lista del ⋯ mobile.
+ */
+export function useFilterVisibilityToggle({
   filterVisibility,
   onFilterVisibilityChange,
   tableId,
-}: DataTableFilterOptionsProps) {
+}: Pick<DataTableFilterOptionsProps, 'filterVisibility' | 'onFilterVisibilityChange' | 'tableId'>) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const { startTransition } = useDataTablePending();
 
-  const toggleFilter = (columnId: string, visible: boolean) => {
+  return (columnId: string, visible: boolean) => {
     const newVisibility = { ...filterVisibility, [columnId]: visible };
     onFilterVisibilityChange(newVisibility);
 
@@ -53,16 +63,28 @@ export function DataTableFilterOptions({
     // Guardar en DB (fire and forget)
     saveTableFilterVisibility(tableId, newVisibility);
   };
+}
+
+export function DataTableFilterOptions({
+  filters,
+  filterVisibility,
+  onFilterVisibilityChange,
+  tableId,
+  activeCount = 0,
+  onClearFilters,
+}: DataTableFilterOptionsProps) {
+  const toggleFilter = useFilterVisibilityToggle({ filterVisibility, onFilterVisibilityChange, tableId });
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8 gap-1.5">
-          <SlidersHorizontal className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Filtros</span>
+        <Button type="button" variant="secondary" size="sm" data-testid="filter-options">
+          Filtros
+          {activeCount > 0 && <span className="tabular-nums">({activeCount})</span>}
+          <ChevronDown className="size-3" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
+      <DropdownMenuContent align="end" className="w-52">
         <DropdownMenuLabel>Mostrar filtros</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {filters.map((filter) => {
@@ -77,7 +99,46 @@ export function DataTableFilterOptions({
             </DropdownMenuCheckboxItem>
           );
         })}
+        {onClearFilters && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem disabled={activeCount === 0} onSelect={onClearFilters}>
+              Limpiar filtros
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/** Lista de "Mostrar filtros" sin disparador, para el diálogo del ⋯ mobile. Misma persistencia que el menú. */
+export function DataTableFilterVisibilityList({
+  filters,
+  filterVisibility,
+  onFilterVisibilityChange,
+  tableId,
+}: DataTableFilterOptionsProps) {
+  const toggleFilter = useFilterVisibilityToggle({ filterVisibility, onFilterVisibilityChange, tableId });
+  const fieldId = React.useId();
+
+  return (
+    <ul className="px-2 py-2">
+      {filters.map((filter) => {
+        const checkboxId = `${fieldId}-${filter.columnId}`;
+        return (
+          <li key={filter.columnId} className="flex items-center gap-2 py-0.5 pl-2 pr-1">
+            <Checkbox
+              id={checkboxId}
+              checked={filterVisibility[filter.columnId] !== false}
+              onCheckedChange={(value) => toggleFilter(filter.columnId, !!value)}
+            />
+            <label htmlFor={checkboxId} className="min-w-0 flex-1 cursor-pointer truncate py-2.5 text-sm">
+              {filter.title}
+            </label>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

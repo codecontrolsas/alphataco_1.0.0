@@ -3,22 +3,19 @@ import * as React from 'react';
 
 import { cn } from '@/lib/utils';
 
-const cardVariants = cva('rounded-xl border bg-card text-card-foreground shadow', {
+const cardVariants = cva('border border-border bg-card text-card-foreground', {
   variants: {
     variant: {
-      default: 'border-border bg-card text-card-foreground',
-      outlined: 'border-2 border-border bg-transparent',
-      filled: 'border-0 bg-muted text-muted-foreground',
-      elevated: 'border-0 shadow-lg bg-card text-card-foreground',
-      ghost: 'border-0 shadow-none bg-transparent',
-      primary: 'border-primary bg-primary/5 text-primary border-2',
-      secondary: 'border-secondary bg-secondary/5 text-secondary border-2',
-      success:
-        'border-emerald-500 bg-emerald-50 text-emerald-700 border-2 dark:bg-emerald-950 dark:text-emerald-300 [&_*]:text-emerald-700 dark:[&_*]:text-emerald-300 [&_.card-description]:text-emerald-600 dark:[&_.card-description]:text-emerald-400 [&_.card-footer]:text-emerald-600 dark:[&_.card-footer]:text-emerald-400',
-      warning:
-        'border-yellow-500 bg-yellow-50 text-yellow-700 border-2 dark:bg-yellow-950 dark:text-yellow-300 [&_*]:text-yellow-700 dark:[&_*]:text-yellow-300 [&_.card-description]:text-yellow-600 dark:[&_.card-description]:text-yellow-400 [&_.card-footer]:text-yellow-600 dark:[&_.card-footer]:text-yellow-400',
-      destructive:
-        'border-destructive bg-destructive/5 text-destructive border-2 [&_*]:text-destructive [&_.card-description]:text-destructive/80 [&_.card-footer]:text-destructive/80',
+      default: '',
+      outlined: 'border-border-strong bg-transparent',
+      filled: 'border-transparent bg-muted text-foreground',
+      elevated: '',
+      ghost: 'border-transparent bg-transparent',
+      primary: 'border-primary/30 bg-primary-soft',
+      secondary: 'bg-panel-2',
+      success: 'border-success-border bg-success-soft text-success-text',
+      warning: 'border-warning-border bg-warning-soft text-warning-text',
+      destructive: 'border-danger-border bg-danger-soft text-danger-text',
     },
     size: {
       sm: 'text-sm',
@@ -34,15 +31,15 @@ const cardVariants = cva('rounded-xl border bg-card text-card-foreground shadow'
     },
     text_color: {
       default: 'text-card-foreground',
-      success: 'text-emerald-700',
-      warning: 'text-yellow-700',
-      destructive: 'text-destructive',
+      success: 'text-success-text',
+      warning: 'text-warning-text',
+      destructive: 'text-danger-text',
     },
     rounded: {
       none: 'rounded-none',
-      sm: 'rounded-sm',
-      default: 'rounded-xl',
-      lg: 'rounded-2xl',
+      sm: 'rounded-none',
+      default: 'rounded-none',
+      lg: 'rounded-none',
       full: 'rounded-full',
     },
   },
@@ -82,7 +79,7 @@ function CardHeader({ className, ...props }: React.ComponentProps<'div'>) {
 }
 
 function CardTitle({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div data-slot="card-title" className={cn('leading-none font-semibold', className)} {...props} />;
+  return <div data-slot="card-title" className={cn('text-section font-semibold', className)} {...props} />;
 }
 
 function CardDescription({ className, ...props }: React.ComponentProps<'div'>) {

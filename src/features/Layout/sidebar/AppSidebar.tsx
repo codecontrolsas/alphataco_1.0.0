@@ -29,7 +29,7 @@ import { NavUserAsync } from './components/async/NavUserAsync';
 export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r">
-      <SidebarHeader className="bg-brand/5 border-b p-2">
+      <SidebarHeader className="border-b border-sidebar-border p-2">
         <Suspense fallback={<Skeleton className="h-12 w-full rounded-md" />}>
           <CompanySwitcherAsync />
         </Suspense>

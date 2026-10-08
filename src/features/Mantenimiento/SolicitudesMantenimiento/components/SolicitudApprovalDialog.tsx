@@ -791,8 +791,7 @@ function ItemCard({
       {/* Estado visual */}
       <div className="flex justify-end">
         <Badge
-          variant={isApproved ? 'default' : isRejected ? 'destructive' : 'secondary'}
-          className={cn(isApproved && 'bg-green-600')}
+          variant={isApproved ? 'success' : isRejected ? 'destructive' : 'secondary'}
         >
           {isApproved ? 'Aprobado' : isRejected ? 'Rechazado' : 'Pendiente de decisión'}
         </Badge>

@@ -31,8 +31,8 @@ export function DashboardBreadcrumb() {
   const activeModule = navigationLinks.find((link) => link.name === activeName);
 
   return (
-    <Breadcrumb>
-      <BreadcrumbList>
+    <Breadcrumb className="min-w-0">
+      <BreadcrumbList className="text-caption">
         <BreadcrumbItem className="hidden md:block">
           <BreadcrumbLink asChild>
             <Link href="/dashboard" className="lowercase">
@@ -45,7 +45,7 @@ export function DashboardBreadcrumb() {
           <>
             <BreadcrumbSeparator className="hidden md:block" />
             <BreadcrumbItem>
-              <BreadcrumbPage>{activeModule.name}</BreadcrumbPage>
+              <BreadcrumbPage className="truncate font-medium">{activeModule.name}</BreadcrumbPage>
             </BreadcrumbItem>
           </>
         )}

@@ -8,6 +8,10 @@ interface TableSkeletonProps {
   filterCount?: number;
 }
 
+/**
+ * Esqueleto con la geometría del DataTable nuevo: toolbar de 48px, header de 32px, filas de 36px,
+ * pie de 44px, borde de 1px y sin radio.
+ */
 export function TableSkeleton({
   columnCount = 6,
   rowCount = 8,
@@ -16,50 +20,48 @@ export function TableSkeleton({
   filterCount = 2,
 }: TableSkeletonProps) {
   return (
-    <div className="space-y-4">
+    <div aria-hidden="true" className="w-full min-w-0 overflow-hidden border border-border bg-card">
       {/* Toolbar */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex gap-2">
-          <Skeleton className="h-9 w-64" />
+      <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
+        <div className="flex flex-wrap gap-2">
+          <Skeleton className="h-8 w-64 max-w-full" />
           {Array.from({ length: filterCount }).map((_, i) => (
-            <Skeleton key={i} className="h-9 w-24" />
+            <Skeleton key={i} className="h-8 w-24" />
           ))}
         </div>
         <div className="flex gap-2">
-          <Skeleton className="h-9 w-32" />
-          <Skeleton className="h-9 w-24" />
+          <Skeleton className="h-8 w-24" />
+          <Skeleton className="h-8 w-24" />
         </div>
       </div>
 
-      {/* Table */}
-      <div className="rounded-md border">
-        <div className="border-b p-3">
-          <div className="flex gap-4">
-            {showCheckbox && <Skeleton className="h-5 w-5" />}
-            {Array.from({ length: columnCount }).map((_, i) => (
-              <Skeleton key={i} className="h-5 flex-1" />
+      {/* Header */}
+      <div className="flex h-8 items-center gap-4 border-b border-border-strong bg-muted px-3">
+        {showCheckbox && <Skeleton className="size-4" />}
+        {Array.from({ length: columnCount }).map((_, i) => (
+          <Skeleton key={i} className="h-3 flex-1" />
+        ))}
+      </div>
+
+      {/* Filas */}
+      <div className="divide-y divide-border">
+        {Array.from({ length: rowCount }).map((_, i) => (
+          <div key={i} className="flex h-9 items-center gap-4 px-3">
+            {showCheckbox && <Skeleton className="size-4" />}
+            {showAvatar && <Skeleton className="size-6 rounded-full" />}
+            {Array.from({ length: columnCount }).map((_, j) => (
+              <Skeleton key={j} className="h-3 flex-1" />
             ))}
           </div>
-        </div>
-        <div className="divide-y">
-          {Array.from({ length: rowCount }).map((_, i) => (
-            <div key={i} className="flex items-center gap-4 p-3">
-              {showCheckbox && <Skeleton className="h-4 w-4" />}
-              {showAvatar && <Skeleton className="h-8 w-8 rounded-full" />}
-              {Array.from({ length: columnCount }).map((_, j) => (
-                <Skeleton key={j} className="h-4 flex-1" />
-              ))}
-            </div>
-          ))}
-        </div>
+        ))}
       </div>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between">
-        <Skeleton className="h-5 w-48" />
+      {/* Pie */}
+      <div className="flex min-h-11 items-center justify-between gap-3 border-t border-border bg-panel-2 px-3">
+        <Skeleton className="h-4 w-28" />
         <div className="flex gap-2">
-          <Skeleton className="h-9 w-20" />
-          <Skeleton className="h-9 w-20" />
+          <Skeleton className="h-7 w-20" />
+          <Skeleton className="h-7 w-32" />
         </div>
       </div>
     </div>

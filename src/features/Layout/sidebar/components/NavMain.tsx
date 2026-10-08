@@ -27,38 +27,37 @@ import { buildSidebarItems, createLinkRegex, findBestMatch, resolveActiveTab } f
  * Las clases van escritas completas y no compuestas en runtime: Tailwind v4 escanea el código
  * como texto plano y una clase armada por concatenación nunca se genera.
  *
- * El módulo activo se marca con la barra de marca a la izquierda (`before:`) más texto e icono
- * en color; el relleno sólido se reserva para la hoja —la tab— que es donde realmente está
- * parado el usuario. Con `--radius: 0` no hay esquinas que ablanden nada, así que el peso
- * visual lo lleva el color.
+ * El ítem activo (módulo o tab) se marca con la barra de marca de 2px a la izquierda (`before:`)
+ * sobre `bg-sidebar-accent`, sin relleno sólido. El hover es neutro: el verde queda para lo activo.
  */
 const MODULE_BUTTON = cn(
   'relative transition-colors',
   // Barra de marca del item activo. Se reserva el espacio siempre para que el texto no salte.
-  'before:absolute before:inset-y-1 before:left-0 before:w-[3px] before:bg-brand before:opacity-0 before:transition-opacity',
-  'hover:bg-brand/10 hover:text-brand',
+  'before:pointer-events-none before:absolute before:inset-y-1 before:left-0 before:w-0.5 before:bg-sidebar-primary before:opacity-0',
+  'hover:bg-sidebar-accent/60',
   'data-[active=true]:before:opacity-100',
-  'data-[active=true]:bg-brand/10 data-[active=true]:font-semibold data-[active=true]:text-brand',
-  'data-[active=true]:hover:bg-brand/15 data-[active=true]:hover:text-brand',
+  'data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground',
+  'data-[active=true]:hover:bg-sidebar-accent',
   // El icono acompaña al estado del item.
-  '[&>svg]:text-sidebar-foreground/60 [&>svg]:transition-colors',
-  'hover:[&>svg]:text-brand data-[active=true]:[&>svg]:text-brand'
+  '[&>svg]:text-muted-foreground',
+  'data-[active=true]:[&>svg]:text-primary-text'
 );
 
-const BADGE_CLASS = 'bg-destructive text-destructive-foreground pointer-events-none';
+const BADGE_CLASS = 'bg-danger text-destructive-foreground pointer-events-none tabular-nums';
 
 function badgeLabel(count: number): string {
   return count > 9 ? '9+' : String(count);
 }
 
-/** Igual que el módulo, pero la tab activa va con relleno sólido: es la hoja del árbol. */
+/** Igual que el módulo: la barra de 2px marca la tab activa (la hoja del árbol). */
 const SUB_ITEM_BUTTON = cn(
-  'transition-colors',
-  'hover:bg-brand/10 hover:text-brand',
-  'data-[active=true]:bg-brand data-[active=true]:font-medium data-[active=true]:text-brand-foreground',
-  'data-[active=true]:hover:bg-brand data-[active=true]:hover:text-brand-foreground',
-  '[&>svg]:text-sidebar-foreground/50 [&>svg]:transition-colors',
-  'hover:[&>svg]:text-brand data-[active=true]:[&>svg]:text-brand-foreground'
+  'relative transition-colors',
+  'before:pointer-events-none before:absolute before:inset-y-1 before:-left-px before:w-0.5 before:bg-sidebar-primary before:opacity-0',
+  'hover:bg-sidebar-accent/60',
+  'data-[active=true]:before:opacity-100',
+  'data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground',
+  'data-[active=true]:hover:bg-sidebar-accent',
+  '[&>svg]:text-muted-foreground data-[active=true]:[&>svg]:text-primary-text'
 );
 
 interface NavMainProps {
@@ -97,7 +96,7 @@ export function NavMain({ accessibleModuleSlugs, visibleTabs }: NavMainProps) {
   if (items.length === 0) {
     return (
       <SidebarGroup>
-        <div className="text-sidebar-foreground/70 px-2 py-6 text-center text-sm group-data-[collapsible=icon]:hidden">
+        <div className="text-muted-foreground px-2 py-6 text-center text-sm group-data-[collapsible=icon]:hidden">
           <p className="font-medium">Sin acceso</p>
           <p className="mt-1 text-xs">No tenés permisos para acceder a ningún módulo. Contactá al administrador.</p>
         </div>
@@ -107,7 +106,7 @@ export function NavMain({ accessibleModuleSlugs, visibleTabs }: NavMainProps) {
 
   return (
     <SidebarGroup>
-      <SidebarGroupLabel className="text-sidebar-foreground/50 text-[11px] font-semibold tracking-[0.12em] uppercase">
+      <SidebarGroupLabel className="text-overline text-muted-foreground">
         Módulos
       </SidebarGroupLabel>
       <SidebarMenu className="gap-0.5">
@@ -121,7 +120,7 @@ export function NavMain({ accessibleModuleSlugs, visibleTabs }: NavMainProps) {
           const activeTab = isActive ? resolveActiveTab(item, tabParam) : null;
 
           // Sin sub-items visibles (modulo de una sola tab, sin tabs, o sin permisos sobre
-          // ninguna): link directo, sin desplegable. Al ser la hoja, va con relleno sólido.
+          // ninguna): link directo, sin desplegable.
           if (!item.items?.length) {
             return (
               <SidebarMenuItem key={item.name}>
@@ -129,12 +128,7 @@ export function NavMain({ accessibleModuleSlugs, visibleTabs }: NavMainProps) {
                   asChild
                   tooltip={item.name}
                   isActive={isActive}
-                  className={cn(
-                    MODULE_BUTTON,
-                    'data-[active=true]:bg-brand data-[active=true]:text-brand-foreground',
-                    'data-[active=true]:hover:bg-brand data-[active=true]:hover:text-brand-foreground',
-                    'data-[active=true]:[&>svg]:text-brand-foreground'
-                  )}
+                  className={MODULE_BUTTON}
                 >
                   <Link href={item.href}>
                     <item.icon />

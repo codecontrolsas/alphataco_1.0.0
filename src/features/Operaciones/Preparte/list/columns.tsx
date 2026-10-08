@@ -341,7 +341,7 @@ export function getColumns({ permissionsMap, callbacks }: GetColumnsOptions): Co
     },
     {
       accessorKey: 'executionDate',
-      meta: { title: 'Fecha de ejecución' },
+      meta: { title: 'Fecha de ejecución', mobile: { role: 'field', priority: 1, label: 'Ejecución' } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de ejecución" />,
       cell: ({ row }) =>
         row.original.subject_to_availability && !row.original.executionDate ? (
@@ -354,13 +354,13 @@ export function getColumns({ permissionsMap, callbacks }: GetColumnsOptions): Co
     },
     {
       accessorKey: 'numero_pedido',
-      meta: { title: 'N° pedido' },
+      meta: { title: 'N° pedido', mobile: { role: 'title', priority: 1 } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="N° pedido" />,
       cell: ({ row }) => row.original.numero_pedido || '-',
     },
     {
       accessorKey: 'status',
-      meta: { title: 'Estado' },
+      meta: { title: 'Estado', mobile: { role: 'status' } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
       cell: ({ row }) => (
         <Badge
@@ -376,7 +376,7 @@ export function getColumns({ permissionsMap, callbacks }: GetColumnsOptions): Co
     {
       id: 'customer',
       accessorFn: (row) => row.customers?.name ?? '-',
-      meta: { title: 'Cliente' },
+      meta: { title: 'Cliente', mobile: { role: 'title', priority: 2 } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Cliente" />,
       cell: ({ row }) => row.original.customers?.name || 'No encontrado',
       filterFn: (row, _id, values: string[]) => values.includes(row.original.cliente_id),
@@ -384,7 +384,7 @@ export function getColumns({ permissionsMap, callbacks }: GetColumnsOptions): Co
     {
       id: 'service',
       accessorFn: (row) => row.customer_services?.service_name ?? '-',
-      meta: { title: 'Contrato' },
+      meta: { title: 'Contrato', mobile: { role: 'subtitle' } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Contrato" />,
       cell: ({ row }) => row.original.customer_services?.service_name || 'No encontrado',
       filterFn: (row, _id, values: string[]) => values.includes(row.original.contrato_id),
@@ -416,14 +416,14 @@ export function getColumns({ permissionsMap, callbacks }: GetColumnsOptions): Co
     {
       id: 'serviceItem',
       accessorFn: (row) => row.service_items?.item_name ?? '-',
-      meta: { title: 'Ítem' },
+      meta: { title: 'Ítem', mobile: { role: 'field', priority: 2 } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Ítem" />,
       cell: ({ row }) => row.original.service_items?.item_name || 'No encontrado',
       filterFn: (row, _id, values: string[]) => values.includes(row.original.item ?? '__null__'),
     },
     {
       accessorKey: 'quantity',
-      meta: { title: 'Cantidad' },
+      meta: { title: 'Cantidad', mobile: { role: 'field', priority: 3 } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Cantidad" />,
       cell: ({ row }) => row.original.quantity ?? '-',
     },

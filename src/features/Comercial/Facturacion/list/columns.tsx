@@ -64,7 +64,7 @@ export function getInvoiceColumns(canViewPrices: boolean): ColumnDef<InvoiceList
     {
       id: 'issue_date',
       accessorFn: (row) => row.issueDate,
-      meta: { title: 'Fecha de emisión' },
+      meta: { title: 'Fecha de emisión', mobile: { role: 'field', priority: 2, label: 'Emisión' } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de emisión" />,
       cell: ({ row }) => (
         <span className="tabular-nums">
@@ -75,7 +75,7 @@ export function getInvoiceColumns(canViewPrices: boolean): ColumnDef<InvoiceList
     {
       id: 'cbte_type',
       accessorFn: (row) => row.cbteLabel,
-      meta: { title: 'Tipo' },
+      meta: { title: 'Tipo', mobile: { role: 'title', priority: 1 } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo" />,
       cell: ({ row }) => {
         const Icon = cbteTypeIcon(row.original.cbteType);
@@ -91,7 +91,7 @@ export function getInvoiceColumns(canViewPrices: boolean): ColumnDef<InvoiceList
     {
       id: 'voucher_number',
       accessorFn: (row) => row.voucherNumber,
-      meta: { title: 'Número' },
+      meta: { title: 'Número', mobile: { role: 'title', priority: 2 } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Número" />,
       cell: ({ row }) => <span className="font-mono tabular-nums">{row.original.voucherNumber}</span>,
     },
@@ -110,7 +110,7 @@ export function getInvoiceColumns(canViewPrices: boolean): ColumnDef<InvoiceList
     {
       id: 'customer',
       accessorFn: (row) => row.customer.name,
-      meta: { title: 'Cliente' },
+      meta: { title: 'Cliente', mobile: { role: 'subtitle' } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Cliente" />,
       cell: ({ row }) => <span className="font-medium">{row.original.customer.name}</span>,
       filterFn: (row, _id, value: string[]) => value.includes(row.original.customer.id),
@@ -125,7 +125,7 @@ export function getInvoiceColumns(canViewPrices: boolean): ColumnDef<InvoiceList
     {
       id: 'status',
       accessorFn: (row) => INVOICE_STATUS_LABELS[row.status],
-      meta: { title: 'Estado' },
+      meta: { title: 'Estado', mobile: { role: 'status' } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
       cell: ({ row }) => (
         <InvoiceStatusBadge
@@ -186,7 +186,7 @@ export function getInvoiceColumns(canViewPrices: boolean): ColumnDef<InvoiceList
     columns.push({
       id: 'total',
       accessorFn: (row) => row.total ?? '',
-      meta: { title: 'Total' },
+      meta: { title: 'Total', mobile: { role: 'field', priority: 1 } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Total" />,
       cell: ({ row }) =>
         row.original.total === null ? (
@@ -201,7 +201,7 @@ export function getInvoiceColumns(canViewPrices: boolean): ColumnDef<InvoiceList
     {
       id: 'cae',
       accessorFn: (row) => row.cae ?? '',
-      meta: { title: 'CAE' },
+      meta: { title: 'CAE', mobile: { role: 'field', priority: 3 } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="CAE" />,
       cell: ({ row }) => <span className="font-mono tabular-nums">{row.original.cae ?? '-'}</span>,
     },

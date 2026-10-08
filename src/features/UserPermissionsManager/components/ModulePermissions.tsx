@@ -18,7 +18,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useToast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import {
   cleanAllUserPermissionsAndRoles,
   cleanUserCustomPermissions,
@@ -78,7 +78,6 @@ export function ModulePermissions({
   initialModules,
   initialUserRoles,
 }: ModulePermissionsProps) {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isCleanDialogOpen, setIsCleanDialogOpen] = useState(false);
 
@@ -130,11 +129,7 @@ export function ModulePermissions({
       queryClient.invalidateQueries({ queryKey: ['permissions'] });
     },
     onError: () => {
-      toast({
-        title: 'Error',
-        description: 'No se pudo actualizar el permiso',
-        variant: 'destructive',
-      });
+      toast.error('Error', { description: 'No se pudo actualizar el permiso', duration: Infinity });
     },
   });
 
@@ -146,11 +141,7 @@ export function ModulePermissions({
       queryClient.invalidateQueries({ queryKey: ['permissions'] });
     },
     onError: () => {
-      toast({
-        title: 'Error',
-        description: 'No se pudo remover el permiso',
-        variant: 'destructive',
-      });
+      toast.error('Error', { description: 'No se pudo remover el permiso', duration: Infinity });
     },
   });
 
@@ -160,18 +151,11 @@ export function ModulePermissions({
       queryClient.invalidateQueries({ queryKey: ['user-permissions', userId] });
       queryClient.invalidateQueries({ queryKey: ['permissions'] });
       queryClient.invalidateQueries({ queryKey: ['user-roles', userId] });
-      toast({
-        title: 'Permisos limpiados',
-        description: 'Se eliminaron todos los permisos personalizados',
-      });
+      toast.success('Permisos limpiados', { description: 'Se eliminaron todos los permisos personalizados' });
       setIsCleanDialogOpen(false);
     },
     onError: () => {
-      toast({
-        title: 'Error',
-        description: 'No se pudieron limpiar los permisos',
-        variant: 'destructive',
-      });
+      toast.error('Error', { description: 'No se pudieron limpiar los permisos', duration: Infinity });
     },
   });
 
@@ -182,18 +166,11 @@ export function ModulePermissions({
       queryClient.invalidateQueries({ queryKey: ['permissions'] });
       queryClient.invalidateQueries({ queryKey: ['user-roles', userId] });
       queryClient.invalidateQueries({ queryKey: ['role-user-counts'] });
-      toast({
-        title: 'Todos los permisos eliminados',
-        description: 'Se eliminaron todos los roles y permisos personalizados',
-      });
+      toast.success('Todos los permisos eliminados', { description: 'Se eliminaron todos los roles y permisos personalizados' });
       setIsCleanDialogOpen(false);
     },
     onError: () => {
-      toast({
-        title: 'Error',
-        description: 'No se pudieron eliminar todos los permisos',
-        variant: 'destructive',
-      });
+      toast.error('Error', { description: 'No se pudieron eliminar todos los permisos', duration: Infinity });
     },
   });
 

@@ -1,5 +1,6 @@
 import { createTabVisibilityChecker } from '@/features/Permissions/lib/tab-visibility';
 import type { ModuleSlug } from '@/features/Permissions/permissions-map';
+import { PageHeader } from '@/shared/components/layout/PageHeader';
 import type { SectionManagerServerProps } from './types';
 
 /**
@@ -56,13 +57,12 @@ export async function SectionManagerServer<M extends ModuleSlug = ModuleSlug>({
   const activeTab = visibleTabs.find((tab) => tab.value === requested) ?? visibleTabs[0];
 
   return (
-    <div className="flex h-full flex-col gap-4">
-      {(!activeTab.hideTitle || actions) && (
-        <div className="flex items-center justify-between gap-4">
-          {!activeTab.hideTitle && <h1 className="text-lg font-semibold tracking-tight">{activeTab.label}</h1>}
-          {actions && <div className="flex items-center gap-2">{actions}</div>}
-        </div>
-      )}
+    <div className="flex h-full flex-col gap-6">
+      {!activeTab.hideTitle ? (
+        <PageHeader title={activeTab.label} actions={actions ?? undefined} />
+      ) : actions ? (
+        <div className="flex items-center justify-end gap-2">{actions}</div>
+      ) : null}
 
       {activeTab.content}
     </div>

@@ -71,7 +71,7 @@ export const columns: ColumnDef<InactiveOtherEquipmentListItem>[] = [
   // ─── N° Serie ────────────────────────────────────────────────────────────
   {
     accessorKey: 'serial_number',
-    meta: { title: 'N° Serie' },
+    meta: { title: 'N° Serie', mobile: { role: 'title', priority: 2 } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="N° Serie" />,
     cell: ({ row }) => (
       <Link
@@ -86,7 +86,7 @@ export const columns: ColumnDef<InactiveOtherEquipmentListItem>[] = [
   // ─── N° Interno ──────────────────────────────────────────────────────────
   {
     accessorKey: 'intern_number',
-    meta: { title: 'N° Interno' },
+    meta: { title: 'N° Interno', mobile: { role: 'title', priority: 1 } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="N° Interno" />,
     cell: ({ row }) => (
       <Link
@@ -102,7 +102,7 @@ export const columns: ColumnDef<InactiveOtherEquipmentListItem>[] = [
   {
     id: 'type',
     accessorFn: (row) => row.type?.name ?? '',
-    meta: { title: 'Tipo' },
+    meta: { title: 'Tipo', mobile: { role: 'subtitle' } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo" />,
     cell: ({ row }) =>
       row.original.type?.name ? (
@@ -204,7 +204,7 @@ export const columns: ColumnDef<InactiveOtherEquipmentListItem>[] = [
   // ─── Estado documental (enum nullable) ─────────────────────────────────────
   {
     accessorKey: 'status',
-    meta: { title: 'Estado' },
+    meta: { title: 'Estado', mobile: { role: 'status' } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
     cell: ({ row }) => {
       const s = row.original.status;
@@ -221,7 +221,7 @@ export const columns: ColumnDef<InactiveOtherEquipmentListItem>[] = [
   // ─── Motivo de baja (enum nullable) — VISIBLE POR DEFAULT en tabla de bajas
   {
     accessorKey: 'reason_for_termination',
-    meta: { title: 'Motivo de baja' },
+    meta: { title: 'Motivo de baja', mobile: { role: 'field', priority: 2, label: 'Motivo' } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Motivo de baja" />,
     cell: ({ row }) => {
       const r = row.original.reason_for_termination;
@@ -238,7 +238,7 @@ export const columns: ColumnDef<InactiveOtherEquipmentListItem>[] = [
   // ─── Fecha de baja — VISIBLE POR DEFAULT en tabla de bajas ─────────────
   {
     accessorKey: 'termination_date',
-    meta: { title: 'Fecha de baja' },
+    meta: { title: 'Fecha de baja', mobile: { role: 'field', priority: 1, label: 'Baja' } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de baja" />,
     cell: ({ row }) =>
       row.original.termination_date ? (
@@ -265,7 +265,7 @@ export const columns: ColumnDef<InactiveOtherEquipmentListItem>[] = [
   {
     id: 'linked_vehicle',
     accessorFn: (row) => row.vehicles?.domain ?? '',
-    meta: { title: 'Vinculado a' },
+    meta: { title: 'Vinculado a', mobile: { role: 'field', priority: 3 } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Vinculado a" />,
     cell: ({ row }) => <span>{row.original.vehicles?.domain ?? <span className="text-muted-foreground">-</span>}</span>,
     filterFn: (row, _id, value: string[]) => {

@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { toast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import { transformDailyReports } from '../lib/transform';
 import { bulkCertifyRows } from '../actions/mutations.server';
 import { Logger } from '@/lib/logger';
@@ -32,11 +32,7 @@ export function BulkCertificacionModal({ isOpen, onClose, selectedRows, onSucces
 
   const handleUpdate = async () => {
     if (selectedRows.length === 0) {
-      toast({
-        title: 'Error',
-        description: 'No hay registros seleccionados.',
-        variant: 'destructive',
-      });
+      toast.error('Error', { description: 'No hay registros seleccionados.', duration: Infinity });
       return;
     }
 
@@ -46,13 +42,9 @@ export function BulkCertificacionModal({ isOpen, onClose, selectedRows, onSucces
       // Una sola server action: pasa a 'en_certificacion' las filas elegibles.
       const result = await bulkCertifyRows(selectedRows.map((row: TableRow) => row.id));
 
-      toast({
-        title: 'Éxito',
-        description:
-          result.skippedIds.length > 0
+      toast.success('Éxito', { description: result.skippedIds.length > 0
             ? `Se actualizaron ${result.certified} de ${selectedRows.length} registro(s) a En certificación. ${result.skippedIds.length} no estaban en estado "ejecutado".`
-            : `Se actualizaron ${result.certified} registro(s) a En certificación.`,
-      });
+            : `Se actualizaron ${result.certified} registro(s) a En certificación.` });
 
       // Llamar callback para refrescar datos
       if (onSuccess) {
@@ -62,11 +54,7 @@ export function BulkCertificacionModal({ isOpen, onClose, selectedRows, onSucces
       onClose();
     } catch (error) {
       logger.error('Error al actualizar los registros seleccionados', { data: { error } });
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Ocurrió un error al actualizar los registros.',
-        variant: 'destructive',
-      });
+      toast.error('Error', { description: error instanceof Error ? error.message : 'Ocurrió un error al actualizar los registros.', duration: Infinity });
     } finally {
       setIsUpdating(false);
     }

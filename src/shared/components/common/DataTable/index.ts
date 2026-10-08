@@ -11,14 +11,30 @@ export { DataTable } from './DataTable';
 export { DataTablePendingProvider, useDataTablePending } from './DataTablePendingContext';
 
 // Sub-componentes (para uso individual si es necesario)
+export { DataTableActiveFilterChip } from './DataTableActiveFilterChip';
+export { DataTableCard } from './DataTableCard';
+export { DataTableCards } from './DataTableCards';
 export { DataTableColumnHeader } from './DataTableColumnHeader';
 export { DataTableDateRangeFilter } from './DataTableDateRangeFilter';
+export { DataTableDesktop } from './DataTableDesktop';
+export { DataTableDetailSheet } from './DataTableDetailSheet';
 export { DataTableFacetedFilter } from './DataTableFacetedFilter';
-export { DataTableFilterOptions } from './DataTableFilterOptions';
+export { DataTableFilterOptions, DataTableFilterVisibilityList } from './DataTableFilterOptions';
+export {
+  DataTableMobileFilters,
+  DataTableMobileFiltersTrigger,
+  DataTableMobileSortTrigger,
+} from './DataTableMobileFilters';
+export { DataTableMoreMenu } from './DataTableMoreMenu';
 export { DataTablePagination } from './DataTablePagination';
+export { DataTableSelectionBar } from './DataTableSelectionBar';
 export { DataTableTextFilter } from './DataTableTextFilter';
 export { DataTableToolbar } from './DataTableToolbar';
-export { DataTableViewOptions } from './DataTableViewOptions';
+export { DataTableColumnsPanel, DataTableViewOptions } from './DataTableViewOptions';
+export { useDataTableExport } from './_DataTableExportButton';
+
+// Modo mobile (puro, sin directiva): resolución de roles de la tarjeta y label de columna
+export { getColumnLabel, resolveMobileLayout } from './mobile-columns';
 
 // Hook (solo cliente)
 export { useDataTable } from './useDataTable';
@@ -51,6 +67,7 @@ export type {
   // Column types
   DataTableColumnConfig,
   DataTableColumnHeaderProps,
+  DataTableColumnMobileMeta,
   // Export types
   DataTableExportConfig,
   DataTableExportOptions,
@@ -58,6 +75,9 @@ export type {
   DataTableFacetedFilterProps,
   // Filter types
   DataTableFilterOption,
+  DataTableFilterVariant,
+  DataTableMobileLayoutMode,
+  DataTableMobileRole,
   DataTablePaginationProps,
   // Component props
   DataTableProps,
@@ -70,6 +90,8 @@ export type {
   DataTableToolbarProps,
   DataTableViewOptionsProps,
   FacetResult,
+  MobileColumnEntry,
+  MobileLayout,
   PrismaTableParams,
   // Sorting
   SortItem,

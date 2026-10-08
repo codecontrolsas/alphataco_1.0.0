@@ -1,6 +1,5 @@
 'use client';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
-import { Toaster } from '@/components/ui/toaster';
 import { usePermissions } from '@/features/Permissions';
 import { VisibilityState } from '@tanstack/react-table';
 import { useState } from 'react';
@@ -55,7 +54,6 @@ export default function MaintenanceGroupsClient({
           />
         </ResizablePanel>
       </ResizablePanelGroup>
-      <Toaster />
       {/* {error && <div className="text-red-500 mt-2">Error: {error}</div>} */}
     </div>
   );

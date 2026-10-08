@@ -57,13 +57,24 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
   return (
     <SupportTicketsRealtimeProvider>
       <SidebarProvider>
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-60 focus:border focus:border-border-strong focus:bg-card focus:px-3 focus:py-2 focus:text-label"
+        >
+          Saltar al contenido
+        </a>
         <AppSidebar />
         <SidebarInset className="min-w-0">
           <DashboardHeader />
           <Suspense fallback={null}>
             <PasswordChangeAlertWrapper />
           </Suspense>
-          <div className="min-w-0 flex-1 px-6 pb-4">{children}</div>
+          {/* `@container/page`: lo usa PageHeader para su banda a todo el ancho del área de contenido. */}
+          <div id="main-content" tabIndex={-1} className="@container/page min-w-0 flex-1 outline-none">
+            <div className="mx-auto flex w-full max-w-(--page-max) flex-col gap-6 px-4 py-4 md:px-6 md:py-6">
+              {children}
+            </div>
+          </div>
         </SidebarInset>
       </SidebarProvider>
     </SupportTicketsRealtimeProvider>

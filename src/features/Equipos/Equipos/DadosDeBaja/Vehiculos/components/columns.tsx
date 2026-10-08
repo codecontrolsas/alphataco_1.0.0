@@ -73,7 +73,7 @@ export const columns: ColumnDef<InactiveVehicleListItem>[] = [
   // ─── Dominio ──────────────────────────────────────────────────────────────
   {
     accessorKey: 'domain',
-    meta: { title: 'Dominio' },
+    meta: { title: 'Dominio', mobile: { role: 'title', priority: 1 } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Dominio" />,
     cell: ({ row }) => (
       <Link
@@ -88,7 +88,7 @@ export const columns: ColumnDef<InactiveVehicleListItem>[] = [
   // ─── N° Interno ──────────────────────────────────────────────────────────
   {
     accessorKey: 'intern_number',
-    meta: { title: 'N° Interno' },
+    meta: { title: 'N° Interno', mobile: { role: 'title', priority: 2 } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="N° Interno" />,
     cell: ({ row }) => (
       <Link href={`/dashboard/equipment/action?action=view&id=${row.original.id}`} className="hover:underline">
@@ -101,7 +101,7 @@ export const columns: ColumnDef<InactiveVehicleListItem>[] = [
   {
     id: 'type',
     accessorFn: (row) => row.type_vehicles_typeTotype?.name ?? '',
-    meta: { title: 'Tipo' },
+    meta: { title: 'Tipo', mobile: { role: 'subtitle' } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo" />,
     cell: ({ row }) =>
       row.original.type_vehicles_typeTotype?.name ? (
@@ -178,7 +178,7 @@ export const columns: ColumnDef<InactiveVehicleListItem>[] = [
   // ─── Condición (enum nullable) ───────────────────────────────────────────
   {
     accessorKey: 'condition',
-    meta: { title: 'Condición' },
+    meta: { title: 'Condición', mobile: { role: 'field', priority: 3 } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Condición" />,
     cell: ({ row }) => {
       const cond = row.original.condition;
@@ -203,7 +203,7 @@ export const columns: ColumnDef<InactiveVehicleListItem>[] = [
   // ─── Estado documental (enum nullable) ──────────────────────────────────
   {
     accessorKey: 'status',
-    meta: { title: 'Estado' },
+    meta: { title: 'Estado', mobile: { role: 'status' } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
     cell: ({ row }) => {
       const s = row.original.status;
@@ -246,7 +246,7 @@ export const columns: ColumnDef<InactiveVehicleListItem>[] = [
   // ─── Motivo de baja (enum nullable) ─────────────────────────────────────
   {
     accessorKey: 'reason_for_termination',
-    meta: { title: 'Motivo de baja' },
+    meta: { title: 'Motivo de baja', mobile: { role: 'field', priority: 2, label: 'Motivo' } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Motivo de baja" />,
     cell: ({ row }) => {
       const r = row.original.reason_for_termination;
@@ -263,7 +263,7 @@ export const columns: ColumnDef<InactiveVehicleListItem>[] = [
   // ─── Fecha de baja ────────────────────────────────────────────────────────
   {
     accessorKey: 'termination_date',
-    meta: { title: 'Fecha de baja' },
+    meta: { title: 'Fecha de baja', mobile: { role: 'field', priority: 1, label: 'Baja' } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de baja" />,
     cell: ({ row }) =>
       row.original.termination_date ? (

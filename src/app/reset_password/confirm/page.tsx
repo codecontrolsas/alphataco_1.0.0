@@ -1,52 +1,38 @@
 // src/app/reset_password/confirm/page.tsx
-import { CardTitle } from '@/components/ui/card';
-import RenderBanner from '@/features/Auth/components/RenderBanner';
+import { buttonVariants } from '@/components/ui/button';
+import { AuthShell } from '@/features/Auth/components/AuthShell';
 import Link from 'next/link';
-import { BRAND_NAME } from '@/shared/lib/branding';
 
 interface PageProps {
   searchParams: { [key: string]: string | string[] | undefined };
 }
 
-
 export default function ConfirmUserPassword({ searchParams }: PageProps) {
   const error = typeof searchParams.error === 'string' ? searchParams.error : '';
 
   return (
-    <section className="min-h-screen overflow-hidden bg-white dark:bg-transparent">
-      <div className="container relative flex-col grid-cols-1 justify-center md:grid lg:max-w-none lg:grid-cols-2 lg:px-0 md:px-2 p-0">
-        <RenderBanner />
-        <div className="lg:p-8 relative z-50 md:p-8 pt-7 p-0 flex flex-col justify-center items-center w-full">
-          <Link className="relative z-20 lg:hidden items-center font-bold text-2xl flex" href="/">
-            <span className="text-brand lowercase">{BRAND_NAME}</span>
-          </Link>
-          <div className="w-full overflow-y-auto">
-            <CardTitle className="text-3xl font-semibold tracking-tight lg:text-left text-center mb-2">
-              {error ? 'Enlace inválido o expirado' : 'Procesando solicitud...'}
-            </CardTitle>
-
-            {error === 'invalid_token' ? (
-              <div className="text-center p-6 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-red-600 font-medium">Enlace inválido o expirado</p>
-                <p className="text-gray-600 text-sm mt-4">
-                  Por favor, solicita un nuevo enlace de recuperación de contraseña.
-                </p>
-                <Link
-                  href="/reset_password"
-                  className="inline-block mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                >
-                  Solicitar nuevo enlace
-                </Link>
-              </div>
-            ) : (
-              <div className="text-center p-6 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-blue-600 font-medium">Verificando enlace...</p>
-                <p className="text-gray-600 text-sm mt-2">Por favor espera mientras procesamos tu solicitud.</p>
-              </div>
-            )}
-          </div>
-        </div>
+    <AuthShell>
+      <div className="space-y-2">
+        <h1 className="text-display text-balance">{error ? 'Enlace inválido o expirado' : 'Procesando solicitud...'}</h1>
       </div>
-    </section>
+      <div className="mt-8">
+        {error === 'invalid_token' ? (
+          <div className="border border-danger-border bg-danger-soft px-3 py-2.5">
+            <p className="text-label text-danger-text">Enlace inválido o expirado</p>
+            <p className="mt-1 text-caption text-foreground/80">
+              Por favor, solicita un nuevo enlace de recuperación de contraseña.
+            </p>
+            <Link href="/reset_password" className={buttonVariants({ variant: 'primary', className: 'mt-4' })}>
+              Solicitar nuevo enlace
+            </Link>
+          </div>
+        ) : (
+          <div className="border border-info-border bg-info-soft px-3 py-2.5">
+            <p className="text-label text-info-text">Verificando enlace...</p>
+            <p className="mt-1 text-caption text-foreground/80">Por favor espera mientras procesamos tu solicitud.</p>
+          </div>
+        )}
+      </div>
+    </AuthShell>
   );
 }

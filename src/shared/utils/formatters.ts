@@ -123,15 +123,32 @@ export function formatSeniorityParenthesis(hireDate: Date | string | null | unde
 // FORMATEO DE NÚMEROS
 // ============================================
 
+// Los formateadores de `Intl` se crean una sola vez a nivel de módulo (`js-cache-function-results`):
+// construir uno por llamada es caro y estas funciones corren por celda y por cifra.
+const LOCALE = 'es-AR';
+const numberFormatter = new Intl.NumberFormat(LOCALE);
+const percentFormatter = new Intl.NumberFormat(LOCALE, { style: 'percent', maximumFractionDigits: 1 });
+const pluralRules = new Intl.PluralRules(LOCALE);
+const currencyFormatters = new Map<string, Intl.NumberFormat>();
+
+function getCurrencyFormatter(currency: string): Intl.NumberFormat {
+  let formatter = currencyFormatters.get(currency);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(LOCALE, { style: 'currency', currency });
+    currencyFormatters.set(currency, formatter);
+  }
+  return formatter;
+}
+
+/** Sustantivo en singular y plural para `formatCount` ("equipo" / "equipos"). */
+export type CountNoun = { one: string; other: string };
+
 /**
  * Formatea un número como moneda
  */
 export function formatCurrency(value: number | null | undefined, currency = 'ARS'): string {
   if (value === null || value === undefined) return '-';
-  return new Intl.NumberFormat('es-AR', {
-    style: 'currency',
-    currency,
-  }).format(value);
+  return getCurrencyFormatter(currency).format(value);
 }
 
 /**
@@ -139,7 +156,24 @@ export function formatCurrency(value: number | null | undefined, currency = 'ARS
  */
 export function formatNumber(value: number | null | undefined): string {
   if (value === null || value === undefined) return '-';
-  return new Intl.NumberFormat('es-AR').format(value);
+  return numberFormatter.format(value);
+}
+
+/**
+ * Formatea una proporción como porcentaje (0.125 → "12,5 %"). Recibe la fracción, no el número × 100.
+ */
+export function formatPercent(value: number | null | undefined): string {
+  if (value === null || value === undefined) return '-';
+  return percentFormatter.format(value);
+}
+
+/**
+ * Cantidad con su sustantivo concordado: `formatCount(387, { one: 'equipo', other: 'equipos' })` → "387 equipos".
+ * El plural lo decide `Intl.PluralRules`, nunca `n === 1 ? '' : 's'`.
+ */
+export function formatCount(value: number, noun: CountNoun): string {
+  const word = pluralRules.select(value) === 'one' ? noun.one : noun.other;
+  return `${numberFormatter.format(value)} ${word}`;
 }
 
 // ============================================

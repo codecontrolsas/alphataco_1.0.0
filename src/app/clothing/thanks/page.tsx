@@ -20,7 +20,7 @@ export default function ClothingThanksPage() {
   }, [router]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+    <main className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md space-y-6 rounded-xl border shadow-lg">
         <CardHeader className="space-y-4 text-center">
           <div className="flex items-center justify-center">
@@ -60,6 +60,6 @@ export default function ClothingThanksPage() {
           </p>
         </CardFooter>
       </Card>
-    </div>
+    </main>
   );
 }

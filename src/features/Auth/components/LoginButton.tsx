@@ -29,7 +29,6 @@ export const LoginButton = () => {
         const element = document.getElementById(`${issue.path}_error`);
         if (element) {
           element.innerText = issue.message;
-          element.style.color = 'red';
         }
       });
 
@@ -70,6 +69,7 @@ export const LoginButton = () => {
   };
   return (
     <Button
+      size="lg"
       className="w-full"
       formAction={(formData) => clientAccion(formData)}
       disabled={pending}

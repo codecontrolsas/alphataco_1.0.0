@@ -105,7 +105,6 @@ export function _PreparteDataTable({
   clearSelectionTrigger,
 }: Props) {
   const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-  const [selectedRows, setSelectedRows] = useState<PreparteListItem[]>([]);
   const [localClearSelectionTrigger, setLocalClearSelectionTrigger] = useState(0);
   const previousParamsRef = useRef<string | undefined>(undefined);
 
@@ -289,7 +288,6 @@ export function _PreparteDataTable({
   const handleStateChange = useCallback((params: DataTableSearchParams) => {
     const serializedParams = JSON.stringify(params);
     if (previousParamsRef.current && previousParamsRef.current !== serializedParams) {
-      setSelectedRows([]);
       setLocalClearSelectionTrigger((value) => value + 1);
     }
     previousParamsRef.current = serializedParams;
@@ -323,20 +321,16 @@ export function _PreparteDataTable({
           : false
       }
       showRowSelection={canUpdate}
-      onRowSelectionChange={setSelectedRows}
       clearSelectionTrigger={(clearSelectionTrigger ?? 0) + localClearSelectionTrigger}
-      toolbarActions={
-        canUpdate ? (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={selectedRows.length === 0}
-            onClick={() => callbacks.onBulkStatus(selectedRows)}
-          >
-            <Edit className="mr-2 h-4 w-4" />
-            Cambiar estado
-          </Button>
-        ) : undefined
+      selectionActions={
+        canUpdate
+          ? (rows) => (
+              <Button variant="outline" size="sm" onClick={() => callbacks.onBulkStatus(rows.map((row) => row.original))}>
+                <Edit className="mr-2 h-4 w-4" />
+                Cambiar estado
+              </Button>
+            )
+          : undefined
       }
       exportConfig={{
         fetchAllData: () => getAllPrepartesForExport(currentParams),

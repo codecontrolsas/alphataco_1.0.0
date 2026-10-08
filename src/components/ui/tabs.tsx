@@ -18,13 +18,21 @@ function Tabs({ className, orientation = 'horizontal', ...props }: React.Compone
   );
 }
 
+// DISENO §4.9. `default` son pestañas subrayadas; `segmented` es el control de vista/densidad.
+// Las pestañas no se parten en dos líneas: en mobile scrollean en horizontal, con fade lateral solo en el borde que
+// tiene pestañas ocultas (`scroll-fade-x`; sin desborde no hay máscara).
+const UNDERLINE_LIST =
+  'border-border border-b group-data-[orientation=horizontal]/tabs:max-w-full group-data-[orientation=horizontal]/tabs:overflow-x-auto group-data-[orientation=horizontal]/tabs:scroll-fade-x';
+
 const tabsListVariants = cva(
-  'rounded-lg p-[3px] group-data-[orientation=horizontal]/tabs:h-9 data-[variant=line]:rounded-none group/tabs-list text-muted-foreground inline-flex w-fit items-center justify-center group-data-[orientation=vertical]/tabs:h-fit group-data-[orientation=vertical]/tabs:flex-col',
+  'group/tabs-list text-muted-foreground inline-flex w-fit items-center justify-start group-data-[orientation=vertical]/tabs:h-fit group-data-[orientation=vertical]/tabs:flex-col group-data-[orientation=vertical]/tabs:items-stretch',
   {
     variants: {
       variant: {
-        default: 'bg-muted',
-        line: 'gap-1 bg-transparent border-b border-border pb-px',
+        default: UNDERLINE_LIST,
+        segmented: 'border-input h-8 border',
+        // Alias: hasta la Fase 1 era la variante subrayada; ahora es igual a `default`.
+        line: UNDERLINE_LIST,
       },
     },
     defaultVariants: {
@@ -41,7 +49,8 @@ function TabsList({
   return (
     <TabsPrimitive.List
       data-slot="tabs-list"
-      data-variant={variant}
+      // `line` es alias de `default`: el trigger lee un solo nombre canónico.
+      data-variant={variant === 'line' ? 'default' : variant}
       className={cn(tabsListVariants({ variant }), className)}
       {...props}
     />
@@ -53,10 +62,12 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:outline-ring text-foreground/60 hover:text-foreground dark:text-muted-foreground dark:hover:text-foreground relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-sm font-medium whitespace-nowrap transition-all group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tabs:justify-start focus-visible:ring-[3px] focus-visible:outline-1 disabled:pointer-events-none disabled:opacity-50 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-sm group-data-[variant=line]/tabs-list:data-[state=active]:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        'group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-[state=active]:bg-transparent dark:group-data-[variant=line]/tabs-list:data-[state=active]:border-transparent dark:group-data-[variant=line]/tabs-list:data-[state=active]:bg-transparent',
-        'data-[state=active]:bg-background dark:data-[state=active]:text-foreground dark:data-[state=active]:border-input dark:data-[state=active]:bg-input/30 data-[state=active]:text-foreground',
-        'after:bg-brand after:absolute after:rounded-full after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-5px] group-data-[orientation=horizontal]/tabs:after:h-[2.5px] group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-[2.5px] group-data-[variant=line]/tabs-list:data-[state=active]:after:opacity-100',
+        // El outline de foco va hacia adentro: la lista subrayada scrollea y recortaría uno hacia afuera.
+        "text-muted-foreground hover:text-foreground data-[state=active]:text-foreground relative inline-flex h-10 flex-1 items-center justify-center gap-1.5 px-3 text-[13px] font-medium whitespace-nowrap transition-[color,background-color,box-shadow] duration-(--duration-fast) focus-visible:outline-offset-[-2px] disabled:pointer-events-none disabled:opacity-50 group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tabs:justify-start [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        // Subrayada: barra de acento de 2px abajo (a la izquierda en vertical).
+        'group-data-[variant=default]/tabs-list:data-[state=active]:shadow-[inset_0_-2px_0_var(--primary)] group-data-[orientation=vertical]/tabs:group-data-[variant=default]/tabs-list:data-[state=active]:shadow-[inset_2px_0_0_var(--primary)]',
+        // Segmented: ítems separados por hairline y el activo invertido.
+        'group-data-[variant=segmented]/tabs-list:border-input group-data-[variant=segmented]/tabs-list:h-full group-data-[variant=segmented]/tabs-list:not-first:border-l group-data-[variant=segmented]/tabs-list:data-[state=active]:bg-foreground group-data-[variant=segmented]/tabs-list:data-[state=active]:text-background',
         className
       )}
       {...props}

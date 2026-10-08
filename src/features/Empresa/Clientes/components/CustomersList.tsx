@@ -48,7 +48,7 @@ export const customerColumns: ColumnDef<CustomerRow>[] = [
     cell: ({ row }) => {
       const isActive = row.original.is_active;
       return (
-        <Badge variant={isActive ? 'success' : 'destructive'} className="text-white">
+        <Badge variant={isActive ? 'success' : 'destructive'}>
           {isActive ? 'Activo' : 'Inactivo'}
         </Badge>
       );

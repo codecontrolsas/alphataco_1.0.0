@@ -22,7 +22,8 @@ import type { DataTableColumnHeaderProps } from './types';
  * - "Sin ordenar": quita esta columna del sorting
  * - "Agregar al ordenamiento": agrega al multi-sort (Asc)
  *
- * Cuando hay multi-sort activo, se muestra un badge con el indice de orden (1, 2, 3...)
+ * La flecha de 12px solo se ve en la columna ordenada; en reposo no hay ícono y, en hover o foco, aparece
+ * `ChevronsUpDown` para indicar que se puede ordenar. Con multi-sort se muestra el índice de orden (1, 2, 3...).
  */
 export function DataTableColumnHeader<TData, TValue>({
   column,
@@ -37,26 +38,29 @@ export function DataTableColumnHeader<TData, TValue>({
   const isSorted = column.getIsSorted();
 
   return (
-    <div className={cn('flex items-center space-x-2', className)}>
+    <div className={cn('flex items-center', className)}>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
+            type="button"
             variant="ghost"
-            size="sm"
-            className="-ml-3 h-8 data-[state=open]:bg-accent"
+            className="group -mx-3 h-8 gap-1.5 rounded-none px-3 text-overline text-inherit data-[state=open]:bg-accent"
             data-testid={`column-header-${column.id}`}
           >
             <span>{title}</span>
             {isSorted === 'desc' ? (
-              <ArrowDown className="ml-2 h-4 w-4" />
+              <ArrowDown aria-hidden="true" className="size-3" />
             ) : isSorted === 'asc' ? (
-              <ArrowUp className="ml-2 h-4 w-4" />
+              <ArrowUp aria-hidden="true" className="size-3" />
             ) : (
-              <ChevronsUpDown className="ml-2 h-4 w-4" />
+              <ChevronsUpDown
+                aria-hidden="true"
+                className="size-3 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 group-data-[state=open]:opacity-100"
+              />
             )}
-            {/* Badge con indice de multi-sort */}
+            {/* Índice de multi-sort */}
             {sortIndex >= 0 && (
-              <span className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary/15 text-[10px] font-semibold text-primary">
+              <span className="flex size-4 items-center justify-center bg-primary-soft font-mono text-[10px] font-semibold text-primary tabular-nums">
                 {sortIndex + 1}
               </span>
             )}

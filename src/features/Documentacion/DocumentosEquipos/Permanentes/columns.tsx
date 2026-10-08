@@ -148,7 +148,7 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
   {
     id: 'vehicle',
     accessorFn: (row) => row.vehicles?.domain ?? row.vehicles?.serie ?? '',
-    meta: { title: 'Equipo' },
+    meta: { title: 'Equipo', mobile: { role: 'title', priority: 1 } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Equipo" />,
     cell: ({ row }) => {
       const v = row.original.vehicles;
@@ -197,7 +197,7 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
   {
     id: 'document_type',
     accessorFn: (row) => row.document_types?.name ?? '',
-    meta: { title: 'Documento' },
+    meta: { title: 'Documento', mobile: { role: 'subtitle' } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Documento" />,
     cell: ({ row }) => (
       <span className="font-medium">
@@ -219,7 +219,7 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
       const names = row.vehicles?.contractor_equipment?.map((ce) => ce.customers?.name ?? '').filter(Boolean) ?? [];
       return names.join(', ');
     },
-    meta: { title: 'Afectado a' },
+    meta: { title: 'Afectado a', mobile: { role: 'field', priority: 2 } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Afectado a" />,
     cell: ({ row }) => {
       const contractors =
@@ -261,7 +261,7 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
   {
     id: 'state',
     accessorKey: 'state',
-    meta: { title: 'Estado' },
+    meta: { title: 'Estado', mobile: { role: 'status' } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
     cell: ({ row }) => {
       // Documento archivado: historial / no vigente (solo visible en el detalle del equipo)
@@ -338,7 +338,7 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
   {
     id: 'validity',
     accessorKey: 'validity',
-    meta: { title: 'Vencimiento' },
+    meta: { title: 'Vencimiento', mobile: { role: 'field', priority: 1 } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Vencimiento" />,
     cell: ({ row }) => {
       // Documento archivado: no aplica estado de vigencia/vencimiento
@@ -368,7 +368,7 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
   {
     id: 'created_at',
     accessorKey: 'created_at',
-    meta: { title: 'Subido el' },
+    meta: { title: 'Subido el', mobile: { role: 'field', priority: 3 } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Subido el" />,
     cell: ({ row }) => {
       if (row.original.state === 'pendiente') {

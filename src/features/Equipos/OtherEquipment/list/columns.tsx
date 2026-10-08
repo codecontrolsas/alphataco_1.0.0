@@ -70,7 +70,7 @@ export const columns: ColumnDef<OtherEquipmentListItem>[] = [
   // ─── N° Serie ────────────────────────────────────────────────────────────
   {
     accessorKey: 'serial_number',
-    meta: { title: 'N° Serie' },
+    meta: { title: 'N° Serie', mobile: { role: 'title', priority: 2 } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="N° Serie" />,
     cell: ({ row }) => (
       <Link
@@ -85,7 +85,7 @@ export const columns: ColumnDef<OtherEquipmentListItem>[] = [
   // ─── N° Interno ──────────────────────────────────────────────────────────
   {
     accessorKey: 'intern_number',
-    meta: { title: 'N° Interno' },
+    meta: { title: 'N° Interno', mobile: { role: 'title', priority: 1 } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="N° Interno" />,
     cell: ({ row }) => (
       <Link
@@ -101,7 +101,7 @@ export const columns: ColumnDef<OtherEquipmentListItem>[] = [
   {
     id: 'type',
     accessorFn: (row) => row.type?.name ?? '',
-    meta: { title: 'Tipo' },
+    meta: { title: 'Tipo', mobile: { role: 'subtitle' } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo" />,
     cell: ({ row }) =>
       row.original.type?.name ? (
@@ -208,7 +208,7 @@ export const columns: ColumnDef<OtherEquipmentListItem>[] = [
         .map((c) => c.customers?.name ?? '')
         .filter(Boolean)
         .join(', '),
-    meta: { title: 'Afectaciones' },
+    meta: { title: 'Afectaciones', mobile: { role: 'field', priority: 2 } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Afectaciones" />,
     cell: ({ row }) => {
       const contractors = (row.original.contractor_other_equipment ?? [])
@@ -269,7 +269,7 @@ export const columns: ColumnDef<OtherEquipmentListItem>[] = [
   // ─── Condición (enum nullable) ───────────────────────────────────────────
   {
     accessorKey: 'condition',
-    meta: { title: 'Condición' },
+    meta: { title: 'Condición', mobile: { role: 'field', priority: 1 } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Condición" />,
     cell: ({ row }) => {
       const cond = row.original.condition;
@@ -294,7 +294,7 @@ export const columns: ColumnDef<OtherEquipmentListItem>[] = [
   // ─── Estado documental (enum nullable) ─────────────────────────────────────
   {
     accessorKey: 'status',
-    meta: { title: 'Estado' },
+    meta: { title: 'Estado', mobile: { role: 'status' } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
     cell: ({ row }) => {
       const s = row.original.status;
@@ -369,7 +369,7 @@ export const columns: ColumnDef<OtherEquipmentListItem>[] = [
   {
     id: 'linked_vehicle',
     accessorFn: (row) => row.vehicles?.domain ?? '',
-    meta: { title: 'Vinculado a' },
+    meta: { title: 'Vinculado a', mobile: { role: 'field', priority: 3 } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Vinculado a" />,
     cell: ({ row }) => <span>{row.original.vehicles?.domain ?? <span className="text-muted-foreground">-</span>}</span>,
     filterFn: (row, _id, value: string[]) => {

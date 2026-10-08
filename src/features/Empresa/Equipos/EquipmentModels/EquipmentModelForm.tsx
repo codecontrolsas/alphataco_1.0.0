@@ -5,7 +5,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { toast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import { Logger } from '@/lib/logger';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -111,28 +111,20 @@ export default function EquipmentModelForm({ editingItem, onReset }: EquipmentMo
       // La accion devuelve el motivo como dato (no lo lanza) para que sobreviva
       // al build de produccion, donde Next oculta los mensajes de Error.
       if (!result.ok) {
-        toast({ title: 'Error', description: result.error, variant: 'destructive' });
+        toast.error('Error', { description: result.error, duration: Infinity });
         return;
       }
 
       // Invalidar la query de la tabla para refetch
       await queryClient.invalidateQueries({ queryKey: ['equipment-models'] });
 
-      toast({
-        title: isEditing ? 'Modelo actualizado' : 'Modelo creado',
-        description: 'Los cambios se guardaron exitosamente.',
-        variant: 'default',
-      });
+      toast.success(isEditing ? 'Modelo actualizado' : 'Modelo creado', { description: 'Los cambios se guardaron exitosamente.' });
 
       onReset();
     } catch (error) {
       logger.error('Error al guardar el modelo de equipo', { data: { error } });
       const message = error instanceof Error ? error.message : 'Ocurrió un error al guardar. Intente nuevamente.';
-      toast({
-        title: 'Error',
-        description: message,
-        variant: 'destructive',
-      });
+      toast.error('Error', { description: message, duration: Infinity });
     }
   };
 

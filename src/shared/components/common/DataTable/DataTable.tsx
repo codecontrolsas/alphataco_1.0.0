@@ -13,7 +13,7 @@ import {
 } from '@tanstack/react-table';
 import * as React from 'react';
 
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Logger } from '@/lib/logger';
 import { cn } from '@/lib/utils';
 import {
   saveTableColumnOrder,
@@ -21,13 +21,41 @@ import {
   saveTableViewPreferences,
 } from '@/shared/actions/table-preferences';
 
-import { DataTablePagination } from './DataTablePagination';
+import { DataTableCards } from './DataTableCards';
+import { DataTableDesktop } from './DataTableDesktop';
+import { DataTableDetailSheet } from './DataTableDetailSheet';
+import {
+  DataTableMobileFilters,
+  DataTableMobileFiltersTrigger,
+  DataTableMobileSortTrigger,
+  type DataTableMobilePanel,
+} from './DataTableMobileFilters';
+import { DataTableMoreMenu } from './DataTableMoreMenu';
+import { DEFAULT_PAGE_SIZE_OPTIONS, DataTablePagination } from './DataTablePagination';
 import { DataTablePendingProvider } from './DataTablePendingContext';
+import { DataTableSelectionBar } from './DataTableSelectionBar';
+import { DataTableRefetchBar } from './DataTableStates';
 import { DataTableToolbar } from './DataTableToolbar';
-import { _DataTableExportButton } from './_DataTableExportButton';
+import { _DataTableExportButton, useDataTableExport } from './_DataTableExportButton';
 import { DEFAULT_PAGE_SIZE, reconcileColumnOrder, serializeSorting, stateToSearchParams } from './helpers';
-import type { DataTableFacetedFilterConfig, DataTableProps, DataTableSearchParams } from './types';
+import { resolveMobileLayout } from './mobile-columns';
+import type {
+  DataTableExportConfig,
+  DataTableFacetedFilterConfig,
+  DataTableProps,
+  DataTableSearchParams,
+} from './types';
 import { useDataTable } from './useDataTable';
+
+const logger = new Logger('DataTable');
+
+// Defaults hoisteados: un `= []` / `= {}` en la firma crea un objeto nuevo en cada render y rompe las memos.
+const EMPTY_FILTERS: DataTableFacetedFilterConfig[] = [];
+const EMPTY_PARAMS: DataTableSearchParams = {};
+const EMPTY_VISIBILITY: Record<string, boolean> = {};
+
+/** Por encima de esta cantidad de filas por página el DOM doble (grilla + tarjetas) empieza a pesar. */
+const LARGE_PAGE_WARN_THRESHOLD = 100;
 
 /**
  * Detecta qué columnIds tienen un filtro activo en los searchParams dados.
@@ -87,8 +115,8 @@ export function DataTable<TData extends Record<string, unknown>, TValue = unknow
   columns,
   data: propData,
   totalRows: propTotalRows,
-  searchParams = {},
-  facetedFilters = [],
+  searchParams = EMPTY_PARAMS,
+  facetedFilters = EMPTY_FILTERS,
   searchPlaceholder = 'Buscar...',
   searchColumn,
   showColumnToggle = true,
@@ -98,12 +126,15 @@ export function DataTable<TData extends Record<string, unknown>, TValue = unknow
   onRowSelectionIdsChange,
   clearSelectionTrigger,
   emptyMessage = 'No se encontraron resultados.',
+  emptyDescription,
+  mobileLayout = 'cards',
+  selectionActions,
   pageSizeOptions,
   toolbarActions,
   exportConfig,
   showExportButton = true,
   showSearch = false,
-  initialColumnVisibility = {},
+  initialColumnVisibility = EMPTY_VISIBILITY,
   initialPageSize,
   initialSorting,
   persistViewPreferences = false,
@@ -112,7 +143,7 @@ export function DataTable<TData extends Record<string, unknown>, TValue = unknow
   tableId,
   paramNamespace,
   showFilterToggle = false,
-  initialFilterVisibility = {},
+  initialFilterVisibility = EMPTY_VISIBILITY,
   'data-testid': dataTestId = 'data-table',
   isFetchingFacets,
   rowClassName,
@@ -168,7 +199,7 @@ export function DataTable<TData extends Record<string, unknown>, TValue = unknow
   });
 
   // Hook para manejar estado sincronizado con URL
-  const filterableColumns = facetedFilters.map((f) => f.columnId);
+  const filterableColumns = React.useMemo(() => facetedFilters.map((f) => f.columnId), [facetedFilters]);
   const {
     state,
     pagination,
@@ -276,7 +307,13 @@ export function DataTable<TData extends Record<string, unknown>, TValue = unknow
   }
   const isInitialQueryState = stateSearchParamsKey === initialQueryStateKeyRef.current && hasRealInitialData;
 
-  const { data: queryResult, isPlaceholderData } = useQuery({
+  const {
+    data: queryResult,
+    isPlaceholderData,
+    isError,
+    isFetching,
+    refetch,
+  } = useQuery({
     queryKey: [...(queryKeyProp ?? ['data-table']), stateSearchParams],
     queryFn: () => queryFn!(stateSearchParams),
     placeholderData: keepPreviousData,
@@ -454,6 +491,9 @@ export function DataTable<TData extends Record<string, unknown>, TValue = unknow
     return () => clearTimeout(timer);
   }, [columnOrder, tableId, enableColumnReorder]);
 
+  // Aviso único de página muy grande (deuda D7: tablas sin paginación server-side).
+  const warnedLargePageRef = React.useRef(false);
+
   // Reset externo de la selección (skip initial render para no disparar al montar).
   const skipFirstClearRef = React.useRef(true);
   React.useEffect(() => {
@@ -465,6 +505,76 @@ export function DataTable<TData extends Record<string, unknown>, TValue = unknow
     setRowSelection({});
   }, [clearSelectionTrigger]);
 
+  // ---- Modo mobile (tarjetas), estados y contexto de las piezas ----
+
+  const showCards = mobileLayout !== 'table';
+  const rowCount = table.getRowModel().rows.length;
+
+  // Carga inicial: dialogs que pasan `data={[]}` de placeholder y dependen del queryFn. Es un skeleton,
+  // nunca "sin resultados" (afirmaría un vacío falso).
+  const isInitialLoading = isRemoteQuery && !queryResult && isFetching && !hasRealInitialData;
+  // Refetch con los datos anteriores a la vista (en server mode, la navegación pendiente).
+  const isRefetching = isPending;
+  const hasSearchOrFilters = hasActiveFilters || state.search !== '';
+  const handleRetry = React.useCallback(() => {
+    void refetch();
+  }, [refetch]);
+
+  // Roles de la tarjeta, memoizados por las columnas visibles (TanStack devuelve el mismo array mientras
+  // no cambian visibilidad, orden ni definiciones de columnas).
+  const visibleLeafColumns = table.getVisibleLeafColumns();
+  const layout = React.useMemo(
+    () => (showCards ? resolveMobileLayout(visibleLeafColumns) : null),
+    [showCards, visibleLeafColumns]
+  );
+
+  // Detalle de fila (mobile): solo el id vive en estado; la fila se deriva en el sheet.
+  const [detailRowId, setDetailRowId] = React.useState<string | null>(null);
+  const [detailMounted, setDetailMounted] = React.useState(false);
+  const handleOpenDetail = React.useCallback((rowId: string) => {
+    setDetailMounted(true);
+    setDetailRowId(rowId);
+  }, []);
+  const handleDetailOpenChange = React.useCallback((open: boolean) => {
+    if (!open) setDetailRowId(null);
+  }, []);
+
+  // Sheet de orden y filtros (mobile): se monta recién al abrirlo por primera vez.
+  const [mobilePanel, setMobilePanel] = React.useState<DataTableMobilePanel | null>(null);
+  const [mobilePanelMounted, setMobilePanelMounted] = React.useState(false);
+  const openMobilePanel = React.useCallback((panel: DataTableMobilePanel) => {
+    setMobilePanelMounted(true);
+    setMobilePanel(panel);
+  }, []);
+  const openFiltersPanel = React.useCallback(() => openMobilePanel('filters'), [openMobilePanel]);
+  const openSortPanel = React.useCallback(() => openMobilePanel('sort'), [openMobilePanel]);
+
+  // Exportar: el mismo handler del botón de desktop sirve para el ⋯ mobile.
+  const noExportConfig: DataTableExportConfig<TData> = {
+    fetchAllData: async () => [],
+    options: { filename: 'export' },
+  };
+  const { handleExport, isExporting } = useDataTableExport(columns, effectiveExportConfig ?? noExportConfig);
+  const canExport = !!effectiveExportConfig && showExportButton;
+
+  const canToggleFilterVisibility = showFilterToggle && !!tableId && facetedFilters.length > 0;
+
+  const selectedCount = Object.keys(rowSelection).length;
+  const hasSelectionToolbar = !!selectionActions && selectedCount > 0;
+
+  if (rowCount > LARGE_PAGE_WARN_THRESHOLD && !warnedLargePageRef.current) {
+    warnedLargePageRef.current = true;
+    logger.warn('Página con más de 100 filas: el DOM doble (grilla + tarjetas) puede pesar', {
+      data: { rowCount, tableId },
+    });
+  }
+
+  const liveMessage = isInitialLoading
+    ? ''
+    : `${displayedTotalRows} ${displayedTotalRows === 1 ? 'resultado' : 'resultados'}${
+        selectedCount > 0 ? `, ${selectedCount} ${selectedCount === 1 ? 'seleccionado' : 'seleccionados'}` : ''
+      }`;
+
   return (
     <DataTablePendingProvider
       value={{
@@ -475,78 +585,121 @@ export function DataTable<TData extends Record<string, unknown>, TValue = unknow
         urlVersion,
       }}
     >
-      <div className="space-y-4" data-testid={dataTestId}>
+      {/* El DataTable trae su propio panel (borde + fondo). Dentro de un Card/Panel del consumidor omite el borde. */}
+      <div
+        data-slot="data-table"
+        className="@container/table border-border bg-card w-full min-w-0 overflow-x-clip border [overflow-clip-margin:2px] in-data-[slot=card-content]:border-0 in-data-[slot=panel-body]:border-0"
+        data-testid={dataTestId}
+      >
+        {/* Barra de selección de desktop: reemplaza a la toolbar solo si el consumidor pasó `selectionActions` */}
+        {hasSelectionToolbar ? (
+          <div className="hidden @3xl/table:block">
+            <DataTableSelectionBar table={table} selectionActions={selectionActions} placement="toolbar" />
+          </div>
+        ) : null}
+
         {/* Toolbar */}
-        <DataTableToolbar
+        <div className={hasSelectionToolbar ? '@3xl/table:hidden' : undefined}>
+          <DataTableToolbar
+            table={table}
+            enableColumnReorder={enableColumnReorder}
+            searchPlaceholder={searchPlaceholder}
+            searchColumn={searchColumn}
+            facetedFilters={facetedFilters}
+            showColumnToggle={showColumnToggle}
+            tableId={tableId}
+            showFilterToggle={showFilterToggle}
+            filterVisibility={filterVisibility}
+            onFilterVisibilityChange={setFilterVisibility}
+            paramNamespace={paramNamespace}
+            isFetchingFacets={isFetchingFacets}
+            facetParams={facetParams}
+            facetScope={queryKeyProp}
+            onSearchChange={onGlobalFilterChange}
+            searchValue={state.search}
+            hasActiveFilters={hasActiveFilters}
+            onResetFilters={resetFilters}
+            exportActions={
+              effectiveExportConfig && showExportButton ? (
+                <_DataTableExportButton columns={columns} exportConfig={effectiveExportConfig} />
+              ) : undefined
+            }
+            toolbarActions={toolbarActions}
+            showSearch={showSearch}
+            mobileFiltersTrigger={
+              showCards && facetedFilters.length > 0 ? (
+                <DataTableMobileFiltersTrigger
+                  filters={facetedFilters}
+                  paramNamespace={paramNamespace}
+                  onOpen={openFiltersPanel}
+                />
+              ) : undefined
+            }
+            mobileSort={showCards ? <DataTableMobileSortTrigger table={table} onOpen={openSortPanel} /> : undefined}
+            moreMenu={
+              showCards ? (
+                <DataTableMoreMenu
+                  table={table}
+                  enableColumnReorder={enableColumnReorder}
+                  pageSizeOptions={pageSizeOptions ?? DEFAULT_PAGE_SIZE_OPTIONS}
+                  onExport={canExport ? handleExport : undefined}
+                  isExporting={isExporting}
+                  showColumnToggle={showColumnToggle}
+                  filterOptions={
+                    canToggleFilterVisibility && tableId
+                      ? {
+                          filters: facetedFilters,
+                          filterVisibility,
+                          onFilterVisibilityChange: setFilterVisibility,
+                          tableId,
+                        }
+                      : undefined
+                  }
+                />
+              ) : undefined
+            }
+          />
+        </div>
+
+        {/* Grilla (desktop). Va primero en el DOM: `cy.contains` sin selector toma el primer elemento. */}
+        <DataTableDesktop
           table={table}
-          enableColumnReorder={enableColumnReorder}
-          searchPlaceholder={searchPlaceholder}
-          searchColumn={searchColumn}
-          facetedFilters={facetedFilters}
-          showColumnToggle={showColumnToggle}
-          tableId={tableId}
-          showFilterToggle={showFilterToggle}
-          filterVisibility={filterVisibility}
-          onFilterVisibilityChange={setFilterVisibility}
-          paramNamespace={paramNamespace}
-          isFetchingFacets={isFetchingFacets}
-          facetParams={facetParams}
-          facetScope={queryKeyProp}
-          onSearchChange={onGlobalFilterChange}
-          searchValue={state.search}
-          hasActiveFilters={hasActiveFilters}
-          onResetFilters={resetFilters}
-          exportActions={
-            effectiveExportConfig && showExportButton ? (
-              <_DataTableExportButton columns={columns} exportConfig={effectiveExportConfig} />
-            ) : undefined
-          }
-          toolbarActions={toolbarActions}
-          showSearch={showSearch}
+          hideWhenNarrow={showCards}
+          rowClassName={rowClassName}
+          isInitialLoading={isInitialLoading}
+          isRefetching={isRefetching}
+          isError={isError}
+          onRetry={handleRetry}
+          hasActiveFilters={hasSearchOrFilters}
+          onClearFilters={resetFilters}
+          emptyMessage={emptyMessage}
+          emptyDescription={emptyDescription}
         />
 
-        {/* Table */}
-        <div className="rounded-md border overflow-auto max-h-[60vh]">
-          <Table containerClassName="overflow-x-visible overflow-y-visible min-w-fit">
-            <TableHeader>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => (
-                    <TableHead
-                      key={header.id}
-                      colSpan={header.colSpan}
-                      className="sticky top-0 z-10 dark:bg-slate-900 bg-white"
-                    >
-                      {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody className={cn('transition-opacity duration-150', isPending && 'opacity-50 pointer-events-none')}>
-              {table.getRowModel().rows?.length ? (
-                table.getRowModel().rows.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    data-state={row.getIsSelected() && 'selected'}
-                    data-testid={`table-row-${row.id}`}
-                    className={rowClassName ? rowClassName(row.original) : undefined}
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={columns.length} className="h-24 text-center">
-                    {emptyMessage}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+        {/* Tarjetas (mobile). Después de la grilla en el DOM; se muestran solo bajo `@3xl/table`. */}
+        {showCards && layout ? (
+          <div className={cn('relative', selectedCount > 0 && 'pb-16 @3xl/table:pb-0')}>
+            {isRefetching ? (
+              <div className="@3xl/table:hidden">
+                <DataTableRefetchBar className="absolute inset-x-0 top-0 z-10" />
+              </div>
+            ) : null}
+            <DataTableCards
+              table={table}
+              layout={layout}
+              rowClassName={rowClassName}
+              onOpenDetail={handleOpenDetail}
+              isInitialLoading={isInitialLoading}
+              isRefetching={isRefetching}
+              isError={isError}
+              onRetry={handleRetry}
+              hasActiveFilters={hasSearchOrFilters}
+              onClearFilters={resetFilters}
+              emptyMessage={emptyMessage}
+              emptyDescription={emptyDescription}
+            />
+          </div>
+        ) : null}
 
         {/* Pagination */}
         <DataTablePagination
@@ -555,7 +708,45 @@ export function DataTable<TData extends Record<string, unknown>, TValue = unknow
           pageSizeOptions={pageSizeOptions}
           showRowSelection={showRowSelection && Boolean(enableRowSelection)}
         />
+
+        {/* Barra de selección de mobile: sticky al pie de la tabla (no fixed: funciona dentro de dialogs) */}
+        {showCards ? (
+          <div className="contents @3xl/table:hidden">
+            <DataTableSelectionBar table={table} selectionActions={selectionActions} placement="sticky-bottom" />
+          </div>
+        ) : null}
+
+        {/* Live region: siempre montada. Anuncia el total y la cantidad de seleccionados cuando cambian. */}
+        <p role="status" className="sr-only">
+          {liveMessage}
+        </p>
       </div>
+
+      {/* Overlays mobile: se montan al abrirlos por primera vez (cada ResponsiveDialog escucha un media query). */}
+      {showCards && layout && detailMounted ? (
+        <DataTableDetailSheet
+          table={table}
+          layout={layout}
+          rowId={detailRowId}
+          onOpenChange={handleDetailOpenChange}
+        />
+      ) : null}
+      {showCards && mobilePanelMounted ? (
+        <DataTableMobileFilters
+          table={table}
+          filters={facetedFilters}
+          panel={mobilePanel}
+          onPanelChange={setMobilePanel}
+          paramNamespace={paramNamespace}
+          facetParams={facetParams}
+          facetScope={queryKeyProp}
+          isFetchingFacets={isFetchingFacets}
+          totalRows={displayedTotalRows}
+          isRefetching={isRefetching}
+          hasActiveFilters={hasActiveFilters}
+          onResetFilters={resetFilters}
+        />
+      ) : null}
     </DataTablePendingProvider>
   );
 }

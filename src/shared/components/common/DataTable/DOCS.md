@@ -15,6 +15,7 @@ Componente de tabla de datos server-side con soporte para paginación, sorting, 
 - [Columnas ocultas por defecto](#columnas-ocultas-por-defecto)
 - [Persistencia de preferencias](#persistencia-de-preferencias)
 - [Selección de Filas](#selección-de-filas)
+- [Modo mobile (tarjetas)](#modo-mobile-tarjetas)
 - [Estado en URL](#estado-en-url)
 - [URL Param Isolation (paramNamespace)](#url-param-isolation-paramnamespace)
 - [Cross-Filter Facets](#cross-filter-facets)
@@ -471,7 +472,10 @@ export default async function Page({ searchParams }: Props) {
 | `showRowSelection`        | `boolean`                            | `false`                           | Mostrar contador de selección                                           |
 | `enableRowSelection`      | `boolean`                            | `false`                           | Habilitar checkboxes de selección                                       |
 | `onRowSelectionChange`    | `(rows: TData[]) => void`            | `undefined`                       | Callback de selección                                                   |
-| `emptyMessage`            | `string`                             | `'No se encontraron resultados.'` | Mensaje cuando no hay datos                                             |
+| `emptyMessage`            | `string`                             | `'No se encontraron resultados.'` | Título del estado vacío                                                 |
+| `emptyDescription`        | `string`                             | `undefined`                       | Descripción opcional del estado vacío                                   |
+| `mobileLayout`            | `'cards' \| 'table'`                | `'cards'`                         | Vista en contenedores < 768px (ver [Modo mobile](#modo-mobile-tarjetas)) |
+| `selectionActions`        | `(rows: Row<TData>[], clear) => ReactNode` | `undefined`                 | Acciones masivas en la barra de selección (opt-in)                      |
 | `pageSizeOptions`         | `number[]`                           | `[10, 20, 30, 50, 100]`           | Opciones de filas por página                                            |
 | `toolbarActions`          | `ReactNode`                          | `undefined`                       | Acciones adicionales en el toolbar                                      |
 | `exportConfig`            | `DataTableExportConfig<TData>`       | `undefined`                       | Configuración de exportación Excel                                      |
@@ -820,21 +824,17 @@ const mergedFilterVisibility = useMemo(() => {
 
 ---
 
-## Card wrapper obligatorio
+## Panel del DataTable (Card wrapper)
 
-El `DataTable` **debe estar envuelto en `<Card><CardContent className="pt-6">`** para dar fondo y contención visual. Sin esto, la tabla queda con fondo transparente.
+El DataTable **trae su propio borde y fondo** (`border border-border bg-card`). Dentro de un `Card`/`CardContent` o de un `Panel` omite el borde propio, así que los consumidores que hoy lo envuelven en `<Card><CardContent className="pt-6">` siguen siendo válidos y no se duplica el borde. En los módulos que se migran al rediseño el wrapper pasa a `Panel p-0`. (La regla `.claude/rules/datatable.md` todavía dice "Card wrapper obligatorio"; se actualiza en la Fase 9.)
 
 ```typescript
-// Server Component (XxxList.tsx)
-import { Card, CardContent } from '@/components/ui/card';
-
-return (
-  <Card>
-    <CardContent className="pt-6">
-      <_XxxDataTable ... />
-    </CardContent>
-  </Card>
-);
+// Válido hoy (el borde propio se omite dentro de card-content)
+<Card>
+  <CardContent className="pt-6">
+    <_XxxDataTable ... />
+  </CardContent>
+</Card>
 ```
 
 ---
@@ -935,6 +935,116 @@ Reglas del mecanismo:
   ...
 />
 ```
+
+---
+
+## Modo mobile (tarjetas)
+
+El DataTable es **un solo componente con dos vistas** que se alternan por *container query*, no por viewport. La raíz es `@container/table`; por debajo de **`@3xl/table` (768px de contenedor)** se oculta la grilla y se muestra una lista de tarjetas. Ambas vistas se renderizan desde el servidor con las mismas filas (sin salto al hidratar). La grilla va primero en el DOM y las tarjetas después, así `cy.contains` (que corre a 1920px) toma siempre la grilla.
+
+Como el corte es por contenedor, una tabla dentro de un dialog de menos de 768px también pasa a tarjetas en escritorio.
+
+**Regla de oro**: lo que existe en desktop tiene lugar en mobile. Nada se pierde, se reubica:
+
+| Desktop | Mobile |
+| --- | --- |
+| Filtros como botones o chips | Botón **Filtros (n)** abre un bottom sheet con todos los filtros (incluidos los ocultos en desktop), en un acordeón. Los chips de filtros activos quedan visibles en una tira con scroll horizontal. |
+| Header de columna con orden | Botón **Ordenar: columna ↑** abre el mismo sheet en la sección "Ordenar por" (columna + Ascendente/Descendente). Un multi-sort activo se ve y se quita, pero no se arma desde mobile. |
+| Columnas, Exportar, Filas por página, Mostrar filtros | Menú **⋯** (`table-more-menu`). Lo que la tabla no tiene, no aparece. |
+| Fila de la grilla | Tarjeta: título, estado + subtítulo, hasta 3 pares label/valor. El botón de detalle (chevron) abre un sheet con **todas** las columnas visibles y la celda `actions` al pie. Dentro de un dialog el detalle se expande en la propia tarjeta (no se encadenan modales). |
+| Pie con select y números | Paginación compacta `‹ 1–50 de 387 ›` con botones de 44px. |
+| Barra de selección | Barra sticky al pie de la tabla, con "Limpiar" y las `selectionActions` si existen. |
+
+Los filtros mobile se aplican **al instante** (escriben la URL como en desktop) y comparten caché de facetas con los popovers (misma `queryKey`): una sola carga por faceta. El botón "Ver N resultados" sale del total que ya está en memoria.
+
+### `meta.mobile` — qué muestra cada columna en la tarjeta
+
+```tsx
+{
+  accessorKey: 'status',
+  meta: {
+    title: 'Estado',
+    mobile: { role: 'status' },
+  },
+}
+```
+
+| Campo | Tipo | Descripción |
+| --- | --- | --- |
+| `role` | `'title' \| 'subtitle' \| 'status' \| 'field' \| 'hidden'` | `title` (hasta 2, en línea: `[código] + nombre`), `subtitle` (1, a la derecha del estado), `status` (1), `field` (hasta 3 visibles, el resto va solo al detalle), `hidden` (solo detalle). |
+| `priority` | `number` | Menor = primero. Default: el orden de la columna en la tabla. |
+| `label` | `string` | Label en tarjeta y detalle. Default: `meta.title` → header si es string → `column.id`. |
+| `hideLabel` | `boolean` | Solo el valor en la tarjeta (chips que se explican solos). En el detalle el label siempre va. |
+
+Reglas:
+- Las tarjetas reusan los `cell` de la grilla: no hay que escribir nada extra, ni agregar campos a las queries.
+- Se resuelve sobre las **columnas visibles**: lo que el usuario oculta en desktop no aparece en la tarjeta. Si oculta la columna título, asciende el siguiente candidato.
+- `select` y `actions` son estructurales (el checkbox lo dibuja la tarjeta; `actions` va al pie del detalle). Una columna sin `accessorFn` y con `excludeFromExport` (una imagen) va solo al detalle.
+- **Si falta `meta.title` y agregarlo cambiaría la cabecera del Excel** (el exportador usa `meta.title || key`), usar `meta.mobile.label` en vez de `meta.title`.
+- Un buen título es **cómo identifica el usuario el registro** (legajo, dominio/interno, número de pedido): ver `.claude/rules/employee-file-number.md`.
+
+**Heurística por defecto** (tabla sin ningún `meta.mobile`): título = primera columna visible; estado = la primera cuyo id sea `status`, `state` o `estado`; campos = las 3 siguientes; el resto, al detalle. Es deliberadamente simple: ninguna tabla queda rota sin anotar. Si la primera columna no identifica el registro, se anota con `meta.mobile`.
+
+Ejemplo (Empleados): `file` y `fullName` son `title`, `status` es `status`, `company_positions`, `hierarchy` y `date_of_admission` son `field`; el resto no se anota y va al detalle.
+
+La resolución vive en `mobile-columns.ts` (`resolveMobileLayout`, `getColumnLabel`), sin directiva `'use client'`.
+
+### `mobileLayout`
+
+`mobileLayout?: 'cards' | 'table'` (default `'cards'`). Con `'table'` no se renderizan tarjetas ni el ⋯ mobile: la grilla queda con scroll horizontal dentro del panel en cualquier ancho (la toolbar y el pie siguen reacomodándose). Usarlo solo cuando **comparar por columna es la tarea** (una matriz de días, una grilla de selección con tildes en la misma fila). **Cada uso se anota en `docs/rediseno-ui/PLAN.md` §9** con archivo y motivo. En la Fase 3 ninguna tabla lo usa.
+
+### `selectionActions` — acciones masivas
+
+```tsx
+<DataTable
+  enableRowSelection
+  showRowSelection
+  selectionActions={(rows, clear) => (
+    <Button size="sm" variant="secondary" onClick={() => bulkUpdate(rows.map((row) => row.original))}>
+      Cambiar estado
+    </Button>
+  )}
+/>
+```
+
+- Firma: `(selectedRows: Row<TData>[], clear: () => void) => ReactNode`. `selectedRows` son las filas seleccionadas **de la página actual** (la selección entre páginas sigue disponible con `onRowSelectionIdsChange`). `clear` es opcional: equivale a destildar a mano y dispara los mismos callbacks.
+- **Opt-in**: con filas tildadas y `selectionActions`, la barra de selección **reemplaza a la toolbar** en desktop (mismo lugar y alto). Sin `selectionActions` la toolbar no se reemplaza, porque se perderían los `toolbarActions` ("Agregar empleado", etc.); el conteo sigue en el pie. En mobile la barra sticky se muestra siempre que haya selección.
+- No usar `toolbarActions` para la acción masiva: con 0 seleccionados quedaría un botón deshabilitado.
+- "Seleccionar los N" (todas las páginas) no existe: la barra trae "Seleccionar página".
+
+### Estados
+
+| Estado | Cuándo | Qué se ve |
+| --- | --- | --- |
+| Carga inicial | `queryFn` sin datos reales todavía (`data={[]}` de placeholder) | Skeleton de 10 filas (o 6 tarjetas). **Nunca** "sin resultados": afirmaría un vacío falso. |
+| Refetch | Cambia un filtro/página/orden y se muestran los datos anteriores (`isPlaceholderData`) | Datos a 60% con `pointer-events-none`, barra de progreso de 2px y `aria-busy`. |
+| Vacío | Sin filas y sin filtros | `EmptyState` con `emptyMessage` como título. `emptyDescription` (opcional) agrega una descripción; no se inventa un "por qué" genérico. |
+| Filtrado vacío | Sin filas con filtros o búsqueda activos | "Sin resultados para los filtros aplicados" con acción "Limpiar filtros". |
+| Error | La consulta falla (`isError`) | Callout `role="alert"` con "Reintentar" (`refetch`). Si había datos, se siguen viendo debajo. Con error y sin filas no se dibuja el vacío. |
+
+La raíz lleva una **live region** (`<p role="status" class="sr-only">`, siempre montada) que anuncia "387 resultados" y "3 seleccionados" cuando cambian.
+
+### Panel y borde
+
+El DataTable trae su **propio panel** (`border border-border bg-card`, sin radio ni sombra). Dentro de un `Card`/`CardContent` o un `Panel` (`data-slot="card-content"` / `"panel-body"`) omite el borde propio para no duplicarlo: no hace falta tocar los consumidores existentes. Cuando un módulo se migre, el wrapper pasa a `Panel p-0`.
+
+### Estructura de archivos
+
+| Archivo | Rol |
+| --- | --- |
+| `DataTable.tsx` | Orquestador: estado, URL, React Query, persistencia, `detailRowId`, contexto de las piezas |
+| `DataTableDesktop.tsx` | Grilla (header sticky, filas de 36px, columna `actions` sticky, estados) |
+| `DataTableCards.tsx` / `DataTableCard.tsx` | Lista de tarjetas (la tarjeta es `memo`, a nivel de módulo) |
+| `DataTableDetailSheet.tsx` | Detalle de fila (sheet) y piezas que comparte la tarjeta |
+| `DataTableSelectionBar.tsx` | Barra de selección (`toolbar` o `sticky-bottom`) |
+| `DataTableMobileFilters.tsx` | Sheet de "Ordenar por" + filtros, y sus dos disparadores |
+| `DataTableMoreMenu.tsx` | Menú ⋯ mobile |
+| `DataTableStates.tsx` | Skeleton, vacío, error, barra de refetch |
+| `filters/` | Hooks (`use-facet-filter`, `use-url-text-filter`, `use-url-date-range`) y cuerpos reusados por el popover y el acordeón |
+
+### `data-testid` nuevos
+
+`table-card-<rowId>` (tarjeta) · `table-detail-sheet` · `table-mobile-filters` · `table-mobile-filters-trigger` · `table-mobile-sort-trigger` · `table-more-menu` · `table-selection-bar` (desktop) y `table-selection-bar-mobile` (sticky, para no duplicar el id) · `table-empty-state` · `table-error` · `filter-chip-clear-<columnId>`. Los testids existentes (`search-input`, `clear-filters`, `filter-<id>`, `table-row-<id>`, `pagination-*`, etc.) se conservan; los controles de toolbar y pie son un solo DOM, así que no se duplican. Solo filas ↔ tarjetas son DOM doble: los testids que vienen **dentro de las celdas** del consumidor aparecen también en la tarjeta (después en el DOM y oculta a 1920px).
 
 ---
 
@@ -1615,6 +1725,16 @@ Esto es inherente al server mode (`router.push` re-renderiza toda la página). M
 | Componente                 | Descripción                       |
 | -------------------------- | --------------------------------- |
 | `DataTable`                | Componente principal              |
+| `DataTableDesktop`         | Grilla (vista desde 768px de contenedor) |
+| `DataTableCards` / `DataTableCard` | Tarjetas (vista mobile)   |
+| `DataTableDetailSheet`     | Detalle de fila (mobile)          |
+| `DataTableSelectionBar`    | Barra de selección                |
+| `DataTableMobileFilters`   | Sheet de orden y filtros (mobile) |
+| `DataTableMoreMenu`        | Menú ⋯ mobile                     |
+| `DataTableActiveFilterChip` | Chip de filtro/orden activo      |
+| `DataTableColumnsPanel`    | Panel de columnas (visibilidad y orden) |
+| `DataTableFilterVisibilityList` | Lista de "Mostrar filtros" sin disparador |
+| `useDataTableExport`       | Hook de exportación a Excel (carga `exceljs` al hacer clic) |
 | `DataTableColumnHeader`    | Header de columna con sorting     |
 | `DataTableFacetedFilter`   | Filtro multi-select con conteos   |
 | `DataTableDateRangeFilter` | Filtro de rango de fechas         |

@@ -11,7 +11,8 @@ function Checkbox({ className, ...props }: React.ComponentProps<typeof CheckboxP
     <CheckboxPrimitive.Root
       data-slot="checkbox"
       className={cn(
-        'peer border-input dark:bg-input/30 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground dark:data-[state=checked]:bg-primary data-[state=checked]:border-primary focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive size-4 shrink-0 rounded-[4px] border shadow-xs transition-shadow outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50',
+        // Cuadrado de 16px con hit area de 24px (44px con puntero grueso) por pseudo-elemento: no mueve el layout.
+        'peer border-input bg-card dark:bg-background data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground data-[state=checked]:border-primary data-[state=indeterminate]:bg-primary data-[state=indeterminate]:text-primary-foreground data-[state=indeterminate]:border-primary dark:data-[state=checked]:bg-primary dark:data-[state=indeterminate]:bg-primary aria-invalid:border-danger relative size-4 shrink-0 border transition-colors duration-(--duration-fast) after:absolute after:-inset-1 pointer-coarse:after:-inset-3.5 disabled:cursor-not-allowed disabled:opacity-50',
         className
       )}
       {...props}

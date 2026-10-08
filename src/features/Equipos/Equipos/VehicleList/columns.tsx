@@ -74,7 +74,7 @@ export const columns: ColumnDef<VehicleListItem>[] = [
   // ─── Dominio ─────────────────────────────────────────────────────────────
   {
     accessorKey: 'domain',
-    meta: { title: 'Dominio' },
+    meta: { title: 'Dominio', mobile: { role: 'title', priority: 1 } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Dominio" />,
     cell: ({ row }) => (
       <Link
@@ -89,7 +89,7 @@ export const columns: ColumnDef<VehicleListItem>[] = [
   // ─── N° Interno ──────────────────────────────────────────────────────────
   {
     accessorKey: 'intern_number',
-    meta: { title: 'N° Interno' },
+    meta: { title: 'N° Interno', mobile: { role: 'title', priority: 2 } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="N° Interno" />,
     cell: ({ row }) => (
       <Link href={`/dashboard/equipment/action?action=view&id=${row.original.id}`} className="hover:underline">
@@ -102,7 +102,7 @@ export const columns: ColumnDef<VehicleListItem>[] = [
   {
     id: 'type',
     accessorFn: (row) => row.type_vehicles_typeTotype?.name ?? '',
-    meta: { title: 'Tipo' },
+    meta: { title: 'Tipo', mobile: { role: 'subtitle' } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo" />,
     cell: ({ row }) =>
       row.original.type_vehicles_typeTotype?.name ? (
@@ -179,7 +179,7 @@ export const columns: ColumnDef<VehicleListItem>[] = [
   // ─── Condición (enum nullable) ───────────────────────────────────────────
   {
     accessorKey: 'condition',
-    meta: { title: 'Condición' },
+    meta: { title: 'Condición', mobile: { role: 'field', priority: 1 } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Condición" />,
     cell: ({ row }) => {
       const cond = row.original.condition;
@@ -204,7 +204,7 @@ export const columns: ColumnDef<VehicleListItem>[] = [
   // ─── Estado documental (enum nullable) ─────────────────────────────────────
   {
     accessorKey: 'status',
-    meta: { title: 'Estado' },
+    meta: { title: 'Estado', mobile: { role: 'status' } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
     cell: ({ row }) => {
       const s = row.original.status;
@@ -299,7 +299,7 @@ export const columns: ColumnDef<VehicleListItem>[] = [
   // ─── Kilómetros ───────────────────────────────────────────────────────────
   {
     accessorKey: 'kilometer',
-    meta: { title: 'Kilómetros' },
+    meta: { title: 'Kilómetros', mobile: { role: 'field', priority: 3, label: 'Km' } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Kilómetros" />,
     cell: ({ row }) =>
       row.original.kilometer != null ? (
@@ -330,7 +330,7 @@ export const columns: ColumnDef<VehicleListItem>[] = [
         .map((c) => c.customers?.name ?? '')
         .filter(Boolean)
         .join(', '),
-    meta: { title: 'Afectaciones' },
+    meta: { title: 'Afectaciones', mobile: { role: 'field', priority: 2 } },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Afectaciones" />,
     cell: ({ row }) => {
       const contractors = (row.original.contractor_equipment ?? []).map((c) => c.customers?.name ?? '').filter(Boolean);

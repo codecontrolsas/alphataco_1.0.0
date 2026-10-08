@@ -5,7 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { toast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import { Logger } from '@/lib/logger';
 import DependencyValidationModal, { type DependencyConfig } from '@/shared/components/modal/DependencyValidationModal';
 import { fetchDependenciesForValue, fetchReplacementOptions } from '@/shared/components/modal/dependency-utils';
@@ -138,22 +138,14 @@ export function EquipmentOwnerForm({ initialData = null, onReset, isEditing = fa
         });
       }
 
-      toast({
-        title: 'Titular guardado correctamente',
-        description: 'Los cambios se han guardado exitosamente.',
-        variant: 'default',
-      });
+      toast.success('Titular guardado correctamente', { description: 'Los cambios se han guardado exitosamente.' });
 
       // Invalidar queries del DataTable para reflejar cambios
       await queryClient.invalidateQueries({ queryKey: ['equipment-owners-list'] });
       onReset();
     } catch (error: unknown) {
       logger.error('Error al guardar el titular', { data: { error } });
-      toast({
-        title: 'Error',
-        description: 'No se pudo guardar el titular. Por favor, inténtalo de nuevo.',
-        variant: 'destructive',
-      });
+      toast.error('Error', { description: 'No se pudo guardar el titular. Por favor, inténtalo de nuevo.', duration: Infinity });
     }
   };
 
@@ -185,21 +177,13 @@ export function EquipmentOwnerForm({ initialData = null, onReset, isEditing = fa
           contract_types: values.contract_types,
         });
 
-        toast({
-          title: 'Titular actualizado correctamente',
-          description: 'El titular y sus equipos han sido actualizados exitosamente.',
-          variant: 'default',
-        });
+        toast.success('Titular actualizado correctamente', { description: 'El titular y sus equipos han sido actualizados exitosamente.' });
 
         await queryClient.invalidateQueries({ queryKey: ['equipment-owners-list'] });
         onReset();
       } catch (err: unknown) {
         logger.error('Error al reasignar equipos y actualizar titular', { data: { err } });
-        toast({
-          title: 'Error',
-          description: 'No se pudieron reasignar los equipos.',
-          variant: 'destructive',
-        });
+        toast.error('Error', { description: 'No se pudieron reasignar los equipos.', duration: Infinity });
       }
     }
   };

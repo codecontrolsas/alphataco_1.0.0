@@ -1,5 +1,112 @@
-import type { Column, ColumnDef, Row, Table } from '@tanstack/react-table';
+import type { Column, ColumnDef, Row, RowData, Table } from '@tanstack/react-table';
 import type { LucideIcon } from 'lucide-react';
+
+// ============================================================================
+// COLUMN META (tipado de `columnDef.meta`) Y MODO MOBILE
+// ============================================================================
+
+declare module '@tanstack/react-table' {
+  // `TData` y `TValue` los exige la firma de la interfaz de TanStack aunque no se usen todos.
+  interface ColumnMeta<TData extends RowData, TValue> {
+    /** Título legible: menú de columnas, cabecera del Excel, label de la tarjeta y del detalle. */
+    title?: string;
+    /** Columnas de UI (select, actions, imagen): fuera del Excel. */
+    excludeFromExport?: boolean;
+    /** Formatter explícito para la exportación a Excel (lo lee `excel-export.ts`). */
+    exportFormatter?: (value: unknown, row: TData) => string | number | null;
+    /** Cómo se muestra la columna en la tarjeta mobile. Sin `mobile` en ninguna columna → heurística. */
+    mobile?: DataTableColumnMobileMeta;
+  }
+}
+
+/** Rol de una columna en la tarjeta mobile. */
+export type DataTableMobileRole = 'title' | 'subtitle' | 'status' | 'field' | 'hidden';
+
+export interface DataTableColumnMobileMeta {
+  role: DataTableMobileRole;
+  /** Menor = primero. Default: el orden de la columna en la tabla. */
+  priority?: number;
+  /** Label en tarjeta y detalle. Default: meta.title → header si es string → column.id. */
+  label?: string;
+  /** Solo el valor en la tarjeta (chips que se explican solos). En el detalle el label siempre va. */
+  hideLabel?: boolean;
+}
+
+/** Una columna ya resuelta para el modo mobile, con el texto que la nombra. */
+export interface MobileColumnEntry<TData> {
+  column: Column<TData, unknown>;
+  label: string;
+  hideLabel: boolean;
+}
+
+/** Salida de `resolveMobileLayout`: qué columna va en cada lugar de la tarjeta y del detalle. */
+export interface MobileLayout<TData> {
+  /** Hasta 2, en orden de prioridad. Arman el nombre accesible de la tarjeta. */
+  titles: MobileColumnEntry<TData>[];
+  subtitle: MobileColumnEntry<TData> | null;
+  status: MobileColumnEntry<TData> | null;
+  /** Hasta 3 pares label/valor visibles en la tarjeta. */
+  fields: MobileColumnEntry<TData>[];
+  /** Todo lo demás: solo se ve en el panel de detalle. */
+  detailOnly: MobileColumnEntry<TData>[];
+  /** Columna estructural `select` (si está visible). */
+  select: Column<TData, unknown> | null;
+  /** Columna estructural `actions` (si está visible): va al pie del detalle. */
+  actions: Column<TData, unknown> | null;
+}
+
+/** Cómo se dibuja la tabla en contenedores angostos. */
+export type DataTableMobileLayoutMode = 'cards' | 'table';
+
+/** Variante visual de los filtros de la toolbar. */
+export type DataTableFilterVariant = 'trigger' | 'chip';
+
+/** Estados que comparten la vista de tabla y la de tarjetas. */
+export interface DataTableViewStateProps {
+  /** Carga inicial sin datos reales todavía (skeleton, nunca "sin resultados"). */
+  isInitialLoading?: boolean;
+  /** Refetch con los datos anteriores a la vista. */
+  isRefetching?: boolean;
+  isError?: boolean;
+  onRetry?: () => void;
+  hasActiveFilters?: boolean;
+  onClearFilters?: () => void;
+  emptyMessage?: string;
+  emptyDescription?: string;
+}
+
+export interface DataTableDesktopProps<TData> extends DataTableViewStateProps {
+  table: Table<TData>;
+  /** Oculta la grilla por debajo de `@3xl/table` (es lo que hace el modo tarjetas). Con `mobileLayout="table"` va en false. */
+  hideWhenNarrow?: boolean;
+  rowClassName?: (row: TData) => string | undefined;
+}
+
+export interface DataTableCardsProps<TData> extends DataTableViewStateProps {
+  table: Table<TData>;
+  layout: MobileLayout<TData>;
+  rowClassName?: (row: TData) => string | undefined;
+  /** Abre el detalle de la fila (id de fila de TanStack). */
+  onOpenDetail: (rowId: string) => void;
+}
+
+export interface DataTableDetailSheetProps<TData> {
+  table: Table<TData>;
+  layout: MobileLayout<TData>;
+  /** Id de la fila abierta, o null si está cerrado. */
+  rowId: string | null;
+  onOpenChange: (open: boolean) => void;
+  /** true cuando la tabla vive dentro de un dialog: el detalle va en línea, sin encadenar modales. */
+  inline?: boolean;
+}
+
+export interface DataTableSelectionBarProps<TData> {
+  table: Table<TData>;
+  /** Acciones masivas del consumidor; reciben las filas seleccionadas y un `clear` para limpiar la selección. */
+  selectionActions?: (selectedRows: Row<TData>[], clear: () => void) => React.ReactNode;
+  /** Desktop: reemplaza la toolbar. Mobile: queda pegada abajo. */
+  placement: 'toolbar' | 'sticky-bottom';
+}
 
 // ============================================================================
 // SEARCH PARAMS TYPES
@@ -218,12 +325,26 @@ export interface DataTableProps<TData, TValue = unknown> {
    * (filtros, paginación, sorting).
    */
   clearSelectionTrigger?: number;
-  /** Mensaje cuando no hay resultados */
+  /** Mensaje cuando no hay resultados (título del estado vacío) */
   emptyMessage?: string;
+  /** Texto secundario del estado vacío (opcional; sin él no se muestra descripción). */
+  emptyDescription?: string;
   /** Tamaños de página disponibles */
   pageSizeOptions?: number[];
   /** Componente de acciones para el toolbar */
   toolbarActions?: React.ReactNode;
+  /**
+   * Cómo se dibuja la tabla en contenedores angostos (< 768px de contenedor).
+   * `cards` (default) = lista de tarjetas; `table` = fuerza la grilla con scroll horizontal dentro del panel.
+   * Cada uso de `table` se anota en `docs/rediseno-ui/PLAN.md` §9.
+   */
+  mobileLayout?: DataTableMobileLayoutMode;
+  /**
+   * Acciones masivas del consumidor. Se muestran en la barra de selección cuando hay filas tildadas
+   * (reemplaza a la toolbar en desktop; queda pegada abajo en mobile). Opt-in: sin ella la toolbar no se
+   * reemplaza. Recibe las filas seleccionadas (de la página actual) y `clear` para limpiar la selección.
+   */
+  selectionActions?: (selectedRows: Row<TData>[], clear: () => void) => React.ReactNode;
   /** Configuración de exportación a Excel (si se omite, se oculta el botón) */
   exportConfig?: DataTableExportConfig<TData>;
   /** Mostrar botón de exportar a Excel (default: true si hay exportConfig) */
@@ -408,6 +529,8 @@ export interface DataTableFacetedFilterProps<TData, TValue> {
    * mismos params comparten la entrada de cache y una muestra las opciones de la otra.
    */
   facetScope?: readonly unknown[];
+  /** `'trigger'` (default): botón del filtro inactivo. `'chip'`: chip del filtro activo con ✕. */
+  variant?: DataTableFilterVariant;
 }
 
 /**

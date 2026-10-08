@@ -6,8 +6,8 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { exportToExcel, tanstackColumnsToExcelColumns, type ExcelExportOptions } from '@/shared/lib/excel-export';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import type { ExcelExportOptions } from '@/shared/lib/excel-export';
 
 export interface DataTableExportConfig<TData> {
   /**
@@ -41,10 +41,14 @@ interface Props<TData, TValue = unknown> {
   exportConfig: DataTableExportConfig<TData>;
 }
 
-export function _DataTableExportButton<TData extends Record<string, unknown>, TValue = unknown>({
-  columns,
-  exportConfig,
-}: Props<TData, TValue>) {
+/**
+ * Handler de exportación compartido entre el botón de desktop y el ⋯ mobile.
+ * `excel-export` (y exceljs, que arrastra) se carga recién al hacer clic.
+ */
+export function useDataTableExport<TData extends Record<string, unknown>, TValue = unknown>(
+  columns: ReadonlyArray<ColumnDef<TData, TValue>>,
+  exportConfig: DataTableExportConfig<TData>
+) {
   const [isExporting, setIsExporting] = useState(false);
 
   const handleExport = async () => {
@@ -57,6 +61,8 @@ export function _DataTableExportButton<TData extends Record<string, unknown>, TV
         toast.warning('No hay datos para exportar');
         return;
       }
+
+      const { exportToExcel, tanstackColumnsToExcelColumns } = await import('@/shared/lib/excel-export');
 
       // Convertir columnas de TanStack a formato Excel
       const excelColumns = tanstackColumnsToExcelColumns<TData>(columns as ReadonlyArray<ColumnDef<TData, unknown>>, {
@@ -75,19 +81,33 @@ export function _DataTableExportButton<TData extends Record<string, unknown>, TV
     }
   };
 
+  return { handleExport, isExporting };
+}
+
+export function _DataTableExportButton<TData extends Record<string, unknown>, TValue = unknown>({
+  columns,
+  exportConfig,
+}: Props<TData, TValue>) {
+  const { handleExport, isExporting } = useDataTableExport(columns, exportConfig);
+
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button variant="outline" size="sm" onClick={handleExport} disabled={isExporting} className="h-8 gap-1.5">
-            {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-            <span className="hidden sm:inline">Excel</span>
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Exportar todos los datos filtrados a Excel</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={handleExport}
+          disabled={isExporting}
+          aria-busy={isExporting}
+        >
+          {isExporting ? <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Download aria-hidden="true" />}
+          {isExporting ? 'Exportando…' : 'Exportar'}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p>Exportar todos los datos filtrados a Excel</p>
+      </TooltipContent>
+    </Tooltip>
   );
 }

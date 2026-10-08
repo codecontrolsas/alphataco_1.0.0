@@ -1,7 +1,7 @@
 'use client';
 
 import type { Column, Table } from '@tanstack/react-table';
-import { ArrowDown, ArrowUp, RotateCcw, Settings2, Undo2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Columns3, RotateCcw, Undo2 } from 'lucide-react';
 import * as React from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -17,12 +17,11 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Separator } from '@/components/ui/separator';
 
+import { getColumnLabel } from './mobile-columns';
 import type { DataTableViewOptionsProps } from './types';
 
-/** Título legible de la columna (el mismo que usan el toggle de columnas y el export a Excel) */
-function getColumnTitle<TData>(column: Column<TData, unknown>): string {
-  return (column.columnDef.meta as { title?: string })?.title || column.id;
-}
+/** Título legible de la columna (el mismo que usan el toggle de columnas, el export a Excel y las tarjetas) */
+const getColumnTitle = getColumnLabel;
 
 /**
  * Columnas que el usuario puede mostrar/ocultar y, por lo tanto, tambien reordenar.
@@ -62,8 +61,8 @@ function ColumnVisibilityOptions<TData>({ table }: { table: Table<TData> }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="ml-auto hidden h-8 lg:flex" data-testid="column-toggle">
-          <Settings2 className="mr-2 h-4 w-4" />
+        <Button type="button" variant="secondary" size="sm" data-testid="column-toggle">
+          <Columns3 aria-hidden="true" />
           Columnas
         </Button>
       </DropdownMenuTrigger>
@@ -94,6 +93,23 @@ function ColumnVisibilityOptions<TData>({ table }: { table: Table<TData> }) {
  * roto. En un popover la lista es una `ul` común y los botones se comportan como botones.
  */
 function ColumnOrderOptions<TData>({ table }: { table: Table<TData> }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="secondary" size="sm" data-testid="column-toggle">
+          <Columns3 aria-hidden="true" />
+          Columnas
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-[320px] p-0">
+        <ColumnOrderPanel table={table} />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** Cuerpo del panel de columnas (mostrar/ocultar y mover). Lo usan el popover de desktop y el diálogo del ⋯ mobile. */
+function ColumnOrderPanel<TData>({ table }: { table: Table<TData> }) {
   const fieldId = React.useId();
   const [announcement, setAnnouncement] = React.useState('');
   const [orderBeforeReset, setOrderBeforeReset] = React.useState<string[] | null>(null);
@@ -174,14 +190,7 @@ function ColumnOrderOptions<TData>({ table }: { table: Table<TData> }) {
   };
 
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="ml-auto hidden h-8 lg:flex" data-testid="column-toggle">
-          <Settings2 className="mr-2 h-4 w-4" />
-          Columnas
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-[320px] p-0">
+    <>
         <div className="px-3 pb-2 pt-3">
           <p className="text-sm font-medium">Columnas</p>
           <p className="text-muted-foreground mt-1 text-xs">
@@ -297,7 +306,45 @@ function ColumnOrderOptions<TData>({ table }: { table: Table<TData> }) {
         <span className="sr-only" role="status" aria-live="polite">
           {announcement}
         </span>
-      </PopoverContent>
-    </Popover>
+    </>
   );
+}
+
+/** Lista simple de visibilidad (sin reordenar) para el diálogo de columnas del ⋯ mobile. */
+function ColumnVisibilityPanel<TData>({ table }: { table: Table<TData> }) {
+  const fieldId = React.useId();
+  const columns = getMovableColumns(table.getAllColumns());
+
+  if (columns.length === 0) {
+    return <p className="text-muted-foreground px-3 py-4 text-sm">Esta tabla no tiene columnas configurables.</p>;
+  }
+
+  return (
+    <ul className="px-2 py-2">
+      {columns.map((column) => {
+        const checkboxId = `${fieldId}-${column.id}`;
+        return (
+          <li key={column.id} className="flex items-center gap-2 py-0.5 pl-2 pr-1">
+            <Checkbox
+              id={checkboxId}
+              checked={column.getIsVisible()}
+              onCheckedChange={(value) => column.toggleVisibility(!!value)}
+              data-testid={`toggle-column-${column.id}`}
+            />
+            <label htmlFor={checkboxId} className="min-w-0 flex-1 cursor-pointer truncate py-2.5 text-sm">
+              {getColumnTitle(column)}
+            </label>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/**
+ * Panel de columnas sin disparador, para mostrarlo dentro de otra superficie (diálogo del ⋯ mobile).
+ * Mismo contenido que el menú de desktop: con `enableColumnReorder` suma las flechas de orden.
+ */
+export function DataTableColumnsPanel<TData>({ table, enableColumnReorder = false }: DataTableViewOptionsProps<TData>) {
+  return enableColumnReorder ? <ColumnOrderPanel table={table} /> : <ColumnVisibilityPanel table={table} />;
 }

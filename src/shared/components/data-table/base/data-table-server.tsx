@@ -394,7 +394,7 @@ export function BaseDataTable<
                         <TableHead
                           key={header.id}
                           colSpan={header.colSpan}
-                          className="sticky top-0 z-10 bg-background dark:bg-slate-950"
+                          className="sticky top-0 z-10 bg-muted"
                         >
                           {header.isPlaceholder
                             ? null

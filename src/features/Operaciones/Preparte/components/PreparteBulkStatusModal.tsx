@@ -10,7 +10,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { toast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import { Logger } from '@/lib/logger';
 import moment from 'moment';
 import { useEffect, useState } from 'react';
@@ -78,11 +78,7 @@ export function PreparteBulkStatusModal({ isOpen, onClose, selectedRows, onSucce
 
   const handleSave = async () => {
     if (!isFormValid()) {
-      toast({
-        title: 'Error',
-        description: 'Por favor completa todos los campos requeridos.',
-        variant: 'destructive',
-      });
+      toast.error('Error', { description: 'Por favor completa todos los campos requeridos.', duration: Infinity });
       return;
     }
 
@@ -96,24 +92,13 @@ export function PreparteBulkStatusModal({ isOpen, onClose, selectedRows, onSucce
 
         if (result.succeeded > 0) {
           const skippedInfo = result.skipped > 0 ? ` (${result.skipped} ya estaban en el parte diario)` : '';
-          toast({
-            title: 'Pedidos confirmados',
-            description: `Se confirmaron ${result.succeeded} pedido${result.succeeded > 1 ? 's' : ''} y se enviaron al parte diario.${skippedInfo}`,
-          });
+          toast.success('Pedidos confirmados', { description: `Se confirmaron ${result.succeeded} pedido${result.succeeded > 1 ? 's' : ''} y se enviaron al parte diario.${skippedInfo}` });
         } else if (result.skipped > 0 && result.errors.length === 0) {
-          toast({
-            title: 'Sin cambios',
-            description: `Los ${result.skipped} pedido${result.skipped > 1 ? 's' : ''} seleccionados ya estaban en el parte diario.`,
-          });
+          toast.info('Sin cambios', { description: `Los ${result.skipped} pedido${result.skipped > 1 ? 's' : ''} seleccionados ya estaban en el parte diario.` });
         }
 
         if (result.errors.length > 0) {
-          toast({
-            title: `${result.errors.length} pedido${result.errors.length > 1 ? 's' : ''} no se pudieron confirmar`,
-            description: result.errors.join('. '),
-            variant: 'destructive',
-            duration: 10000,
-          });
+          toast.error(`${result.errors.length} pedido${result.errors.length > 1 ? 's' : ''} no se pudieron confirmar`, { description: result.errors.join('. '), duration: 10000 });
         }
       } else if (status === 'reprogramado') {
         // Reprogramación masiva atómica: clona cada preparte como `pendiente`
@@ -123,10 +108,7 @@ export function PreparteBulkStatusModal({ isOpen, onClose, selectedRows, onSucce
 
         const result = await bulkReschedulePrepartes(selectedIds, newDate, reason);
 
-        toast({
-          title: 'Pedidos reprogramados',
-          description: `Se reprogramaron ${result.succeeded} pedido${result.succeeded > 1 ? 's' : ''} para el ${moment(newDate).format('DD/MM/YYYY')}.`,
-        });
+        toast.success('Pedidos reprogramados', { description: `Se reprogramaron ${result.succeeded} pedido${result.succeeded > 1 ? 's' : ''} para el ${moment(newDate).format('DD/MM/YYYY')}.` });
       } else {
         // Para otros estados: usar la actualización masiva existente
         const selectedIds = selectedRows.map((row) => row.id);
@@ -141,10 +123,7 @@ export function PreparteBulkStatusModal({ isOpen, onClose, selectedRows, onSucce
 
         await updateMultiplePreparteStatus(selectedIds, updateData);
 
-        toast({
-          title: 'Éxito',
-          description: `Se actualizó el estado de ${selectedRows.length} pedido${selectedRows.length > 1 ? 's' : ''} a "${status}".`,
-        });
+        toast.success('Éxito', { description: `Se actualizó el estado de ${selectedRows.length} pedido${selectedRows.length > 1 ? 's' : ''} a "${status}".` });
       }
 
       // Llamar onSuccess para refrescar la tabla
@@ -155,11 +134,7 @@ export function PreparteBulkStatusModal({ isOpen, onClose, selectedRows, onSucce
       onClose();
     } catch (error) {
       logger.error('Error al actualizar estados', { data: { error } });
-      toast({
-        title: 'Error',
-        description: 'Ocurrió un error al actualizar los estados.',
-        variant: 'destructive',
-      });
+      toast.error('Error', { description: 'Ocurrió un error al actualizar los estados.', duration: Infinity });
     } finally {
       setIsLoading(false);
     }

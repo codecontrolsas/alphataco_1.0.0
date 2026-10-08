@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { toast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import { Logger } from '@/lib/logger';
 import DependencyValidationModal, { DependencyConfig } from '@/shared/components/modal/DependencyValidationModal';
 import {
@@ -237,11 +237,7 @@ function EquipmentSubTypesForm({
       }
 
       if (onSuccess) onSuccess();
-      toast({
-        title: 'Subtipo de equipo guardado correctamente',
-        description: 'Los cambios se han guardado exitosamente.',
-        variant: 'default',
-      });
+      toast.success('Subtipo de equipo guardado correctamente', { description: 'Los cambios se han guardado exitosamente.' });
 
       onReset();
     } catch (error: unknown) {
@@ -267,11 +263,7 @@ function EquipmentSubTypesForm({
         errorMessage = 'Error de base de datos: No se pudo completar la operación.';
       }
 
-      toast({
-        title: 'Error',
-        description: errorMessage,
-        variant: 'destructive',
-      });
+      toast.error('Error', { description: errorMessage, duration: Infinity });
     }
   };
 
@@ -344,11 +336,7 @@ function EquipmentSubTypesForm({
         if (onSuccess) onSuccess();
       } catch (err) {
         logger.error('Error al reemplazar referencias', { data: { error: err } });
-        toast({
-          title: 'Error',
-          description: 'No se pudieron reemplazar las referencias',
-          variant: 'destructive',
-        });
+        toast.error('Error', { description: 'No se pudieron reemplazar las referencias', duration: Infinity });
       }
     }
   };

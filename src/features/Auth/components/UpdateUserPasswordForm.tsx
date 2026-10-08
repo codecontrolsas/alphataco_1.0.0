@@ -1,6 +1,6 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { CloseEyeIcon } from '@/components/ui/icons/closeEye';
 import { EyeIcon } from '@/components/ui/icons/openEye';
@@ -66,10 +66,10 @@ export const UpdateUserPasswordForm = () => {
 
   if (!token || tokenError) {
     return (
-      <div className="text-center p-6 bg-red-50 border border-red-200 rounded-lg">
-        <p className="text-red-600 font-medium">Enlace inválido o expirado</p>
-        <p className="text-gray-600 text-sm mt-4">Pedí un enlace nuevo desde “¿Olvidaste tu contraseña?”.</p>
-        <a href="/reset_password" className="inline-block mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+      <div className="border border-danger-border bg-danger-soft px-3 py-2.5">
+        <p className="text-label text-danger-text">Enlace inválido o expirado</p>
+        <p className="mt-1 text-caption text-foreground/80">Pedí un enlace nuevo desde “¿Olvidaste tu contraseña?”.</p>
+        <a href="/reset_password" className={buttonVariants({ variant: 'primary', className: 'mt-4' })}>
           Solicitar nuevo enlace
         </a>
       </div>
@@ -84,14 +84,14 @@ export const UpdateUserPasswordForm = () => {
           name="password"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-lg">Contraseña</FormLabel>
+              <FormLabel>Contraseña</FormLabel>
               <div className="flex gap-2">
                 <FormControl>
                   <Input
                     type={showPassword ? 'text' : 'password'}
                     placeholder="contraseña segura"
                     autoComplete="new-password"
-                    className="text-lg"
+                    className="h-10"
                     {...field}
                   />
                 </FormControl>
@@ -104,7 +104,7 @@ export const UpdateUserPasswordForm = () => {
                   {showPassword ? <CloseEyeIcon /> : <EyeIcon />}
                 </Toggle>
               </div>
-              <FormDescription className="text-lg">Ingresa tu nueva contraseña.</FormDescription>
+              <FormDescription>Ingresa tu nueva contraseña.</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -114,14 +114,14 @@ export const UpdateUserPasswordForm = () => {
           name="confirmPassword"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-lg">Confirmar contraseña</FormLabel>
+              <FormLabel>Confirmar contraseña</FormLabel>
               <div className="flex gap-2">
                 <FormControl>
                   <Input
                     type={showPassword ? 'text' : 'password'}
                     placeholder="contraseña segura"
                     autoComplete="new-password"
-                    className="text-lg"
+                    className="h-10"
                     {...field}
                   />
                 </FormControl>
@@ -134,12 +134,12 @@ export const UpdateUserPasswordForm = () => {
                   {showPassword ? <CloseEyeIcon /> : <EyeIcon />}
                 </Toggle>
               </div>
-              <FormDescription className="text-lg">Ingresa tu nueva contraseña otra vez.</FormDescription>
+              <FormDescription>Ingresa tu nueva contraseña otra vez.</FormDescription>
               <FormMessage />
             </FormItem>
           )}
         />
-        <Button type="submit" disabled={showLoader}>
+        <Button type="submit" size="lg" disabled={showLoader}>
           {showLoader ? 'Cambiando contraseña...' : 'Cambiar contraseña'}
         </Button>
       </form>

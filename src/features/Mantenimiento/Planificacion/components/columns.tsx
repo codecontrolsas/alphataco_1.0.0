@@ -222,7 +222,7 @@ export function getColumns({ onAssign }: ColumnsProps): ColumnDef<DesvioRowData>
             <TooltipProvider delayDuration={100}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Badge variant="default" className="bg-blue-600 hover:bg-blue-700">
+                  <Badge variant="info">
                     Con OT
                   </Badge>
                 </TooltipTrigger>

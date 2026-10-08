@@ -1,4 +1,16 @@
 import type { BadgeProps } from '@/components/ui/badge';
+import {
+  CalendarX,
+  CircleCheck,
+  CircleDashed,
+  CircleX,
+  Clock,
+  ShieldCheck,
+  ShieldX,
+  TriangleAlert,
+  Wrench,
+  type LucideIcon,
+} from 'lucide-react';
 
 // ============================================================================
 // EMPLOYEE ENUM LABELS
@@ -265,3 +277,104 @@ export function getEnumLabel(value: string | null | undefined, labels: Record<st
   if (!value) return '-';
   return labels[value] ?? value.replace(/_/g, ' ');
 }
+
+// ============================================================================
+// STATUS TONES (StatusBadge) — mapa único estado → tono (DISENO.md §4.2)
+// ============================================================================
+
+/** Tono semántico de un estado. Lo consume `StatusBadge` (`@/components/ui/status-badge`). */
+export type StatusTone = 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'brand';
+
+/**
+ * Tono de cada estado por dominio. Las claves son los valores reales de la BD (enums de Prisma).
+ * Es el ÚNICO mapa estado → tono del sistema: prohibido redefinirlo por pantalla. Los dominios que faltan
+ * (mantenimiento, OT, factura, preparte, tickets…) los agrega cada módulo al migrar sus badges.
+ */
+export const statusToneMap = {
+  // status_type de empleados y equipos
+  resource: {
+    Completo: 'success',
+    Completo_con_doc_vencida: 'warning',
+    Incompleto: 'danger',
+    Avalado: 'success',
+    No_avalado: 'danger',
+  },
+  // is_active (los ternarios Activo/Inactivo): el consumidor pasa `is_active ? 'active' : 'inactive'`
+  activity: {
+    active: 'success',
+    inactive: 'neutral',
+  },
+  // state de documentos: pendiente = sin archivo, presentado = pendiente de revisión
+  document: {
+    aprobado: 'success',
+    presentado: 'info',
+    pendiente: 'neutral',
+    vencido: 'danger',
+    rechazado: 'danger',
+  },
+  // condition_enum de equipos
+  condition: {
+    operativo: 'success',
+    operativo_condicionado: 'warning',
+    en_reparacion: 'info',
+    no_operativo: 'danger',
+    en_preparacion: 'neutral',
+  },
+  // daily_report_header_status_new
+  dailyReport: {
+    abierto: 'info',
+    cerrado: 'success',
+    cerrado_completo: 'success',
+    cerrado_incompleto: 'warning',
+  },
+  // daily_report_status (fila del parte)
+  dailyReportRow: {
+    pendiente: 'warning',
+    sin_recursos_asignados: 'danger',
+    ejecutado: 'success',
+    reprogramado: 'info',
+    cancelado: 'neutral',
+    en_certificacion: 'info',
+  },
+} as const satisfies Record<string, Record<string, StatusTone>>;
+
+export type StatusDomain = keyof typeof statusToneMap;
+export type StatusOf<D extends StatusDomain> = keyof (typeof statusToneMap)[D];
+
+/** Label visible de cada estado por dominio. Reusa los mapas de labels de arriba. */
+export const statusLabelMap = {
+  resource: employeeStatusLabels,
+  activity: { active: 'Activo', inactive: 'Inactivo' },
+  document: documentStateLabels,
+  condition: conditionLabels,
+  dailyReport: dailyReportStatusLabels,
+  dailyReportRow: dailyReportRowStatusLabels,
+} satisfies Record<StatusDomain, Record<string, string>>;
+
+/**
+ * Ícono de los estados donde suma significado más allá del tono. El resto lleva el punto de color
+ * (`StatusBadge` con `icon="dot"`): el texto siempre acompaña, nunca es solo color.
+ */
+export const statusIconMap: { [D in StatusDomain]?: Partial<Record<StatusOf<D>, LucideIcon>> } = {
+  resource: {
+    Completo: CircleCheck,
+    Completo_con_doc_vencida: TriangleAlert,
+    Incompleto: CircleX,
+    Avalado: ShieldCheck,
+    No_avalado: ShieldX,
+  },
+  document: {
+    aprobado: CircleCheck,
+    presentado: Clock,
+    pendiente: CircleDashed,
+    vencido: CalendarX,
+    rechazado: CircleX,
+  },
+  condition: {
+    operativo: CircleCheck,
+    operativo_condicionado: TriangleAlert,
+    en_reparacion: Wrench,
+    no_operativo: CircleX,
+    en_preparacion: CircleDashed,
+  },
+};

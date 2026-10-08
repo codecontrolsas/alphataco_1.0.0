@@ -242,7 +242,7 @@ export function getColumns(permissions: Permissions, isActive: boolean): ColumnD
           </div>
         );
       },
-      meta: { title: 'Nombre completo' },
+      meta: { title: 'Nombre completo', mobile: { role: 'title', priority: 2, label: 'Nombre completo' } },
     },
 
     // --- Email (visible) ---
@@ -260,7 +260,7 @@ export function getColumns(permissions: Permissions, isActive: boolean): ColumnD
       accessorKey: 'file',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Legajo" />,
       cell: ({ row }) => <div>{row.original.file ?? '-'}</div>,
-      meta: { title: 'Legajo' },
+      meta: { title: 'Legajo', mobile: { role: 'title', priority: 1 } },
     },
 
     // --- Status (visible) ---
@@ -284,7 +284,7 @@ export function getColumns(permissions: Permissions, isActive: boolean): ColumnD
         if (val == null) return value.includes(NULL_FILTER_VALUE);
         return value.includes(val);
       },
-      meta: { title: 'Estado' },
+      meta: { title: 'Estado', mobile: { role: 'status' } },
     },
 
     // --- Hierarchy / Sector (visible) ---
@@ -298,7 +298,7 @@ export function getColumns(permissions: Permissions, isActive: boolean): ColumnD
         if (id == null) return value.includes(NULL_FILTER_VALUE);
         return value.includes(id);
       },
-      meta: { title: 'Sector' },
+      meta: { title: 'Sector', mobile: { role: 'field', priority: 1 } },
     },
 
     // --- Company Position (visible) ---
@@ -312,7 +312,7 @@ export function getColumns(permissions: Permissions, isActive: boolean): ColumnD
         if (id == null) return value.includes(NULL_FILTER_VALUE);
         return value.includes(id);
       },
-      meta: { title: 'Puesto' },
+      meta: { title: 'Puesto', mobile: { role: 'subtitle' } },
     },
 
     // --- Date of Admission (visible) ---
@@ -325,7 +325,7 @@ export function getColumns(permissions: Permissions, isActive: boolean): ColumnD
           {row.original.date_of_admission ? moment.utc(row.original.date_of_admission).format('DD/MM/YYYY') : '-'}
         </div>
       ),
-      meta: { title: 'Fecha de ingreso' },
+      meta: { title: 'Fecha de ingreso', mobile: { role: 'field', priority: 3, label: 'Ingreso' } },
     },
 
     // --- Contractor Employee / Afectaciones (visible) ---
@@ -376,7 +376,7 @@ export function getColumns(permissions: Permissions, isActive: boolean): ColumnD
         return matchesReal;
       },
       enableSorting: false,
-      meta: { title: 'Afectaciones' },
+      meta: { title: 'Afectaciones', mobile: { role: 'field', priority: 2, label: 'Afectaciones' } },
     },
 
     // =========================================================================
@@ -866,7 +866,7 @@ export function getColumns(permissions: Permissions, isActive: boolean): ColumnD
                 {row.original.termination_date ? moment.utc(row.original.termination_date).format('DD/MM/YYYY') : '-'}
               </div>
             ),
-            meta: { title: 'Fecha de baja' },
+            meta: { title: 'Fecha de baja', mobile: { role: 'field', priority: 0, label: 'Baja' } },
           } satisfies ColumnDef<EmployeeListItem>,
         ]
       : []),

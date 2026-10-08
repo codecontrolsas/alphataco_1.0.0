@@ -98,7 +98,7 @@ export function VehicleChecklistsTabContent({ equipmentId }: VehicleChecklistsTa
                       </TableCell>
                       <TableCell>
                         {answer.result === 'B' ? (
-                          <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+                          <Badge variant="success">
                             <CheckCircle className="h-3 w-3 mr-1" />
                             Bueno
                           </Badge>
