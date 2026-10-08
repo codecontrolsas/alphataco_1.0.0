@@ -81,6 +81,7 @@ import {
   type StatusBadgeVariant,
   type TaskInfo,
 } from './order-detail/types';
+import { OrderMaterialsSection, useOrderMaterials } from './order-detail/OrderMaterialsSection';
 import { OrderStatusSections } from './order-detail/OrderStatusSections';
 import { ValidationHistoryList } from './order-detail/ValidationHistoryList';
 import { useOrderDetailData } from './order-detail/useOrderDetailData';
@@ -159,6 +160,9 @@ export function OrderDetailDialog({
 
   // Local sector order state for immediate UI updates on reorder
   const [localTimelineData, setLocalTimelineData] = useState<SectorTimelineItem[] | null>(null);
+
+  // Pedidos de materiales abiertos: impiden completar la orden (el servidor lo vuelve a validar).
+  const { openRequests } = useOrderMaterials(order?.id, open);
 
   const vehicle = order?.vehicles;
   const items = order?.maintenance_order_items || [];
@@ -674,6 +678,9 @@ export function OrderDetailDialog({
               )}
             </div>
 
+            {/* Materiales (Almacenes etapa 4) */}
+            {order?.id && <OrderMaterialsSection orderId={order.id} orderNumber={order.order_number ?? null} />}
+
             {/* Comentarios de la solicitud (por item) */}
             {itemsWithComments.length > 0 && (
               <>
@@ -816,11 +823,21 @@ export function OrderDetailDialog({
               onChange={(e) => setValidationNotes(e.target.value)}
             />
 
+            {openRequests.length > 0 && (
+              <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
+                No se puede cerrar todavía:{' '}
+                {openRequests.length === 1
+                  ? `${openRequests[0]!.number} sigue abierto. Entregalo, cerralo o cancelalo`
+                  : `${openRequests.map((r) => r.number).join(', ')} siguen abiertos. Entregalos, cerralos o cancelalos`}{' '}
+                desde Almacenes → Pedidos.
+              </p>
+            )}
+
             <PermissionGuard module="mantenimiento" tab="ordenes_mantenimiento" action="update">
               <div className="flex gap-2">
                 <Button
                   onClick={() => workshopValidateMutation.mutate()}
-                  disabled={workshopValidateMutation.isPending}
+                  disabled={workshopValidateMutation.isPending || openRequests.length > 0}
                   className="flex-1"
                 >
                   {workshopValidateMutation.isPending ? 'Cerrando...' : 'Validar y Cerrar Orden'}

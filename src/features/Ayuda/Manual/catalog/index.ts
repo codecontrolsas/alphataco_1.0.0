@@ -8,6 +8,7 @@ import { equiposSection } from './sections/equipos.ts';
 import { documentacionSection } from './sections/documentacion.ts';
 import { operacionesSection } from './sections/operaciones.ts';
 import { mantenimientoSection } from './sections/mantenimiento.ts';
+import { almacenesSection } from './sections/almacenes.ts';
 import { comercialSection } from './sections/comercial.ts';
 import { formulariosSection } from './sections/formularios.ts';
 import { configuracionSection } from './sections/configuracion.ts';
@@ -28,6 +29,7 @@ export const MANUAL_SECTIONS: SectionDef[] = [
   documentacionSection,
   operacionesSection,
   mantenimientoSection,
+  almacenesSection,
   comercialSection,
   formulariosSection,
   configuracionSection,

@@ -80,6 +80,7 @@ const STAGE_BY_ACTION: Record<string, ActivityStage> = {
   [ACTIVITY_LOG.REPAIR_RETURNED_TO_CHIEF]: 'workshop',
   [ACTIVITY_LOG.TASK_ADDED_BY_OPERATOR]: 'workshop',
   [ACTIVITY_LOG.TASK_REQUESTED_FOR_OTHER_SECTOR]: 'workshop',
+  [ACTIVITY_LOG.MATERIAL_REQUEST_CREATED]: 'workshop',
 };
 
 /**

@@ -2,7 +2,7 @@
 title: Ficha del empleado
 summary: El legajo completo de cada empleado: datos personales, de contacto y laborales, documentación, diagramas, indumentaria, y cómo darlo de baja o reactivarlo.
 keywords: ficha, legajo, empleado, alta, editar, baja, reactivar, documentación, afectación, contratistas, aptitudes, indumentaria, puesto
-updated: 2026-10-07
+updated: 2026-10-08
 ---
 
 La ficha del empleado es su legajo digital. Reúne en un solo lugar sus datos, la documentación que se le exige, sus diagramas de trabajo y las entregas de indumentaria. Desde acá se da de alta a un empleado nuevo, se corrigen sus datos y se lo da de baja o se lo reactiva.
@@ -158,14 +158,20 @@ Lista las entregas de ropa de trabajo y elementos de protección personal que re
 |---|---|
 | **Fecha de entrega** | |
 | **Tipo de entrega** | **Planificada CCT**, **Planificada EPP** o **Reposición**. |
+| **Estado** | **Vigente** o **Anulada** (con la fecha y el motivo). |
+| **Depósito** | Del que salió la ropa. Vacío en las entregas anteriores al control de stock. |
 | **Legajo** / **Entregado por** | Quién hizo la entrega. |
 | **Artículos** | Artículo, marca, talle y cantidad. |
+| **Costo** | Lo que valió la entrega, solo con **Ver precios e importes** en **Almacenes → Movimientos**. |
 | **Firma** | Si el empleado firmó la recepción. |
 | **Notas** | Oculta por defecto. |
 
 - El ícono del ojo abre la **Constancia de Entrega EPP**, que se puede bajar con **Descargar PDF**.
 - Si tildás varias entregas, **Descargar ZIP** baja todas las constancias juntas.
 - **Nueva Entrega** abre, en otra pestaña del navegador, el panel de entregas con este empleado ya elegido. Ese panel pide iniciar sesión por separado. El paso a paso está en <GuideLink to="entrega-de-indumentaria">Entrega de indumentaria</GuideLink>.
+- **Anular** (en cada fila vigente) anula la entrega con un motivo obligatorio: la ropa vuelve al depósito del que salió y la entrega queda **Anulada**, con su constancia conservada. No se puede deshacer.
+
+Cada entrega descuenta stock en **Almacenes**: es una salida imputada a este empleado. Así, en **Almacenes → Movimientos** podés ver todo lo que se le entregó filtrando por su legajo (ver <GuideLink to="movimientos-de-stock">Movimientos de stock</GuideLink>).
 
 Los artículos, marcas y talles se configuran en <GuideLink to="catalogo-de-indumentaria">Catálogo de indumentaria</GuideLink>.
 
@@ -229,6 +235,7 @@ El circuito completo de ingresos y egresos está en <GuideLink to="altas-y-bajas
 - **Partes diarios**: el empleado solo debería ir a partes de clientes a los que está afectado y en días en los que su diagrama dice que trabaja; si no, el parte marca un desvío. Ver <GuideLink to="diagramas-afectaciones-y-desvios">Diagramas, afectaciones y desvíos</GuideLink>.
 - **Dashboard**: cuenta entre los empleados activos, con diagrama, en operación o disponibles (<GuideLink to="dashboard-principal">Dashboard principal</GuideLink>).
 - **Usuarios**: si el empleado tiene usuario, la baja lo bloquea y la reactivación lo habilita (<GuideLink to="usuarios-y-roles">Usuarios y roles</GuideLink>).
+- **Almacenes**: las entregas de ropa y cualquier salida de material imputada al empleado descuentan stock; las herramientas que se le entregaron figuran en **Préstamos** hasta que las devuelve (<GuideLink to="prestamos-de-herramientas">Préstamos de herramientas</GuideLink>).
 
 ## Permisos
 
@@ -239,7 +246,7 @@ El circuito completo de ingresos y egresos está en <GuideLink to="altas-y-bajas
 | **Crear** en **Empleados** | El alta (**Agregar empleado**). |
 | **Ver** en **Documentos de empleados** (módulo Documentación) | La pestaña **Documentación**. Subir documentos requiere **Editar** en documentos permanentes o mensuales; los documentos privados requieren el permiso de subir privados. |
 | **Ver** en **Diagramas** de la ficha | La solapa **Diagramas**. **Nuevo Diagrama** requiere **Ver** en **Cargar Diagramas** del módulo Empleados. |
-| **Ver** / **Crear** en **Indumentaria** | Ver las entregas / el botón **Nueva Entrega**. |
+| **Ver** / **Crear** / **Eliminar** en **Indumentaria** | Ver las entregas / el botón **Nueva Entrega** / **Anular** una entrega. |
 
 El menú de acciones (**Dar de Baja Empleado** / **Activar Empleado**) está disponible para quien puede abrir la ficha.
 

@@ -24,7 +24,9 @@ import {
   type DataTableSearchParams,
   type FacetResult,
 } from '@/shared/components/common/DataTable';
-import { useQueryClient } from '@tanstack/react-query';
+import { formatMoney } from '@/features/Warehouses/lib/format';
+import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
 import { Layers, Plus } from 'lucide-react';
 import moment from 'moment';
@@ -40,7 +42,8 @@ import {
 } from '../actions/actions.server';
 import { TireBulkForm } from './TireBulkForm';
 import { TireForm } from './TireForm';
-import { getColumns } from './columns';
+import { TireReturnDialog } from './TireReturnDialog';
+import { getColumns, getTireWarehouseLabel } from './columns';
 
 // ============================================================================
 // TYPES
@@ -69,6 +72,7 @@ const ALL_FILTER_IDS = [
   'is_new',
   'retread_level',
   'vehicle',
+  'warehouse',
   'serial_number',
   'size',
   'created_at',
@@ -97,6 +101,7 @@ export default function _TiresDataTable({
   );
 
   const canCreate = permissions.hasPermission('mantenimiento', 'catalogo_cubiertas', 'create');
+  const canViewPrices = permissions.hasPermission('almacenes', 'movimientos', 'view_prices');
 
   // ─── Query client ─────────────────────────────────────────────────────────
   const queryClient = useQueryClient();
@@ -117,27 +122,35 @@ export default function _TiresDataTable({
 
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getTiresPaginated(params), []);
 
-  // ─── Mark as found handler ────────────────────────────────────────────────
-  async function handleMarkFound(tire: TireListItem) {
-    try {
-      await updateTireStatus(tire.id, 'AVAILABLE');
-      toast.success(`Cubierta ${tire.serial_number} marcada como disponible`);
-      queryClient.invalidateQueries({ queryKey: ['tires-catalog'] });
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Error al actualizar estado');
-    }
-  }
+  // ─── Mark as found / repaired (vuelve a disponible; con stock afuera pide el depósito) ───
+  const [returningTire, setReturningTire] = useState<TireListItem | null>(null);
 
-  // ─── Mark as repaired handler ─────────────────────────────────────────────
-  async function handleMarkRepaired(tire: TireListItem) {
-    try {
-      await updateTireStatus(tire.id, 'AVAILABLE');
+  const markAvailableMutation = useMutation({
+    mutationFn: async ({ tire, warehouseId }: { tire: TireListItem; warehouseId: string | null }) => {
+      unwrapAction(await updateTireStatus(tire.id, 'AVAILABLE', warehouseId));
+      return tire;
+    },
+    onSuccess: (tire) => {
       toast.success(`Cubierta ${tire.serial_number} marcada como disponible`);
       queryClient.invalidateQueries({ queryKey: ['tires-catalog'] });
-    } catch (error) {
+      setReturningTire(null);
+    },
+    onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Error al actualizar estado');
-    }
-  }
+    },
+  });
+  const { mutate: markAvailable } = markAvailableMutation;
+
+  const handleMarkAvailable = useCallback(
+    (tire: TireListItem) => {
+      if (tire.material_unit?.status === 'OUT') {
+        setReturningTire(tire);
+        return;
+      }
+      markAvailable({ tire, warehouseId: null });
+    },
+    [markAvailable]
+  );
 
   // ─── Columns ──────────────────────────────────────────────────────────────
   const columns = useMemo(
@@ -146,10 +159,11 @@ export default function _TiresDataTable({
         permissions,
         (tire) => setEditingTire(tire),
         (tire) => setDeletingTire(tire),
-        handleMarkFound,
-        handleMarkRepaired
+        handleMarkAvailable,
+        handleMarkAvailable,
+        canViewPrices
       ),
-    [permissions]
+    [permissions, handleMarkAvailable, canViewPrices]
   );
 
   // ─── Filter visibility ────────────────────────────────────────────────────
@@ -241,6 +255,13 @@ export default function _TiresDataTable({
         fetchFacet: makeFkFetchFacet('vehicle', 'Sin asignar'),
       },
 
+      // ── Warehouse (FK via stock unit) ─────────────────────────────────────
+      {
+        columnId: 'warehouse',
+        title: 'Depósito',
+        fetchFacet: makeFkFetchFacet('warehouse', 'Sin depósito'),
+      },
+
       // ── Text filters ──────────────────────────────────────────────────────
       { columnId: 'serial_number', title: 'Número', type: 'text' as const, placeholder: 'Buscar por número...' },
       { columnId: 'size', title: 'Medida', type: 'text' as const, placeholder: 'Buscar por medida...' },
@@ -270,7 +291,7 @@ export default function _TiresDataTable({
     if (!deletingTire) return;
     setIsDeleting(true);
     try {
-      await deleteTire(deletingTire.id);
+      unwrapAction(await deleteTire(deletingTire.id));
       toast.success('Cubierta eliminada correctamente');
       queryClient.invalidateQueries({ queryKey: ['tires-catalog'] });
       setDeletingTire(null);
@@ -319,6 +340,8 @@ export default function _TiresDataTable({
             is_new: (value) => (value ? 'Nueva' : 'Usada'),
             tread_depth: (value) => (value != null ? `${value} mm` : '-'),
             created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
+            warehouse: (_value, row) => getTireWarehouseLabel(row.material_unit),
+            cost: (value) => (value != null ? formatMoney(value as string) : 'Sin costo'),
             vehicle: (_value, row) => {
               return row.vehicle_tire_positions?.[0]?.vehicle?.domain ?? 'Sin asignar';
             },
@@ -344,6 +367,16 @@ export default function _TiresDataTable({
 
       {/* ─── Bulk create form ────────────────────────────────────────────── */}
       <TireBulkForm open={showBulkForm} onOpenChange={setShowBulkForm} queryKey={['tires-catalog']} />
+
+      {/* ─── Devolver al depósito (reparada / encontrada con stock afuera) ─ */}
+      {returningTire !== null && (
+        <TireReturnDialog
+          serialNumber={returningTire.serial_number}
+          isPending={markAvailableMutation.isPending}
+          onConfirm={(warehouseId) => markAvailable({ tire: returningTire, warehouseId })}
+          onCancel={() => setReturningTire(null)}
+        />
+      )}
 
       {/* ─── Delete confirmation dialog ──────────────────────────────────── */}
       <AlertDialog

@@ -34,6 +34,7 @@ export const empleadosSection = defineSection({
         'altas-y-bajas',
         'documentos-alertas-y-estado',
         'documentos-de-empleados',
+        'prestamos-de-herramientas',
         'diagramas',
         'entrega-de-indumentaria',
         'catalogos-de-rrhh',

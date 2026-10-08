@@ -15,11 +15,19 @@ import {
   tireTreadTypeLabels,
 } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
+import { useTireReturnWarehouse } from '@/features/Mantenimiento/Gomeria/shared/hooks/useTireReturnWarehouse';
+import { TireReturnWarehouseSelect } from '@/features/Mantenimiento/Gomeria/shared/TireReturnWarehouseSelect';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import type { AvailableTire, EnsuredTirePosition } from '../actions/actions.server';
-import { performCalibration, performMissingReport, performRepair, performReplace } from '../actions/actions.server';
+import {
+  performCalibration,
+  performMissingReport,
+  performRepair,
+  performReplace,
+} from '../actions/actions.server';
 import { uploadDiscardPhoto } from '../utils/uploadDiscardPhoto';
 import { TireReplacePicker } from './TireReplacePicker';
 
@@ -163,6 +171,8 @@ function TireActionsWithTire({ position, serviceOrderId, vehicleId, onActionComp
   function handleSuccess(message: string) {
     toast.success(message);
     void queryClient.invalidateQueries({ queryKey: ['vehicle-tire-positions', vehicleId] });
+    // La que salio a disponible vuelve a ofrecerse; la que se monto deja de ofrecerse.
+    void queryClient.invalidateQueries({ queryKey: ['available-tires', vehicleId] });
     onActionComplete();
     onClose();
   }
@@ -197,16 +207,18 @@ function TireActionsWithTire({ position, serviceOrderId, vehicleId, onActionComp
   const [repairObs, setRepairObs] = useState('');
 
   const repairMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       if (!repairNewTire) throw new Error('Seleccione una cubierta de reemplazo');
-      return performRepair({
-        serviceOrderId,
-        positionNumber: position.position_number,
-        vehicleId,
-        tireId: position.tire_id!,
-        newTireId: repairNewTire.id,
-        observations: repairObs || undefined,
-      });
+      return unwrapAction(
+        await performRepair({
+          serviceOrderId,
+          positionNumber: position.position_number,
+          vehicleId,
+          tireId: position.tire_id!,
+          newTireId: repairNewTire.id,
+          observations: repairObs || undefined,
+        })
+      );
     },
     onSuccess: () => handleSuccess('Reparación registrada'),
     onError: (error) => {
@@ -226,6 +238,12 @@ function TireActionsWithTire({ position, serviceOrderId, vehicleId, onActionComp
   const [replaceObs, setReplaceObs] = useState('');
   const [isUploading, setIsUploading] = useState(false);
 
+  // La cubierta que sale a "Disponible" vuelve a un deposito si tiene stock (Almacenes etapa 6).
+  const oldTireHasStock = !!position.tire?.material_unit_id;
+  const returnWarehouse = useTireReturnWarehouse(vehicleId, oldTireHasStock);
+  const effectiveWarehouseId = returnWarehouse.warehouseId;
+  const needsWarehouse = oldDest === 'AVAILABLE' && oldTireHasStock;
+
   const replaceMutation = useMutation({
     mutationFn: async () => {
       if (!replaceNewTire) throw new Error('Seleccione una cubierta de reemplazo');
@@ -243,20 +261,23 @@ function TireActionsWithTire({ position, serviceOrderId, vehicleId, onActionComp
         }
       }
 
-      return performReplace({
-        serviceOrderId,
-        positionNumber: position.position_number,
-        vehicleId,
-        tireId: position.tire_id!,
-        newTireId: replaceNewTire.id,
-        oldDestination: oldDest,
-        discardPhotoUrl,
-        discardComment: oldDest === 'DISCARD' || oldDest === 'REPAIR' ? discardComment : undefined,
-        treadDepth: replaceTread ? Number(replaceTread) : undefined,
-        pressureStart: replacePressStart ? Number(replacePressStart) : undefined,
-        pressureEnd: replacePressEnd ? Number(replacePressEnd) : undefined,
-        observations: replaceObs || undefined,
-      });
+      return unwrapAction(
+        await performReplace({
+          serviceOrderId,
+          positionNumber: position.position_number,
+          vehicleId,
+          tireId: position.tire_id!,
+          newTireId: replaceNewTire.id,
+          oldDestination: oldDest,
+          oldTireWarehouseId: needsWarehouse ? effectiveWarehouseId || null : null,
+          discardPhotoUrl,
+          discardComment: oldDest === 'DISCARD' || oldDest === 'REPAIR' ? discardComment : undefined,
+          treadDepth: replaceTread ? Number(replaceTread) : undefined,
+          pressureStart: replacePressStart ? Number(replacePressStart) : undefined,
+          pressureEnd: replacePressEnd ? Number(replacePressEnd) : undefined,
+          observations: replaceObs || undefined,
+        })
+      );
     },
     onSuccess: () => handleSuccess('Reemplazo registrado'),
     onError: (error) => {
@@ -409,6 +430,15 @@ function TireActionsWithTire({ position, serviceOrderId, vehicleId, onActionComp
           </RadioGroup>
         </div>
 
+        {needsWarehouse && returnWarehouse.needsChoice && (
+          <TireReturnWarehouseSelect
+            label="Depósito al que vuelve"
+            warehouses={returnWarehouse.warehouses}
+            value={effectiveWarehouseId}
+            onChange={returnWarehouse.setWarehouseId}
+          />
+        )}
+
         {(oldDest === 'DISCARD' || oldDest === 'REPAIR') && (
           <div
             className={`space-y-2 rounded-md border p-3 ${
@@ -487,7 +517,10 @@ function TireActionsWithTire({ position, serviceOrderId, vehicleId, onActionComp
           className="w-full"
           onClick={() => replaceMutation.mutate()}
           disabled={
-            isPending || !replaceNewTire || ((oldDest === 'DISCARD' || oldDest === 'REPAIR') && !discardComment)
+            isPending ||
+            !replaceNewTire ||
+            ((oldDest === 'DISCARD' || oldDest === 'REPAIR') && !discardComment) ||
+            (needsWarehouse && !effectiveWarehouseId)
           }
         >
           {isUploading ? 'Subiendo foto...' : replaceMutation.isPending ? 'Registrando...' : 'Registrar reemplazo'}
@@ -550,19 +583,22 @@ function EmptyPositionAssign({
   const [selectedTire, setSelectedTire] = useState<AvailableTire | null>(null);
 
   const assignMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       if (!selectedTire) throw new Error('Seleccione una cubierta');
-      return performReplace({
-        serviceOrderId,
-        positionNumber: position.position_number,
-        vehicleId,
-        tireId: null,
-        newTireId: selectedTire.id,
-      });
+      return unwrapAction(
+        await performReplace({
+          serviceOrderId,
+          positionNumber: position.position_number,
+          vehicleId,
+          tireId: null,
+          newTireId: selectedTire.id,
+        })
+      );
     },
     onSuccess: () => {
       toast.success('Cubierta asignada a la posición');
       void queryClient.invalidateQueries({ queryKey: ['vehicle-tire-positions', vehicleId] });
+      void queryClient.invalidateQueries({ queryKey: ['available-tires', vehicleId] });
       onActionComplete();
       onClose();
     },

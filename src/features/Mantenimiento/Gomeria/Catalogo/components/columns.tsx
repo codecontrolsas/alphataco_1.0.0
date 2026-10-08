@@ -13,7 +13,8 @@ import {
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type { ColumnDef } from '@tanstack/react-table';
-import { CircleOff, MapPin, Pencil, Trash2, Wrench } from 'lucide-react';
+import { formatMoney } from '@/features/Warehouses/lib/format';
+import { CircleOff, MapPin, Pencil, Trash2, Warehouse, Wrench } from 'lucide-react';
 import moment from 'moment';
 import type { TireListItem } from '../actions/actions.server';
 
@@ -26,6 +27,22 @@ type Permissions = {
 };
 
 // ============================================================================
+// WAREHOUSE LABEL (cell + export share it)
+// ============================================================================
+
+/**
+ * Donde esta la cubierta segun su unidad de stock: el deposito si esta IN_STOCK; "Afuera" si esta
+ * OUT (montada, en reparacion o extraviada con stock); "Dada de baja" si fue descartada; "Sin stock"
+ * si no tiene unidad (anterior a la etapa 6 o sin inventario inicial).
+ */
+export function getTireWarehouseLabel(unit: TireListItem['material_unit']): string {
+  if (!unit) return 'Sin stock';
+  if (unit.status === 'IN_STOCK') return unit.warehouse?.name ?? 'Sin stock';
+  if (unit.status === 'DISCARDED') return 'Dada de baja';
+  return 'Afuera';
+}
+
+// ============================================================================
 // COLUMNS
 // ============================================================================
 
@@ -34,7 +51,8 @@ export function getColumns(
   onEdit: (tire: TireListItem) => void,
   onDelete: (tire: TireListItem) => void,
   onMarkFound?: (tire: TireListItem) => void,
-  onMarkRepaired?: (tire: TireListItem) => void
+  onMarkRepaired?: (tire: TireListItem) => void,
+  canViewPrices = false
 ): ColumnDef<TireListItem>[] {
   const canUpdate = permissions.hasPermission('mantenimiento', 'catalogo_cubiertas', 'update');
   const canDelete = permissions.hasPermission('mantenimiento', 'catalogo_cubiertas', 'delete');
@@ -197,6 +215,57 @@ export function getColumns(
       enableSorting: false,
       meta: { title: 'Vehículo' },
     },
+
+    // --- Warehouse (stock unit location) ---
+    {
+      id: 'warehouse',
+      accessorFn: (row) => getTireWarehouseLabel(row.material_unit),
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Depósito" />,
+      cell: ({ row }) => {
+        const unit = row.original.material_unit;
+        const label = getTireWarehouseLabel(unit);
+        if (unit?.status === 'IN_STOCK' && unit.warehouse) {
+          return (
+            <div className="inline-flex items-center gap-1">
+              <Warehouse className="h-3 w-3 text-muted-foreground" />
+              {label}
+            </div>
+          );
+        }
+        return (
+          <div className="inline-flex items-center gap-1 text-muted-foreground">
+            <CircleOff className="h-3 w-3" />
+            {label}
+          </div>
+        );
+      },
+      filterFn: (row, _id, value: string[]) => {
+        const unit = row.original.material_unit;
+        const warehouseId = unit?.status === 'IN_STOCK' ? (unit.warehouse?.id ?? null) : null;
+        if (warehouseId == null) return value.includes(NULL_FILTER_VALUE);
+        return value.includes(warehouseId);
+      },
+      meta: { title: 'Depósito' },
+    },
+
+    // --- Cost (latest entry cost of the unit; only with view_prices) ---
+    ...(canViewPrices
+      ? [
+          {
+            id: 'cost',
+            accessorFn: (row: TireListItem) => row.unit_cost,
+            header: ({ column }) => <DataTableColumnHeader column={column} title="Costo" />,
+            cell: ({ row }) =>
+              row.original.unit_cost != null ? (
+                <span className="tabular-nums">{formatMoney(row.original.unit_cost)}</span>
+              ) : (
+                <span className="text-muted-foreground">Sin costo</span>
+              ),
+            enableSorting: false,
+            meta: { title: 'Costo' },
+          } satisfies ColumnDef<TireListItem>,
+        ]
+      : []),
 
     // --- Created At ---
     {

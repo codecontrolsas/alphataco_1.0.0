@@ -1,15 +1,15 @@
 ---
 title: Gomería
-summary: Stock de cubiertas, plantillas de ejes por tipo de vehículo, marcas y tipos, y las órdenes de gomería para calibrar, reparar, reemplazar o reportar cubiertas.
-keywords: gomería, cubiertas, neumáticos, stock, plantilla, ejes, posiciones, calibración, presión, reemplazo, reparación, extravío, descarte, precurado, marca, medida
-updated: 2026-10-07
+summary: Catálogo de cubiertas con su depósito y su costo, plantillas de ejes por tipo de vehículo, marcas y tipos, y las órdenes de gomería para calibrar, reparar, reemplazar o reportar cubiertas, con su efecto en el stock de Almacenes.
+keywords: gomería, cubiertas, neumáticos, stock, depósito, costo, almacenes, plantilla, ejes, posiciones, calibración, presión, reemplazo, reparación, extravío, descarte, precurado, marca, medida, montaje
+updated: 2026-10-08
 ---
 
-La pestaña **Gomería** del módulo **Mantenimiento** lleva el control de las cubiertas: cuántas hay, de qué marca y medida, dónde está montada cada una y qué se le hizo. Se organiza en cinco pestañas internas:
+La pestaña **Gomería** del módulo **Mantenimiento** lleva el control de las cubiertas: cuántas hay, de qué marca y medida, dónde está montada cada una y qué se le hizo. Cada cubierta es además una **unidad de stock** en el módulo **Almacenes**, con su depósito y su costo: montarla, desmontarla o descartarla mueve ese stock solo (ver [Las cubiertas en el stock de Almacenes](#las-cubiertas-en-el-stock-de-almacenes)). Se organiza en cinco pestañas internas:
 
 | Pestaña | Para qué sirve |
 |---|---|
-| **Catálogo** | El stock: cada cubierta con su número, marca, medida y estado. |
+| **Catálogo** | Cada cubierta con su número, marca, medida, estado, depósito y costo. |
 | **Plantillas** | La forma de los ejes de cada tipo de vehículo (cuántos ejes, simples o duales, auxilio). |
 | **Órdenes** | Cada intervención de gomería sobre un vehículo: calibrar, reparar, reemplazar, reportar extravío. |
 | **Marcas** | Las marcas de cubiertas. |
@@ -18,8 +18,9 @@ La pestaña **Gomería** del módulo **Mantenimiento** lleva el control de las c
 <OpenScreen />
 
 <Flow title="Orden recomendado para empezar">
+  <FlowStep title="Depósitos" module="Almacenes" to="depositos">Tiene que haber al menos un depósito activo.</FlowStep>
   <FlowStep title="Marcas y Tipos">Cargá las marcas y las medidas que usás.</FlowStep>
-  <FlowStep title="Catálogo">Dá de alta las cubiertas del stock.</FlowStep>
+  <FlowStep title="Catálogo">Dá de alta las cubiertas, con su depósito y su costo.</FlowStep>
   <FlowStep title="Plantillas">Armá los ejes y asignalos a los subtipos de vehículo.</FlowStep>
   <FlowStep title="Órdenes" tone="success">Ya podés intervenir los vehículos.</FlowStep>
 </Flow>
@@ -27,6 +28,8 @@ La pestaña **Gomería** del módulo **Mantenimiento** lleva el control de las c
 ## Marcas
 
 Lista de marcas con **Nombre**, **Estado** (**Activa** o **Inactiva**), cantidad de **Cubiertas** y fecha de alta (**Creado**). **Nueva Marca** pide solo el **Nombre**. En cada fila podés **Editar** y **Desactivar** (o **Activar**). Una marca inactiva no se ofrece al cargar cubiertas nuevas, pero las cubiertas que ya la tienen no cambian.
+
+Cada combinación de **tipo** y **marca** es un **material** de Almacenes (por ejemplo **CUB-295/80R22.5-MIX-FIR**, "Cubierta 295/80R22.5 Mixto · Firestone"). El sistema lo crea y le actualiza el nombre al cargar o editar tipos y marcas, y lo deja inactivo si se desactiva el tipo o la marca. Ver <GuideLink to="materiales">Materiales</GuideLink>.
 
 ## Tipos
 
@@ -49,16 +52,20 @@ El stock completo de cubiertas.
 | **Profundidad (mm)** | Profundidad de banda cargada. |
 | **Estado** | Ver abajo. |
 | **Vehículo** | Dónde está montada, si está instalada. |
+| **Depósito** | El depósito donde está, si está en stock. Si no: **Afuera** (montada, en reparación o extraviada), **Dada de baja**, o **Sin stock** (cubiertas anteriores a Almacenes que todavía no se cargaron). |
+| **Costo** | Costo de la cubierta, solo con **Ver precios e importes** en **Almacenes → Movimientos**. |
 | **Fecha de alta** | Cuándo se cargó. |
 
 El buscador es **Buscar por número o medida...**; también hay filtros y exportación a Excel.
 
 ### Cómo cargar cubiertas
 
-- **Agregar cubierta** abre **Nueva cubierta**: **Número de serie**, **Marca**, **Tipo de cubierta**, si es **Nueva** o **Usada**, **Desgaste (%)** y **Precurado** (o **Sin precurado**).
-- **Alta masiva** abre **Alta masiva de cubiertas** para cargar una serie correlativa: un **Prefijo** (por ejemplo, BRD-) y los números **Desde** y **Hasta**, más la **Marca**, el **Tipo de cubierta**, la **Profundidad (mm)**, si son nuevas o usadas y el **Precurado**. Se pueden crear hasta 500 de una vez.
+- **Agregar cubierta** abre **Nueva cubierta**: **Número de serie**, **Marca**, **Tipo de cubierta**, si es **Nueva** o **Usada**, **Desgaste (%)**, **Precurado** (o **Sin precurado**), y el **Depósito** al que entra y su **Costo unitario** (los dos obligatorios).
+- **Alta masiva** abre **Alta masiva de cubiertas** para cargar una serie correlativa: un **Prefijo** (por ejemplo, BRD-) y los números **Desde** y **Hasta**, más la **Marca**, el **Tipo de cubierta**, la **Profundidad (mm)**, si son nuevas o usadas, el **Precurado**, el **Depósito** y el **Costo unitario**. Se pueden crear hasta 500 de una vez.
 
-Toda cubierta nueva entra como **Disponible**.
+Toda cubierta nueva entra como **Disponible** y el sistema registra en Almacenes una **entrada** al depósito elegido, con su número de serie y su costo. Si la empresa tiene un solo depósito activo, viene elegido.
+
+También se pueden dar de alta desde **Almacenes**: una **Entrada** de un material de cubiertas crea cada cubierta en este catálogo como **Disponible** y nueva (ver <GuideLink to="movimientos-de-stock">Movimientos de stock</GuideLink>).
 
 <Callout type="warning" title="Números repetidos">
 El número de serie no se puede repetir. En el alta masiva, si algún número del rango ya existe, no se crea ninguna y el aviso lista los números en conflicto: ajustá el rango o el prefijo.
@@ -70,13 +77,15 @@ El número de serie no se puede repetir. En el alta masiva, si algún número de
   <State name="Disponible" tone="success" next="Instalada">En stock, lista para montar.</State>
   <State name="Instalada" tone="info" next="Disponible, En reparación, Descartada, Extraviada">Montada en una posición de un vehículo. Se ve el vehículo en la columna **Vehículo**.</State>
   <State name="En reparación" tone="warning" next="Disponible">Salió del vehículo para repararse. Cuando vuelve, tocá **Marcar como reparada**.</State>
-  <State name="Extraviada" tone="danger" next="Disponible, Instalada">Se reportó como perdida. Si aparece, tocá **Marcar como encontrada**.</State>
+  <State name="Extraviada" tone="danger" next="Disponible, Instalada">Se reportó como perdida. Si aparece, tocá **Marcar como encontrada**. Una cubierta extraviada que tiene stock no se puede montar directamente: primero se marca como encontrada.</State>
   <State name="Descartada" tone="danger">Fuera de uso definitivamente.</State>
 </States>
 
-Los cambios de estado de **Instalada** en adelante se hacen desde las **Órdenes** de gomería; en el catálogo solo se resuelven las reparadas y las encontradas, que vuelven a **Disponible**.
+Los cambios de estado de **Instalada** en adelante se hacen desde las **Órdenes** de gomería; en el catálogo solo se resuelven las reparadas y las encontradas, que vuelven a **Disponible**. Si la cubierta tiene stock y está afuera, **Marcar como reparada** y **Marcar como encontrada** abren **Devolver la cubierta al depósito** para elegir el **Depósito al que vuelve**.
 
-**Eliminar** saca la cubierta del catálogo (**¿Eliminar cubierta?**). Usalo para cargas erróneas; para una cubierta que se dio de baja por desgaste, lo correcto es descartarla en una orden, así queda el historial.
+**Editar** una cubierta con stock no permite cambiar la serie, la marca ni el tipo ("**La cubierta tiene stock: no se cambian la serie, la marca ni el tipo**"), porque definen su material en Almacenes.
+
+**Eliminar** saca la cubierta del catálogo (**¿Eliminar cubierta?**). Solo sirve para cubiertas sin stock cargadas por error: una cubierta con stock se rechaza ("**Dala de baja con un descarte; tiene stock**"). Para una cubierta que se dio de baja por desgaste, lo correcto es descartarla en una orden, así queda el historial.
 
 ## Plantillas
 
@@ -148,13 +157,34 @@ Tocá **Finalizar Orden**. Una orden finalizada ya no admite intervenciones nuev
 |---|---|---|
 | **Calibrar** | **Desgaste (%)**, **Presión inicio (PSI)**, **Presión fin (PSI)** y **Observaciones**. | Nada cambia de estado: queda registrada la medición. |
 | **Reparar** | La **Cubierta de reemplazo** que se monta mientras tanto y **Observaciones**. | La cubierta que sale pasa a **En reparación**; la que entra pasa a **Instalada**. |
-| **Reemplazar** | La **Cubierta nueva**, el **Destino cubierta actual** (**Disponible**, **Descarte** o **Reparación**), desgaste y presiones de la nueva. Para **Descarte** o **Reparación** pide el **Motivo** (obligatorio) y permite adjuntar una foto. | La que sale queda **Disponible**, **Descartada** o **En reparación** según el destino; la que entra pasa a **Instalada**. |
+| **Reemplazar** | La **Cubierta nueva**, el **Destino cubierta actual** (**Disponible**, **Descarte** o **Reparación**), desgaste y presiones de la nueva. Para **Disponible**, si hay más de un depósito, pide el **Depósito al que vuelve**. Para **Descarte** o **Reparación** pide el **Motivo** (obligatorio) y permite adjuntar una foto. | La que sale queda **Disponible**, **Descartada** o **En reparación** según el destino; la que entra pasa a **Instalada**. |
 | **Extravío** | El motivo (**Reportar cubierta extraviada**). | La cubierta pasa a **Extraviada** y la posición queda vacía, lista para asignarle otra. |
 
-Para montar se ofrecen las cubiertas **Disponibles** y las **Extraviadas** del stock (podés buscarlas por serie, marca o medida). Si la cubierta no está cargada, **Crear cubierta** permite darla de alta en el momento (**Crear cubierta rápida**) y seleccionarla.
+Para montar se ofrecen las cubiertas **Disponibles** que están en un depósito y las **Extraviadas** que todavía no tienen stock (podés buscarlas por serie, marca o medida). Una cubierta que no está cargada en el catálogo no se puede crear desde la orden: primero se da de alta en el **Catálogo**, con su depósito y su costo.
 
 <Callout type="danger" title="Anular una orden">
-**Anular orden** revierte todos los movimientos de cubiertas de esa orden (las que se montaron vuelven a stock y las que salieron vuelven a su posición). No se puede deshacer, solo se puede anular una orden **Abierta**, y no se puede anular si en la orden se descartó alguna cubierta.
+**Anular orden** revierte todos los movimientos de cubiertas de esa orden (las que se montaron vuelven a stock y las que salieron vuelven a su posición), y anula en Almacenes las salidas y devoluciones que generó. No se puede deshacer, solo se puede anular una orden **Abierta**, y no se puede anular si en la orden se descartó alguna cubierta.
+</Callout>
+
+## Las cubiertas en el stock de Almacenes
+
+Cada cubierta es una unidad del material de su tipo y marca, con número de serie, depósito y costo. Lo que se hace en Gomería mueve ese stock solo, y cada movimiento queda imputado al vehículo:
+
+| En Gomería… | En Almacenes… |
+|---|---|
+| Se da de alta una cubierta (individual o masiva) | **Entrada** al depósito elegido, con su costo. |
+| Se monta una cubierta (**Reemplazar** o **Reparar**) | **Salida** del depósito, imputada al vehículo. |
+| La que sale va a **Disponible** (o se marca reparada o encontrada) | **Devolución** al depósito que se elija, al costo con que salió. |
+| La que sale va a **Descarte** | **Baja** de la unidad: el costo queda imputado al vehículo. |
+| La que sale va a **Reparación**, o se reporta **Extravío** | Nada: sigue imputada al vehículo hasta que vuelva. |
+| Se anula una orden abierta | Se anulan las salidas y devoluciones de la orden. |
+
+El detalle de esos movimientos en Almacenes dice "**Cubierta montada**" o "**Cubierta desmontada en la orden de gomería del…**", con el vehículo y la posición.
+
+Al revés, desde Almacenes las cubiertas **se ingresan y se transfieren**, pero no se sacan, no se ajustan para restar, no se devuelven como préstamo y sus movimientos no se anulan: todo eso se corrige desde Gomería ("**Las cubiertas se montan y se dan de baja desde Gomería**").
+
+<Callout type="info" title="Cubiertas cargadas antes de Almacenes">
+Las cubiertas que ya existían figuran con **Sin stock** en la columna **Depósito**. Funcionan como antes, sin mover stock, hasta que alguien las carga con el **Inventario inicial de cubiertas** de **Almacenes → Configuración**, que les pone depósito y costo y deja imputadas a su vehículo las que están montadas (ver <GuideLink to="configuracion-de-almacenes">Configuración de Almacenes</GuideLink>).
 </Callout>
 
 ## Cómo se relaciona con la ficha del vehículo
@@ -171,6 +201,7 @@ Las órdenes de gomería también se pueden hacer desde el campo, escaneando el 
 
 - **Subtipos de vehículo**: las plantillas se asignan a los subtipos que se cargan en <GuideLink to="catalogos-de-equipos">Catálogos de equipos</GuideLink>. Un vehículo sin plantilla (ni propia ni heredada de su subtipo) no puede abrir una orden de gomería.
 - **Mantenimiento del taller**: gomería es un circuito aparte. Las órdenes de gomería no pasan por la validación de operaciones ni por el taller, y no cambian la condición del vehículo (no lo dejan **No operativo**).
+- **Almacenes**: el stock, el depósito y el costo de cada cubierta, y los movimientos que generan las órdenes (<GuideLink to="circuito-de-materiales">El circuito de los materiales</GuideLink>).
 
 ## Permisos
 
@@ -184,7 +215,7 @@ Cada pestaña interna tiene su propio permiso dentro de **Gomería**:
 | **Marcas de Cubiertas** | Ver la pestaña | **Nueva Marca** | **Editar**, **Activar** y **Desactivar** | — |
 | **Tipos de Cubierta** | Ver la pestaña | **Nuevo Tipo** | **Editar**, **Activar** y **Desactivar** | — |
 
-Para entrar a la pestaña **Gomería** hace falta **Ver** en **Gomería**.
+Para entrar a la pestaña **Gomería** hace falta **Ver** en **Gomería**. La columna **Costo** del catálogo necesita además **Ver precios e importes** en **Almacenes → Movimientos**.
 
 ## Problemas frecuentes
 
@@ -193,5 +224,13 @@ Al abrir una orden aparece **El equipo … no tiene plantilla de cubiertas asign
 </Callout>
 
 <Callout type="info" title="No aparece la cubierta que quiero montar">
-Solo se ofrecen cubiertas **Disponibles** o **Extraviadas**. Si está **En reparación**, marcala como reparada en el **Catálogo**; si no existe, creala con **Crear cubierta**.
+Solo se ofrecen cubiertas **Disponibles** en un depósito, y **Extraviadas** sin stock. Si está **En reparación** o **Extraviada** con stock, marcala como reparada o encontrada en el **Catálogo** (vuelve a un depósito); si no existe, dala de alta en el **Catálogo**.
+</Callout>
+
+<Callout type="warning" title="&quot;La cubierta … no está en un depósito: registrá su devolución antes de montarla&quot;">
+La cubierta figura afuera del stock (por ejemplo, porque se desmontó a reparación). Marcala como reparada o encontrada en el **Catálogo**, eligiendo el depósito, y volvé a intentar.
+</Callout>
+
+<Callout type="warning" title="&quot;Elegí el depósito al que vuelve la cubierta …&quot;">
+La empresa tiene más de un depósito y la cubierta vuelve al stock: elegí el depósito en el campo que aparece.
 </Callout>

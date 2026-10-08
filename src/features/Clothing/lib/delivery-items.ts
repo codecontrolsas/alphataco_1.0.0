@@ -72,3 +72,21 @@ export function normalizeDeliveryItems(items: readonly RawDeliveryItem[]): Norma
 
   return normalized;
 }
+
+/** Filas sin marca o sin talle: con stock por combinacion no se pueden entregar (Almacenes etapa 5). */
+export function linesWithoutBrandOrSize(items: readonly NormalizedDeliveryItem[]): number[] {
+  return items.flatMap((item, index) => (item.clothingBrandId && item.clothingSizeId ? [] : [index]));
+}
+
+/**
+ * Suma las cantidades por material para la salida de stock: dos filas de la misma combinacion
+ * (por ejemplo, una con certificado y otra sin) son una sola linea de stock. Las filas de la
+ * entrega NO se fusionan (ver `normalizeDeliveryItems`); solo la salida.
+ */
+export function groupQuantitiesByMaterial(
+  lines: readonly { materialId: string; quantity: number }[]
+): { materialId: string; quantity: number }[] {
+  const totals = new Map<string, number>();
+  for (const line of lines) totals.set(line.materialId, (totals.get(line.materialId) ?? 0) + line.quantity);
+  return [...totals].map(([materialId, quantity]) => ({ materialId, quantity }));
+}

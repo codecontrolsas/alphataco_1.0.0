@@ -22,6 +22,7 @@ import { createHash } from 'node:crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client.ts';
 import { ACTIONS, PERMISSIONS } from '../src/features/Permissions/permissions-map.ts';
+import { DEFAULT_MEASUREMENT_UNITS } from '../src/features/Warehouses/lib/default-units.ts';
 import { buildPermissionRows, SYSTEM_ROLE_SLUGS } from './seed/permission-rows.ts';
 
 /** Namespace fijo para derivar UUIDs v5 deterministicos en este seed. No cambiar entre corridas. */
@@ -134,11 +135,21 @@ async function main(): Promise<void> {
     //     deliberadamente NO hay fallback por variable de entorno (una lista global
     //     recibiria los datos de todas las empresas). `update: {}` para no pisar una lista
     //     que alguien ya haya editado.
-    for (const kind of ['documents_expiry', 'daily_report_deviations'] as const) {
+    for (const kind of ['documents_expiry', 'daily_report_deviations', 'stock_batch_expiry'] as const) {
       await prisma.notification_settings.upsert({
         where: { company_id_kind: { company_id: company.id, kind } },
         update: {},
         create: { company_id: company.id, kind, recipients: [company.contact_email] },
+      });
+    }
+
+    // 2c. Unidades de medida de Almacenes, POR EMPRESA. `update: {}` para no pisar una
+    //     unidad que la empresa ya haya renombrado o desactivado.
+    for (const unit of DEFAULT_MEASUREMENT_UNITS) {
+      await prisma.measurement_units.upsert({
+        where: { company_id_abbreviation: { company_id: company.id, abbreviation: unit.abbreviation } },
+        update: {},
+        create: { company_id: company.id, name: unit.name, abbreviation: unit.abbreviation },
       });
     }
 

@@ -26,6 +26,8 @@ import { cache } from 'react';
 export interface ClothingOperator {
   /** `profile.credential_id` del usuario de sesión. */
   userId: string;
+  /** `profile.id`: actor de los movimientos de stock de las entregas (Almacenes etapa 5). */
+  profileId: string;
   employeeId: string;
   employeeName: string;
   employeeFile: string | null;
@@ -51,7 +53,7 @@ export const getClothingOperator = cache(async (): Promise<ClothingOperator | nu
 
   const profile = await prisma.profile.findUnique({
     where: { credential_id: credentialId },
-    select: { employee_id: true },
+    select: { id: true, employee_id: true },
   });
   if (!profile?.employee_id) return null;
 
@@ -63,6 +65,7 @@ export const getClothingOperator = cache(async (): Promise<ClothingOperator | nu
 
   return {
     userId: credentialId,
+    profileId: profile.id,
     employeeId: employee.id,
     employeeName: `${employee.lastname} ${employee.firstname}`.trim(),
     employeeFile: employee.file,
@@ -146,4 +149,16 @@ export async function assertBrandSizePairsInCompany(
 
   if (brands.length !== brandIds.length) throw new Error('Alguna marca de ropa no pertenece a la empresa activa');
   if (sizes.length !== sizeIds.length) throw new Error('Algún talle de ropa no pertenece a la empresa activa');
+}
+
+/**
+ * `warehouseId` del cliente (deposito del que sale una entrega, Almacenes etapa 5): solo se
+ * acepta si es un deposito ACTIVO de la empresa dada.
+ */
+export async function assertWarehouseInCompany(warehouseId: string, companyId: string): Promise<void> {
+  const warehouse = await prisma.warehouses.findFirst({
+    where: { id: warehouseId, company_id: companyId, is_active: true },
+    select: { id: true },
+  });
+  if (!warehouse) throw new Error('El depósito no existe, está inactivo o no es de la empresa');
 }

@@ -96,7 +96,8 @@ export function ClothingItemForm({ open, onOpenChange, item }: ClothingItemFormP
   const { data: existingEntries, isLoading: isLoadingEntries } = useQuery({
     queryKey: ['item-brand-sizes', item?.id],
     queryFn: () => getItemBrandSizes(item!.id),
-    staleTime: 30 * 1000,
+    // Es la base contra la que se calculan altas y bajas: se lee fresca al abrir.
+    staleTime: 0,
     enabled: !!item?.id && open,
   });
 
@@ -179,19 +180,29 @@ export function ClothingItemForm({ open, onOpenChange, item }: ClothingItemFormP
 
       const currentGroups = brandSizeGroupsRef.current;
       const combinations = currentGroups.flatMap((g) => g.sizes.map((s) => ({ brandId: g.brandId, sizeId: s.id })));
+      // Altas y bajas explicitas contra la matriz leida del servidor al abrir (nunca "lo que no
+      // vino se borra"): cada combinacion tiene su material de stock (Almacenes etapa 5).
+      const key = (p: { brandId: string; sizeId: string }) => `${p.brandId}|${p.sizeId}`;
+      const baseline = (existingEntries ?? []).map((e) => ({ brandId: e.clothing_brand_id, sizeId: e.clothing_size_id }));
+      const baselineKeys = new Set(baseline.map(key));
+      const currentKeys = new Set(combinations.map(key));
+      const changes = {
+        add: combinations.filter((c) => !baselineKeys.has(key(c))),
+        remove: baseline.filter((b) => !currentKeys.has(key(b))),
+      };
 
       logger.debug('Submitting with combinations', {
-        data: { combinationsCount: combinations.length, groups: currentGroups.length },
+        data: { add: changes.add.length, remove: changes.remove.length, groups: currentGroups.length },
       });
 
       if (isEditing && item) {
         await updateClothingItem(item.id, payload);
-        await setItemBrandSizes(item.id, combinations);
+        if (changes.add.length > 0 || changes.remove.length > 0) await setItemBrandSizes(item.id, changes);
         toast.success('Artículo actualizado exitosamente');
       } else {
         const created = await createClothingItem(payload);
         if (combinations.length > 0) {
-          await setItemBrandSizes(created.id, combinations);
+          await setItemBrandSizes(created.id, { add: combinations, remove: [] });
         }
         toast.success('Artículo creado exitosamente');
       }
@@ -293,6 +304,11 @@ export function ClothingItemForm({ open, onOpenChange, item }: ClothingItemFormP
             ) : (
               <ItemBrandSizeManager
                 groups={brandSizeGroups}
+                materials={Object.fromEntries(
+                  (existingEntries ?? []).flatMap((e) =>
+                    e.material ? [[`${e.clothing_brand_id}|${e.clothing_size_id}`, e.material] as const] : []
+                  )
+                )}
                 onAdd={handleAddBrandSize}
                 onRemove={handleRemoveBrandSize}
                 brands={activeBrands ?? []}
@@ -304,7 +320,8 @@ export function ClothingItemForm({ open, onOpenChange, item }: ClothingItemFormP
               <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
+              {/* Sin la matriz cargada no hay base para calcular altas y bajas: no se guarda. */}
+              <Button type="submit" disabled={form.formState.isSubmitting || isLoadingCatalogs}>
                 {form.formState.isSubmitting ? 'Guardando...' : isEditing ? 'Guardar cambios' : 'Crear artículo'}
               </Button>
             </DialogFooter>

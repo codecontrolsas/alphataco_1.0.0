@@ -1,11 +1,11 @@
 ---
 title: Entrega de indumentaria
-summary: Panel para registrar entregas de ropa de trabajo y EPP con la firma del empleado, consultar el historial y descargar la constancia en PDF.
-keywords: indumentaria, ropa, EPP, elementos de protección, entrega, firma, constancia, RG 12-4, talle, panel, pañol
-updated: 2026-10-07
+summary: Panel para registrar entregas de ropa de trabajo y EPP con la firma del empleado, descontando el stock del depósito elegido, consultar el historial, descargar la constancia en PDF y anular una entrega.
+keywords: indumentaria, ropa, EPP, elementos de protección, entrega, firma, constancia, RG 12-4, talle, panel, pañol, stock, depósito, disponible, anular entrega
+updated: 2026-10-08
 ---
 
-El panel de **Entrega de Indumentaria** es una pantalla aparte del sistema, pensada para usarse en una tablet o en la computadora del pañol: el responsable de indumentaria registra qué se le entregó a cada empleado (ropa de trabajo o elementos de protección personal), el empleado **firma en la pantalla** con el dedo, y la entrega queda guardada con fecha y hora, lista para imprimir la constancia.
+El panel de **Entrega de Indumentaria** es una pantalla aparte del sistema, pensada para usarse en una tablet o en la computadora del pañol: el responsable de indumentaria registra qué se le entregó a cada empleado (ropa de trabajo o elementos de protección personal), el empleado **firma en la pantalla** con el dedo, y la entrega queda guardada con fecha y hora, lista para imprimir la constancia. Cada entrega **descuenta el stock** del depósito del que sale la ropa, en el módulo Almacenes.
 
 No está dentro del menú lateral: se abre con su propia dirección, que termina en **/clothing**. Pedile el enlace al administrador del sistema y guardalo como favorito en el dispositivo que se use para las entregas.
 
@@ -50,14 +50,14 @@ En **Buscar empleado** escribí el legajo, el nombre o el apellido. La lista mue
 <Step title="Tipo: por qué se entrega">
 Elegí el tipo de entrega: **Planificada CCT** (la que corresponde por convenio), **Planificada EPP** (elementos de protección planificados) o **Reposición** (reemplazo de algo roto o perdido).
 </Step>
-<Step title="Artículos: qué se entrega">
-Por cada artículo completá **Artículo** y **Cantidad** (obligatorios) y, si corresponde, **Marca** y **Talle**. Las marcas y talles que aparecen son los que están cargados para ese artículo en el catálogo. Tildá **Posee certificado** si el elemento tiene certificación. Para sumar otra línea usá **Agregar artículo**; para quitar una, el ícono de la papelera. Tiene que haber al menos un artículo.
+<Step title="Artículos: qué se entrega y de dónde sale">
+Arriba elegí el **Depósito** del que sale la ropa (si la empresa tiene uno solo, ya viene elegido). Después, por cada artículo completá **Artículo**, **Cantidad**, **Marca** y **Talle**: los cuatro son obligatorios, porque el stock se lleva por artículo, marca y talle. Las marcas y talles que aparecen son los que están cargados para ese artículo en el catálogo. En la lista de talles ves cuánto hay de cada uno en el depósito ("**· 5 disp.**" o "**· Sin stock**") y, al elegir uno, debajo aparece "**Disponible: N**" (en rojo si no alcanza). Tildá **Posee certificado** si el elemento tiene certificación. Para sumar otra línea usá **Agregar artículo**; para quitar una, el ícono de la papelera. Tiene que haber al menos un artículo.
 </Step>
 <Step title="Firma: el empleado confirma">
 Pasale el dispositivo al empleado para que firme en el recuadro **Firme aqui con su dedo o lapiz**. Si sale mal, **Limpiar** y que firme de nuevo. Cuando esté bien, tocá **Confirmar Firma**: vas a ver **Firma registrada**. Sin firma confirmada no se puede seguir.
 </Step>
 <Step title="Confirmar: revisá y guardá">
-En **Resumen de la entrega** revisá el empleado, el tipo, los artículos (con marca, talle, certificado y cantidad) y la firma. Si querés, agregá **Observaciones**. La entrega se registra con la fecha y hora del momento. Tocá **Confirmar Entrega**.
+En **Resumen de la entrega** revisá el empleado, el tipo, el depósito (**Sale del depósito**), los artículos (con marca, talle, certificado y cantidad) y la firma. Si querés, agregá **Observaciones**. La entrega se registra con la fecha y hora del momento. Tocá **Confirmar Entrega**.
 </Step>
 </Steps>
 
@@ -67,8 +67,12 @@ Al terminar vas a ver "**Entrega registrada correctamente**" y el panel pasa al 
 En el sistema, en la ficha del empleado, pestaña **Indumentaria**, el botón **Nueva Entrega** abre este panel en otra pestaña del navegador con el empleado ya elegido: arrancás directamente en el paso **Tipo**. Ver <GuideLink to="ficha-del-empleado">Ficha del empleado</GuideLink>.
 </Callout>
 
+<Callout type="warning" title="Si no hay stock, la entrega no se registra">
+Si algún artículo no alcanza en el depósito elegido, al confirmar aparece el motivo, por ejemplo "**Stock insuficiente de Camisa · Ombú · 42 en Depósito Base: hay 1 u, se pidieron 2 u**", y **no se registra nada**: ni la entrega ni la salida de stock. El asistente no se reinicia: volvé a **Artículos**, cambiá el depósito o la cantidad y confirmá de nuevo. Para que haya stock, el almacén tiene que registrar una entrada (ver <GuideLink to="movimientos-de-stock">Movimientos de stock</GuideLink>).
+</Callout>
+
 <Callout type="warning" title="Revisá antes de confirmar">
-Una entrega confirmada no se edita desde el panel. Verificá cantidades y talles en el resumen antes de tocar **Confirmar Entrega**.
+Una entrega confirmada no se edita. Verificá cantidades y talles en el resumen antes de tocar **Confirmar Entrega**. Si quedó mal, se anula desde el sistema (ver [Anular una entrega](#anular-una-entrega)) y se vuelve a cargar.
 </Callout>
 
 ## Cómo consultar las entregas
@@ -80,6 +84,7 @@ En **Ver Entregas** está el historial de todas las entregas de la empresa.
 | **Fecha de entrega** | Fecha y hora en que se confirmó. |
 | **Legajo (destinatario)** y **Destinatario** | El empleado que recibió. |
 | **Tipo de entrega** | Planificada CCT, Planificada EPP o Reposición. |
+| **Estado** | **Vigente** o **Anulada** (con la fecha y el motivo de la anulación). |
 | **Legajo (entregó)** y **Entregado por** | Quién registró la entrega. |
 | **Artículos** | Lo entregado. |
 | **Firma** | Si tiene firma (filtro **Con firma** / **Sin firma**). |
@@ -89,23 +94,72 @@ Podés buscar por el nombre del empleado y exportar la lista a Excel (ver <Guide
 
 ### La constancia en PDF
 
-Con **Ver PDF** se abre la **Constancia de Entrega EPP** (formulario **RG 12-4**) con los datos de la empresa, del trabajador (nombre, DNI, legajo y puesto), el detalle de cada producto (tipo, modelo, talle, código, marca, certificado, cantidad y si es reposición) y la firma. Hacé clic en **Descargar PDF** para guardarla o imprimirla.
+Con **Ver PDF** se abre la **Constancia de Entrega EPP** (formulario **RG 12-4**) con los datos de la empresa, del trabajador (nombre, DNI, legajo y puesto), el detalle de cada producto (tipo, modelo, talle, código, marca, certificado, cantidad y si es reposición) y la firma. Hacé clic en **Descargar PDF** para guardarla o imprimirla. La constancia de una entrega anulada lleva la marca **ANULADA** con la fecha.
 
 Si seleccionás varias entregas, **Descargar ZIP** genera un archivo comprimido con una constancia por entrega.
+
+## Anular una entrega
+
+La anulación no se hace desde este panel sino desde el sistema: en la ficha del empleado, pestaña **Indumentaria**, o en **Configuración → RRHH → Reportes** de indumentaria, con el botón **Anular** de la fila. Hace falta el permiso **Eliminar** en la pestaña **Indumentaria** del empleado.
+
+<Steps>
+<Step title="Tocá Anular">
+Se abre **¿Anular la entrega a [legajo] Apellido Nombre?**.
+</Step>
+<Step title="Escribí el motivo">
+Completá **Motivo** (obligatorio), por ejemplo "se cargó un talle equivocado", y confirmá.
+</Step>
+</Steps>
+
+Al anularla:
+
+- **La ropa vuelve al depósito del que salió**, al mismo costo ("**Entrega anulada: la ropa volvió al depósito**").
+- **La entrega no se borra**: queda con el estado **Anulada**, con la fecha y el motivo, y su constancia firmada se conserva con la marca **ANULADA**.
+- No se puede deshacer, y una entrega anulada no se anula otra vez.
+
+Las entregas registradas **antes de que existiera el control de stock** también se pueden anular, pero no devuelven nada al depósito: solo quedan marcadas ("**Esta entrega es anterior al control de stock: no hay stock que devolver.**").
+
+<Callout type="info" title="Anulá desde acá, no desde Almacenes">
+La salida de stock de una entrega también se puede anular desde **Almacenes → Movimientos**, pero así la entrega sigue figurando **Vigente**. Anulala desde la ficha del empleado o desde **Reportes**: devuelve el stock y marca la entrega en un solo paso (y si la salida ya estaba anulada, solo marca la entrega).
+</Callout>
 
 ## Cómo se conecta con el resto del sistema
 
 <Flow title="De la entrega a la ficha del empleado">
 <FlowStep title="Catálogo" module="Configuración" tone="default" to="catalogo-de-indumentaria">Artículos, marcas y talles disponibles.</FlowStep>
-<FlowStep title="Entrega firmada" module="Panel de indumentaria" tone="info">Se registra con fecha, firma y quién entregó.</FlowStep>
+<FlowStep title="Stock de ropa" module="Almacenes" tone="default" to="materiales">Cada artículo + marca + talle es un material con su stock.</FlowStep>
+<FlowStep title="Entrega firmada" module="Panel de indumentaria" tone="info">Se registra con fecha, firma, depósito y quién entregó.</FlowStep>
+<FlowStep title="Salida de stock" module="Almacenes" tone="warning" to="movimientos-de-stock">Descuenta del depósito y se imputa al empleado.</FlowStep>
 <FlowStep title="Ficha del empleado" module="Empleados" tone="success" to="ficha-del-empleado">Queda en la pestaña Indumentaria.</FlowStep>
 </Flow>
 
 - **Lo que se puede entregar** sale del catálogo de indumentaria: si falta un artículo, una marca o un talle, hay que cargarlo ahí primero (ver <GuideLink to="catalogo-de-indumentaria">Catálogo de indumentaria</GuideLink>).
 - **Cada entrega aparece en la ficha del empleado**, pestaña **Indumentaria**, con su fecha, tipo, quién la entregó, la firma y las notas (ver <GuideLink to="ficha-del-empleado">Ficha del empleado</GuideLink>).
 - Los empleados **dados de baja** no aparecen en la búsqueda del paso **Empleado**.
-- El panel **no descuenta stock**: registra la entrega y la firma, pero no lleva existencias de pañol.
+- **Cada entrega es una salida de stock** del depósito elegido, imputada al empleado que recibe, al costo promedio de cada prenda. En **Almacenes → Movimientos** figura como una **Salida** con la referencia "Entrega de ropa", y su detalle dice "**Entrega de ropa a [legajo] Apellido Nombre**". Si cargaste dos líneas de la misma prenda, la salida las suma en una. Ver <GuideLink to="movimientos-de-stock">Movimientos de stock</GuideLink>.
+- **El stock de ropa se lleva por artículo, marca y talle**: cada combinación del catálogo es un material de Almacenes que el sistema crea solo. Las compras de ropa se ingresan en Almacenes con una entrada. Ver <GuideLink to="materiales">Materiales</GuideLink>.
+- La entrega **no pasa por pedidos de materiales ni por la regla de salida directa**: la autorizan el usuario del panel y la firma del empleado.
+- Con **Ver precios e importes** en **Almacenes → Movimientos**, la ficha del empleado y los reportes muestran el **Costo** de cada entrega.
 
 ## Permisos
 
-El panel no usa los permisos por rol del sistema: alcanza con tener un usuario vinculado a un empleado. En cambio, **ver las entregas en la ficha del empleado** requiere el permiso **Ver** sobre la pestaña **Indumentaria** de Empleados, y el catálogo se administra desde Configuración con sus propios permisos (ver <GuideLink to="empresa-usuarios-y-permisos">Empresa, usuarios y permisos</GuideLink>).
+El panel no usa los permisos por rol del sistema: alcanza con tener un usuario vinculado a un empleado. En cambio, en el sistema:
+
+| Para… | Hace falta |
+|---|---|
+| Ver las entregas en la ficha del empleado | **Ver** en la pestaña **Indumentaria** de Empleados |
+| **Anular** una entrega | **Eliminar** en la pestaña **Indumentaria** de Empleados |
+| Ver el **Costo** de las entregas | **Ver precios e importes** en **Almacenes → Movimientos** |
+| Administrar el catálogo | Los permisos de **Configuración → RRHH** |
+
+Ver <GuideLink to="empresa-usuarios-y-permisos">Empresa, usuarios y permisos</GuideLink>.
+
+## Problemas frecuentes
+
+<Callout type="warning" title="&quot;No hay depósitos activos&quot;">
+El selector de **Depósito** está vacío. Un administrador tiene que crear un depósito en **Almacenes → Depósitos** (ver <GuideLink to="depositos">Depósitos</GuideLink>).
+</Callout>
+
+<Callout type="warning" title="&quot;… no está habilitado en el catálogo de Ropa&quot;">
+La combinación de artículo, marca y talle se quitó de la matriz, o el artículo, la marca o el talle están desactivados. Revisalo en el <GuideLink to="catalogo-de-indumentaria">Catálogo de indumentaria</GuideLink>.
+</Callout>

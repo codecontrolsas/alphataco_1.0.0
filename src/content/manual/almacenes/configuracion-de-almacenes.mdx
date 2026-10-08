@@ -1,0 +1,84 @@
+---
+title: Configuración de Almacenes
+summary: Las categorías de materiales, las unidades de medida, el monto máximo de salida directa y la carga del inventario inicial de las cubiertas que ya estaban en Gomería.
+keywords: configuración, categorías, unidades de medida, abreviatura, salida directa, monto máximo, límite, inventario inicial, cubiertas, gomería, puesta en marcha
+updated: 2026-10-08
+---
+
+La sección **Configuración** de Almacenes reúne lo que se define una vez y se usa en todo el módulo: cómo se agrupan los materiales, en qué se miden, hasta qué monto se puede sacar material sin pedido y, si la empresa ya usaba Gomería, la carga inicial de sus cubiertas al stock.
+
+<OpenScreen />
+
+La pantalla tiene hasta cuatro bloques: **Categorías de materiales**, **Unidades de medida**, **Salida directa** e **Inventario inicial de cubiertas** (este último solo cuando hay algo que cargar).
+
+## Categorías de materiales
+
+"**Agrupan el catálogo: Lubricantes, Herramientas, EPP…**". Sirven para ordenar y filtrar el stock y los materiales. Un material puede no tener categoría.
+
+- **Agregar** abre **Nueva categoría**, que solo pide el **Nombre** (no se puede repetir).
+- En cada fila, los íconos **Editar**, **Dar de baja** y, si está inactiva, **Reactivar**.
+- **Dar de baja**: si algún material la usa, se desactiva y deja de ofrecerse; si no, se elimina.
+
+El sistema crea solo las categorías **Ropa** y **Cubiertas**, que usan los materiales que vienen del catálogo de indumentaria y de Gomería.
+
+## Unidades de medida
+
+"**En qué se cuenta cada material: unidad, litro, kilogramo…**". Cada empresa arranca con **Unidad (u)**, **Litro (l)**, **Kilogramo (kg)**, **Metro (m)**, **Par (par)** y **Caja (caja)**.
+
+- **Agregar** abre **Nueva unidad**, con **Nombre** y **Abreviatura** (por ejemplo "Bidón" y "bid"). Ni el nombre ni la abreviatura se pueden repetir.
+- Se editan, se dan de baja y se reactivan igual que las categorías.
+
+La abreviatura es lo que se ve junto a las cantidades en todo el módulo ("12 l", "3 u").
+
+## Salida directa
+
+Define el **Monto máximo ($)** que puede valer una salida registrada directamente desde **Nuevo movimiento**. "**Una salida desde "Nuevo movimiento" que supere este monto se rechaza y tiene que hacerse por pedido de materiales. Los materiales que requieren aprobación siempre van por pedido.**"
+
+- Escribí el monto y tocá **Guardar**. Vacío significa **sin límite** ("**La salida directa queda sin límite de monto**").
+- El total que se compara es el costo real de la salida, calculado al costo promedio de cada material.
+- Solo quien tiene **Editar** en **Configuración** puede cambiarlo; el resto lo ve.
+
+El monto es una de las tres condiciones de la salida directa. Las otras dos son el permiso **Salida directa** y que ningún material esté marcado **Requiere aprobación** (ver <GuideLink to="movimientos-de-stock">Movimientos de stock</GuideLink> y <GuideLink to="pedidos-de-materiales">Pedidos de materiales</GuideLink>).
+
+## Inventario inicial de cubiertas
+
+Si la empresa ya tenía cubiertas cargadas en Gomería antes de usar Almacenes, esas cubiertas existen pero **no tienen stock**: no tienen depósito ni costo. Mientras queden cubiertas así, aparece este bloque: "**Hay N cubiertas de Gomería sin stock.**"
+
+Las cubiertas se agrupan por **medida, banda y marca**, con cuántas hay en cada estado (por ejemplo "12 cubiertas: 8 disponible, 3 instalada, 1 en reparación").
+
+<Steps>
+<Step title="Elegí el depósito">
+En **Depósito**, el depósito al que entran.
+</Step>
+<Step title="Cargá el costo de cada grupo">
+Un **Costo unitario** por grupo de medida y marca. Es obligatorio para todos los grupos.
+</Step>
+<Step title="Cargá">
+Tocá **Cargar N cubiertas al stock**. Todo se registra junto o no se registra nada.
+</Step>
+</Steps>
+
+Qué hace el sistema:
+
+1. Registra una **entrada** al depósito con todas las cubiertas, cada una con su número de serie y el costo de su grupo, con la referencia "Inventario inicial de cubiertas".
+2. Las **disponibles** quedan en el depósito.
+3. Las **instaladas** salen al vehículo donde están montadas. Las que están **en reparación** o **extraviadas** salen al vehículo del que se desmontaron por última vez. Así cada una queda imputada a su vehículo.
+4. Si de alguna no se sabe el vehículo, queda en el depósito, y el aviso final lo dice: "**Quedó en el depósito 1 cubierta sin equipo conocido**".
+
+El aviso final resume todo: "**Inventario cargado: 40 cubiertas en MOV-000210 y 3 salida(s) a los equipos (…)**". Las cubiertas descartadas no se cargan.
+
+<Callout type="info" title="Quién lo ve">
+El bloque necesita **Ajustar stock** en **Movimientos**, porque carga stock sin un comprobante de compra. Desaparece cuando ya no quedan cubiertas sin stock.
+</Callout>
+
+Las cubiertas que se dan de alta después en Gomería ya entran al stock con su depósito y su costo (ver <GuideLink to="gomeria">Gomería</GuideLink>).
+
+## Permisos
+
+| Para… | Hace falta |
+|---|---|
+| Ver la pantalla | **Ver** en **Configuración** de Almacenes |
+| **Agregar** categorías y unidades | **Crear** |
+| Editar, reactivar, y guardar el monto de salida directa | **Editar** |
+| Dar de baja categorías y unidades | **Eliminar** |
+| Cargar el inventario inicial de cubiertas | **Ajustar stock** en **Movimientos** |

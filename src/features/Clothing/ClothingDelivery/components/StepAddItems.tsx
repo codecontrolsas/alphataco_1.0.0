@@ -9,7 +9,9 @@ import {
   getBrandsForItem,
   getItemsForDelivery,
   getSizesForItemBrand,
+  type DeliveryWarehouse,
 } from '@/features/Clothing/ClothingDelivery/actions/queries.server';
+import { formatQuantity } from '@/features/Warehouses/lib/format';
 import { Logger } from '@/lib/logger';
 import { useQuery } from '@tanstack/react-query';
 import { Package, Plus, Trash2 } from 'lucide-react';
@@ -35,9 +37,10 @@ interface ItemRowProps {
   onUpdate: (index: number, updated: Partial<WizardItem>) => void;
   onRemove: (index: number) => void;
   canRemove: boolean;
+  warehouseId: string | null;
 }
 
-function ItemRow({ index, item, companyId, onUpdate, onRemove, canRemove }: ItemRowProps) {
+function ItemRow({ index, item, companyId, onUpdate, onRemove, canRemove, warehouseId }: ItemRowProps) {
   const idPrefix = useId();
 
   const { data: items = [], isLoading: loadingItems } = useQuery({
@@ -54,9 +57,10 @@ function ItemRow({ index, item, companyId, onUpdate, onRemove, canRemove }: Item
   });
 
   const { data: sizes = [], isLoading: loadingSizes } = useQuery({
-    queryKey: ['clothing-sizes-for-item-brand', item.clothingItemId, item.clothingBrandId],
-    queryFn: () => getSizesForItemBrand(item.clothingItemId, item.clothingBrandId!),
-    staleTime: 60_000,
+    // Con el deposito en la clave: cambiar de deposito trae el disponible de ese deposito.
+    queryKey: ['clothing-sizes-for-item-brand', item.clothingItemId, item.clothingBrandId, warehouseId],
+    queryFn: () => getSizesForItemBrand(item.clothingItemId, item.clothingBrandId!, warehouseId),
+    staleTime: 15_000,
     enabled: !!item.clothingItemId && !!item.clothingBrandId,
   });
 
@@ -101,6 +105,8 @@ function ItemRow({ index, item, companyId, onUpdate, onRemove, canRemove }: Item
     },
     [index, sizes, onUpdate]
   );
+
+  const selectedSize = sizes.find((s) => s?.id === item.clothingSizeId) ?? null;
 
   // Draft string mientras el input tiene foco — permite estado vacio durante edicion.
   // Cuando no esta enfocado, displayQuantity refleja item.quantity (siempre sincronizado al padre).
@@ -251,15 +257,24 @@ function ItemRow({ index, item, companyId, onUpdate, onRemove, canRemove }: Item
               />
             </SelectTrigger>
             <SelectContent>
+              {/* Un talle sin stock se puede elegir: el servidor rechaza la entrega con el detalle. */}
               {sizes.map((s) =>
                 s ? (
                   <SelectItem key={s.id} value={s.id}>
-                    {s.name}
+                    <span className="tabular-nums">
+                      {s.name}
+                      {s.available !== null && (Number(s.available) > 0 ? ` · ${formatQuantity(s.available)} disp.` : ' · Sin stock')}
+                    </span>
                   </SelectItem>
                 ) : null
               )}
             </SelectContent>
           </Select>
+          {selectedSize?.available != null && (
+            <p className={`text-xs tabular-nums ${Number(selectedSize.available) < item.quantity ? 'text-destructive' : 'text-muted-foreground'}`}>
+              Disponible: {formatQuantity(selectedSize.available)}
+            </p>
+          )}
         </div>
       </div>
 
@@ -282,6 +297,11 @@ interface StepAddItemsProps {
   companyId: string;
   items: WizardItem[];
   onChange: (items: WizardItem[]) => void;
+  /** Deposito del que sale la entrega (Almacenes etapa 5). */
+  warehouses: DeliveryWarehouse[];
+  loadingWarehouses: boolean;
+  warehouseId: string | null;
+  onWarehouseChange: (warehouseId: string) => void;
 }
 
 const emptyItem = (): WizardItem => ({
@@ -295,7 +315,15 @@ const emptyItem = (): WizardItem => ({
   hasCertificate: false,
 });
 
-export function StepAddItems({ companyId, items, onChange }: StepAddItemsProps) {
+export function StepAddItems({
+  companyId,
+  items,
+  onChange,
+  warehouses,
+  loadingWarehouses,
+  warehouseId,
+  onWarehouseChange,
+}: StepAddItemsProps) {
   const handleAdd = useCallback(() => {
     onChange([...items, emptyItem()]);
   }, [items, onChange]);
@@ -320,8 +348,30 @@ export function StepAddItems({ companyId, items, onChange }: StepAddItemsProps) 
       <div>
         <p className="text-sm font-medium mb-1.5 text-foreground">Artículos a entregar</p>
         <p className="text-sm text-muted-foreground mb-3">
-          Agregue todos los artículos de la entrega. Debe haber al menos uno.
+          Agregue todos los artículos de la entrega, con marca y talle. Debe haber al menos uno.
         </p>
+      </div>
+
+      <div className="space-y-1.5 max-w-sm">
+        <Label htmlFor="clothing-delivery-warehouse" className="text-xs">
+          Depósito
+        </Label>
+        <Select value={warehouseId ?? undefined} onValueChange={onWarehouseChange} disabled={loadingWarehouses}>
+          <SelectTrigger id="clothing-delivery-warehouse" className="h-9 w-full">
+            <SelectValue
+              placeholder={
+                loadingWarehouses ? 'Cargando...' : warehouses.length === 0 ? 'No hay depósitos activos' : 'Elegí el depósito'
+              }
+            />
+          </SelectTrigger>
+          <SelectContent>
+            {warehouses.map((w) => (
+              <SelectItem key={w.id} value={w.id}>
+                {w.name} ({w.code})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="space-y-3">
@@ -334,6 +384,7 @@ export function StepAddItems({ companyId, items, onChange }: StepAddItemsProps) 
             onUpdate={handleUpdate}
             onRemove={handleRemove}
             canRemove={items.length > 1}
+            warehouseId={warehouseId}
           />
         ))}
       </div>

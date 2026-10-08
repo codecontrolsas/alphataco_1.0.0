@@ -6,6 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Trash2, X } from 'lucide-react';
+import { formatQuantity } from '@/features/Warehouses/lib/format';
 import { useCallback, useState } from 'react';
 
 // ============================================================================
@@ -30,6 +31,11 @@ interface SizeOption {
 
 interface ItemBrandSizeManagerProps {
   groups: BrandSizeGroup[];
+  /**
+   * Material de stock de cada combinacion ya guardada, por `brandId|sizeId` (Almacenes etapa 5).
+   * Las combinaciones nuevas no lo tienen hasta guardar.
+   */
+  materials?: Record<string, { code: string; stock: string }>;
   onAdd: (brandId: string, sizeIds: string[]) => void;
   onRemove: (brandId: string) => void;
   brands: BrandOption[];
@@ -40,7 +46,7 @@ interface ItemBrandSizeManagerProps {
 // COMPONENT
 // ============================================================================
 
-export function ItemBrandSizeManager({ groups, onAdd, onRemove, brands, sizes }: ItemBrandSizeManagerProps) {
+export function ItemBrandSizeManager({ groups, materials = {}, onAdd, onRemove, brands, sizes }: ItemBrandSizeManagerProps) {
   const [showAddRow, setShowAddRow] = useState(false);
   const [selectedBrandId, setSelectedBrandId] = useState('');
   const [selectedSizeIds, setSelectedSizeIds] = useState<string[]>([]);
@@ -93,11 +99,20 @@ export function ItemBrandSizeManager({ groups, onAdd, onRemove, brands, sizes }:
               <div className="flex items-center gap-2 overflow-hidden">
                 <span className="text-sm font-medium shrink-0">{brandName}</span>
                 <div className="flex flex-wrap gap-1">
-                  {assignedSizes.map((size) => (
-                    <Badge key={size.id} variant="secondary" className="text-xs">
-                      {size.name}
-                    </Badge>
-                  ))}
+                  {assignedSizes.map((size) => {
+                    const material = materials[`${brandId}|${size.id}`];
+                    return (
+                      <Badge
+                        key={size.id}
+                        variant="secondary"
+                        className="text-xs tabular-nums"
+                        title={material ? `Material ${material.code} · stock total ${material.stock}` : 'Se crea su material al guardar'}
+                      >
+                        {size.name}
+                        {material && <span className="ml-1 text-muted-foreground">· {formatQuantity(material.stock)}</span>}
+                      </Badge>
+                    );
+                  })}
                 </div>
               </div>
               <Button
@@ -112,6 +127,12 @@ export function ItemBrandSizeManager({ groups, onAdd, onRemove, brands, sizes }:
             </div>
           ))}
         </div>
+      )}
+
+      {groups.length > 0 && Object.keys(materials).length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Junto a cada talle, el stock total en Almacenes. Cada combinación es un material de stock.
+        </p>
       )}
 
       {groups.length === 0 && !showAddRow && (

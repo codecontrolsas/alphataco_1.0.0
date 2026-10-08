@@ -56,6 +56,7 @@ export type SectionIcon =
   | 'documents'
   | 'operations'
   | 'maintenance'
+  | 'warehouse'
   | 'forms'
   | 'help'
   | 'settings'

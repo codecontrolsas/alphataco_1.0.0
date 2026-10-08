@@ -3,6 +3,7 @@ import type { DeviationsResult, RowWithDeviations } from '../schemas/deviations'
 import type { ExpirySummary } from '../schemas/documents-expiry';
 import { renderDeviationsEmail } from './deviations';
 import { renderDocumentsExpiryEmail } from './documents-expiry';
+import { renderWarehouseBatchExpiryEmail } from './warehouse-batch-expiry';
 
 /**
  * Las dos plantillas arman HTML concatenando strings que vienen de la base: nombres de
@@ -215,5 +216,40 @@ describe('plantillas de los jobs — escapado de HTML', () => {
 
     expect(deviations.html).not.toContain('supabase.co');
     expect(expiry.html).not.toContain('supabase.co');
+  });
+});
+
+describe('renderWarehouseBatchExpiryEmail', () => {
+  const item = {
+    materialCode: 'DES',
+    material: HOSTILE,
+    unit: 'l',
+    warehouse: HOSTILE,
+    batch: HOSTILE,
+    expiresOn: '2099-02-20',
+    quantity: '5',
+    status: 'EXPIRED' as const,
+  };
+
+  it('escapa los textos que vienen de la base', () => {
+    const email = renderWarehouseBatchExpiryEmail({ companyName: 'Empresa', today: '2099-03-01', windowDays: 30, items: [item] });
+    expect(email.html).not.toContain(HOSTILE);
+    expect(email.html).toContain(ESCAPED);
+  });
+
+  it('separa vencidos de por vencer y lo dice en el texto plano', () => {
+    const email = renderWarehouseBatchExpiryEmail({
+      companyName: 'Empresa',
+      today: '2099-03-01',
+      windowDays: 30,
+      items: [
+        { ...item, material: 'Grasa', warehouse: 'Base', batch: 'L1' },
+        { ...item, material: 'Aceite', warehouse: 'Base', batch: 'L2', status: 'EXPIRING', expiresOn: '2099-03-20' },
+      ],
+    });
+    expect(email.text).toContain('Vencidos: 1');
+    expect(email.text).toContain('Vencen en los próximos 30 días: 1');
+    expect(email.html).toContain('Lotes vencidos');
+    expect(email.subject).toContain('Empresa');
   });
 });

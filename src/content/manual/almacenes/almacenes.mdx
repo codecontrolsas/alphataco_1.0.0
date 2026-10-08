@@ -1,0 +1,134 @@
+---
+title: Cómo funciona Almacenes
+summary: Qué es el módulo Almacenes, cómo se organiza en depósitos, materiales y movimientos, cómo se calcula el costo, qué hace cada sección y con qué otros módulos se conecta.
+keywords: almacenes, almacén, inventario, stock, depósito, pañol, material, movimiento, costo promedio, valorizado, lote, número de serie, herramienta, préstamo, pedido, imputación, multi-depósito
+updated: 2026-10-08
+---
+
+**Almacenes** es el inventario de la empresa: qué materiales hay, en qué depósito, cuánto valen y a quién se le entregó cada cosa. Todo lo que entra o sale de un depósito queda registrado como un **movimiento**, y el stock de cada depósito es el resultado de esos movimientos. Lo usan el pañol, el almacén de la base, compras y quien necesita pedir materiales para trabajar.
+
+<OpenScreen />
+
+## Las ideas básicas
+
+Antes de cargar nada conviene entender cinco conceptos. El resto del módulo se apoya en ellos.
+
+| Concepto | Qué es |
+|---|---|
+| **Depósito** | Un lugar físico donde se guarda material: la base, una obra, el pañol, una camioneta. La empresa puede tener todos los que necesite, y el stock se lleva por separado en cada uno. |
+| **Material** | Cualquier cosa que se guarda y se entrega: un aceite, un filtro, un guante, una amoladora, una cubierta. Tiene un código, una unidad de medida y una forma de control. |
+| **Stock** | La cantidad de un material en un depósito. Nunca puede quedar negativo: si no hay, no sale. |
+| **Movimiento** | Cada entrada, salida, transferencia, ajuste, devolución o anulación. Lleva un número correlativo (**MOV-000001**, **MOV-000002**…), fecha, depósito, sus líneas de materiales y quién lo registró. Un movimiento registrado no se edita ni se borra: si estuvo mal, se anula con otro movimiento. |
+| **Imputación** | A quién se le carga una salida: un empleado, un vehículo, un equipo, una orden de mantenimiento o un cliente (y, si querés, su contrato). Así se sabe cuánto material consumió cada uno. |
+
+### Tres formas de controlar un material
+
+Cada material se controla de una de estas tres maneras, y se elige al crearlo:
+
+- **Por cantidad**: se cuenta cuánto hay (litros de aceite, cajas de guantes, metros de cable). Es la forma más común.
+- **Por lote**: además de la cantidad, se sabe de qué lote es cada parte y cuándo vence (grasas, químicos, medicamentos del botiquín). El sistema avisa lo vencido y lo que vence en los próximos 30 días, y **no deja sacar ni transferir un lote vencido**.
+- **Por número de serie**: cada unidad se identifica de a una (amoladoras, detectores, cubiertas). Cada vez que una unidad sale del depósito queda **prestada** a quien la recibió hasta que vuelve o se da de baja (ver <GuideLink to="prestamos-de-herramientas">Préstamos de herramientas</GuideLink>).
+
+Cuando un material ya tiene movimientos, su forma de control y su unidad de medida ya no se pueden cambiar.
+
+### Cómo se calcula el costo
+
+El sistema valoriza el inventario a **costo promedio ponderado**, uno por material y para toda la empresa (no por depósito):
+
+- Cada **entrada** se carga con su costo unitario y recalcula el promedio. Ejemplo: había 10 litros a $ 1.000 y entran 10 litros a $ 1.400: el promedio pasa a $ 1.200.
+- Las **salidas**, **transferencias** y **ajustes** salen al promedio vigente y no lo cambian.
+- Una **devolución** vuelve al costo con el que salió, y una **anulación** usa el costo del movimiento original.
+
+Los importes solo los ve quien tiene el permiso **Ver precios e importes**. El resto ve cantidades.
+
+## Qué hay en cada sección
+
+En el menú lateral, **Almacenes** tiene siete secciones:
+
+| Sección | Para qué sirve | Guía |
+|---|---|---|
+| **Stock** | Cuánto hay de cada material en cada depósito, los avisos de stock bajo mínimo y de lotes por vencer, y la ficha de cada material con su historial. | <GuideLink to="stock-y-ficha-del-material">Stock y ficha del material</GuideLink> |
+| **Movimientos** | Registrar entradas, salidas, transferencias y ajustes, y consultar o anular cualquier movimiento. | <GuideLink to="movimientos-de-stock">Movimientos de stock</GuideLink> |
+| **Préstamos** | Qué herramientas están afuera del depósito, en poder de quién y desde cuándo; devolverlas o darlas de baja. | <GuideLink to="prestamos-de-herramientas">Préstamos de herramientas</GuideLink> |
+| **Pedidos** | Pedir materiales, aprobar o rechazar los pedidos y entregarlos desde el almacén. | <GuideLink to="pedidos-de-materiales">Pedidos de materiales</GuideLink> |
+| **Materiales** | El catálogo: qué se guarda, cómo se controla, el stock mínimo y si sus salidas necesitan aprobación. | <GuideLink to="materiales">Materiales</GuideLink> |
+| **Depósitos** | Los lugares donde se guarda el material y su responsable. | <GuideLink to="depositos">Depósitos</GuideLink> |
+| **Configuración** | Categorías, unidades de medida, el monto máximo de salida directa y el inventario inicial de cubiertas. | <GuideLink to="configuracion-de-almacenes">Configuración de Almacenes</GuideLink> |
+
+Solo ves las secciones para las que tenés permiso **Ver**. Si abrís un enlace a una sección que no podés ver, el sistema te muestra la primera sección que sí podés ver; si no tenés ninguna, aparece "**Sin acceso**".
+
+## Cómo ponerlo en marcha
+
+<Flow title="Orden recomendado para empezar">
+  <FlowStep title="Configuración" module="Almacenes" to="configuracion-de-almacenes">Revisá las unidades de medida y cargá las categorías.</FlowStep>
+  <FlowStep title="Depósitos" module="Almacenes" to="depositos">Dá de alta cada lugar donde guardás material.</FlowStep>
+  <FlowStep title="Materiales" module="Almacenes" to="materiales">Cargá el catálogo con su forma de control.</FlowStep>
+  <FlowStep title="Entradas" module="Almacenes" tone="info" to="movimientos-de-stock">Ingresá el stock existente con su costo.</FlowStep>
+  <FlowStep title="Operación diaria" module="Almacenes" tone="success" to="circuito-de-materiales">Salidas, pedidos, préstamos y transferencias.</FlowStep>
+</Flow>
+
+<Callout type="tip" title="El inventario que ya tenés">
+Para cargar lo que hoy está en los estantes, registrá una **Entrada** por depósito con todos los materiales y su costo unitario, y poné en **Referencia** algo como "Inventario inicial". Para las cubiertas que ya estaban cargadas en Gomería hay una pantalla especial: ver <GuideLink to="configuracion-de-almacenes">Configuración de Almacenes</GuideLink>.
+</Callout>
+
+La ropa de trabajo y las cubiertas **no se cargan a mano en Materiales**: el sistema crea sus materiales solo, a partir del catálogo de indumentaria y del catálogo de Gomería. Lo explica <GuideLink to="materiales">Materiales</GuideLink>.
+
+## Cómo se conecta con el resto del sistema
+
+Almacenes no está aislado: otros módulos mueven stock sin que nadie entre a Almacenes.
+
+| Desde | Qué pasa en Almacenes | Guía |
+|---|---|---|
+| **Panel de entrega de indumentaria** | Cada entrega de ropa o EPP es una salida del depósito elegido, imputada al empleado. Si no hay stock, la entrega no se registra. Anular la entrega devuelve la ropa al depósito. | <GuideLink to="entrega-de-indumentaria">Entrega de indumentaria</GuideLink> |
+| **Gomería** | Cada cubierta es una unidad de stock. Darla de alta es una entrada; montarla es una salida al vehículo; desmontarla a disponible la devuelve a un depósito; descartarla es una baja. | <GuideLink to="gomeria">Gomería</GuideLink> |
+| **Mantenimiento** | El taller y los operarios piden repuestos con un pedido de materiales imputado a la orden y a la OT. La orden no se puede cerrar mientras tenga pedidos abiertos. | <GuideLink to="taller">Taller</GuideLink> |
+| **Panel del operario** | El operario pide materiales desde su OT y ve si ya se los entregaron. | <GuideLink to="panel-del-operario">Panel del operario</GuideLink> |
+| **Empleados, Equipos, Comercial** | Son los destinos posibles de una salida: el material queda imputado a ese empleado, vehículo, equipo o cliente. | <GuideLink to="movimientos-de-stock">Movimientos de stock</GuideLink> |
+
+El recorrido completo, desde que el material entra hasta que se consume, está en <GuideLink to="circuito-de-materiales">El circuito de los materiales</GuideLink>.
+
+## Permisos
+
+Cada sección tiene sus propios permisos. Además de **Ver**, **Crear**, **Editar** y **Eliminar**, Almacenes usa acciones propias:
+
+| Sección | Acción | Qué habilita |
+|---|---|---|
+| **Stock** | **Ver** | La tabla de stock, los avisos y la ficha de cada material. |
+| | **Ver precios e importes** | El costo promedio y el valorizado en la tabla de stock y en la ficha del material (con el costo de cada movimiento del kardex). |
+| **Movimientos** | **Ver** | La lista y el detalle de los movimientos. |
+| | **Crear** | Registrar entradas, salidas y transferencias. |
+| | **Salida directa** | Registrar una salida sin pedido aprobado. Sin esta acción, las salidas van por pedido de materiales. |
+| | **Ajustar stock** | Registrar ajustes (corregir el stock contra el conteo físico) y cargar el inventario inicial de cubiertas. |
+| | **Anular movimiento** | El botón **Anular** en el detalle de un movimiento. |
+| | **Ver precios e importes** | Costos e importes en los movimientos, el total estimado de los pedidos, los materiales de las órdenes de mantenimiento y el costo de las entregas de ropa. |
+| **Préstamos** | **Ver** | La lista de herramientas prestadas. |
+| | **Crear** | **Devolver** una herramienta. |
+| | **Eliminar** | **Dar de baja** una herramienta que no vuelve. |
+| **Pedidos** | **Ver** | Ver tus propios pedidos y cancelarlos mientras esperan aprobación. |
+| | **Ver todas las solicitudes** | Ver los pedidos de todos, no solo los tuyos. |
+| | **Crear** | Hacer pedidos (también desde una orden de mantenimiento). |
+| | **Aprobar** | Aprobar o rechazar pedidos. |
+| | **Editar** | Entregar y cerrar pedidos. |
+| **Materiales** | **Ver** / **Crear** / **Editar** / **Eliminar** | Consultar, dar de alta, editar o reactivar, y dar de baja materiales. |
+| **Depósitos** | **Ver** / **Crear** / **Editar** / **Eliminar** | Lo mismo con los depósitos. |
+| **Configuración** | **Ver** / **Crear** / **Editar** / **Eliminar** | Categorías y unidades de medida. **Editar** también guarda el monto máximo de salida directa. |
+
+<Callout type="info" title="Quién aprueba y quién entrega">
+**Aprobar** y **Editar** en **Pedidos** son permisos distintos a propósito: uno decide si el material sale, el otro lo entrega. Quien aprueba o entrega pedidos de otros necesita además **Ver todas las solicitudes**; si no, solo ve los suyos.
+</Callout>
+
+Los roles de sistema (**Admin**, **Administrador** y **Full Access Provisional**) tienen todo. A los roles de tu empresa se les asignan a mano desde **Configuración → General → Usuarios** (ver <GuideLink to="empresa-usuarios-y-permisos">Empresa, usuarios y permisos</GuideLink>).
+
+## Problemas frecuentes
+
+<Callout type="warning" title="&quot;No hay depósitos activos&quot;">
+Antes de registrar movimientos, entregar ropa o dar de alta cubiertas tiene que existir al menos un depósito activo. Crealo en <GuideLink to="depositos">Depósitos</GuideLink>.
+</Callout>
+
+<Callout type="info" title="No veo los importes">
+Te falta **Ver precios e importes** en **Stock** (para la tabla de stock y la ficha del material) o en **Movimientos** (para movimientos, pedidos, órdenes de mantenimiento y entregas de ropa). Las cantidades se ven igual.
+</Callout>
+
+<Callout type="info" title="Me equivoqué en un movimiento">
+Un movimiento no se edita. Se anula con **Anular** desde su detalle y se vuelve a cargar bien. Ver <GuideLink to="movimientos-de-stock">Movimientos de stock</GuideLink>.
+</Callout>

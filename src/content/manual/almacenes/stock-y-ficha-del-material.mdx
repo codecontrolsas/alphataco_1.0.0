@@ -1,0 +1,124 @@
+---
+title: Stock y ficha del material
+summary: Cuánto hay de cada material en cada depósito, los avisos de stock bajo mínimo y de lotes vencidos o por vencer, y la ficha de un material con su stock por depósito, sus préstamos y su kardex.
+keywords: stock, existencias, saldo, depósito, bajo mínimo, stock mínimo, lote, vencimiento, vencido, por vencer, valorizado, costo promedio, kardex, ficha del material, unidades, número de serie
+updated: 2026-10-08
+---
+
+La sección **Stock** responde la pregunta de todos los días: **cuánto hay de cada cosa y dónde**. Muestra una fila por material y depósito (y por lote, si el material se controla por lote), con los avisos de lo que falta o está por vencer. Desde cada fila entrás a la **ficha del material**, con su historial completo.
+
+<OpenScreen />
+
+## Los avisos de arriba
+
+Arriba de la tabla pueden aparecer dos avisos. Si no hay nada que avisar, no se muestran.
+
+- **Lotes vencidos o por vencer** (en rojo): "**N lotes vencidos**" y "**N lotes vencen en los próximos 30 días**". Lista cada uno con material, lote, depósito, cantidad y fecha. Al pie recuerda que "**Los lotes vencidos no pueden salir ni transferirse: se dan de baja con un ajuste.**"
+- **Materiales por debajo del mínimo** (en ámbar): "**N materiales por debajo del mínimo**", con lo que hay sobre el mínimo (por ejemplo "4 / 10 l"). Incluye los agotados.
+
+Cada aviso muestra hasta 8 casos; si hay más, dice "y N más" y te sugiere filtrar la tabla. Hacé clic en un material para abrir su ficha.
+
+<Callout type="info" title="Aviso por correo">
+Además del aviso en pantalla, los **lunes a la mañana** el sistema manda un correo con los lotes vencidos y los que vencen en los próximos 30 días, agrupados por depósito. Si no hay nada que avisar, no se manda.
+</Callout>
+
+## La tabla de stock
+
+| Columna | Qué muestra |
+|---|---|
+| **Código** | Código del material. |
+| **Material** | Nombre; es un enlace a la ficha del material. |
+| **Categoría** | Oculta por defecto. |
+| **Depósito** | Dónde está ese stock. |
+| **Lote** y **Vencimiento** | Solo en materiales controlados por lote. |
+| **Cantidad** | Lo que hay en ese depósito (y lote). |
+| **Unidad** | Unidad de medida del material. |
+| **Bajo mínimo** | **Sí** si la suma de **todos los depósitos** está por debajo del stock mínimo del material. |
+| **Costo promedio** y **Valorizado** | Solo con **Ver precios e importes**. El valorizado es cantidad por costo promedio. |
+
+El buscador dice **Buscar por código, material o lote**. A la vista hay tres filtros, **Depósito**, **Categoría** y **Bajo mínimo**, y con **Filtros** sumás **Unidad**, **Lote**, **Código**, **Material**, **Vencimiento**, **Cantidad** y **Costo promedio**. El botón **Excel** exporta "Stock por depósito" con los filtros aplicados.
+
+<Callout type="tip" title="Preguntas que se resuelven con un filtro">
+- **¿Qué hay en la camioneta 3?** Filtrá **Depósito**.
+- **¿Qué tengo que reponer?** Filtrá **Bajo mínimo** en **Sí**.
+- **¿Qué vence este mes?** Filtrá **Vencimiento** con el rango de fechas.
+- **¿Cuánto vale el pañol?** Filtrá el depósito y exportá a Excel: la columna **Valorizado** suma el total (con permiso de precios).
+</Callout>
+
+El stock mínimo es **de la empresa**, no de cada depósito: si tenés 4 litros en la base y 8 en la obra y el mínimo es 10, el material no está bajo mínimo. El mínimo se define en <GuideLink to="materiales">Materiales</GuideLink>.
+
+## La ficha del material
+
+Se abre con el nombre del material, desde **Stock**, desde **Materiales**, desde los avisos o desde cualquier línea de un movimiento o pedido. **← Stock** vuelve a la tabla.
+
+### Encabezado
+
+El código y el nombre, con las marcas **Inactivo** y **Requiere aprobación** si corresponden. Debajo:
+
+- **Stock total**: la suma de todos los depósitos.
+- **Costo promedio** y **Valorizado**: solo con **Ver precios e importes** en **Stock**.
+- **Categoría**, **Unidad** y **Mínimo** (o **Sin definir**).
+
+### Stock por depósito
+
+Una fila por depósito con su **Cantidad**, y además **Lote** y **Vencimiento** si el material se controla por lote. Si no hay stock en ningún lado: "**Sin stock en ningún depósito.**"
+
+En los materiales **por número de serie**, abajo aparecen las **Unidades en depósito**: cada número de serie con el depósito donde está.
+
+### Préstamos
+
+Solo en materiales por número de serie que tienen unidades afuera o dadas de baja:
+
+- **Unidades prestadas**: **Serie**, **En poder de**, **Desde** (con los días que lleva afuera) y **Salida** (el movimiento con que salió, con enlace).
+- **Dadas de baja**: **Serie**, **Motivo** (**Extraviada** o **Rota**), **La tenía** y **Fecha**.
+
+Para devolver o dar de baja una unidad, usá la sección <GuideLink to="prestamos-de-herramientas">Préstamos</GuideLink>.
+
+### Kardex
+
+El historial de todos los movimientos del material, en orden, con el saldo que dejó cada uno:
+
+| Columna | Qué muestra |
+|---|---|
+| **Fecha** | Fecha del movimiento. |
+| **Movimiento** | Número (enlace al detalle) y tipo; las anulaciones dicen **(anulación)**. |
+| **Depósito** | Dónde ocurrió. |
+| **Destino / lote / serie** | A quién se imputó la salida, o el lote o número de serie involucrado. |
+| **Entrada** y **Salida** | La cantidad que sumó o restó. Una transferencia aparece en gris con el símbolo ⇄: cambia el depósito, no el total. |
+| **Saldo** | El stock total del material, en todos los depósitos, después de ese movimiento. |
+| **Costo unit.** y **Promedio** | Con permiso de precios: el costo de la línea y el costo promedio que quedó. |
+
+Si el material nunca se movió: "**El material todavía no tiene movimientos.**"
+
+<Callout type="tip" title="Para qué sirve el kardex">
+Es la forma de explicar cualquier número. Si el stock no coincide con lo que contaste, el kardex muestra cada entrada y salida con su fecha, su número y quién la registró (en el detalle de cada movimiento). Si el costo promedio subió, ves qué entrada lo movió.
+</Callout>
+
+## Cómo se conecta con el resto del sistema
+
+- Todo lo que ves acá es el resultado de los **movimientos**: las entradas suman, las salidas restan, las transferencias pasan de un depósito a otro (ver <GuideLink to="movimientos-de-stock">Movimientos de stock</GuideLink>).
+- Las **entregas de ropa** del panel de indumentaria y los **montajes de cubiertas** de Gomería también descuentan stock, y figuran en el kardex como salidas (ver <GuideLink to="circuito-de-materiales">El circuito de los materiales</GuideLink>).
+- El **stock mínimo**, la forma de control y la marca **Requiere aprobación** se definen en <GuideLink to="materiales">Materiales</GuideLink>.
+
+## Permisos
+
+| Para… | Hace falta |
+|---|---|
+| Ver la tabla, los avisos y la ficha del material | **Ver** en **Stock** |
+| Ver costo promedio, valorizado y los costos del kardex | **Ver precios e importes** en **Stock** |
+
+La ficha del material siempre exige **Ver** en **Stock**, aunque llegues desde otra sección.
+
+## Problemas frecuentes
+
+<Callout type="warning" title="Abro un material desde Materiales y no encuentra la página">
+La ficha del material exige **Ver** en **Stock**. Si solo tenés permiso en **Materiales**, pedí también **Ver** en **Stock**.
+</Callout>
+
+<Callout type="info" title="El material está bajo mínimo pero en este depósito hay de sobra">
+El mínimo se compara contra la suma de todos los depósitos. Si el total está por debajo, la marca aparece en todas sus filas. Para repartir mejor, usá una transferencia.
+</Callout>
+
+<Callout type="info" title="Un lote vencido sigue apareciendo">
+Un lote vencido sigue siendo stock hasta que se lo da de baja. Registrá un **Ajuste** que reste esa cantidad de ese lote (ver <GuideLink to="movimientos-de-stock">Movimientos de stock</GuideLink>).
+</Callout>

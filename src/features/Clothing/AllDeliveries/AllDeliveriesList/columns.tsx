@@ -3,6 +3,8 @@
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { DeliveryStatusBadge } from '@/features/Clothing/components/DeliveryStatusBadge';
+import { DELIVERY_STATUS_ACTIVE, DELIVERY_STATUS_CANCELLED } from '@/features/Clothing/lib/delivery-stock-where';
 import { DeliveryReceiptButton } from '@/features/Clothing/pdf/DeliveryReceiptButton';
 import { clothingDeliveryTypeBadges, clothingDeliveryTypeLabels } from '@/features/Clothing/utils/mappers';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
@@ -113,6 +115,18 @@ export function getColumns(): ColumnDef<AllDeliveryListItem>[] {
         if (val == null) return value.includes(NULL_FILTER_VALUE);
         return value.includes(val as string);
       },
+    },
+
+    // ── status (virtual: cancelled_at) ────────────────────────────────────────
+    {
+      id: 'status',
+      accessorFn: (row) => (row.cancelled_at ? DELIVERY_STATUS_CANCELLED : DELIVERY_STATUS_ACTIVE),
+      meta: { title: 'Estado' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      cell: ({ row }) => (
+        <DeliveryStatusBadge cancelledAt={row.original.cancelled_at} cancelReason={row.original.cancel_reason} />
+      ),
+      filterFn: (row, id, value: string[]) => value.includes(row.getValue(id) as string),
     },
 
     // ── delivered_by_file — legajo del que entrega ────────────────────────────

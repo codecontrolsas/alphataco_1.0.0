@@ -54,9 +54,13 @@ import {
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import moment from 'moment';
-import type { MaintenanceOrderReportData, ReportMilestone, ReportTask, ReportWorkOrder } from './types';
+import { getDeliveredMaterials } from '../lib/order-materials';
+import type { MaintenanceOrderReportData, ReportMaterial, ReportMilestone, ReportTask, ReportWorkOrder } from './types';
 
 const logger = new Logger('MaintenanceOrders/pdf/report-data');
+
+const quantityFormat = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 4 });
+const moneyFormat = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 
 // ============================================================================
 // CONSTANTES DEL DOCUMENTO
@@ -209,7 +213,9 @@ function resolvePriorityLabel(priority: string): string {
  */
 export async function buildMaintenanceOrderReportData(
   orderId: string,
-  issuerUserId: string | null
+  issuerUserId: string | null,
+  /** Costos de los materiales: solo si quien emite tiene permiso de ver precios. */
+  options: { withPrices: boolean } = { withPrices: false }
 ): Promise<MaintenanceOrderReportData> {
   logger.debug('Armando datos del PDF de orden de mantenimiento', { data: { orderId, issuerUserId } });
 
@@ -219,6 +225,7 @@ export async function buildMaintenanceOrderReportData(
         where: { id: orderId },
         select: {
           id: true,
+          company_id: true,
           order_number: true,
           status: true,
           source: true,
@@ -329,6 +336,19 @@ export async function buildMaintenanceOrderReportData(
     if (!order) {
       throw new Error(`No existe la orden de mantenimiento ${orderId}`);
     }
+
+    // ── Materiales (Almacenes etapa 4) ───────────────────────────────────────
+    const delivered = await getDeliveredMaterials(prisma, order.company_id, order.id);
+    const materials: ReportMaterial[] = delivered.map((row) => ({
+      workOrder: row.workOrderNumber ? [row.workOrderNumber, row.sectorName].filter(Boolean).join(' · ') : null,
+      material: `${row.code} · ${row.name}`,
+      quantity: `${quantityFormat.format(Number(row.quantity))} ${row.unit}`,
+      cost: options.withPrices ? moneyFormat.format(Number(row.totalCost)) : null,
+    }));
+    const materialsTotal =
+      options.withPrices && delivered.length > 0
+        ? moneyFormat.format(delivered.reduce((acc, row) => acc + Number(row.totalCost), 0))
+        : null;
 
     // ── Equipo ──────────────────────────────────────────────────────────────
     const vehicle = order.vehicles;
@@ -562,6 +582,8 @@ export async function buildMaintenanceOrderReportData(
       equipment,
       milestones,
       workOrders: reportWorkOrders,
+      materials,
+      materialsTotal,
 
       companyName,
       logoSrc: LOGO_SRC,

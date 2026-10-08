@@ -1,0 +1,135 @@
+---
+title: Materiales
+summary: El catálogo de Almacenes: cómo dar de alta un material, elegir cómo se controla (por cantidad, por lote o por número de serie), fijar el stock mínimo y la aprobación, y cómo funcionan los materiales de ropa (por artículo, marca y talle) y de cubiertas.
+keywords: material, catálogo, alta, código, unidad de medida, categoría, control de stock, por cantidad, por lote, por número de serie, stock mínimo, requiere aprobación, dar de baja, reactivar, ropa, talle, indumentaria, cubiertas
+updated: 2026-10-08
+---
+
+**Materiales** es el catálogo de todo lo que se guarda en los depósitos. Cada material se carga una sola vez, con su código, su unidad y la forma en que se controla, y después se mueve en cualquier depósito. Acá también se define el **stock mínimo** y si sus salidas necesitan **aprobación**.
+
+<OpenScreen />
+
+## La lista de materiales
+
+| Columna | Qué muestra |
+|---|---|
+| **Código** | Código del material. |
+| **Nombre** | Enlace a la ficha del material, con su stock y su kardex. |
+| **Descripción** | Oculta por defecto. |
+| **Categoría** | Por ejemplo Lubricantes, Herramientas, EPP, Ropa, Cubiertas. |
+| **Unidad** | En qué se cuenta. |
+| **Tipo de control** | **Por cantidad**, **Por lote** o **Por número de serie**. |
+| **Requiere aprobación** | **Sí** si sus salidas tienen que pasar por un pedido aprobado. |
+| **Stock mínimo** | El mínimo para toda la empresa. |
+| **Estado** | **Activo** o **Inactivo**. |
+| **Creado** | Oculta por defecto. |
+
+El buscador dice **Buscar por código, nombre o descripción**. A la vista hay tres filtros, **Categoría**, **Tipo de control** y **Estado**, y con **Filtros** sumás **Unidad**, **Requiere aprobación**, **Código**, **Nombre**, **Descripción**, **Stock mínimo** y **Creado**. **Excel** exporta el "Listado de Materiales".
+
+## Dar de alta un material
+
+<Steps>
+<Step title="Abrí el formulario">
+Tocá **Nuevo material**.
+</Step>
+<Step title="Identificalo">
+**Código** (por ejemplo "ACE-15W40") y **Nombre** ("Aceite 15W40"). El código no se puede repetir en la empresa. **Categoría** es opcional (**Sin categoría**).
+</Step>
+<Step title="Elegí la unidad y el control">
+**Unidad de medida**: litro, unidad, kilogramo, etc. **Control de stock**: **Por cantidad**, **Por lote** o **Por número de serie** (ver abajo).
+</Step>
+<Step title="Completá el resto">
+**Stock mínimo** (opcional; es la suma de todos los depósitos), **Descripción** (opcional) y la casilla **Requiere aprobación**.
+</Step>
+<Step title="Guardá">
+Tocá **Crear material**. Ves "**Material ACE-15W40 creado**". El material arranca sin stock: entra con una entrada en <GuideLink to="movimientos-de-stock">Movimientos</GuideLink>.
+</Step>
+</Steps>
+
+### Cómo elegir el control de stock
+
+| Control | Elegilo cuando… | Ejemplos |
+|---|---|---|
+| **Por cantidad** | Solo importa cuánto hay. | Aceite, filtros, cable, guantes, tornillería. |
+| **Por lote** | Tiene fecha de vencimiento o necesitás saber de qué partida es. El sistema avisa lo vencido y lo próximo a vencer y bloquea su salida. | Grasas, químicos, pinturas, insumos de botiquín. |
+| **Por número de serie** | Cada unidad se identifica de a una y querés saber quién la tiene. Cada salida es un préstamo. | Amoladoras, taladros, detectores de gases, equipos de medición. |
+
+<Callout type="warning" title="Pensalo antes del primer movimiento">
+Cuando el material ya tiene movimientos, el **Control de stock** y la **Unidad de medida** quedan bloqueados ("**No se puede cambiar: el material ya tiene movimientos.**"). Cambiarlos reinterpretaría el stock y el historial.
+</Callout>
+
+### Requiere aprobación
+
+Con la casilla tildada, **ninguna salida directa** de ese material se acepta: tiene que pasar por un pedido que apruebe un responsable, aunque quien lo saque tenga permiso de salida directa. Usalo para lo caro o lo delicado. Ver <GuideLink to="pedidos-de-materiales">Pedidos de materiales</GuideLink>.
+
+## Editar, dar de baja y reactivar
+
+En el menú de tres puntos de cada fila:
+
+- **Editar**: cambia los datos. "**Los cambios no alteran los movimientos ya registrados.**" El botón dice **Guardar cambios**.
+- **Dar de baja**: si el material **nunca se movió**, se elimina. Si **ya tiene movimientos**, se desactiva: su historial se conserva y deja de ofrecerse en los formularios ("**Material desactivado: ya no se ofrece en los movimientos**").
+- **Reactivar**: vuelve a ofrecer un material inactivo.
+
+Un material inactivo no admite entradas. Si todavía tiene stock, ese stock se puede sacar o transferir.
+
+## Materiales de ropa: uno por artículo, marca y talle
+
+La ropa de trabajo y los EPP se llevan en el stock **por talle**: cada combinación de **artículo + marca + talle** del catálogo de indumentaria es un material distinto. Así, "Camisa Ombú 42" y "Camisa Ombú 44" tienen stock separado.
+
+**No se cargan a mano**: el sistema los crea solo cuando se arma la matriz de marcas y talles de un artículo en el catálogo de indumentaria.
+
+| Dato | Cómo se arma |
+|---|---|
+| **Código** | Código del artículo, tres letras de la marca y el talle, en mayúsculas: por ejemplo **IND-001-OMB-42**. Si el artículo no tiene código, usa las primeras letras del nombre. Si el código ya existe, le agrega **-2**, **-3**… |
+| **Nombre** | "Camisa · Ombú · 42". |
+| **Categoría, unidad y control** | **Ropa**, unidad, **Por cantidad**. |
+
+- Si cambiás el nombre del artículo, de la marca o del talle, el nombre del material se actualiza solo.
+- Si quitás la combinación de la matriz, o desactivás el artículo, la marca o el talle, el material pasa a **Inactivo**. Nunca se borra: si volvés a habilitar la combinación, recupera el mismo material con su stock y su historial.
+- En el catálogo de indumentaria, junto a cada talle se ve el stock total en Almacenes.
+
+Ver <GuideLink to="catalogo-de-indumentaria">Catálogo de indumentaria</GuideLink>.
+
+## Materiales de cubiertas: uno por tipo y marca
+
+Cada combinación de **tipo de cubierta** (medida y banda) y **marca** de Gomería es un material **Por número de serie**, y cada cubierta es una unidad de ese material.
+
+| Dato | Cómo se arma |
+|---|---|
+| **Código** | **CUB-**, la medida, la banda abreviada (**LIS**, **MIX** o **TAC**) y tres letras de la marca: por ejemplo **CUB-295/80R22.5-MIX-FIR**. |
+| **Nombre** | "Cubierta 295/80R22.5 Mixto · Firestone". |
+| **Categoría, unidad y control** | **Cubiertas**, unidad, **Por número de serie**. |
+
+El sistema los crea al cargar o editar tipos y marcas en Gomería, y el material está activo mientras el tipo y la marca lo estén. Ver <GuideLink to="gomeria">Gomería</GuideLink>.
+
+<Callout type="info" title="Lo que se administra en otro catálogo">
+Al editar un material de ropa o de cubiertas aparece el aviso "**Este material se administra desde el catálogo de Ropa**" (o **de Gomería**): el **Código**, el **Nombre**, la **Unidad** y el **Control de stock** salen de ese catálogo y no se cambian acá. Sí podés cambiar la categoría, el stock mínimo, la descripción y **Requiere aprobación**. Tampoco se dan de baja ni se reactivan desde acá: se quita o se habilita la combinación (ropa) o se desactiva o activa el tipo o la marca (cubiertas).
+</Callout>
+
+## Cómo se conecta con el resto del sistema
+
+- **Configuración**: las categorías y las unidades de medida que ofrece el formulario se cargan en <GuideLink to="configuracion-de-almacenes">Configuración de Almacenes</GuideLink>.
+- **Stock**: el stock mínimo dispara el aviso de **Bajo mínimo** (<GuideLink to="stock-y-ficha-del-material">Stock y ficha del material</GuideLink>).
+- **Pedidos**: **Requiere aprobación** obliga a pasar por un pedido (<GuideLink to="pedidos-de-materiales">Pedidos de materiales</GuideLink>).
+- **Préstamos**: los materiales por número de serie generan préstamos al salir (<GuideLink to="prestamos-de-herramientas">Préstamos de herramientas</GuideLink>).
+
+## Permisos
+
+| Para… | Hace falta en **Materiales** |
+|---|---|
+| Ver la lista | **Ver** |
+| **Nuevo material** | **Crear** |
+| **Editar** y **Reactivar** | **Editar** |
+| **Dar de baja** | **Eliminar** |
+
+Para abrir la ficha de un material hace falta, además, **Ver** en **Stock**.
+
+## Problemas frecuentes
+
+<Callout type="warning" title="No puedo cambiar la unidad o el control de stock">
+El material ya tiene movimientos. Si de verdad se cargó mal, dalo de baja (se desactiva), creá uno nuevo bien definido y pasá el stock con un ajuste que reste en uno y otro que sume en el nuevo.
+</Callout>
+
+<Callout type="info" title="No encuentro un talle de ropa en Materiales">
+El material se crea al guardar la combinación en el catálogo de indumentaria. Si la combinación no está en la matriz del artículo, no existe el material.
+</Callout>

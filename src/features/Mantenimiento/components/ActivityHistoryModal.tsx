@@ -28,6 +28,7 @@ import {
   Hash,
   Layers,
   LogIn,
+  Package,
   Pause,
   Play,
   Plus,
@@ -225,6 +226,12 @@ const actionConfig: Record<
     icon: ArrowRight,
     color: 'text-purple-600',
     bgColor: 'bg-purple-50',
+  },
+  material_request_created: {
+    label: 'Pedido de materiales',
+    icon: Package,
+    color: 'text-indigo-600',
+    bgColor: 'bg-indigo-50',
   },
 
   approved: { label: 'Solicitud aprobada', icon: CheckCircle, color: 'text-green-600', bgColor: 'bg-green-50' },

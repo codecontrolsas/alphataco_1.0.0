@@ -6,5 +6,6 @@
 # por que. Los endpoints devuelven un JSON con el detalle por empresa justamente para que
 # aparezca ahi: `docker compose --env-file .env.docker logs cron`.
 0 8 * * 1   curl --fail-with-body -sS -H "Authorization: Bearer $JOBS_TOKEN" $APP_URL/api/jobs/documents-expiry
+5 8 * * 1   curl --fail-with-body -sS -H "Authorization: Bearer $JOBS_TOKEN" $APP_URL/api/jobs/warehouse-batch-expiry
 0 7 * * *   curl --fail-with-body -sS -H "Authorization: Bearer $JOBS_TOKEN" $APP_URL/api/jobs/daily-report-deviations
 30 0 * * *  curl --fail-with-body -sS -H "Authorization: Bearer $JOBS_TOKEN" $APP_URL/api/jobs/daily-indicators

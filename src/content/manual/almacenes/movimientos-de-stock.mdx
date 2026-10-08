@@ -1,0 +1,195 @@
+---
+title: Movimientos de stock
+summary: Cómo registrar entradas, salidas, transferencias y ajustes, a quién se imputa cada salida, cómo se manejan lotes y números de serie, cuándo una salida necesita pedido, y cómo consultar y anular un movimiento.
+keywords: movimiento, entrada, ingreso, compra, remito, salida, egreso, consumo, transferencia, ajuste, conteo físico, faltante, sobrante, anulación, anular, devolución, imputación, destino, lote, número de serie, salida directa, MOV
+updated: 2026-10-08
+---
+
+Un **movimiento** es cada cosa que le pasa al stock: material que entra, que sale, que cambia de depósito o que se corrige después de un conteo. La sección **Movimientos** tiene la lista de todos los movimientos de la empresa y el botón para registrar uno nuevo. Cada movimiento queda con su número (**MOV-000123**), su fecha, el depósito, los materiales, el respaldo (remito, factura) y quién lo cargó.
+
+<OpenScreen />
+
+## Los tipos de movimiento
+
+| Tipo | Para qué | Efecto en el stock | Se carga desde |
+|---|---|---|---|
+| **Entrada** | Material que llega: una compra, un remito, el inventario inicial. | Suma en el depósito, con su costo unitario. Recalcula el costo promedio. | **Nuevo movimiento** |
+| **Salida** | Material que se entrega o se consume. | Resta en el depósito, al costo promedio, y lo imputa a un destino. | **Nuevo movimiento** (salida directa) o la entrega de un **pedido** |
+| **Transferencia** | Llevar material de un depósito a otro. | Resta en el origen y suma en el destino. No cambia el total ni el costo. | **Nuevo movimiento** |
+| **Ajuste** | Corregir el stock contra el conteo físico: faltantes, roturas, sobrantes, lotes vencidos. | Resta o suma, según lo que elijas, al costo promedio. El motivo es obligatorio. | **Nuevo movimiento** (permiso **Ajustar stock**) |
+| **Devolución** | Una herramienta prestada que vuelve. | Suma en el depósito, al costo con que había salido. | **Préstamos** |
+
+Además, cualquier movimiento se puede **anular**: el sistema registra un movimiento nuevo con el efecto contrario (ver [Anular un movimiento](#anular-un-movimiento)).
+
+<Callout type="info" title="Respaldo de cada movimiento">
+Cada movimiento lleva una **Referencia** (el número de remito, factura u orden) y **Observaciones**. Los ajustes y las anulaciones exigen el motivo por escrito. Así, cualquier diferencia de stock se puede explicar con el número del movimiento, su respaldo y quién lo registró.
+</Callout>
+
+## La lista de movimientos
+
+| Columna | Qué muestra |
+|---|---|
+| **Número** | **MOV-** y el correlativo; enlace al detalle. |
+| **Tipo** | **Entrada**, **Salida**, **Transferencia**, **Ajuste** o **Devolución**. |
+| **Fecha** | Fecha del hecho (la que se cargó, no la de carga). |
+| **Depósito** | El depósito del movimiento (en una transferencia, el de origen). |
+| **Depósito destino** | Solo en transferencias. Oculta por defecto. |
+| **Tipo de destino** y **Destino** | A quién se imputó una salida o una devolución: **Empleado**, **Vehículo**, **Equipo**, **Orden de mantenimiento** o **Cliente**. |
+| **Referencia** | El respaldo. |
+| **Notas** | Observaciones o motivo. Oculta por defecto. |
+| **Estado** | **Vigente**, **Anulado** (tiene una anulación) o **Anulación** (es la anulación de otro). |
+| **Creado por** | Quién lo registró. |
+| **Fecha de carga** | Cuándo se registró en el sistema. Oculta por defecto. |
+| **Total** | Importe del movimiento, solo con **Ver precios e importes**. |
+
+El buscador dice **Buscar por número o referencia**. A la vista hay tres filtros, **Tipo**, **Fecha** y **Estado**, y con **Filtros** sumás **Depósito**, **Depósito destino**, **Tipo de destino**, **Creado por**, **Número**, **Destino** (por legajo, apellido, dominio, interno, orden o cliente), **Referencia**, **Notas**, **Fecha de carga** y **Total**. **Excel** exporta "Movimientos de stock" con los filtros aplicados.
+
+<Callout type="tip" title="Cuánto material se le dio a alguien">
+Filtrá **Tipo** en **Salida** y escribí en **Destino** el legajo del empleado, el dominio del vehículo o el nombre del cliente. Con el permiso de precios, la columna **Total** muestra lo que valió cada salida.
+</Callout>
+
+## Registrar un movimiento
+
+**Nuevo movimiento** (arriba a la derecha) abre el formulario en una pantalla propia. El botón aparece con **Crear** o con **Ajustar stock** en **Movimientos**.
+
+<Steps>
+<Step title="Elegí el tipo">
+En **Tipo** elegí **Entrada**, **Salida**, **Transferencia** o **Ajuste**. Solo ves los tipos que tu permiso habilita: con **Crear**, los tres primeros; con **Ajustar stock**, el ajuste. Debajo del título aparece una línea que explica para qué sirve el tipo elegido.
+</Step>
+<Step title="Completá la cabecera">
+- **Depósito** (en una transferencia, **Depósito origen** y **Depósito destino**). Si la empresa tiene un solo depósito, ya viene elegido.
+- **Fecha**: la del hecho. Podés escribirla (DD/MM/AAAA) o elegirla en el calendario. Por defecto es hoy.
+- **Referencia**: remito, factura u otro respaldo (opcional).
+- **Observaciones**, o **Motivo del ajuste** si es un ajuste (obligatorio).
+</Step>
+<Step title="En una salida, elegí a quién se imputa">
+En **Se imputa a** elegí **Empleado**, **Vehículo**, **Equipo**, **Orden de mantenimiento** o **Cliente**, y buscá el destino. Los empleados se buscan por legajo o nombre y aparecen como **[legajo] Apellido Nombre**; los vehículos por interno, dominio o serie; las órdenes por número, dominio o interno. Con **Cliente** podés elegir también el **Contrato (opcional)**. Solo se ofrecen empleados, vehículos y equipos activos, y órdenes de mantenimiento abiertas.
+</Step>
+<Step title="Cargá los materiales">
+En **Materiales**, cada línea lleva el material (buscalo por código o nombre) y la **Cantidad**. Al elegirlo ves cómo se controla y el **Disponible en el depósito**. **Agregar línea** suma otra; el tacho la quita. Según el tipo y el material, la línea pide más datos (ver abajo).
+</Step>
+<Step title="Registrá">
+El botón dice **Registrar entrada**, **Registrar salida**, etc. Al guardar ves "**MOV-000123 registrado: N líneas**" (con el total, si tenés permiso de precios) y se abre el detalle del movimiento.
+</Step>
+</Steps>
+
+Si algo no cierra (falta stock, un lote vencido, un número de serie repetido), el sistema muestra el motivo exacto y **no borra lo que cargaste**: corregís y volvés a registrar. Por ejemplo: "**Stock insuficiente de Aceite 15W40 en Depósito Base: hay 12 l, se pidieron 20 l**".
+
+### Lo que pide cada línea
+
+| Material | Entrada o ajuste que suma | Salida, transferencia o ajuste que resta |
+|---|---|---|
+| **Por cantidad** | **Cantidad** (y **Costo unitario** en las entradas). | **Cantidad**. |
+| **Por lote** | **Cantidad**, **Lote** y **Vencimiento**. Si el lote ya existe, se suma a él; tiene que tener la misma fecha de vencimiento. | **Cantidad** y el **Lote**, elegido entre los que tienen stock en el depósito. |
+| **Por número de serie** | **Números de serie**, uno por línea o separados por coma. La cantidad tiene que coincidir con la cantidad de números. | **Unidades**: tildá los números de serie que están en el depósito. |
+
+- **Costo unitario**: solo en las entradas, y es obligatorio (puede ser 0). Con él se recalcula el costo promedio del material.
+- **Lotes al sacar**: el primero de la lista dice **vence primero**; conviene usar ese. Los vencidos aparecen como **Vencido** y no se pueden elegir en salidas ni transferencias. En un ajuste sí, porque es la forma de darlos de baja.
+- En un **ajuste**, cada línea tiene su sentido: **Resta (faltante, rotura)** o **Suma (sobrante)**.
+
+<Callout type="warning" title="Un material inactivo no admite ingresos">
+Si un material está dado de baja, no se le pueden registrar entradas ni ajustes que sumen. Reactivalo primero en <GuideLink to="materiales">Materiales</GuideLink>.
+</Callout>
+
+## Salida directa o pedido de materiales
+
+No todas las salidas se pueden registrar directamente. Una salida desde **Nuevo movimiento** solo pasa si se cumplen **las tres** condiciones:
+
+1. **Tenés el permiso Salida directa** en **Movimientos**. Si no, al elegir **Salida** aparece el aviso "**No tenés permiso de salida directa: las salidas van por pedido de materiales, que aprueba un responsable.**" con el enlace **Hacer un pedido**.
+2. **Ningún material de la salida está marcado Requiere aprobación**. Si alguno lo está: "**Detector multigás requiere aprobación: hacé un pedido de materiales.**"
+3. **El total no supera el monto máximo de salida directa** de la empresa. Si lo supera, la salida se rechaza con el total y el máximo (o, sin permiso de precios, sin los importes).
+
+Cuando alguna falla, el camino es un **pedido**: alguien con permiso lo aprueba y el almacén lo entrega. Ver <GuideLink to="pedidos-de-materiales">Pedidos de materiales</GuideLink>. El monto máximo se define en <GuideLink to="configuracion-de-almacenes">Configuración de Almacenes</GuideLink>.
+
+Las entradas, transferencias y ajustes no pasan por esta regla.
+
+## Salidas de herramientas: los préstamos
+
+Toda salida de un material **por número de serie** deja esas unidades **prestadas** a quien las recibió. Aparecen en la sección **Préstamos** hasta que vuelven (con una devolución) o se dan de baja. Ver <GuideLink to="prestamos-de-herramientas">Préstamos de herramientas</GuideLink>.
+
+## Ropa y cubiertas
+
+Los materiales de ropa y de cubiertas se pueden ingresar y transferir desde acá como cualquier otro. Pero:
+
+- **Ropa**: la entrega al empleado se hace desde el panel de indumentaria, con su firma, y es una salida automática (ver <GuideLink to="entrega-de-indumentaria">Entrega de indumentaria</GuideLink>).
+- **Cubiertas**: una **entrada** de un material de cubiertas crea cada cubierta en Gomería, como **Disponible** y nueva (si ya existía una cubierta con ese número, la vincula). En cambio, las **salidas y los ajustes que restan cubiertas se rechazan**: "**Las cubiertas se montan y se dan de baja desde Gomería**". Ver <GuideLink to="gomeria">Gomería</GuideLink>.
+
+## El detalle de un movimiento
+
+Se abre con el número del movimiento. **← Movimientos** vuelve a la lista. Arriba ves el número, el tipo y las marcas **Anulación** o **Anulado**. Según el caso aparece una nota que lo explica:
+
+- "**Entrega del pedido PED-000012.**" (o "**Anula una entrega del pedido…**"), con enlace al pedido.
+- "**Devuelve el préstamo de MOV-000045**": una devolución de herramientas.
+- "**Entrega de ropa a [legajo] Apellido Nombre…**": salió desde el panel de indumentaria.
+- "**Cubierta montada**" o "**Cubierta desmontada en la orden de gomería del…**", con el vehículo y la posición.
+- "**Anula a MOV-…**" o "**Anulado por MOV-…**", con el enlace al otro movimiento.
+
+Debajo, la **Fecha**, el **Depósito** (u **Origen → destino**), **Imputado a**, la **Referencia**, **Registrado por** (con fecha y hora), el **Total** (con permiso de precios) y las **Observaciones** o el **Motivo**. La tabla de líneas muestra **Material**, **Lote / serie**, **Cantidad** con su signo (+ suma, − resta en el depósito) y, con permiso de precios, **Costo unitario** y **Total**.
+
+## Anular un movimiento
+
+Un movimiento no se edita ni se borra. Si estuvo mal, se anula y se carga de nuevo.
+
+<Steps>
+<Step title="Abrí el movimiento">
+Entrá al detalle desde la lista.
+</Step>
+<Step title="Tocá Anular">
+El botón aparece si tenés **Anular movimiento** y el movimiento no está anulado ni es una anulación.
+</Step>
+<Step title="Escribí el motivo">
+En **¿Anular MOV-…?** completá **Motivo** (obligatorio) y confirmá con **Anular movimiento**.
+</Step>
+</Steps>
+
+El sistema registra un movimiento nuevo, del mismo tipo, con el **efecto contrario y el mismo costo** que el original, y te lleva a él. El original queda marcado **Anulado**. No se puede deshacer.
+
+Qué pasa en cada caso:
+
+- **Anular una entrada** retira el material. Si ya se usó y no alcanza el stock, no se puede: "**No se puede anular MOV-…: de Aceite en Base hay 2 l y la anulación necesita 10 l**".
+- **Anular una salida** devuelve el material al depósito y descuenta lo imputado al destino. Si la salida fue una entrega de un pedido, el pedido recupera lo pendiente y vuelve a su estado anterior (un pedido **Cerrado** sigue cerrado).
+- **Anular una transferencia** lo vuelve al depósito de origen, si sigue en el de destino.
+- **Anular una devolución** reabre el préstamo: la herramienta vuelve a figurar en poder de quien la tenía.
+- Una herramienta que ya se devolvió o se dio de baja hace que su salida ya no se pueda anular.
+- **No se puede anular una anulación**, ni anular dos veces el mismo movimiento.
+
+<Callout type="warning" title="Movimientos que se corrigen en otro lado">
+- **Cubiertas**: sus movimientos no se anulan desde acá ("**Los movimientos de cubiertas no se anulan desde Almacenes: se corrigen desde Gomería**"). Los de una orden de gomería se revierten anulando la orden.
+- **Entregas de ropa**: anulalas desde la ficha del empleado o desde **Reportes** de indumentaria. Así se anula la salida **y** la entrega queda marcada **Anulada**. Si anulás solo la salida desde acá, el stock vuelve pero la entrega sigue figurando **Vigente** hasta que alguien la anule allá.
+</Callout>
+
+## Cómo se conecta con el resto del sistema
+
+- **Stock**: cada movimiento cambia el stock del depósito y aparece en el kardex del material (<GuideLink to="stock-y-ficha-del-material">Stock y ficha del material</GuideLink>).
+- **Pedidos**: cada entrega de un pedido es una salida, y su anulación devuelve lo pendiente (<GuideLink to="pedidos-de-materiales">Pedidos de materiales</GuideLink>).
+- **Préstamos**: las salidas de herramientas abren préstamos; las devoluciones los cierran (<GuideLink to="prestamos-de-herramientas">Préstamos de herramientas</GuideLink>).
+- **Mantenimiento**: lo entregado a una orden de mantenimiento se ve en el detalle de la orden y en su PDF (<GuideLink to="taller">Taller</GuideLink>).
+
+## Permisos
+
+| Para… | Hace falta en **Movimientos** |
+|---|---|
+| Ver la lista y el detalle | **Ver** |
+| Registrar entradas, salidas y transferencias | **Crear** |
+| Registrar una salida sin pedido | **Salida directa** (además de **Crear**) |
+| Registrar ajustes | **Ajustar stock** |
+| Anular un movimiento | **Anular movimiento** |
+| Ver costos y totales | **Ver precios e importes** |
+
+## Problemas frecuentes
+
+<Callout type="warning" title="No puedo elegir un lote">
+Si dice **Sin lotes con stock en el depósito**, ese material no tiene lotes en el depósito elegido. Si el lote aparece como **Vencido**, no puede salir ni transferirse: dalo de baja con un **Ajuste** que reste.
+</Callout>
+
+<Callout type="warning" title="&quot;El lote … ya existe con vencimiento …&quot;">
+Estás ingresando un número de lote que ya existe con otra fecha de vencimiento. Revisá la fecha del remito o usá otro número de lote.
+</Callout>
+
+<Callout type="info" title="No veo el botón Nuevo movimiento">
+Te falta **Crear** o **Ajustar stock** en **Movimientos**.
+</Callout>
+
+<Callout type="info" title="El botón Registrar salida está deshabilitado">
+No tenés **Salida directa**. Hacé un pedido de materiales con el enlace del aviso.
+</Callout>

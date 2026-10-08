@@ -50,6 +50,10 @@ echo "==> Aplicando migraciones pendientes..."
 npx prisma migrate deploy
 
 echo "==> Corriendo los tests de integracion de los jobs..."
-npx vitest run \
+# En secuencia (--no-file-parallelism): los jobs recorren TODAS las empresas de la base, y un
+# archivo que crea y borra sus empresas de prueba en paralelo le cambia el universo al otro
+# (se vio: daily-indicators leyo una empresa que el otro test borro y fallo por FK en jobs_runs).
+npx vitest run --no-file-parallelism \
   src/features/Jobs/lib/auth.test.ts \
-  src/features/Jobs/jobs/jobs.integration.test.ts
+  src/features/Jobs/jobs/jobs.integration.test.ts \
+  src/features/Jobs/jobs/warehouse-batch-expiry.integration.test.ts

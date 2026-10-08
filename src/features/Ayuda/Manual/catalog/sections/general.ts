@@ -22,7 +22,7 @@ export const generalSection = defineSection({
     },
     {
       slug: 'glosario',
-      related: ['preguntas-frecuentes', 'primeros-pasos'],
+      related: ['preguntas-frecuentes', 'primeros-pasos', 'almacenes'],
     },
     {
       slug: 'preguntas-frecuentes',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isDeliveryType, normalizeDeliveryItems, type RawDeliveryItem } from './delivery-items';
+import { isDeliveryType, groupQuantitiesByMaterial, linesWithoutBrandOrSize, normalizeDeliveryItems, type RawDeliveryItem } from './delivery-items';
 
 describe('isDeliveryType', () => {
   it('acepta los tres tipos del enum', () => {
@@ -79,5 +79,31 @@ describe('normalizeDeliveryItems', () => {
     ];
 
     expect(normalizeDeliveryItems(items).map((item) => item.clothingItemId)).toEqual(['item-2', 'item-1']);
+  });
+});
+
+describe('linesWithoutBrandOrSize', () => {
+  it('devuelve los indices de las filas sin marca o sin talle', () => {
+    const items = normalizeDeliveryItems([
+      { clothingItemId: 'a', clothingBrandId: 'b', clothingSizeId: 's', quantity: 1 },
+      { clothingItemId: 'a', clothingBrandId: 'b', clothingSizeId: null, quantity: 1 },
+      { clothingItemId: 'a', clothingBrandId: '', clothingSizeId: 's', quantity: 1 },
+    ]);
+    expect(linesWithoutBrandOrSize(items)).toEqual([1, 2]);
+  });
+});
+
+describe('groupQuantitiesByMaterial', () => {
+  it('suma las filas del mismo material y conserva el orden de aparicion', () => {
+    expect(
+      groupQuantitiesByMaterial([
+        { materialId: 'm1', quantity: 2 },
+        { materialId: 'm2', quantity: 1 },
+        { materialId: 'm1', quantity: 3 },
+      ])
+    ).toEqual([
+      { materialId: 'm1', quantity: 5 },
+      { materialId: 'm2', quantity: 1 },
+    ]);
   });
 });

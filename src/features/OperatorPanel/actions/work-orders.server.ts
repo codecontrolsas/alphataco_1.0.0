@@ -7,6 +7,7 @@ import { logActivity } from '@/features/Mantenimiento/shared/activity-log/log-ac
 import { logWorkOrderCompletedOnMaintenanceOrder } from '@/features/Mantenimiento/shared/activity-log/log-work-order-completed';
 import { withMaintenanceActor } from '@/features/Mantenimiento/shared/maintenance-actor';
 import { lockMaintenanceOrder } from '@/features/Mantenimiento/shared/order-lock';
+import { findMaintenanceOrderIdByWorkOrder } from '@/features/Mantenimiento/shared/work-order-order';
 import { assertOrderTransition, OrderTransitionError } from '@/features/Mantenimiento/shared/order-transition';
 import { getWorkOrderBlockingStatus } from '@/features/OperatorPanel/actions/blocking';
 import { assertWorkOrderInScope } from '@/features/OperatorPanel/actions/perimeter';
@@ -35,19 +36,6 @@ const logger = new Logger('OperatorPanel/work-orders');
 // El lock del pedido vive en `Mantenimiento/shared/order-lock.ts` (Task 13b): el orden
 // pedido → OT que la Task 9c unificó DENTRO de este módulo ahora es el criterio compartido por
 // los tres que escriben pedido y OT en la misma transacción. Ver el comentario de esa función.
-
-/** Pedido al que pertenece la OT, o `null` si la OT no cuelga de ninguno. */
-async function findMaintenanceOrderIdByWorkOrder(
-  tx: Prisma.TransactionClient,
-  workOrderId: string
-): Promise<string | null> {
-  const orderItem = await tx.maintenance_order_items.findFirst({
-    where: { work_order_id: workOrderId },
-    select: { maintenance_order_id: true },
-  });
-
-  return orderItem?.maintenance_order_id ?? null;
-}
 
 /**
  * "Uno a la vez": ninguna OTRA OT del mismo pedido puede estar en progreso.

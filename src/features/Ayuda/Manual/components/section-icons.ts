@@ -1,4 +1,5 @@
 import {
+  Boxes,
   BriefcaseBusiness,
   ClipboardCheck,
   ClipboardList,
@@ -29,6 +30,7 @@ export const SECTION_ICONS: Record<SectionIcon, LucideIcon> = {
   documents: FileText,
   operations: ClipboardList,
   maintenance: Wrench,
+  warehouse: Boxes,
   forms: ClipboardCheck,
   help: LifeBuoy,
   settings: Settings,

@@ -2,7 +2,7 @@
 title: Del checklist al taller
 summary: Cómo una falla detectada en un checklist se convierte en una solicitud, un pedido de mantenimiento y un trabajo de taller, y qué cambia en el equipo.
 keywords: checklist, desvío, solicitud, mantenimiento, taller, orden de trabajo, OT, condición, no operativo, kilometraje
-updated: 2026-10-07
+updated: 2026-10-08
 ---
 
 Cuando un chofer o un supervisor encuentra algo mal en un equipo, el sistema lo lleva paso a paso hasta el taller y de vuelta a la calle: el **checklist** registra la falla, la **solicitud** la pone a consideración de un supervisor, el **pedido** la programa en el taller, las **órdenes de trabajo** la resuelven y el cierre devuelve el equipo a **Operativo**. Mientras tanto, la condición del equipo se refleja en los partes diarios y en el Dashboard.
@@ -64,7 +64,7 @@ El taller trabaja en <GuideLink to="taller">Mantenimiento → Taller</GuideLink>
 
 1. **Por Programar**: pedidos aprobados sin fecha. Con **Planificar Pedido de Mantenimiento** se fija la **Fecha de recepción en taller**. El taller también puede **Rechazar Pedido** con motivo; queda en el historial del equipo.
 2. **Por Ingresar**: pedidos con fecha. Cuando el equipo llega, **Aprobar Entrada a Taller** pide el **Kilometraje actual del equipo** (no puede ser menor al registrado) y, si corresponde, el horómetro. Al confirmar, **el equipo pasa a No operativo** ("Entrada a taller aprobada. El equipo ahora está "No Operativo"").
-3. **En Taller**: los equipos activos. Se reparten los trabajos por **sector** y se generan las **órdenes de trabajo** (OT), que los operarios ejecutan desde su <GuideLink to="panel-del-operario">panel</GuideLink>. Los trabajos de un taller externo se registran como OT externas. La <GuideLink to="vista-taller">Vista Taller</GuideLink> muestra lo mismo agrupado por sector.
+3. **En Taller**: los equipos activos. Se reparten los trabajos por **sector** y se generan las **órdenes de trabajo** (OT), que los operarios ejecutan desde su <GuideLink to="panel-del-operario">panel</GuideLink>. Los trabajos de un taller externo se registran como OT externas. La <GuideLink to="vista-taller">Vista Taller</GuideLink> muestra lo mismo agrupado por sector. Si hacen falta **repuestos**, el operario (desde su OT) o el taller (desde el detalle de la orden) hacen un **pedido de materiales** al almacén, imputado a la orden (ver <GuideLink to="pedidos-de-materiales">Pedidos de materiales</GuideLink>).
 4. **Aprobaciones**: lo que necesita la autorización del jefe de taller (tareas a aprobar, reasignaciones de sector y pedidos con todas sus OT terminadas).
 
 Del lado de Operaciones, el paso **Seguimiento** muestra los equipos pendientes de ingreso y los que están en el taller.
@@ -81,7 +81,7 @@ Del lado de Operaciones, el paso **Seguimiento** muestra los equipos pendientes 
 
 ## Paso 5: el cierre y la vuelta a la calle
 
-Cuando todas las OT de un pedido están **Completada** o **Completada Parcial**, el pedido pasa a **Pend. Validación Taller** y aparece en **Aprobaciones**. Al cerrarlo el jefe de taller:
+Cuando todas las OT de un pedido están **Completada** o **Completada Parcial**, el pedido pasa a **Pend. Validación Taller** y aparece en **Aprobaciones**. No se puede cerrar mientras tenga **pedidos de materiales** sin terminar (pendientes de aprobación, aprobados o entregados en parte): hay que entregarlos, cerrarlos o cancelarlos en **Almacenes → Pedidos**. Al cerrarlo el jefe de taller:
 
 - El pedido queda **Completada**.
 - El equipo vuelve a **Operativo**, **salvo que tenga otro pedido todavía En Taller**: en ese caso sigue **No operativo** hasta que se cierre el último.
@@ -99,11 +99,12 @@ Cuando todas las OT de un pedido están **Completada** o **Completada Parcial**,
 La **condición del equipo** se usa en otros dos lugares:
 
 - **Partes diarios**: si asignás a una línea del parte un equipo que no está operativo, se marca el desvío "Condición: No operativo" (o "Condición: En reparación", "Condición: Condicionado", "Condición: En preparación"). Ver <GuideLink to="diagramas-afectaciones-y-desvios">Diagramas, afectaciones y desvíos</GuideLink>.
+- **Almacenes**: los repuestos entregados para la reparación salen del stock imputados a la orden, y se ven en el detalle de la orden y en su PDF (**Materiales utilizados**). Ver <GuideLink to="circuito-de-materiales">El circuito de los materiales</GuideLink>.
 - **Dashboard**: en <GuideLink to="dashboard-principal">el Dashboard principal</GuideLink>, la disponibilidad de la flota cuenta como disponibles los equipos **Operativo** y **Operativo condicionado**; los **No operativo**, **En reparación** y **En preparación** cuentan como en reparación.
 
 ## Gomería
 
-Las cubiertas tienen su propio circuito en <GuideLink to="gomeria">Mantenimiento → Gomería</GuideLink>: catálogo de cubiertas, plantillas de disposición por tipo de equipo, marcas, tipos y **órdenes** de servicio de gomería. Las órdenes de gomería también se pueden iniciar desde el QR del equipo. Es independiente de los pedidos de taller.
+Las cubiertas tienen su propio circuito en <GuideLink to="gomeria">Mantenimiento → Gomería</GuideLink>: catálogo de cubiertas, plantillas de disposición por tipo de equipo, marcas, tipos y **órdenes** de servicio de gomería. Las órdenes de gomería también se pueden iniciar desde el QR del equipo. Es independiente de los pedidos de taller. Cada cubierta es stock de Almacenes: montarla, desmontarla o descartarla en una orden de gomería mueve ese stock.
 
 ## Permisos
 
@@ -114,6 +115,8 @@ Cada paso es una pestaña con su permiso: **Formularios** para completar checkli
 **"El chofer hizo el checklist y el taller no ve nada"**: los desvíos no se registraron en una solicitud. Buscá el equipo en **Equipos con Desvíos** y usá **Resolver Desvíos**.
 
 **"La solicitud no llega al taller"**: está esperando al supervisor en **Validar Solicitud**, o el supervisor rechazó todos los ítems.
+
+**"No me deja cerrar la orden"**: tiene pedidos de materiales abiertos. El aviso nombra cuáles; resolvelos en **Almacenes → Pedidos**.
 
 **"El equipo salió del taller pero sigue No operativo"**: tiene otro pedido todavía **En Taller**. Se pone Operativo al cerrar el último.
 

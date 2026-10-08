@@ -1,0 +1,84 @@
+---
+title: Depósitos
+summary: Cómo dar de alta los depósitos de la empresa (base, obra, pañol, camioneta), asignarles un responsable, y cuándo se pueden dar de baja.
+keywords: depósito, almacén, pañol, base, obra, camioneta, ubicación, multi-depósito, responsable, transferencia, dar de baja, reactivar
+updated: 2026-10-08
+---
+
+Un **depósito** es cualquier lugar físico donde se guarda material: la base, una obra, el pañol, el contenedor de una locación o una camioneta que lleva repuestos. La empresa puede tener todos los que necesite. El stock se lleva **por separado en cada depósito**, y el material se pasa de uno a otro con una **transferencia**.
+
+<OpenScreen />
+
+## Cómo pensar los depósitos
+
+Cargá un depósito por cada lugar donde **alguien tiene que poder decir qué hay**. Algunos ejemplos:
+
+- **Un depósito central** en la base y **un pañol** de herramientas, aunque estén en el mismo predio, si los atienden personas distintas.
+- **Un depósito por obra o locación**, si se manda material para que se use allá.
+- **Una camioneta**, si lleva un stock propio de repuestos que se repone desde la base.
+
+Mientras más fino lo armes, más preciso es el stock, pero también hay que registrar cada transferencia. Si el material de la camioneta se consume en el día, no hace falta que sea un depósito: alcanza con la salida desde la base.
+
+<Callout type="info" title="El costo es uno solo">
+El costo promedio de cada material es el mismo en todos los depósitos. Una transferencia cambia **dónde** está el material, no cuánto vale.
+</Callout>
+
+## La lista de depósitos
+
+| Columna | Qué muestra |
+|---|---|
+| **Código** | Código corto, por ejemplo **BASE** o **OBRA-12**. |
+| **Nombre** | Por ejemplo "Depósito Base Neuquén". |
+| **Dirección** | Opcional. |
+| **Legajo responsable** y **Responsable** | El empleado a cargo, si se asignó. |
+| **Estado** | **Activo** o **Inactivo**. |
+| **Creado** | Fecha de alta. |
+
+El buscador dice **Buscar por código, nombre o dirección**. A la vista hay tres filtros, **Estado**, **Responsable** y **Nombre**, y el resto se suma con **Filtros**. **Excel** exporta la lista.
+
+## Dar de alta un depósito
+
+<Steps>
+<Step title="Abrí el formulario">
+Tocá **Nuevo depósito**.
+</Step>
+<Step title="Completá los datos">
+**Código** y **Nombre** (obligatorios, y ninguno de los dos se puede repetir en la empresa), **Dirección** y **Responsable** (opcionales). El responsable se busca entre los empleados por legajo o nombre.
+</Step>
+<Step title="Guardá">
+Ves "**Se creó el depósito "Depósito Base Neuquén"**". El depósito arranca vacío: el material entra con una entrada o una transferencia desde otro depósito.
+</Step>
+</Steps>
+
+Si la empresa tiene **un solo depósito activo**, los formularios (movimientos, entregas de ropa, alta de cubiertas) lo eligen solos.
+
+## Editar, dar de baja y reactivar
+
+En el menú de tres puntos de cada fila:
+
+- **Editar**: cambia código, nombre, dirección o responsable.
+- **Dar de baja**: "**Tiene que estar sin stock. Si tuvo movimientos se desactiva (su historial se conserva); si nunca se usó, se elimina.**"
+- **Reactivar**: vuelve a ofrecer un depósito inactivo.
+
+Un depósito inactivo no se ofrece en los formularios y no admite movimientos nuevos.
+
+<Callout type="warning" title="&quot;El depósito tiene stock: transferilo o ajustalo antes de darlo de baja&quot;">
+No se puede dar de baja un depósito con material. Pasá su stock a otro con una **Transferencia** o, si ya no existe, registrá un **Ajuste** que lo reste (ver <GuideLink to="movimientos-de-stock">Movimientos de stock</GuideLink>).
+</Callout>
+
+## Cómo se conecta con el resto del sistema
+
+- **Movimientos**: cada movimiento ocurre en un depósito; las transferencias mueven material entre dos (<GuideLink to="movimientos-de-stock">Movimientos de stock</GuideLink>).
+- **Stock**: la tabla de stock se filtra por depósito (<GuideLink to="stock-y-ficha-del-material">Stock y ficha del material</GuideLink>).
+- **Pedidos**: quien entrega un pedido elige de qué depósito sale (<GuideLink to="pedidos-de-materiales">Pedidos de materiales</GuideLink>).
+- **Indumentaria**: el panel de entregas pide el depósito del que sale la ropa (<GuideLink to="entrega-de-indumentaria">Entrega de indumentaria</GuideLink>).
+- **Gomería**: el alta de cubiertas pide el depósito al que entran, y desmontar una cubierta a disponible pide el depósito al que vuelve (<GuideLink to="gomeria">Gomería</GuideLink>).
+
+## Permisos
+
+| Para… | Hace falta en **Depósitos** |
+|---|---|
+| Ver la lista | **Ver** |
+| **Nuevo depósito** | **Crear** |
+| **Editar** y **Reactivar** | **Editar** |
+| **Dar de baja** | **Eliminar** |

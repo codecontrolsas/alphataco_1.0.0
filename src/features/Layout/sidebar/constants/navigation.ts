@@ -1,6 +1,7 @@
 import type { ModuleSlug } from '@/features/Permissions/permissions-map';
 import { MODULE_ICONS, type ModuleIcon } from '@/shared/constants/module-icons';
 import {
+  ArrowLeftRight,
   BookOpen,
   Building2,
   ChartColumn,
@@ -10,7 +11,9 @@ import {
   FileText,
   FileType,
   GitBranch,
+  HandHelping,
   House,
+  Layers,
   LifeBuoy,
   Package,
   Plus,
@@ -178,18 +181,34 @@ export const navigationLinks: NavigationLink[] = [
     ],
   },
   {
+    name: 'Almacenes',
+    moduleSlug: 'almacenes',
+    href: '/dashboard/warehouse',
+    icon: MODULE_ICONS.almacenes,
+    position: 9,
+    items: [
+      { name: 'Stock', tabSlug: 'stock' },
+      { name: 'Movimientos', tabSlug: 'movimientos' },
+      { name: 'Préstamos', tabSlug: 'prestamos' },
+      { name: 'Pedidos', tabSlug: 'pedidos' },
+      { name: 'Materiales', tabSlug: 'materiales' },
+      { name: 'Depósitos', tabSlug: 'depositos' },
+      { name: 'Configuración', tabSlug: 'config-almacen' },
+    ],
+  },
+  {
     name: 'Formularios',
     moduleSlug: 'formularios',
     href: '/dashboard/forms',
     icon: MODULE_ICONS.formularios,
-    position: 9,
+    position: 10,
   },
   {
     name: 'Ayuda',
     moduleSlug: 'ayuda',
     href: '/dashboard/help',
     icon: MODULE_ICONS.ayuda,
-    position: 10,
+    position: 11,
     items: [
       { name: 'Tickets', tabSlug: 'tickets', badge: 'support-tickets' },
       { name: 'Manual de uso', tabSlug: 'manual' },
@@ -200,7 +219,7 @@ export const navigationLinks: NavigationLink[] = [
     moduleSlug: 'configuracion',
     href: '/dashboard/configuration',
     icon: MODULE_ICONS.configuracion,
-    position: 11,
+    position: 12,
     items: [
       { name: 'General', tabSlug: 'general' },
       { name: 'RRHH', tabSlug: 'rrhh' },
@@ -243,6 +262,13 @@ export const SUB_ITEM_ICONS: Record<string, NavIcon> = {
   'mantenimiento:nuevo_pedido': Plus,
   'mantenimiento:equipments_with_deviations': TriangleAlert,
   'mantenimiento:gomeria': CircleDot,
+  'almacenes:stock': Layers,
+  'almacenes:movimientos': ArrowLeftRight,
+  'almacenes:prestamos': HandHelping,
+  'almacenes:pedidos': ClipboardList,
+  'almacenes:materiales': Package,
+  'almacenes:depositos': Warehouse,
+  'almacenes:config-almacen': Settings,
   'ayuda:tickets': LifeBuoy,
   'ayuda:manual': BookOpen,
 };

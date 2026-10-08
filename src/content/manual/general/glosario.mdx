@@ -1,11 +1,11 @@
 ---
 title: Glosario
-summary: Qué significa cada término que usa el sistema (legajo, afectación, alerta, parte diario, desvío, certificación, CAE, OT, etc.) y dónde se trabaja.
-keywords: glosario, términos, definiciones, significado, qué es, vocabulario
-updated: 2026-10-07
+summary: Qué significa cada término que usa el sistema (legajo, afectación, alerta, parte diario, desvío, certificación, CAE, OT, depósito, movimiento, préstamo, etc.) y dónde se trabaja.
+keywords: glosario, términos, definiciones, significado, qué es, vocabulario, stock, depósito, material, movimiento, kardex, lote, préstamo
+updated: 2026-10-08
 ---
 
-Los términos del sistema, en orden alfabético. Cada uno indica dónde se trabaja, con un enlace a la guía correspondiente. Si un término tiene dos usos en el sistema (como **desvío** o **pedido**), están los dos.
+Los términos del sistema, en orden alfabético. Cada uno indica dónde se trabaja, con un enlace a la guía correspondiente. Si un término tiene más de un uso en el sistema (como **desvío** o **pedido**), están todos.
 
 ## A
 
@@ -13,9 +13,17 @@ Los términos del sistema, en orden alfabético. Cada uno indica dónde se traba
 
 Vínculo entre un empleado o un equipo y un **cliente**: indica que ese recurso trabaja para ese cliente. Un mismo recurso puede estar afectado a varios clientes. En la ficha del empleado figura como **Asignado a contratistas**, en la del equipo como **Asignación a Contratistas**, y en las listas de documentos como la columna **Afectado a**. La afectación importa porque **cambia los documentos que se le exigen** al recurso (un cliente puede pedir documentación propia) y porque en el parte diario un recurso no afectado al cliente de la línea genera un **desvío**. Se carga desde la ficha del recurso o desde el cliente. Ver <GuideLink to="clientes">Clientes</GuideLink> y <GuideLink to="diagramas-afectaciones-y-desvios">Diagramas, afectaciones y desvíos</GuideLink>.
 
+### Ajuste de stock
+
+Movimiento de **Almacenes** que corrige el stock de un depósito contra el conteo físico: resta lo que falta o se rompió, suma lo que sobra, o da de baja un lote vencido. Lleva el motivo por escrito y necesita el permiso **Ajustar stock**. Ver <GuideLink to="movimientos-de-stock">Movimientos de stock</GuideLink>.
+
 ### Alerta (documento pendiente)
 
 Un documento que **el sistema exige pero que todavía no se subió**. El sistema la crea solo para cada tipo de documento **obligatorio** que corresponde a un empleado, equipo o a la empresa, y figura con el estado **Pendiente** y sin archivo. Desaparece como alerta cuando se sube el archivo. Las alertas son las que hacen que un recurso figure **Incompleto**. Ver <GuideLink to="documentos-alertas-y-estado">Documentos, alertas y estado</GuideLink>.
+
+### Anulación (de un movimiento de stock)
+
+La forma de corregir un movimiento de **Almacenes** ya registrado: en vez de editarlo o borrarlo, se registra un movimiento nuevo con el efecto contrario y el mismo costo, con el motivo. El original queda marcado **Anulado**. Una anulación no se puede anular. Ver <GuideLink to="movimientos-de-stock">Movimientos de stock</GuideLink>.
 
 ### ARCA simulado (modo demo)
 
@@ -47,11 +55,19 @@ Formulario de inspección de un equipo, con ítems que se responden **Bueno**, *
 
 Estado operativo de un equipo: **Operativo**, **No operativo**, **En reparación**, **Operativo condicionado** o **En preparación**. La mueve sobre todo el circuito de mantenimiento (por ejemplo, al terminar un trabajo en el taller vuelve a **Operativo** si no quedan otros pedidos en taller). Un equipo que no está operativo genera **desvío** si se lo asigna en un parte diario. Ver <GuideLink to="ficha-del-vehiculo">Ficha del vehículo</GuideLink>.
 
+### Costo promedio
+
+El valor de cada material en **Almacenes**: uno solo por material para toda la empresa, que se recalcula con cada entrada (promedio ponderado entre lo que había y lo que entra). Las salidas, transferencias y ajustes salen a ese costo. Solo lo ve quien tiene **Ver precios e importes**. Ver <GuideLink to="almacenes">Cómo funciona Almacenes</GuideLink>.
+
 ### Cubierta
 
-Neumático de un equipo, que se sigue individualmente en **Gomería**: puede estar **Disponible**, **Instalada**, **En reparación**, **Descartada** o **Extraviada**. Ver <GuideLink to="gomeria">Gomería</GuideLink>.
+Neumático de un equipo, que se sigue individualmente en **Gomería**: puede estar **Disponible**, **Instalada**, **En reparación**, **Descartada** o **Extraviada**. Cada cubierta es además una unidad de stock de **Almacenes**, con depósito y costo: montarla, desmontarla o descartarla mueve el stock. Ver <GuideLink to="gomeria">Gomería</GuideLink>.
 
 ## D
+
+### Depósito
+
+Un lugar físico donde se guarda material: la base, una obra, el pañol, una camioneta. En **Almacenes** el stock se lleva por separado en cada depósito, y el material pasa de uno a otro con una **transferencia**. Ver <GuideLink to="depositos">Depósitos</GuideLink>.
 
 ### Desvío
 
@@ -113,6 +129,18 @@ Sección de Mantenimiento para gestionar las **cubiertas**: catálogo, plantilla
 
 Los dos ambientes de ARCA. En **Homologación** los comprobantes son **de prueba** y no tienen validez fiscal ("**Estás en homologación…**"); en **Producción** son comprobantes reales. Cada ambiente tiene su propio certificado y su propia numeración. Ver <GuideLink to="datos-fiscales">Datos fiscales</GuideLink>.
 
+## I
+
+### Imputación (destino de una salida)
+
+A quién se le carga el material que sale de un depósito: un **empleado**, un **vehículo**, un **equipo**, una **orden de mantenimiento** o un **cliente** (con su contrato, si se quiere). Se elige en cada salida y en cada pedido de materiales, y permite saber cuánto material consumió cada uno. Ver <GuideLink to="movimientos-de-stock">Movimientos de stock</GuideLink>.
+
+## K
+
+### Kardex
+
+El historial de un material en **Almacenes**: todos sus movimientos en orden, con lo que entró y salió en cada uno, el saldo que quedó y, con permiso de precios, el costo. Está en la ficha del material. Ver <GuideLink to="stock-y-ficha-del-material">Stock y ficha del material</GuideLink>.
+
 ## L
 
 ### Legajo
@@ -123,11 +151,29 @@ El **número de legajo** es el identificador interno de cada empleado, y es la f
 
 Cada renglón de un parte diario: un servicio para un cliente en ese día, con sus **recursos** (empleados y equipos). Estados: **Pendiente**, **Sin recursos**, **Ejecutado**, **Reprogramado**, **Cancelado** y **En certificación**. Una línea pasa sola de **Sin recursos** a **Pendiente** cuando se le asignan los recursos necesarios. Ver <GuideLink to="detalle-del-parte">Detalle del parte</GuideLink>.
 
+### Lote
+
+Partida de un material controlado **por lote**, con su número y su fecha de vencimiento. El stock de esos materiales se lleva por lote; los vencidos no pueden salir ni transferirse, y se avisan en **Almacenes → Stock** y por correo los lunes. Ver <GuideLink to="stock-y-ficha-del-material">Stock y ficha del material</GuideLink>.
+
+## M
+
+### Material
+
+Cualquier cosa que se guarda en los depósitos de **Almacenes**: un aceite, un filtro, un guante, una herramienta, una cubierta. Tiene código, unidad de medida y una forma de control: **por cantidad**, **por lote** o **por número de serie**. La ropa (por artículo, marca y talle) y las cubiertas (por tipo y marca) tienen materiales que el sistema crea solo. Ver <GuideLink to="materiales">Materiales</GuideLink>.
+
+### Movimiento de stock
+
+Cada cosa que le pasa al stock en **Almacenes**: **Entrada**, **Salida**, **Transferencia**, **Ajuste** o **Devolución**. Tiene un número **MOV-…**, fecha, depósito, materiales y quién lo registró. No se edita ni se borra: se corrige con una **anulación**. Ver <GuideLink to="movimientos-de-stock">Movimientos de stock</GuideLink>.
+
 ## N
 
 ### Novedad
 
 Lo que un empleado hizo (o no) un día determinado según su diagrama: por ejemplo, trabajo, franco, vacaciones o enfermedad. Cada **tipo de novedad** indica si es **Laboralmente Activo** (el empleado trabaja ese día) y si **Computa ausentismo**. Los tipos se configuran en **Configuración → RRHH**. Ver <GuideLink to="diagramas">Diagramas</GuideLink> y <GuideLink to="catalogos-de-rrhh">Catálogos de RRHH</GuideLink>.
+
+### Número de serie
+
+Identificador de cada unidad de un material controlado **por número de serie** (herramientas, equipos de medición, cubiertas). Cada vez que una unidad sale del depósito queda **prestada** a quien la recibió. Ver <GuideLink to="prestamos-de-herramientas">Préstamos de herramientas</GuideLink>.
 
 ## O
 
@@ -143,14 +189,19 @@ El registro de **todo el trabajo de un día**: un parte por fecha, con una líne
 
 ### Pedido
 
-Tiene dos usos:
+Tiene tres usos:
 
 - **En Operaciones (Gestor de Pedidos)**: un trabajo que el cliente pide para una fecha. Estados: **Pendiente**, **Confirmado**, **Reprogramado**, **Cancelado**, **Rechazado** y **Vencido** (un pendiente cuya fecha pasó sin confirmarse). Al confirmarlo se crea su línea en el parte diario de ese día. Ver <GuideLink to="gestor-de-pedidos">Gestor de pedidos</GuideLink>.
 - **En Mantenimiento (pedido u orden de mantenimiento)**: el trabajo de taller que se genera al aprobar una solicitud. Pasa por la programación, el ingreso al taller, las OT de cada sector y la validación final. Ver <GuideLink to="taller">Taller</GuideLink>.
+- **En Almacenes (pedido de materiales, PED-…)**: el pedido de materiales para un destino, que aprueba un responsable y entrega el almacén, en una o varias veces. Estados: **Pendiente de aprobación**, **Aprobado**, **Entregado en parte**, **Entregado**, **Rechazado**, **Cerrado** y **Cancelado**. Es el camino obligado cuando una salida no puede ser directa, y el de los repuestos del taller. Ver <GuideLink to="pedidos-de-materiales">Pedidos de materiales</GuideLink>.
 
 ### Permiso
 
 La habilitación para hacer **una acción** (**Ver**, **Crear**, **Editar**, **Eliminar**, **Aprobar**, **Ver precios e importes**, etc.) en **una pantalla**. Sin permiso, la pantalla o el botón no aparecen. Ver <GuideLink to="empresa-usuarios-y-permisos">Empresa, usuarios y permisos</GuideLink>.
+
+### Préstamo (de herramientas)
+
+Una unidad de un material por número de serie que salió del depósito y todavía no volvió. Toda salida de esos materiales es un préstamo, que se cierra con una **devolución** o con una **baja** (extraviada o rota). Se consulta en **Almacenes → Préstamos**. Ver <GuideLink to="prestamos-de-herramientas">Préstamos de herramientas</GuideLink>.
 
 ### Punto de venta
 
@@ -168,9 +219,17 @@ Conjunto de permisos con nombre que se asigna a los usuarios. Hay roles de siste
 
 ## S
 
+### Salida directa
+
+Una salida de material registrada desde **Almacenes → Movimientos** sin pedido. Solo se acepta si quien la carga tiene el permiso **Salida directa**, ningún material está marcado **Requiere aprobación** y el total no supera el monto máximo de la empresa. Si no, va por **pedido de materiales**. Ver <GuideLink to="movimientos-de-stock">Movimientos de stock</GuideLink>.
+
 ### Solicitud de mantenimiento
 
 El **reporte de algo que hay que reparar o revisar** en un equipo. Se origina en un checklist con desvíos, en una carga manual o en un mantenimiento preventivo. Queda **Pendiente** hasta que el supervisor la **aprueba** (y se convierte en un pedido para el taller) o la **rechaza**. Ver <GuideLink to="validar-solicitudes">Validar solicitudes</GuideLink> y <GuideLink to="nuevo-pedido-de-mantenimiento">Nuevo pedido de mantenimiento</GuideLink>.
+
+### Stock (y stock mínimo)
+
+La cantidad de un material en un depósito. Nunca puede quedar negativo. El **stock mínimo** se define por material para toda la empresa: si la suma de los depósitos queda por debajo, el material aparece **Bajo mínimo**. Ver <GuideLink to="stock-y-ficha-del-material">Stock y ficha del material</GuideLink>.
 
 ## T
 

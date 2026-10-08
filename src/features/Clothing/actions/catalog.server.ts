@@ -4,6 +4,7 @@ import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { syncClothingMaterials } from '@/features/Warehouses/lib/clothing-materials';
 import {
   assertBrandSizePairsInCompany,
   assertClothingBrandInCompany,
@@ -40,7 +41,12 @@ export async function updateClothingBrand(id: string, name: string) {
 
   try {
     await assertClothingBrandInCompany(id, companyId);
-    return await prisma.clothing_brands.update({ where: { id }, data: { name, updated_at: new Date() } });
+    // El nombre del material de cada combinacion lleva la marca (Almacenes etapa 5).
+    return await prisma.$transaction(async (tx) => {
+      const brand = await tx.clothing_brands.update({ where: { id }, data: { name, updated_at: new Date() } });
+      await syncClothingMaterials(tx, companyId, { brandId: id });
+      return brand;
+    });
   } catch (error) {
     logger.error('Error updating clothing brand', { data: { error, id, name } });
     throw error;
@@ -54,7 +60,11 @@ export async function toggleClothingBrandActive(id: string, isActive: boolean) {
 
   try {
     await assertClothingBrandInCompany(id, companyId);
-    return await prisma.clothing_brands.update({ where: { id }, data: { is_active: isActive, updated_at: new Date() } });
+    return await prisma.$transaction(async (tx) => {
+      const brand = await tx.clothing_brands.update({ where: { id }, data: { is_active: isActive, updated_at: new Date() } });
+      await syncClothingMaterials(tx, companyId, { brandId: id });
+      return brand;
+    });
   } catch (error) {
     logger.error('Error toggling clothing brand active status', { data: { error, id, isActive } });
     throw error;
@@ -85,7 +95,11 @@ export async function updateClothingSize(id: string, name: string) {
 
   try {
     await assertClothingSizeInCompany(id, companyId);
-    return await prisma.clothing_sizes.update({ where: { id }, data: { name, updated_at: new Date() } });
+    return await prisma.$transaction(async (tx) => {
+      const size = await tx.clothing_sizes.update({ where: { id }, data: { name, updated_at: new Date() } });
+      await syncClothingMaterials(tx, companyId, { sizeId: id });
+      return size;
+    });
   } catch (error) {
     logger.error('Error updating clothing size', { data: { error, id, name } });
     throw error;
@@ -99,7 +113,11 @@ export async function toggleClothingSizeActive(id: string, isActive: boolean) {
 
   try {
     await assertClothingSizeInCompany(id, companyId);
-    return await prisma.clothing_sizes.update({ where: { id }, data: { is_active: isActive, updated_at: new Date() } });
+    return await prisma.$transaction(async (tx) => {
+      const size = await tx.clothing_sizes.update({ where: { id }, data: { is_active: isActive, updated_at: new Date() } });
+      await syncClothingMaterials(tx, companyId, { sizeId: id });
+      return size;
+    });
   } catch (error) {
     logger.error('Error toggling clothing size active status', { data: { error, id, isActive } });
     throw error;
@@ -137,14 +155,19 @@ export async function updateClothingItem(id: string, data: { name: string; code?
 
   try {
     await assertClothingItemInCompany(id, companyId);
-    return await prisma.clothing_items.update({
-      where: { id },
-      data: {
-        name: data.name,
-        code: data.code ?? null,
-        description: data.description ?? null,
-        updated_at: new Date(),
-      },
+    // El codigo del material no cambia (es estable); el nombre si (Almacenes etapa 5).
+    return await prisma.$transaction(async (tx) => {
+      const item = await tx.clothing_items.update({
+        where: { id },
+        data: {
+          name: data.name,
+          code: data.code ?? null,
+          description: data.description ?? null,
+          updated_at: new Date(),
+        },
+      });
+      await syncClothingMaterials(tx, companyId, { itemId: id });
+      return item;
     });
   } catch (error) {
     logger.error('Error updating clothing item', { data: { error, id, itemData: data } });
@@ -159,7 +182,11 @@ export async function toggleClothingItemActive(id: string, isActive: boolean) {
 
   try {
     await assertClothingItemInCompany(id, companyId);
-    return await prisma.clothing_items.update({ where: { id }, data: { is_active: isActive, updated_at: new Date() } });
+    return await prisma.$transaction(async (tx) => {
+      const item = await tx.clothing_items.update({ where: { id }, data: { is_active: isActive, updated_at: new Date() } });
+      await syncClothingMaterials(tx, companyId, { itemId: id });
+      return item;
+    });
   } catch (error) {
     logger.error('Error toggling clothing item active status', { data: { error, id, isActive } });
     throw error;
@@ -181,47 +208,84 @@ export async function getItemBrandSizes(itemId: string) {
   try {
     await assertClothingItemInCompany(itemId, companyId);
 
-    return await prisma.clothing_item_brand_sizes.findMany({
-      where: { clothing_item_id: itemId },
-      include: {
-        clothing_brands: { select: { id: true, name: true } },
-        clothing_sizes: { select: { id: true, name: true } },
-      },
-      orderBy: [{ clothing_brands: { name: 'asc' } }, { clothing_sizes: { name: 'asc' } }],
-    });
+    const [entries, materials] = await Promise.all([
+      prisma.clothing_item_brand_sizes.findMany({
+        where: { clothing_item_id: itemId },
+        include: {
+          clothing_brands: { select: { id: true, name: true } },
+          clothing_sizes: { select: { id: true, name: true } },
+        },
+        orderBy: [{ clothing_brands: { name: 'asc' } }, { clothing_sizes: { name: 'asc' } }],
+      }),
+      // Material de stock de cada combinacion y su stock total (Almacenes etapa 5). Solo
+      // cantidades: los costos no salen de esta pantalla.
+      prisma.clothing_item_materials.findMany({
+        where: { company_id: companyId, clothing_item_id: itemId },
+        select: {
+          clothing_brand_id: true,
+          clothing_size_id: true,
+          material: { select: { code: true, stock_balances: { select: { quantity: true } } } },
+        },
+      }),
+    ]);
+    const byCombination = new Map(
+      materials.map((m) => [
+        `${m.clothing_brand_id}|${m.clothing_size_id}`,
+        {
+          code: m.material.code,
+          stock: String(m.material.stock_balances.reduce((acc, b) => acc + Number(b.quantity), 0)),
+        },
+      ])
+    );
+    return entries.map((entry) => ({
+      ...entry,
+      material: byCombination.get(`${entry.clothing_brand_id}|${entry.clothing_size_id}`) ?? null,
+    }));
   } catch (error) {
     logger.error('Error getting item brand sizes', { data: { error, itemId } });
     throw error;
   }
 }
 
+type BrandSizePair = { brandId: string; sizeId: string };
+
 /**
- * Reemplaza en una transacción el set completo de marcas/talles de un artículo.
+ * Altas y bajas EXPLÍCITAS de combinaciones marca/talle de un artículo (regla del repo para M:M:
+ * la ausencia de un par nunca implica borrarlo). El formulario calcula la diferencia contra la
+ * matriz que leyó del servidor al abrirse.
  *
- * Perímetro: el artículo y TODOS los pares marca/talle tienen que ser de la empresa
- * activa. Si alguno no lo es, la operación falla entera en vez de guardar una parte: el
- * formulario sólo ofrece opciones propias, así que un par ajeno es manipulación, y un
- * guardado parcial dejaría al usuario creyendo que se grabó lo que mandó.
+ * Cada combinación tiene su material de stock (Almacenes etapa 5): quitarla lo desactiva, nunca lo
+ * borra, y volver a habilitarla recupera el mismo material.
+ *
+ * Perímetro: el artículo y TODOS los pares tienen que ser de la empresa activa. Si alguno no lo
+ * es, falla entera: el formulario sólo ofrece opciones propias, así que un par ajeno es
+ * manipulación, y un guardado parcial dejaría al usuario creyendo que se grabó lo que mandó.
  */
-export async function setItemBrandSizes(itemId: string, entries: { brandId: string; sizeId: string }[]) {
+export async function setItemBrandSizes(itemId: string, changes: { add: BrandSizePair[]; remove: BrandSizePair[] }) {
   const companyId = await getActiveCompanyId();
-  logger.debug('Setting item brand sizes', { data: { itemId, count: entries.length } });
+  logger.debug('Updating item brand sizes', { data: { itemId, add: changes.add.length, remove: changes.remove.length } });
 
   try {
     await assertClothingItemInCompany(itemId, companyId);
-    await assertBrandSizePairsInCompany(entries, companyId);
+    await assertBrandSizePairsInCompany([...changes.add, ...changes.remove], companyId);
 
-    await prisma.$transaction([
-      prisma.clothing_item_brand_sizes.deleteMany({ where: { clothing_item_id: itemId } }),
-      prisma.clothing_item_brand_sizes.createMany({
-        data: entries.map((entry) => ({
-          clothing_item_id: itemId,
-          clothing_brand_id: entry.brandId,
-          clothing_size_id: entry.sizeId,
-        })),
-        skipDuplicates: true,
-      }),
-    ]);
+    await prisma.$transaction(async (tx) => {
+      if (changes.remove.length > 0) {
+        await tx.clothing_item_brand_sizes.deleteMany({
+          where: {
+            clothing_item_id: itemId,
+            OR: changes.remove.map((p) => ({ clothing_brand_id: p.brandId, clothing_size_id: p.sizeId })),
+          },
+        });
+      }
+      if (changes.add.length > 0) {
+        await tx.clothing_item_brand_sizes.createMany({
+          data: changes.add.map((p) => ({ clothing_item_id: itemId, clothing_brand_id: p.brandId, clothing_size_id: p.sizeId })),
+          skipDuplicates: true,
+        });
+      }
+      await syncClothingMaterials(tx, companyId, { itemId });
+    });
   } catch (error) {
     logger.error('Error setting item brand sizes', { data: { error, itemId } });
     throw error;

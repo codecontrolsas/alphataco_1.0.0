@@ -1,8 +1,8 @@
 ---
 title: Taller
 summary: Del pedido aprobado al equipo reparado: programar la fecha, registrar el ingreso, armar las órdenes de trabajo por sector, autorizar tareas y cerrar la orden.
-keywords: taller, pedido, programar, fecha, ingreso, kilometraje, orden de mantenimiento, orden de trabajo, OT, OM, sector, jefe de taller, aprobaciones, cerrar, no operativo
-updated: 2026-10-07
+keywords: taller, pedido, programar, fecha, ingreso, kilometraje, orden de mantenimiento, orden de trabajo, OT, OM, sector, jefe de taller, aprobaciones, cerrar, no operativo, repuestos, materiales, pedido de materiales
+updated: 2026-10-08
 ---
 
 La pestaña **Taller** del módulo **Mantenimiento** es donde trabaja el jefe de taller. Recibe los pedidos que aprobó operaciones (o que cargó directamente un supervisor), les pone fecha, registra cuándo entra el equipo, reparte el trabajo entre los sectores del taller y, cuando los sectores terminan, revisa y cierra.
@@ -136,9 +136,9 @@ Botones de cada fila:
 | Botón | Qué hace |
 |---|---|
 | **Gestionar** | Abre el asistente para asignar tareas y sectores y generar las OT. Solo en órdenes **En Taller** o **Rechazada por Taller**. |
-| **Detalle** / **Ver detalle** | Muestra la orden por sector: cada OT con su estado (**Pendiente**, **En progreso**, **Pausada**, **Completada**, **Parcial**, **Cancelada**), la tarea de **DIAGNOSTICO** y las tareas que agregaron los operarios. |
+| **Detalle** / **Ver detalle** | Muestra la orden por sector: cada OT con su estado (**Pendiente**, **En progreso**, **Pausada**, **Completada**, **Parcial**, **Cancelada**), la tarea de **DIAGNOSTICO**, las tareas que agregaron los operarios y los **Materiales** (repuestos) de la orden. |
 | **Ítems** | Abre **Ítems solicitados**: cada ítem de la orden con su descripción, las tareas asignadas y las fotos. |
-| **PDF** | Descarga el detalle completo de la orden en PDF. |
+| **PDF** | Descarga el detalle completo de la orden en PDF, con la sección **Materiales utilizados**. |
 
 ### Cómo gestionar una orden (Gestionar)
 
@@ -180,6 +180,31 @@ Si en el paso **Desvíos** rechazás todo, el botón cambia a **Guardar cambios*
 Si cerrás el asistente con cambios sin guardar, aparece **Hay cambios sin guardar**: **Seguir editando** o **Descartar cambios**.
 </Callout>
 
+### Materiales de la orden (repuestos)
+
+Los repuestos de una reparación salen del stock de **Almacenes** con un **pedido de materiales** imputado a la orden y, si corresponde, a la OT. El taller no saca material directamente: lo pide, alguien lo aprueba y el almacén lo entrega.
+
+En el detalle de la orden, la sección **Materiales** muestra:
+
+- **Los pedidos de la orden**: número (enlace al pedido en Almacenes), estado, la OT a la que corresponden (u **Orden**), fecha y cantidad de materiales. Si no hay: "**Todavía no se pidieron materiales para esta orden.**"
+- **Entregado**: lo que el almacén ya entregó, agrupado por OT (o **Toda la orden**), por material y cantidad neta (descontando las entregas anuladas). Con **Ver precios e importes** en **Almacenes → Movimientos** se ven el costo de cada línea, el total por OT y el **Total materiales** de la orden.
+
+Para pedir:
+
+<Steps>
+<Step title="Tocá Pedir materiales">
+El botón aparece en la sección **Materiales** con la orden **En Taller** y el permiso **Crear** en **Almacenes → Pedidos**.
+</Step>
+<Step title="Elegí la OT y los materiales">
+En **Orden de trabajo** elegí una de las OT abiertas de la orden o **Toda la orden (sin OT)**. Agregá cada material con su **Cantidad** y, si querés, una **Nota**. No se elige depósito: "**El almacén elige de dónde sale cuando lo entrega.**"
+</Step>
+<Step title="Enviá">
+Tocá **Enviar pedido**. Ves "**PED-000012 enviado: queda pendiente de aprobación**". Desde ahí sigue el circuito de <GuideLink to="pedidos-de-materiales">Pedidos de materiales</GuideLink>.
+</Step>
+</Steps>
+
+Los operarios también piden materiales desde su OT, en el <GuideLink to="panel-del-operario">Panel del operario</GuideLink>. Esos pedidos aparecen acá con su OT.
+
 ## 4 Aprobaciones
 
 Es la bandeja del jefe de taller. Arriba hay dos indicadores que se habilitan cuando tienen pendientes:
@@ -206,6 +231,10 @@ Abajo tenés **Notas de validacion (opcional)** y tres botones:
 
 Al cerrar con **Validar y Cerrar Orden**, el equipo vuelve a **Operativo**, salvo que tenga **otra** orden todavía dentro del taller: en ese caso sigue **No operativo** hasta que se cierre la última.
 
+<Callout type="warning" title="Pedidos de materiales abiertos">
+Una orden con pedidos de materiales **Pendientes de aprobación**, **Aprobados** o **Entregados en parte** no se puede cerrar. Arriba del botón aparece "**No se puede cerrar todavía: PED-000012 sigue abierto. Entregalo, cerralo o cancelalo desde Almacenes → Pedidos.**" y **Validar y Cerrar Orden** queda deshabilitado. Los pedidos **Entregados**, **Cerrados**, **Rechazados** o **Cancelados** no bloquean.
+</Callout>
+
 <States title="Estados del pedido en el taller">
   <State name="Pendiente de planificar fecha de taller" tone="warning" next="Pendiente de ingreso a taller, Rechazada">Está en Por Programar, sin fecha.</State>
   <State name="Rechazada" tone="danger">El taller rechazó el pedido antes de programarlo. Queda en el historial del equipo.</State>
@@ -226,6 +255,7 @@ Los nombres cambian un poco según la tabla (por ejemplo, **Pendiente Planificar
 - **Partes diarios**: un equipo No operativo cargado en un parte genera un desvío de equipo por condición (ver <GuideLink to="partes-diarios">Partes diarios</GuideLink>).
 - **Dashboard**: los equipos No operativos cuentan como **No disponibles** en el <GuideLink to="dashboard-principal">Dashboard principal</GuideLink> y bajan el porcentaje de operatividad de la flota.
 - **Historial**: todo lo que pasa con el pedido (planificación, ingreso, OT, rechazos, cierre) queda en la pestaña **Historial de Mantenimiento** de la ficha del equipo.
+- **Almacenes**: los repuestos se piden con pedidos de materiales imputados a la orden y a la OT; lo entregado se ve en la sección **Materiales** y en el PDF, y los pedidos abiertos impiden cerrar la orden (<GuideLink to="pedidos-de-materiales">Pedidos de materiales</GuideLink>).
 - **Configuración**: talleres, sectores (con su cupo), tipos de reparación y grupos de tareas se cargan en <GuideLink to="catalogos-de-mantenimiento">Catálogos de mantenimiento</GuideLink>. Si un tipo de reparación no está asignado a ningún sector, el asistente te va a pedir el sector a mano.
 
 El recorrido completo está en <GuideLink to="del-checklist-al-taller">Del checklist al taller</GuideLink>.
@@ -241,6 +271,8 @@ El recorrido completo está en <GuideLink to="del-checklist-al-taller">Del check
 | Agregar reparaciones y generar las OT | **Crear** en **Gestión de Órdenes**. |
 | Asignar tareas y rechazar desvíos en Gestionar | **Editar** en **Gestión de Órdenes**. |
 | Validar y cerrar, rechazar ítems y devolver una orden | **Editar** en **Órdenes de Mantenimiento**. |
+| **Pedir materiales** desde el detalle de la orden | **Crear** en **Almacenes → Pedidos**. |
+| Ver el costo de los materiales de la orden | **Ver precios e importes** en **Almacenes → Movimientos**. |
 
 ## Problemas frecuentes
 
@@ -254,6 +286,10 @@ El valor no puede ser menor que el último registrado (el que viene precargado).
 
 <Callout type="info" title="Una orden terminada no aparece en Aprobaciones">
 Aparece recién cuando **todas** sus OT están terminadas. Revisá en **Detalle** si queda alguna **Pendiente**, **En progreso** o **Pausada**, o si hay tareas esperando autorización en **Autorizaciones**.
+</Callout>
+
+<Callout type="info" title="Validar y Cerrar Orden está deshabilitado">
+La orden tiene pedidos de materiales abiertos. Entregalos, cerralos o cancelalos desde **Almacenes → Pedidos** (ver <GuideLink to="pedidos-de-materiales">Pedidos de materiales</GuideLink>).
 </Callout>
 
 <Callout type="danger" title="Cerrar es definitivo">

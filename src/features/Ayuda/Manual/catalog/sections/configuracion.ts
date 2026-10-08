@@ -86,7 +86,7 @@ export const configuracionSection = defineSection({
         tab('configuracion', 'reportes_indumentaria'),
       ],
       screens: [{ path: CONFIG, tab: 'rrhh', subtab: 'items-maestro' }],
-      related: ['entrega-de-indumentaria', 'ficha-del-empleado', 'catalogos-de-rrhh'],
+      related: ['entrega-de-indumentaria', 'ficha-del-empleado', 'catalogos-de-rrhh', 'materiales'],
     },
     {
       slug: 'catalogos-de-equipos',

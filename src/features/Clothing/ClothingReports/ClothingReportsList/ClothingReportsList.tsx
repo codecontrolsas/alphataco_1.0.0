@@ -1,3 +1,4 @@
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
 import { Card, CardContent } from '@/components/ui/card';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
@@ -28,9 +29,10 @@ export default async function ClothingReportsList({ searchParams }: ClothingRepo
   const tableParams = stripPrefixFromSearchParams(searchParams as DataTableSearchParams, TABLE_ID);
 
   // Facets are loaded lazy (on-demand when opening each popover) — NOT in SSR
-  const [{ data, total }, preferences] = await Promise.all([
+  const [{ data, total }, preferences, permissionsMap] = await Promise.all([
     getClothingReportsPaginated(tableParams),
     getTablePreferences(TABLE_ID),
+    getUserPermissionsMapServer(),
   ]);
 
   return (
@@ -43,6 +45,7 @@ export default async function ClothingReportsList({ searchParams }: ClothingRepo
           tableId={TABLE_ID}
           initialColumnVisibility={preferences.columnVisibility ?? {}}
           initialFilterVisibility={preferences.filterVisibility ?? {}}
+          permissionsMap={permissionsMap}
         />
       </CardContent>
     </Card>

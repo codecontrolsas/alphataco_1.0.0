@@ -3,16 +3,20 @@
 import { Button } from '@/components/ui/button';
 import { BulkDownloadBar } from '@/features/Clothing/pdf/BulkDownloadBar';
 import { clothingDeliveryTypeLabels } from '@/features/Clothing/utils/mappers';
+import { buildDeliveryStatusFacetResult } from '@/features/Clothing/components/DeliveryStatusBadge';
+import { deliveryStatusLabels } from '@/features/Clothing/lib/delivery-stock-where';
+import { formatMoney } from '@/features/Warehouses/lib/format';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import { clothing_delivery_type } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
+import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import {
   DataTable,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
   type FacetResult,
 } from '@/shared/components/common/DataTable';
-import { ExternalLink } from 'lucide-react';
+import { CircleOff, ExternalLink } from 'lucide-react';
 import moment from 'moment';
 import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
@@ -42,6 +46,8 @@ interface EmployeeDeliveriesDataTableProps {
   tableId: string;
   initialColumnVisibility?: Record<string, boolean>;
   initialFilterVisibility?: Record<string, boolean>;
+  /** Mapa "module:tab:action" -> concedido, cargado en el servidor. */
+  permissionsMap: Record<string, boolean>;
 }
 
 // ============================================================================
@@ -89,7 +95,12 @@ export default function _EmployeeDeliveriesDataTable({
   tableId,
   initialColumnVisibility,
   initialFilterVisibility,
+  permissionsMap,
 }: EmployeeDeliveriesDataTableProps) {
+  const canViewPrices = permissionsMap['almacenes:movimientos:view_prices'] === true;
+  const canCancel = permissionsMap['empleados:indumentaria_empleado:delete'] === true;
+  const queryKey = useMemo(() => ['employee-deliveries', employeeId] as const, [employeeId]);
+
   logger.debug('Rendering employee deliveries table', { data: { employeeId, totalRows } });
 
   // ─── Client-side navigation ───────────────────────────────────────────────
@@ -134,8 +145,35 @@ export default function _EmployeeDeliveriesDataTable({
     [employeeId]
   );
 
+  const fetchStatusFacet = useCallback(
+    async (facetParams: DataTableSearchParams): Promise<FacetResult> => {
+      const result = await getEmployeeDeliveriesSingleFacet('status', employeeId, facetParams);
+      return buildDeliveryStatusFacetResult(result?.counts ?? new Map());
+    },
+    [employeeId]
+  );
+
+  const fetchWarehouseFacet = useCallback(
+    async (facetParams: DataTableSearchParams): Promise<FacetResult> => {
+      const result = await getEmployeeDeliveriesSingleFacet('warehouse', employeeId, facetParams);
+      if (!result) return { options: [], counts: new Map() };
+      const base = buildFkFacetResult(
+        result.resolvedOptions?.map((o) => ({ id: o.id, name: o.name })),
+        result.counts
+      );
+      const nullCount = result.counts.get(NULL_FILTER_VALUE);
+      return nullCount
+        ? { ...base, options: [...base.options, { value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }] }
+        : base;
+    },
+    [employeeId]
+  );
+
   // ─── Columns ──────────────────────────────────────────────────────────────
-  const columns = useMemo(() => getColumns(), []);
+  const columns = useMemo(
+    () => getColumns({ canViewPrices, canCancel, queryKey }),
+    [canViewPrices, canCancel, queryKey]
+  );
 
   // ─── Faceted filters ──────────────────────────────────────────────────────
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
@@ -156,6 +194,29 @@ export default function _EmployeeDeliveriesDataTable({
           clothingDeliveryTypeLabels
         ),
       },
+      // status — virtual faceted (cancelled_at)
+      {
+        columnId: 'status',
+        title: 'Estado',
+        fetchFacet: fetchStatusFacet,
+      },
+      // warehouse — FK nullable faceted
+      {
+        columnId: 'warehouse',
+        title: 'Depósito',
+        fetchFacet: fetchWarehouseFacet,
+      },
+      // cost — text (importe exacto), solo con view_prices
+      ...(canViewPrices
+        ? [
+            {
+              columnId: 'cost',
+              title: 'Costo',
+              type: 'text' as const,
+              placeholder: 'Importe exacto, ej. 15000,50',
+            },
+          ]
+        : []),
       // delivered_by_file — text filter (legajo del que entrega)
       {
         columnId: 'delivered_by_file',
@@ -197,7 +258,7 @@ export default function _EmployeeDeliveriesDataTable({
         placeholder: 'Buscar en notas...',
       },
     ],
-    [makeEnumFetchFacet, makeFkFetchFacet, data]
+    [makeEnumFetchFacet, makeFkFetchFacet, fetchStatusFacet, fetchWarehouseFacet, canViewPrices, data]
   );
 
   // ─── Filter visibility (max 3 by default) ────────────────────────────────
@@ -228,6 +289,9 @@ export default function _EmployeeDeliveriesDataTable({
         delivery_type: (val: unknown) =>
           val ? clothingDeliveryTypeLabels[val as keyof typeof clothingDeliveryTypeLabels] ?? String(val) : '-',
         has_signature: (val: unknown) => (val === 'true' ? 'Sí' : 'No'),
+        status: (val: unknown) => deliveryStatusLabels[String(val)] ?? '-',
+        warehouse: (val: unknown) => (val ? String(val) : '-'),
+        cost: (val: unknown) => (val != null ? formatMoney(String(val)) : 'Sin costo'),
         delivered_by_file: (val: unknown) => (val != null ? String(val) : '-'),
       },
     }),
@@ -256,7 +320,7 @@ export default function _EmployeeDeliveriesDataTable({
         paramNamespace={tableId}
         tableId={tableId}
         queryFn={tableQueryFn}
-        queryKey={['employee-deliveries', employeeId]}
+        queryKey={[...queryKey]}
         onStateChange={handleStateChange}
         facetedFilters={facetedFilters}
         initialFilterVisibility={mergedFilterVisibility}

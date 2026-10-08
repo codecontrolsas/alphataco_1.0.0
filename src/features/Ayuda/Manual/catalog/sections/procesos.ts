@@ -45,6 +45,19 @@ export const procesosSection = defineSection({
         'taller',
         'vista-taller',
         'gomeria',
+        'pedidos-de-materiales',
+      ],
+    },
+    {
+      slug: 'circuito-de-materiales',
+      related: [
+        'almacenes',
+        'movimientos-de-stock',
+        'pedidos-de-materiales',
+        'prestamos-de-herramientas',
+        'entrega-de-indumentaria',
+        'gomeria',
+        'taller',
       ],
     },
     {

@@ -16,6 +16,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { DiagramAxle, DiagramPosition } from '@/features/Mantenimiento/Gomeria/shared/TireDiagramRenderer';
 import { TireDiagramRenderer } from '@/features/Mantenimiento/Gomeria/shared/TireDiagramRenderer';
+import { useTireReturnWarehouse } from '@/features/Mantenimiento/Gomeria/shared/hooks/useTireReturnWarehouse';
+import { TireReturnWarehouseSelect } from '@/features/Mantenimiento/Gomeria/shared/TireReturnWarehouseSelect';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ExternalLink, Pencil, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
@@ -138,7 +140,12 @@ export function VehicleTireDiagramSection({ vehicleId, canUpdate }: VehicleTireD
     tire_id: p.tire_id,
     tire_serial: p.tire?.serial_number,
     tire_brand: p.tire?.brand?.name,
+    tire_has_stock: !!p.tire?.material_unit_id,
   }));
+
+  // Al restablecer, las cubiertas montadas con stock vuelven a un depósito (Almacenes etapa 6).
+  const mountedWithStock = (positions ?? []).some((p) => !!p.tire?.material_unit_id);
+  const returnWarehouse = useTireReturnWarehouse(vehicleId, resetConfirmOpen && mountedWithStock);
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 
@@ -155,7 +162,11 @@ export function VehicleTireDiagramSection({ vehicleId, canUpdate }: VehicleTireD
   async function handleReset() {
     setIsResetting(true);
     try {
-      await resetVehicleToSubTypeTemplate(vehicleId);
+      const result = await resetVehicleToSubTypeTemplate(vehicleId, returnWarehouse.warehouseId || null);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
       await queryClient.invalidateQueries({ queryKey: ['vehicle-template-info', vehicleId] });
       await queryClient.invalidateQueries({ queryKey: ['vehicle-tire-positions-details', vehicleId] });
       toast.success('Configuración restablecida al sub-tipo');
@@ -342,11 +353,19 @@ export function VehicleTireDiagramSection({ vehicleId, canUpdate }: VehicleTireD
               ¿Desea continuar?
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {mountedWithStock && returnWarehouse.needsChoice && (
+            <TireReturnWarehouseSelect
+              label="Depósito al que vuelven las cubiertas con stock"
+              warehouses={returnWarehouse.warehouses}
+              value={returnWarehouse.warehouseId}
+              onChange={returnWarehouse.setWarehouseId}
+            />
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => void handleReset()}
-              disabled={isResetting}
+              disabled={isResetting || (mountedWithStock && !returnWarehouse.warehouseId)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {isResetting ? 'Restableciendo...' : 'Restablecer'}

@@ -4,7 +4,7 @@ import { useClothingContext } from '@/app/clothing/clothing-layout-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { EmployeeForDelivery } from '@/features/Clothing/ClothingDelivery/actions/queries.server';
-import { getEmployeeForDeliveryById } from '@/features/Clothing/ClothingDelivery/actions/queries.server';
+import { getDeliveryWarehouses, getEmployeeForDeliveryById } from '@/features/Clothing/ClothingDelivery/actions/queries.server';
 import { StepAddItems, type WizardItem } from '@/features/Clothing/ClothingDelivery/components/StepAddItems';
 import { StepConfirm } from '@/features/Clothing/ClothingDelivery/components/StepConfirm';
 import { StepDeliveryType } from '@/features/Clothing/ClothingDelivery/components/StepDeliveryType';
@@ -12,6 +12,7 @@ import { StepSelectEmployee } from '@/features/Clothing/ClothingDelivery/compone
 import { StepSignature } from '@/features/Clothing/ClothingDelivery/components/StepSignature';
 import { Logger } from '@/lib/logger';
 import { cn } from '@/lib/utils';
+import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ArrowRight, Briefcase, CheckCircle2, Package, Pen, User } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -24,6 +25,8 @@ const logger = new Logger('Clothing/DeliveryWizard');
 type WizardData = {
   employee: EmployeeForDelivery | null;
   deliveryType: string | null;
+  /** Deposito elegido (Almacenes etapa 5). Si la empresa tiene uno solo, se usa ese sin elegir. */
+  warehouseId: string | null;
   items: WizardItem[];
   signatureUrl: string | null;
   notes: string;
@@ -32,6 +35,7 @@ type WizardData = {
 const INITIAL_DATA: WizardData = {
   employee: null,
   deliveryType: null,
+  warehouseId: null,
   items: [{ clothingItemId: '', itemName: '', quantity: 1, hasCertificate: false }],
   signatureUrl: null,
   notes: '',
@@ -53,7 +57,7 @@ const STEPS = [
 // VALIDATION
 // ============================================================================
 
-function validateStep(step: number, data: WizardData): string | null {
+function validateStep(step: number, data: WizardData, warehouseId: string | null): string | null {
   switch (step) {
     case 0:
       if (!data.employee) return 'Debe seleccionar un empleado para continuar.';
@@ -64,6 +68,11 @@ function validateStep(step: number, data: WizardData): string | null {
     case 2: {
       const validItems = data.items.filter((i) => i.clothingItemId);
       if (validItems.length === 0) return 'Debe agregar al menos un artículo.';
+      if (!warehouseId) return 'Elegí el depósito del que sale la entrega.';
+      // El stock se lleva por artículo + marca + talle (Almacenes etapa 5).
+      if (validItems.some((i) => !i.clothingBrandId || !i.clothingSizeId)) {
+        return 'Cada artículo tiene que tener marca y talle.';
+      }
       return null;
     }
     case 3:
@@ -168,6 +177,20 @@ export function DeliveryWizard({ initialEmployeeId, onComplete }: DeliveryWizard
   const [data, setData] = useState<WizardData>(INITIAL_DATA);
   const [validationError, setValidationError] = useState<string | null>(null);
 
+  const { data: warehouses = [], isLoading: loadingWarehouses } = useQuery({
+    queryKey: ['clothing-delivery-warehouses', companyId],
+    queryFn: () => getDeliveryWarehouses(),
+    staleTime: 5 * 60_000,
+  });
+  // Derivado: con un solo deposito no hace falta elegir.
+  const warehouseId = data.warehouseId ?? (warehouses.length === 1 ? warehouses[0]!.id : null);
+  const warehouseName = warehouses.find((w) => w.id === warehouseId)?.name ?? null;
+
+  const updateWarehouse = useCallback((id: string) => {
+    setData((prev) => ({ ...prev, warehouseId: id }));
+    setValidationError(null);
+  }, []);
+
   // Pre-load employee from URL param
   useEffect(() => {
     if (!initialEmployeeId || data.employee) return;
@@ -221,7 +244,7 @@ export function DeliveryWizard({ initialEmployeeId, onComplete }: DeliveryWizard
   }, [onComplete]);
 
   const handleNext = useCallback(() => {
-    const error = validateStep(currentStep, data);
+    const error = validateStep(currentStep, data, warehouseId);
     if (error) {
       setValidationError(error);
       return;
@@ -229,7 +252,7 @@ export function DeliveryWizard({ initialEmployeeId, onComplete }: DeliveryWizard
     setValidationError(null);
     logger.debug('Advancing step', { data: { from: currentStep, to: currentStep + 1 } });
     setCurrentStep((s) => Math.min(s + 1, STEPS.length - 1));
-  }, [currentStep, data]);
+  }, [currentStep, data, warehouseId]);
 
   const handleBack = useCallback(() => {
     setValidationError(null);
@@ -243,7 +266,17 @@ export function DeliveryWizard({ initialEmployeeId, onComplete }: DeliveryWizard
       case 1:
         return <StepDeliveryType value={data.deliveryType} onChange={updateDeliveryType} />;
       case 2:
-        return <StepAddItems companyId={companyId} items={data.items} onChange={updateItems} />;
+        return (
+          <StepAddItems
+            companyId={companyId}
+            items={data.items}
+            onChange={updateItems}
+            warehouses={warehouses}
+            loadingWarehouses={loadingWarehouses}
+            warehouseId={warehouseId}
+            onWarehouseChange={updateWarehouse}
+          />
+        );
       case 3:
         return (
           <StepSignature
@@ -253,10 +286,12 @@ export function DeliveryWizard({ initialEmployeeId, onComplete }: DeliveryWizard
           />
         );
       case 4:
-        return data.employee && data.deliveryType ? (
+        return data.employee && data.deliveryType && warehouseId ? (
           <StepConfirm
             employee={data.employee}
             deliveryType={data.deliveryType}
+            warehouseId={warehouseId}
+            warehouseName={warehouseName}
             items={data.items.filter((i) => i.clothingItemId)}
             signatureUrl={data.signatureUrl}
             notes={data.notes}
@@ -271,6 +306,11 @@ export function DeliveryWizard({ initialEmployeeId, onComplete }: DeliveryWizard
     currentStep,
     companyId,
     data,
+    warehouses,
+    loadingWarehouses,
+    warehouseId,
+    warehouseName,
+    updateWarehouse,
     updateEmployee,
     updateDeliveryType,
     updateItems,

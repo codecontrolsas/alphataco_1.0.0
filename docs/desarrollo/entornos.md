@@ -36,13 +36,14 @@ Ninguna variable `NEXT_PUBLIC_*` contiene un secreto: la key de PostHog es públ
 
 ## Jobs periódicos (`/api/jobs/*`)
 
-Los tres jobs corren dentro de la app, disparados por el servicio `cron` del compose (busybox
+Los cuatro jobs corren dentro de la app, disparados por el servicio `cron` del compose (busybox
 `crond` + `curl`, `TZ=America/Argentina/Buenos_Aires`). No hay `pg_cron`, `net.http_post` ni
 edge functions: P5 los reemplazó a todos.
 
 | Cuándo (hora AR) | Endpoint | Qué hace |
 | ----------------- | --------- | --------- |
 | lunes 08:00        | `GET /api/jobs/documents-expiry`        | Resumen semanal de vencimientos de documentos. Un correo **por empresa**. |
+| lunes 08:05        | `GET /api/jobs/warehouse-batch-expiry`  | Lotes de Almacenes vencidos y por vencer (30 días), con saldo. Un correo **por empresa**, solo si hay algo que avisar (destinatarios: `stock_batch_expiry`). |
 | todos los días 07:00 | `GET /api/jobs/daily-report-deviations` | Desvíos del parte diario del día. Un correo **por empresa**, solo si hay desvíos. |
 | todos los días 00:30 | `GET /api/jobs/daily-indicators`        | Cierra partes diarios, marca prepartes vencidos y persiste los 11 indicadores del día por empresa en `daily_indicators`. No manda correos. |
 

@@ -1,5 +1,5 @@
 /** Nombres de job. Coinciden con el último segmento de la ruta y con `jobs_runs.job`. */
-export const JOB_NAMES = ['documents-expiry', 'daily-report-deviations', 'daily-indicators'] as const;
+export const JOB_NAMES = ['documents-expiry', 'daily-report-deviations', 'daily-indicators', 'warehouse-batch-expiry'] as const;
 
 export type JobName = (typeof JOB_NAMES)[number];
 

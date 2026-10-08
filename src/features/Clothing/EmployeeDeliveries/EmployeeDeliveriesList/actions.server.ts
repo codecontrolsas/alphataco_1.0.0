@@ -1,5 +1,14 @@
 'use server';
 
+import {
+  buildDeliveryStockWhere,
+  DELIVERY_STATUS_ACTIVE,
+  DELIVERY_STATUS_CANCELLED,
+  DELIVERY_STOCK_MANUAL_COLUMNS,
+  DELIVERY_STOCK_SELECT,
+  serializeDeliveryCost,
+} from '@/features/Clothing/lib/delivery-stock-where';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
@@ -35,6 +44,7 @@ const MANUALLY_HANDLED_COLUMNS = [
   ...DATE_RANGE_COLUMNS.flatMap((c) => [`${c}_from`, `${c}_to`]),
   'delivered_by_id',
   'delivered_by_file',
+  ...DELIVERY_STOCK_MANUAL_COLUMNS,
 ];
 
 /** Mapeo de columnas FK para ordenamiento server-side */
@@ -42,7 +52,14 @@ const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Record<string, unknow
   delivered_by_id: (dir) => ({
     employees_clothing_deliveries_delivered_by_idToemployees: { lastname: dir },
   }),
+  status: (dir) => ({ cancelled_at: dir }),
+  warehouse: (dir) => ({ warehouse: { name: dir } }),
 };
+
+/** El costo del movimiento de stock solo sale del servidor con `almacenes:movimientos:view_prices`. */
+async function canViewDeliveryPrices() {
+  return checkPermissionServer('almacenes', 'movimientos', 'view_prices');
+}
 
 // ============================================================================
 // HELPERS INTERNOS
@@ -57,6 +74,10 @@ const DELIVERY_SELECT = {
   delivered_at: true,
   notes: true,
   signature_url: true,
+  ...DELIVERY_STOCK_SELECT,
+  employees_clothing_deliveries_employee_idToemployees: {
+    select: { id: true, firstname: true, lastname: true, file: true },
+  },
   employees_clothing_deliveries_delivered_by_idToemployees: {
     select: {
       id: true,
@@ -83,7 +104,12 @@ const DELIVERY_SELECT = {
 } as const;
 
 /** Construye el WHERE clause compartido entre paginated, export y facets. */
-function buildWhereClause(companyId: string, employeeId: string, state: ReturnType<typeof parseSearchParams>) {
+function buildWhereClause(
+  companyId: string,
+  employeeId: string,
+  state: ReturnType<typeof parseSearchParams>,
+  canViewPrices: boolean
+) {
   const searchWhere = buildSearchWhere(state.search, ['notes']);
 
   const filtersWhere = buildFiltersWhere(state.filters, {}, { exclude: MANUALLY_HANDLED_COLUMNS });
@@ -131,6 +157,7 @@ function buildWhereClause(companyId: string, employeeId: string, state: ReturnTy
     ...dateFiltersWhere,
     ...deliveredByWhere,
     ...deliveredByFileWhere,
+    ...buildDeliveryStockWhere(state.filters, canViewPrices),
   };
 }
 
@@ -139,19 +166,22 @@ function buildWhereClause(companyId: string, employeeId: string, state: ReturnTy
 // ============================================================================
 
 export async function getEmployeeDeliveriesPaginated(employeeId: string, searchParams: DataTableSearchParams) {
-  const companyId = await getActiveCompanyId();
+  const [companyId, canViewPrices] = await Promise.all([getActiveCompanyId(), canViewDeliveryPrices()]);
 
   try {
     const state = parseSearchParams(searchParams);
     const { skip, take } = stateToPrismaParams(state);
-    const where = buildWhereClause(companyId, employeeId, state);
+    const where = buildWhereClause(companyId, employeeId, state, canViewPrices);
 
     // Safe orderBy: multi-sort, solo campos válidos
     const resolvedSorts: Record<string, unknown>[] = [];
     for (const s of state.sorting) {
       const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
       const fkMapper = FK_SORT_MAP[s.id];
-      if (fkMapper) {
+      if (s.id === 'cost') {
+        // Ordenar por costo sin permiso permitiria deducir los importes.
+        if (canViewPrices) resolvedSorts.push({ stock_movement: { total_cost: dir } });
+      } else if (fkMapper) {
         resolvedSorts.push(fkMapper(dir));
       } else if (VALID_SORT_FIELDS.has(s.id)) {
         resolvedSorts.push({ [s.id]: dir });
@@ -170,7 +200,7 @@ export async function getEmployeeDeliveriesPaginated(employeeId: string, searchP
       prisma.clothing_deliveries.count({ where }),
     ]);
 
-    return { data, total };
+    return { data: data.map((row) => serializeDeliveryCost(row, canViewPrices)), total };
   } catch (error) {
     logger.error('Error al obtener entregas de empleado paginadas', { data: { error, employeeId } });
     throw new Error(`Error al obtener las entregas: ${error instanceof Error ? error.message : String(error)}`);
@@ -182,11 +212,11 @@ export async function getEmployeeDeliveriesPaginated(employeeId: string, searchP
 // ============================================================================
 
 export async function getAllEmployeeDeliveriesForExport(employeeId: string, searchParams: DataTableSearchParams) {
-  const companyId = await getActiveCompanyId();
+  const [companyId, canViewPrices] = await Promise.all([getActiveCompanyId(), canViewDeliveryPrices()]);
 
   try {
     const state = parseSearchParams(searchParams);
-    const where = buildWhereClause(companyId, employeeId, state);
+    const where = buildWhereClause(companyId, employeeId, state, canViewPrices);
 
     const data = await prisma.clothing_deliveries.findMany({
       orderBy: [{ delivered_at: 'desc' }],
@@ -194,7 +224,7 @@ export async function getAllEmployeeDeliveriesForExport(employeeId: string, sear
       select: DELIVERY_SELECT,
     });
 
-    return data;
+    return data.map((row) => serializeDeliveryCost(row, canViewPrices));
   } catch (error) {
     logger.error('Error al exportar entregas de empleado', { data: { error, employeeId } });
     throw new Error('Error al exportar las entregas');
@@ -217,7 +247,7 @@ export async function getEmployeeDeliveriesSingleFacet(
   counts: Map<string, number>;
   resolvedOptions?: Array<{ id: string; name: string | null }>;
 } | null> {
-  const companyId = await getActiveCompanyId();
+  const [companyId, canViewPrices] = await Promise.all([getActiveCompanyId(), canViewDeliveryPrices()]);
 
   let parsedState: ReturnType<typeof parseSearchParams> | null = null;
   if (searchParams && Object.keys(searchParams).length > 0) {
@@ -234,7 +264,7 @@ export async function getEmployeeDeliveriesSingleFacet(
     delete modified.filters[excludeColumn];
     delete modified.filters[`${excludeColumn}_from`];
     delete modified.filters[`${excludeColumn}_to`];
-    return buildWhereClause(companyId, employeeId, modified);
+    return buildWhereClause(companyId, employeeId, modified, canViewPrices);
   }
 
   function toFacetMap(rows: { key: string | null | undefined; count: number }[]): Map<string, number> {
@@ -262,6 +292,34 @@ export async function getEmployeeDeliveriesSingleFacet(
       return {
         counts: toFacetMap(rows.map((r) => ({ key: r.delivery_type, count: r._count }))),
       };
+    }
+
+    // ── Estado (virtual: cancelled_at) ──
+    if (columnId === 'status') {
+      const [active, cancelled] = await Promise.all([
+        prisma.clothing_deliveries.count({ where: { ...where, cancelled_at: null } }),
+        prisma.clothing_deliveries.count({ where: { ...where, cancelled_at: { not: null } } }),
+      ]);
+      const counts = new Map<string, number>();
+      if (active > 0) counts.set(DELIVERY_STATUS_ACTIVE, active);
+      if (cancelled > 0) counts.set(DELIVERY_STATUS_CANCELLED, cancelled);
+      return { counts };
+    }
+
+    // ── FK nullable: warehouse ──
+    if (columnId === 'warehouse') {
+      const rows = await prisma.clothing_deliveries.groupBy({
+        by: ['warehouse_id'],
+        where,
+        _count: true,
+      });
+      const counts = toFacetMap(rows.map((r) => ({ key: r.warehouse_id, count: r._count })));
+      const ids = rows.map((r) => r.warehouse_id).filter((id): id is string => id != null);
+      const warehouses =
+        ids.length > 0
+          ? await prisma.warehouses.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
+          : [];
+      return { counts, resolvedOptions: warehouses };
     }
 
     // ── FK: delivered_by_id ──

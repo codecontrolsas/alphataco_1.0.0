@@ -2,7 +2,8 @@
  * RRHH: candidatos de Seleccion (pre legajos) en todos sus estados con su documentacion,
  * indumentaria (catalogo y entregas) y los KPIs de la empresa.
  */
-import type { Prisma } from '../../../src/generated/prisma/client.ts';
+import { Prisma } from '../../../src/generated/prisma/client.ts';
+import { clothingMaterialCode, clothingMaterialName } from '../../../src/features/Warehouses/lib/clothing-material-code.ts';
 import { addPdf, type Ctx } from '../lib/ctx.ts';
 import { demoId } from '../lib/ids.ts';
 import { makePerson } from '../lib/people.ts';
@@ -128,6 +129,18 @@ const CLOTHING_ITEMS = [
 ];
 const CLOTHING_BRANDS = ['Ombú', 'Pampero', 'Funcional', 'Libus', '3M'];
 
+/** Costo de compra por prenda (Almacenes etapa 5): la ropa entra al deposito base con este costo. */
+const CLOTHING_COSTS: Record<string, number> = {
+  camisa: 38000,
+  pantalon: 42000,
+  mameluco: 65000,
+  campera: 85000,
+  botines: 98000,
+  casco: 18500,
+  guantes: 6900,
+  anteojos: 3800,
+};
+
 /** Los elementos de proteccion personal (EPP) y la ropa de trabajo tienen marcas distintas. */
 function brandsFor(item: (typeof CLOTHING_ITEMS)[number]): string[] {
   return item.code.startsWith('EPP') ? ['Libus', '3M', 'Funcional'] : ['Ombú', 'Pampero'];
@@ -191,9 +204,200 @@ export async function seedClothing(ctx: Ctx, employees: DemoEmployee[]): Promise
       }
     }
   }
+  const stock = await seedClothingStock(ctx, deliveries, items);
+  // Primero el stock: cada entrega referencia a su salida (`stock_movement_id`).
+  await stock.writeMovements();
   await tx.clothing_deliveries.createMany({ data: deliveries });
   await tx.clothing_delivery_items.createMany({ data: items });
-  ctx.log(`indumentaria: ${deliveries.length} entregas`);
+  ctx.log(`indumentaria: ${deliveries.length} entregas, ${stock.materialCount} materiales de ropa, ${stock.movementCount} movimientos de stock`);
+}
+
+/**
+ * Stock de la ropa (Almacenes etapa 5): un material por combinacion de la matriz (misma regla de
+ * codigo que el sistema), una compra al deposito base antes de la primera entrega, una salida
+ * por entrega imputada al empleado y una entrega anulada (su salida, anulada). Como estos
+ * materiales solo tienen movimientos de ropa y una sola compra, el costo promedio es el de la
+ * compra y no hace falta el libro de Almacenes. Completa `warehouse_id`, `stock_movement_id` y la
+ * anulacion en las entregas y devuelve la escritura de movimientos, que va ANTES que las entregas.
+ */
+async function seedClothingStock(
+  ctx: Ctx,
+  deliveries: Prisma.clothing_deliveriesCreateManyInput[],
+  items: Prisma.clothing_delivery_itemsCreateManyInput[]
+) {
+  const { tx, cal, company, actorId } = ctx;
+  const dec = (v: number | string) => new Prisma.Decimal(v);
+  const warehouseId = demoId('warehouse', 'BASE');
+  const categoryId = demoId('material_category', 'Ropa');
+  await tx.material_categories.create({ data: { id: categoryId, company_id: company.id, name: 'Ropa' } });
+
+  // Materiales de la matriz.
+  const taken = new Set((await tx.materials.findMany({ where: { company_id: company.id }, select: { code: true } })).map((m) => m.code));
+  const materialByCombo = new Map<string, { id: string; cost: number; name: string }>();
+  const materials: Prisma.materialsCreateManyInput[] = [];
+  const links: Prisma.clothing_item_materialsCreateManyInput[] = [];
+  for (const item of CLOTHING_ITEMS) {
+    for (const brand of brandsFor(item)) {
+      for (const size of item.sizes) {
+        const combination = { itemCode: item.code, itemName: item.name, brandName: brand, sizeName: size };
+        const code = clothingMaterialCode(combination, taken);
+        taken.add(code);
+        const id = demoId('material', `ropa:${item.key}:${brand}:${size}`);
+        const name = clothingMaterialName(combination);
+        materials.push({
+          id,
+          company_id: company.id,
+          code,
+          name,
+          category_id: categoryId,
+          unit_id: demoId('measurement_unit', 'u'),
+          tracking_type: 'QUANTITY',
+          average_cost: CLOTHING_COSTS[item.key]!,
+        });
+        links.push({
+          company_id: company.id,
+          clothing_item_id: demoId('clothing_item', item.key),
+          clothing_brand_id: demoId('clothing_brand', brand),
+          clothing_size_id: demoId('clothing_size', size),
+          material_id: id,
+        });
+        materialByCombo.set(`${demoId('clothing_item', item.key)}|${demoId('clothing_brand', brand)}|${demoId('clothing_size', size)}`, {
+          id,
+          cost: CLOTHING_COSTS[item.key]!,
+          name,
+        });
+      }
+    }
+  }
+  await tx.materials.createMany({ data: materials });
+  await tx.clothing_item_materials.createMany({ data: links });
+
+  // Lo que sale por entrega, agrupado por material.
+  const linesByDelivery = new Map<string, Map<string, number>>();
+  for (const it of items) {
+    const material = materialByCombo.get(`${it.clothing_item_id}|${it.clothing_brand_id}|${it.clothing_size_id}`)!;
+    const lines = linesByDelivery.get(it.clothing_delivery_id) ?? new Map<string, number>();
+    lines.set(material.id, (lines.get(material.id) ?? 0) + (it.quantity ?? 1));
+    linesByDelivery.set(it.clothing_delivery_id, lines);
+  }
+  const costOf = new Map([...materialByCombo.values()].map((m) => [m.id, m.cost]));
+
+  // La ultima reposicion se anula (cargada por error): su ropa vuelve al deposito.
+  const ordered = [...deliveries].sort((a, b) => +new Date(a.delivered_at) - +new Date(b.delivered_at));
+  const cancelled = [...ordered].reverse().find((d) => d.delivery_type === 'REPLACEMENT') ?? null;
+
+  const lastNumber = await tx.stock_movements.findMany({
+    where: { company_id: company.id },
+    select: { number: true },
+    orderBy: { number: 'desc' },
+    take: 1,
+  });
+  let seq = Number(lastNumber[0]?.number.replace(/\D/g, '') ?? 0);
+  const movements: Prisma.stock_movementsCreateManyInput[] = [];
+  const movementLines: Prisma.stock_movement_linesCreateManyInput[] = [];
+  const balances = new Map<string, number>();
+  const nextNumber = () => `MOV-${String(++seq).padStart(6, '0')}`;
+
+  // Compra: todo lo que se entrega mas un margen, antes de la primera entrega.
+  const purchased = new Map<string, number>();
+  for (const lines of linesByDelivery.values()) for (const [m, q] of lines) purchased.set(m, (purchased.get(m) ?? 0) + q);
+  const purchaseId = demoId('stock_movement', 'ropa:compra');
+  const firstDay = ordered.length ? Math.round((+new Date(ordered[0]!.delivered_at) - +cal.day(0)) / 86_400_000) - 5 : -210;
+  let purchaseTotal = dec(0);
+  for (const [i, [materialId, used]] of [...purchased].entries()) {
+    const qty = used + 6;
+    const cost = costOf.get(materialId)!;
+    purchaseTotal = purchaseTotal.plus(dec(qty).times(cost));
+    balances.set(materialId, qty);
+    movementLines.push({ id: demoId('stock_line', `ropa:compra:${i}`), movement_id: purchaseId, material_id: materialId, quantity: qty, direction: 1, unit_cost: cost, total_cost: dec(qty).times(cost) });
+  }
+  movements.push({
+    id: purchaseId,
+    company_id: company.id,
+    number: nextNumber(),
+    type: 'ENTRY',
+    warehouse_id: warehouseId,
+    occurred_on: cal.day(firstDay),
+    reference: 'Factura A 0004-00031207 · Indumentaria del Sur',
+    notes: 'Compra de ropa de trabajo y EPP',
+    total_cost: purchaseTotal,
+    created_by: actorId,
+    created_at: cal.at(firstDay, 8),
+  });
+
+  // Una salida por entrega (y la anulacion de la anulada, el dia siguiente).
+  for (const delivery of ordered) {
+    const lines = linesByDelivery.get(delivery.id!);
+    if (!lines) continue;
+    const exitId = demoId('stock_movement', `ropa:${delivery.id}`);
+    let total = dec(0);
+    const exitLines = [...lines].map(([materialId, qty], i) => {
+      const cost = costOf.get(materialId)!;
+      total = total.plus(dec(qty).times(cost));
+      balances.set(materialId, balances.get(materialId)! - qty);
+      return { id: demoId('stock_line', `ropa:${delivery.id}:${i}`), movement_id: exitId, material_id: materialId, quantity: qty, direction: -1, unit_cost: cost, total_cost: dec(qty).times(cost) };
+    });
+    const at = new Date(delivery.delivered_at);
+    movements.push({
+      id: exitId,
+      company_id: company.id,
+      number: nextNumber(),
+      type: 'EXIT',
+      warehouse_id: warehouseId,
+      occurred_on: new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate())),
+      reference: 'Entrega de ropa',
+      notes: delivery.notes ?? null,
+      destination_type: 'EMPLOYEE',
+      employee_id: delivery.employee_id,
+      total_cost: total,
+      created_by: actorId,
+      created_at: at,
+    });
+    movementLines.push(...exitLines);
+    delivery.warehouse_id = warehouseId;
+    delivery.stock_movement_id = exitId;
+
+    if (delivery === cancelled) {
+      const reversalId = demoId('stock_movement', `ropa:anulacion:${delivery.id}`);
+      const reversalAt = new Date(at.getTime() + 86_400_000);
+      movements.push({
+        id: reversalId,
+        company_id: company.id,
+        number: nextNumber(),
+        type: 'EXIT',
+        warehouse_id: warehouseId,
+        occurred_on: new Date(Date.UTC(reversalAt.getUTCFullYear(), reversalAt.getUTCMonth(), reversalAt.getUTCDate())),
+        reference: 'Entrega de ropa',
+        notes: 'Anulación de entrega de ropa: se cargó el talle equivocado',
+        destination_type: 'EMPLOYEE',
+        employee_id: delivery.employee_id,
+        reverses_movement_id: exitId,
+        total_cost: total,
+        created_by: actorId,
+        created_at: reversalAt,
+      });
+      exitLines.forEach((l, i) => {
+        balances.set(l.material_id, balances.get(l.material_id)! + Number(l.quantity));
+        movementLines.push({ ...l, id: demoId('stock_line', `ropa:anulacion:${delivery.id}:${i}`), movement_id: reversalId, direction: 1 });
+      });
+      delivery.cancelled_at = reversalAt;
+      delivery.cancelled_by = actorId;
+      delivery.cancel_reason = 'Se cargó el talle equivocado';
+    }
+  }
+
+  return {
+    materialCount: materials.length,
+    movementCount: movements.length,
+    /** Va antes que las entregas: `clothing_deliveries.stock_movement_id` referencia estos movimientos. */
+    async writeMovements() {
+      await tx.stock_movements.createMany({ data: movements });
+      await tx.stock_movement_lines.createMany({ data: movementLines });
+      await tx.stock_balances.createMany({
+        data: [...balances].map(([materialId, qty]) => ({ company_id: company.id, material_id: materialId, warehouse_id: warehouseId, quantity: qty })),
+      });
+    },
+  };
 }
 
 const KPIS = [

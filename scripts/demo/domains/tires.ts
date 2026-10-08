@@ -1,8 +1,14 @@
 /**
  * Neumaticos: marcas, medidas, plantillas de ejes por subtipo (tractor 6x4 y camioneta 4x4),
  * cubiertas montadas en esas unidades, stock disponible, descartes y ordenes de gomeria.
+ *
+ * Almacenes etapa 6: cada combinacion tipo + marca es un material SERIAL (misma regla de codigo
+ * que el sistema) y las cubiertas son sus unidades. Una compra al deposito base trae las montadas
+ * y las disponibles; las montadas salen a su equipo. Las que estan en reparacion quedan SIN stock,
+ * para que la seccion "Inventario inicial de cubiertas" de Almacenes tenga que mostrar.
  */
-import type { Prisma } from '../../../src/generated/prisma/client.ts';
+import { Prisma } from '../../../src/generated/prisma/client.ts';
+import { tireMaterialCode, tireMaterialName } from '../../../src/features/Warehouses/lib/tire-material-code.ts';
 import type { Ctx } from '../lib/ctx.ts';
 import { demoId } from '../lib/ids.ts';
 import { pick, weighted } from '../lib/random.ts';
@@ -110,6 +116,7 @@ export async function seedTires(ctx: Ctx, vehicles: DemoVehicle[]): Promise<void
   // Stock y descartes.
   for (let i = 0; i < 24; i++) newTire(pick(faker, TYPES).key, weighted(faker, [['AVAILABLE', 70], ['DISCARDED', 20], ['IN_REPAIR', 10]] as const));
 
+  await seedTireStock(ctx, tires, mounted);
   await tx.tires.createMany({ data: tires });
   await tx.vehicle_tire_positions.createMany({ data: positions });
   await tx.vehicle_axle_tire_sizes.createMany({
@@ -154,4 +161,147 @@ export async function seedTires(ctx: Ctx, vehicles: DemoVehicle[]): Promise<void
     });
   }
   ctx.log(`neumáticos: ${tires.length} cubiertas, ${mounted.length} unidades con plantilla, ${orders} órdenes de gomería`);
+}
+
+/** Costo de compra por medida (ARS). */
+const TIRE_COSTS: Record<string, number> = { pesado_traccion: 520000, pesado_direccional: 495000, camioneta: 185000 };
+
+/**
+ * Stock de las cubiertas: materiales, una compra al deposito base y una salida por equipo con
+ * las montadas. Completa `material_unit_id` en las cubiertas (se escriben despues). Como estos
+ * materiales solo tienen esta compra y estas salidas, el costo promedio es el de la compra.
+ */
+async function seedTireStock(
+  ctx: Ctx,
+  tires: Prisma.tiresCreateManyInput[],
+  mounted: Array<{ vehicle: DemoVehicle; tireIds: string[] }>
+): Promise<void> {
+  const { tx, cal, company, actorId } = ctx;
+  const dec = (v: number | string) => new Prisma.Decimal(v);
+  const warehouseId = demoId('warehouse', 'BASE');
+  const categoryId = demoId('material_category', 'Cubiertas');
+  await tx.material_categories.create({ data: { id: categoryId, company_id: company.id, name: 'Cubiertas' } });
+
+  // Un material por tipo x marca.
+  const taken = new Set((await tx.materials.findMany({ where: { company_id: company.id }, select: { code: true } })).map((m) => m.code));
+  const materialOf = new Map<string, string>();
+  const costOf = new Map<string, number>();
+  const materials: Prisma.materialsCreateManyInput[] = [];
+  const links: Prisma.tire_materialsCreateManyInput[] = [];
+  for (const type of TYPES) {
+    for (const brand of BRANDS) {
+      const combination = { size: type.size, treadType: type.tread, brandName: brand };
+      const code = tireMaterialCode(combination, taken);
+      taken.add(code);
+      const id = demoId('material', `cubierta:${type.key}:${brand}`);
+      materials.push({
+        id,
+        company_id: company.id,
+        code,
+        name: tireMaterialName(combination),
+        category_id: categoryId,
+        unit_id: demoId('measurement_unit', 'u'),
+        tracking_type: 'SERIAL',
+        average_cost: TIRE_COSTS[type.key]!,
+      });
+      links.push({
+        company_id: company.id,
+        tire_type_id: demoId('tire_type', type.key),
+        tire_brand_id: demoId('tire_brand', brand),
+        material_id: id,
+      });
+      materialOf.set(`${demoId('tire_type', type.key)}|${demoId('tire_brand', brand)}`, id);
+      costOf.set(id, TIRE_COSTS[type.key]!);
+    }
+  }
+  await tx.materials.createMany({ data: materials });
+  await tx.tire_materials.createMany({ data: links });
+
+  // Entran las montadas y las disponibles; las en reparacion y las descartadas quedan sin stock.
+  const stocked = tires.filter((t) => t.status === 'INSTALLED' || t.status === 'AVAILABLE');
+  const lastNumber = await tx.stock_movements.findMany({
+    where: { company_id: company.id },
+    select: { number: true },
+    orderBy: { number: 'desc' },
+    take: 1,
+  });
+  let seq = Number(lastNumber[0]?.number.replace(/\D/g, '') ?? 0);
+  const nextNumber = () => `MOV-${String(++seq).padStart(6, '0')}`;
+  const movements: Prisma.stock_movementsCreateManyInput[] = [];
+  const lines: Prisma.stock_movement_linesCreateManyInput[] = [];
+  const units: Prisma.material_unitsCreateManyInput[] = [];
+
+  const purchaseId = demoId('stock_movement', 'cubiertas:compra');
+  let purchaseTotal = dec(0);
+  for (const tire of stocked) {
+    const materialId = materialOf.get(`${tire.tire_type_id}|${tire.brand_id}`)!;
+    const cost = costOf.get(materialId)!;
+    const unitId = demoId('material_unit', `cubierta:${tire.id}`);
+    tire.material_unit_id = unitId;
+    units.push({
+      id: unitId,
+      company_id: company.id,
+      material_id: materialId,
+      serial_number: tire.serial_number,
+      status: tire.status === 'INSTALLED' ? 'OUT' : 'IN_STOCK',
+      warehouse_id: tire.status === 'INSTALLED' ? null : warehouseId,
+      last_movement_id: purchaseId,
+    });
+    lines.push({ movement_id: purchaseId, material_id: materialId, quantity: 1, direction: 1, unit_cost: cost, total_cost: cost, unit_id: unitId });
+    purchaseTotal = purchaseTotal.plus(cost);
+  }
+  movements.push({
+    id: purchaseId,
+    company_id: company.id,
+    number: nextNumber(),
+    type: 'ENTRY',
+    warehouse_id: warehouseId,
+    occurred_on: cal.day(-400),
+    reference: 'Factura A 0007-00002214 · Neumáticos Patagonia',
+    notes: 'Alta de cubiertas',
+    total_cost: purchaseTotal,
+    created_by: actorId,
+    created_at: cal.at(-400, 9),
+  });
+
+  // Una salida por equipo con sus cubiertas montadas.
+  const unitOf = new Map(tires.map((t) => [t.id!, t]));
+  for (const { vehicle, tireIds } of mounted) {
+    const exitId = demoId('stock_movement', `cubiertas:montaje:${vehicle.id}`);
+    let total = dec(0);
+    for (const tireId of tireIds) {
+      const tire = unitOf.get(tireId)!;
+      const materialId = materialOf.get(`${tire.tire_type_id}|${tire.brand_id}`)!;
+      const cost = costOf.get(materialId)!;
+      lines.push({ movement_id: exitId, material_id: materialId, quantity: 1, direction: -1, unit_cost: cost, total_cost: cost, unit_id: tire.material_unit_id! });
+      total = total.plus(cost);
+      units.find((u) => u.id === tire.material_unit_id)!.last_movement_id = exitId;
+    }
+    movements.push({
+      id: exitId,
+      company_id: company.id,
+      number: nextNumber(),
+      type: 'EXIT',
+      warehouse_id: warehouseId,
+      occurred_on: cal.day(-390),
+      reference: `Gomería ${vehicle.domain ?? 'equipo'}, montaje inicial`,
+      destination_type: 'VEHICLE',
+      vehicle_id: vehicle.id,
+      total_cost: total,
+      created_by: actorId,
+      created_at: cal.at(-390, 10),
+    });
+  }
+
+  await tx.stock_movements.createMany({ data: movements });
+  await tx.material_units.createMany({ data: units });
+  await tx.stock_movement_lines.createMany({ data: lines });
+
+  // Saldo del deposito base: las disponibles, por material.
+  const balances = new Map<string, number>();
+  for (const unit of units) if (unit.status === 'IN_STOCK') balances.set(unit.material_id, (balances.get(unit.material_id) ?? 0) + 1);
+  await tx.stock_balances.createMany({
+    data: [...balances].map(([materialId, quantity]) => ({ company_id: company.id, material_id: materialId, warehouse_id: warehouseId, quantity })),
+  });
+  ctx.log(`cubiertas en stock: ${units.length} unidades, ${movements.length} movimientos, ${materials.length} materiales`);
 }

@@ -65,6 +65,16 @@ export function DeliveryReceiptLayout({ data }: DeliveryReceiptLayoutProps) {
           </Text>
         </View>
 
+        {/* Entrega anulada (Almacenes etapa 5): la constancia se conserva, marcada. */}
+        {data.cancelled_at && (
+          <View style={styles.cancelledRow}>
+            <Text style={styles.cancelledText}>
+              ANULADA el {moment(data.cancelled_at).format('DD/MM/YYYY')}
+              {data.cancel_reason ? ` — Motivo: ${data.cancel_reason}` : ''}
+            </Text>
+          </View>
+        )}
+
         {/* ── COMPANY INFO ROW 1: Razon Social | CUIT ────────────── */}
         <View style={styles.infoRow}>
           <View style={[styles.infoCell, styles.infoCellBorder, { width: '65%' }]}>

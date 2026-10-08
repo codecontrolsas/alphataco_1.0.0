@@ -16,7 +16,7 @@ export const DEMO_PASSWORD = 'AlphaDemo2026!';
 /** Roles custom de la demo: modulos que ven (con las acciones que tiene el rol admin en ellos). */
 const CUSTOM_ROLES = [
   { name: 'RRHH (demo)', color: '#0ea5e9', modules: ['dashboard', 'empleados', 'seleccion', 'documentacion'] },
-  { name: 'Taller (demo)', color: '#f97316', modules: ['dashboard', 'mantenimiento', 'equipos', 'formularios'] },
+  { name: 'Taller (demo)', color: '#f97316', modules: ['dashboard', 'mantenimiento', 'equipos', 'formularios', 'almacenes'] },
   { name: 'Operaciones (demo)', color: '#16a34a', modules: ['dashboard', 'operaciones', 'comercial', 'equipos', 'empleados'] },
 ];
 

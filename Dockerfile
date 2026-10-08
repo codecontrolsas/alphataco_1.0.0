@@ -105,10 +105,11 @@ COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=build --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=build --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
 COPY --from=build --chown=nextjs:nodejs /app/src/generated ./src/generated
-# Seed de empresa (RUN_SEED=true) y los dos modulos locales que importa.
+# Seed de empresa (RUN_SEED=true) y los modulos locales que importa.
 COPY --from=build --chown=nextjs:nodejs /app/scripts/seed-company.ts ./scripts/seed-company.ts
 COPY --from=build --chown=nextjs:nodejs /app/scripts/seed/permission-rows.ts ./scripts/seed/permission-rows.ts
 COPY --from=build --chown=nextjs:nodejs /app/src/features/Permissions/permissions-map.ts ./src/features/Permissions/permissions-map.ts
+COPY --from=build --chown=nextjs:nodejs /app/src/features/Warehouses/lib/default-units.ts ./src/features/Warehouses/lib/default-units.ts
 # CLI de Prisma + deps del seed, encima del node_modules trazado del standalone.
 COPY --from=tools --chown=nextjs:nodejs /tools/node_modules ./node_modules
 # Reset diario de la demo (lo corre un Schedule de Dokploy, ver scripts/demo/reset.ts)

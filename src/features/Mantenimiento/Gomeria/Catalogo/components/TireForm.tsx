@@ -16,7 +16,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { createTire, getTireBrandsForSelect, updateTire, type TireListItem } from '../actions/actions.server';
+import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
+import { DECIMAL_RE } from '@/features/Warehouses/schemas/stock-movement';
+import {
+  createTire,
+  getTireBrandsForSelect,
+  getTireWarehousesForSelect,
+  updateTire,
+  type TireListItem,
+} from '../actions/actions.server';
 
 const logger = new Logger('TireForm');
 
@@ -31,9 +39,33 @@ const tireFormSchema = z.object({
   is_new: z.boolean().default(true),
   retread_level: z.nativeEnum(TireRetreadLevel).nullable().optional(),
   tread_depth: z.coerce.number().positive('Debe ser positivo').nullable().optional(),
+  /** Solo en el alta: la cubierta entra al stock (Almacenes etapa 6). */
+  warehouseId: z.string(),
+  unitCost: z.string(),
+});
+
+/**
+ * El alta exige costo unitario: la cubierta entra al stock con una entrada. El depósito se
+ * controla al enviar, porque con uno solo viene elegido sin que el usuario toque el campo.
+ */
+const createTireFormSchema = tireFormSchema.superRefine((v, ctx) => {
+  if (!DECIMAL_RE.test(v.unitCost.trim())) {
+    ctx.addIssue({ code: 'custom', path: ['unitCost'], message: 'Costo inválido (hasta 4 decimales)' });
+  }
 });
 
 type TireFormValues = z.infer<typeof tireFormSchema>;
+
+const EMPTY_VALUES: TireFormValues = {
+  serial_number: '',
+  brand_id: '',
+  tire_type_id: '',
+  is_new: true,
+  retread_level: null,
+  tread_depth: null,
+  warehouseId: '',
+  unitCost: '',
+};
 
 // ============================================================================
 // PROPS
@@ -53,6 +85,8 @@ interface TireFormProps {
 export function TireForm({ open, onOpenChange, tire, queryKey }: TireFormProps) {
   const queryClient = useQueryClient();
   const isEditing = !!tire;
+  // Con stock, la serie, la marca y el tipo definen su material y su unidad: no se cambian.
+  const hasStock = !!tire?.material_unit;
 
   // Load brands
   const { data: brands = [], isLoading: isLoadingBrands } = useQuery({
@@ -70,8 +104,15 @@ export function TireForm({ open, onOpenChange, tire, queryKey }: TireFormProps) 
     enabled: open,
   });
 
+  const { data: warehouses = [], isLoading: isLoadingWarehouses } = useQuery({
+    queryKey: ['tire-warehouses-select'],
+    queryFn: () => getTireWarehousesForSelect(),
+    staleTime: 5 * 60 * 1000,
+    enabled: open && !isEditing,
+  });
+
   const form = useForm<TireFormValues>({
-    resolver: zodResolver(tireFormSchema),
+    resolver: zodResolver(isEditing ? tireFormSchema : createTireFormSchema),
     defaultValues: tire
       ? {
           serial_number: tire.serial_number,
@@ -80,37 +121,42 @@ export function TireForm({ open, onOpenChange, tire, queryKey }: TireFormProps) 
           is_new: tire.is_new,
           retread_level: (tire.retread_level as TireRetreadLevel | null) ?? null,
           tread_depth: tire.tread_depth != null ? Number(tire.tread_depth) : null,
+          warehouseId: '',
+          unitCost: '',
         }
-      : {
-          serial_number: '',
-          brand_id: '',
-          tire_type_id: '',
-          is_new: true,
-          retread_level: null,
-          tread_depth: null,
-        },
+      : EMPTY_VALUES,
   });
+
+  // Con un solo depósito activo viene elegido.
+  const selectedWarehouseId = form.watch('warehouseId');
+  const effectiveWarehouseId = selectedWarehouseId || (warehouses.length === 1 ? warehouses[0]!.id : '');
 
   const mutation = useMutation({
     mutationFn: async (values: TireFormValues) => {
       if (isEditing && tire) {
-        return updateTire(tire.id, {
-          serial_number: values.serial_number,
-          brand_id: values.brand_id,
-          tire_type_id: values.tire_type_id,
-          is_new: values.is_new,
-          retread_level: values.retread_level ?? null,
-          tread_depth: values.tread_depth ?? null,
-        });
+        unwrapAction(
+          await updateTire(tire.id, {
+            serial_number: values.serial_number,
+            brand_id: values.brand_id,
+            tire_type_id: values.tire_type_id,
+            is_new: values.is_new,
+            retread_level: values.retread_level ?? null,
+            tread_depth: values.tread_depth ?? null,
+          })
+        );
       } else {
-        return createTire({
-          serial_number: values.serial_number,
-          brand_id: values.brand_id,
-          tire_type_id: values.tire_type_id,
-          is_new: values.is_new,
-          retread_level: values.retread_level ?? null,
-          tread_depth: values.tread_depth ?? null,
-        });
+        unwrapAction(
+          await createTire({
+            serial_number: values.serial_number,
+            brand_id: values.brand_id,
+            tire_type_id: values.tire_type_id,
+            is_new: values.is_new,
+            retread_level: values.retread_level ?? null,
+            tread_depth: values.tread_depth ?? null,
+            warehouseId: effectiveWarehouseId,
+            unitCost: values.unitCost,
+          })
+        );
       }
     },
     onSuccess: () => {
@@ -125,6 +171,10 @@ export function TireForm({ open, onOpenChange, tire, queryKey }: TireFormProps) 
   });
 
   async function onSubmit(values: TireFormValues) {
+    if (!isEditing && !effectiveWarehouseId) {
+      form.setError('warehouseId', { message: 'Elegí el depósito' });
+      return;
+    }
     mutation.mutate(values);
   }
 
@@ -132,14 +182,7 @@ export function TireForm({ open, onOpenChange, tire, queryKey }: TireFormProps) 
     if (nextOpen && !tire) {
       // Only reset to empty when opening for create (no tire prop).
       // For edit mode, the component remounts with tire data already in defaultValues.
-      form.reset({
-        serial_number: '',
-        brand_id: '',
-        tire_type_id: '',
-        is_new: true,
-        retread_level: null,
-        tread_depth: null,
-      });
+      form.reset(EMPTY_VALUES);
     }
     onOpenChange(nextOpen);
   }
@@ -155,6 +198,11 @@ export function TireForm({ open, onOpenChange, tire, queryKey }: TireFormProps) 
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4">
+            {hasStock && (
+              <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                La cubierta está en el stock de Almacenes: la serie, la marca y el tipo no se cambian.
+              </p>
+            )}
             {/* Serial Number — full width */}
             <FormField
               control={form.control}
@@ -163,7 +211,7 @@ export function TireForm({ open, onOpenChange, tire, queryKey }: TireFormProps) 
                 <FormItem>
                   <FormLabel>Número de serie</FormLabel>
                   <FormControl>
-                    <Input placeholder="Ej: ABC001" {...field} />
+                    <Input placeholder="Ej: ABC001" readOnly={hasStock} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -181,7 +229,7 @@ export function TireForm({ open, onOpenChange, tire, queryKey }: TireFormProps) 
                     {isLoadingBrands ? (
                       <Skeleton className="h-9 w-full rounded-md" />
                     ) : (
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={hasStock}>
                         <FormControl>
                           <SelectTrigger className="w-full">
                             <SelectValue placeholder="Seleccionar marca..." />
@@ -210,7 +258,7 @@ export function TireForm({ open, onOpenChange, tire, queryKey }: TireFormProps) 
                     {isLoadingTypes ? (
                       <Skeleton className="h-9 w-full rounded-md" />
                     ) : (
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={hasStock}>
                         <FormControl>
                           <SelectTrigger className="w-full">
                             <SelectValue placeholder="Seleccionar tipo..." />
@@ -298,6 +346,53 @@ export function TireForm({ open, onOpenChange, tire, queryKey }: TireFormProps) 
                   </FormItem>
                 )}
               />
+            )}
+
+            {/* Stock — solo en el alta */}
+            {!isEditing && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="warehouseId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Depósito</FormLabel>
+                      {isLoadingWarehouses ? (
+                        <Skeleton className="h-9 w-full rounded-md" />
+                      ) : (
+                        <Select onValueChange={field.onChange} value={field.value || effectiveWarehouseId}>
+                          <FormControl>
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Seleccionar depósito..." />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {warehouses.map((w) => (
+                              <SelectItem key={w.id} value={w.id}>
+                                {w.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="unitCost"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Costo unitario</FormLabel>
+                      <FormControl>
+                        <Input inputMode="decimal" placeholder="Ej: 450000" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             )}
 
             <DialogFooter>

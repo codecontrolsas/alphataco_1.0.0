@@ -21,6 +21,8 @@ export interface TirePositionSummary {
   tire_id: string | null;
   tire_serial?: string;
   tire_brand?: string;
+  /** Tiene stock en Almacenes (etapa 6). */
+  tire_has_stock?: boolean;
 }
 
 interface VehicleAxleEditorProps {
@@ -135,6 +137,7 @@ export function VehicleAxleEditor({
         serial: p.tire_serial ?? 'Sin serial',
         brand: p.tire_brand ?? null,
         positionNumber: p.position_number,
+        hasStock: !!p.tire_has_stock,
       }));
   }
 
@@ -145,13 +148,15 @@ export function VehicleAxleEditor({
     try {
       const payload = axles.map(fromPlantillasAxle);
 
-      if (isNewConfig) {
-        await createVehicleCustomTemplate(vehicleId, payload, displacedTireActions);
-        toast.success('Configuración creada correctamente');
-      } else {
-        await updateVehicleCustomAxles(vehicleId, payload, displacedTireActions);
-        toast.success('Configuración actualizada correctamente');
+      const result = isNewConfig
+        ? await createVehicleCustomTemplate(vehicleId, payload, displacedTireActions)
+        : await updateVehicleCustomAxles(vehicleId, payload, displacedTireActions);
+      // El mensaje del servidor dice qué pasó (por ejemplo, el depósito de una cubierta con stock).
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
       }
+      toast.success(isNewConfig ? 'Configuración creada correctamente' : 'Configuración actualizada correctamente');
 
       onSave();
       onOpenChange(false);
@@ -225,6 +230,7 @@ export function VehicleAxleEditor({
       </Sheet>
 
       <DisplacedTiresDialog
+        vehicleId={vehicleId}
         open={showDisplacedDialog}
         tires={displacedTires}
         onConfirm={(actions) => {

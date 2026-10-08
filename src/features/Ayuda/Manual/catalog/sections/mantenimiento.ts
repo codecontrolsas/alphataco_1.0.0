@@ -26,7 +26,14 @@ export const mantenimientoSection = defineSection({
       ],
       // Pasos `?taller_step=schedule|confirmed|in_workshop|approvals`: misma limitación que arriba.
       screens: [{ path: '/dashboard/maintenance', tab: 'maint_taller' }],
-      related: ['del-checklist-al-taller', 'validar-solicitudes', 'vista-taller', 'panel-del-operario', 'catalogos-de-mantenimiento'],
+      related: [
+        'del-checklist-al-taller',
+        'validar-solicitudes',
+        'vista-taller',
+        'panel-del-operario',
+        'catalogos-de-mantenimiento',
+        'pedidos-de-materiales',
+      ],
     },
     {
       slug: 'vista-taller',
@@ -58,7 +65,7 @@ export const mantenimientoSection = defineSection({
       ],
       // Las pestañas internas (`?gomeria_tab=...`) no se pueden declarar: abren esta misma guía.
       screens: [{ path: '/dashboard/maintenance', tab: 'gomeria' }],
-      related: ['ficha-del-vehiculo', 'qr-del-equipo', 'catalogos-de-equipos'],
+      related: ['ficha-del-vehiculo', 'qr-del-equipo', 'catalogos-de-equipos', 'materiales', 'configuracion-de-almacenes'],
     },
   ],
 });

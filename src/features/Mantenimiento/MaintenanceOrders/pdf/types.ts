@@ -142,6 +142,25 @@ export interface ReportIssuance {
   traceId: string;
 }
 
+// ============================================================================
+// MATERIALES (Almacenes etapa 4)
+// ============================================================================
+
+/**
+ * Material entregado a la orden por pedido de materiales, neto de anulaciones. Las cantidades y
+ * los importes llegan formateados; el costo solo si quien emite tiene permiso de ver precios.
+ */
+export interface ReportMaterial {
+  /** OT a la que se pidio ("OT-000102 · Mecánica"); null = pedido a nivel orden. */
+  workOrder: string | null;
+  /** "ACE-15W40 · Aceite 15W40". */
+  material: string;
+  /** "12 l". */
+  quantity: string;
+  /** "$ 60.006,00" o null sin permiso. */
+  cost: string | null;
+}
+
 export interface MaintenanceOrderReportData {
   /** `maintenance_orders.order_number`. */
   orderNumber: string;
@@ -163,6 +182,9 @@ export interface MaintenanceOrderReportData {
   equipment: ReportEquipment;
   milestones: ReportMilestone[];
   workOrders: ReportWorkOrder[];
+  materials: ReportMaterial[];
+  /** Total de materiales formateado; null sin permiso de ver precios. */
+  materialsTotal: string | null;
 
   /** Empresa emisora, para el encabezado. */
   companyName: string;

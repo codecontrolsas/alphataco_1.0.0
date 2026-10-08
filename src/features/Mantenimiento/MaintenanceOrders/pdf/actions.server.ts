@@ -12,6 +12,7 @@
  * cliente y recien al hacer clic.
  */
 
+import { checkPermissionServer } from '@/features/Permissions';
 import { getSessionUserId } from '@/shared/lib/session';
 import { assertOrderInActiveCompany } from '../actions/order-perimeter';
 import { buildMaintenanceOrderReportData } from './report-data';
@@ -22,7 +23,10 @@ export async function getMaintenanceOrderReportData(orderId: string): Promise<Ma
   // Perímetro: la orden tiene que ser de la empresa activa.
   await assertOrderInActiveCompany(orderId);
 
-  const issuerUserId = await getSessionUserId();
+  const [issuerUserId, withPrices] = await Promise.all([
+    getSessionUserId(),
+    checkPermissionServer('almacenes', 'movimientos', 'view_prices'),
+  ]);
 
-  return buildMaintenanceOrderReportData(orderId, issuerUserId);
+  return buildMaintenanceOrderReportData(orderId, issuerUserId, { withPrices });
 }

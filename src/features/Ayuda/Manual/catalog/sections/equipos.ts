@@ -39,7 +39,7 @@ export const equiposSection = defineSection({
       // Vehículos y equipamiento comparten esta ruta (el equipamiento sólo agrega `type=other`,
       // que el catálogo no distingue): el botón "?" de la ficha abre esta guía en ambos casos.
       screens: [{ path: '/dashboard/equipment/action' }],
-      related: ['equipos-listado', 'documentos-de-equipos', 'qr-del-equipo', 'del-checklist-al-taller', 'gomeria'],
+      related: ['equipos-listado', 'documentos-de-equipos', 'qr-del-equipo', 'del-checklist-al-taller', 'gomeria', 'movimientos-de-stock'],
     },
     {
       slug: 'ficha-de-otro-equipo',

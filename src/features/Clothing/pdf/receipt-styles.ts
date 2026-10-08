@@ -69,6 +69,19 @@ export const styles = StyleSheet.create({
     fontFamily: 'Helvetica-Bold',
     textAlign: 'center',
   },
+  cancelledRow: {
+    borderLeft: border,
+    borderRight: border,
+    borderBottom: border,
+    padding: 4,
+    backgroundColor: '#fde8e8',
+  },
+  cancelledText: {
+    fontSize: 9,
+    fontFamily: 'Helvetica-Bold',
+    color: '#b42318',
+    textAlign: 'center',
+  },
   // ── Info rows (company, worker, etc.) ─────────────────────────────────────
   infoRow: {
     flexDirection: 'row',

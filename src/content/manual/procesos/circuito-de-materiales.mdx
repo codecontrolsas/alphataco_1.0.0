@@ -1,0 +1,115 @@
+---
+title: El circuito de los materiales
+summary: De punta a punta, cómo entra el material al almacén, cómo sale (directo o por pedido), qué pasa con las herramientas, la ropa, las cubiertas y los repuestos del taller, y cómo se corrigen los errores.
+keywords: circuito, inventario, almacén, entrada, salida, pedido, aprobación, entrega, préstamo, devolución, ropa, indumentaria, cubiertas, gomería, repuestos, mantenimiento, anulación, imputación, costo
+updated: 2026-10-08
+---
+
+Esta guía recorre la vida completa de un material: cómo entra, cómo se reparte entre depósitos, cómo sale y a quién se le imputa, y qué pasa cuando sale desde otro módulo (indumentaria, gomería, taller). Sirve para entender **por qué el stock dice lo que dice** y para saber dónde se corrige cada cosa.
+
+<Flow title="La vida de un material">
+  <FlowStep title="Alta" module="Almacenes" to="materiales">Se carga en el catálogo con su forma de control.</FlowStep>
+  <FlowStep title="Entrada" module="Almacenes" to="movimientos-de-stock">Llega al depósito con su costo.</FlowStep>
+  <FlowStep title="Transferencias" module="Almacenes" tone="info" to="movimientos-de-stock">Se reparte entre depósitos.</FlowStep>
+  <FlowStep title="Salida" module="Almacenes y otros módulos" tone="warning" to="pedidos-de-materiales">Directa, por pedido, o desde ropa, gomería o el taller.</FlowStep>
+  <FlowStep title="Imputación" module="Empleados, Equipos, Mantenimiento, Comercial" tone="success">El costo queda cargado a quien lo recibió.</FlowStep>
+</Flow>
+
+## Paso 1: el material entra
+
+Todo material entra con una **Entrada** en <GuideLink to="movimientos-de-stock">Movimientos</GuideLink>: el depósito, la fecha, el remito o la factura como **Referencia**, y por cada material la cantidad y el **costo unitario**. Con ese costo el sistema recalcula el **costo promedio** del material, que es uno solo para toda la empresa.
+
+Según cómo se controla el material, la entrada pide además el **lote y su vencimiento** o los **números de serie**. Las cubiertas son la excepción: entran desde el catálogo de Gomería con su depósito y su costo (o con una entrada en Almacenes, que crea las cubiertas en Gomería).
+
+## Paso 2: el material se reparte
+
+Si el material tiene que estar en otro lado (una obra, una camioneta, el pañol), se registra una **Transferencia** del depósito de origen al de destino. No cambia el total ni el costo: solo dónde está. Ver <GuideLink to="depositos">Depósitos</GuideLink>.
+
+## Paso 3: el material sale
+
+Hay cinco caminos de salida. Todos descuentan stock del depósito, al costo promedio, y lo imputan a un destino.
+
+| Camino | Quién | Cuándo | Guía |
+|---|---|---|---|
+| **Salida directa** | El almacén, con permiso **Salida directa**. | El material no requiere aprobación y el total está dentro del monto máximo. | <GuideLink to="movimientos-de-stock">Movimientos de stock</GuideLink> |
+| **Pedido de materiales** | Cualquiera con permiso de pedir; aprueba un responsable; entrega el almacén. | Cuando la salida directa no corresponde, o cuando se quiere el visto bueno de alguien. | <GuideLink to="pedidos-de-materiales">Pedidos de materiales</GuideLink> |
+| **Entrega de ropa** | El responsable de indumentaria, en su panel, con la firma del empleado. | Ropa de trabajo y EPP. | <GuideLink to="entrega-de-indumentaria">Entrega de indumentaria</GuideLink> |
+| **Montaje de cubiertas** | La gomería, en una orden de gomería. | Cada cubierta que se monta en un vehículo. | <GuideLink to="gomeria">Gomería</GuideLink> |
+| **Repuestos del taller** | El operario desde su OT, o el taller desde la orden, con un pedido. | Repuestos de una reparación. | <GuideLink to="taller">Taller</GuideLink> |
+
+### La regla de la salida directa
+
+<States title="¿Esta salida puede ser directa?">
+  <State name="¿Tenés Salida directa?" tone="info" next="Pedido de materiales">Si no, el formulario lo avisa y ofrece hacer un pedido.</State>
+  <State name="¿Algún material requiere aprobación?" tone="warning" next="Pedido de materiales">Si alguno lo requiere, la salida se rechaza.</State>
+  <State name="¿Supera el monto máximo?" tone="warning" next="Pedido de materiales">Si el total supera el monto de Configuración, se rechaza.</State>
+  <State name="Salida registrada" tone="success">Pasó las tres: se descuenta y se imputa.</State>
+</States>
+
+### El pedido de materiales
+
+<Steps>
+<Step title="Pedido">
+Quien necesita el material elige el destino y los materiales con sus cantidades. Queda **Pendiente de aprobación**.
+</Step>
+<Step title="Aprobación">
+Un responsable lo **aprueba** o lo **rechaza** con motivo. Quien lo pidió puede **cancelarlo** mientras espera.
+</Step>
+<Step title="Entrega">
+El almacén entrega todo o una parte, eligiendo depósito, lote o números de serie. Cada entrega es una salida. El pedido pasa a **Entregado en parte** o **Entregado**.
+</Step>
+<Step title="Cierre">
+Si el resto no se va a entregar, el almacén lo **cierra** con motivo.
+</Step>
+</Steps>
+
+## Paso 4: lo que vuelve
+
+- **Herramientas**: toda salida de un material por número de serie queda como **préstamo** de quien la recibió. Cuando vuelve, se registra la **devolución** desde **Préstamos**, al depósito que elijas y al costo con que salió. Si no vuelve, se **da de baja** como extraviada o rota. Ver <GuideLink to="prestamos-de-herramientas">Préstamos de herramientas</GuideLink>.
+- **Cubiertas**: al desmontar una cubierta a **Disponible** en una orden de gomería, o al marcarla como reparada o encontrada, vuelve al depósito que se elija.
+- **Materiales de consumo** (por cantidad o lote): no se devuelven. Si salió de más, se anula la salida o se registra una entrada.
+
+## Paso 5: dónde se ve lo consumido
+
+| Qué querés saber | Dónde |
+|---|---|
+| Todo lo que se le entregó a un empleado, vehículo o cliente | **Movimientos**, filtrando **Tipo** en **Salida** y el **Destino**. |
+| La ropa que recibió un empleado y cuánto costó | Ficha del empleado, pestaña **Indumentaria** (<GuideLink to="ficha-del-empleado">Ficha del empleado</GuideLink>). |
+| Los repuestos de una reparación | Detalle de la orden de mantenimiento, sección **Materiales**, y su PDF (<GuideLink to="taller">Taller</GuideLink>). |
+| Qué herramientas tiene alguien hoy | **Préstamos**, filtrando **Tenedor**. |
+| El historial completo de un material | Su **kardex**, en la ficha del material (<GuideLink to="stock-y-ficha-del-material">Stock y ficha del material</GuideLink>). |
+
+## Cuando algo sale mal
+
+Ningún movimiento se borra ni se edita: todo se corrige con otro movimiento, y queda el rastro de quién lo hizo y por qué.
+
+| Error | Cómo se corrige | Dónde |
+|---|---|---|
+| Una entrada, salida o transferencia mal cargada | **Anular** el movimiento (con motivo) y cargarlo de nuevo. | Detalle del movimiento |
+| El stock no coincide con el conteo físico | **Ajuste** que suma o resta, con el motivo. | **Nuevo movimiento** |
+| Un lote vencido | **Ajuste** que lo resta. | **Nuevo movimiento** |
+| Una entrega de pedido equivocada | **Anular** la entrega: el pedido recupera lo pendiente. | Detalle de la entrega |
+| Una entrega de ropa equivocada | **Anular** la entrega (con motivo): la ropa vuelve al depósito. | Ficha del empleado o **Reportes** de indumentaria |
+| Un movimiento de cubiertas | Anular la orden de gomería, o descartar la cubierta. | Gomería |
+| Una herramienta devuelta por error | Anular la devolución: el préstamo se reabre. | Detalle de la devolución |
+
+<Callout type="warning" title="Lo que no se puede anular">
+- Una entrada cuyo material ya se usó (no queda stock para retirarlo).
+- La salida de una herramienta que ya se devolvió o se dio de baja.
+- Una anulación.
+- La baja de una herramienta.
+</Callout>
+
+## Quién hace cada cosa
+
+Una forma habitual de repartir los permisos (cada empresa lo arma a su medida en sus roles):
+
+| Perfil | Permisos típicos en Almacenes |
+|---|---|
+| **Responsable de almacén** | Todo en **Stock**, **Movimientos** (incluida **Salida directa**), **Préstamos**, **Materiales** y **Depósitos**; **Editar** y **Ver todas las solicitudes** en **Pedidos** para entregarlos. |
+| **Supervisor o jefe** | **Ver** y **Aprobar** en **Pedidos**, con **Ver todas las solicitudes**. |
+| **Personal que pide material** | **Ver** y **Crear** en **Pedidos**. |
+| **Administración** | **Ver** y **Ver precios e importes** en **Stock** y **Movimientos**; **Anular movimiento** y **Ajustar stock** si controla el inventario. |
+| **Operario de taller** | Ninguno: pide los repuestos desde su panel. |
+
+Ver <GuideLink to="almacenes">Cómo funciona Almacenes</GuideLink> para el detalle de cada permiso.

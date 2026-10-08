@@ -22,6 +22,7 @@ import { CloseWorkOrderDialog } from './CloseWorkOrderDialog';
 import { ReturnTaskDialog } from './ReturnTaskDialog';
 import { TaskList } from './WorkOrderDetail/TaskList';
 import { WorkOrderHeader } from './WorkOrderDetail/WorkOrderHeader';
+import { WorkOrderMaterials } from './WorkOrderDetail/WorkOrderMaterials';
 
 const logger = new Logger('WorkOrderDetail');
 
@@ -219,6 +220,7 @@ export function WorkOrderDetail({ initialData }: { initialData: OperatorWorkOrde
             onNotesSave={handleNotesSave}
             onReturnTask={(repairId) => setReturnTaskRepairId(repairId)}
           />
+          <WorkOrderMaterials workOrderId={data.id} workOrderNumber={data.order_number} workOrderStatus={data.status} />
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 'use server';
 
-import { assertTireTypeInActiveCompany, getVehicleCompanyId } from '@/features/Mantenimiento/Gomeria/shared/perimeter';
+import { assertTireTypeInActiveCompany } from '@/features/Mantenimiento/Gomeria/shared/perimeter';
 import { TireTreadType } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
@@ -14,6 +14,7 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { syncTireMaterials } from '@/features/Warehouses/lib/tire-materials';
 import { prisma } from '@/shared/lib/prisma';
 
 const logger = new Logger('features/Mantenimiento/Gomeria/Tipos');
@@ -246,8 +247,12 @@ export async function createTireType(data: { name: string; size: string; tread_t
     if (existing) {
       throw new Error(`Ya existe un tipo de cubierta con medida "${data.size}" y tipo de banda "${data.tread_type}"`);
     }
-    const tireType = await prisma.tire_types.create({ data: { ...data, company_id: companyId } });
-    return tireType;
+    // Cada combinacion tipo + marca es un material de Almacenes (etapa 6): se crean juntos.
+    return await prisma.$transaction(async (tx) => {
+      const tireType = await tx.tire_types.create({ data: { ...data, company_id: companyId } });
+      await syncTireMaterials(tx, companyId);
+      return tireType;
+    });
   } catch (error) {
     logger.error('Error creating tire type', { data: { error } });
     throw error;
@@ -259,11 +264,15 @@ export async function updateTireType(id: string, data: { name?: string; size?: s
   try {
     await assertTireTypeInActiveCompany(id);
 
-    const tireType = await prisma.tire_types.update({
-      where: { id },
-      data,
+    // El nombre y el estado del material de cada combinacion siguen al tipo y a la marca.
+    return await prisma.$transaction(async (tx) => {
+      const tireType = await tx.tire_types.update({
+        where: { id },
+        data,
+      });
+      await syncTireMaterials(tx, tireType.company_id);
+      return tireType;
     });
-    return tireType;
   } catch (error) {
     logger.error('Error updating tire type', { data: { error, id } });
     throw error;
@@ -275,11 +284,15 @@ export async function toggleTireTypeActive(id: string, isActive: boolean) {
   try {
     await assertTireTypeInActiveCompany(id);
 
-    const tireType = await prisma.tire_types.update({
-      where: { id },
-      data: { is_active: isActive },
+    // El nombre y el estado del material de cada combinacion siguen al tipo y a la marca.
+    return await prisma.$transaction(async (tx) => {
+      const tireType = await tx.tire_types.update({
+        where: { id },
+        data: { is_active: isActive },
+      });
+      await syncTireMaterials(tx, tireType.company_id);
+      return tireType;
     });
-    return tireType;
   } catch (error) {
     logger.error('Error toggling tire type active', { data: { error, id } });
     throw error;
@@ -308,32 +321,6 @@ export async function getTireTypesForSelect() {
     return data;
   } catch (error) {
     logger.error('Error fetching tire types for select', { data: { error } });
-    throw error;
-  }
-}
-
-/**
- * Tipos de la empresa del vehículo atendido, para el alta rápida del asistente de gomería:
- * ese formulario también corre desde el QR anónimo, donde la empresa no puede salir de la
- * sesión del operario.
- */
-export async function getTireTypesForVehicle(vehicleId: string) {
-  logger.debug('Fetching tire types for vehicle', { data: { vehicleId } });
-  try {
-    const companyId = await getVehicleCompanyId(prisma, vehicleId);
-    const data = await prisma.tire_types.findMany({
-      where: { company_id: companyId, is_active: true },
-      select: {
-        id: true,
-        name: true,
-        size: true,
-        tread_type: true,
-      },
-      orderBy: { name: 'asc' },
-    });
-    return data;
-  } catch (error) {
-    logger.error('Error fetching tire types for vehicle', { data: { error, vehicleId } });
     throw error;
   }
 }

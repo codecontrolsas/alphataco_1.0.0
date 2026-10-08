@@ -14,6 +14,8 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useTireReturnWarehouse } from '@/features/Mantenimiento/Gomeria/shared/hooks/useTireReturnWarehouse';
+import { TireReturnWarehouseSelect } from '@/features/Mantenimiento/Gomeria/shared/TireReturnWarehouseSelect';
 import { AlertTriangle } from 'lucide-react';
 import { useState } from 'react';
 import type { DisplacedTireAction } from './actions.server';
@@ -23,9 +25,12 @@ export interface DisplacedTireInfo {
   serial: string;
   brand: string | null;
   positionNumber: number;
+  /** Tiene stock en Almacenes: si vuelve a disponible, vuelve a un depósito. */
+  hasStock: boolean;
 }
 
 interface DisplacedTiresDialogProps {
+  vehicleId: string;
   open: boolean;
   tires: DisplacedTireInfo[];
   onConfirm: (actions: DisplacedTireAction[]) => void;
@@ -40,10 +45,12 @@ const DESTINATION_LABELS: Record<Destination, string> = {
   DISCARD: 'Descarte',
 };
 
-export function DisplacedTiresDialog({ open, tires, onConfirm, onCancel }: DisplacedTiresDialogProps) {
+export function DisplacedTiresDialog({ vehicleId, open, tires, onConfirm, onCancel }: DisplacedTiresDialogProps) {
   const [destinations, setDestinations] = useState<Record<string, Destination>>({});
+  const returning = tires.some((t) => t.hasStock && destinations[t.tireId] === 'AVAILABLE');
+  const returnWarehouse = useTireReturnWarehouse(vehicleId, open && tires.some((t) => t.hasStock));
 
-  const allSelected = tires.every((t) => destinations[t.tireId]);
+  const allSelected = tires.every((t) => destinations[t.tireId]) && (!returning || !!returnWarehouse.warehouseId);
 
   function handleDestinationChange(tireId: string, destination: Destination) {
     setDestinations((prev) => ({ ...prev, [tireId]: destination }));
@@ -53,6 +60,7 @@ export function DisplacedTiresDialog({ open, tires, onConfirm, onCancel }: Displ
     const actions: DisplacedTireAction[] = tires.map((t) => ({
       tireId: t.tireId,
       destination: destinations[t.tireId],
+      warehouseId: destinations[t.tireId] === 'AVAILABLE' ? returnWarehouse.warehouseId || null : null,
     }));
     onConfirm(actions);
   }
@@ -108,6 +116,15 @@ export function DisplacedTiresDialog({ open, tires, onConfirm, onCancel }: Displ
         <div className="py-2">
           {tires.length > 3 ? <ScrollArea className="h-[300px] pr-3">{tireList}</ScrollArea> : tireList}
         </div>
+
+        {returning && returnWarehouse.needsChoice && (
+          <TireReturnWarehouseSelect
+            label="Depósito al que vuelven las disponibles"
+            warehouses={returnWarehouse.warehouses}
+            value={returnWarehouse.warehouseId}
+            onChange={returnWarehouse.setWarehouseId}
+          />
+        )}
 
         <AlertDialogFooter>
           <AlertDialogCancel onClick={onCancel}>Cancelar</AlertDialogCancel>

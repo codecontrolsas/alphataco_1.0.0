@@ -2,9 +2,13 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { DeliveryReceiptButton } from '@/features/Clothing/pdf/DeliveryReceiptButton';
+import { DeliveryRowActions, formatEmployeeLabel } from '@/features/Clothing/components/DeliveryRowActions';
+import { DeliveryStatusBadge } from '@/features/Clothing/components/DeliveryStatusBadge';
+import { DELIVERY_STATUS_ACTIVE, DELIVERY_STATUS_CANCELLED } from '@/features/Clothing/lib/delivery-stock-where';
+import { formatMoney } from '@/features/Warehouses/lib/format';
 import { clothingDeliveryTypeBadges, clothingDeliveryTypeLabels } from '@/features/Clothing/utils/mappers';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Check, X } from 'lucide-react';
 import moment from 'moment';
@@ -20,7 +24,20 @@ export const HIDDEN_COLUMNS_BY_DEFAULT = ['notes', 'created_at'];
 // COLUMNS
 // ============================================================================
 
-export function getColumns(): ColumnDef<ClothingReportListItem>[] {
+export interface ClothingReportsColumnsOptions {
+  /** `almacenes:movimientos:view_prices`: sin permiso la columna Costo no existe. */
+  canViewPrices: boolean;
+  /** `empleados:indumentaria_empleado:delete`: habilita la accion Anular. */
+  canCancel: boolean;
+  /** Key de la query de la tabla, para refrescarla al anular. */
+  queryKey: readonly unknown[];
+}
+
+export function getColumns({
+  canViewPrices,
+  canCancel,
+  queryKey,
+}: ClothingReportsColumnsOptions): ColumnDef<ClothingReportListItem>[] {
   return [
     // ── select ────────────────────────────────────────────────────────────────
     {
@@ -147,6 +164,50 @@ export function getColumns(): ColumnDef<ClothingReportListItem>[] {
       },
     },
 
+    // ── status (virtual: cancelled_at) ────────────────────────────────────────
+    {
+      id: 'status',
+      accessorFn: (row) => (row.cancelled_at ? DELIVERY_STATUS_CANCELLED : DELIVERY_STATUS_ACTIVE),
+      meta: { title: 'Estado' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      cell: ({ row }) => (
+        <DeliveryStatusBadge cancelledAt={row.original.cancelled_at} cancelReason={row.original.cancel_reason} />
+      ),
+      filterFn: (row, id, value: string[]) => value.includes(row.getValue(id) as string),
+    },
+
+    // ── warehouse — FK nullable ───────────────────────────────────────────────
+    {
+      id: 'warehouse',
+      accessorFn: (row) => row.warehouse?.name ?? '',
+      meta: { title: 'Depósito' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Depósito" />,
+      cell: ({ row }) => row.original.warehouse?.name ?? <span className="text-muted-foreground">—</span>,
+      filterFn: (row, _id, value: string[]) => {
+        const id = row.original.warehouse?.id;
+        if (id == null) return value.includes(NULL_FILTER_VALUE);
+        return value.includes(id);
+      },
+    },
+
+    // ── cost — total_cost de la salida de stock (solo con view_prices) ─────────
+    ...(canViewPrices
+      ? [
+          {
+            id: 'cost',
+            accessorFn: (row: ClothingReportListItem) => row.cost,
+            meta: { title: 'Costo' },
+            header: ({ column }) => <DataTableColumnHeader column={column} title="Costo" />,
+            cell: ({ row }) =>
+              row.original.cost != null ? (
+                <span className="tabular-nums">{formatMoney(row.original.cost)}</span>
+              ) : (
+                <span className="text-muted-foreground">Sin costo</span>
+              ),
+          } satisfies ColumnDef<ClothingReportListItem>,
+        ]
+      : []),
+
     // ── items_summary — virtual (no filter) ───────────────────────────────────
     {
       id: 'items_summary',
@@ -217,7 +278,16 @@ export function getColumns(): ColumnDef<ClothingReportListItem>[] {
       meta: { excludeFromExport: true, title: '' },
       enableSorting: false,
       enableHiding: false,
-      cell: ({ row }) => <DeliveryReceiptButton deliveryId={row.original.id} compact />,
+      cell: ({ row }) => (
+        <DeliveryRowActions
+          deliveryId={row.original.id}
+          employeeLabel={formatEmployeeLabel(row.original.employees_clothing_deliveries_employee_idToemployees)}
+          canCancel={canCancel}
+          isCancelled={row.original.cancelled_at != null}
+          hasStock={row.original.warehouse_id != null}
+          queryKey={queryKey}
+        />
+      ),
     },
   ];
 }

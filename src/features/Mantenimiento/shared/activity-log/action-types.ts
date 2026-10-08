@@ -58,6 +58,10 @@ export const ACTIVITY_LOG = {
   REPAIR_RETURNED_TO_CHIEF: 'repair_returned_to_chief',
   TASK_ADDED_BY_OPERATOR: 'task_added_by_operator',
   TASK_REQUESTED_FOR_OTHER_SECTOR: 'task_requested_for_other_sector',
+
+  // ── Almacenes (etapa 4) ─────────────────────────────────────────
+  /** Pedido de materiales imputado a la orden (desde la OT o desde el detalle de la orden). */
+  MATERIAL_REQUEST_CREATED: 'material_request_created',
 } as const;
 
 export type ActivityActionType = (typeof ACTIVITY_LOG)[keyof typeof ACTIVITY_LOG];

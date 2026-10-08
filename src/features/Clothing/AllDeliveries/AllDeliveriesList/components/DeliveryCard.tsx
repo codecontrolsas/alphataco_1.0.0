@@ -1,6 +1,7 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
+import { DeliveryStatusBadge } from '@/features/Clothing/components/DeliveryStatusBadge';
 import { DeliveryReceiptButton } from '@/features/Clothing/pdf/DeliveryReceiptButton';
 import { clothingDeliveryTypeBadges, clothingDeliveryTypeLabels } from '@/features/Clothing/utils/mappers';
 import { Calendar, Check, Package, User, X } from 'lucide-react';
@@ -41,6 +42,10 @@ export function DeliveryCard({ delivery }: DeliveryCardProps) {
           <Badge variant={clothingDeliveryTypeBadges[type]} className="text-[11px] px-2 py-0.5">
             {clothingDeliveryTypeLabels[type]}
           </Badge>
+        )}
+        {/* Almacenes etapa 5: una entrega anulada se distingue tambien en la vista movil. */}
+        {delivery.cancelled_at && (
+          <DeliveryStatusBadge cancelledAt={delivery.cancelled_at} cancelReason={delivery.cancel_reason} />
         )}
         <Badge variant={delivery.signature_url ? 'success' : 'secondary'} className="text-[11px] px-2 py-0.5 gap-1">
           {delivery.signature_url ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}

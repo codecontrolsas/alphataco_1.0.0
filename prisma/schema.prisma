@@ -371,6 +371,7 @@ model clothing_brands {
   company                   company                     @relation(fields: [company_id], references: [id], onDelete: Cascade)
   clothing_item_brand_sizes clothing_item_brand_sizes[]
   clothing_delivery_items   clothing_delivery_items[]
+  clothing_item_materials   clothing_item_materials[]
 
   @@unique([name, company_id], map: "clothing_brands_name_company_id_key")
   @@schema("public")
@@ -392,6 +393,15 @@ model clothing_deliveries {
   employees_clothing_deliveries_delivered_by_idToemployees employees                 @relation("clothing_deliveries_delivered_by_idToemployees", fields: [delivered_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   company                                                  company                   @relation(fields: [company_id], references: [id], onDelete: Cascade)
   clothing_delivery_items                                  clothing_delivery_items[]
+  /// Almacenes etapa 5: deposito del que salio, su salida de stock y la anulacion.
+  warehouse_id                                             String?                   @db.Uuid
+  stock_movement_id                                        String?                   @unique @db.Uuid
+  cancelled_at                                             DateTime?                 @db.Timestamptz(6)
+  cancelled_by                                             String?                   @db.Uuid
+  cancel_reason                                            String?
+  warehouse                                                warehouses?               @relation(fields: [warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  stock_movement                                           stock_movements?          @relation(fields: [stock_movement_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  canceller                                                profile?                  @relation("clothing_delivery_canceller", fields: [cancelled_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([employee_id], map: "idx_clothing_deliveries_employee")
   @@index([company_id], map: "idx_clothing_deliveries_company_id")
@@ -431,6 +441,28 @@ model clothing_item_brand_sizes {
   @@schema("public")
 }
 
+/// Almacenes etapa 5: material de stock de cada combinacion articulo + marca + talle. NUNCA se
+/// borra (la matriz `clothing_item_brand_sizes` si se reescribe): si una combinacion se quita y
+/// se vuelve a habilitar, recupera el mismo material con su stock e historial.
+model clothing_item_materials {
+  id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id        String          @db.Uuid
+  clothing_item_id  String          @db.Uuid
+  clothing_brand_id String          @db.Uuid
+  clothing_size_id  String          @db.Uuid
+  material_id       String          @unique @db.Uuid
+  created_at        DateTime        @default(now()) @db.Timestamptz(6)
+  company           company         @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  clothing_items    clothing_items  @relation(fields: [clothing_item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clothing_brands   clothing_brands @relation(fields: [clothing_brand_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clothing_sizes    clothing_sizes  @relation(fields: [clothing_size_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  material          materials       @relation(fields: [material_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([clothing_item_id, clothing_brand_id, clothing_size_id], map: "clothing_item_materials_combination_key")
+  @@index([company_id], map: "idx_clothing_item_materials_company")
+  @@schema("public")
+}
+
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model clothing_items {
   id                        String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -444,6 +476,7 @@ model clothing_items {
   company                   company                     @relation(fields: [company_id], references: [id], onDelete: Cascade)
   clothing_item_brand_sizes clothing_item_brand_sizes[]
   clothing_delivery_items   clothing_delivery_items[]
+  clothing_item_materials   clothing_item_materials[]
 
   @@unique([name, company_id], map: "clothing_items_name_company_id_key")
   @@schema("public")
@@ -460,6 +493,7 @@ model clothing_sizes {
   company                   company                     @relation(fields: [company_id], references: [id], onDelete: Cascade)
   clothing_item_brand_sizes clothing_item_brand_sizes[]
   clothing_delivery_items   clothing_delivery_items[]
+  clothing_item_materials   clothing_item_materials[]
 
   @@unique([name, company_id], map: "clothing_sizes_name_company_id_key")
   @@schema("public")
@@ -573,6 +607,19 @@ model company {
   priceUpdateRuns               price_update_runs[]
   certifications                certifications[]
 
+  warehouses           warehouses[]
+  material_categories  material_categories[]
+  measurement_units    measurement_units[]
+  materials            materials[]
+  material_batches     material_batches[]
+  material_units       material_units[]
+  stock_balances       stock_balances[]
+  stock_movements      stock_movements[]
+  material_unit_write_offs material_unit_write_offs[]
+  material_requests    material_requests[]
+  warehouse_settings   warehouse_settings?
+  clothing_item_materials      clothing_item_materials[]
+  tire_materials               tire_materials[]
   @@schema("public")
 }
 
@@ -741,6 +788,8 @@ model customer_services {
   service_items      service_items[]
   service_sectors    service_sectors[]
 
+  stock_movements      stock_movements[]
+  material_requests    material_requests[]
   @@schema("public")
 }
 
@@ -780,6 +829,8 @@ model customers {
   certifications             certifications[]
   invoices                   invoices[]
   share_company_users        share_company_users[]
+  stock_movements            stock_movements[]
+  material_requests          material_requests[]
 
 
   @@unique([company_id, cuit], map: "customers_company_id_cuit_key")
@@ -1196,6 +1247,9 @@ model employees {
   clothing_deliveries_given                                         clothing_deliveries[]          @relation("clothing_deliveries_delivered_by_idToemployees")
   pre_employees                                                     pre_employees?
 
+  managed_warehouses   warehouses[]       @relation("warehouse_manager")
+  stock_movements      stock_movements[]  @relation("stock_movement_employee")
+  material_requests    material_requests[] @relation("material_request_employee")
   @@index([type_of_contract], map: "idx_employees_type_of_contract")
   @@schema("public")
 }
@@ -1550,6 +1604,8 @@ model maintenance_orders {
   company_id                                                  String                     @db.Uuid
   company                                                     company                    @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
+  stock_movements      stock_movements[]
+  material_requests    material_requests[]
   @@index([equipment_id], map: "idx_maintenance_orders_equipment")
   @@index([order_number], map: "idx_maintenance_orders_order_number")
   @@index([maintenance_request_id], map: "idx_maintenance_orders_request")
@@ -1806,6 +1862,8 @@ model other_equipment {
   profile                        profile?                         @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   other_equipment_certifications other_equipment_certifications[]
 
+  stock_movements      stock_movements[]
+  material_requests    material_requests[]
   @@index([company_id], map: "idx_other_equipment_company_id")
   @@index([is_active], map: "idx_other_equipment_is_active")
   @@index([linked_vehicle_id], map: "idx_other_equipment_linked_vehicle")
@@ -2056,6 +2114,12 @@ model profile {
   user_roles_user_roles_assigned_byToprofile                                         user_roles[]                     @relation("user_roles_assigned_byToprofile")
   user_roles_user_roles_user_idToprofile                                             user_roles[]                     @relation("user_roles_user_idToprofile")
 
+  stock_movements      stock_movements[]  @relation("stock_movement_creator")
+  material_write_offs  material_unit_write_offs[] @relation("material_write_off_creator")
+  material_requests_requested material_requests[] @relation("material_request_requester")
+  material_requests_decided  material_requests[] @relation("material_request_decider")
+  material_requests_closed   material_requests[] @relation("material_request_closer")
+  clothing_deliveries_cancelled clothing_deliveries[] @relation("clothing_delivery_canceller")
   @@index([employee_id], map: "idx_profile_employee_id")
   @@schema("public")
 }
@@ -2583,6 +2647,8 @@ model vehicles {
   tire_template_id              String?                         @db.Uuid
   tire_template                 tire_templates?                 @relation("vehicle_tire_template", fields: [tire_template_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  stock_movements      stock_movements[]
+  material_requests    material_requests[]
   @@schema("public")
 }
 
@@ -2593,8 +2659,9 @@ model tire_brands {
   is_active  Boolean  @default(true)
   created_at DateTime @default(now()) @db.Timestamptz(6)
 
-  company company @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tires   tires[]
+  company        company          @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tires          tires[]
+  tire_materials tire_materials[]
 
   @@unique([name, company_id])
   @@schema("public")
@@ -2610,10 +2677,29 @@ model tire_types {
   created_at DateTime      @default(now()) @db.Timestamptz(6)
   updated_at DateTime      @updatedAt @db.Timestamptz(6)
 
-  company company @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tires   tires[]
+  company        company          @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tires          tires[]
+  tire_materials tire_materials[]
 
   @@unique([size, tread_type, company_id])
+  @@schema("public")
+}
+
+/// Vinculo tipo + marca de cubierta -> material SERIAL de Almacenes (etapa 6). Nunca se borra.
+model tire_materials {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id    String      @db.Uuid
+  tire_type_id  String      @db.Uuid
+  tire_brand_id String      @db.Uuid
+  material_id   String      @unique @db.Uuid
+  created_at    DateTime    @default(now()) @db.Timestamptz(6)
+  company       company     @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  tire_type     tire_types  @relation(fields: [tire_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tire_brand    tire_brands @relation(fields: [tire_brand_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  material      materials   @relation(fields: [material_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([tire_type_id, tire_brand_id], map: "tire_materials_combination_key")
+  @@index([company_id], map: "idx_tire_materials_company")
   @@schema("public")
 }
 
@@ -2633,7 +2719,10 @@ model tires {
   is_active       Boolean           @default(true)
   created_at      DateTime          @default(now()) @db.Timestamptz(6)
   updated_at      DateTime          @updatedAt @db.Timestamptz(6)
+  /// Unidad de stock de la cubierta (Almacenes etapa 6). NULL: cubierta sin stock.
+  material_unit_id String?          @unique @db.Uuid
 
+  material_unit              material_units?          @relation(fields: [material_unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   brand                      tire_brands              @relation(fields: [brand_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tire_type                  tire_types               @relation(fields: [tire_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   company                    company                  @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -2753,7 +2842,13 @@ model tire_service_items {
   pressure_end         Decimal?            @db.Decimal(5, 1)
   observations         String?
   created_at           DateTime            @default(now()) @db.Timestamptz(6)
+  /// Salida de stock de la cubierta que se monta (Almacenes etapa 6).
+  mount_movement_id    String?             @db.Uuid
+  /// Devolucion al deposito de la cubierta que se desmonta a disponible.
+  return_movement_id   String?             @db.Uuid
 
+  mount_movement  stock_movements?    @relation("tire_item_mount", fields: [mount_movement_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  return_movement stock_movements?    @relation("tire_item_return", fields: [return_movement_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   service_order tire_service_orders @relation(fields: [service_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   vehicle       vehicles            @relation(fields: [vehicle_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tire          tires?              @relation("tire_at_position", fields: [tire_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -2892,6 +2987,7 @@ model work_orders {
   maintenance_activity_log                  maintenance_activity_log[]
   maintenance_order_items                   maintenance_order_items[]
   work_order_items                          work_order_items[]
+  material_requests                         material_requests[]
   profile_work_orders_cancelled_byToprofile profile?                   @relation("work_orders_cancelled_byToprofile", fields: [cancelled_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   company                                   company                    @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   profile_work_orders_completed_byToprofile profile?                   @relation("work_orders_completed_byToprofile", fields: [completed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -3130,6 +3226,7 @@ enum job_run_status {
 enum notification_kind {
   documents_expiry
   daily_report_deviations
+  stock_batch_expiry
 
   @@schema("public")
 }
@@ -4077,5 +4174,405 @@ model invoice_certifications {
   @@unique([invoice_id, certification_id])
   @@unique([certification_id], map: "uq_invoice_certifications_live_prod", where: raw("((environment = 'produccion'::arca_environment) AND (released_at IS NULL))"))
   @@index([certification_id], map: "idx_invoice_certifications_certification")
+  @@schema("public")
+}
+
+// ── Almacenes (etapa 1) ─────────────────────────────────────────────────────
+// Spec: docs/superpowers/specs/2026-10-04-almacenes-etapa-1-design.md
+//
+// Lo que Prisma no modela y vive SOLO en la migracion 20261004100000_warehouses_core:
+// los CHECK de cantidades/destinos/transferencias, el unico de `stock_balances` con
+// NULLS NOT DISTINCT (un saldo por material+deposito+lote, con lote NULL incluido).
+//
+// `stock_balances`, `material_units`, `material_batches` (alta) y `materials.average_cost`
+// los escribe UNICAMENTE el motor de stock (src/features/Warehouses/lib/stock-engine.ts).
+
+enum material_tracking_type {
+  QUANTITY
+  SERIAL
+  BATCH
+
+  @@schema("public")
+}
+
+enum material_unit_status {
+  IN_STOCK
+  OUT
+  DISCARDED
+
+  @@schema("public")
+}
+
+enum stock_movement_type {
+  ENTRY
+  EXIT
+  TRANSFER
+  ADJUSTMENT
+  /// Devolucion de unidades serializadas prestadas (etapa 2). Solo la registra `registerReturn`.
+  RETURN
+
+  @@schema("public")
+}
+
+enum material_request_status {
+  PENDING_APPROVAL
+  APPROVED
+  PARTIALLY_DELIVERED
+  DELIVERED
+  REJECTED
+  CLOSED
+  CANCELLED
+
+  @@schema("public")
+}
+
+enum material_write_off_reason {
+  LOST
+  BROKEN
+
+  @@schema("public")
+}
+
+enum stock_destination_type {
+  EMPLOYEE
+  VEHICLE
+  OTHER_EQUIPMENT
+  MAINTENANCE_ORDER
+  CUSTOMER
+
+  @@schema("public")
+}
+
+model warehouses {
+  id                  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id          String            @db.Uuid
+  code                String
+  name                String
+  address             String?
+  manager_employee_id String?           @db.Uuid
+  is_active           Boolean           @default(true)
+  created_at          DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime          @default(now()) @updatedAt @db.Timestamptz(6)
+  company             company           @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  manager             employees?        @relation("warehouse_manager", fields: [manager_employee_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  stock_balances      stock_balances[]
+  material_units      material_units[]
+  movements           stock_movements[] @relation("movement_warehouse")
+  incoming_transfers  stock_movements[] @relation("movement_target_warehouse")
+  clothing_deliveries clothing_deliveries[]
+
+  @@unique([company_id, code])
+  @@unique([company_id, name])
+  @@index([company_id], map: "idx_warehouses_company_id")
+  @@schema("public")
+}
+
+model material_categories {
+  id         String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id String      @db.Uuid
+  name       String
+  is_active  Boolean     @default(true)
+  created_at DateTime    @default(now()) @db.Timestamptz(6)
+  updated_at DateTime    @default(now()) @updatedAt @db.Timestamptz(6)
+  company    company     @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  materials  materials[]
+
+  @@unique([company_id, name])
+  @@schema("public")
+}
+
+model measurement_units {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id   String      @db.Uuid
+  name         String
+  abbreviation String
+  is_active    Boolean     @default(true)
+  created_at   DateTime    @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime    @default(now()) @updatedAt @db.Timestamptz(6)
+  company      company     @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  materials    materials[]
+
+  @@unique([company_id, name])
+  @@unique([company_id, abbreviation])
+  @@schema("public")
+}
+
+model materials {
+  id                String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id        String                 @db.Uuid
+  code              String
+  name              String
+  description       String?
+  category_id       String?                @db.Uuid
+  unit_id           String                 @db.Uuid
+  /// No editable una vez que el material tiene movimientos.
+  tracking_type     material_tracking_type @default(QUANTITY)
+  /// Se usa en la etapa 3 (pedidos con aprobacion).
+  requires_approval Boolean                @default(false)
+  /// Minimo a nivel empresa (suma de todos los depositos).
+  min_stock         Decimal?               @db.Decimal(15, 4)
+  /// Costo promedio ponderado de la empresa. Solo lo escribe el motor de stock.
+  average_cost      Decimal                @default(0) @db.Decimal(15, 4)
+  is_active         Boolean                @default(true)
+  created_at        DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime               @default(now()) @updatedAt @db.Timestamptz(6)
+  company           company                @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  category          material_categories?   @relation(fields: [category_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  unit              measurement_units      @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  batches           material_batches[]
+  units             material_units[]
+  stock_balances    stock_balances[]
+  movement_lines    stock_movement_lines[]
+  request_lines     material_request_lines[]
+  clothing_combination clothing_item_materials?
+  tire_combination     tire_materials?
+
+  @@unique([company_id, code])
+  @@index([company_id], map: "idx_materials_company_id")
+  @@index([category_id], map: "idx_materials_category_id")
+  @@schema("public")
+}
+
+model material_batches {
+  id             String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id     String                 @db.Uuid
+  material_id    String                 @db.Uuid
+  batch_number   String
+  expires_at     DateTime?              @db.Date
+  created_at     DateTime               @default(now()) @db.Timestamptz(6)
+  company        company                @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  material       materials              @relation(fields: [material_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  stock_balances stock_balances[]
+  movement_lines stock_movement_lines[]
+
+  @@unique([material_id, batch_number])
+  @@index([company_id, expires_at], map: "idx_material_batches_company_expires")
+  @@schema("public")
+}
+
+model material_units {
+  id               String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id       String                 @db.Uuid
+  material_id      String                 @db.Uuid
+  serial_number    String
+  status           material_unit_status   @default(IN_STOCK)
+  /// Lleno solo mientras la unidad esta IN_STOCK (CHECK en la migracion).
+  warehouse_id     String?                @db.Uuid
+  /// Ultimo movimiento: dice donde esta o quien la tiene.
+  last_movement_id String?                @db.Uuid
+  created_at       DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime               @default(now()) @updatedAt @db.Timestamptz(6)
+  company          company                @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  material         materials              @relation(fields: [material_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  warehouse        warehouses?            @relation(fields: [warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  last_movement    stock_movements?       @relation("unit_last_movement", fields: [last_movement_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  movement_lines   stock_movement_lines[]
+  write_offs       material_unit_write_offs[]
+  tire             tires?
+
+  @@unique([material_id, serial_number])
+  @@index([warehouse_id], map: "idx_material_units_warehouse_id")
+  @@schema("public")
+}
+
+/// Saldo materializado: una fila por material + deposito + lote (lote NULL para los que no
+/// son BATCH). La unicidad real es un indice NULLS NOT DISTINCT escrito a mano en la migracion.
+model stock_balances {
+  id           String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id   String            @db.Uuid
+  material_id  String            @db.Uuid
+  warehouse_id String            @db.Uuid
+  batch_id     String?           @db.Uuid
+  quantity     Decimal           @default(0) @db.Decimal(15, 4)
+  updated_at   DateTime          @default(now()) @updatedAt @db.Timestamptz(6)
+  company      company           @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  material     materials         @relation(fields: [material_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  warehouse    warehouses        @relation(fields: [warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  batch        material_batches? @relation(fields: [batch_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([company_id], map: "idx_stock_balances_company_id")
+  @@index([material_id, warehouse_id], map: "idx_stock_balances_material_warehouse")
+  @@index([warehouse_id], map: "idx_stock_balances_warehouse_id")
+  @@schema("public")
+}
+
+/// Movimiento de stock. Inmutable: los errores se corrigen con una anulacion
+/// (`reverses_movement_id`), nunca editando.
+model stock_movements {
+  id                   String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id           String                  @db.Uuid
+  number               String
+  type                 stock_movement_type
+  warehouse_id         String                  @db.Uuid
+  target_warehouse_id  String?                 @db.Uuid
+  occurred_on          DateTime                @db.Date
+  reference            String?
+  notes                String?
+  destination_type     stock_destination_type?
+  employee_id          String?                 @db.Uuid
+  vehicle_id           String?                 @db.Uuid
+  other_equipment_id   String?                 @db.Uuid
+  maintenance_order_id String?                 @db.Uuid
+  customer_id          String?                 @db.Uuid
+  customer_service_id  String?                 @db.Uuid
+  reverses_movement_id String?                 @unique @db.Uuid
+  /// Solo RETURN: la salida cuyo prestamo cierra la devolucion.
+  returned_from_movement_id String?            @db.Uuid
+  /// Solo EXIT: entrega de un pedido de materiales (etapa 3).
+  material_request_id  String?                 @db.Uuid
+  total_cost           Decimal                 @default(0) @db.Decimal(15, 4)
+  created_by           String                  @db.Uuid
+  created_at           DateTime                @default(now()) @db.Timestamptz(6)
+  company              company                 @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  warehouse            warehouses              @relation("movement_warehouse", fields: [warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  target_warehouse     warehouses?             @relation("movement_target_warehouse", fields: [target_warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  employee             employees?              @relation("stock_movement_employee", fields: [employee_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  vehicle              vehicles?               @relation(fields: [vehicle_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_equipment      other_equipment?        @relation(fields: [other_equipment_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  maintenance_order    maintenance_orders?     @relation(fields: [maintenance_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer             customers?              @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer_service     customer_services?      @relation(fields: [customer_service_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  creator              profile                 @relation("stock_movement_creator", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reverses             stock_movements?        @relation("stock_movement_reversal", fields: [reverses_movement_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reversed_by          stock_movements?        @relation("stock_movement_reversal")
+  returned_from        stock_movements?        @relation("stock_movement_return", fields: [returned_from_movement_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  returns              stock_movements[]       @relation("stock_movement_return")
+  write_offs           material_unit_write_offs[]
+  material_request     material_requests?      @relation(fields: [material_request_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  lines                stock_movement_lines[]
+  units_last_here      material_units[]        @relation("unit_last_movement")
+  clothing_delivery    clothing_deliveries?
+  tire_item_mounts     tire_service_items[]    @relation("tire_item_mount")
+  tire_item_returns    tire_service_items[]    @relation("tire_item_return")
+
+  @@unique([company_id, number])
+  @@index([company_id, occurred_on, created_at], map: "idx_stock_movements_company_date")
+  @@index([warehouse_id], map: "idx_stock_movements_warehouse_id")
+  @@index([employee_id], map: "idx_stock_movements_employee_id")
+  @@index([vehicle_id], map: "idx_stock_movements_vehicle_id")
+  @@index([other_equipment_id], map: "idx_stock_movements_other_equipment_id")
+  @@index([maintenance_order_id], map: "idx_stock_movements_maintenance_order_id")
+  @@index([customer_id], map: "idx_stock_movements_customer_id")
+  @@index([returned_from_movement_id], map: "idx_stock_movements_returned_from")
+  @@index([material_request_id], map: "idx_stock_movements_material_request")
+  @@schema("public")
+}
+
+model stock_movement_lines {
+  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  movement_id String            @db.Uuid
+  material_id String            @db.Uuid
+  quantity    Decimal           @db.Decimal(15, 4)
+  /// Efecto sobre el saldo de `warehouse_id` del movimiento: +1 entra, -1 sale.
+  direction   Int               @db.SmallInt
+  unit_cost   Decimal           @db.Decimal(15, 4)
+  total_cost  Decimal           @db.Decimal(15, 4)
+  batch_id    String?           @db.Uuid
+  unit_id     String?           @db.Uuid
+  /// Linea de pedido que satisface esta linea de entrega (etapa 3).
+  request_line_id String?       @db.Uuid
+  movement    stock_movements   @relation(fields: [movement_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  request_line material_request_lines? @relation(fields: [request_line_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  material    materials         @relation(fields: [material_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  batch       material_batches? @relation(fields: [batch_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  unit        material_units?   @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([movement_id], map: "idx_stock_movement_lines_movement_id")
+  @@index([material_id], map: "idx_stock_movement_lines_material_id")
+  @@index([request_line_id], map: "idx_stock_movement_lines_request_line")
+  @@schema("public")
+}
+
+/// Baja de una unidad serializada que estaba prestada y no vuelve (extraviada o rota). No es un
+/// movimiento de stock: la unidad ya habia salido y su costo queda imputado a quien la tenia.
+model material_unit_write_offs {
+  id               String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id       String                    @db.Uuid
+  unit_id          String                    @db.Uuid
+  /// Ultimo movimiento de la unidad al darla de baja: el prestamo que cierra.
+  loan_movement_id String                    @db.Uuid
+  reason           material_write_off_reason
+  notes            String
+  created_by       String                    @db.Uuid
+  created_at       DateTime                  @default(now()) @db.Timestamptz(6)
+  company          company                   @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  unit             material_units            @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  loan_movement    stock_movements           @relation(fields: [loan_movement_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  creator          profile                   @relation("material_write_off_creator", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([unit_id, loan_movement_id])
+  @@index([company_id], map: "idx_material_unit_write_offs_company_id")
+  @@schema("public")
+}
+
+/// Pedido de materiales con aprobacion (etapa 3). Se entrega en una o varias salidas de stock
+/// (`stock_movements.material_request_id`); lo entregado se calcula de esas salidas.
+model material_requests {
+  id                   String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id           String                  @db.Uuid
+  number               String
+  status               material_request_status @default(PENDING_APPROVAL)
+  requested_by         String                  @db.Uuid
+  destination_type     stock_destination_type
+  employee_id          String?                 @db.Uuid
+  vehicle_id           String?                 @db.Uuid
+  other_equipment_id   String?                 @db.Uuid
+  maintenance_order_id String?                 @db.Uuid
+  customer_id          String?                 @db.Uuid
+  customer_service_id  String?                 @db.Uuid
+  /// OT desde la que se pidio (etapa 4). Solo con destino MAINTENANCE_ORDER (CHECK en BD).
+  work_order_id        String?                 @db.Uuid
+  notes                String?
+  decided_by           String?                 @db.Uuid
+  decided_at           DateTime?               @db.Timestamptz(6)
+  decision_notes       String?
+  closed_by            String?                 @db.Uuid
+  closed_at            DateTime?               @db.Timestamptz(6)
+  close_notes          String?
+  created_at           DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime                @default(now()) @updatedAt @db.Timestamptz(6)
+  company              company                 @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  requester            profile                 @relation("material_request_requester", fields: [requested_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  decider              profile?                @relation("material_request_decider", fields: [decided_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  closer               profile?                @relation("material_request_closer", fields: [closed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  employee             employees?              @relation("material_request_employee", fields: [employee_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  vehicle              vehicles?               @relation(fields: [vehicle_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_equipment      other_equipment?        @relation(fields: [other_equipment_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  maintenance_order    maintenance_orders?     @relation(fields: [maintenance_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer             customers?              @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer_service     customer_services?      @relation(fields: [customer_service_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_order           work_orders?            @relation(fields: [work_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  lines                material_request_lines[]
+  deliveries           stock_movements[]
+
+  @@unique([company_id, number])
+  @@index([company_id, status], map: "idx_material_requests_company_status")
+  @@index([requested_by], map: "idx_material_requests_requested_by")
+  @@index([work_order_id], map: "idx_material_requests_work_order")
+  @@schema("public")
+}
+
+model material_request_lines {
+  id             String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  request_id     String                 @db.Uuid
+  material_id    String                 @db.Uuid
+  quantity       Decimal                @db.Decimal(15, 4)
+  request        material_requests      @relation(fields: [request_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  material       materials              @relation(fields: [material_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  delivery_lines stock_movement_lines[]
+
+  @@index([request_id], map: "idx_material_request_lines_request_id")
+  @@schema("public")
+}
+
+/// Configuracion de Almacenes por empresa (etapa 3).
+model warehouse_settings {
+  company_id             String   @id @db.Uuid
+  /// Monto maximo de una salida directa (sin pedido). NULL = sin limite.
+  direct_exit_max_amount Decimal? @db.Decimal(15, 2)
+  updated_at             DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  updated_by             String?  @db.Uuid
+  company                company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
   @@schema("public")
 }

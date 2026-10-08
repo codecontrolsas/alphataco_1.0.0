@@ -13,7 +13,17 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
+import { toGomeriaActionError } from '@/features/Mantenimiento/Gomeria/shared/action-error';
+import { assertVehicleInActiveCompany } from '@/features/Mantenimiento/Gomeria/shared/perimeter';
+import { applyTireStatusChange } from '@/features/Warehouses/lib/tire-stock';
+import type { TireStatus } from '@/generated/prisma/enums';
+import { requireServerAuthProfile } from '@/shared/actions/auth.actions';
+import { withActor } from '@/shared/lib/actor';
 import { prisma } from '@/shared/lib/prisma';
+
+/** Varias llamadas al motor de stock por operacion: mas margen que los 5 s por defecto. */
+const GOMERIA_TX_OPTIONS = { timeout: 30_000, maxWait: 5_000 };
 
 const logger = new Logger('features/Equipos/VehicleTires');
 
@@ -32,6 +42,17 @@ export type AxleInput = {
 export type DisplacedTireAction = {
   tireId: string;
   destination: 'AVAILABLE' | 'REPAIR' | 'DISCARD';
+  /** Deposito al que vuelve si pasa a disponible y tiene stock (Almacenes etapa 6). */
+  warehouseId?: string | null;
+};
+
+/** Quien mueve el stock de las cubiertas que salen del diagrama. */
+type StockActor = { companyId: string; createdBy: string };
+
+const DESTINATION_STATUS: Record<DisplacedTireAction['destination'], TireStatus> = {
+  AVAILABLE: 'AVAILABLE',
+  REPAIR: 'IN_REPAIR',
+  DISCARD: 'DISCARDED',
 };
 
 // ============================================================================
@@ -54,6 +75,7 @@ export async function getVehicleTirePositionsWithDetails(vehicleId: string) {
               tread_depth: true,
               is_new: true,
               retread_level: true,
+              material_unit_id: true,
               brand: { select: { id: true, name: true } },
               tire_type: { select: { id: true, size: true, tread_type: true } },
             },
@@ -174,7 +196,8 @@ async function rebuildPositionsPreservingTires(
   tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
   vehicleId: string,
   templateId: string,
-  displacedTireActions: DisplacedTireAction[]
+  displacedTireActions: DisplacedTireAction[],
+  actor: StockActor
 ) {
   // 1. Capture current tire assignments by position number
   const oldPositions = await tx.vehicle_tire_positions.findMany({
@@ -246,10 +269,19 @@ async function rebuildPositionsPreservingTires(
 
   // 7. Apply destination for displaced tires
   if (displacedTireIds.size > 0) {
-    const actionMap = new Map(displacedTireActions.map((a) => [a.tireId, a.destination]));
+    const actionMap = new Map(displacedTireActions.map((a) => [a.tireId, a]));
 
     for (const tireId of displacedTireIds) {
-      const destination = actionMap.get(tireId) ?? 'AVAILABLE';
+      const action = actionMap.get(tireId);
+      const destination = action?.destination ?? 'AVAILABLE';
+      const current = await tx.tires.findUniqueOrThrow({ where: { id: tireId }, select: { status: true } });
+      await applyTireStatusChange(tx, actor.companyId, actor.createdBy, {
+        tireId,
+        from: current.status,
+        to: DESTINATION_STATUS[destination],
+        warehouseId: action?.warehouseId ?? null,
+        notes: 'Quitada al editar el diagrama del equipo',
+      });
 
       if (destination === 'AVAILABLE') {
         await tx.tires.update({ where: { id: tireId }, data: { status: 'AVAILABLE' } });
@@ -273,11 +305,14 @@ export async function createVehicleCustomTemplate(
   vehicleId: string,
   axles: AxleInput[],
   displacedTireActions: DisplacedTireAction[] = []
-) {
+): Promise<ActionResult> {
   logger.debug('Creating custom tire template for vehicle', { data: { vehicleId, axleCount: axles.length } });
 
   try {
-    return await prisma.$transaction(async (tx) => {
+    // Mueve stock de las cubiertas: el equipo tiene que ser de la empresa activa.
+    await assertVehicleInActiveCompany(vehicleId);
+    const profile = await requireServerAuthProfile();
+    await withActor(profile.credentialId, async (tx) => {
       const vehicle = await tx.vehicles.findUnique({
         where: { id: vehicleId },
         select: {
@@ -321,17 +356,18 @@ export async function createVehicleCustomTemplate(
         data: { tire_template_id: template.id },
       });
 
-      await rebuildPositionsPreservingTires(tx, vehicleId, template.id, displacedTireActions);
+      await rebuildPositionsPreservingTires(tx, vehicleId, template.id, displacedTireActions, {
+        companyId: vehicle.company_id!,
+        createdBy: profile.id,
+      });
 
       logger.info('Created custom template for vehicle', {
         data: { vehicleId, templateId: template.id },
       });
-
-      return template;
-    });
+    }, prisma, GOMERIA_TX_OPTIONS);
+    return ok(null);
   } catch (error) {
-    logger.error('Error creating custom template for vehicle', { data: { error, vehicleId } });
-    throw error;
+    return toGomeriaActionError(error, logger, 'guardar la plantilla del equipo');
   }
 }
 
@@ -339,14 +375,21 @@ export async function updateVehicleCustomAxles(
   vehicleId: string,
   axles: AxleInput[],
   displacedTireActions: DisplacedTireAction[] = []
-) {
+): Promise<ActionResult> {
   logger.debug('Updating custom axles for vehicle', { data: { vehicleId, axleCount: axles.length } });
 
   try {
-    return await prisma.$transaction(async (tx) => {
+    // Mueve stock de las cubiertas: el equipo tiene que ser de la empresa activa.
+    await assertVehicleInActiveCompany(vehicleId);
+    const profile = await requireServerAuthProfile();
+    await withActor(profile.credentialId, async (tx) => {
       const vehicle = await tx.vehicles.findUnique({
         where: { id: vehicleId },
-        select: { tire_template_id: true, tire_template: { select: { is_vehicle_override: true } } },
+        select: {
+          company_id: true,
+          tire_template_id: true,
+          tire_template: { select: { is_vehicle_override: true } },
+        },
       });
 
       if (!vehicle?.tire_template_id || !vehicle.tire_template?.is_vehicle_override) {
@@ -370,24 +413,38 @@ export async function updateVehicleCustomAxles(
         });
       }
 
-      await rebuildPositionsPreservingTires(tx, vehicleId, templateId, displacedTireActions);
+      await rebuildPositionsPreservingTires(tx, vehicleId, templateId, displacedTireActions, {
+        companyId: vehicle.company_id!,
+        createdBy: profile.id,
+      });
 
       logger.info('Updated custom axles for vehicle', { data: { vehicleId, templateId } });
-    });
+    }, prisma, GOMERIA_TX_OPTIONS);
+    return ok(null);
   } catch (error) {
-    logger.error('Error updating custom axles', { data: { error, vehicleId } });
-    throw error;
+    return toGomeriaActionError(error, logger, 'guardar los ejes del equipo');
   }
 }
 
-export async function resetVehicleToSubTypeTemplate(vehicleId: string) {
+/**
+ * Vuelve a la plantilla del subtipo: las cubiertas montadas pasan a disponibles y, si tienen
+ * stock, vuelven al depósito elegido (o al único activo de la empresa).
+ */
+export async function resetVehicleToSubTypeTemplate(
+  vehicleId: string,
+  warehouseId: string | null = null
+): Promise<ActionResult> {
   logger.debug('Resetting vehicle to sub-type template', { data: { vehicleId } });
 
   try {
-    return await prisma.$transaction(async (tx) => {
+    // Mueve stock de las cubiertas: el equipo tiene que ser de la empresa activa.
+    await assertVehicleInActiveCompany(vehicleId);
+    const profile = await requireServerAuthProfile();
+    await withActor(profile.credentialId, async (tx) => {
       const vehicle = await tx.vehicles.findUnique({
         where: { id: vehicleId },
         select: {
+          company_id: true,
           tire_template_id: true,
           tire_template: { select: { is_vehicle_override: true } },
           sub_type: { select: { tire_template_id: true } },
@@ -407,6 +464,15 @@ export async function resetVehicleToSubTypeTemplate(vehicleId: string) {
 
       if (positions.length > 0) {
         const tireIds = positions.map((p) => p.tire_id!);
+        for (const tireId of tireIds) {
+          await applyTireStatusChange(tx, vehicle.company_id!, profile.id, {
+            tireId,
+            from: 'INSTALLED',
+            to: 'AVAILABLE',
+            warehouseId,
+            notes: 'Quitada al restablecer la plantilla del equipo',
+          });
+        }
         await tx.tires.updateMany({
           where: { id: { in: tireIds } },
           data: { status: 'AVAILABLE' },
@@ -432,10 +498,10 @@ export async function resetVehicleToSubTypeTemplate(vehicleId: string) {
       }
 
       logger.info('Reset vehicle to sub-type template', { data: { vehicleId } });
-    });
+    }, prisma, GOMERIA_TX_OPTIONS);
+    return ok(null);
   } catch (error) {
-    logger.error('Error resetting vehicle template', { data: { error, vehicleId } });
-    throw error;
+    return toGomeriaActionError(error, logger, 'restablecer la plantilla');
   }
 }
 

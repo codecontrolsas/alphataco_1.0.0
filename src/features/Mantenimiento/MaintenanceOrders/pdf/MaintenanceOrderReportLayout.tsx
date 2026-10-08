@@ -44,7 +44,7 @@ import {
   tracking,
   type,
 } from './theme';
-import type { MaintenanceOrderReportData, ReportTask, ReportWorkOrder } from './types';
+import type { MaintenanceOrderReportData, ReportMaterial, ReportTask, ReportWorkOrder } from './types';
 
 // ============================================================================
 // GRILLA DE COLUMNAS
@@ -63,6 +63,12 @@ const TASK_COLS = {
   status: '12%',
   performer: '17%',
   closedAt: '16%',
+} as const;
+
+/** Columnas de la tabla de materiales (con y sin costos). */
+const MATERIAL_COLS = {
+  withCost: { workOrder: '28%', material: '44%', quantity: '12%', cost: '16%' },
+  withoutCost: { workOrder: '30%', material: '54%', quantity: '16%', cost: '0%' },
 } as const;
 
 /** Columnas de la tabla de trazabilidad. */
@@ -695,6 +701,63 @@ function TaskRow({ task }: TaskRowProps) {
   );
 }
 
+// ============================================================================
+// MATERIALES (Almacenes etapa 4)
+// ============================================================================
+
+function MaterialsTable({ materials, total }: { materials: ReportMaterial[]; total: string | null }) {
+  const withCost = materials.some((m) => m.cost !== null);
+  const cols = withCost ? MATERIAL_COLS.withCost : MATERIAL_COLS.withoutCost;
+  return (
+    <View>
+      <View style={styles.tableHead}>
+        <View style={[styles.headCell, { width: cols.workOrder }]}>
+          <Text style={styles.headText}>Orden de trabajo</Text>
+        </View>
+        <View style={[styles.headCell, { width: cols.material }]}>
+          <Text style={styles.headText}>Material</Text>
+        </View>
+        <View style={[styles.headCell, { width: cols.quantity }]}>
+          <Text style={[styles.headText, styles.cellTextRight]}>Cantidad</Text>
+        </View>
+        {withCost && (
+          <View style={[styles.headCell, { width: cols.cost }]}>
+            <Text style={[styles.headText, styles.cellTextRight]}>Costo</Text>
+          </View>
+        )}
+      </View>
+      {materials.map((m, index) => (
+        <View key={`${m.workOrder ?? 'orden'}-${m.material}-${index}`} style={styles.row} wrap={false}>
+          <View style={[styles.cell, { width: cols.workOrder }]}>
+            <Text style={[styles.cellText, styles.cellTextMuted]}>{m.workOrder ?? 'Toda la orden'}</Text>
+          </View>
+          <View style={[styles.cell, { width: cols.material }]}>
+            <Text style={styles.cellText}>{m.material}</Text>
+          </View>
+          <View style={[styles.cell, { width: cols.quantity }]}>
+            <Text style={[styles.cellText, styles.cellTextRight]}>{m.quantity}</Text>
+          </View>
+          {withCost && (
+            <View style={[styles.cell, { width: cols.cost }]}>
+              <Text style={[styles.cellText, styles.cellTextRight]}>{m.cost}</Text>
+            </View>
+          )}
+        </View>
+      ))}
+      {total !== null && (
+        <View style={styles.row} wrap={false}>
+          <View style={[styles.cell, { width: '84%' }]}>
+            <Text style={[styles.cellText, styles.cellTextBold, styles.cellTextRight]}>Total materiales</Text>
+          </View>
+          <View style={[styles.cell, { width: '16%' }]}>
+            <Text style={[styles.cellText, styles.cellTextBold, styles.cellTextRight]}>{total}</Text>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+}
+
 interface WorkOrderBlockProps {
   workOrder: ReportWorkOrder;
   /**
@@ -1026,10 +1089,27 @@ export function MaintenanceOrderReportLayout({ data }: MaintenanceOrderReportLay
           )}
         </View>
 
-        {/* ── 5. OBSERVACIONES ─────────────────────────────────────────── */}
+        {/* ── 5. MATERIALES (Almacenes etapa 4) ─────────────────────────── */}
+        <View style={styles.section}>
+          <View wrap={false}>
+            <SectionHeader
+              index={5}
+              title="Materiales utilizados"
+              hint="Entregados por pedido de materiales, netos de anulaciones"
+            />
+            {data.materials.length === 0 && (
+              <View style={styles.emptyRow}>
+                <Text style={[styles.cellText, styles.absentValue]}>No se registraron materiales.</Text>
+              </View>
+            )}
+          </View>
+          {data.materials.length > 0 && <MaterialsTable materials={data.materials} total={data.materialsTotal} />}
+        </View>
+
+        {/* ── 6. OBSERVACIONES ─────────────────────────────────────────── */}
         {/* No divisible: partida, el recuadro de criterios quedaba cortado entre dos hojas */}
         <View style={styles.section} wrap={false}>
-          <SectionHeader index={5} title="Observaciones generales" />
+          <SectionHeader index={6} title="Observaciones generales" />
           <View style={styles.closingRow}>
             <View style={{ flexGrow: 1, flexShrink: 1, minWidth: 0 }}>
               <Text style={[styles.prose, data.description?.trim() ? {} : styles.absentValue]}>
@@ -1049,9 +1129,9 @@ export function MaintenanceOrderReportLayout({ data }: MaintenanceOrderReportLay
           </View>
         </View>
 
-        {/* ── 6. CONFORMIDAD ───────────────────────────────────────────── */}
+        {/* ── 7. CONFORMIDAD ───────────────────────────────────────────── */}
         <View style={styles.section} wrap={false}>
-          <SectionHeader index={6} title="Conformidad" />
+          <SectionHeader index={7} title="Conformidad" />
           <View style={styles.signatureRow}>
             <View style={styles.signature}>
               <View style={styles.signatureLine}>

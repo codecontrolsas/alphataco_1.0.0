@@ -2,6 +2,8 @@
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { buildDeliveryStatusFacetResult } from '@/features/Clothing/components/DeliveryStatusBadge';
+import { deliveryStatusLabels } from '@/features/Clothing/lib/delivery-stock-where';
 import { BulkDownloadBar } from '@/features/Clothing/pdf/BulkDownloadBar';
 import { clothingDeliveryTypeLabels } from '@/features/Clothing/utils/mappers';
 import { clothing_delivery_type } from '@/generated/prisma/enums';
@@ -293,6 +295,11 @@ function DesktopDeliveriesTable({
     []
   );
 
+  const fetchStatusFacet = useCallback(async (facetParams: DataTableSearchParams): Promise<FacetResult> => {
+    const result = await getAllDeliveriesSingleFacet('status', facetParams);
+    return buildDeliveryStatusFacetResult(result?.counts ?? new Map());
+  }, []);
+
   // ─── Columns ──────────────────────────────────────────────────────────────
   const columns = useMemo(() => getColumns(), []);
 
@@ -354,13 +361,18 @@ function DesktopDeliveriesTable({
         },
       },
       {
+        columnId: 'status',
+        title: 'Estado',
+        fetchFacet: fetchStatusFacet,
+      },
+      {
         columnId: 'notes',
         title: 'Notas',
         type: 'text' as const,
         placeholder: 'Buscar en notas...',
       },
     ],
-    [makeEnumFetchFacet, makeFkFetchFacet, data]
+    [makeEnumFetchFacet, makeFkFetchFacet, fetchStatusFacet, data]
   );
 
   // ─── Filter visibility (max 3 by default) ────────────────────────────────
@@ -391,6 +403,7 @@ function DesktopDeliveriesTable({
         delivery_type: (val: unknown) =>
           val ? clothingDeliveryTypeLabels[val as keyof typeof clothingDeliveryTypeLabels] ?? String(val) : '-',
         has_signature: (val: unknown) => (val === 'true' ? 'Sí' : 'No'),
+        status: (val: unknown) => deliveryStatusLabels[String(val)] ?? '-',
         delivered_by_file: (val: unknown) => (val != null ? String(val) : '-'),
         employee_file: (val: unknown) => (val != null ? String(val) : '-'),
       },

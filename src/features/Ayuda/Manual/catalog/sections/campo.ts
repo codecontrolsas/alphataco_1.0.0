@@ -16,11 +16,11 @@ export const campoSection = defineSection({
     },
     {
       slug: 'panel-del-operario',
-      related: ['taller', 'vista-taller', 'del-checklist-al-taller'],
+      related: ['taller', 'vista-taller', 'del-checklist-al-taller', 'pedidos-de-materiales'],
     },
     {
       slug: 'entrega-de-indumentaria',
-      related: ['ficha-del-empleado', 'catalogo-de-indumentaria'],
+      related: ['ficha-del-empleado', 'catalogo-de-indumentaria', 'materiales', 'movimientos-de-stock', 'depositos'],
     },
   ],
 });

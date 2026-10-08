@@ -1,8 +1,8 @@
 ---
 title: Panel del operario
-summary: Panel del taller donde cada operario ve las órdenes de trabajo de su sector, las inicia, completa tareas, pide tareas nuevas y cierra la OT.
-keywords: operario, taller, OT, orden de trabajo, sector, mecánico, diagnóstico, tarea, pausar, cerrar OT, devolver tarea
-updated: 2026-10-07
+summary: Panel del taller donde cada operario ve las órdenes de trabajo de su sector, las inicia, completa tareas, pide tareas nuevas y materiales, y cierra la OT.
+keywords: operario, taller, OT, orden de trabajo, sector, mecánico, diagnóstico, tarea, pausar, cerrar OT, devolver tarea, materiales, repuestos, pedir materiales, esperando materiales
+updated: 2026-10-08
 ---
 
 El **Panel de Operario** es la pantalla del personal de taller. Cada operario ve solo las **órdenes de trabajo (OT)** de su sector, las inicia cuando arranca, va tildando las tareas a medida que las termina, deja notas técnicas y cierra la OT al final. Todo lo que hace se refleja en el módulo **Mantenimiento** del sistema, donde el jefe de taller sigue el avance.
@@ -86,6 +86,30 @@ Pausar tiene otro efecto: **libera a los sectores siguientes**. Una misma orden 
 <State name="Completada Parcial" tone="warning">Cerrada con alguna tarea pendiente.</State>
 </States>
 
+## Cómo pedir materiales
+
+Si para la reparación necesitás repuestos o insumos del almacén, pedilos desde la misma OT. Abajo del detalle está la sección **Materiales**.
+
+<Steps>
+<Step title="Tocá Pedir materiales">
+El botón está mientras la OT no esté cerrada ni cancelada.
+</Step>
+<Step title="Cargá lo que necesitás">
+Buscá cada material por código o nombre y poné la **Cantidad**. **Agregar material** suma otro. Si querés, escribí una **Nota** (para qué es, la urgencia). No elegís depósito: el almacén decide de dónde sale cuando lo entrega.
+</Step>
+<Step title="Enviá">
+Tocá **Enviar pedido**. Vas a ver "**PED-000012 enviado: queda pendiente de aprobación**".
+</Step>
+</Steps>
+
+En la sección **Materiales** ves tus pedidos de esa OT, cada uno con su número, su estado y, por material, cuánto se entregó de lo pedido (por ejemplo "**2 de 4 u**"). Mientras haya pedidos sin entregar del todo, el título muestra **Esperando materiales**. Si no pediste nada: "**No pediste materiales para esta OT.**"
+
+<Callout type="info" title="La OT no se pausa sola">
+Pedir materiales no cambia el estado de la OT. Si no podés seguir sin el repuesto, pausala vos con **Pausar OT**.
+</Callout>
+
+El pedido lo aprueba un responsable y lo entrega el almacén, como cualquier pedido de materiales (ver <GuideLink to="pedidos-de-materiales">Pedidos de materiales</GuideLink>). Queda imputado a la orden de mantenimiento y a tu OT, y el jefe de taller lo ve en el detalle de la orden. No necesitás permisos del módulo Almacenes.
+
 ## Cómo devolver una tarea
 
 Si una tarea no corresponde a tu sector o no la podés hacer, devolvéla al jefe de taller:
@@ -127,6 +151,7 @@ Si al agregar ves **Sin tipos de reparacion disponibles**, tu sector no tiene ti
 - Las OT que ves las genera el jefe de taller en **Mantenimiento → Taller** a partir de los pedidos aprobados (ver <GuideLink to="taller">Taller</GuideLink>). El recorrido completo, desde el checklist del chofer hasta el taller, está en <GuideLink to="del-checklist-al-taller">Del checklist al taller</GuideLink>.
 - Cada acción tuya (iniciar, pausar, completar tareas, devolver, agregar, cerrar) queda registrada en el historial de la orden y se ve en **Mantenimiento → Vista Taller**, donde las tareas abiertas se agrupan por sector (ver <GuideLink to="vista-taller">Vista Taller</GuideLink>).
 - Las tareas devueltas, las que requieren aprobación y las derivadas a otro sector le llegan al jefe de taller para que decida.
+- Los **materiales** que pedís llegan a **Almacenes → Pedidos** para que los aprueben y los entreguen. Mientras haya pedidos abiertos, el jefe de taller no puede cerrar la orden (ver <GuideLink to="taller">Taller</GuideLink>).
 - Cuando se cierra **la última OT** de una orden de mantenimiento, la orden pasa a **Pend. Validación Taller**. Si en cambio aparece el aviso "**La OT se cerró, pero el pedido quedó en un estado que impide avanzarlo a validación del taller. Avisá al jefe de taller.**", la OT sí se cerró: avisale al jefe de taller.
 
 ## Permisos

@@ -13,6 +13,9 @@ const DELIVERY_PDF_SELECT = {
   delivered_at: true,
   signature_url: true,
   notes: true,
+  // Almacenes etapa 5: una entrega anulada se imprime marcada.
+  cancelled_at: true,
+  cancel_reason: true,
   clothing_delivery_items: {
     select: {
       quantity: true,

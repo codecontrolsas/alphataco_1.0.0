@@ -13,6 +13,7 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { syncTireMaterials } from '@/features/Warehouses/lib/tire-materials';
 import { prisma } from '@/shared/lib/prisma';
 
 const logger = new Logger('features/Mantenimiento/Gomeria/Marcas');
@@ -221,8 +222,12 @@ export async function createTireBrand(data: { name: string }) {
     if (existing) {
       throw new Error(`Ya existe una marca con el nombre "${data.name}"`);
     }
-    const brand = await prisma.tire_brands.create({ data: { name: data.name, company_id: companyId } });
-    return brand;
+    // Cada combinacion tipo + marca es un material de Almacenes (etapa 6): se crean juntos.
+    return await prisma.$transaction(async (tx) => {
+      const brand = await tx.tire_brands.create({ data: { name: data.name, company_id: companyId } });
+      await syncTireMaterials(tx, companyId);
+      return brand;
+    });
   } catch (error) {
     logger.error('Error creating tire brand', { data: { error } });
     throw error;
@@ -234,11 +239,15 @@ export async function updateTireBrand(id: string, data: { name: string }) {
   try {
     await assertTireBrandInActiveCompany(id);
 
-    const brand = await prisma.tire_brands.update({
-      where: { id },
-      data: { name: data.name },
+    // El nombre y el estado del material de cada combinacion siguen al tipo y a la marca.
+    return await prisma.$transaction(async (tx) => {
+      const brand = await tx.tire_brands.update({
+        where: { id },
+        data: { name: data.name },
+      });
+      await syncTireMaterials(tx, brand.company_id);
+      return brand;
     });
-    return brand;
   } catch (error) {
     logger.error('Error updating tire brand', { data: { error, id } });
     throw error;
@@ -250,11 +259,15 @@ export async function toggleTireBrandActive(id: string, isActive: boolean) {
   try {
     await assertTireBrandInActiveCompany(id);
 
-    const brand = await prisma.tire_brands.update({
-      where: { id },
-      data: { is_active: isActive },
+    // El nombre y el estado del material de cada combinacion siguen al tipo y a la marca.
+    return await prisma.$transaction(async (tx) => {
+      const brand = await tx.tire_brands.update({
+        where: { id },
+        data: { is_active: isActive },
+      });
+      await syncTireMaterials(tx, brand.company_id);
+      return brand;
     });
-    return brand;
   } catch (error) {
     logger.error('Error toggling tire brand active', { data: { error, id } });
     throw error;

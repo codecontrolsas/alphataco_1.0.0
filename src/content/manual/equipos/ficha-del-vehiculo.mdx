@@ -2,7 +2,7 @@
 title: Ficha del vehículo
 summary: Todo lo que se ve y se hace dentro de un vehículo: datos, asignación a clientes y centro de costo, documentos, QR, historial de mantenimiento, checklists y cubiertas.
 keywords: ficha, vehículo, detalle, editar, dominio, asignación, contratistas, clientes, centro de costo, sector, qr, historial de mantenimiento, checklist, cubiertas, gomería, en preparación, operativo
-updated: 2026-10-07
+updated: 2026-10-08
 ---
 
 La ficha reúne toda la información de un vehículo: sus datos, a qué clientes y centro de costo está asignado, sus documentos, su código QR, lo que pasó por el taller, los checklists que se le hicieron y la configuración de sus cubiertas. Se abre haciendo clic en el **Dominio**, el **N° Interno** o **Ver** desde el <GuideLink to="equipos-listado">listado de equipos</GuideLink>, o desde cualquier tabla que muestre el equipo como enlace.
@@ -107,6 +107,11 @@ La tabla **Historial de Checklists** lista cada checklist completado para el veh
 - **Medidas de cubierta**: la medida por eje, que puede ajustarse para este vehículo.
 - **Historial de Órdenes de Gomería**: los servicios de gomería registrados.
 
+Las cubiertas son stock de **Almacenes**, así que algunos cambios de la configuración mueven stock:
+
+- **Restablecer** la configuración del subtipo desmonta las cubiertas montadas y las deja **Disponibles**: las que tienen stock vuelven a un depósito, que se elige en **Depósito al que vuelven las cubiertas con stock** (si hay uno solo, se usa ese).
+- Al **Editar** el diagrama, si quedan cubiertas sin posición, el sistema pregunta qué hacer con cada una. Las que pasan a **Disponible** vuelven al **Depósito al que vuelven las disponibles**; las descartadas se dan de baja del stock.
+
 Ver <GuideLink to="gomeria">Gomería</GuideLink>.
 
 ## Cómo se conecta con el resto del sistema
@@ -115,6 +120,7 @@ Ver <GuideLink to="gomeria">Gomería</GuideLink>.
 - **Asignación → Comercial y Operaciones**: los clientes tildados son los que figuran en el cliente y en la planificación.
 - **Condición ↔ Mantenimiento**: el taller cambia la condición; la ficha solo habilita el primer paso a **Operativo**.
 - **Checklist y QR → Mantenimiento**: un checklist con ítems en mal estado puede generar un pedido de mantenimiento que después aparece en el historial.
+- **Almacenes**: todo material que sale imputado al vehículo (repuestos, herramientas, cubiertas que se le montan) queda registrado como una salida a su nombre. Para verlo, en **Almacenes → Movimientos** filtrá **Destino** por el dominio o el interno (ver <GuideLink to="movimientos-de-stock">Movimientos de stock</GuideLink>). Las herramientas que tiene en su poder figuran en **Almacenes → Préstamos**.
 
 ## Permisos
 

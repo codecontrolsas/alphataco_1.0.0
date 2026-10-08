@@ -1,3 +1,4 @@
+import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
 import { Card, CardContent } from '@/components/ui/card';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
@@ -29,9 +30,10 @@ export default async function EmployeeDeliveriesList({ employeeId, searchParams 
   const tableParams = stripPrefixFromSearchParams(searchParams as DataTableSearchParams, TABLE_ID);
 
   // Facets se cargan lazy (on-demand al abrir cada popover) — no en SSR
-  const [{ data, total }, preferences] = await Promise.all([
+  const [{ data, total }, preferences, permissionsMap] = await Promise.all([
     getEmployeeDeliveriesPaginated(employeeId, tableParams),
     getTablePreferences(TABLE_ID),
+    getUserPermissionsMapServer(),
   ]);
 
   return (
@@ -45,6 +47,7 @@ export default async function EmployeeDeliveriesList({ employeeId, searchParams 
           tableId={TABLE_ID}
           initialColumnVisibility={preferences.columnVisibility ?? {}}
           initialFilterVisibility={preferences.filterVisibility ?? {}}
+          permissionsMap={permissionsMap}
         />
       </CardContent>
     </Card>

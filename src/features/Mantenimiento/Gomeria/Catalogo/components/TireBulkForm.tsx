@@ -15,7 +15,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { createTiresBulk, getTireBrandsForSelect } from '../actions/actions.server';
+import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
+import { DECIMAL_RE } from '@/features/Warehouses/schemas/stock-movement';
+import { createTiresBulk, getTireBrandsForSelect, getTireWarehousesForSelect } from '../actions/actions.server';
 
 const logger = new Logger('TireBulkForm');
 
@@ -33,6 +35,9 @@ const tireBulkFormSchema = z
     is_new: z.boolean().default(true),
     retread_level: z.nativeEnum(TireRetreadLevel).nullable().optional(),
     tread_depth: z.coerce.number().positive('Debe ser positivo').nullable().optional(),
+    /** Las cubiertas entran al stock con una entrada (Almacenes etapa 6). */
+    warehouseId: z.string(),
+    unitCost: z.string().trim().regex(DECIMAL_RE, 'Costo inválido (hasta 4 decimales)'),
   })
   .refine((data) => data.rangeTo >= data.rangeFrom, {
     message: 'El número final debe ser mayor o igual al número inicial',
@@ -87,8 +92,20 @@ export function TireBulkForm({ open, onOpenChange, queryKey }: TireBulkFormProps
       is_new: true,
       retread_level: null,
       tread_depth: null,
+      warehouseId: '',
+      unitCost: '',
     },
   });
+
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ['tire-warehouses-select'],
+    queryFn: () => getTireWarehousesForSelect(),
+    staleTime: 5 * 60 * 1000,
+    enabled: open,
+  });
+  // Con un solo depósito activo viene elegido.
+  const watchedWarehouseId = useWatch({ control: form.control, name: 'warehouseId' });
+  const effectiveWarehouseId = watchedWarehouseId || (warehouses.length === 1 ? warehouses[0]!.id : '');
 
   // Watch values for preview
   const watchedPrefix = useWatch({ control: form.control, name: 'prefix' });
@@ -100,18 +117,21 @@ export function TireBulkForm({ open, onOpenChange, queryKey }: TireBulkFormProps
   const previewLast = watchedPrefix ? `${watchedPrefix}${watchedTo}` : '-';
 
   const mutation = useMutation({
-    mutationFn: async (values: TireBulkFormValues) => {
-      return createTiresBulk({
-        prefix: values.prefix,
-        rangeFrom: values.rangeFrom,
-        rangeTo: values.rangeTo,
-        brand_id: values.brand_id,
-        tire_type_id: values.tire_type_id,
-        is_new: values.is_new,
-        retread_level: values.retread_level ?? null,
-        tread_depth: values.tread_depth ?? null,
-      });
-    },
+    mutationFn: async (values: TireBulkFormValues) =>
+      unwrapAction(
+        await createTiresBulk({
+          prefix: values.prefix,
+          rangeFrom: values.rangeFrom,
+          rangeTo: values.rangeTo,
+          brand_id: values.brand_id,
+          tire_type_id: values.tire_type_id,
+          is_new: values.is_new,
+          retread_level: values.retread_level ?? null,
+          tread_depth: values.tread_depth ?? null,
+          warehouseId: effectiveWarehouseId,
+          unitCost: values.unitCost,
+        })
+      ),
     onSuccess: (result) => {
       toast.success(`Se crearon ${result.count} cubiertas correctamente`);
       queryClient.invalidateQueries({ queryKey });
@@ -125,6 +145,10 @@ export function TireBulkForm({ open, onOpenChange, queryKey }: TireBulkFormProps
   });
 
   async function onSubmit(values: TireBulkFormValues) {
+    if (!effectiveWarehouseId) {
+      form.setError('warehouseId', { message: 'Elegí el depósito' });
+      return;
+    }
     mutation.mutate(values);
   }
 
@@ -311,6 +335,47 @@ export function TireBulkForm({ open, onOpenChange, queryKey }: TireBulkFormProps
                         ))}
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Stock */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="warehouseId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Depósito</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || effectiveWarehouseId}>
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Seleccionar depósito..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {warehouses.map((w) => (
+                          <SelectItem key={w.id} value={w.id}>
+                            {w.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="unitCost"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Costo unitario</FormLabel>
+                    <FormControl>
+                      <Input inputMode="decimal" placeholder="Ej: 450000" {...field} />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

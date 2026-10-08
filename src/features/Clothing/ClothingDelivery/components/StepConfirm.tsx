@@ -8,12 +8,13 @@ import {
   createClothingDelivery,
   type CreateDeliveryInput,
 } from '@/features/Clothing/ClothingDelivery/actions/deliveries.server';
+import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import type { EmployeeForDelivery } from '@/features/Clothing/ClothingDelivery/actions/queries.server';
 import type { WizardItem } from '@/features/Clothing/ClothingDelivery/components/StepAddItems';
 import { clothingDeliveryTypeBadges, clothingDeliveryTypeLabels } from '@/features/Clothing/utils/mappers';
 import type { clothing_delivery_type } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Briefcase, CalendarDays, CreditCard, Loader2, Package, Pen, ScrollText, User } from 'lucide-react';
 import moment from 'moment';
 import { useCallback } from 'react';
@@ -24,6 +25,8 @@ const logger = new Logger('Clothing/StepConfirm');
 interface StepConfirmProps {
   employee: EmployeeForDelivery;
   deliveryType: string;
+  warehouseId: string;
+  warehouseName: string | null;
   items: WizardItem[];
   signatureUrl: string | null;
   notes: string;
@@ -34,22 +37,31 @@ interface StepConfirmProps {
 export function StepConfirm({
   employee,
   deliveryType,
+  warehouseId,
+  warehouseName,
   items,
   signatureUrl,
   notes,
   onNotesChange,
   onReset,
 }: StepConfirmProps) {
+  const queryClient = useQueryClient();
+  // El disponible por talle cambia al entregar (y conviene releerlo si fallo por stock).
+  const refreshAvailability = () => queryClient.invalidateQueries({ queryKey: ['clothing-sizes-for-item-brand'] });
   const { mutate, isPending } = useMutation({
-    mutationFn: (data: CreateDeliveryInput) => createClothingDelivery(data),
+    // El servidor devuelve el error (no lo lanza): asi llega el detalle de stock faltante.
+    mutationFn: async (data: CreateDeliveryInput) => unwrapAction(await createClothingDelivery(data)),
     onSuccess: () => {
       logger.info('Delivery created successfully');
       toast.success('Entrega registrada correctamente');
+      refreshAvailability();
       onReset();
     },
     onError: (err) => {
       logger.error('Error creating delivery', { data: { err } });
-      toast.error('No se pudo registrar la entrega. Intente nuevamente.');
+      // El asistente no se reinicia: el operario corrige (depósito, cantidad) y vuelve a confirmar.
+      toast.error(err instanceof Error ? err.message : 'No se pudo registrar la entrega. Intente nuevamente.');
+      refreshAvailability();
     },
   });
 
@@ -64,6 +76,7 @@ export function StepConfirm({
 
     mutate({
       employeeId: employee.id,
+      warehouseId,
       deliveryType,
       signatureUrl: signatureUrl ?? undefined,
       notes: notes.trim() || undefined,
@@ -76,7 +89,7 @@ export function StepConfirm({
         hasCertificate: item.hasCertificate,
       })),
     });
-  }, [employee.id, deliveryType, items, signatureUrl, notes, mutate]);
+  }, [employee.id, warehouseId, deliveryType, items, signatureUrl, notes, mutate]);
 
   return (
     <div className="space-y-5">
@@ -135,6 +148,12 @@ export function StepConfirm({
         <Badge variant={clothingDeliveryTypeBadges[deliveryType as clothing_delivery_type]}>
           {clothingDeliveryTypeLabels[deliveryType as clothing_delivery_type]}
         </Badge>
+      </div>
+
+      {/* Depósito (Almacenes etapa 5) */}
+      <div className="rounded-lg border bg-card p-4 space-y-1">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Sale del depósito</p>
+        <p className="text-sm font-medium">{warehouseName ?? '—'}</p>
       </div>
 
       {/* Items */}

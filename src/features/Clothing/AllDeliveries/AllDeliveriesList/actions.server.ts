@@ -1,5 +1,11 @@
 'use server';
 
+import {
+  buildDeliveryStatusWhere,
+  DELIVERY_STATUS_ACTIVE,
+  DELIVERY_STATUS_CANCELLED,
+  DELIVERY_STATUS_SELECT,
+} from '@/features/Clothing/lib/delivery-stock-where';
 import { Logger } from '@/lib/logger';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
@@ -36,6 +42,7 @@ const MANUALLY_HANDLED_COLUMNS = [
   'delivered_by_file',
   'employee_id',
   'employee_file',
+  'status',
 ];
 
 /** Mapeo de columnas FK para ordenamiento server-side */
@@ -46,6 +53,7 @@ const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Record<string, unknow
   employee_id: (dir) => ({
     employees_clothing_deliveries_employee_idToemployees: { lastname: dir },
   }),
+  status: (dir) => ({ cancelled_at: dir }),
 };
 
 // ============================================================================
@@ -61,6 +69,7 @@ const DELIVERY_SELECT = {
   delivered_at: true,
   notes: true,
   signature_url: true,
+  ...DELIVERY_STATUS_SELECT,
   employees_clothing_deliveries_employee_idToemployees: {
     select: {
       id: true,
@@ -184,6 +193,7 @@ function buildWhereClause(companyId: string, state: ReturnType<typeof parseSearc
     ...employeeFileWhere,
     ...deliveredByWhere,
     ...deliveredByFileWhere,
+    ...buildDeliveryStatusWhere(state.filters),
   };
 }
 
@@ -314,6 +324,18 @@ export async function getAllDeliveriesSingleFacet(
       return {
         counts: toFacetMap(rows.map((r) => ({ key: r.delivery_type, count: r._count }))),
       };
+    }
+
+    // ── Estado (virtual: cancelled_at) ──
+    if (columnId === 'status') {
+      const [active, cancelled] = await Promise.all([
+        prisma.clothing_deliveries.count({ where: { ...where, cancelled_at: null } }),
+        prisma.clothing_deliveries.count({ where: { ...where, cancelled_at: { not: null } } }),
+      ]);
+      const counts = new Map<string, number>();
+      if (active > 0) counts.set(DELIVERY_STATUS_ACTIVE, active);
+      if (cancelled > 0) counts.set(DELIVERY_STATUS_CANCELLED, cancelled);
+      return { counts };
     }
 
     // ── FK: employee_id (recipient) ──

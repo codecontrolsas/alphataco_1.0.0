@@ -37,6 +37,12 @@ export const ACTIONS = {
   // distintos, y poder tocar el precio es otro más.
   view_prices: { slug: 'view_prices', name: 'Ver precios e importes' },
   update_prices: { slug: 'update_prices', name: 'Modificar precios' },
+  // Almacenes: un ajuste corrige el inventario sin respaldo documental, y una anulacion
+  // revierte un movimiento ya registrado. Ninguno de los dos es "registrar movimientos".
+  adjust: { slug: 'adjust', name: 'Ajustar stock' },
+  reverse: { slug: 'reverse', name: 'Anular movimiento' },
+  // Salida de stock sin pedido. Sin esta accion, una salida pasa por un pedido aprobado.
+  direct_exit: { slug: 'direct_exit', name: 'Salida directa' },
 } as const;
 
 export type ActionSlug = keyof typeof ACTIONS;
@@ -570,7 +576,8 @@ export const PERMISSIONS = {
             name: 'Indumentaria',
             tabId: '3df67b2a-f5e7-47e0-849b-88698d055863',
             parent: 'detalle-empleado',
-            allowedActions: ['view', 'create'],
+            // `delete`: anular una entrega de ropa (Almacenes etapa 5).
+            allowedActions: ['view', 'create', 'delete'],
           },
         },
       },
@@ -1326,6 +1333,82 @@ export const PERMISSIONS = {
         // 'approve' habilita aprobar y rechazar: es la decisión de gerencia,
         // separada de la carga y edición que hace RRHH con 'create'/'update'.
         allowedActions: ['view', 'create', 'update', 'approve'],
+        subtabs: {},
+      },
+    },
+  },
+  // ============================================
+  // 12. ALMACENES
+  // ============================================
+  // Inventario multi-deposito (spec docs/superpowers/specs/2026-10-04-almacenes-etapa-1-design.md).
+  // Prefijo de ids `b0000000-`: `50000000-` ya es de Documentacion. Antes de elegir un prefijo,
+  // verificar que no exista: `SELECT DISTINCT substr(id::text,1,8) FROM tabs`.
+  // Las pantallas de detalle (movimiento, material) heredan el permiso del tab desde el que
+  // se llega: movimientos/view y stock/view respectivamente.
+  almacenes: {
+    slug: 'almacenes',
+    name: 'Almacenes',
+    moduleId: 'b0000000-0000-0000-0000-000000000000',
+    tabs: {
+      stock: {
+        slug: 'stock',
+        name: 'Stock',
+        tabId: 'b0000000-0000-0000-0000-000000000001',
+        parent: null,
+        allowedActions: ['view', 'view_prices'],
+        subtabs: {},
+      },
+      movimientos: {
+        slug: 'movimientos',
+        name: 'Movimientos',
+        tabId: 'b0000000-0000-0000-0000-000000000002',
+        parent: null,
+        // 'create' registra entradas, salidas y transferencias; 'adjust' y 'reverse' son
+        // aparte (ver ACTIONS).
+        allowedActions: ['view', 'create', 'adjust', 'reverse', 'view_prices', 'direct_exit'],
+        subtabs: {},
+      },
+      prestamos: {
+        slug: 'prestamos',
+        name: 'Préstamos',
+        tabId: 'b0000000-0000-0000-0000-000000000006',
+        parent: null,
+        // 'create' registra la devolucion; 'delete' da de baja una herramienta que no vuelve.
+        allowedActions: ['view', 'create', 'delete'],
+        subtabs: {},
+      },
+      pedidos: {
+        slug: 'pedidos',
+        name: 'Pedidos',
+        tabId: 'b0000000-0000-0000-0000-000000000007',
+        parent: null,
+        // 'view' ve los propios, 'view_all_requests' todos; 'approve' aprueba o rechaza;
+        // 'update' entrega y cierra.
+        allowedActions: ['view', 'view_all_requests', 'create', 'approve', 'update'],
+        subtabs: {},
+      },
+      materiales: {
+        slug: 'materiales',
+        name: 'Materiales',
+        tabId: 'b0000000-0000-0000-0000-000000000003',
+        parent: null,
+        allowedActions: ['view', 'create', 'update', 'delete'],
+        subtabs: {},
+      },
+      depositos: {
+        slug: 'depositos',
+        name: 'Depósitos',
+        tabId: 'b0000000-0000-0000-0000-000000000004',
+        parent: null,
+        allowedActions: ['view', 'create', 'update', 'delete'],
+        subtabs: {},
+      },
+      'config-almacen': {
+        slug: 'config-almacen',
+        name: 'Configuración',
+        tabId: 'b0000000-0000-0000-0000-000000000005',
+        parent: null,
+        allowedActions: ['view', 'create', 'update', 'delete'],
         subtabs: {},
       },
     },

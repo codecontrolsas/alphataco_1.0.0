@@ -1,8 +1,8 @@
 ---
 title: Catálogo de indumentaria
-summary: Cómo cargar los artículos de indumentaria y EPP con sus marcas y talles, y cómo consultar y descargar las constancias de todas las entregas.
-keywords: indumentaria, EPP, ropa de trabajo, artículo, marca, talle, combinación, entregas, constancia, reportes, firma, ZIP, reposición
-updated: 2026-10-07
+summary: Cómo cargar los artículos de indumentaria y EPP con sus marcas y talles (cada combinación es un material con stock en Almacenes), y cómo consultar, anular y descargar las constancias de todas las entregas.
+keywords: indumentaria, EPP, ropa de trabajo, artículo, marca, talle, combinación, entregas, constancia, reportes, firma, ZIP, reposición, stock, material, anular entrega
+updated: 2026-10-08
 ---
 
 El **Listado Maestro de Artículos** es el catálogo de la ropa de trabajo y los elementos de protección personal (EPP) que la empresa entrega a su gente. Lo que se carga acá es exactamente lo que después se puede elegir al registrar una entrega. También reúne el reporte de todas las entregas hechas. Lo usan RRHH, Higiene y Seguridad y el pañol.
@@ -47,7 +47,7 @@ Hacé clic en **Nuevo Artículo**.
 **Nombre** es obligatorio (por ejemplo "Camisa manga larga" o "Botas de seguridad") y no puede repetirse. **Código** (por ejemplo "CAM-ML-001") y **Descripción** son opcionales.
 </Step>
 <Step title="Armá las combinaciones de marca y talle">
-En **Marcas y Talles**, hacé clic en **Agregar**, elegí una marca en **Seleccioná una marca...**, tildá los talles que hay de esa marca y confirmá. Repetí con cada marca. Cada combinación se ve como una fila con la marca y sus talles; el tacho la quita.
+En **Marcas y Talles**, hacé clic en **Agregar**, elegí una marca en **Seleccioná una marca...**, tildá los talles que hay de esa marca y confirmá. Repetí con cada marca. Cada combinación se ve como una fila con la marca y sus talles; el tacho la quita. Al guardar, el sistema crea un **material de stock** por cada talle de cada marca (ver [El stock de cada combinación](#el-stock-de-cada-combinación)).
 </Step>
 <Step title="Guardá">
 Hacé clic en **Crear artículo**. Vas a ver **Artículo creado exitosamente**.
@@ -60,6 +60,16 @@ Al registrar una entrega se elige el artículo, después una de **sus** marcas y
 
 Para cambiar un artículo, usá **Editar** en su fila (el botón dice **Guardar cambios**). Para dejar de entregarlo, usá **Desactivar**: un artículo inactivo no se ofrece en las entregas nuevas, pero sigue apareciendo en las entregas ya registradas.
 
+### El stock de cada combinación
+
+Cada combinación de **artículo + marca + talle** es un **material** del módulo Almacenes, con su propio stock. "Camisa Ombú 42" y "Camisa Ombú 44" son dos materiales distintos. El sistema los crea y los mantiene solo:
+
+- **Al guardar** la matriz, crea el material de cada combinación nueva. Su código combina el código del artículo, tres letras de la marca y el talle (por ejemplo **IND-001-OMB-42**), y su nombre es "Camisa · Ombú · 42".
+- **Al renombrar** el artículo, la marca o el talle, actualiza el nombre del material.
+- **Al quitar** una combinación de la matriz, o al desactivar el artículo, la marca o el talle, el material pasa a **Inactivo** y ya no se puede entregar. Nunca se borra: si volvés a habilitar la combinación, recupera el mismo material con su stock y su historial.
+
+En la edición del artículo, junto a cada talle ves su **stock total en Almacenes** (pasando el mouse, el código del material). Las compras de ropa se ingresan al stock en **Almacenes → Movimientos** con una entrada de esos materiales (ver <GuideLink to="materiales">Materiales</GuideLink> y <GuideLink to="movimientos-de-stock">Movimientos de stock</GuideLink>).
+
 ## Reportes
 
 **Reportes** es el listado de **todas** las entregas de indumentaria de la empresa.
@@ -70,6 +80,9 @@ Para cambiar un artículo, usá **Editar** en su fila (el botón dice **Guardar 
 | **Legajo Receptor** y **Empleado** | Quién recibió. |
 | **Legajo (entregó)** y **Entregado por** | Quién entregó. |
 | **Tipo de entrega** | **Planificada CCT**, **Planificada EPP** o **Reposición**. |
+| **Estado** | **Vigente** o **Anulada**. |
+| **Depósito** | Del que salió la ropa (vacío en las entregas anteriores al control de stock). |
+| **Costo** | Lo que valió la entrega, solo con **Ver precios e importes** en **Almacenes → Movimientos**. |
 | **Artículos** | Lo que se entregó. |
 | Firma | **Con firma** o **Sin firma**. |
 | **Notas** | Las observaciones de la entrega. |
@@ -77,21 +90,23 @@ Para cambiar un artículo, usá **Editar** en su fila (el botón dice **Guardar 
 
 Podés filtrar por todas esas columnas y exportar a Excel ("Reportes de Entregas de Indumentaria", con una fila por artículo).
 
-- El botón de cada fila abre la **Constancia de Entrega EPP** en PDF, para ver o descargar.
+- El botón de cada fila abre la **Constancia de Entrega EPP** en PDF, para ver o descargar. Las anuladas llevan la marca **ANULADA**.
+- **Anular** (con permiso **Eliminar** en la pestaña **Indumentaria** de Empleados) anula una entrega con su motivo: la ropa vuelve al depósito y la entrega queda **Anulada** (ver <GuideLink to="entrega-de-indumentaria">Entrega de indumentaria</GuideLink>).
 - Tildando varias entregas (o todas las visibles, con la casilla del encabezado) aparece una barra para descargarlas juntas con **Descargar ZIP**. La selección se mantiene aunque cambies de página.
 
 ## Cómo se conecta con el resto del sistema
 
 <Flow>
 <FlowStep title="Catálogo" module="Configuración">Artículos con sus marcas y talles.</FlowStep>
-<FlowStep title="Entrega" module="Panel de indumentaria" to="entrega-de-indumentaria" tone="info">Se elige artículo, marca y talle, y firma el empleado.</FlowStep>
+<FlowStep title="Materiales y stock" module="Almacenes" to="materiales">Un material por combinación; se cargan las compras.</FlowStep>
+<FlowStep title="Entrega" module="Panel de indumentaria" to="entrega-de-indumentaria" tone="info">Se elige depósito, artículo, marca y talle, y firma el empleado.</FlowStep>
 <FlowStep title="Ficha del empleado" module="Empleados" to="ficha-del-empleado" tone="success">La entrega queda en la pestaña Indumentaria.</FlowStep>
 <FlowStep title="Reportes" module="Configuración">Todas las entregas, con su constancia.</FlowStep>
 </Flow>
 
 - Lo que se entrega sale de este catálogo: si falta un artículo, una marca o un talle, se carga acá (<GuideLink to="entrega-de-indumentaria">Entrega de indumentaria</GuideLink>).
 - Cada entrega queda también en la ficha del empleado (<GuideLink to="ficha-del-empleado#indumentaria">Ficha del empleado → Indumentaria</GuideLink>).
-- El catálogo no lleva stock: no descuenta existencias al entregar.
+- **El stock lo lleva Almacenes**: cada entrega descuenta del depósito elegido el material de esa combinación, y si no hay stock no se puede entregar (<GuideLink to="stock-y-ficha-del-material">Stock y ficha del material</GuideLink>).
 
 ## Permisos
 

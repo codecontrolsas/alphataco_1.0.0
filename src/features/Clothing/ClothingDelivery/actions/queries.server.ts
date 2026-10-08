@@ -3,6 +3,7 @@
 import {
   assertClothingBrandInCompany,
   assertClothingItemInCompany,
+  assertWarehouseInCompany,
   getClothingOperatorCompanyId,
 } from '@/features/Clothing/actions/perimeter';
 import { Logger } from '@/lib/logger';
@@ -128,16 +129,18 @@ export async function getBrandsForItem(itemId: string) {
 export type BrandForItem = Awaited<ReturnType<typeof getBrandsForItem>>[number];
 
 /**
- * Talles disponibles para la combinación artículo + marca.
- * Perímetro: artículo y marca tienen que ser de la empresa del operario.
+ * Talles disponibles para la combinación artículo + marca, con el stock del depósito elegido
+ * (Almacenes etapa 5). Sin depósito, `available` es null. Solo cantidades: sin costos.
+ * Perímetro: artículo, marca y depósito tienen que ser de la empresa del operario.
  */
-export async function getSizesForItemBrand(itemId: string, brandId: string) {
+export async function getSizesForItemBrand(itemId: string, brandId: string, warehouseId?: string | null) {
   const companyId = await getClothingOperatorCompanyId();
-  logger.debug('Getting sizes for item+brand', { data: { itemId, brandId } });
+  logger.debug('Getting sizes for item+brand', { data: { itemId, brandId, warehouseId } });
 
   try {
     await assertClothingItemInCompany(itemId, companyId);
     await assertClothingBrandInCompany(brandId, companyId);
+    if (warehouseId) await assertWarehouseInCompany(warehouseId, companyId);
 
     const entries = await prisma.clothing_item_brand_sizes.findMany({
       where: { clothing_item_id: itemId, clothing_brand_id: brandId },
@@ -145,11 +148,44 @@ export async function getSizesForItemBrand(itemId: string, brandId: string) {
       orderBy: { clothing_sizes: { name: 'asc' } },
     });
 
-    return entries.map((entry) => entry.clothing_sizes);
+    // Stock por talle: una consulta para todos los talles de la combinacion.
+    const stock = new Map<string, string>();
+    if (warehouseId && entries.length > 0) {
+      const links = await prisma.clothing_item_materials.findMany({
+        where: { company_id: companyId, clothing_item_id: itemId, clothing_brand_id: brandId },
+        select: {
+          clothing_size_id: true,
+          material: {
+            select: { stock_balances: { where: { warehouse_id: warehouseId }, select: { quantity: true } } },
+          },
+        },
+      });
+      for (const link of links) {
+        const total = link.material.stock_balances.reduce((acc, b) => acc + Number(b.quantity), 0);
+        stock.set(link.clothing_size_id, String(total));
+      }
+    }
+
+    return entries.map((entry) => ({
+      ...entry.clothing_sizes,
+      available: warehouseId ? (stock.get(entry.clothing_sizes.id) ?? '0') : null,
+    }));
   } catch (error) {
     logger.error('Error getting sizes for item+brand', { data: { error, itemId, brandId } });
     throw error;
   }
 }
+
+/** Depósitos activos de la empresa del operario, para elegir de dónde sale la entrega. */
+export async function getDeliveryWarehouses() {
+  const companyId = await getClothingOperatorCompanyId();
+  return prisma.warehouses.findMany({
+    where: { company_id: companyId, is_active: true },
+    select: { id: true, code: true, name: true },
+    orderBy: { name: 'asc' },
+  });
+}
+
+export type DeliveryWarehouse = Awaited<ReturnType<typeof getDeliveryWarehouses>>[number];
 
 export type SizeForItemBrand = Awaited<ReturnType<typeof getSizesForItemBrand>>[number];

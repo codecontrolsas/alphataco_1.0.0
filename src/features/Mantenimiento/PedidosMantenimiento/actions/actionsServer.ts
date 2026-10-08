@@ -19,6 +19,7 @@ import type {
 } from '../../types';
 import { getSupervisorFilterInfo } from '../../utils/supervisorFilter';
 import { withMaintenanceActor } from '@/features/Mantenimiento/shared/maintenance-actor';
+import { lockMaintenanceOrder } from '@/features/Mantenimiento/shared/order-lock';
 import { assertOrderTransition } from '@/features/Mantenimiento/shared/order-transition';
 
 const serverLogger = new Logger('PedidosMantenimiento/actions');
@@ -637,6 +638,9 @@ export async function rejectPendingOrder(input: RejectPendingOrderInput) {
 
   try {
     const data = await withMaintenanceActor(profile.id, async (tx) => {
+      // Lock primero: la guarda de abajo mira los pedidos de materiales abiertos, y el alta de un
+      // pedido tambien lockea la orden (Almacenes etapa 4).
+      await lockMaintenanceOrder(tx, input.orderId);
       const current = await tx.maintenance_orders.findUnique({
         where: { id: input.orderId },
         select: { status: true, maintenance_request_id: true },

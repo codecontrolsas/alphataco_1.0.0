@@ -1,0 +1,114 @@
+---
+title: Préstamos de herramientas
+summary: Qué herramientas están fuera del depósito, en poder de quién y desde cuándo, cómo registrar su devolución y cómo darlas de baja si se pierden o se rompen.
+keywords: préstamo, prestada, herramienta, devolución, devolver, quién tiene qué, tenedor, número de serie, baja, extraviada, rota, pañol
+updated: 2026-10-08
+---
+
+La sección **Préstamos** responde "**¿quién tiene qué?**". Lista cada herramienta que salió del depósito y todavía no volvió: qué es, su número de serie, en poder de quién está y hace cuántos días. Desde acá se registra la devolución o, si la herramienta no vuelve, su baja.
+
+<OpenScreen />
+
+## Qué es un préstamo
+
+Un préstamo no se carga aparte: **toda salida de un material controlado por número de serie es un préstamo**. Cuando el pañol registra la salida de la amoladora **AM-014** a un empleado (o a un vehículo, un equipo, una orden de mantenimiento o un cliente), esa unidad queda prestada a ese destino hasta que:
+
+- **vuelve**: se registra una **devolución** y la unidad entra de nuevo a un depósito; o
+- **no vuelve**: se **da de baja** como extraviada o rota.
+
+Los materiales por cantidad o por lote (aceite, guantes, grasa) se consumen: no generan préstamos.
+
+<Flow title="La vida de una herramienta">
+  <FlowStep title="Entrada" module="Movimientos" to="movimientos-de-stock">Ingresa con su número de serie.</FlowStep>
+  <FlowStep title="Salida" module="Movimientos o Pedidos" tone="info" to="movimientos-de-stock">Se entrega a alguien: queda prestada.</FlowStep>
+  <FlowStep title="Devolución" module="Préstamos" tone="success">Vuelve al depósito que elijas.</FlowStep>
+  <FlowStep title="Baja" module="Préstamos" tone="danger">Si se perdió o se rompió.</FlowStep>
+</Flow>
+
+## La lista de préstamos
+
+| Columna | Qué muestra |
+|---|---|
+| **Código** y **Material** | El material; el nombre es un enlace a su ficha. |
+| **Número de serie** | La unidad prestada. |
+| **Tipo de destino** | **Empleado**, **Vehículo**, **Equipo**, **Orden de mantenimiento** o **Cliente**. |
+| **Tenedor** | Quién la tiene. Los empleados aparecen como **[legajo] Apellido Nombre**. |
+| **Desde** | Fecha de la salida. |
+| **Días en préstamo** | Cuántos días lleva afuera. |
+| **Salida** | El número del movimiento con que salió, con enlace al detalle. |
+
+El buscador dice **Buscar por material, código o número de serie**. A la vista hay tres filtros, **Tipo de destino**, **Tenedor** y **Desde**, y con **Filtros** sumás **Código**, **Material**, **Número de serie**, **Días en préstamo** y **Salida**. **Excel** exporta "Préstamos abiertos". Si no hay nada afuera: "**No hay préstamos abiertos**".
+
+Las cubiertas no aparecen en esta lista aunque estén montadas: se manejan desde Gomería (ver <GuideLink to="gomeria">Gomería</GuideLink>).
+
+<Callout type="tip" title="Antes de liquidar a un empleado">
+Filtrá **Tenedor** con su legajo: ves todas las herramientas que tiene en su poder. Lo mismo para un vehículo antes de mandarlo a otra base.
+</Callout>
+
+## Devolver una herramienta
+
+<Steps>
+<Step title="Abrí las acciones de la fila">
+Tocá el menú de tres puntos de la herramienta y elegí **Devolver**.
+</Step>
+<Step title="Completá la devolución">
+En **Devolver** con el número de serie (y abajo el material y quién la tiene):
+
+- **Vuelve al depósito**: no tiene que ser el mismo del que salió.
+- **Fecha**: escribila o elegila en el calendario.
+- **Observaciones**: el estado en que vuelve (opcional).
+</Step>
+<Step title="Confirmá">
+Ves, por ejemplo, "**MOV-000088: AM-014 devuelto a Depósito Base**". La herramienta desaparece de la lista y vuelve al stock.
+</Step>
+</Steps>
+
+La devolución es un movimiento de tipo **Devolución**: entra al depósito **al mismo costo con que salió** y queda imputada al mismo destino, así lo que se le cargó a ese destino se compensa. Su detalle dice "**Devuelve el préstamo de MOV-…**". Si te equivocaste, se anula como cualquier movimiento, y el préstamo se reabre (ver <GuideLink to="movimientos-de-stock">Movimientos de stock</GuideLink>).
+
+## Dar de baja una herramienta
+
+Cuando la herramienta no va a volver:
+
+<Steps>
+<Step title="Elegí Dar de baja">
+En el menú de la fila, **Dar de baja**.
+</Step>
+<Step title="Indicá qué pasó">
+En **¿Dar de baja AM-014?** elegí el **Motivo** (**Extraviada** o **Rota**) y contá **Qué pasó** (obligatorio). Por ejemplo: "se perdió en la locación del pozo 12".
+</Step>
+<Step title="Confirmá">
+El préstamo se cierra y la herramienta deja de figurar en el stock. Queda registrado quién la tenía.
+</Step>
+</Steps>
+
+La baja **no mueve stock**: la herramienta ya había salido, y su costo ya estaba imputado a quien la tenía. En la ficha del material queda en **Dadas de baja**, con el motivo, quién la tenía y la fecha.
+
+<Callout type="danger" title="La baja no se deshace">
+No hay forma de anular una baja. Si la herramienta aparece, registrá una **Entrada** con el mismo número de serie: el sistema lo acepta y la unidad vuelve al stock. Y una vez dada de baja, la salida original ya no se puede anular.
+</Callout>
+
+## Cómo se conecta con el resto del sistema
+
+- Los préstamos nacen de las **salidas** de materiales por número de serie, cargadas en **Movimientos** o al entregar un **pedido** (<GuideLink to="movimientos-de-stock">Movimientos de stock</GuideLink>, <GuideLink to="pedidos-de-materiales">Pedidos de materiales</GuideLink>).
+- En la **ficha del material** ves sus **Unidades prestadas** y **Dadas de baja** (<GuideLink to="stock-y-ficha-del-material">Stock y ficha del material</GuideLink>).
+- Si querés que alguien aprobado retire la herramienta, marcá el material **Requiere aprobación** en <GuideLink to="materiales">Materiales</GuideLink>: su salida va a tener que pasar por un pedido.
+
+## Permisos
+
+| Para… | Hace falta en **Préstamos** |
+|---|---|
+| Ver la lista | **Ver** |
+| **Devolver** | **Crear** |
+| **Dar de baja** | **Eliminar** |
+
+Si no tenés ninguno de los dos últimos, la fila no muestra el menú de acciones.
+
+## Problemas frecuentes
+
+<Callout type="warning" title="&quot;Las cubiertas montadas se desmontan desde Gomería&quot;">
+Las cubiertas no se devuelven ni se dan de baja desde acá. Usá una orden de gomería, o **Marcar como reparada** o **Marcar como encontrada** en el catálogo de cubiertas.
+</Callout>
+
+<Callout type="info" title="Una herramienta que devolví volvió a aparecer">
+Alguien anuló la devolución. Abrí su **Salida** y revisá en el detalle quién y por qué.
+</Callout>

@@ -1,0 +1,167 @@
+---
+title: Pedidos de materiales
+summary: Cómo pedir materiales, quién aprueba o rechaza, cómo entrega el almacén (en una o varias veces), cómo se cierra o cancela un pedido, y cómo se conectan los pedidos con Mantenimiento.
+keywords: pedido, pedido de materiales, solicitud de materiales, aprobación, aprobar, rechazar, entregar, entrega parcial, cerrar, cancelar, PED, salida directa, repuestos, orden de mantenimiento, OT
+updated: 2026-10-08
+---
+
+Un **pedido de materiales** es la forma ordenada de sacar material del almacén cuando la salida necesita un visto bueno. Alguien pide qué necesita y para quién; un responsable lo **aprueba** o lo **rechaza**; y el almacén lo **entrega**, de una vez o en partes, eligiendo de qué depósito sale. Cada entrega es una salida de stock imputada al destino del pedido.
+
+<OpenScreen />
+
+## Cuándo hace falta un pedido
+
+Una salida desde **Nuevo movimiento** se puede registrar directamente solo si quien la carga tiene el permiso **Salida directa**, ninguno de los materiales está marcado **Requiere aprobación** y el total no supera el monto máximo de la empresa. Si falla cualquiera de las tres, la salida va por pedido. Los detalles están en <GuideLink to="movimientos-de-stock">Movimientos de stock</GuideLink>.
+
+Los pedidos también son el camino para los **repuestos de Mantenimiento**: el operario los pide desde su OT y el taller desde la orden (ver [Pedidos desde Mantenimiento](#pedidos-desde-mantenimiento)).
+
+## El circuito de un pedido
+
+<Flow title="Del pedido a la entrega">
+  <FlowStep title="Pedido" module="Pedidos" tone="default">Alguien pide materiales para un destino.</FlowStep>
+  <FlowStep title="Aprobación" module="Pedidos" tone="warning">Un responsable aprueba o rechaza.</FlowStep>
+  <FlowStep title="Entrega" module="Pedidos" tone="info">El almacén entrega todo o una parte.</FlowStep>
+  <FlowStep title="Salida de stock" module="Movimientos" tone="success" to="movimientos-de-stock">Cada entrega descuenta stock y lo imputa al destino.</FlowStep>
+</Flow>
+
+<States title="Estados de un pedido">
+  <State name="Pendiente de aprobación" tone="warning" next="Aprobado, Rechazado, Cancelado">Recién creado. Espera la decisión de un responsable.</State>
+  <State name="Aprobado" tone="info" next="Entregado en parte, Entregado, Cerrado">Listo para que el almacén lo entregue. Todavía no se entregó nada.</State>
+  <State name="Entregado en parte" tone="info" next="Entregado, Cerrado">Se entregó algo, pero queda pendiente.</State>
+  <State name="Entregado" tone="success">Se entregó todo lo pedido.</State>
+  <State name="Rechazado" tone="danger">El responsable no lo aprobó. Lleva el motivo.</State>
+  <State name="Cerrado" tone="default">Se dio por terminado sin entregar lo que faltaba. Lleva el motivo.</State>
+  <State name="Cancelado" tone="default">Quien lo pidió lo canceló antes de que se decidiera.</State>
+</States>
+
+El estado de un pedido aprobado se recalcula solo después de cada entrega, y también si se anula una entrega: puede volver de **Entregado** a **Entregado en parte** o a **Aprobado**. Un pedido **Cerrado** sigue cerrado aunque se anule una de sus entregas.
+
+## La lista de pedidos
+
+| Columna | Qué muestra |
+|---|---|
+| **Número** | **PED-** y el correlativo; enlace al detalle. |
+| **Estado** | Uno de los siete de arriba. |
+| **Solicitante** | Quién lo pidió. |
+| **Tipo de destino** y **Destino** | A quién se va a imputar: empleado, vehículo, equipo, orden de mantenimiento o cliente. |
+| **Fecha** | Cuándo se pidió. |
+| **Avance** | Líneas entregadas por completo sobre el total, por ejemplo **2 / 3**. |
+| **Decidió** | Quién lo aprobó o rechazó. |
+
+El buscador dice **Buscar por número o notas**. A la vista hay tres filtros, **Estado**, **Tipo de destino** y **Fecha**, y con **Filtros** sumás **Solicitante**, **Decidió**, **Número** y **Destino**. **Excel** exporta "Pedidos de materiales".
+
+<Callout type="info" title="¿Por qué no veo los pedidos de los demás?">
+Con **Ver** en **Pedidos** ves solo **tus** pedidos. Para ver los de todos hace falta **Ver todas las solicitudes**. Quien aprueba o entrega pedidos de otros necesita ese permiso.
+</Callout>
+
+<Callout type="tip" title="La bandeja de cada uno">
+- **Quien aprueba**: filtrá **Estado** en **Pendiente de aprobación**.
+- **El almacén**: filtrá **Aprobado** y **Entregado en parte**.
+</Callout>
+
+## Hacer un pedido
+
+<Steps>
+<Step title="Abrí el formulario">
+En **Pedidos**, **Nuevo pedido**. También llegás desde **Nuevo movimiento**, con el enlace **Hacer un pedido** del aviso de salida directa.
+</Step>
+<Step title="Elegí el destino">
+En **Se imputa a** elegí **Empleado**, **Vehículo**, **Equipo**, **Orden de mantenimiento** o **Cliente** (con su **Contrato (opcional)**) y buscalo, igual que en una salida. Es obligatorio.
+</Step>
+<Step title="Agregá los materiales">
+Cada línea lleva el material y la **Cantidad**. **Agregar línea** suma otra. No se elige depósito, lote ni número de serie: eso lo decide quien entrega. Con permiso de precios ves el **total estimado** al costo promedio vigente.
+</Step>
+<Step title="Enviá">
+Opcionalmente escribí **Observaciones** (para qué se necesita, la urgencia) y tocá **Enviar pedido**. Ves "**PED-000012 creado: queda pendiente de aprobación**" y se abre el detalle.
+</Step>
+</Steps>
+
+Un pedido no se edita. Si te equivocaste, cancelalo mientras está pendiente y hacé uno nuevo.
+
+## El detalle del pedido
+
+Arriba, el número, el estado y los botones de las acciones que podés hacer. Debajo:
+
+- **Pedido por** (con fecha y hora) y **Se imputa a**.
+- **Orden de trabajo**, si se pidió desde una OT de mantenimiento.
+- **Aprobado por** o **Rechazado por**, con fecha, y el **Motivo del rechazo**.
+- **Total estimado (promedio vigente)**, con permiso de precios.
+- **Observaciones**, y **Cerrado por** o **Cancelado por** con su motivo.
+- **Materiales**: por línea, lo **Pedido**, lo **Entregado** y lo **Pendiente**.
+- **Entregas**: cada salida con su número (enlace al movimiento), fecha y depósito. Las anuladas dicen **Anulada por MOV-…**. Si todavía no hubo: "**Todavía no hubo entregas.**"
+
+## Aprobar o rechazar
+
+Con **Aprobar** en **Pedidos**, un pedido **Pendiente de aprobación** muestra dos botones:
+
+- **Aprobar**: "**Queda listo para que el almacén lo entregue.**" Confirmá con **Aprobar pedido**.
+- **Rechazar**: pide el **Motivo del rechazo**, que el solicitante ve en el pedido. Confirmá con **Rechazar pedido**. No se puede deshacer.
+
+Hay un solo nivel de aprobación.
+
+## Entregar
+
+Con **Editar** en **Pedidos**, un pedido **Aprobado** o **Entregado en parte** muestra **Entregar**, que abre una pantalla propia.
+
+<Steps>
+<Step title="Elegí de dónde sale">
+En **Entrega**, elegí el **Depósito**, la **Fecha** y, si querés, **Observaciones**. El material sale de ese depósito y se imputa al destino del pedido.
+</Step>
+<Step title="Indicá qué se entrega ahora">
+En **Materiales pendientes**, cada línea muestra lo **Pendiente** y el **disponible** en el depósito elegido. **A entregar** viene con todo lo pendiente: bajalo si entregás una parte, y **dejá en 0 lo que no se entrega ahora**. Si el material es por lote, elegí el **Lote** (los vencidos no se pueden elegir); si es por número de serie, tildá las **Unidades**.
+</Step>
+<Step title="Registrá">
+Tocá **Registrar entrega**. Ves "**MOV-000130: entrega de PED-000012 registrada. Estado: Entregado en parte**" (o el estado que corresponda).
+</Step>
+</Steps>
+
+- No se puede entregar más de lo pendiente: "**De Aceite 15W40 quedan 20 l por entregar: no se pueden entregar 30 l**".
+- Si falta stock en ese depósito, la entrega se rechaza con el detalle: probá con otro depósito o entregá una parte.
+- La entrega **no** pasa por la regla de salida directa: el pedido ya está aprobado.
+- Cada entrega es un movimiento de **Salida** que en su detalle dice "**Entrega del pedido PED-…**". Las herramientas entregadas quedan **prestadas** al destino (ver <GuideLink to="prestamos-de-herramientas">Préstamos de herramientas</GuideLink>).
+
+### Corregir una entrega
+
+Si entregaste de más o del depósito equivocado, abrí la entrega desde **Entregas** y anulala con **Anular** (ver <GuideLink to="movimientos-de-stock">Movimientos de stock</GuideLink>). El material vuelve al depósito, la línea recupera lo pendiente y el estado del pedido se recalcula.
+
+## Cerrar o cancelar
+
+- **Cerrar** (con **Editar**): para un pedido **Aprobado** o **Entregado en parte** cuyo resto no se va a entregar. "**Lo pendiente ya no se entrega. Las entregas hechas se mantienen.**" Pide el **Motivo del cierre** y se confirma con **Cerrar pedido**.
+- **Cancelar pedido**: solo **quien lo pidió**, mientras está **Pendiente de aprobación**. "**El pedido deja de esperar aprobación. Para pedir otra cosa, hacé uno nuevo.**"
+
+## Pedidos desde Mantenimiento
+
+Los repuestos de una reparación se piden con este mismo circuito, imputados a la orden de mantenimiento y, si corresponde, a la OT:
+
+| Desde | Quién | Cómo |
+|---|---|---|
+| **Panel del operario**, en la OT | El operario del sector. No necesita permisos de Almacenes. | **Pedir materiales** en el detalle de la OT: material, cantidad y una nota. El pedido queda imputado a esa orden y esa OT. Ver <GuideLink to="panel-del-operario">Panel del operario</GuideLink>. |
+| **Detalle de la orden** (Mantenimiento → Taller) | Quien tenga **Crear** en **Pedidos**, con la orden **En Taller**. | **Pedir materiales** en la sección **Materiales** de la orden. Se elige la OT, o **Toda la orden (sin OT)**. Ver <GuideLink to="taller">Taller</GuideLink>. |
+
+Esos pedidos se aprueban y se entregan acá como cualquier otro, y su detalle muestra la **Orden de trabajo**. Mientras una orden tenga pedidos **Pendientes de aprobación**, **Aprobados** o **Entregados en parte**, el taller **no puede cerrarla**: hay que entregarlos, cerrarlos o cancelarlos. Lo entregado se ve en el detalle de la orden, agrupado por OT, y en el PDF de la orden, en **Materiales utilizados**.
+
+## Permisos
+
+| Para… | Hace falta en **Pedidos** |
+|---|---|
+| Ver tus pedidos y cancelarlos mientras están pendientes | **Ver** |
+| Ver los pedidos de todos | **Ver todas las solicitudes** |
+| **Nuevo pedido** (y **Pedir materiales** en una orden de mantenimiento) | **Crear** |
+| **Aprobar** y **Rechazar** | **Aprobar** |
+| **Entregar** y **Cerrar** | **Editar** |
+
+El total estimado de un pedido se ve con **Ver precios e importes** en **Movimientos**.
+
+## Problemas frecuentes
+
+<Callout type="warning" title="&quot;PED-… no admite entregas: tiene que estar aprobado&quot;">
+El pedido todavía no se aprobó, o ya está cerrado, rechazado o cancelado. Si está pendiente, pedile a un responsable que lo apruebe.
+</Callout>
+
+<Callout type="info" title="No me aparece el botón Entregar o Aprobar">
+Depende del estado del pedido y de tus permisos. **Aprobar** y **Rechazar** solo aparecen en pedidos **Pendientes de aprobación**; **Entregar** y **Cerrar**, en **Aprobados** o **Entregados en parte**.
+</Callout>
+
+<Callout type="info" title="El taller no puede cerrar una orden">
+El aviso "**No se puede cerrar todavía: PED-… sigue abierto**" significa que la orden tiene pedidos de materiales sin terminar. Entregalos, cerralos o cancelalos desde **Almacenes → Pedidos**.
+</Callout>

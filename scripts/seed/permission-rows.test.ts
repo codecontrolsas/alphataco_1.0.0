@@ -135,3 +135,19 @@ describe('buildPermissionRows', () => {
     expect(result.rolePermissions).toHaveLength(9); // t1: 1 accion x 3 roles + t2: 2 acciones x 3 roles
   });
 });
+
+describe('PERMISSIONS (mapa real)', () => {
+  // Las migraciones insertan tabs con `ON CONFLICT (id) DO UPDATE`: un id repetido entre dos
+  // modulos no falla, PISA la tab del otro modulo (nombre y permisos). Paso con Almacenes, que
+  // nacio con el prefijo `50000000-` de Documentacion.
+  it('no repite ids de modulo ni de tab', async () => {
+    const { PERMISSIONS, ACTIONS } = await import('../../src/features/Permissions/permissions-map.ts');
+    const actionNames = Object.fromEntries(Object.values(ACTIONS).map((a) => [a.slug, a.name]));
+    const { modules, tabs } = buildPermissionRows(PERMISSIONS, actionNames);
+
+    const repeated = (ids: string[]) => ids.filter((id, i) => ids.indexOf(id) !== i);
+    expect(repeated(modules.map((m) => m.id))).toEqual([]);
+    expect(repeated(tabs.map((t) => t.id))).toEqual([]);
+    expect(repeated([...modules.map((m) => m.id), ...tabs.map((t) => t.id)])).toEqual([]);
+  });
+});

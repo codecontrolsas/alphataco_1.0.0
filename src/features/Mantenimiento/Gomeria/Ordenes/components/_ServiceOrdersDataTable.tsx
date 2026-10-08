@@ -231,8 +231,12 @@ export default function _ServiceOrdersDataTable({
     if (!cancellingOrder) return;
     setIsActionPending(true);
     try {
-      await cancelServiceOrder(cancellingOrder.id);
-      toast.success('Orden anulada y cubiertas revertidas correctamente');
+      const result = await cancelServiceOrder(cancellingOrder.id);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success('Orden anulada, cubiertas revertidas y movimientos de stock anulados');
       setCancellingOrder(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Error al anular la orden');
@@ -315,7 +319,8 @@ export default function _ServiceOrdersDataTable({
             <AlertDialogTitle>¿Anular orden de gomería?</AlertDialogTitle>
             <AlertDialogDescription>
               Se anulará la orden del vehículo <strong>{cancellingOrder?.vehicle?.domain}</strong> y se revertirán todos
-              los movimientos de cubiertas realizados en esta orden. Esta acción no se puede deshacer.
+              los movimientos de cubiertas realizados en esta orden. También se anulan los movimientos de stock de las
+              cubiertas (montajes y devoluciones al depósito). Esta acción no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

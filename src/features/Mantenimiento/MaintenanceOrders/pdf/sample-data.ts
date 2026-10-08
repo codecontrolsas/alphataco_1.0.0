@@ -309,6 +309,12 @@ export const sampleMaintenanceOrderReport: MaintenanceOrderReportData = {
   ],
 
   companyName: 'Empresa Demo S.R.L.',
+  materials: [
+    { workOrder: 'OT-2026-0412 · Hidráulica', material: 'HID-68 · Aceite hidráulico ISO 68', quantity: '32 l', cost: '$ 166.400,00' },
+    { workOrder: 'OT-2026-0412 · Hidráulica', material: 'KIT-SELL · Kit de sellos de cilindro', quantity: '1 u', cost: '$ 48.500,00' },
+  ],
+  materialsTotal: '$ 214.900,00',
+
   documentCode: 'RG MT-08',
   documentRevision: '1',
 

@@ -14,9 +14,15 @@ import { resolveVehicleTireTemplateId } from '@/features/Mantenimiento/Gomeria/s
 import type { DiagramAxle } from '@/features/Mantenimiento/Gomeria/shared/tire-diagram-utils';
 import { calculatePositions } from '@/features/Mantenimiento/Gomeria/shared/tire-diagram-utils';
 import { TIRE_READINESS_MESSAGES } from '@/features/Mantenimiento/Gomeria/shared/tire-readiness-messages';
-import type { TireOldDestination, TireServiceOrderStatus } from '@/generated/prisma/enums';
+import type { TireOldDestination, TireServiceOrderStatus, TireStatus } from '@/generated/prisma/enums';
+import { tireStatusLabels } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
 import { Logger } from '@/lib/logger';
+import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
+import { toGomeriaActionError } from '@/features/Mantenimiento/Gomeria/shared/action-error';
+import { reverseStockMovement } from '@/features/Warehouses/lib/stock-engine';
+import { mountTire, returnTire, writeOffTire } from '@/features/Warehouses/lib/tire-stock';
 import { requireServerAuthProfile } from '@/shared/actions/auth.actions';
+import { withActor } from '@/shared/lib/actor';
 import {
   NULL_FILTER_VALUE,
   buildDateRangeFiltersWhere,
@@ -29,6 +35,9 @@ import {
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+
+/** Varias llamadas al motor de stock por operacion: mas margen que los 5 s por defecto. */
+const GOMERIA_TX_OPTIONS = { timeout: 30_000, maxWait: 5_000 };
 
 const logger = new Logger('features/Mantenimiento/Gomeria/Ordenes');
 
@@ -551,18 +560,23 @@ export async function closeServiceOrderForVehicle(id: string, vehicleId: string)
 // CANCEL SERVICE ORDER
 // ============================================================================
 
-/** Anular una orden es una acción del dashboard: la orden tiene que ser de la empresa activa. */
-export async function cancelServiceOrder(id: string) {
+/**
+ * Anular una orden es una acción del dashboard: la orden tiene que ser de la empresa activa.
+ * Antes de revertir los estados anula, en orden inverso, los movimientos de stock de cada item
+ * (devoluciones y montajes, Almacenes etapa 6).
+ */
+export async function cancelServiceOrder(id: string): Promise<ActionResult> {
   logger.debug('Cancelling service order', { data: { id } });
 
   try {
     await assertServiceOrderInActiveCompany(id);
+    const profile = await requireServerAuthProfile();
 
-    const result = await prisma.$transaction(async (tx) => {
+    await withActor(profile.credentialId, async (tx) => {
       // 1. Fetch the order and verify it's OPEN
       const order = await tx.tire_service_orders.findUnique({
         where: { id },
-        select: { id: true, status: true },
+        select: { id: true, status: true, company_id: true },
       });
 
       if (!order) {
@@ -584,12 +598,27 @@ export async function cancelServiceOrder(id: string) {
         throw new Error('No se puede cancelar: la orden contiene cubiertas descartadas');
       }
 
-      // 4. Reverse items in reverse chronological order (already sorted desc by created_at)
+      // 4. Stock: anular devoluciones y montajes, del item mas nuevo al mas viejo. Dentro de un
+      //    item, primero la devolucion de la que salio y despues el montaje de la que entro.
+      for (const item of items) {
+        for (const movementId of [item.return_movement_id, item.mount_movement_id]) {
+          if (!movementId) continue;
+          await reverseStockMovement(tx, order.company_id, profile.id, movementId, 'Anulación de la orden de gomería');
+        }
+      }
+
+      // 5. Reverse items in reverse chronological order (already sorted desc by created_at)
       for (const item of items) {
         if (item.action === 'CALIBRATE') {
           // No status to reverse for calibration
           continue;
         }
+
+        // Las cubiertas tienen que seguir como las dejo la orden: si despues se marcaron como
+        // reparadas o encontradas (y volvieron al deposito), revertir las dejaria montadas segun
+        // Gomeria y en el deposito segun Almacenes.
+        await assertTireStatusForCancel(tx, item.tire_id, expectedOldTireStatus(item));
+        if (item.new_tire_id) await assertTireStatusForCancel(tx, item.new_tire_id, 'INSTALLED');
 
         if (item.action === 'REPLACE') {
           // Reverse new tire back to AVAILABLE
@@ -672,16 +701,43 @@ export async function cancelServiceOrder(id: string) {
         }
       }
 
-      // 5. Delete the order (cascades to items)
+      // 6. Delete the order (cascades to items)
       await tx.tire_service_orders.delete({ where: { id } });
+    }, prisma, GOMERIA_TX_OPTIONS);
 
-      return { success: true };
-    });
-
-    return result;
+    return ok(null);
   } catch (error) {
-    logger.error('Error cancelling service order', { data: { error, id } });
-    throw error;
+    return toGomeriaActionError(error, logger, 'cancelar la orden');
+  }
+}
+
+/** Estado en que la orden dejo la cubierta que salio de la posicion (null si no hay que verificarla). */
+function expectedOldTireStatus(item: {
+  action: string;
+  tire_id: string | null;
+  old_tire_destination: TireOldDestination | null;
+}): TireStatus | null {
+  if (!item.tire_id) return null;
+  if (item.action === 'REPAIR') return 'IN_REPAIR';
+  if (item.action === 'MISSING_REPORT') return 'MISSING';
+  if (item.action === 'REPLACE') {
+    if (item.old_tire_destination === 'REPAIR') return 'IN_REPAIR';
+    if (item.old_tire_destination === 'AVAILABLE') return 'AVAILABLE';
+  }
+  return null;
+}
+
+async function assertTireStatusForCancel(
+  tx: Pick<typeof prisma, 'tires'>,
+  tireId: string | null,
+  expected: TireStatus | null
+): Promise<void> {
+  if (!tireId || !expected) return;
+  const tire = await tx.tires.findUnique({ where: { id: tireId }, select: { serial_number: true, status: true } });
+  if (tire && tire.status !== expected) {
+    throw new Error(
+      `No se puede anular la orden: la cubierta ${tire.serial_number} cambió de estado después (hoy está ${tireStatusLabels[tire.status]?.toLowerCase() ?? tire.status})`
+    );
   }
 }
 
@@ -784,8 +840,11 @@ export async function getVehicleTirePositions(vehicleId: string) {
  * todas.
  *
  * Ya NO se filtra por la medida del eje: el operario elige la cubierta que
- * corresponde (su medida es visible en cada fila) o crea una nueva indicando el
- * tipo de rueda. Ordenadas por medida y luego por serie para facilitar la búsqueda.
+ * corresponde (su medida es visible en cada fila). Ordenadas por medida y luego por serie
+ * para facilitar la búsqueda.
+ *
+ * Una cubierta con stock solo se monta si está en un depósito (Almacenes etapa 6): las
+ * extraviadas con stock no se ofrecen hasta que se marcan como encontradas.
  */
 export async function getAvailableTiresForVehicle(vehicleId: string) {
   logger.debug('Fetching available tires', { data: { vehicleId } });
@@ -796,8 +855,11 @@ export async function getAvailableTiresForVehicle(vehicleId: string) {
     const tires = await prisma.tires.findMany({
       where: {
         company_id: companyId,
-        status: { in: ['AVAILABLE', 'MISSING'] },
         is_active: true,
+        OR: [
+          { status: 'AVAILABLE', OR: [{ material_unit_id: null }, { material_unit: { status: 'IN_STOCK' } }] },
+          { status: 'MISSING', material_unit_id: null },
+        ],
       },
       select: {
         id: true,
@@ -808,6 +870,7 @@ export async function getAvailableTiresForVehicle(vehicleId: string) {
         tread_depth: true,
         brand: { select: { id: true, name: true } },
         tire_type: { select: { id: true, size: true, tread_type: true } },
+        material_unit: { select: { warehouse: { select: { name: true } } } },
       },
       orderBy: [{ tire_type: { size: 'asc' } }, { status: 'asc' }, { serial_number: 'asc' }],
     });
@@ -816,6 +879,19 @@ export async function getAvailableTiresForVehicle(vehicleId: string) {
     logger.error('Error fetching available tires', { data: { error } });
     throw error;
   }
+}
+
+/**
+ * Depósitos activos de la empresa del vehículo atendido, para elegir adónde vuelve la
+ * cubierta que se desmonta a "Disponible". La empresa sale del vehículo (flujo del QR).
+ */
+export async function getTireReturnWarehousesForVehicle(vehicleId: string) {
+  const companyId = await getVehicleCompanyId(prisma, vehicleId);
+  return prisma.warehouses.findMany({
+    where: { company_id: companyId, is_active: true },
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true },
+  });
 }
 
 // ============================================================================
@@ -901,13 +977,14 @@ export async function performRepair(data: {
   tireId: string;
   newTireId: string;
   observations?: string;
-}) {
+}): Promise<ActionResult> {
   logger.debug('Performing repair', {
     data: { serviceOrderId: data.serviceOrderId, positionNumber: data.positionNumber },
   });
 
   try {
-    await prisma.$transaction(async (tx) => {
+    const profile = await requireServerAuthProfile();
+    await withActor(profile.credentialId, async (tx) => {
       const companyId = await getServiceOrderCompanyId(tx, data.serviceOrderId);
       await assertVehicleInCompany(tx, data.vehicleId, companyId);
       await assertTireInCompany(tx, data.tireId, companyId);
@@ -933,10 +1010,17 @@ export async function performRepair(data: {
         );
       }
 
-      // 3. Old tire → IN_REPAIR
+      // 3. Old tire → IN_REPAIR (sin movimiento: sigue imputada al vehiculo hasta que vuelve)
       await tx.tires.update({
         where: { id: data.tireId },
         data: { status: 'IN_REPAIR' },
+      });
+
+      // 3b. Stock: la que entra sale de su deposito al vehiculo (Almacenes etapa 6).
+      const mount = await mountTire(tx, companyId, profile.id, {
+        tireId: data.newTireId,
+        vehicleId: data.vehicleId,
+        reference: await tireServiceReference(tx, data.vehicleId, data.positionNumber),
       });
 
       // 4. New tire → INSTALLED
@@ -961,15 +1045,26 @@ export async function performRepair(data: {
           tire_id: data.tireId,
           new_tire_id: data.newTireId,
           observations: data.observations ?? null,
+          mount_movement_id: mount?.id ?? null,
         },
       });
-    });
+    }, prisma, GOMERIA_TX_OPTIONS);
 
-    return { success: true };
+    return ok(null);
   } catch (error) {
-    logger.error('Error performing repair', { data: { error } });
-    throw error;
+    return toGomeriaActionError(error, logger, 'registrar la reparación');
   }
+}
+
+/** Referencia de los movimientos de stock de una orden de gomeria: "Gomería AB123CD, posición 3". */
+async function tireServiceReference(
+  tx: Pick<typeof prisma, 'vehicles'>,
+  vehicleId: string,
+  positionNumber: number
+): Promise<string> {
+  const vehicle = await tx.vehicles.findUnique({ where: { id: vehicleId }, select: { domain: true, intern_number: true } });
+  const name = vehicle?.domain || vehicle?.intern_number || 'equipo';
+  return `Gomería ${name}, posición ${positionNumber}`;
 }
 
 // ============================================================================
@@ -987,19 +1082,23 @@ export async function performReplace(data: {
   tireId: string | null; // null for initial assign (empty position)
   newTireId: string;
   oldDestination?: 'AVAILABLE' | 'DISCARD' | 'REPAIR';
+  /** Deposito al que vuelve la cubierta que sale a disponible (si tiene stock). */
+  oldTireWarehouseId?: string | null;
   discardPhotoUrl?: string;
   discardComment?: string;
   treadDepth?: number;
   pressureStart?: number;
   pressureEnd?: number;
   observations?: string;
-}) {
+}): Promise<ActionResult> {
   logger.debug('Performing replace', {
     data: { serviceOrderId: data.serviceOrderId, positionNumber: data.positionNumber },
   });
 
   try {
-    await prisma.$transaction(async (tx) => {
+    const profile = await requireServerAuthProfile();
+    await withActor(profile.credentialId, async (tx) => {
+      let returnMovementId: string | null = null;
       const companyId = await getServiceOrderCompanyId(tx, data.serviceOrderId);
       await assertVehicleInCompany(tx, data.vehicleId, companyId);
       if (data.tireId !== null) await assertTireInCompany(tx, data.tireId, companyId);
@@ -1017,13 +1116,24 @@ export async function performReplace(data: {
           throw new Error(`La cubierta en la posición ${data.positionNumber} no coincide con la cubierta esperada`);
         }
 
-        // 2. Handle old tire destination
+        // 2. Handle old tire destination (y su stock: vuelve al deposito o se da de baja)
         if (data.oldDestination === 'AVAILABLE') {
+          const returned = await returnTire(tx, companyId, profile.id, {
+            tireId: data.tireId,
+            warehouseId: data.oldTireWarehouseId ?? null,
+            notes: 'Desmontada en la orden de gomería',
+          });
+          returnMovementId = returned?.id ?? null;
           await tx.tires.update({
             where: { id: data.tireId },
             data: { status: 'AVAILABLE' },
           });
         } else if (data.oldDestination === 'DISCARD') {
+          await writeOffTire(tx, companyId, profile.id, {
+            tireId: data.tireId,
+            reason: 'BROKEN',
+            notes: data.discardComment ?? '',
+          });
           await tx.tires.update({
             where: { id: data.tireId },
             data: {
@@ -1049,6 +1159,13 @@ export async function performReplace(data: {
           `La cubierta de reemplazo (${newTire.serial_number}) no está disponible — estado actual: ${newTire.status}`
         );
       }
+
+      // 3b. Stock: la que entra sale de su deposito al vehiculo (Almacenes etapa 6).
+      const mount = await mountTire(tx, companyId, profile.id, {
+        tireId: data.newTireId,
+        vehicleId: data.vehicleId,
+        reference: await tireServiceReference(tx, data.vehicleId, data.positionNumber),
+      });
 
       // 4. New tire → INSTALLED
       await tx.tires.update({
@@ -1080,14 +1197,15 @@ export async function performReplace(data: {
           pressure_start: data.pressureStart != null ? String(data.pressureStart) : null,
           pressure_end: data.pressureEnd != null ? String(data.pressureEnd) : null,
           observations: data.observations ?? null,
+          mount_movement_id: mount?.id ?? null,
+          return_movement_id: returnMovementId,
         },
       });
-    });
+    }, prisma, GOMERIA_TX_OPTIONS);
 
-    return { success: true };
+    return ok(null);
   } catch (error) {
-    logger.error('Error performing replace', { data: { error } });
-    throw error;
+    return toGomeriaActionError(error, logger, 'registrar el reemplazo');
   }
 }
 
@@ -1390,6 +1508,7 @@ export async function ensureVehicleTirePositions(vehicleId: string) {
             retread_level: true,
             tread_depth: true,
             status: true,
+            material_unit_id: true,
             brand: { select: { id: true, name: true } },
             tire_type: { select: { id: true, size: true, tread_type: true } },
           },
@@ -1482,6 +1601,7 @@ export async function ensureVehicleTirePositions(vehicleId: string) {
             retread_level: true,
             tread_depth: true,
             status: true,
+            material_unit_id: true,
             brand: { select: { id: true, name: true } },
             tire_type: { select: { id: true, size: true, tread_type: true } },
           },

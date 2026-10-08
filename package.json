@@ -22,6 +22,7 @@
     "test:db": "bash scripts/test-db.sh",
     "test:auth": "bash scripts/test-auth.sh",
     "test:jobs": "bash scripts/test-jobs.sh",
+    "test:warehouses": "bash scripts/test-warehouses.sh",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "db:deploy": "prisma migrate deploy",
