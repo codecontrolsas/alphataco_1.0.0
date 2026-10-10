@@ -179,7 +179,8 @@ export async function seedSupplierPayments(ctx: Ctx): Promise<string> {
         },
         payments: paid
           ? {
-              create: (o.payments ?? []).map((p) => ({
+              create: (o.payments ?? []).map((p, i) => ({
+                id: demoId('payment_order_payment', `${o.key}-${i}`),
                 method: p.method,
                 treasury_account_id: account(p.account),
                 amount: money(p.amount),
@@ -191,6 +192,26 @@ export async function seedSupplierPayments(ctx: Ctx): Promise<string> {
           : undefined,
       },
     });
+    // Tesoreria: cada medio de pago es un movimiento SUPPLIER_PAYMENT, con la misma regla que
+    // registerPayment (los cheques y e-cheqs debitan en su fecha de pago). No hay trigger.
+    if (paid && o.payments?.length) {
+      const supplier = await tx.suppliers.findUniqueOrThrow({ where: { id: supplierId(o.supplier) }, select: { name: true } });
+      const number = `OP-${String(opCounter).padStart(6, '0')}`;
+      await tx.treasury_movements.createMany({
+        data: o.payments.map((p, i) => ({
+          id: demoId('treasury_movement', `${o.key}-${i}`),
+          company_id: company.id,
+          account_id: account(p.account),
+          date: new Date(`${cal.ymd(p.checkDueIn !== undefined ? o.day + p.checkDueIn : o.day)}T00:00:00.000Z`),
+          amount: money(-p.amount),
+          kind: 'SUPPLIER_PAYMENT' as const,
+          description: `${number} — ${supplier.name}${p.checkNumber ? ` — Cheque N° ${p.checkNumber}` : ''}`,
+          payment_order_payment_id: demoId('payment_order_payment', `${o.key}-${i}`),
+          created_by: actorId,
+          created_at: cal.at(o.day, 11),
+        })),
+      });
+    }
     return net;
   };
 

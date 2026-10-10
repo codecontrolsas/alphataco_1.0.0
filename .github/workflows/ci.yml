@@ -56,3 +56,4 @@ jobs:
       - run: bash scripts/test-jobs.sh
       - run: bash scripts/test-warehouses.sh
       - run: bash scripts/test-purchases.sh
+      - run: bash scripts/test-treasury.sh

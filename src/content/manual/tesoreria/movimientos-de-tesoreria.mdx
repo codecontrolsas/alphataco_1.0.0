@@ -1,0 +1,50 @@
+---
+title: Movimientos
+summary: Cómo cargar un movimiento manual (ingreso o egreso) con su concepto, el aviso de saldo negativo, cómo editarlo o anularlo, y qué pasa con los movimientos automáticos de transferencias y pagos a proveedores.
+keywords: movimientos, movimiento manual, nuevo movimiento, ingreso, egreso, concepto, gastos bancarios, comisiones, impuesto a los débitos y créditos, aporte de socios, retiro, débito programado, editar movimiento, anular movimiento, motivo, saldo negativo, caja en negativo, movimiento automático, pago a proveedor, transferencia, filtros, Excel
+updated: 2026-10-10
+---
+
+**Tesorería → Movimientos** lista todos los movimientos de todas las cuentas y cajas: saldos iniciales, manuales, transferencias y pagos a proveedores. Se puede filtrar por cualquier columna y exportar a Excel.
+
+<OpenScreen />
+
+## Cargar un movimiento manual
+
+Los manuales son la plata que entra o sale sin otro documento detrás: gastos y comisiones bancarias, el impuesto a los débitos y créditos, un aporte de los socios, un retiro de caja.
+
+**Nuevo movimiento**:
+
+| Campo | Qué poner |
+|---|---|
+| **Sentido** | **Ingreso** o **Egreso**. |
+| **Cuenta o caja** | Dónde entra o de dónde sale. Solo las activas. |
+| **Fecha** | El día en que la plata entra o sale. Puede ser futura (un débito programado): hasta esa fecha figura "a debitar" o "a acreditar". |
+| **Importe** | Siempre positivo: el signo lo pone el sentido. |
+| **Concepto** | Para qué fue. Solo aparecen los conceptos que admiten ese sentido (se cargan en <GuideLink to="configuracion-de-tesoreria">Configuración</GuideLink>). |
+| **Descripción** | Opcional. |
+
+Mientras completás, el formulario muestra el saldo de la cuenta a esa fecha y **cómo queda**.
+
+<Callout type="warning" title="Saldo negativo">
+Si una **caja** queda en negativo, el sistema pide confirmar antes de guardar. En un **banco** solo lo informa (puede estar en descubierto). Nunca bloquea: si el gasto ocurrió, se registra.
+</Callout>
+
+## Editar o anular
+
+En la fila de un movimiento manual o de un saldo inicial vigente, el menú de acciones tiene:
+
+- **Editar**: se puede cambiar cualquier campo. Si cambiás el sentido, el concepto tiene que admitirlo.
+- **Anular**, con el motivo: deja de sumar y queda tachado en el extracto. No se puede deshacer; si fue un error, cargalo de nuevo.
+
+## Movimientos automáticos
+
+Las **transferencias** y los **pagos a proveedores** generan sus movimientos solos y no se editan ni se anulan desde acá: la columna **Origen** lleva al documento. Para revertirlos, anulá la <GuideLink to="transferencias">transferencia</GuideLink> o la <GuideLink to="ordenes-de-pago">orden de pago</GuideLink>, y sus movimientos se anulan con el mismo motivo.
+
+## Permisos
+
+| Acción | Permiso |
+|---|---|
+| Ver los movimientos | **Movimientos → Ver** |
+| Cargar movimientos manuales | **Movimientos → Crear** |
+| Editar y anular manuales y saldos iniciales | **Movimientos → Editar** |

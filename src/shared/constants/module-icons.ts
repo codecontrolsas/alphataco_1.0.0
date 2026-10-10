@@ -2,6 +2,7 @@ import type { ModuleSlug } from '@/features/Permissions/permissions-map';
 import {
   Boxes,
   ShoppingCart,
+  Landmark,
   Building2,
   CalendarDays,
   CircleHelp,
@@ -45,6 +46,7 @@ export const MODULE_ICONS: Record<ModuleSlug, ModuleIcon> = {
   seleccion: UserSearch,
   almacenes: Boxes,
   compras: ShoppingCart,
+  tesoreria: Landmark,
 };
 
 /**

@@ -2,8 +2,9 @@ import { z } from 'zod';
 import { AMOUNT_SCALE, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 
 /**
- * Configuracion de pagos (spec Compras etapa 5 §2): cuentas y cajas, regimenes de retencion y la
- * situacion impositiva del proveedor. Modulo SIN directiva.
+ * Configuracion de pagos (spec Compras etapa 5 §2): regimenes de retencion y la situacion
+ * impositiva del proveedor. Las cuentas y cajas se mudaron a Tesoreria (`Treasury/schemas/accounts`).
+ * Modulo SIN directiva.
  */
 
 export const WITHHOLDING_TAXES = ['GANANCIAS', 'IVA', 'IIBB', 'SUSS'] as const;
@@ -22,8 +23,6 @@ export const WITHHOLDING_STATUS_LABELS = {
   EXEMPT: 'Exento',
 } as const;
 
-export const TREASURY_ACCOUNT_KIND_LABELS = { BANK: 'Cuenta bancaria', CASH: 'Caja' } as const;
-
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Porcentaje 0..100 con hasta 4 decimales. */
@@ -35,20 +34,6 @@ const isAmount = (value: string) => {
   const scaled = parseScaled(value || '0', AMOUNT_SCALE);
   return scaled !== null && scaled >= BigInt(0);
 };
-
-export const treasuryAccountFormSchema = z
-  .object({
-    kind: z.enum(['BANK', 'CASH']),
-    name: z.string().trim().min(1, 'El nombre es obligatorio').max(80, 'Máximo 80 caracteres'),
-    bankName: z.string().trim().max(80, 'Máximo 80 caracteres'),
-    accountNumber: z.string().trim().max(40, 'Máximo 40 caracteres'),
-    cbu: z.string().trim(),
-  })
-  .superRefine((v, ctx) => {
-    if (v.cbu && !/^\d{22}$/.test(v.cbu)) ctx.addIssue({ code: 'custom', path: ['cbu'], message: 'El CBU tiene 22 dígitos' });
-  });
-
-export type TreasuryAccountFormValues = z.infer<typeof treasuryAccountFormSchema>;
 
 export const withholdingRegimeFormSchema = z
   .object({

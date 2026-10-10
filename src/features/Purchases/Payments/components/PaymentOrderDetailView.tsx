@@ -1,11 +1,12 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import moment from 'moment';
 import Link from 'next/link';
 import type { PaymentOrderDetail } from '../../actions/payment-orders.server';
-import type { TreasuryAccountRow } from '../../actions/treasury-accounts.server';
+import type { TreasuryAccountRow } from '@/features/Treasury/actions/accounts.server';
 import { HistoryCard } from '../../components/HistoryCard';
 import { PAYMENT_METHOD_LABELS } from '../../schemas/payment-orders';
 import { WITHHOLDING_TAX_LABELS } from '../../schemas/payment-settings';
@@ -200,6 +201,10 @@ export function PaymentOrderDetailView({ order, accounts }: { order: PaymentOrde
                       {p.checkBank ? ` · ${p.checkBank}` : ''} · pago {day(p.checkDueOn)}
                     </span>
                   )}
+                  {p.movement && !p.movement.cancelled && (
+                    <span className="text-muted-foreground">Débito: {day(p.movement.date)}</span>
+                  )}
+                  {p.movement?.toDebit && !p.movement.cancelled && <Badge variant="outline">A debitar</Badge>}
                   <span className="ml-auto tabular-nums">{formatMoney(p.amount)}</span>
                 </li>
               ))}

@@ -37,10 +37,14 @@ import { sendDocumentSchema, type SendDocumentValues } from '../schemas/send';
 import { mailNotSentMessage, supplierRecipients } from '../lib/supplier-send';
 import { renderPaymentOrderPdf } from '../pdf/render-payment-pdf.server';
 import { sendSupplierDocumentEmail } from '@/shared/lib/mail/templates/purchases';
+import { paymentMovementDate } from '@/features/Treasury/lib/movement-rules';
+import { treasuryToday } from '@/features/Treasury/lib/today';
+import { assertActiveAccount, cancelMovements, createMovement } from '@/features/Treasury/lib/movements';
 
 const logger = new Logger('features/Purchases/payment-orders');
 
 const PURCHASES_PATH = '/dashboard/purchases';
+const TREASURY_PATH = '/dashboard/treasury';
 const SESSION_EXPIRED = 'Tu sesión expiró. Volvé a ingresar.';
 const NOT_FOUND = 'La orden de pago no existe';
 const TRANSACTION_OPTIONS = { timeout: 20_000, maxWait: 5_000 };
@@ -280,10 +284,8 @@ export async function registerPayment(id: string, values: RegisterPaymentFormVal
         await assertWithholdingsStillValid(tx, companyId, order.supplier, id);
         // Neto 0 (todo compensado con NC o anticipos): se registra sin medios de pago.
         if (v.payments.length === 0 && cents(order.netTotal) !== BigInt(0)) throw new PurchaseError('Agregá al menos un medio de pago');
-        const accountIds = [...new Set(v.payments.map((p) => p.accountId))];
-        if (accountIds.some((a) => !UUID_RE.test(a))) throw new PurchaseError('La cuenta no existe o está inactiva');
-        const accounts = await tx.treasury_accounts.count({ where: { id: { in: accountIds }, company_id: companyId, is_active: true } });
-        if (accounts !== accountIds.length) throw new PurchaseError('La cuenta no existe o está inactiva');
+        // Cuenta inexistente, ajena o inactiva: el mensaje de Tesoreria nombra la cuenta.
+        for (const accountId of new Set(v.payments.map((p) => p.accountId))) await assertActiveAccount(tx, companyId, accountId);
         const total = v.payments.reduce((acc, p) => acc + cents(p.amount), BigInt(0));
         if (total !== cents(order.netTotal)) {
           throw new PurchaseError(`Los medios suman ${money(total)} y no suman el neto a pagar (${money(cents(order.netTotal))})`);
@@ -296,18 +298,34 @@ export async function registerPayment(id: string, values: RegisterPaymentFormVal
           await tx.payment_order_withholdings.update({ where: { id: w.id }, data: { certificate_number: number } });
           certificates.push(number);
         }
-        await tx.payment_order_payments.createMany({
-          data: v.payments.map((p) => ({
-            payment_order_id: id,
-            method: p.method,
-            treasury_account_id: p.accountId,
-            amount: new Prisma.Decimal(money(cents(p.amount))),
-            reference: p.reference || null,
-            check_number: p.method === 'CHECK' || p.method === 'ECHECK' ? p.checkNumber : null,
-            check_bank: p.method === 'CHECK' || p.method === 'ECHECK' ? p.checkBank || null : null,
-            check_due_on: p.method === 'CHECK' || p.method === 'ECHECK' ? day(p.checkDueOn) : null,
-          })),
-        });
+        // Cada medio de pago genera su movimiento de Tesoreria en esta misma transaccion: los
+        // cheques y e-cheqs debitan en su fecha de pago (spec Tesoreria etapa 1 §3.1).
+        for (const p of v.payments) {
+          const isCheck = p.method === 'CHECK' || p.method === 'ECHECK';
+          const payment = await tx.payment_order_payments.create({
+            data: {
+              payment_order_id: id,
+              method: p.method,
+              treasury_account_id: p.accountId,
+              amount: new Prisma.Decimal(money(cents(p.amount))),
+              reference: p.reference || null,
+              check_number: isCheck ? p.checkNumber : null,
+              check_bank: isCheck ? p.checkBank || null : null,
+              check_due_on: isCheck ? day(p.checkDueOn) : null,
+            },
+            select: { id: true },
+          });
+          await createMovement(tx, {
+            companyId,
+            accountId: p.accountId,
+            date: paymentMovementDate(p.method, v.paidOn, isCheck ? p.checkDueOn : null),
+            amountCents: -cents(p.amount),
+            kind: 'SUPPLIER_PAYMENT',
+            paymentOrderPaymentId: payment.id,
+            description: `${order.number} — ${order.supplier.name}${isCheck ? ` — Cheque N° ${p.checkNumber}` : ''}`,
+            createdBy: profile.id,
+          });
+        }
         await tx.payment_orders.update({ where: { id }, data: { status: 'PAID', paid_on: day(v.paidOn), paid_by: profile.id } });
         return { number: order.number, certificates };
       },
@@ -315,6 +333,8 @@ export async function registerPayment(id: string, values: RegisterPaymentFormVal
       TRANSACTION_OPTIONS
     );
     revalidate();
+    // El pago (o su anulacion) mueve el saldo de las cuentas de Tesoreria.
+    revalidatePath(TREASURY_PATH, 'layout');
     return ok(result);
   } catch (error) {
     return toPurchaseActionError(error, logger, 'registrar el pago');
@@ -347,6 +367,7 @@ export async function cancelPaymentOrder(id: string, reason: string): Promise<Ac
       const now = new Date();
       if (order.status === 'PAID') {
         await tx.payment_order_withholdings.updateMany({ where: { payment_order_id: id }, data: { cancelled_at: now } });
+        await cancelMovements(tx, { paymentOrderId: id }, { by: profile.id, reason: motive.data, at: now });
       }
       await tx.payment_orders.update({
         where: { id },
@@ -354,6 +375,8 @@ export async function cancelPaymentOrder(id: string, reason: string): Promise<Ac
       });
     });
     revalidate();
+    // El pago (o su anulacion) mueve el saldo de las cuentas de Tesoreria.
+    revalidatePath(TREASURY_PATH, 'layout');
     return ok(null);
   } catch (error) {
     return toPurchaseActionError(error, logger, 'anular la orden de pago');
@@ -470,11 +493,13 @@ export async function getPaymentOrderDetail(id: string) {
           check_bank: true,
           check_due_on: true,
           treasury_account: { select: { id: true, name: true } },
+          movement: { select: { date: true, cancelled_at: true } },
         },
       },
     },
   });
   if (!order) return null;
+  const today = treasuryToday();
   const status = order.status as PaymentOrderStatus;
   const at = (d: Date | null) => d?.toISOString() ?? null;
   const recipients = await supplierRecipients(prisma, order.supplier_id);
@@ -529,6 +554,10 @@ export async function getPaymentOrderDetail(id: string) {
       checkBank: p.check_bank,
       checkDueOn: isoDay(p.check_due_on),
       account: p.treasury_account,
+      // Movimiento de Tesoreria: fecha valor y si todavia esta "a debitar".
+      movement: p.movement
+        ? { date: isoDay(p.movement.date)!, cancelled: p.movement.cancelled_at !== null, toDebit: isoDay(p.movement.date)! > today }
+        : null,
     })),
     history: [
       { event: 'Creada', at: at(order.created_at), by: userName(order.creator), notes: null },

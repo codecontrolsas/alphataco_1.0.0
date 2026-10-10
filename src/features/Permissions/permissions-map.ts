@@ -1456,6 +1456,55 @@ export const PERMISSIONS = {
     },
   },
 
+  // ============================================
+  // 14. TESORERIA
+  // ============================================
+  // Cuentas, saldos, movimientos y transferencias (spec
+  // docs/superpowers/specs/2026-10-10-tesoreria-etapa-1-design.md). Prefijo de ids `d0000000-`.
+  // El extracto de una cuenta hereda el permiso de 'cuentas'.
+  tesoreria: {
+    slug: 'tesoreria',
+    name: 'Tesorería',
+    moduleId: 'd0000000-0000-0000-0000-000000000000',
+    tabs: {
+      cuentas: {
+        slug: 'cuentas',
+        name: 'Cuentas',
+        tabId: 'd0000000-0000-0000-0000-000000000001',
+        parent: null,
+        allowedActions: ['view'],
+        subtabs: {},
+      },
+      // 'update' edita y anula movimientos manuales y saldos iniciales.
+      movimientos: {
+        slug: 'movimientos',
+        name: 'Movimientos',
+        tabId: 'd0000000-0000-0000-0000-000000000002',
+        parent: null,
+        allowedActions: ['view', 'create', 'update'],
+        subtabs: {},
+      },
+      // 'update' anula transferencias (no se editan).
+      transferencias: {
+        slug: 'transferencias',
+        name: 'Transferencias',
+        tabId: 'd0000000-0000-0000-0000-000000000003',
+        parent: null,
+        allowedActions: ['view', 'create', 'update'],
+        subtabs: {},
+      },
+      // Cuentas y cajas (con saldo inicial) y conceptos.
+      'config-tesoreria': {
+        slug: 'config-tesoreria',
+        name: 'Configuración',
+        tabId: 'd0000000-0000-0000-0000-000000000004',
+        parent: null,
+        allowedActions: ['view', 'update'],
+        subtabs: {},
+      },
+    },
+  },
+
 } as const;
 
 // ============================================

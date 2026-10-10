@@ -1,0 +1,65 @@
+---
+title: Cómo funciona Tesorería
+summary: Qué es el módulo Tesorería, cómo se calcula el saldo de cada cuenta y caja, la diferencia entre saldo y "a debitar", de dónde salen los movimientos y qué viene en las próximas etapas.
+keywords: tesorería, tesoreria, saldo, saldos, banco, bancos, caja, cajas, cuenta bancaria, movimientos, a debitar, a acreditar, proyectado, extracto, cheque, e-cheq, transferencia, pagos a proveedores, cobranzas, conciliación, permisos
+updated: 2026-10-10
+---
+
+**Tesorería** muestra **cuánta plata hay en cada cuenta bancaria y en cada caja**, cuánto se va a debitar en los próximos días y **por qué cambió** el saldo. Todo lo que entra o sale de una cuenta queda como un **movimiento**, con el documento que lo originó.
+
+<OpenScreen />
+
+## Las ideas básicas
+
+| Concepto | Qué es |
+|---|---|
+| **Cuenta o caja** | Un lugar donde hay plata: una cuenta bancaria ("Banco Galicia CC $") o una caja de efectivo ("Caja administración"). Se cargan en <GuideLink to="configuracion-de-tesoreria">Configuración de Tesorería</GuideLink>. |
+| **Movimiento** | Una entrada (ingreso) o salida (egreso) de plata de una cuenta, en una **fecha**: la fecha en que la plata entra o sale de verdad. |
+| **Saldo inicial** | Lo que había en la cuenta el día que se empieza a usar Tesorería. Es el primer movimiento de la cuenta. |
+| **Saldo** | La suma de los movimientos con fecha **hasta hoy**. |
+| **A debitar** | Los egresos con fecha **posterior a hoy**: por ejemplo, un e-cheq que se le dio a un proveedor y todavía no venció. No bajan el saldo hasta su fecha. |
+| **A acreditar** | Los ingresos con fecha posterior a hoy. |
+| **Proyectado** | Saldo + a debitar + a acreditar: cómo queda la cuenta cuando pase todo lo programado. |
+
+<Callout type="info" title="El saldo no se carga: se calcula">
+Nadie escribe el saldo de una cuenta. Es siempre la suma de sus movimientos vigentes. Si un saldo no coincide con el banco, se busca el movimiento que falta o sobra en el extracto.
+</Callout>
+
+## De dónde salen los movimientos
+
+| Tipo | Lo genera | Se corrige… |
+|---|---|---|
+| **Saldo inicial** | Quien configura la cuenta. | Editándolo o anulándolo. |
+| **Manual** | Un usuario, en <GuideLink to="movimientos-de-tesoreria">Movimientos</GuideLink>: gastos bancarios, impuestos, aportes, retiros. | Editándolo o anulándolo. |
+| **Transferencia** | Una <GuideLink to="transferencias">transferencia</GuideLink> entre dos cuentas (dos movimientos: uno en cada cuenta). | Anulando la transferencia. |
+| **Pago a proveedor** | El pago de una <GuideLink to="ordenes-de-pago">orden de pago</GuideLink> de Compras: un movimiento por cada medio de pago. | Anulando la orden de pago. |
+
+Un movimiento **anulado** no se borra: queda en el extracto tachado, con el motivo, y deja de sumar.
+
+## Los cheques debitan en su fecha
+
+Cuando se paga con **cheque** o **e-cheq**, el movimiento lleva la **fecha de pago del cheque**, no la del pago de la orden. Hasta ese día figura **a debitar** y no baja el saldo; ese día pasa solo al saldo, sin que nadie haga nada. Las transferencias y el efectivo salen el día del pago.
+
+## Las secciones
+
+| Sección | Para qué |
+|---|---|
+| **Cuentas** | Una tarjeta por cuenta y caja con su saldo, a debitar, a acreditar y proyectado, y los totales de bancos y de cajas. Cada tarjeta abre el **extracto**. Ver <GuideLink to="cuentas-y-saldos">Cuentas y saldos</GuideLink>. |
+| **Movimientos** | Todos los movimientos de todas las cuentas, y el alta de los manuales. |
+| **Transferencias** | Los pases de plata entre cuentas. |
+| **Configuración** | Cuentas y cajas con su saldo inicial, y los conceptos de los movimientos manuales. |
+
+## Lo que viene
+
+Tesorería se completa en etapas: **cobranzas** a clientes con recibo y retenciones sufridas, **cheques** (cartera de terceros, chequeras propias, depósitos, endosos y rechazos) y **conciliación bancaria** con el extracto del banco. Todas escriben en el mismo libro de movimientos.
+
+## Permisos
+
+| Acción | Permiso |
+|---|---|
+| Ver las tarjetas y el extracto | **Cuentas → Ver** |
+| Ver los movimientos | **Movimientos → Ver** |
+| Cargar movimientos manuales | **Movimientos → Crear** |
+| Editar y anular manuales y saldos iniciales | **Movimientos → Editar** |
+| Ver, cargar y anular transferencias | **Transferencias → Ver / Crear / Editar** |
+| Ver y cambiar cuentas, cajas y conceptos | **Configuración → Ver / Editar** |

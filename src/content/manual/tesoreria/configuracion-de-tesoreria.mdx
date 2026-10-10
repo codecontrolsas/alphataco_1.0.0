@@ -1,0 +1,46 @@
+---
+title: Configuración de Tesorería
+summary: Cómo cargar las cuentas bancarias y cajas con su saldo inicial, editarlas, desactivarlas o borrarlas, y cómo mantener los conceptos de los movimientos manuales con el sentido que admiten.
+keywords: configuración de tesorería, cuentas y cajas, cuenta bancaria, caja, CBU, número de cuenta, saldo inicial, apertura, descubierto, desactivar cuenta, borrar cuenta, conceptos, concepto, sentido, solo ingresos, solo egresos, ingresos y egresos, gastos bancarios, aporte de socios
+updated: 2026-10-10
+---
+
+En **Tesorería → Configuración** se mantienen las **cuentas y cajas** (de las que también paga Compras) y los **conceptos** de los movimientos manuales.
+
+<OpenScreen />
+
+## Cuentas y cajas
+
+**Agregar**:
+
+| Campo | Qué poner |
+|---|---|
+| **Tipo** | **Cuenta bancaria** o **Caja**. |
+| **Nombre** | Cómo se la reconoce: "Banco Galicia CC $", "Caja administración". No puede repetirse. |
+| **Banco**, **Número de cuenta** y **CBU** | Opcionales, solo para cuentas bancarias. El CBU tiene 22 dígitos. |
+| **Saldo inicial (opcional)** | **Fecha** e **Importe** de lo que había el día que se empieza a usar Tesorería. Puede ser negativo (un banco en descubierto). Van juntos. |
+
+Cada cuenta muestra su saldo inicial y su saldo de hoy. Las acciones de cada fila:
+
+| Acción | Qué pasa |
+|---|---|
+| **Saldo inicial** (balanza) | Carga o edita el saldo inicial. Hay uno solo vigente por cuenta: si ya existe, se edita ese. |
+| **Editar** (lápiz) | Cambia los datos de la cuenta. |
+| **Desactivar** (encendido) | La cuenta deja de aceptar movimientos, transferencias y pagos. Su saldo y sus movimientos se siguen viendo. Si tiene saldo, pide confirmar mostrándolo. |
+| **Reactivar** (flecha circular) | Vuelve a estar disponible. |
+| **Borrar** (tacho) | Solo una cuenta sin ningún movimiento ni pago. Si los tiene, desactivala. |
+
+## Conceptos
+
+Clasifican los <GuideLink to="movimientos-de-tesoreria">movimientos manuales</GuideLink>: gastos bancarios, impuesto a los débitos y créditos, aporte de socios, retiro de caja, ajuste.
+
+| Campo | Qué poner |
+|---|---|
+| **Nombre** | No puede repetirse. |
+| **Sentido** | **Solo ingresos**, **Solo egresos** o **Ingresos y egresos**. Al cargar un movimiento, solo se ofrecen los conceptos que admiten su sentido. |
+
+Un concepto **ya usado** no cambia de sentido y no se borra: se desactiva (deja de ofrecerse, pero los movimientos lo conservan).
+
+## Permisos
+
+Para ver alcanza con **Configuración → Ver**; para crear, cambiar, desactivar o borrar hace falta **Configuración → Editar**.

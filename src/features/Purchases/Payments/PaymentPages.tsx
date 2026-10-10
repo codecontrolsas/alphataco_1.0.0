@@ -4,7 +4,7 @@ import moment from 'moment';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import type { PaymentOrderDetail, PaymentOrderFormData } from '../actions/payment-orders.server';
-import type { TreasuryAccountRow } from '../actions/treasury-accounts.server';
+import type { TreasuryAccountRow } from '@/features/Treasury/actions/accounts.server';
 import type { PaymentOrderFormValues } from '../schemas/payment-orders';
 import { PaymentOrderDetailView } from './components/PaymentOrderDetailView';
 import { PaymentOrderForm } from './components/PaymentOrderForm';

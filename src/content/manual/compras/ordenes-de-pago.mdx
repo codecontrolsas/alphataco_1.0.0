@@ -2,7 +2,7 @@
 title: Órdenes de pago
 summary: Cómo armar una orden de pago a un proveedor con sus comprobantes, notas de crédito y anticipos; cómo se calculan y corrigen las retenciones; el circuito de aprobación; cómo se registra el pago con uno o varios medios, se envía al proveedor con los certificados y se anula.
 keywords: orden de pago, OP, pagar, pago a proveedor, pagos, pago parcial, anticipo, pago a cuenta, nota de crédito, aplicar anticipo, retenciones, retención, certificado de retención, Ganancias, IVA, IIBB, SUSS, aprobar pago, registrar pago, transferencia, cheque, e-cheq, efectivo, cuenta bancaria, caja, neto a pagar, anular pago, enviar al proveedor
-updated: 2026-10-09
+updated: 2026-10-10
 ---
 
 La **orden de pago** junta lo que se le paga a un proveedor de una vez: uno o varios comprobantes (completos o en parte), las notas de crédito y los anticipos que se descuentan, y las **retenciones** que se le practican. Se aprueba, se registra el pago con los medios que se usaron y se le manda al proveedor con los **certificados de retención**.
@@ -20,8 +20,8 @@ La **orden de pago** junta lo que se le paga a un proveedor de una vez: uno o va
 
 Una orden se puede **anular** en cualquier estado. Una aprobada o pendiente puede **volver a borrador** para corregirla; después hay que aprobarla de nuevo.
 
-<Callout type="info" title="Solo se registra el pago">
-El sistema registra **cómo** se pagó (medio, cuenta o caja, referencia), pero no mueve plata ni concilia bancos. Eso llega con el módulo de **Tesorería**.
+<Callout type="info" title="El pago mueve el saldo">
+Al registrar el pago, cada medio deja un movimiento en <GuideLink to="tesoreria">Tesorería</GuideLink> y baja el saldo de su cuenta o caja. Los **cheques** y **e-cheqs** debitan en su **fecha de pago**: hasta ese día figuran "a debitar". Anular la orden anula esos movimientos.
 </Callout>
 
 ## Armar una orden de pago
@@ -78,7 +78,7 @@ En una orden **aprobada**, **Registrar pago**:
 |---|---|
 | **Fecha de pago** | Tiene que ser del mismo mes que la fecha prevista. |
 | **Medio** | Transferencia, Cheque, E-cheq o Efectivo. Se pueden agregar varios: por ejemplo, un e-cheq y el resto por transferencia. |
-| **Cuenta o caja** | Desde dónde se paga. Se cargan en <GuideLink to="configuracion-de-compras">Configuración de Compras</GuideLink>. |
+| **Cuenta o caja** | Desde dónde se paga, con su saldo de hoy al lado. Se cargan en <GuideLink to="configuracion-de-tesoreria">Configuración de Tesorería</GuideLink>; una cuenta desactivada no se ofrece. |
 | **Importe** | Lo de ese medio. La suma de los medios tiene que dar **exactamente** el neto a pagar. |
 | **Referencia** | El número de transferencia, opcional. |
 | **N° de cheque** y **Fecha de pago del cheque** | Solo en cheques y e-cheqs. |
@@ -86,6 +86,8 @@ En una orden **aprobada**, **Registrar pago**:
 Si el neto a pagar es **$ 0** (los comprobantes se compensan con notas de crédito o anticipos), el pago se registra sin medios: solo la fecha.
 
 Al confirmar, la orden queda **Pagada** y cada retención toma su número de certificado: **GAN-000001**, **IVA-000001**, **IIBB-000001**, **SUSS-000001**. Los comprobantes pagados completos dejan de figurar en Vencimientos.
+
+Cada medio de pago queda como un movimiento de **Tesorería** en su cuenta: la transferencia y el efectivo con la fecha de pago, el cheque y el e-cheq con su fecha de pago del cheque. En el detalle de la orden, cada medio muestra su **fecha de débito** y la marca **A debitar** mientras no llegue.
 
 ## El PDF y el envío al proveedor
 
@@ -97,7 +99,7 @@ Una orden pagada se le puede **enviar al proveedor** por mail, con el PDF adjunt
 
 **Anular**, con el motivo. Libera lo que la orden pagaba: los comprobantes vuelven a quedar pendientes y los anticipos aplicados vuelven a estar disponibles.
 
-Si la orden ya estaba **pagada**, sus certificados quedan **anulados** (el número no se vuelve a usar) y salen del listado de retenciones a declarar. Usalo cuando el pago no se hizo o se revirtió.
+Si la orden ya estaba **pagada**, sus certificados quedan **anulados** (el número no se vuelve a usar) y salen del listado de retenciones a declarar, y sus movimientos de Tesorería se anulan con el mismo motivo (el saldo de la cuenta vuelve a estar como antes del pago). Usalo cuando el pago no se hizo o se revirtió.
 
 <Callout type="info" title="Comprobantes en una orden de pago">
 Mientras un comprobante esté en una orden sin anular, no se puede editar ni anular desde **Facturas**. Primero hay que anular la orden.

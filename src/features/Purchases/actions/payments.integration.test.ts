@@ -1,5 +1,6 @@
 import moment from 'moment';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { treasuryToday } from '@/features/Treasury/lib/today';
 
 /**
  * Pagos (Compras etapa 5) contra el Postgres del compose: `npm run test:purchases`. Se simulan la
@@ -38,7 +39,8 @@ vi.mock('@/shared/lib/mail/templates/purchases', () => ({
   sendPurchaseOrderDecisionEmail: mails.any,
   sendSupplierDocumentEmail: mails.any,
 }));
-vi.mock('next/cache', () => ({ revalidatePath: () => undefined }));
+const revalidated = vi.hoisted(() => ({ paths: [] as string[] }));
+vi.mock('next/cache', () => ({ revalidatePath: (path: string) => void revalidated.paths.push(path) }));
 
 const RUN = Boolean(process.env.DATABASE_URL);
 
@@ -49,6 +51,7 @@ async function db() {
 async function cleanup() {
   const prisma = await db();
   const company_id = { in: [COMPANY, OTHER_COMPANY] };
+  await prisma.treasury_movements.deleteMany({ where: { company_id } });
   await prisma.payment_order_lines.deleteMany({ where: { payment_order: { company_id }, kind: 'ADVANCE_APPLIED' } });
   await prisma.payment_orders.deleteMany({ where: { company_id } });
   await prisma.supplier_withholding_profiles.deleteMany({ where: { supplier: { company_id } } });
@@ -77,6 +80,11 @@ function expectFail(result: { ok: true } | { ok: false; error: string }): string
 // Hora local, como el servidor (en UTC, a la noche ya es "mañana" y la factura sale con fecha futura).
 const TODAY = moment().format('YYYY-MM-DD');
 const NEXT_MONTH = moment().add(1, 'month').startOf('month').format('YYYY-MM-DD');
+// Tesorería clasifica pasado/futuro con el día argentino (lib/today.ts), no con el del proceso.
+const AR_TODAY = treasuryToday();
+const TOMORROW = moment(AR_TODAY).add(1, 'day').format('YYYY-MM-DD');
+
+const accountForm = (name: string) => ({ kind: 'BANK' as const, name, bankName: '', accountNumber: '', cbu: '', openingDate: '', openingAmount: '' });
 
 let invoiceNumber = 5000;
 let categoryId = '';
@@ -211,31 +219,6 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     state.denied.clear();
   });
 
-  describe('cuentas y cajas', () => {
-    it('alta, duplicado, editar, desactivar, perimetro y permisos', async () => {
-      const actions = await import('./treasury-accounts.server');
-      const bank = expectOk(
-        await actions.createTreasuryAccount({ kind: 'BANK', name: 'Banco Galicia CC', bankName: 'Galicia', accountNumber: '123-4', cbu: '' })
-      );
-      expect(expectFail(await actions.createTreasuryAccount({ kind: 'CASH', name: 'banco galicia cc', bankName: '', accountNumber: '', cbu: '' }))).toBe(
-        'Ya existe la cuenta «Banco Galicia CC»'
-      );
-      expect(
-        expectFail(await actions.createTreasuryAccount({ kind: 'BANK', name: 'Otra', bankName: '', accountNumber: '', cbu: '123' }))
-      ).toBe('El CBU tiene 22 dígitos');
-      expectOk(await actions.updateTreasuryAccount(bank.id, { kind: 'BANK', name: 'Galicia CC', bankName: 'Galicia', accountNumber: '123-4', cbu: '' }));
-      expectOk(await actions.setTreasuryAccountActive(bank.id, false));
-      const rows = await actions.getTreasuryAccounts();
-      expect(rows.map((r) => [r.name, r.is_active])).toEqual([['Galicia CC', false]]);
-      expectOk(await actions.setTreasuryAccountActive(bank.id, true));
-      expect(expectFail(await actions.setTreasuryAccountActive(FOREIGN_ACCOUNT, false))).toBe('La cuenta no existe');
-      state.denied.add('compras:config-compras:update');
-      expect(expectFail(await actions.createTreasuryAccount({ kind: 'CASH', name: 'Caja', bankName: '', accountNumber: '', cbu: '' }))).toBe(
-        'No tenés permiso para realizar esta acción'
-      );
-    });
-  });
-
   describe('regimenes de retencion', () => {
     it('alta por impuesto con sus reglas, duplicado y perimetro', async () => {
       const actions = await import('./withholding-regimes.server');
@@ -330,11 +313,11 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     beforeAll(async () => {
       state.denied.clear();
       const categories = await import('./expense-categories.server');
-      const accounts = await import('./treasury-accounts.server');
+      const accounts = await import('@/features/Treasury/actions/accounts.server');
       const regimes = await import('./withholding-regimes.server');
       const profiles = await import('./withholding-profiles.server');
       categoryId = expectOk(await categories.createExpenseCategory({ name: 'Servicios pagos' })).id;
-      accountId = expectOk(await accounts.createTreasuryAccount({ kind: 'BANK', name: 'Banco pagos', bankName: '', accountNumber: '', cbu: '' })).id;
+      accountId = expectOk(await accounts.createTreasuryAccount(accountForm('Banco pagos'))).id;
       const all = await regimes.getWithholdingRegimes();
       const gan = all.find((r) => r.tax === 'GANANCIAS' && r.code === '078')!;
       const iva = all.find((r) => r.tax === 'IVA')!;
@@ -441,6 +424,8 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
       expectOk(await actions.approvePaymentOrder(order.id));
       expectOk(await actions.registerPayment(order.id, { paidOn: TODAY, payments: [] }));
       expect((await orderRow(order.id)).status).toBe('PAID');
+      const prisma = await db();
+      expect(await prisma.treasury_movements.count({ where: { payment_order_payment: { payment_order_id: order.id } } })).toBe(0);
       const other = await expenseInvoice(OTHER_SUPPLIER, '500');
       const withNet = expectOk(await actions.createPaymentOrder(paymentForm(OTHER_SUPPLIER, [invoiceLine(other, '605')])));
       expectOk(await actions.submitPaymentOrder(withNet.id));
@@ -527,7 +512,90 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
       expectOk(await actions.approvePaymentOrder(order.id));
       const bad = payValues('100.00');
       bad.payments[0]!.accountId = FOREIGN_ACCOUNT;
-      expect(expectFail(await actions.registerPayment(order.id, bad))).toBe('La cuenta no existe o está inactiva');
+      expect(expectFail(await actions.registerPayment(order.id, bad))).toBe('La cuenta no existe');
+    });
+
+    describe('tesoreria: el pago mueve el saldo', () => {
+      let chequesId = '';
+
+      beforeAll(async () => {
+        const accounts = await import('@/features/Treasury/actions/accounts.server');
+        chequesId = expectOk(await accounts.createTreasuryAccount(accountForm('Banco cheques'))).id;
+      });
+
+      async function indicatorsOf(id: string) {
+        const accounts = await import('@/features/Treasury/actions/accounts.server');
+        const row = (await accounts.getTreasuryAccounts()).find((r) => r.id === id)!;
+        return { balance: row.balance, toDebit: row.toDebit };
+      }
+
+      async function approvedAdvance(amount: string) {
+        const actions = await import('./payment-orders.server');
+        const order = expectOk(
+          await actions.createPaymentOrder(paymentForm(OTHER_SUPPLIER, [], { plannedOn: AR_TODAY, advance: { amount, purchaseOrderId: '', description: 'Anticipo' } }))
+        );
+        expectOk(await actions.submitPaymentOrder(order.id));
+        expectOk(await actions.approvePaymentOrder(order.id));
+        return order;
+      }
+
+      const echeck = (amount: string, dueOn: string) => ({
+        method: 'ECHECK' as const,
+        accountId: chequesId,
+        amount,
+        reference: '',
+        checkNumber: '987',
+        checkBank: '',
+        checkDueOn: dueOn,
+      });
+      const transfer = (amount: string) => ({ method: 'TRANSFER' as const, accountId: chequesId, amount, reference: 'T', checkNumber: '', checkBank: '', checkDueOn: '' });
+
+      it('transferencia + e-cheq a mañana: dos movimientos, el e-cheq a debitar en su fecha; anular la orden anula los dos', async () => {
+        const actions = await import('./payment-orders.server');
+        const order = await approvedAdvance('1000');
+        expectOk(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [transfer('400'), echeck('600', TOMORROW)] }));
+        const prisma = await db();
+        const movements = await prisma.treasury_movements.findMany({
+          where: { payment_order_payment: { payment_order_id: order.id } },
+          orderBy: { amount: 'asc' },
+          select: { amount: true, date: true, kind: true, description: true, account_id: true },
+        });
+        expect(movements.map((m) => [m.kind, m.amount.toString(), m.date.toISOString().slice(0, 10), m.account_id])).toEqual([
+          ['SUPPLIER_PAYMENT', '-600', TOMORROW, chequesId],
+          ['SUPPLIER_PAYMENT', '-400', AR_TODAY, chequesId],
+        ]);
+        expect(movements[0]!.description).toBe(`${order.number} — Otro proveedor — Cheque N° 987`);
+        expect(await indicatorsOf(chequesId)).toEqual({ balance: '-400.00', toDebit: '-600.00' });
+        expect(revalidated.paths).toContain('/dashboard/treasury');
+        revalidated.paths.length = 0;
+
+        const results = await Promise.all([actions.cancelPaymentOrder(order.id, 'Primera'), actions.cancelPaymentOrder(order.id, 'Segunda')]);
+        expect(results.filter((r) => r.ok)).toHaveLength(1);
+        const reason = (await prisma.payment_orders.findUniqueOrThrow({ where: { id: order.id } })).cancel_reason;
+        const cancelled = await prisma.treasury_movements.findMany({ where: { payment_order_payment: { payment_order_id: order.id } } });
+        expect(cancelled.every((m) => m.cancelled_at !== null && m.cancel_reason === reason)).toBe(true);
+        expect(revalidated.paths).toContain('/dashboard/treasury');
+        expect(await indicatorsOf(chequesId)).toEqual({ balance: '0.00', toDebit: '0.00' });
+      });
+
+      it('un e-cheq con fecha de hoy entra al saldo y no queda a debitar', async () => {
+        const actions = await import('./payment-orders.server');
+        const order = await approvedAdvance('250');
+        expectOk(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [echeck('250', AR_TODAY)] }));
+        expect(await indicatorsOf(chequesId)).toEqual({ balance: '-250.00', toDebit: '0.00' });
+      });
+
+      it('pagar desde una cuenta desactivada dice cuál está inactiva', async () => {
+        const actions = await import('./payment-orders.server');
+        const accounts = await import('@/features/Treasury/actions/accounts.server');
+        const order = await approvedAdvance('10');
+        expectOk(await accounts.setTreasuryAccountActive(chequesId, false));
+        expect(expectFail(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [transfer('10')] }))).toBe(
+          'La cuenta «Banco cheques» está inactiva'
+        );
+        expectOk(await accounts.setTreasuryAccountActive(chequesId, true));
+        expect((await orderRow(order.id)).status).toBe('APPROVED');
+      });
     });
   });
 

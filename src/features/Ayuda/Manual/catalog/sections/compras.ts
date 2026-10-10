@@ -100,7 +100,7 @@ export const comprasSection = defineSection({
         { path: '/dashboard/purchases', tab: 'pagos' },
         { path: '/dashboard/purchases/payments/*' },
       ],
-      related: ['cuenta-corriente-y-vencimientos', 'retenciones', 'facturas-de-proveedor', 'proveedores', 'configuracion-de-compras', 'compras'],
+      related: ['cuenta-corriente-y-vencimientos', 'retenciones', 'facturas-de-proveedor', 'proveedores', 'configuracion-de-compras', 'cuentas-y-saldos', 'configuracion-de-tesoreria', 'compras'],
     },
     {
       slug: 'cuenta-corriente-y-vencimientos',
@@ -126,7 +126,7 @@ export const comprasSection = defineSection({
       slug: 'configuracion-de-compras',
       access: [tab('compras', 'config-compras')],
       screens: [{ path: '/dashboard/purchases', tab: 'config-compras' }],
-      related: ['proveedores', 'facturas-de-proveedor', 'ordenes-de-pago', 'retenciones', 'compras'],
+      related: ['proveedores', 'facturas-de-proveedor', 'ordenes-de-pago', 'retenciones', 'configuracion-de-tesoreria', 'compras'],
     },
   ],
 });

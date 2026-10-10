@@ -1,0 +1,38 @@
+---
+title: Transferencias
+summary: Cómo pasar plata de una cuenta o caja a otra con una transferencia numerada, qué movimientos genera, el aviso de saldo negativo y cómo anularla.
+keywords: transferencia, transferencias, TR, pase entre cuentas, fondo de caja, depositar efectivo, extraer efectivo, banco a caja, caja a banco, anular transferencia, motivo
+updated: 2026-10-10
+---
+
+Una **transferencia** pasa plata de una cuenta o caja a otra de la empresa: reponer el fondo de una caja desde el banco, depositar el efectivo, mover fondos entre bancos. Lleva un número correlativo (**TR-000001**, **TR-000002**…).
+
+<OpenScreen />
+
+## Cargar una transferencia
+
+En **Tesorería → Transferencias**, **Nueva transferencia**:
+
+| Campo | Qué poner |
+|---|---|
+| **Desde** | La cuenta o caja de donde sale la plata. |
+| **Hacia** | A dónde entra. No puede ser la misma. |
+| **Fecha** | El día del pase. |
+| **Importe** | Positivo. |
+| **Notas** | Opcional: "Fondo de caja", "Depósito de la recaudación". |
+
+El formulario muestra cómo quedan las **dos** cuentas a esa fecha. Si la caja de origen queda en negativo, pide confirmar.
+
+Al guardar se generan **dos movimientos** con la misma fecha: el egreso en la cuenta de origen y el ingreso en la de destino. Los dos se ven en <GuideLink to="movimientos-de-tesoreria">Movimientos</GuideLink> y en el extracto de cada cuenta.
+
+## Anular
+
+Una transferencia **no se edita**. Si está mal, **Anular** con el motivo: se anulan los dos movimientos juntos. Después cargala de nuevo con los datos correctos.
+
+## Permisos
+
+| Acción | Permiso |
+|---|---|
+| Ver las transferencias | **Transferencias → Ver** |
+| Cargarlas | **Transferencias → Crear** |
+| Anularlas | **Transferencias → Editar** |

@@ -628,6 +628,9 @@ model company {
   purchase_receipts            purchase_receipts[]
   supplier_invoices            supplier_invoices[]
   treasury_accounts            treasury_accounts[]
+  treasury_movements           treasury_movements[]
+  treasury_concepts            treasury_concepts[]
+  treasury_transfers           treasury_transfers[]
   payment_orders               payment_orders[]
   withholding_regimes          withholding_regimes[]
   purchase_expense_categories  purchase_expense_categories[]
@@ -2167,6 +2170,10 @@ model profile {
   payment_orders_paid         payment_orders[] @relation("payment_order_payer")
   payment_orders_cancelled    payment_orders[] @relation("payment_order_canceller")
   payment_order_rejections    payment_order_rejections[] @relation("payment_order_rejection_author")
+  treasury_movements_created  treasury_movements[] @relation("treasury_movement_creator")
+  treasury_movements_cancelled treasury_movements[] @relation("treasury_movement_canceller")
+  treasury_transfers_created  treasury_transfers[] @relation("treasury_transfer_creator")
+  treasury_transfers_cancelled treasury_transfers[] @relation("treasury_transfer_canceller")
   supplier_documents_uploaded supplier_documents[]
 
   @@index([employee_id], map: "idx_profile_employee_id")
@@ -5237,9 +5244,15 @@ model treasury_accounts {
   account_number String?
   cbu            String?                   @db.VarChar(22)
   is_active      Boolean                   @default(true)
+  /// Solo pesos por ahora (CHECK currency = 'ARS').
+  currency       String                    @default("ARS") @db.VarChar(3)
   created_at     DateTime                  @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime                  @default(now()) @updatedAt @db.Timestamptz(6)
   company        company                   @relation(fields: [company_id], references: [id], onDelete: Cascade)
   payments       payment_order_payments[]
+  movements      treasury_movements[]
+  transfers_from treasury_transfers[]      @relation("treasury_transfer_from")
+  transfers_to   treasury_transfers[]      @relation("treasury_transfer_to")
 
   @@unique([company_id, name], map: "treasury_accounts_company_id_name_key")
   @@schema("public")
@@ -5371,6 +5384,7 @@ model payment_order_payments {
   check_due_on        DateTime?         @db.Date
   payment_order       payment_orders    @relation(fields: [payment_order_id], references: [id], onDelete: Cascade)
   treasury_account    treasury_accounts @relation(fields: [treasury_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  movement            treasury_movements?
 
   @@index([payment_order_id], map: "idx_payment_order_payments_order_id")
   @@index([treasury_account_id], map: "idx_payment_order_payments_account_id")
@@ -5427,6 +5441,99 @@ enum treasury_account_kind {
   BANK
   CASH
 
+  @@schema("public")
+}
+
+enum treasury_movement_kind {
+  OPENING
+  MANUAL
+  TRANSFER
+  SUPPLIER_PAYMENT
+
+  @@schema("public")
+}
+
+enum treasury_concept_direction {
+  IN
+  OUT
+  BOTH
+
+  @@schema("public")
+}
+
+/// Libro de movimientos de Tesoreria: toda entrada o salida de plata de una cuenta o caja.
+/// El saldo es la suma de los vigentes con fecha hasta hoy (no se guarda).
+model treasury_movements {
+  id                       String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id               String                  @db.Uuid
+  account_id               String                  @db.Uuid
+  /// Fecha valor: el dia en que la plata entra o sale de la cuenta.
+  date                     DateTime                @db.Date
+  /// Con signo: positivo entra, negativo sale. Nunca 0.
+  amount                   Decimal                 @db.Decimal(15, 2)
+  kind                     treasury_movement_kind
+  concept_id               String?                 @db.Uuid
+  description              String?
+  payment_order_payment_id String?                 @unique @db.Uuid
+  transfer_id              String?                 @db.Uuid
+  created_by               String                  @db.Uuid
+  created_at               DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime                @default(now()) @updatedAt @db.Timestamptz(6)
+  cancelled_by             String?                 @db.Uuid
+  cancelled_at             DateTime?               @db.Timestamptz(6)
+  cancel_reason            String?
+  company                  company                 @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  account                  treasury_accounts       @relation(fields: [account_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  concept                  treasury_concepts?      @relation(fields: [concept_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  payment_order_payment    payment_order_payments? @relation(fields: [payment_order_payment_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  transfer                 treasury_transfers?     @relation(fields: [transfer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  creator                  profile                 @relation("treasury_movement_creator", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  canceller                profile?                @relation("treasury_movement_canceller", fields: [cancelled_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([account_id, date], map: "idx_treasury_movements_account_date")
+  @@index([company_id, date], map: "idx_treasury_movements_company_date")
+  @@index([transfer_id], map: "idx_treasury_movements_transfer_id")
+  @@schema("public")
+}
+
+/// Concepto para clasificar los movimientos manuales (gastos bancarios, aporte de socios...).
+model treasury_concepts {
+  id         String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id String                     @db.Uuid
+  name       String
+  direction  treasury_concept_direction
+  is_active  Boolean                    @default(true)
+  created_at DateTime                   @default(now()) @db.Timestamptz(6)
+  company    company                    @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  movements  treasury_movements[]
+
+  @@unique([company_id, name], map: "treasury_concepts_company_id_name_key")
+  @@schema("public")
+}
+
+/// Transferencia entre dos cuentas de la empresa (TR-000001). Genera dos movimientos TRANSFER.
+model treasury_transfers {
+  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id      String               @db.Uuid
+  number          String
+  date            DateTime             @db.Date
+  from_account_id String               @db.Uuid
+  to_account_id   String               @db.Uuid
+  amount          Decimal              @db.Decimal(15, 2)
+  notes           String?
+  created_by      String               @db.Uuid
+  created_at      DateTime             @default(now()) @db.Timestamptz(6)
+  cancelled_by    String?              @db.Uuid
+  cancelled_at    DateTime?            @db.Timestamptz(6)
+  cancel_reason   String?
+  company         company              @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  from_account    treasury_accounts    @relation("treasury_transfer_from", fields: [from_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  to_account      treasury_accounts    @relation("treasury_transfer_to", fields: [to_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  creator         profile              @relation("treasury_transfer_creator", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  canceller       profile?             @relation("treasury_transfer_canceller", fields: [cancelled_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  movements       treasury_movements[]
+
+  @@unique([company_id, number], map: "treasury_transfers_company_id_number_key")
   @@schema("public")
 }
 

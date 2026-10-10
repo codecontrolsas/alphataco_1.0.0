@@ -35,6 +35,7 @@ import { seedCertifications } from './domains/commercial.ts';
 import { seedCandidates, seedClothing, seedKpis } from './domains/hr.ts';
 import { SUPPLIER_DOCUMENTS_BUCKET, seedPurchases } from './domains/purchases.ts';
 import { seedTires } from './domains/tires.ts';
+import { seedTreasury } from './domains/treasury.ts';
 import { seedWarehouses } from './domains/warehouses.ts';
 import { seedUsers } from './domains/users.ts';
 import { seedIndicators } from './domains/indicators.ts';
@@ -106,6 +107,8 @@ async function main(): Promise<void> {
           await seedTires(ctx, vehicles);
           // Compras despues de Almacenes: usa sus materiales y sus pedidos aprobados.
           await seedPurchases(ctx);
+          // Tesoreria despues de Compras: usa sus cuentas y sus pagos ya tienen movimiento.
+          await seedTreasury(ctx);
           await seedCandidates(ctx, employees);
           await seedClothing(ctx, employees);
           await seedKpis(ctx);

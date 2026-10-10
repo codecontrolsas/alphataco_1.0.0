@@ -18,7 +18,7 @@ import { useState } from 'react';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 import { registerPayment } from '../../actions/payment-orders.server';
-import type { TreasuryAccountRow } from '../../actions/treasury-accounts.server';
+import type { TreasuryAccountRow } from '@/features/Treasury/actions/accounts.server';
 import { invalidatePurchases } from '../../lib/invalidate';
 import { cents, money } from '../../lib/payment-totals';
 import {
@@ -173,7 +173,7 @@ export function RegisterPaymentDialog({
                               <SelectContent>
                                 {active.map((a) => (
                                   <SelectItem key={a.id} value={a.id}>
-                                    {a.name}
+                                    {a.name} — saldo {formatMoney(a.balance)}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
