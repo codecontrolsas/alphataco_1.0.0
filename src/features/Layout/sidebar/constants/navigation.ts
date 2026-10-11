@@ -146,9 +146,9 @@ export const navigationLinks: NavigationLink[] = [
     icon: MODULE_ICONS.documentacion,
     position: 6,
     items: [
-      { name: 'Documentos de Empleados', tabSlug: 'documentos-de-empleados' },
-      { name: 'Documentos de Equipos', tabSlug: 'documentos-de-equipos' },
-      { name: 'Documentos de Empresa', tabSlug: 'documentos-de-empresa' },
+      { name: 'Doc. de Empleados', tabSlug: 'documentos-de-empleados' },
+      { name: 'Doc. de Equipos', tabSlug: 'documentos-de-equipos' },
+      { name: 'Doc. de Empresa', tabSlug: 'documentos-de-empresa' },
     ],
   },
   {
@@ -158,8 +158,8 @@ export const navigationLinks: NavigationLink[] = [
     icon: MODULE_ICONS.operaciones,
     position: 7,
     items: [
-      { name: 'Gestor de Pedidos', tabSlug: 'preparte' },
-      { name: 'Partes Diarios', tabSlug: 'dailyreportstable' },
+      { name: 'Planificador', tabSlug: 'preparte' },
+      { name: 'Partes Operaciones', tabSlug: 'dailyreportstable' },
     ],
   },
   {
@@ -169,7 +169,7 @@ export const navigationLinks: NavigationLink[] = [
     icon: MODULE_ICONS.mantenimiento,
     position: 8,
     items: [
-      { name: 'Operaciones', tabSlug: 'maint_operaciones' },
+      { name: 'Supervisión', tabSlug: 'maint_operaciones' },
       { name: 'Vista Taller', tabSlug: 'workshop_view' },
       { name: 'Taller', tabSlug: 'maint_taller' },
       { name: 'Nuevo Pedido', tabSlug: 'nuevo_pedido' },
