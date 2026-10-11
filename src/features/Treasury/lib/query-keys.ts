@@ -19,4 +19,5 @@ export const TREASURY_QUERY_KEYS = {
   ownChecks: ['treasury-own-checks'],
   ownCheckDetail: ['treasury-own-check-detail'],
   checkbooks: ['treasury-checkbooks'],
+  reconciliation: ['treasury-reconciliation'],
 } as const;

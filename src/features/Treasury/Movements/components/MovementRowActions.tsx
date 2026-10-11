@@ -17,8 +17,10 @@ import { OpeningBalanceDialog } from './OpeningBalanceDialog';
 
 const logger = new Logger('Treasury/MovementRowActions');
 
+const RECONCILED_LOCK_TITLE = 'Conciliado con el extracto: desconcilialo primero';
+
 export interface MovementRowActionsProps {
-  movement: { id: string; kind: treasury_movement_kind; cancelled: boolean; accountName: string };
+  movement: { id: string; kind: treasury_movement_kind; cancelled: boolean; reconciled: boolean; accountName: string };
   accounts: TreasuryAccountRow[];
   concepts: TreasuryConceptRow[];
 }
@@ -57,11 +59,20 @@ export function MovementRowActions({ movement, accounts, concepts }: MovementRow
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem disabled={load.isPending} onSelect={() => load.mutate()}>
+          <DropdownMenuItem
+            disabled={load.isPending || movement.reconciled}
+            title={movement.reconciled ? RECONCILED_LOCK_TITLE : undefined}
+            onSelect={() => load.mutate()}
+          >
             <Pencil className="mr-2 h-4 w-4" />
             {isOpening ? 'Editar saldo inicial' : 'Editar'}
           </DropdownMenuItem>
-          <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setCancelling(true)}>
+          <DropdownMenuItem
+            className="text-destructive focus:text-destructive"
+            disabled={movement.reconciled}
+            title={movement.reconciled ? RECONCILED_LOCK_TITLE : undefined}
+            onSelect={() => setCancelling(true)}
+          >
             <Ban className="mr-2 h-4 w-4" />
             Anular
           </DropdownMenuItem>

@@ -1535,6 +1535,16 @@ export const PERMISSIONS = {
         allowedActions: ['view', 'create', 'update', 'delete'],
         subtabs: {},
       },
+      // Etapa 4. 'create' importa extractos; 'update' concilia, registra e ignora líneas; 'delete'
+      // desconcilia y borra importaciones.
+      conciliacion: {
+        slug: 'conciliacion',
+        name: 'Conciliación',
+        tabId: 'd0000000-0000-0000-0000-000000000009',
+        parent: null,
+        allowedActions: ['view', 'create', 'update', 'delete'],
+        subtabs: {},
+      },
       // 'update' adjunta o reemplaza el certificado de una retención.
       'retenciones-sufridas': {
         slug: 'retenciones-sufridas',

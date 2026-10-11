@@ -38,6 +38,7 @@ import { SUPPLIER_DOCUMENTS_BUCKET, seedPurchases } from './domains/purchases.ts
 import { CUSTOMER_DOCUMENTS_BUCKET, seedCustomerReceipts } from './domains/customer-receipts.ts';
 import { seedThirdPartyChecks } from './domains/third-party-checks.ts';
 import { seedOwnChecks } from './domains/own-checks.ts';
+import { seedBankReconciliation } from './domains/bank-reconciliation.ts';
 import { seedTires } from './domains/tires.ts';
 import { seedTreasury } from './domains/treasury.ts';
 import { seedWarehouses } from './domains/warehouses.ts';
@@ -119,6 +120,8 @@ async function main(): Promise<void> {
           await seedThirdPartyChecks(ctx);
           // Cheques propios después: numera sus órdenes de pago a continuación de las de Compras y del endoso.
           await seedOwnChecks(ctx);
+          // Conciliación al final de Tesorería: concilia los movimientos ya cargados del Galicia.
+          await seedBankReconciliation(ctx);
           await seedCandidates(ctx, employees);
           await seedClothing(ctx, employees);
           await seedKpis(ctx);

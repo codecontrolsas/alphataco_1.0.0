@@ -87,6 +87,7 @@ export async function getAccountStatement(db: BalancesDb, companyId: string, acc
       customer_receipt_payment: { select: { receipt: { select: { id: true, number: true } } } },
       check_operation: { select: { id: true, number: true, kind: true } },
       third_party_check: { select: { id: true, number: true } },
+      statement_line: { select: { id: true } },
       own_check: { select: { id: true, number: true, payment_order_payment: { select: { payment_order: { select: { id: true, number: true } } } } } },
     },
   });
@@ -108,6 +109,8 @@ export async function getAccountStatement(db: BalancesDb, companyId: string, acc
       thirdPartyCheck: m.third_party_check,
       cancelled: m.cancelled_at !== null,
       cancelReason: m.cancel_reason,
+      // Conciliado con una línea del extracto (etapa 4).
+      reconciled: m.statement_line !== null,
       future: isFuture(date, today),
     };
   });

@@ -16,7 +16,7 @@ import {
   safePaging,
   textValue,
 } from '../../lib/filter-values';
-import { OPENING_OPERATION_LABEL } from './constants';
+import { MOVEMENT_STATE_LABELS, OPENING_OPERATION_LABEL } from './constants';
 
 const logger = new Logger('features/Treasury/Movements/MovementsList');
 
@@ -107,12 +107,15 @@ function buildWhereClause(companyId: string, state: FilterState): MovementWhere 
     buildTreasuryDateRangeWhere(f, { dateColumns: DATE_COLUMNS, timestampColumns: TIMESTAMP_COLUMNS }) as MovementWhere
   );
 
-  // Estado (derivado de cancelled_at): ambos valores = sin filtro
-  const states = f.state ?? [];
-  const wantsActive = states.includes('ACTIVE');
-  const wantsCancelled = states.includes('CANCELLED');
-  if (wantsActive && !wantsCancelled) and.push({ cancelled_at: null });
-  if (wantsCancelled && !wantsActive) and.push({ cancelled_at: { not: null } });
+  // Estado (derivado de cancelled_at y de la línea de extracto). ACTIVE = vigente, con o sin
+  // conciliar; RECONCILED = vigente conciliado (subconjunto de ACTIVE). Valores desconocidos se ignoran.
+  const states = (f.state ?? []).filter((v) => ownEntry(MOVEMENT_STATE_LABELS, v) !== undefined);
+  const stateClauses: MovementWhere[] = [];
+  if (states.includes('ACTIVE')) stateClauses.push({ cancelled_at: null });
+  else if (states.includes('RECONCILED')) stateClauses.push({ cancelled_at: null, statement_line: { isNot: null } });
+  if (states.includes('CANCELLED')) stateClauses.push({ cancelled_at: { not: null } });
+  if (stateClauses.length === 1) and.push(stateClauses[0]);
+  else if (stateClauses.length > 1) and.push({ OR: stateClauses });
 
   // Texto
   const description = textValue(f.description?.[0]);
@@ -148,6 +151,7 @@ const MOVEMENT_SELECT = {
   created_at: true,
   cancelled_at: true,
   cancel_reason: true,
+  statement_line: { select: { id: true } },
   account: { select: { id: true, name: true } },
   concept: { select: { id: true, name: true } },
   transfer: { select: { id: true, number: true } },
@@ -173,6 +177,8 @@ function shape(rows: Prisma.treasury_movementsGetPayload<{ select: typeof MOVEME
       created_at: r.created_at,
       cancelled: r.cancelled_at != null,
       cancel_reason: r.cancel_reason,
+      // Conciliado = ya tiene una linea de extracto bancario asociada
+      reconciled: r.statement_line !== null,
       account: { id: r.account.id, name: r.account.name },
       concept: r.concept ? { id: r.concept.id, name: r.concept.name } : null,
       transfer: r.transfer ? { id: r.transfer.id, number: r.transfer.number } : null,
@@ -283,13 +289,17 @@ export async function getTreasuryMovementSingleFacet(
     }
 
     if (columnId === 'state') {
-      const [active, cancelled] = await Promise.all([
+      const [active, reconciled, cancelled] = await Promise.all([
         prisma.treasury_movements.count({ where: { AND: [where, { cancelled_at: null }] } }),
+        prisma.treasury_movements.count({
+          where: { AND: [where, { cancelled_at: null, statement_line: { isNot: null } }] },
+        }),
         prisma.treasury_movements.count({ where: { AND: [where, { cancelled_at: { not: null } }] } }),
       ]);
       return {
         counts: new Map([
           ['ACTIVE', active],
+          ['RECONCILED', reconciled],
           ['CANCELLED', cancelled],
         ]),
       };

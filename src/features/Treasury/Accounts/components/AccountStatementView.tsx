@@ -133,7 +133,7 @@ export function AccountStatementView({
           credit: isNegative(r.amount) ? '' : r.amount,
           debit: isNegative(r.amount) ? abs(r.amount) : '',
           balance: r.balance,
-          status: r.cancelled ? `Anulado: ${r.cancelReason ?? ''}` : r.future ? (isNegative(r.amount) ? 'A debitar' : 'A acreditar') : '',
+          status: r.cancelled ? `Anulado: ${r.cancelReason ?? ''}` : [r.future ? (isNegative(r.amount) ? 'A debitar' : 'A acreditar') : '', r.reconciled ? 'Conciliado' : ''].filter(Boolean).join(' · '),
         })),
         { date: day(current.to), kind: '', detail: 'Saldo final', origin: '', credit: '', debit: '', balance: current.closing, status: '' },
       ];
@@ -301,6 +301,11 @@ export function AccountStatementView({
                       </div>
                       <div className="flex flex-wrap gap-1 pt-0.5">
                         {r.cancelled && <span className="text-xs">Anulado: {r.cancelReason}</span>}
+                        {!r.cancelled && r.reconciled && (
+                          <Badge variant="outline" className="mr-1 border-emerald-600 text-emerald-700 dark:text-emerald-400" title="Conciliado con el extracto del banco">
+                            Conciliado
+                          </Badge>
+                        )}
                         {!r.cancelled && r.future && (
                           <Badge variant="outline" className="text-xs">
                             {isNegative(r.amount) ? 'A debitar' : 'A acreditar'}

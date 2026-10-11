@@ -1,7 +1,6 @@
 'use server';
 
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
-import { AMOUNT_SCALE, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { checkPermissionServer } from '@/features/Permissions';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
@@ -10,9 +9,9 @@ import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import moment from 'moment';
 import { NO_PERMISSION, UUID_RE, firstIssue, toTreasuryActionError } from '../lib/action-errors';
-import { assertBankAccount, cancelMovements, createMovement } from '../lib/movements';
+import { assertBankAccount, cancelMovements } from '../lib/movements';
 import { checkbookStatus, normalizeCheckNumber, ownCheckAlert } from '../lib/own-check-transitions';
-import { assertOwnTransition, lockCheckbook, lockOwnChecks, moveOwnCheck, nextFreeNumber, voidCheckNumber } from '../lib/own-checks';
+import { assertOwnTransition, debitOwnCheck, lockCheckbook, lockOwnChecks, moveOwnCheck, nextFreeNumber, voidCheckNumber } from '../lib/own-checks';
 import { supplierCheckDebts } from '../lib/rejected-checks';
 import { TreasuryError } from '../lib/treasury-errors';
 import {
@@ -38,7 +37,6 @@ import { SESSION_EXPIRED, TRANSACTION_OPTIONS, localToday, revalidateTreasury } 
 const logger = new Logger('features/Treasury/own-checks');
 
 const CHECK_NOT_FOUND = 'El cheque no existe';
-const cents = (value: string | null) => parseScaled(value ?? '0', AMOUNT_SCALE) ?? BigInt(0);
 const dmy = (value: string) => moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY');
 const isoDay = (value: Date | null) => (value ? value.toISOString().slice(0, 10) : null);
 
@@ -160,29 +158,7 @@ export async function debitOwnChecks(values: DebitOwnChecksValues): Promise<Acti
       async (tx) => {
         assertNotFuture(v.date, localToday());
         const checks = await lockOwnChecks(tx, companyId, v.checkIds);
-        const context = await tx.own_checks.findMany({
-          where: { id: { in: v.checkIds } },
-          select: { id: true, supplier: { select: { name: true } }, payment_order_payment: { select: { payment_order: { select: { number: true } } } } },
-        });
-        const contextOf = new Map(context.map((c) => [c.id, c]));
-        for (const check of checks.values()) {
-          assertOwnTransition(check, 'DEBIT');
-          if (check.paymentDate && v.date < check.paymentDate) {
-            throw new TreasuryError(`Cheque Nº ${check.number}: su fecha de pago es el ${dmy(check.paymentDate)}; el débito no puede ser anterior`);
-          }
-          const extra = contextOf.get(check.id);
-          await createMovement(tx, {
-            companyId,
-            accountId: check.accountId,
-            date: v.date,
-            amountCents: -cents(check.amount),
-            kind: 'OWN_CHECK',
-            ownCheckId: check.id,
-            description: [`Débito del cheque Nº ${check.number}`, extra?.supplier?.name, extra?.payment_order_payment?.payment_order.number].filter(Boolean).join(' — '),
-            createdBy: profile.id,
-          });
-          await moveOwnCheck(tx, { check, action: 'DEBIT', date: v.date, userId: profile.id });
-        }
+        for (const check of checks.values()) await debitOwnCheck(tx, { check, date: v.date, companyId, userId: profile.id });
         return checks.size;
       },
       prisma,

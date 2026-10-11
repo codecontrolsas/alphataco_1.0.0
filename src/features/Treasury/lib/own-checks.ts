@@ -1,8 +1,8 @@
 import 'server-only';
 
-import { AMOUNT_SCALE, formatScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
+import { AMOUNT_SCALE, formatScaled, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { Prisma } from '@/generated/prisma/client';
-import { dateOnly } from './movements';
+import { createMovement, dateOnly } from './movements';
 import { nextOwnCheckStatus, normalizeCheckNumber, ownCheckTransitionError, type OwnCheckAction, type OwnCheckStatus } from './own-check-transitions';
 import { TreasuryError } from './treasury-errors';
 
@@ -301,4 +301,38 @@ export async function voidCheckNumber(
     data: { check_id: created.id, from_status: null, to_status: 'CANCELLED', date: dateOnly(input.date), reason: input.reason, user_id: input.userId },
   });
   return { id: created.id, number };
+}
+
+const dmy = (value: string) => `${value.slice(8, 10)}/${value.slice(5, 7)}/${value.slice(0, 4)}`;
+
+/**
+ * Confirma el débito de UN cheque emitido (spec etapa 3b §3.3): la fecha no puede ser anterior a su
+ * fecha de pago; sale de su cuenta con un movimiento OWN_CHECK y queda DEBITADO. Lo usan el débito
+ * desde la tabla y la conciliación con el extracto (etapa 4). Devuelve el id del movimiento.
+ */
+export async function debitOwnCheck(
+  tx: Prisma.TransactionClient,
+  input: { check: LockedOwnCheck; date: string; companyId: string; userId: string }
+): Promise<{ movementId: string }> {
+  const { check } = input;
+  assertOwnTransition(check, 'DEBIT');
+  if (check.paymentDate && input.date < check.paymentDate) {
+    throw new TreasuryError(`Cheque Nº ${check.number}: su fecha de pago es el ${dmy(check.paymentDate)}; el débito no puede ser anterior`);
+  }
+  const extra = await tx.own_checks.findUniqueOrThrow({
+    where: { id: check.id },
+    select: { supplier: { select: { name: true } }, payment_order_payment: { select: { payment_order: { select: { number: true } } } } },
+  });
+  const movement = await createMovement(tx, {
+    companyId: input.companyId,
+    accountId: check.accountId,
+    date: input.date,
+    amountCents: -(parseScaled(check.amount ?? '0', AMOUNT_SCALE) ?? BigInt(0)),
+    kind: 'OWN_CHECK',
+    ownCheckId: check.id,
+    description: [`Débito del cheque Nº ${check.number}`, extra.supplier?.name, extra.payment_order_payment?.payment_order.number].filter(Boolean).join(' — '),
+    createdBy: input.userId,
+  });
+  await moveOwnCheck(tx, { check, action: 'DEBIT', date: input.date, userId: input.userId });
+  return { movementId: movement.id };
 }

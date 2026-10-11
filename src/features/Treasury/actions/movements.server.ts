@@ -12,7 +12,7 @@ import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { NO_PERMISSION, UUID_RE, firstIssue, toTreasuryActionError } from '../lib/action-errors';
 import { conceptAllows, signedCents, type MovementDirection } from '../lib/movement-rules';
-import { assertActiveAccount, assertEditableMovement, assertMoneyAccount, PORTFOLIO_WITHOUT_OPENING, cancelMovements, createMovement, dateOnly, lockMovement } from '../lib/movements';
+import { assertActiveAccount, assertEditableMovement, assertMoneyAccount, assertNotReconciled, PORTFOLIO_WITHOUT_OPENING, cancelMovements, createMovement, dateOnly, lockMovement } from '../lib/movements';
 import { TreasuryError } from '../lib/treasury-errors';
 import {
   cancelReasonSchema,
@@ -113,6 +113,7 @@ export async function updateManualMovement(id: string, values: ManualMovementFor
         if (movement.cancelled) throw new TreasuryError('El movimiento está anulado');
         assertEditableMovement(movement);
         if (movement.kind !== 'MANUAL') throw new TreasuryError('El saldo inicial se edita desde la cuenta');
+        assertNotReconciled(movement);
         // Una cuenta inactiva no acepta movimientos nuevos, pero el movimiento puede quedarse en la
         // suya; lo mismo con el concepto. Pasarlo a otra cuenta o concepto exige que estén activos.
         if (v.accountId !== movement.accountId) await assertMoneyAccount(tx, companyId, v.accountId);
@@ -229,6 +230,7 @@ export async function updateOpeningBalance(id: string, values: OpeningBalanceFor
         const movement = await lockMovement(tx, companyId, id);
         if (movement.kind !== 'OPENING' || movement.accountId !== v.accountId) throw new TreasuryError(NOT_FOUND);
         if (movement.cancelled) throw new TreasuryError('El saldo inicial está anulado');
+        assertNotReconciled(movement);
         await assertActiveAccount(tx, companyId, movement.accountId);
         await tx.treasury_movements.update({
           where: { id },

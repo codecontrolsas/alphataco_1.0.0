@@ -33,4 +33,5 @@ echo "==> Corriendo los tests de integracion de Tesoreria..."
 npx vitest run \
   src/features/Treasury/actions/treasury.integration.test.ts \
   src/features/Treasury/actions/receipts.integration.test.ts \
-  src/features/Treasury/actions/checks.integration.test.ts
+  src/features/Treasury/actions/checks.integration.test.ts \
+  src/features/Treasury/actions/reconciliation.integration.test.ts

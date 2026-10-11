@@ -5,7 +5,7 @@ import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ArrowLeftRight, Ban, CheckCircle2, HandCoins, Pencil, PiggyBank, Truck, WalletCards, type LucideIcon, ScrollText } from 'lucide-react';
+import { ArrowLeftRight, Ban, CheckCheck, CheckCircle2, HandCoins, Pencil, PiggyBank, Truck, WalletCards, type LucideIcon, ScrollText } from 'lucide-react';
 import moment from 'moment';
 import { formatArgentinaDay } from '../../lib/today';
 import Link from 'next/link';
@@ -35,6 +35,7 @@ export const movementKindIcons: Record<MovementKind, LucideIcon> = {
 export const movementStateIcons: Record<keyof typeof MOVEMENT_STATE_LABELS, LucideIcon> = {
   ACTIVE: CheckCircle2,
   CANCELLED: Ban,
+  RECONCILED: CheckCheck,
 };
 
 /** Fecha valor (YYYY-MM-DD, sin hora): se formatea tal cual para no correr un dia. */
@@ -204,7 +205,13 @@ export function getColumns({ canUpdate, accounts, concepts }: ColumnsOptions): C
     },
     {
       id: 'state',
-      accessorFn: (row) => (row.cancelled ? MOVEMENT_STATE_LABELS.CANCELLED : MOVEMENT_STATE_LABELS.ACTIVE),
+      // El export toma este valor: un movimiento vigente y conciliado lo dice explicitamente
+      accessorFn: (row) =>
+        row.cancelled
+          ? MOVEMENT_STATE_LABELS.CANCELLED
+          : row.reconciled
+            ? `${MOVEMENT_STATE_LABELS.ACTIVE} - Conciliado`
+            : MOVEMENT_STATE_LABELS.ACTIVE,
       meta: { title: 'Estado' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
       cell: ({ row }) => {
@@ -216,13 +223,23 @@ export function getColumns({ canUpdate, accounts, concepts }: ColumnsOptions): C
               <Icon className="h-3 w-3" />
               {MOVEMENT_STATE_LABELS[key]}
             </Badge>
+            {!row.original.cancelled && row.original.reconciled && (
+              <Badge variant="outline" className="ml-1 gap-1 whitespace-nowrap" title="Conciliado con el extracto">
+                <CheckCheck className="h-3 w-3" />
+                Conciliado
+              </Badge>
+            )}
             {row.original.cancelled && row.original.cancel_reason && (
               <p className="max-w-xs text-xs text-muted-foreground">{row.original.cancel_reason}</p>
             )}
           </div>
         );
       },
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.cancelled ? 'CANCELLED' : 'ACTIVE'),
+      filterFn: (row, _id, value: string[]) => {
+        if (row.original.cancelled) return value.includes('CANCELLED');
+        // Vigente incluye al conciliado; "Conciliado" es el subconjunto con línea de extracto
+        return value.includes('ACTIVE') || (row.original.reconciled && value.includes('RECONCILED'));
+      },
     },
     {
       id: 'cancel_reason',
@@ -255,6 +272,7 @@ export function getColumns({ canUpdate, accounts, concepts }: ColumnsOptions): C
             id: row.original.id,
             kind: row.original.kind,
             cancelled: row.original.cancelled,
+            reconciled: row.original.reconciled,
             accountName: row.original.account.name,
           }}
           accounts={accounts}

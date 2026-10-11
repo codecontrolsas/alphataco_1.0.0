@@ -21,6 +21,7 @@ export const tesoreriaSection = defineSection({
         tab('tesoreria', 'cobranzas'),
         tab('tesoreria', 'cheques'),
         tab('tesoreria', 'cheques-propios'),
+        tab('tesoreria', 'conciliacion'),
         tab('tesoreria', 'retenciones-sufridas'),
       ],
       screens: [{ path: '/dashboard/treasury' }],
@@ -33,7 +34,7 @@ export const tesoreriaSection = defineSection({
         { path: '/dashboard/treasury', tab: 'cuentas' },
         { path: '/dashboard/treasury/accounts/*' },
       ],
-      related: ['tesoreria', 'movimientos-de-tesoreria', 'transferencias', 'ordenes-de-pago'],
+      related: ['tesoreria', 'movimientos-de-tesoreria', 'transferencias', 'ordenes-de-pago', 'conciliacion-bancaria'],
     },
     {
       slug: 'movimientos-de-tesoreria',
@@ -129,6 +130,19 @@ export const tesoreriaSection = defineSection({
       access: [tab('tesoreria', 'cheques-propios')],
       screens: [],
       related: ['cheques-propios', 'ordenes-de-pago', 'configuracion-de-tesoreria'],
+    },
+    // Etapa 4: conciliación bancaria.
+    {
+      slug: 'conciliacion-bancaria',
+      access: [tab('tesoreria', 'conciliacion')],
+      screens: [{ path: '/dashboard/treasury', tab: 'conciliacion' }],
+      related: ['perfil-de-extracto', 'cuentas-y-saldos', 'movimientos-de-tesoreria', 'cheques-propios', 'configuracion-de-tesoreria'],
+    },
+    {
+      slug: 'perfil-de-extracto',
+      access: [tab('tesoreria', 'conciliacion')],
+      screens: [],
+      related: ['conciliacion-bancaria'],
     },
   ],
 });

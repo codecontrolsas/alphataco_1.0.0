@@ -2,7 +2,7 @@
 title: Cómo funciona Tesorería
 summary: Qué es el módulo Tesorería, cómo se calcula el saldo de cada cuenta y caja, la diferencia entre saldo y "a debitar", de dónde salen los movimientos, las cobranzas a clientes y qué viene en las próximas etapas.
 keywords: tesorería, tesoreria, saldo, saldos, banco, bancos, caja, cajas, cuenta bancaria, movimientos, a debitar, a acreditar, proyectado, extracto, cheque, e-cheq, transferencia, pagos a proveedores, cobranzas, conciliación, recibo, cobro, permisos
-updated: 2026-10-11
+updated: 2026-10-12
 ---
 
 **Tesorería** muestra **cuánta plata hay en cada cuenta bancaria y en cada caja**, cuánto se va a debitar en los próximos días y **por qué cambió** el saldo. Todo lo que entra o sale de una cuenta queda como un **movimiento**, con el documento que lo originó.
@@ -53,12 +53,13 @@ Los cheques que **recibe** la empresa entran a una **cartera de cheques** el dí
 | **Cobranzas** | Lo que está **a cobrar** (facturas y notas de débito con saldo) y los **recibos**. Ver <GuideLink to="cobrar-facturas">Cobrar facturas</GuideLink>. |
 | **Cheques** | La cartera de cheques de terceros: depositar, descontar, rechazos y carga inicial. Ver <GuideLink to="cartera-de-cheques">Cartera de cheques</GuideLink>. |
 | **Cheques propios** | Chequeras y cheques emitidos: confirmar débitos, rechazos y números inutilizados. Ver <GuideLink to="cheques-propios">Cheques propios</GuideLink>. |
+| **Conciliación** | El extracto del banco importado y conciliado con el libro: qué está registrado, qué falta y qué todavía no pasó por el banco. Ver <GuideLink to="conciliacion-bancaria">Conciliación bancaria</GuideLink>. |
 | **Retenciones sufridas** | Las retenciones que practicaron los clientes, por mes, con su certificado. Ver <GuideLink to="retenciones-sufridas">Retenciones sufridas</GuideLink>. |
 | **Configuración** | Cuentas y cajas con su saldo inicial, y los conceptos de los movimientos manuales. |
 
-## Lo que viene
+## Un solo libro
 
-Tesorería se completa en etapas: ya están las cuentas, las cobranzas, la **cartera de cheques de terceros** (depósitos, descuentos, endosos y rechazos) y los **cheques propios** con sus chequeras; después viene la **conciliación bancaria** con el extracto del banco. Todas escriben en el mismo libro de movimientos.
+Cuentas, cobranzas, cartera de cheques de terceros, cheques propios y conciliación bancaria escriben en el mismo libro de movimientos: el saldo de cada cuenta es la suma de sus movimientos vigentes, y el extracto del banco se concilia contra ese libro.
 
 ## Permisos
 
@@ -73,4 +74,5 @@ Tesorería se completa en etapas: ya están las cuentas, las cobranzas, la **car
 | Cobranzas y cuenta corriente de clientes | **Cobranzas → Ver / Crear / Editar / Eliminar** |
 | Cartera de cheques (depositar, descontar, rechazar, anular) | **Cheques → Ver / Crear / Editar / Eliminar** |
 | Cheques propios (chequeras, débitos, rechazos) | **Cheques propios → Ver / Crear / Editar / Eliminar** |
+| Conciliación (importar, conciliar, desconciliar) | **Conciliación → Ver / Crear / Editar / Eliminar** |
 | Retenciones sufridas | **Retenciones sufridas → Ver / Editar** |

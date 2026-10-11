@@ -2,7 +2,7 @@
 title: Cheques propios
 summary: Qué pasa con los cheques y e-cheqs que emite la empresa al pagar a proveedores, cómo confirmar que el banco los debitó (uno o varios a la vez), cómo registrar un rechazo y su deuda con el proveedor, y cómo deshacer cada paso.
 keywords: cheques propios, cheque emitido, e-cheq, emitido, debitado, rechazado, anulado, confirmar débito, débito, pendiente de confirmar, a debitar, rechazo, cheque rechazado, deuda con el proveedor, deshacer débito, anular rechazo, conciliar cheques
-updated: 2026-10-11
+updated: 2026-10-12
 ---
 
 Cuando se paga una orden con **Cheque** o **E-cheq**, el cheque queda **emitido**: el proveedor lo tiene, pero la plata todavía no salió del banco. Recién sale cuando alguien confirma que el banco lo **debitó**, con la fecha real. Así el saldo de la cuenta coincide con el del banco.
@@ -37,7 +37,9 @@ Un cheque **emitido** cuya fecha de pago ya pasó figura **Pendiente de confirma
 
 Se carga la **fecha del débito**: no puede ser futura ni anterior a la fecha de pago de ningún cheque. Cada cheque sale de su cuenta en esa fecha y queda **Debitado**; el movimiento se ve en el extracto de la cuenta con el origen **Ch. Nº …**.
 
-Si se marcó por error, desde el detalle **Deshacer el débito** (con motivo): se anula el movimiento y el cheque vuelve a **Emitido**.
+También se confirma desde la **conciliación**: cuando el extracto del banco trae el débito, la línea sugiere **Débito del cheque Nº …** y, al aceptarla, el cheque queda debitado con la fecha de la línea y conciliado. Ver <GuideLink to="conciliacion-bancaria">Conciliación bancaria</GuideLink>.
+
+Si se marcó por error, desde el detalle **Deshacer el débito** (con motivo): se anula el movimiento y el cheque vuelve a **Emitido**. Si el débito ya está conciliado con el extracto, primero hay que desconciliarlo.
 
 ## Rechazo
 

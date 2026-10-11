@@ -196,11 +196,11 @@ export async function deleteTreasuryAccount(id: string): Promise<ActionResult> {
   try {
     const account = await prisma.treasury_accounts.findFirst({
       where: { id, company_id: companyId },
-      select: { _count: { select: { movements: true, payments: true, transfers_from: true, transfers_to: true, checkbooks: true, own_checks: true } } },
+      select: { _count: { select: { movements: true, payments: true, transfers_from: true, transfers_to: true, checkbooks: true, own_checks: true, statements: true } } },
     });
     if (!account) return fail(NOT_FOUND);
     const c = account._count;
-    if (c.movements + c.payments + c.transfers_from + c.transfers_to + c.checkbooks + c.own_checks > 0) return fail('La cuenta tiene movimientos: desactivala');
+    if (c.movements + c.payments + c.transfers_from + c.transfers_to + c.checkbooks + c.own_checks + c.statements > 0) return fail('La cuenta tiene movimientos: desactivala');
     await prisma.treasury_accounts.delete({ where: { id } });
     revalidateTreasury();
     return ok(null);

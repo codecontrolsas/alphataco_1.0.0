@@ -636,6 +636,9 @@ model company {
   third_party_check_operations third_party_check_operations[]
   checkbooks                   checkbooks[]
   own_checks                   own_checks[]
+  bank_statement_profiles      bank_statement_profiles[]
+  bank_statements              bank_statements[]
+  bank_statement_lines         bank_statement_lines[]
   payment_orders               payment_orders[]
   withholding_regimes          withholding_regimes[]
   purchase_expense_categories  purchase_expense_categories[]
@@ -2192,6 +2195,9 @@ model profile {
   checkbooks_retired          checkbooks[] @relation("checkbook_retirer")
   own_checks_created          own_checks[] @relation("own_check_creator")
   own_check_events            own_check_events[] @relation("own_check_event_user")
+  bank_statement_profiles     bank_statement_profiles[] @relation("bank_statement_profile_updater")
+  bank_statements_created     bank_statements[] @relation("bank_statement_creator")
+  bank_lines_reconciled       bank_statement_lines[] @relation("bank_line_reconciler")
   supplier_documents_uploaded supplier_documents[]
 
   @@index([employee_id], map: "idx_profile_employee_id")
@@ -5280,6 +5286,9 @@ model treasury_accounts {
   check_operations third_party_check_operations[] @relation("check_operation_bank")
   checkbooks       checkbooks[]
   own_checks       own_checks[]
+  statement_profile bank_statement_profiles?
+  statements       bank_statements[]
+  statement_lines  bank_statement_lines[]
 
   @@unique([company_id, name], map: "treasury_accounts_company_id_name_key")
   @@schema("public")
@@ -5545,6 +5554,8 @@ model treasury_movements {
   check_operation          third_party_check_operations? @relation(fields: [check_operation_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   third_party_check        third_party_checks?     @relation(fields: [third_party_check_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   own_check                own_checks?             @relation(fields: [own_check_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  /// Línea del extracto con la que está conciliado (etapa 4). Conciliado = trabado.
+  statement_line           bank_statement_lines?
   creator                  profile                 @relation("treasury_movement_creator", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   canceller                profile?                @relation("treasury_movement_canceller", fields: [cancelled_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -6034,6 +6045,89 @@ enum own_check_status {
   DEBITED
   REJECTED
   CANCELLED
+
+  @@schema("public")
+}
+
+/// Perfil de columnas del extracto de una cuenta bancaria (spec Tesorería etapa 4 §2.1). Uno por cuenta.
+model bank_statement_profiles {
+  id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id         String            @db.Uuid
+  account_id         String            @unique @db.Uuid
+  header_row         Int
+  date_column        String            @db.VarChar(3)
+  description_column String            @db.VarChar(3)
+  reference_column   String?           @db.VarChar(3)
+  amount_column      String?           @db.VarChar(3)
+  debit_column       String?           @db.VarChar(3)
+  credit_column      String?           @db.VarChar(3)
+  date_format        String            @db.VarChar(10)
+  decimal_separator  String            @db.VarChar(1)
+  updated_by         String            @db.Uuid
+  updated_at         DateTime          @default(now()) @updatedAt @db.Timestamptz(6)
+  company            company           @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  account            treasury_accounts @relation(fields: [account_id], references: [id], onDelete: Cascade)
+  updater            profile           @relation("bank_statement_profile_updater", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("public")
+}
+
+/// Importación de un extracto bancario: sus líneas y el período que cubren.
+model bank_statements {
+  id            String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id    String                 @db.Uuid
+  account_id    String                 @db.Uuid
+  file_name     String
+  date_from     DateTime               @db.Date
+  date_to       DateTime               @db.Date
+  line_count    Int
+  skipped_count Int                    @default(0)
+  created_by    String                 @db.Uuid
+  created_at    DateTime               @default(now()) @db.Timestamptz(6)
+  company       company                @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  account       treasury_accounts      @relation(fields: [account_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  creator       profile                @relation("bank_statement_creator", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  lines         bank_statement_lines[]
+
+  @@index([account_id, created_at], map: "idx_bank_statements_account_created")
+  @@schema("public")
+}
+
+/// Línea del extracto: pendiente, conciliada con un movimiento, registrada (se creó su movimiento) o ignorada.
+model bank_statement_lines {
+  id            String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  statement_id  String              @db.Uuid
+  company_id    String              @db.Uuid
+  account_id    String              @db.Uuid
+  row_number    Int
+  date          DateTime            @db.Date
+  description   String
+  reference     String              @default("")
+  /// Con signo: positivo crédito, negativo débito. Nunca 0.
+  amount        Decimal             @db.Decimal(15, 2)
+  line_key      String
+  status        bank_line_status    @default(PENDING)
+  movement_id   String?             @unique @db.Uuid
+  ignore_reason String?
+  reconciled_by String?             @db.Uuid
+  reconciled_at DateTime?           @db.Timestamptz(6)
+  statement     bank_statements     @relation(fields: [statement_id], references: [id], onDelete: Cascade)
+  company       company             @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  account       treasury_accounts   @relation(fields: [account_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  movement      treasury_movements? @relation(fields: [movement_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reconciler    profile?            @relation("bank_line_reconciler", fields: [reconciled_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([account_id, line_key], map: "bank_statement_lines_key")
+  @@index([statement_id], map: "idx_bank_statement_lines_statement")
+  @@index([account_id, status, date], map: "idx_bank_statement_lines_account_status")
+  @@schema("public")
+}
+
+enum bank_line_status {
+  PENDING
+  MATCHED
+  CREATED
+  IGNORED
 
   @@schema("public")
 }

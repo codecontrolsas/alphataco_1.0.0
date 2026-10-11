@@ -3,6 +3,7 @@
 export const MOVEMENT_STATE_LABELS = {
   ACTIVE: 'Vigente',
   CANCELLED: 'Anulado',
+  RECONCILED: 'Conciliado',
 } as const;
 
 export type MovementState = keyof typeof MOVEMENT_STATE_LABELS;

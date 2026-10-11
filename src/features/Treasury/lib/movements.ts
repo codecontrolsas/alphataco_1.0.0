@@ -119,7 +119,7 @@ export async function createMovement(tx: MovementsTx, input: CreateMovementInput
  * orden de pago, los de un recibo de cobranza, los de una operación de cheques o el débito de un cheque propio). Los ya anulados no se tocan: conservan su motivo y fecha. Devuelve cuántos anuló.
  */
 export async function cancelMovements(
-  tx: Pick<Prisma.TransactionClient, 'treasury_movements'>,
+  tx: Pick<Prisma.TransactionClient, 'treasury_movements' | '$queryRaw'>,
   where: { ids?: string[]; transferId?: string; paymentOrderId?: string; customerReceiptId?: string; checkOperationId?: string; ownCheckId?: string },
   cancel: { by: string; reason: string; at: Date }
 ): Promise<number> {
@@ -131,11 +131,35 @@ export async function cancelMovements(
   if (where.checkOperationId) origin.push({ check_operation_id: where.checkOperationId });
   if (where.ownCheckId) origin.push({ own_check_id: where.ownCheckId });
   if (origin.length === 0) return 0;
+  // Un movimiento conciliado con el extracto está trabado (etapa 4): se rechaza antes de anular nada.
+  // Primero se bloquean los movimientos y DESPUÉS, en otra sentencia, se mira si están conciliados:
+  // así se ve una conciliación que estaba en curso (y que tenía la fila tomada) cuando termina.
+  const targets = await tx.treasury_movements.findMany({ where: { cancelled_at: null, OR: origin }, select: { id: true } });
+  if (targets.length === 0) return 0;
+  const ids = targets.map((t) => t.id).sort();
+  await tx.$queryRaw`SELECT id FROM treasury_movements WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR UPDATE`;
+  const reconciled = await tx.$queryRaw<{ date: string; amount: string }[]>`
+    SELECT m.date::text AS date, m.amount::text AS amount FROM treasury_movements m
+    WHERE m.id = ANY(${ids}::uuid[]) AND EXISTS (SELECT 1 FROM bank_statement_lines bl WHERE bl.movement_id = m.id)
+    LIMIT 1
+  `;
+  if (reconciled[0]) throw new TreasuryError(reconciledMessage(reconciled[0].date, reconciled[0].amount));
   const { count } = await tx.treasury_movements.updateMany({
     where: { cancelled_at: null, OR: origin },
     data: { cancelled_by: cancel.by, cancelled_at: cancel.at, cancel_reason: cancel.reason },
   });
   return count;
+}
+
+const dm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+const pesos = (amount: string) => {
+  const [int = '0', dec = '00'] = amount.replace('-', '').split('.');
+  return `$ ${int.replace(/\B(?=(\d{3})+(?!\d))/g, '.')},${dec}`;
+};
+
+/** "El movimiento del 05/10 por $ 1.500,00 está conciliado con el extracto: desconcilialo primero". */
+export function reconciledMessage(date: string, amount: string): string {
+  return `El movimiento del ${dm(date)} por ${pesos(amount)} está conciliado con el extracto: desconcilialo primero`;
 }
 
 export type LockedMovement = {
@@ -151,6 +175,8 @@ export type LockedMovement = {
   receiptNumber: string | null;
   checkOperationNumber: string | null;
   ownCheckNumber: string | null;
+  /** Conciliado con una línea del extracto (etapa 4): no se edita ni se anula. */
+  reconciled: boolean;
 };
 
 /** Toma la fila del movimiento con `FOR UPDATE` (editar y anular compiten por ella). */
@@ -188,6 +214,10 @@ export async function lockMovement(tx: Pick<Prisma.TransactionClient, '$queryRaw
   `;
   const row = rows[0];
   if (!row) throw new TreasuryError('El movimiento no existe');
+  // En otra sentencia, después del FOR UPDATE: ve una conciliación que terminó mientras se esperaba la fila.
+  const reconciled = await tx.$queryRaw<{ reconciled: boolean }[]>`
+    SELECT EXISTS (SELECT 1 FROM bank_statement_lines WHERE movement_id = ${id}::uuid) AS reconciled
+  `;
   return {
     id: row.id,
     accountId: row.account_id,
@@ -201,7 +231,13 @@ export async function lockMovement(tx: Pick<Prisma.TransactionClient, '$queryRaw
     receiptNumber: row.receipt_number,
     checkOperationNumber: row.check_operation_number,
     ownCheckNumber: row.own_check_number,
+    reconciled: reconciled[0]?.reconciled ?? false,
   };
+}
+
+/** Un movimiento conciliado con el extracto no se edita ni se anula (etapa 4 §3.8). */
+export function assertNotReconciled(movement: LockedMovement): void {
+  if (movement.reconciled) throw new TreasuryError(reconciledMessage(movement.date, movement.amount));
 }
 
 /** Un movimiento automático no se toca desde Movimientos: se revierte desde su documento. */
