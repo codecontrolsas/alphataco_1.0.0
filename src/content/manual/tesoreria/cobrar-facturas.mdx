@@ -48,7 +48,9 @@ Al confirmar se vuelven a calcular los pendientes: si mientras tanto se emitió 
 
 ## Qué mueve en las cuentas
 
-Cada medio es un **movimiento de cobro** en su cuenta o caja, con la fecha del cobro. Un **cheque o e-cheq** entra en su **vencimiento**: hasta ese día figura **A acreditar** y no suma al saldo (si ya venció, entra el día del cobro). Ver <GuideLink to="cuentas-y-saldos">Cuentas y saldos</GuideLink>.
+Cada medio es un **movimiento de cobro** con la fecha del cobro: la transferencia y el efectivo en su cuenta o caja; el **cheque o e-cheq**, en una **cartera de cheques**. Para un cheque se cargan número, banco, emisión, fecha de pago y **librador** (se completa con el cliente y se puede cambiar). Al confirmar, si algún cheque ya está cargado (mismo banco, número y CUIT del librador), el sistema avisa y no deja confirmar. Ver <GuideLink to="cartera-de-cheques">Cartera de cheques</GuideLink>.
+
+Si el cliente tiene **cheques rechazados** sin cobrar, aparecen en **Qué se cobra → Cheques rechazados**: se tildan y se cobran como un comprobante más. Ver <GuideLink to="rechazo-de-un-cheque">Rechazo de un cheque</GuideLink>.
 
 Esos movimientos no se editan desde Movimientos: se revierten anulando el recibo.
 

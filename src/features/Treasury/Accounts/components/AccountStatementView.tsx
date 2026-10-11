@@ -40,6 +40,18 @@ function OriginLink({ row }: { row: Row }) {
       </Link>
     );
   }
+  if (row.checkOperation) {
+    // Una operación de cheques se ve desde el cheque (el neto de un descuento no tiene uno solo).
+    return row.thirdPartyCheck ? (
+      <Link href={`/dashboard/treasury/checks/${row.thirdPartyCheck.id}`} className="font-mono text-xs underline underline-offset-4">
+        {row.checkOperation.number}
+      </Link>
+    ) : (
+      <Link href="/dashboard/treasury?tab=cheques" className="font-mono text-xs underline underline-offset-4">
+        {row.checkOperation.number}
+      </Link>
+    );
+  }
   if (row.customerReceipt) {
     return (
       <Link href={`/dashboard/treasury/receipts/${row.customerReceipt.id}`} className="font-mono text-xs underline underline-offset-4">
@@ -108,7 +120,7 @@ export function AccountStatementView({
           date: day(r.date),
           kind: TREASURY_MOVEMENT_KIND_LABELS[r.kind],
           detail: detailOf(r),
-          origin: r.paymentOrder?.number ?? r.customerReceipt?.number ?? r.transfer?.number ?? '',
+          origin: r.paymentOrder?.number ?? r.customerReceipt?.number ?? r.transfer?.number ?? r.checkOperation?.number ?? '',
           credit: isNegative(r.amount) ? '' : r.amount,
           debit: isNegative(r.amount) ? abs(r.amount) : '',
           balance: r.balance,

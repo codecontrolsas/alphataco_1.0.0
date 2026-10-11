@@ -1,0 +1,42 @@
+---
+title: Rechazo de un cheque
+summary: Qué hacer cuando el banco o un proveedor devuelve un cheque de tercero, qué pasa con la plata y con las deudas del cliente y del proveedor, cómo se cobran esas deudas y cómo se anula un rechazo cargado por error.
+keywords: cheque rechazado, rechazo, CR, sin fondos, devolución, deuda del cliente, deuda con el proveedor, cobrar cheque rechazado, pagar cheque rechazado, anular rechazo
+updated: 2026-10-11
+---
+
+Un cheque **depositado**, **descontado** o **endosado** puede volver rechazado: por falta de fondos, firma, fecha u otro motivo. El sistema registra el rechazo y deja las deudas que corresponden.
+
+<OpenScreen to="cartera-de-cheques" label="Abrir la cartera de cheques" />
+
+## Registrar el rechazo
+
+En el detalle del cheque, **Registrar rechazo** pide la **fecha**, quién lo **devolvió** (el banco o el proveedor) y el **motivo**. Queda registrado con número **CR-000001**…
+
+Qué pasa según de dónde vuelve:
+
+| El cheque estaba | Qué se mueve | Qué se debe |
+| --- | --- | --- |
+| **Depositado** | Sale del banco el importe del cheque | El cliente vuelve a deber el cheque |
+| **Descontado** | Sale del banco el importe del cheque (el nominal) | El cliente vuelve a deber el cheque |
+| **Endosado** | Nada en las cuentas | El cliente vuelve a deber el cheque **y** la empresa vuelve a deberle al proveedor |
+
+Si el rechazo llega antes de la fecha de acreditación de un depositado, la salida del banco se registra en la fecha de acreditación: así el banco nunca muestra la salida antes que la entrada.
+
+## Cobrar la deuda del cliente
+
+La deuda aparece en **A cobrar**, en la <GuideLink to="cuenta-corriente-de-clientes">cuenta corriente del cliente</GuideLink> y en el detalle del cheque, con el botón **Cobrar**. Se cobra con un recibo, como una factura más (total o en partes), en la sección **Cheques rechazados**.
+
+## Pagar la deuda con el proveedor
+
+Si el cheque estaba endosado, la deuda con el proveedor aparece en su cuenta corriente y en los vencimientos de Compras. Se paga con una orden de pago, en la sección **Cheques de terceros endosados y rechazados**. Esa línea **no lleva retenciones**: ya se retuvo cuando se pagó la factura original.
+
+## Anular un rechazo
+
+Si el rechazo se cargó por error, desde el detalle del cheque **Anular rechazo CR-…** devuelve el cheque al estado que tenía y anula la salida del banco.
+
+No se puede si la deuda ya está en un recibo o en una orden de pago, aunque sean borradores: primero hay que sacarla de ahí (o anular ese documento). El mensaje dice cuál es.
+
+## Permisos
+
+Registrar un rechazo requiere **Cheques → Editar**; anularlo, **Cheques → Eliminar**.

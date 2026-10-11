@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# npm run test:treasury — integracion de Tesoreria (cuentas, movimientos, transferencias y cobranzas) contra
+# npm run test:treasury — integracion de Tesoreria (cuentas, movimientos, transferencias, cobranzas y cheques) contra
 # el Postgres del compose: CHECK de la base, el `FOR UPDATE` de las anulaciones (dos
 # simultaneas), la numeracion con advisory lock, los saldos y el perimetro de empresa.
 #
@@ -32,4 +32,5 @@ npx prisma migrate deploy
 echo "==> Corriendo los tests de integracion de Tesoreria..."
 npx vitest run \
   src/features/Treasury/actions/treasury.integration.test.ts \
-  src/features/Treasury/actions/receipts.integration.test.ts
+  src/features/Treasury/actions/receipts.integration.test.ts \
+  src/features/Treasury/actions/checks.integration.test.ts

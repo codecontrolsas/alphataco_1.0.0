@@ -15,7 +15,9 @@ export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['issue_date'];
 /** Tipos de comprobante a pagar: facturas, ND y NC habilitadas del catalogo. */
 export const DUE_CBTE_TYPE_IDS = [1, 2, 3, 6, 7, 8, 11, 12, 13] as const;
 
-export const cbteTypeLabel = (id: number) => (isCbteTypeId(id) ? CBTE_TYPES[id].label : String(id));
+export const CHECK_DEBT_TYPE_LABEL = 'Cheque rechazado';
+
+export const cbteTypeLabel = (id: number | null) => (id == null ? CHECK_DEBT_TYPE_LABEL : isCbteTypeId(id) ? CBTE_TYPES[id].label : String(id));
 
 export const NO_ORDER_LABEL = 'Sin orden';
 export const NO_DUE_DATE_LABEL = 'Sin vencimiento';
@@ -81,7 +83,11 @@ export function getColumns(): ColumnDef<DueInvoiceListItem>[] {
       header: ({ column }) => <DataTableColumnHeader column={column} title="Comprobante" />,
       cell: ({ row }) => (
         <Link
-          href={`/dashboard/purchases/invoices/${row.original.id}`}
+          href={
+            row.original.kind === 'CHECK'
+              ? `/dashboard/treasury/checks/${row.original.id}`
+              : `/dashboard/purchases/invoices/${row.original.id}`
+          }
           className="font-mono text-sm font-medium text-blue-600 hover:underline"
         >
           {row.original.label}
@@ -94,7 +100,7 @@ export function getColumns(): ColumnDef<DueInvoiceListItem>[] {
       meta: { title: 'Tipo de comprobante' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo de comprobante" />,
       cell: ({ row }) => <span>{cbteTypeLabel(row.original.cbte_type)}</span>,
-      filterFn: (row, _id, value: string[]) => value.includes(String(row.original.cbte_type)),
+      filterFn: (row, _id, value: string[]) => row.original.cbte_type != null && value.includes(String(row.original.cbte_type)),
     },
     {
       id: 'issue_date',

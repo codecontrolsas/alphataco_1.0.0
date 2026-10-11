@@ -59,6 +59,8 @@ export async function getAccountStatement(db: BalancesDb, companyId: string, acc
       transfer: { select: { id: true, number: true } },
       payment_order_payment: { select: { payment_order: { select: { id: true, number: true } } } },
       customer_receipt_payment: { select: { receipt: { select: { id: true, number: true } } } },
+      check_operation: { select: { id: true, number: true, kind: true } },
+      third_party_check: { select: { id: true, number: true } },
     },
   });
   const rows = movements.map((m) => {
@@ -73,6 +75,8 @@ export async function getAccountStatement(db: BalancesDb, companyId: string, acc
       transfer: m.transfer,
       paymentOrder: m.payment_order_payment?.payment_order ?? null,
       customerReceipt: m.customer_receipt_payment?.receipt ?? null,
+      checkOperation: m.check_operation ? { id: m.check_operation.id, number: m.check_operation.number ?? 'Carga inicial', kind: m.check_operation.kind } : null,
+      thirdPartyCheck: m.third_party_check,
       cancelled: m.cancelled_at !== null,
       cancelReason: m.cancel_reason,
       future: isFuture(date, today),

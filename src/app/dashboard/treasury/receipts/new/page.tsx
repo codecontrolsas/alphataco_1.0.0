@@ -6,5 +6,5 @@ const one = (value: string | string[] | undefined) => (typeof value === 'string'
 
 export default async function NewReceiptRoute({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
-  return <NewReceiptPage customerId={one(params.customerId)} invoiceId={one(params.invoiceId)} />;
+  return <NewReceiptPage customerId={one(params.customerId)} invoiceId={one(params.invoiceId)} checkId={one(params.checkId)} />;
 }

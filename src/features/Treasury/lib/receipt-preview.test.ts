@@ -21,6 +21,12 @@ const values = (over: Partial<ReceiptFormValues> = {}): ReceiptFormValues => ({
 const invoices = { ars: { currency: 'ARS', exchangeRate: '1.000000' }, usd: { currency: 'USD', exchangeRate: '1000.000000' } };
 
 describe('previewReceipt', () => {
+  it('suma la deuda de cheques rechazados a lo que se cobra (etapa 3a)', () => {
+    const preview = previewReceipt(values({ rejectedChecks: [{ checkId: 'chk', amount: '300' }] }), invoices);
+    expect(preview.totals.invoices).toBe('126300.00');
+    expect(preview.closing).toBe('Faltan $ 300,00');
+  });
+
   it('convierte cada comprobante con la cotización de su moneda y calcula el cierre', () => {
     const preview = previewReceipt(values(), invoices);
     expect(preview.lines).toEqual({ ars: { ars: '1000.00', fx: '0.00' }, usd: { ars: '125000.00', fx: '25000.00' } });

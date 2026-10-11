@@ -3,6 +3,7 @@ import 'server-only';
 import { formatVoucherLabel } from '@/features/Comercial/Facturacion/lib/invoice-type';
 import { COMPANY_SELECT, companySource, loadCompanyLogo, loadReactPdf, type RenderedPdf } from '@/features/Purchases/pdf/render-purchase-pdf.server';
 import { prisma } from '@/shared/lib/prisma';
+import { rejectedCheckLabel } from '../lib/rejected-checks';
 import { TreasuryError } from '../lib/treasury-errors';
 import { ReceiptPdfDocument } from './ReceiptPdfDocument';
 import { buildReceiptPdfData } from './receipt-pdf-data';
@@ -38,12 +39,22 @@ export async function renderCustomerReceiptPdf(receiptId: string, companyId: str
           description: true,
           invoice: { select: { cbte_type: true, number: true, sales_point: { select: { number: true } } } },
           source_line: { select: { receipt: { select: { number: true } } } },
+          third_party_check: { select: { number: true, bank: true } },
         },
       },
       withholdings: { orderBy: { id: 'asc' }, select: { tax: true, jurisdiction: true, certificate_number: true, certificate_date: true, amount: true } },
       payments: {
         orderBy: { id: 'asc' },
-        select: { method: true, amount: true, reference: true, check_number: true, check_bank: true, check_due_on: true, treasury_account: { select: { name: true } } },
+        select: {
+          method: true,
+          amount: true,
+          reference: true,
+          check_number: true,
+          check_bank: true,
+          check_due_on: true,
+          drawer_name: true,
+          treasury_account: { select: { name: true } },
+        },
       },
     },
   });
@@ -65,7 +76,9 @@ export async function renderCustomerReceiptPdf(receiptId: string, companyId: str
       kind: l.kind,
       label: l.invoice
         ? formatVoucherLabel(l.invoice.cbte_type, l.invoice.sales_point.number, l.invoice.number)
-        : l.kind === 'ADVANCE_APPLIED'
+        : l.third_party_check
+          ? rejectedCheckLabel(l.third_party_check.number, l.third_party_check.bank)
+          : l.kind === 'ADVANCE_APPLIED'
           ? (l.source_line?.receipt.number ?? '')
           : (l.description ?? ''),
       currency: l.currency.trim(),
@@ -89,6 +102,7 @@ export async function renderCustomerReceiptPdf(receiptId: string, companyId: str
       checkNumber: p.check_number,
       checkBank: p.check_bank,
       checkDueOn: p.check_due_on ? isoDay(p.check_due_on) : null,
+      drawerName: p.drawer_name,
     })),
     totals: {
       invoices: receipt.invoices_total.toFixed(2),

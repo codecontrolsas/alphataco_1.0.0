@@ -114,6 +114,10 @@ export function ReceiptDetailView({ detail, can }: { detail: ReceiptDetail; can:
                       <Link href={`/dashboard/comercial/facturacion/${l.invoice.id}`} className="underline underline-offset-4">
                         {l.invoice.label}
                       </Link>
+                    ) : l.rejectedCheck ? (
+                      <Link href={`/dashboard/treasury/checks/${l.rejectedCheck.id}`} className="underline underline-offset-4">
+                        {l.rejectedCheck.label}
+                      </Link>
                     ) : l.kind === 'ADVANCE' ? (
                       `Cobro a cuenta${l.description ? ` · ${l.description}` : ''}`
                     ) : (
@@ -241,7 +245,17 @@ export function ReceiptDetailView({ detail, can }: { detail: ReceiptDetail; can:
                       </Link>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {[p.reference, p.checkNumber ? `N° ${p.checkNumber}` : null, p.checkBank].filter(Boolean).join(' · ') || '—'}
+                      {[p.reference, p.checkNumber ? `N° ${p.checkNumber}` : null, p.checkBank, p.drawerName ? `librador ${p.drawerName}` : null]
+                        .filter(Boolean)
+                        .join(' · ') || '—'}
+                      {p.check && (
+                        <>
+                          {' · '}
+                          <Link href={`/dashboard/treasury/checks/${p.check.id}`} className="underline underline-offset-4">
+                            Cheque {p.check.status.toLowerCase()}
+                          </Link>
+                        </>
+                      )}
                     </TableCell>
                     <TableCell>
                       {p.movement ? (

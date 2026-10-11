@@ -26,7 +26,7 @@ describe('claves de permiso de las tabs de Tesorería', () => {
   const files = tabContents();
 
   it('encuentra las tabs', () => {
-    expect(files.length).toBeGreaterThanOrEqual(7);
+    expect(files.length).toBeGreaterThanOrEqual(9);
   });
 
   for (const file of files) {

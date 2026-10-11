@@ -17,6 +17,7 @@ const SALES_POINT = 'e9000000-0000-4000-8000-000000000020';
 const FOREIGN_SALES_POINT = 'e9000000-0000-4000-8000-000000000021';
 const BANK = 'e9000000-0000-4000-8000-000000000030';
 const CASH = 'e9000000-0000-4000-8000-000000000031';
+const PORTFOLIO = 'e9000000-0000-4000-8000-000000000032';
 
 const state = vi.hoisted(() => ({ denied: new Set<string>() }));
 
@@ -82,6 +83,8 @@ async function cleanup() {
   await prisma.$transaction(async (tx) => {
     await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica');
     await tx.$executeRaw`DELETE FROM treasury_movements WHERE company_id = ANY(${companies}::uuid[])`;
+    await tx.$executeRaw`DELETE FROM third_party_check_events e USING third_party_checks c WHERE c.id = e.check_id AND c.company_id = ANY(${companies}::uuid[])`;
+    await tx.$executeRaw`DELETE FROM third_party_checks WHERE company_id = ANY(${companies}::uuid[])`;
     await tx.$executeRaw`DELETE FROM customer_receipts WHERE company_id = ANY(${companies}::uuid[])`;
     await tx.$executeRaw`DELETE FROM customer_receipt_lines l WHERE NOT EXISTS (SELECT 1 FROM customer_receipts r WHERE r.id = l.receipt_id)`;
     await tx.$executeRaw`DELETE FROM customer_receipt_withholdings w WHERE NOT EXISTS (SELECT 1 FROM customer_receipts r WHERE r.id = w.receipt_id)`;
@@ -241,6 +244,7 @@ describe.skipIf(!RUN)('cobranzas (integracion)', () => {
       data: [
         { id: BANK, company_id: COMPANY, kind: 'BANK', name: 'Banco test' },
         { id: CASH, company_id: COMPANY, kind: 'CASH', name: 'Caja test' },
+        { id: PORTFOLIO, company_id: COMPANY, kind: 'CHECK_PORTFOLIO', name: 'Cartera test' },
       ],
     });
   }, 60_000);
@@ -432,33 +436,34 @@ describe.skipIf(!RUN)('cobranzas (integracion)', () => {
       expect(await pendingOf(invoice)).toBe('600.00');
     });
 
-    it('cheques: a fecha entran en su vencimiento; vencidos, en la fecha del cobro', async () => {
+    it('cheques (etapa 3a): a fecha o vencidos, entran a la cartera en la fecha del cobro', async () => {
       const { confirmReceipt } = await actions();
       const invoice = await insertInvoice({ total: '300.00' });
+      const check = { checkIssueDate: YESTERDAY, drawerName: 'Cliente A SA', drawerCuit: '30712345671' };
       const created = expectOk(
         await confirmReceipt(
           null,
           form({
             invoices: [{ invoiceId: invoice, amount: '300' }],
             payments: [
-              payment('100', { method: 'ECHECK', checkNumber: '111', checkBank: 'Galicia', checkDueOn: IN_30_DAYS }),
-              payment('200', { method: 'CHECK', checkNumber: '222', checkBank: 'Nación', checkDueOn: YESTERDAY }),
+              payment('100', { method: 'ECHECK', accountId: PORTFOLIO, checkNumber: '111', checkBank: 'Galicia', checkDueOn: IN_30_DAYS, ...check }),
+              payment('200', { method: 'CHECK', accountId: PORTFOLIO, checkNumber: '222', checkBank: 'Nación', checkDueOn: YESTERDAY, ...check }),
             ],
           })
         )
       );
       const dates = (await movementsOf(created.id)).map((m) => [m.amount.toFixed(2), moment.utc(m.date).format('YYYY-MM-DD')]).sort();
       expect(dates).toEqual([
-        ['100.00', IN_30_DAYS],
+        ['100.00', TODAY],
         ['200.00', TODAY],
       ]);
       expect((await movementsOf(created.id)).find((m) => m.amount.toFixed(2) === '100.00')?.description).toContain('Cheque N° 111');
     });
 
-    it('fecha de hoy (Argentina) vale y mañana no; un cheque que vence hoy entra al saldo', async () => {
+    it('fecha de hoy (Argentina) vale y mañana no; lo cobrado hoy entra al saldo', async () => {
       const { confirmReceipt, saveReceiptDraft } = await actions();
       const invoice = await insertInvoice({ total: '50.00' });
-      const values = form({ invoices: [{ invoiceId: invoice, amount: '50' }], payments: [payment('50', { accountId: CASH, method: 'CHECK', checkNumber: '9', checkDueOn: TODAY })] });
+      const values = form({ invoices: [{ invoiceId: invoice, amount: '50' }], payments: [payment('50', { accountId: CASH, method: 'CASH' })] });
       expect(expectFail(await saveReceiptDraft(null, { ...values, date: TOMORROW }))).toBe('La fecha no puede ser futura');
       const before = await balanceOf(CASH);
       expectOk(await confirmReceipt(null, values));

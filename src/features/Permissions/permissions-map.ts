@@ -1513,6 +1513,17 @@ export const PERMISSIONS = {
         allowedActions: ['view', 'create', 'update', 'delete'],
         subtabs: {},
       },
+      // Etapa 3a. 'create' deposita, descuenta y hace la carga inicial de cheques; 'update' registra
+      // rechazos; 'delete' anula depósitos, descuentos, rechazos y cargas iniciales. El endoso usa
+      // el permiso de pagos de Compras.
+      cheques: {
+        slug: 'cheques',
+        name: 'Cheques',
+        tabId: 'd0000000-0000-0000-0000-000000000007',
+        parent: null,
+        allowedActions: ['view', 'create', 'update', 'delete'],
+        subtabs: {},
+      },
       // 'update' adjunta o reemplaza el certificado de una retención.
       'retenciones-sufridas': {
         slug: 'retenciones-sufridas',

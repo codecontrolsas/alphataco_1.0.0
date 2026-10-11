@@ -26,6 +26,7 @@ const KIND_LABELS: Record<CustomerStatementData['currencies'][number]['rows'][nu
   RECEIPT: 'Cobro',
   ADVANCE: 'Cobro a cuenta',
   ADVANCE_APPLIED: 'Anticipo aplicado',
+  REJECTED_CHECK: 'Cheque rechazado',
 };
 
 /**

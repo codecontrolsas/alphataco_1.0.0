@@ -57,3 +57,14 @@ describe('buildCustomerStatement', () => {
     expect(ars.rows.map((r) => r.id)).toEqual(['m', 'z']);
   });
 });
+
+describe('cheques rechazados (etapa 3a)', () => {
+  it('el rechazo va al debe y su cobro al haber: el saldo vuelve a 0', () => {
+    const [ars] = buildCustomerStatement({}, [
+      entry({ id: 'r', date: '2026-10-05', kind: 'REJECTED_CHECK', debit: '900.00' }),
+      entry({ id: 'c', date: '2026-10-06', kind: 'RECEIPT', credit: '900.00' }),
+    ]);
+    expect(ars?.rows.map((r) => r.balance)).toEqual(['900.00', '0.00']);
+    expect(ars?.closing).toBe('0.00');
+  });
+});

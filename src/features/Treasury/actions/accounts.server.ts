@@ -67,6 +67,11 @@ export async function getActiveTreasuryAccountOptions() {
   return accountsWithIndicators(await getActiveCompanyId(), true);
 }
 
+/** Cuentas y cajas de plata (sin carteras de cheques): movimientos manuales y transferencias. */
+export async function getActiveMoneyAccountOptions() {
+  return (await getActiveTreasuryAccountOptions()).filter((a) => a.kind !== 'CHECK_PORTFOLIO');
+}
+
 const orNull = (value: string) => (value.trim() ? value.trim() : null);
 
 async function findDuplicate(companyId: string, name: string, exceptId?: string) {
@@ -135,6 +140,11 @@ export async function updateTreasuryAccount(id: string, values: TreasuryAccountF
   try {
     const existing = await findDuplicate(companyId, v.name, id);
     if (existing) return fail(duplicate(existing.name));
+    // Una cartera de cheques no pasa a ser cuenta de plata ni al revés: sus movimientos son de cheques.
+    const current = await prisma.treasury_accounts.findFirst({ where: { id, company_id: companyId }, select: { kind: true } });
+    if (current && current.kind !== v.kind && (current.kind === 'CHECK_PORTFOLIO' || v.kind === 'CHECK_PORTFOLIO')) {
+      return fail('Una cartera de cheques no cambia de tipo: creá una cuenta nueva');
+    }
     const { count } = await prisma.treasury_accounts.updateMany({
       where: { id, company_id: companyId },
       data: {

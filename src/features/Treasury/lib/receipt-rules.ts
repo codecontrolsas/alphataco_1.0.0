@@ -13,14 +13,11 @@ export function isCollectable(cbteType: number): boolean {
 }
 
 /**
- * Fecha valor del movimiento de un medio del recibo: la del cobro; en cheque y e-cheq, su
- * vencimiento si es posterior (queda "a acreditar" hasta esa fecha).
+ * Fecha valor del movimiento de un medio del recibo: siempre la del cobro. Desde la etapa 3a los
+ * cheques entran a una cartera el día que se reciben; la plata llega al banco recién cuando se
+ * depositan (con su fecha de acreditación).
  */
-export function receiptPaymentMovementDate(method: PaymentMethodKind, receiptDate: string, checkDueOn: string | null): string {
-  if (method === 'CHECK' || method === 'ECHECK') {
-    if (!checkDueOn) throw new Error('El cheque no tiene vencimiento');
-    return checkDueOn > receiptDate ? checkDueOn : receiptDate;
-  }
+export function receiptPaymentMovementDate(_method: PaymentMethodKind, receiptDate: string, _checkDueOn: string | null): string {
   return receiptDate;
 }
 

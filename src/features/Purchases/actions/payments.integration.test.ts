@@ -17,6 +17,7 @@ const OTHER_SUPPLIER = 'd7000000-0000-4000-8000-000000000032';
 const FOREIGN_SUPPLIER = 'd7000000-0000-4000-8000-000000000033';
 const FOREIGN_ACCOUNT = 'd7000000-0000-4000-8000-000000000040';
 const FOREIGN_REGIME = 'd7000000-0000-4000-8000-000000000041';
+const CHECK_CUSTOMER = 'd7000000-0000-4000-8000-000000000050';
 
 const state = vi.hoisted(() => ({ denied: new Set<string>() }));
 const mails = vi.hoisted(() => ({ any: vi.fn(async () => true) }));
@@ -53,7 +54,14 @@ async function cleanup() {
   const company_id = { in: [COMPANY, OTHER_COMPANY] };
   await prisma.treasury_movements.deleteMany({ where: { company_id } });
   await prisma.payment_order_lines.deleteMany({ where: { payment_order: { company_id }, kind: 'ADVANCE_APPLIED' } });
+  // Los eventos de los cheques apuntan a las órdenes: van antes.
+  await prisma.third_party_check_events.deleteMany({ where: { check: { company_id } } });
   await prisma.payment_orders.deleteMany({ where: { company_id } });
+  // Cheques de terceros (Tesorería etapa 3a): items, cheques (con sus eventos) y operaciones.
+  await prisma.third_party_check_operation_items.deleteMany({ where: { operation: { company_id } } });
+  await prisma.third_party_checks.deleteMany({ where: { company_id } });
+  await prisma.third_party_check_operations.deleteMany({ where: { company_id } });
+  await prisma.customers.deleteMany({ where: { company_id } });
   await prisma.supplier_withholding_profiles.deleteMany({ where: { supplier: { company_id } } });
   await prisma.withholding_regimes.deleteMany({ where: { company_id } });
   await prisma.treasury_accounts.deleteMany({ where: { company_id } });
@@ -596,6 +604,173 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
         expectOk(await accounts.setTreasuryAccountActive(chequesId, true));
         expect((await orderRow(order.id)).status).toBe('APPROVED');
       });
+    });
+  });
+
+  describe('cheques de terceros: endoso y deuda con el proveedor (Tesorería etapa 3a)', () => {
+    let portfolioId = '';
+    let bankId = '';
+    let checkNumber = 3000;
+
+    beforeAll(async () => {
+      state.denied.clear();
+      const prisma = await db();
+      const accounts = await import('@/features/Treasury/actions/accounts.server');
+      portfolioId = expectOk(await accounts.createTreasuryAccount({ ...accountForm('Cartera pagos'), kind: 'CHECK_PORTFOLIO' })).id;
+      bankId = expectOk(await accounts.createTreasuryAccount(accountForm('Banco endosos'))).id;
+      await prisma.customers.create({ data: { id: CHECK_CUSTOMER, company_id: COMPANY, name: 'Cliente cheques', cuit: BigInt('30712345671'), vat_condition_id: 1 } });
+    });
+
+    /** Un cheque EN CARTERA por la carga inicial de Tesorería. */
+    async function portfolioCheck(amount: string): Promise<{ id: string; number: string }> {
+      const checks = await import('@/features/Treasury/actions/checks.server');
+      checkNumber += 1;
+      const number = String(checkNumber);
+      expectOk(
+        await checks.createOpeningChecks({
+          portfolioId,
+          date: AR_TODAY,
+          customerId: CHECK_CUSTOMER,
+          checks: [{ kind: 'PHYSICAL', number, bank: 'Banco Galicia', drawerName: 'Cliente cheques', drawerCuit: '30712345671', issueDate: AR_TODAY, paymentDate: AR_TODAY, amount }],
+        })
+      );
+      const prisma = await db();
+      const row = await prisma.third_party_checks.findFirstOrThrow({ where: { company_id: COMPANY, number }, select: { id: true } });
+      return { id: row.id, number };
+    }
+
+    async function approvedAdvance(amount: string, supplierId = OTHER_SUPPLIER) {
+      const actions = await import('./payment-orders.server');
+      const order = expectOk(await actions.createPaymentOrder(paymentForm(supplierId, [], { plannedOn: AR_TODAY, advance: { amount, purchaseOrderId: '', description: 'Anticipo' } })));
+      expectOk(await actions.submitPaymentOrder(order.id));
+      expectOk(await actions.approvePaymentOrder(order.id));
+      return order;
+    }
+
+    const endorse = (checkId: string) => ({
+      method: 'THIRD_PARTY_CHECK' as const,
+      accountId: '',
+      amount: '',
+      reference: '',
+      checkNumber: '',
+      checkBank: '',
+      checkDueOn: '',
+      thirdPartyCheckId: checkId,
+    });
+    const transfer = (amount: string) => ({ method: 'TRANSFER' as const, accountId: bankId, amount, reference: 'T', checkNumber: '', checkBank: '', checkDueOn: '' });
+
+    async function checkRow(id: string) {
+      const prisma = await db();
+      return prisma.third_party_checks.findUniqueOrThrow({ where: { id }, select: { status: true, supplier_id: true, events: { select: { to_status: true, payment_order_id: true }, orderBy: { created_at: 'asc' } } } });
+    }
+
+    it('pagar con un cheque de la cartera lo endosa al proveedor y lo saca de la cartera', async () => {
+      const actions = await import('./payment-orders.server');
+      const check = await portfolioCheck('600.00');
+      const order = await approvedAdvance('1000');
+      expectOk(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [endorse(check.id), transfer('400')] }));
+      const row = await checkRow(check.id);
+      expect(row.status).toBe('ENDORSED');
+      expect(row.supplier_id).toBe(OTHER_SUPPLIER);
+      expect(row.events.at(-1)).toEqual({ to_status: 'ENDORSED', payment_order_id: order.id });
+      const prisma = await db();
+      const out = await prisma.treasury_movements.findFirstOrThrow({
+        where: { payment_order_payment: { payment_order_id: order.id, method: 'THIRD_PARTY_CHECK' } },
+        select: { account_id: true, amount: true, kind: true, third_party_check_id: true },
+      });
+      expect(out).toMatchObject({ account_id: portfolioId, kind: 'SUPPLIER_PAYMENT', third_party_check_id: check.id });
+      expect(out.amount.toString()).toBe('-600');
+    });
+
+    it('un cheque mayor que lo que falta no cierra el pago', async () => {
+      const actions = await import('./payment-orders.server');
+      const check = await portfolioCheck('600.00');
+      const order = await approvedAdvance('100');
+      expect(expectFail(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [endorse(check.id)] }))).toMatch(/^Los medios suman .* y no suman el neto a pagar/);
+      expect((await orderRow(order.id)).status).toBe('APPROVED');
+      expect((await checkRow(check.id)).status).toBe('IN_PORTFOLIO');
+    });
+
+    it('un cheque que otro depositó mientras tanto no se endosa: la orden sigue aprobada y sin movimientos', async () => {
+      const actions = await import('./payment-orders.server');
+      const checks = await import('@/features/Treasury/actions/checks.server');
+      const check = await portfolioCheck('50.00');
+      const order = await approvedAdvance('50');
+      expectOk(await checks.depositChecks({ bankAccountId: bankId, date: AR_TODAY, slipNumber: '', items: [{ checkId: check.id, creditedOn: AR_TODAY }] }));
+      expect(expectFail(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [endorse(check.id)] }))).toBe(
+        `El cheque Nº ${check.number} (BANCO GALICIA) está depositado: no se puede endosar`
+      );
+      expect((await orderRow(order.id)).status).toBe('APPROVED');
+      const prisma = await db();
+      expect(await prisma.treasury_movements.count({ where: { payment_order_payment: { payment_order_id: order.id } } })).toBe(0);
+    });
+
+    // El 1° del mes, ayer es otro mes y la orden se rechazaría por las retenciones antes de llegar al cheque.
+    it.skipIf(AR_TODAY.endsWith('-01'))('el endoso no puede ser anterior a la entrada del cheque a la cartera', async () => {
+      const actions = await import('./payment-orders.server');
+      const check = await portfolioCheck('20.00');
+      const order = await approvedAdvance('20');
+      const yesterday = moment(AR_TODAY).subtract(1, 'day').format('YYYY-MM-DD');
+      expect(expectFail(await actions.registerPayment(order.id, { paidOn: yesterday, payments: [endorse(check.id)] }))).toBe(
+        `Cheque Nº ${check.number}: entró a la cartera el ${moment(AR_TODAY).format('DD/MM/YYYY')}; la operación no puede ser anterior`
+      );
+      expect((await orderRow(order.id)).status).toBe('APPROVED');
+    });
+
+    it('anular la orden devuelve el cheque a la cartera; si el cheque fue rechazado, no se anula', async () => {
+      const actions = await import('./payment-orders.server');
+      const checks = await import('@/features/Treasury/actions/checks.server');
+      const back = await portfolioCheck('70.00');
+      const first = await approvedAdvance('70');
+      expectOk(await actions.registerPayment(first.id, { paidOn: AR_TODAY, payments: [endorse(back.id)] }));
+      expectOk(await actions.cancelPaymentOrder(first.id, 'Error'));
+      expect((await checkRow(back.id)).status).toBe('IN_PORTFOLIO');
+      const prisma = await db();
+      expect(await prisma.treasury_movements.count({ where: { third_party_check_id: back.id, payment_order_payment_id: { not: null }, cancelled_at: null } })).toBe(0);
+
+      const rejected = await portfolioCheck('80.00');
+      const second = await approvedAdvance('80');
+      expectOk(await actions.registerPayment(second.id, { paidOn: AR_TODAY, payments: [endorse(rejected.id)] }));
+      const rejection = expectOk(await checks.rejectCheck({ checkId: rejected.id, date: AR_TODAY, reason: 'Sin fondos', returnedBy: 'SUPPLIER' }));
+      expect(expectFail(await actions.cancelPaymentOrder(second.id, 'x'))).toBe(
+        `El cheque Nº ${rejected.number} endosado en esta orden fue rechazado: anulá primero el rechazo ${rejection.number}`
+      );
+    });
+
+    it('rechazo de un endosado: deuda del cliente y del proveedor; la orden que la paga no lleva retenciones', async () => {
+      const actions = await import('./payment-orders.server');
+      const checks = await import('@/features/Treasury/actions/checks.server');
+      const { customerCheckDebts, supplierCheckDebts } = await import('@/features/Treasury/lib/rejected-checks');
+      const prisma = await db();
+      // Endoso al proveedor con retenciones: factura de 1.000.000 + IVA, el cheque cubre parte del neto.
+      const invoice = await expenseInvoice(SUPPLIER, '1000000');
+      const order = expectOk(await actions.createPaymentOrder(paymentForm(SUPPLIER, [invoiceLine(invoice, '1210000')], { plannedOn: AR_TODAY })));
+      expectOk(await actions.submitPaymentOrder(order.id));
+      expectOk(await actions.approvePaymentOrder(order.id));
+      const net = (await orderRow(order.id)).net_total.toFixed(2);
+      const check = await portfolioCheck('500000.00');
+      const rest = (Number(net) - 500000).toFixed(2);
+      expectOk(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [endorse(check.id), transfer(rest)] }));
+      expectOk(await checks.rejectCheck({ checkId: check.id, date: AR_TODAY, reason: 'Sin fondos', returnedBy: 'SUPPLIER' }));
+      expect((await customerCheckDebts(prisma, [check.id])).get(check.id)?.pending).toBe('500000.00');
+      expect((await supplierCheckDebts(prisma, [check.id])).get(check.id)?.pending).toBe('500000.00');
+
+      const { getSupplierAccount } = await import('./supplier-account.server');
+      const account = await getSupplierAccount(SUPPLIER);
+      expect(account?.movements.some((m) => m.kind === 'REJECTED_CHECK' && m.debit === '500000.00')).toBe(true);
+
+      const debtLine: PayLine = { kind: 'REJECTED_CHECK', invoiceId: '', sourceLineId: '', checkId: check.id, amount: '500000' };
+      const payDebt = expectOk(await actions.createPaymentOrder(paymentForm(SUPPLIER, [debtLine], { plannedOn: AR_TODAY })));
+      const draft = await orderRow(payDebt.id);
+      expect(draft.withholdings_total.toFixed(2)).toBe('0.00');
+      expect(draft.net_total.toFixed(2)).toBe('500000.00');
+      // La deuda está en una orden sin pagar: el rechazo no se anula.
+      const rejection = await prisma.third_party_check_operations.findFirstOrThrow({ where: { kind: 'REJECTION', items: { some: { check_id: check.id } } }, select: { id: true } });
+      expect(expectFail(await checks.cancelCheckOperation(rejection.id, 'x'))).toBe(`La deuda del cheque está en la ${payDebt.number}, sin pagar: quitala de ahí primero`);
+      expectOk(await actions.submitPaymentOrder(payDebt.id));
+      expectOk(await actions.approvePaymentOrder(payDebt.id));
+      expectOk(await actions.registerPayment(payDebt.id, { paidOn: AR_TODAY, payments: [transfer('500000')] }));
+      expect((await supplierCheckDebts(prisma, [check.id])).get(check.id)?.pending).toBe('0.00');
     });
   });
 

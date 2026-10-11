@@ -23,7 +23,7 @@ export async function assertActiveAccount(
   tx: Pick<Prisma.TransactionClient, 'treasury_accounts'>,
   companyId: string,
   accountId: string
-): Promise<{ id: string; name: string; kind: 'BANK' | 'CASH' }> {
+): Promise<{ id: string; name: string; kind: 'BANK' | 'CASH' | 'CHECK_PORTFOLIO' }> {
   if (!UUID_RE.test(accountId)) throw new TreasuryError('La cuenta no existe');
   const account = await tx.treasury_accounts.findFirst({
     where: { id: accountId, company_id: companyId },
@@ -32,6 +32,41 @@ export async function assertActiveAccount(
   if (!account) throw new TreasuryError('La cuenta no existe');
   if (!account.is_active) throw new TreasuryError(`La cuenta «${account.name}» está inactiva`);
   return { id: account.id, name: account.name, kind: account.kind };
+}
+
+export const PORTFOLIO_WITHOUT_OPENING = 'Una cartera no lleva saldo inicial: cargá sus cheques con la carga inicial';
+
+/** Cuenta o caja de plata: una cartera de cheques no admite movimientos manuales, transferencias ni medios que no sean cheques. */
+export async function assertMoneyAccount(
+  tx: Pick<Prisma.TransactionClient, 'treasury_accounts'>,
+  companyId: string,
+  accountId: string
+): Promise<{ id: string; name: string; kind: 'BANK' | 'CASH' }> {
+  const account = await assertActiveAccount(tx, companyId, accountId);
+  if (account.kind === 'CHECK_PORTFOLIO') throw new TreasuryError(`La cartera «${account.name}» solo mueve cheques`);
+  return { id: account.id, name: account.name, kind: account.kind };
+}
+
+/** Cartera de cheques activa de la empresa (adonde entran los cheques recibidos). */
+export async function assertPortfolioAccount(
+  tx: Pick<Prisma.TransactionClient, 'treasury_accounts'>,
+  companyId: string,
+  accountId: string
+): Promise<{ id: string; name: string }> {
+  const account = await assertActiveAccount(tx, companyId, accountId);
+  if (account.kind !== 'CHECK_PORTFOLIO') throw new TreasuryError('Los cheques van a una cartera de cheques');
+  return { id: account.id, name: account.name };
+}
+
+/** Cuenta bancaria activa (destino de depósitos y descuentos de cheques). */
+export async function assertBankAccount(
+  tx: Pick<Prisma.TransactionClient, 'treasury_accounts'>,
+  companyId: string,
+  accountId: string
+): Promise<{ id: string; name: string }> {
+  const account = await assertActiveAccount(tx, companyId, accountId);
+  if (account.kind !== 'BANK') throw new TreasuryError('Elegí una cuenta bancaria');
+  return { id: account.id, name: account.name };
 }
 
 export type CreateMovementInput = {
@@ -47,6 +82,8 @@ export type CreateMovementInput = {
   transferId?: string | null;
   paymentOrderPaymentId?: string | null;
   customerReceiptPaymentId?: string | null;
+  checkOperationId?: string | null;
+  thirdPartyCheckId?: string | null;
   createdBy: string;
 };
 
@@ -66,6 +103,8 @@ export async function createMovement(tx: MovementsTx, input: CreateMovementInput
       transfer_id: input.transferId ?? null,
       payment_order_payment_id: input.paymentOrderPaymentId ?? null,
       customer_receipt_payment_id: input.customerReceiptPaymentId ?? null,
+      check_operation_id: input.checkOperationId ?? null,
+      third_party_check_id: input.thirdPartyCheckId ?? null,
       created_by: input.createdBy,
     },
     select: { id: true },
@@ -78,7 +117,7 @@ export async function createMovement(tx: MovementsTx, input: CreateMovementInput
  */
 export async function cancelMovements(
   tx: Pick<Prisma.TransactionClient, 'treasury_movements'>,
-  where: { ids?: string[]; transferId?: string; paymentOrderId?: string; customerReceiptId?: string },
+  where: { ids?: string[]; transferId?: string; paymentOrderId?: string; customerReceiptId?: string; checkOperationId?: string },
   cancel: { by: string; reason: string; at: Date }
 ): Promise<number> {
   const origin: Prisma.treasury_movementsWhereInput[] = [];
@@ -86,6 +125,7 @@ export async function cancelMovements(
   if (where.transferId) origin.push({ transfer_id: where.transferId });
   if (where.paymentOrderId) origin.push({ payment_order_payment: { payment_order_id: where.paymentOrderId } });
   if (where.customerReceiptId) origin.push({ customer_receipt_payment: { receipt_id: where.customerReceiptId } });
+  if (where.checkOperationId) origin.push({ check_operation_id: where.checkOperationId });
   if (origin.length === 0) return 0;
   const { count } = await tx.treasury_movements.updateMany({
     where: { cancelled_at: null, OR: origin },
@@ -105,6 +145,7 @@ export type LockedMovement = {
   transferNumber: string | null;
   paymentOrderNumber: string | null;
   receiptNumber: string | null;
+  checkOperationNumber: string | null;
 };
 
 /** Toma la fila del movimiento con `FOR UPDATE` (editar y anular compiten por ella). */
@@ -122,16 +163,19 @@ export async function lockMovement(tx: Pick<Prisma.TransactionClient, '$queryRaw
       transfer_number: string | null;
       payment_order_number: string | null;
       receipt_number: string | null;
+      check_operation_number: string | null;
     }[]
   >`
     SELECT m.id, m.account_id, m.concept_id, m.date::text AS date, m.amount::text AS amount, m.kind::text AS kind, m.cancelled_at,
-           t.number AS transfer_number, po.number AS payment_order_number, cr.number AS receipt_number
+           t.number AS transfer_number, po.number AS payment_order_number, cr.number AS receipt_number,
+           co.number AS check_operation_number
     FROM treasury_movements m
     LEFT JOIN treasury_transfers t ON t.id = m.transfer_id
     LEFT JOIN payment_order_payments p ON p.id = m.payment_order_payment_id
     LEFT JOIN payment_orders po ON po.id = p.payment_order_id
     LEFT JOIN customer_receipt_payments crp ON crp.id = m.customer_receipt_payment_id
     LEFT JOIN customer_receipts cr ON cr.id = crp.receipt_id
+    LEFT JOIN third_party_check_operations co ON co.id = m.check_operation_id
     WHERE m.id = ${id}::uuid AND m.company_id = ${companyId}::uuid
     FOR UPDATE OF m
   `;
@@ -148,6 +192,7 @@ export async function lockMovement(tx: Pick<Prisma.TransactionClient, '$queryRaw
     transferNumber: row.transfer_number,
     paymentOrderNumber: row.payment_order_number,
     receiptNumber: row.receipt_number,
+    checkOperationNumber: row.check_operation_number,
   };
 }
 
@@ -161,5 +206,12 @@ export function assertEditableMovement(movement: LockedMovement): void {
   }
   if (movement.kind === 'CUSTOMER_RECEIPT') {
     throw new TreasuryError(`Este movimiento es del recibo ${movement.receiptNumber}. Para revertirlo, anulá el recibo`);
+  }
+  if (movement.kind === 'CHECK_OPERATION') {
+    throw new TreasuryError(
+      movement.checkOperationNumber
+        ? `Este movimiento es de la operación de cheques ${movement.checkOperationNumber}. Para revertirlo, anulá la operación`
+        : 'Este movimiento es de la carga inicial de cheques. Para revertirlo, anulá el cheque desde su detalle'
+    );
   }
 }

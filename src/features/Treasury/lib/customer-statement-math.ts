@@ -10,7 +10,7 @@ export type CustomerStatementEntry = {
   id: string;
   date: string;
   currency: string;
-  kind: 'INVOICE' | 'DEBIT_NOTE' | 'CREDIT_NOTE' | 'RECEIPT' | 'ADVANCE' | 'ADVANCE_APPLIED';
+  kind: 'INVOICE' | 'DEBIT_NOTE' | 'CREDIT_NOTE' | 'RECEIPT' | 'ADVANCE' | 'ADVANCE_APPLIED' | 'REJECTED_CHECK';
   label: string;
   href: string;
   debit: string;

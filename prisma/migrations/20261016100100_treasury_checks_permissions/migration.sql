@@ -1,0 +1,19 @@
+-- Tesoreria, etapa 3a: tab de Cheques y sus permisos para los roles de sistema. Mismo contenido
+-- que declara src/features/Permissions/permissions-map.ts. Va entre Cobranzas y Retenciones sufridas.
+
+INSERT INTO tabs (id, module_id, slug, name, description, order_index, parent_tab_id)
+VALUES
+  ('d0000000-0000-0000-0000-000000000007', 'd0000000-0000-0000-0000-000000000000', 'cheques',
+   'Cheques', 'Cartera de cheques de terceros: depósitos, descuentos y rechazos', 5, NULL)
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, order_index = EXCLUDED.order_index;
+
+UPDATE tabs SET order_index = 6 WHERE id = 'd0000000-0000-0000-0000-000000000006';
+
+-- Permisos de los 3 roles de sistema, y SOLO esos tres: los roles custom de cada empresa se
+-- asignan a mano desde el editor de permisos (regla del proyecto).
+INSERT INTO role_permissions (role_id, tab_id, action_id)
+SELECT r.id, 'd0000000-0000-0000-0000-000000000007'::uuid, a.id
+FROM roles r
+JOIN actions a ON a.slug IN ('view', 'create', 'update', 'delete')
+WHERE r.slug IN ('admin', 'administrador', 'full-access-provisional')
+ON CONFLICT (role_id, tab_id, action_id) DO NOTHING;

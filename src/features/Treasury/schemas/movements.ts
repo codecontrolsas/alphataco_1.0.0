@@ -11,6 +11,7 @@ export const TREASURY_MOVEMENT_KIND_LABELS = {
   TRANSFER: 'Transferencia',
   SUPPLIER_PAYMENT: 'Pago a proveedor',
   CUSTOMER_RECEIPT: 'Cobro a cliente',
+  CHECK_OPERATION: 'Operación de cheques',
 } as const;
 
 export const manualMovementFormSchema = z.object({

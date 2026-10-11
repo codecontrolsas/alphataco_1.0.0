@@ -41,7 +41,7 @@ Un movimiento **anulado** no se borra: queda en el extracto tachado, con el moti
 
 Cuando se paga con **cheque** o **e-cheq**, el movimiento lleva la **fecha de pago del cheque**, no la del pago de la orden. Hasta ese día figura **a debitar** y no baja el saldo; ese día pasa solo al saldo, sin que nadie haga nada. Las transferencias y el efectivo salen el día del pago.
 
-Con los cheques que **recibe** la empresa es al revés: el cobro entra en el **vencimiento** del cheque y hasta ese día figura **a acreditar**.
+Los cheques que **recibe** la empresa entran a una **cartera de cheques** el día del cobro. Cuando se depositan, entran al banco en su **fecha de acreditación** y hasta ese día figuran **a acreditar**. Ver <GuideLink to="cartera-de-cheques">Cartera de cheques</GuideLink>.
 
 ## Las secciones
 
@@ -51,12 +51,13 @@ Con los cheques que **recibe** la empresa es al revés: el cobro entra en el **v
 | **Movimientos** | Todos los movimientos de todas las cuentas, y el alta de los manuales. |
 | **Transferencias** | Los pases de plata entre cuentas. |
 | **Cobranzas** | Lo que está **a cobrar** (facturas y notas de débito con saldo) y los **recibos**. Ver <GuideLink to="cobrar-facturas">Cobrar facturas</GuideLink>. |
+| **Cheques** | La cartera de cheques de terceros: depositar, descontar, rechazos y carga inicial. Ver <GuideLink to="cartera-de-cheques">Cartera de cheques</GuideLink>. |
 | **Retenciones sufridas** | Las retenciones que practicaron los clientes, por mes, con su certificado. Ver <GuideLink to="retenciones-sufridas">Retenciones sufridas</GuideLink>. |
 | **Configuración** | Cuentas y cajas con su saldo inicial, y los conceptos de los movimientos manuales. |
 
 ## Lo que viene
 
-Tesorería se completa en etapas: después de cuentas y cobranzas vienen **cheques** (cartera de terceros, chequeras propias, depósitos, endosos y rechazos) y **conciliación bancaria** con el extracto del banco. Todas escriben en el mismo libro de movimientos.
+Tesorería se completa en etapas: ya están las cuentas, las cobranzas y la **cartera de cheques de terceros** (depósitos, descuentos, endosos y rechazos); después vienen las **chequeras propias** y la **conciliación bancaria** con el extracto del banco. Todas escriben en el mismo libro de movimientos.
 
 ## Permisos
 
@@ -69,4 +70,5 @@ Tesorería se completa en etapas: después de cuentas y cobranzas vienen **chequ
 | Ver, cargar y anular transferencias | **Transferencias → Ver / Crear / Editar** |
 | Ver y cambiar cuentas, cajas y conceptos | **Configuración → Ver / Editar** |
 | Cobranzas y cuenta corriente de clientes | **Cobranzas → Ver / Crear / Editar / Eliminar** |
+| Cartera de cheques (depositar, descontar, rechazar, anular) | **Cheques → Ver / Crear / Editar / Eliminar** |
 | Retenciones sufridas | **Retenciones sufridas → Ver / Editar** |

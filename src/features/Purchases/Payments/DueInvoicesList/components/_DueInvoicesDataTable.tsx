@@ -84,8 +84,14 @@ export function _DueInvoicesDataTable({
   const handleBuildOrder = useCallback(() => {
     const [supplierId] = [...supplierIds];
     if (!supplierId) return;
-    router.push(`/dashboard/purchases/payments/new?supplier=${supplierId}&invoices=${selectedIds.join(',')}`);
-  }, [router, supplierIds, selectedIds]);
+    // Facturas y cheques rechazados viajan en parametros separados
+    const invoiceIds = selectedRows.filter((r) => r.kind === 'INVOICE').map((r) => r.id);
+    const checkIds = selectedRows.filter((r) => r.kind === 'CHECK').map((r) => r.id);
+    const params = new URLSearchParams({ supplier: supplierId });
+    if (invoiceIds.length) params.set('invoices', invoiceIds.join(','));
+    if (checkIds.length) params.set('checks', checkIds.join(','));
+    router.push(`/dashboard/purchases/payments/new?${params.toString()}`);
+  }, [router, supplierIds, selectedRows]);
 
   const columns = useMemo(() => getColumns(), []);
 

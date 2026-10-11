@@ -16,6 +16,7 @@ import {
   safePaging,
   textValue,
 } from '../../lib/filter-values';
+import { OPENING_OPERATION_LABEL } from './constants';
 
 const logger = new Logger('features/Treasury/Movements/MovementsList');
 
@@ -64,14 +65,20 @@ function parseAmount(text: string): Prisma.Decimal | null {
   return normalized ? new Prisma.Decimal(normalized) : null;
 }
 
-/** Numero de la orden de pago o de la transferencia de origen del movimiento. */
-const originNumberContains = (value: string): MovementWhere => ({
-  OR: [
+/** Numero de la orden de pago, transferencia, recibo u operacion de cheques de origen del movimiento. */
+const originNumberContains = (value: string): MovementWhere => {
+  const or: MovementWhere[] = [
     { payment_order_payment: { payment_order: { number: contains(value) } } },
     { transfer: { number: contains(value) } },
     { customer_receipt_payment: { receipt: { number: contains(value) } } },
-  ],
-});
+    { check_operation: { number: contains(value) } },
+  ];
+  // La carga inicial no tiene numero: se busca por el texto que muestra la tabla
+  if (value.length >= 3 && OPENING_OPERATION_LABEL.toLowerCase().includes(value.toLowerCase())) {
+    or.push({ check_operation: { number: null } });
+  }
+  return { OR: or };
+};
 
 /** WHERE compartido entre paginated, export y facets. */
 function buildWhereClause(companyId: string, state: FilterState): MovementWhere {
@@ -146,6 +153,8 @@ const MOVEMENT_SELECT = {
   transfer: { select: { id: true, number: true } },
   payment_order_payment: { select: { payment_order: { select: { id: true, number: true } } } },
   customer_receipt_payment: { select: { receipt: { select: { id: true, number: true } } } },
+  check_operation: { select: { id: true, number: true } },
+  third_party_check_id: true,
 } as const;
 
 function shape(rows: Prisma.treasury_movementsGetPayload<{ select: typeof MOVEMENT_SELECT }>[]) {
@@ -167,6 +176,10 @@ function shape(rows: Prisma.treasury_movementsGetPayload<{ select: typeof MOVEME
       transfer: r.transfer ? { id: r.transfer.id, number: r.transfer.number } : null,
       paymentOrder: order ? { id: order.id, number: order.number } : null,
       customerReceipt: receipt ? { id: receipt.id, number: receipt.number } : null,
+      // Operacion de cheques (deposito, descuento, rechazo, carga inicial): sin numero = carga inicial
+      checkOperation: r.check_operation
+        ? { id: r.check_operation.id, number: r.check_operation.number ?? OPENING_OPERATION_LABEL, checkId: r.third_party_check_id }
+        : null,
     };
   });
 }

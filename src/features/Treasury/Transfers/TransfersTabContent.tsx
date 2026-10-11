@@ -1,5 +1,5 @@
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { getActiveTreasuryAccountOptions } from '../actions/accounts.server';
+import { getActiveMoneyAccountOptions } from '../actions/accounts.server';
 import { Suspense } from 'react';
 import { NoPermission } from '../fallback/NoPermission';
 import { NewTransferButton } from './components/NewTransferButton';
@@ -17,7 +17,7 @@ export default async function TransfersTabContent({
   if (permissions['tesoreria:transferencias:view'] !== true) return <NoPermission />;
   const canCreate = permissions['tesoreria:transferencias:create'] === true;
   const canUpdate = permissions['tesoreria:transferencias:update'] === true;
-  const accounts = canCreate ? await getActiveTreasuryAccountOptions() : [];
+  const accounts = canCreate ? await getActiveMoneyAccountOptions() : [];
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-end gap-2">

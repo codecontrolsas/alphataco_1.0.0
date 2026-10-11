@@ -7,7 +7,7 @@ import { defineSection, tab } from '../define.ts';
 export const tesoreriaSection = defineSection({
   key: 'tesoreria',
   title: 'Tesorería',
-  description: 'Saldos de cuentas bancarias y cajas, extracto, movimientos manuales, transferencias entre cuentas, el reflejo de los pagos a proveedores y las cobranzas a clientes con sus retenciones.',
+  description: 'Saldos de cuentas bancarias y cajas, extracto, movimientos manuales, transferencias entre cuentas, el reflejo de los pagos a proveedores, las cobranzas a clientes con sus retenciones y la cartera de cheques de terceros.',
   icon: 'treasury',
   guides: [
     {
@@ -19,10 +19,11 @@ export const tesoreriaSection = defineSection({
         tab('tesoreria', 'transferencias'),
         tab('tesoreria', 'config-tesoreria'),
         tab('tesoreria', 'cobranzas'),
+        tab('tesoreria', 'cheques'),
         tab('tesoreria', 'retenciones-sufridas'),
       ],
       screens: [{ path: '/dashboard/treasury' }],
-      related: ['cuentas-y-saldos', 'movimientos-de-tesoreria', 'transferencias', 'cobrar-facturas', 'configuracion-de-tesoreria', 'ordenes-de-pago'],
+      related: ['cuentas-y-saldos', 'movimientos-de-tesoreria', 'transferencias', 'cobrar-facturas', 'cartera-de-cheques', 'configuracion-de-tesoreria', 'ordenes-de-pago'],
     },
     {
       slug: 'cuentas-y-saldos',
@@ -58,7 +59,7 @@ export const tesoreriaSection = defineSection({
         { path: '/dashboard/treasury', tab: 'cobranzas' },
         { path: '/dashboard/treasury/receipts/*' },
       ],
-      related: ['cobros-en-moneda-extranjera', 'anticipos-de-clientes', 'retenciones-sufridas', 'cuenta-corriente-de-clientes', 'anular-un-recibo', 'facturacion'],
+      related: ['cobros-en-moneda-extranjera', 'anticipos-de-clientes', 'retenciones-sufridas', 'cuenta-corriente-de-clientes', 'cartera-de-cheques', 'anular-un-recibo', 'facturacion'],
     },
     {
       slug: 'cobros-en-moneda-extranjera',
@@ -82,13 +83,35 @@ export const tesoreriaSection = defineSection({
       slug: 'cuenta-corriente-de-clientes',
       access: [tab('tesoreria', 'cobranzas')],
       screens: [{ path: '/dashboard/treasury/customers/*' }],
-      related: ['cobrar-facturas', 'anticipos-de-clientes', 'cobros-en-moneda-extranjera', 'clientes', 'facturacion'],
+      related: ['cobrar-facturas', 'anticipos-de-clientes', 'cobros-en-moneda-extranjera', 'rechazo-de-un-cheque', 'clientes', 'facturacion'],
     },
     {
       slug: 'anular-un-recibo',
       access: [tab('tesoreria', 'cobranzas')],
       screens: [],
-      related: ['cobrar-facturas', 'anticipos-de-clientes', 'cuentas-y-saldos'],
+      related: ['cobrar-facturas', 'anticipos-de-clientes', 'cartera-de-cheques', 'cuentas-y-saldos'],
+    },
+    // Etapa 3a: cheques de terceros.
+    {
+      slug: 'cartera-de-cheques',
+      access: [tab('tesoreria', 'cheques')],
+      screens: [
+        { path: '/dashboard/treasury', tab: 'cheques' },
+        { path: '/dashboard/treasury/checks/*' },
+      ],
+      related: ['depositar-y-descontar-cheques', 'rechazo-de-un-cheque', 'endosar-cheques', 'cobrar-facturas', 'configuracion-de-tesoreria'],
+    },
+    {
+      slug: 'depositar-y-descontar-cheques',
+      access: [tab('tesoreria', 'cheques')],
+      screens: [],
+      related: ['cartera-de-cheques', 'rechazo-de-un-cheque', 'cuentas-y-saldos'],
+    },
+    {
+      slug: 'rechazo-de-un-cheque',
+      access: [tab('tesoreria', 'cheques')],
+      screens: [],
+      related: ['cartera-de-cheques', 'cuenta-corriente-de-clientes', 'cobrar-facturas', 'cuenta-corriente-y-vencimientos', 'endosar-cheques'],
     },
   ],
 });

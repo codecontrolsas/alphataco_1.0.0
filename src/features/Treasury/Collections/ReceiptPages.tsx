@@ -26,8 +26,11 @@ function Header({ title, back = BACK }: { title: string; back?: string }) {
   );
 }
 
-/** `/dashboard/treasury/receipts/new[?customerId=&invoiceId=]`: recibo nuevo (desde "A cobrar", con el comprobante tildado). */
-export async function NewReceiptPage({ customerId, invoiceId }: { customerId: string | null; invoiceId: string | null }) {
+/**
+ * `/dashboard/treasury/receipts/new[?customerId=&invoiceId=|checkId=]`: recibo nuevo (desde "A
+ * cobrar" o el detalle de un cheque rechazado, con el comprobante o la deuda tildados).
+ */
+export async function NewReceiptPage({ customerId, invoiceId, checkId = null }: { customerId: string | null; invoiceId: string | null; checkId?: string | null }) {
   const permissions = await getUserPermissionsMapServer();
   if (permissions['tesoreria:cobranzas:create'] !== true) return <NoPermission />;
   const data = await getReceiptFormData({ customerId: customerId ?? undefined });
@@ -38,6 +41,8 @@ export async function NewReceiptPage({ customerId, invoiceId }: { customerId: st
     values.invoices = [{ invoiceId: invoice.invoiceId, amount: invoice.pending }];
     if (invoice.currency !== 'ARS') values.rates = [{ currency: invoice.currency as 'USD' | 'EUR', rate: '' }];
   }
+  const debt = checkId ? data.checkDebts.find((d) => d.checkId === checkId) : undefined;
+  if (debt) values.rejectedChecks = [{ checkId: debt.checkId, amount: debt.pending }];
   return (
     <div className="space-y-4">
       <Header title="Nuevo recibo" />

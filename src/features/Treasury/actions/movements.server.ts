@@ -12,7 +12,7 @@ import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { NO_PERMISSION, UUID_RE, firstIssue, toTreasuryActionError } from '../lib/action-errors';
 import { conceptAllows, signedCents, type MovementDirection } from '../lib/movement-rules';
-import { assertActiveAccount, assertEditableMovement, cancelMovements, createMovement, dateOnly, lockMovement } from '../lib/movements';
+import { assertActiveAccount, assertEditableMovement, assertMoneyAccount, PORTFOLIO_WITHOUT_OPENING, cancelMovements, createMovement, dateOnly, lockMovement } from '../lib/movements';
 import { TreasuryError } from '../lib/treasury-errors';
 import {
   cancelReasonSchema,
@@ -73,6 +73,7 @@ export async function createManualMovement(values: ManualMovementFormValues): Pr
       profile.credentialId,
       async (tx) => {
         await assertConcept(tx, companyId, v.conceptId, v.direction);
+        await assertMoneyAccount(tx, companyId, v.accountId);
         return createMovement(tx, {
           companyId,
           accountId: v.accountId,
@@ -114,7 +115,7 @@ export async function updateManualMovement(id: string, values: ManualMovementFor
         if (movement.kind !== 'MANUAL') throw new TreasuryError('El saldo inicial se edita desde la cuenta');
         // Una cuenta inactiva no acepta movimientos nuevos, pero el movimiento puede quedarse en la
         // suya; lo mismo con el concepto. Pasarlo a otra cuenta o concepto exige que estén activos.
-        if (v.accountId !== movement.accountId) await assertActiveAccount(tx, companyId, v.accountId);
+        if (v.accountId !== movement.accountId) await assertMoneyAccount(tx, companyId, v.accountId);
         await assertConcept(tx, companyId, v.conceptId, v.direction, v.conceptId === movement.conceptId);
         await tx.treasury_movements.update({
           where: { id },
@@ -190,6 +191,8 @@ export async function createOpeningBalance(values: OpeningBalanceFormValues): Pr
         if (current) {
           throw new TreasuryError(`La cuenta ya tiene saldo inicial al ${moment.utc(current.date).format('DD/MM/YYYY')}: editalo`);
         }
+        const account = await assertActiveAccount(tx, companyId, v.accountId);
+        if (account.kind === 'CHECK_PORTFOLIO') throw new TreasuryError(PORTFOLIO_WITHOUT_OPENING);
         return createMovement(tx, {
           companyId,
           accountId: v.accountId,
@@ -274,6 +277,8 @@ export async function getMovementDetail(id: string) {
       transfer: { select: { id: true, number: true } },
       payment_order_payment: { select: { payment_order: { select: { id: true, number: true } } } },
       customer_receipt_payment: { select: { receipt: { select: { id: true, number: true } } } },
+      check_operation: { select: { id: true, number: true } },
+      third_party_check: { select: { id: true, number: true } },
     },
   });
   if (!m) return null;
@@ -294,6 +299,8 @@ export async function getMovementDetail(id: string) {
     transfer: m.transfer,
     paymentOrder: m.payment_order_payment?.payment_order ?? null,
     customerReceipt: m.customer_receipt_payment?.receipt ?? null,
+    checkOperation: m.check_operation ? { id: m.check_operation.id, number: m.check_operation.number ?? 'Carga inicial' } : null,
+    thirdPartyCheck: m.third_party_check,
   };
 }
 

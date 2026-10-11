@@ -10,7 +10,7 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { Banknote, CircleOff, Landmark, Truck, User, Wallet, type LucideIcon } from 'lucide-react';
+import { Banknote, CircleOff, Landmark, Truck, User, Wallet, WalletCards, type LucideIcon } from 'lucide-react';
 import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
 import { PAYMENT_ORDER_STATUS_LABELS } from '../../../lib/payment-order-state-machine';
@@ -44,6 +44,7 @@ const methodIcons: Record<payment_method, LucideIcon> = {
   CHECK: Wallet,
   ECHECK: Wallet,
   CASH: Banknote,
+  THIRD_PARTY_CHECK: WalletCards,
 };
 
 const dateOnly = (value: unknown) => (value ? moment.utc(value as string | Date).format('DD/MM/YYYY') : '');

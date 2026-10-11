@@ -39,7 +39,10 @@ import { renderPaymentOrderPdf } from '../pdf/render-payment-pdf.server';
 import { sendSupplierDocumentEmail } from '@/shared/lib/mail/templates/purchases';
 import { paymentMovementDate } from '@/features/Treasury/lib/movement-rules';
 import { treasuryToday } from '@/features/Treasury/lib/today';
-import { assertActiveAccount, cancelMovements, createMovement } from '@/features/Treasury/lib/movements';
+import { assertMoneyAccount, cancelMovements, createMovement } from '@/features/Treasury/lib/movements';
+import { assertNotBeforeEntry, assertTransition, lockChecks, moveCheck, type LockedCheck } from '@/features/Treasury/lib/checks';
+import { TreasuryError } from '@/features/Treasury/lib/treasury-errors';
+import { openCheckDebtsOfSupplier, rejectedCheckLabel } from '@/features/Treasury/lib/rejected-checks';
 
 const logger = new Logger('features/Purchases/payment-orders');
 
@@ -255,6 +258,43 @@ export async function backToDraftPaymentOrder(id: string): Promise<ActionResult>
   }
 }
 
+/**
+ * Endoso de un cheque de tercero (Tesoreria etapa 3a §3.4): el medio de pago lleva el cheque, su
+ * cartera y su importe; sale de la cartera a la fecha de pago y queda ENDOSADO al proveedor.
+ */
+async function endorseCheck(
+  tx: Prisma.TransactionClient,
+  input: { check: LockedCheck; companyId: string; orderId: string; orderNumber: string; supplier: { id: string; name: string }; paidOn: string; userId: string }
+) {
+  const { check } = input;
+  if (!check) throw new TreasuryError('El cheque no existe');
+  const payment = await tx.payment_order_payments.create({
+    data: {
+      payment_order_id: input.orderId,
+      method: 'THIRD_PARTY_CHECK',
+      treasury_account_id: check.portfolioId,
+      amount: new Prisma.Decimal(check.amount),
+      third_party_check_id: check.id,
+      check_number: check.number,
+      check_bank: check.bank,
+      check_due_on: day(check.paymentDate),
+    },
+    select: { id: true },
+  });
+  await createMovement(tx, {
+    companyId: input.companyId,
+    accountId: check.portfolioId,
+    date: input.paidOn,
+    amountCents: -cents(check.amount),
+    kind: 'SUPPLIER_PAYMENT',
+    paymentOrderPaymentId: payment.id,
+    thirdPartyCheckId: check.id,
+    description: `${input.orderNumber} — ${input.supplier.name} — Endoso del cheque N° ${check.number} (${check.bank})`,
+    createdBy: input.userId,
+  });
+  await moveCheck(tx, { check, action: 'ENDORSE', date: input.paidOn, userId: input.userId, origin: { paymentOrderId: input.orderId }, set: { supplierId: input.supplier.id } });
+}
+
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
 /**
@@ -284,9 +324,21 @@ export async function registerPayment(id: string, values: RegisterPaymentFormVal
         await assertWithholdingsStillValid(tx, companyId, order.supplier, id);
         // Neto 0 (todo compensado con NC o anticipos): se registra sin medios de pago.
         if (v.payments.length === 0 && cents(order.netTotal) !== BigInt(0)) throw new PurchaseError('Agregá al menos un medio de pago');
-        // Cuenta inexistente, ajena o inactiva: el mensaje de Tesoreria nombra la cuenta.
-        for (const accountId of new Set(v.payments.map((p) => p.accountId))) await assertActiveAccount(tx, companyId, accountId);
-        const total = v.payments.reduce((acc, p) => acc + cents(p.amount), BigInt(0));
+        // Cheques de terceros (Tesoreria etapa 3a): se bloquean y tienen que seguir EN CARTERA. Su
+        // importe y su cartera salen del cheque, no del formulario.
+        const endorsedIds = v.payments.flatMap((p) => (p.method === 'THIRD_PARTY_CHECK' && p.thirdPartyCheckId ? [p.thirdPartyCheckId] : []));
+        const endorsed = await lockChecks(tx, companyId, endorsedIds);
+        for (const check of endorsed.values()) {
+          assertTransition(check, 'ENDORSE');
+          assertNotBeforeEntry(check, v.paidOn);
+        }
+        const amountOf = (p: (typeof v.payments)[number]) =>
+          p.method === 'THIRD_PARTY_CHECK' ? cents(endorsed.get(p.thirdPartyCheckId ?? '')?.amount ?? '0') : cents(p.amount);
+        // Cuenta inexistente, ajena, inactiva o una cartera: el mensaje de Tesoreria nombra la cuenta.
+        for (const accountId of new Set(v.payments.filter((p) => p.method !== 'THIRD_PARTY_CHECK').map((p) => p.accountId))) {
+          await assertMoneyAccount(tx, companyId, accountId);
+        }
+        const total = v.payments.reduce((acc, p) => acc + amountOf(p), BigInt(0));
         if (total !== cents(order.netTotal)) {
           throw new PurchaseError(`Los medios suman ${money(total)} y no suman el neto a pagar (${money(cents(order.netTotal))})`);
         }
@@ -301,6 +353,10 @@ export async function registerPayment(id: string, values: RegisterPaymentFormVal
         // Cada medio de pago genera su movimiento de Tesoreria en esta misma transaccion: los
         // cheques y e-cheqs debitan en su fecha de pago (spec Tesoreria etapa 1 §3.1).
         for (const p of v.payments) {
+          if (p.method === 'THIRD_PARTY_CHECK') {
+            await endorseCheck(tx, { check: endorsed.get(p.thirdPartyCheckId ?? '') as LockedCheck, companyId, orderId: id, orderNumber: order.number, supplier: order.supplier, paidOn: v.paidOn, userId: profile.id });
+            continue;
+          }
           const isCheck = p.method === 'CHECK' || p.method === 'ECHECK';
           const payment = await tx.payment_order_payments.create({
             data: {
@@ -354,7 +410,9 @@ export async function cancelPaymentOrder(id: string, reason: string): Promise<Ac
   if (!profile) return fail(SESSION_EXPIRED);
   const companyId = await getActiveCompanyId();
   try {
-    await withActor(profile.credentialId, async (tx) => {
+    await withActor(
+      profile.credentialId,
+      async (tx) => {
       const order = await lockPaymentOrder(tx, companyId, id, 'cancel');
       const used = await tx.$queryRaw<{ number: string }[]>`
         SELECT po.number FROM payment_order_lines a
@@ -366,6 +424,22 @@ export async function cancelPaymentOrder(id: string, reason: string): Promise<Ac
       if (used[0]) throw new PurchaseError(`El anticipo de la ${order.number} se aplicó en la ${used[0].number}: anulá esa primero`);
       const now = new Date();
       if (order.status === 'PAID') {
+        // Los cheques de terceros endosados vuelven a la cartera, salvo que ya los hayan rechazado.
+        const endorsedPayments = await tx.payment_order_payments.findMany({
+          where: { payment_order_id: id, method: 'THIRD_PARTY_CHECK', third_party_check_id: { not: null } },
+          select: { third_party_check_id: true },
+        });
+        const endorsed = await lockChecks(tx, companyId, endorsedPayments.map((p) => p.third_party_check_id as string));
+        for (const check of endorsed.values()) {
+          if (check.status === 'REJECTED') {
+            const rejection = await tx.$queryRaw<{ number: string }[]>`
+              SELECT o.number FROM third_party_check_operation_items i JOIN third_party_check_operations o ON o.id = i.operation_id
+              WHERE i.check_id = ${check.id}::uuid AND o.kind = 'REJECTION' AND o.cancelled_at IS NULL LIMIT 1
+            `;
+            throw new PurchaseError(`El cheque Nº ${check.number} endosado en esta orden fue rechazado: anulá primero el rechazo ${rejection[0]?.number ?? ''}`.trim());
+          }
+          await moveCheck(tx, { check, action: 'UNDO_EXIT', date: treasuryToday(), userId: profile.id, origin: { paymentOrderId: id } });
+        }
         await tx.payment_order_withholdings.updateMany({ where: { payment_order_id: id }, data: { cancelled_at: now } });
         await cancelMovements(tx, { paymentOrderId: id }, { by: profile.id, reason: motive.data, at: now });
       }
@@ -373,7 +447,10 @@ export async function cancelPaymentOrder(id: string, reason: string): Promise<Ac
         where: { id },
         data: { status: 'CANCELLED', cancelled_by: profile.id, cancelled_at: now, cancel_reason: motive.data },
       });
-    });
+      },
+      prisma,
+      TRANSACTION_OPTIONS
+    );
     revalidate();
     // El pago (o su anulacion) mueve el saldo de las cuentas de Tesoreria.
     revalidatePath(TREASURY_PATH, 'layout');
@@ -390,7 +467,7 @@ export async function cancelPaymentOrder(id: string, reason: string): Promise<Ac
 export async function getPaymentOrderFormData(supplierId?: string, options: { excludeOrderId?: string } = {}) {
   if (!(await canEditOrders())) return null;
   const companyId = await getActiveCompanyId();
-  const empty = { supplier: null, openItems: { invoices: [], advances: [] }, purchaseOrders: [] };
+  const empty = { supplier: null, openItems: { invoices: [], advances: [], checkDebts: [] }, purchaseOrders: [] };
   if (!supplierId || !UUID_RE.test(supplierId)) return empty;
   const supplier = await prisma.suppliers.findFirst({
     where: { id: supplierId, company_id: companyId },
@@ -398,7 +475,11 @@ export async function getPaymentOrderFormData(supplierId?: string, options: { ex
   });
   if (!supplier) return empty;
   const exclude = options.excludeOrderId && UUID_RE.test(options.excludeOrderId) ? options.excludeOrderId : undefined;
-  const [invoices, advances, purchaseOrders] = await Promise.all([
+  const included = exclude
+    ? (await prisma.payment_order_lines.findMany({ where: { payment_order_id: exclude, kind: 'REJECTED_CHECK' }, select: { third_party_check_id: true } }))
+        .flatMap((l) => (l.third_party_check_id ? [l.third_party_check_id] : []))
+    : [];
+  const [invoices, advances, purchaseOrders, checkDebts] = await Promise.all([
     openInvoicesOfSupplier(prisma, companyId, supplier.id, { excludeOrderId: exclude }),
     openAdvancesOfSupplier(prisma, companyId, supplier.id, { excludeOrderId: exclude }),
     prisma.purchase_orders.findMany({
@@ -407,6 +488,7 @@ export async function getPaymentOrderFormData(supplierId?: string, options: { ex
       orderBy: { number: 'desc' },
       take: 100,
     }),
+    openCheckDebtsOfSupplier(prisma, companyId, supplier.id, { excludeOrderId: exclude, include: included }),
   ]);
   return {
     supplier: { ...supplier, cuit: supplier.cuit.toString() },
@@ -428,12 +510,37 @@ export async function getPaymentOrderFormData(supplierId?: string, options: { ex
         amount: money(cents(a.amount)),
         available: money(cents(a.available)),
       })),
+      /** Deudas por cheques de terceros endosados a este proveedor y rechazados (Tesoreria etapa 3a). */
+      checkDebts: checkDebts.map((d) => ({ checkId: d.checkId, label: d.label, rejectedOn: d.rejectedOn, amount: d.amount, pending: d.pending })),
     },
     purchaseOrders: purchaseOrders.map((o) => ({ id: o.id, number: o.number, total: o.total.toFixed(2) })),
   };
 }
 
 export type PaymentOrderFormData = NonNullable<Awaited<ReturnType<typeof getPaymentOrderFormData>>>;
+
+/** Cheques de terceros EN CARTERA para endosar al registrar el pago (Tesoreria etapa 3a), por fecha de pago. */
+export async function getPortfolioChecksForPayment() {
+  if (!(await checkPermissionServer('compras', 'pagos', 'update'))) return [];
+  const companyId = await getActiveCompanyId();
+  const rows = await prisma.third_party_checks.findMany({
+    where: { company_id: companyId, status: 'IN_PORTFOLIO', portfolio: { is_active: true } },
+    select: { id: true, number: true, bank: true, drawer_name: true, amount: true, payment_date: true, portfolio: { select: { name: true } } },
+    orderBy: [{ payment_date: 'asc' }, { number: 'asc' }],
+    take: 500,
+  });
+  return rows.map((c) => ({
+    id: c.id,
+    number: c.number,
+    bank: c.bank,
+    drawerName: c.drawer_name,
+    amount: c.amount.toFixed(2),
+    paymentDate: isoDay(c.payment_date)!,
+    portfolioName: c.portfolio.name,
+  }));
+}
+
+export type PortfolioCheckOption = Awaited<ReturnType<typeof getPortfolioChecksForPayment>>[number];
 
 const userName = (p: { fullname: string | null; email: string | null } | null) => (p ? (p.fullname ?? p.email ?? 'Usuario') : null);
 
@@ -466,6 +573,7 @@ export async function getPaymentOrderDetail(id: string) {
           invoice: { select: { id: true, cbte_type: true, sales_point: true, number: true, total: true, due_date: true } },
           purchase_order: { select: { id: true, number: true } },
           source_line: { select: { payment_order: { select: { id: true, number: true } } } },
+          third_party_check: { select: { id: true, number: true, bank: true } },
         },
       },
       withholdings: {
@@ -494,6 +602,7 @@ export async function getPaymentOrderDetail(id: string) {
           check_due_on: true,
           treasury_account: { select: { id: true, name: true } },
           movement: { select: { date: true, cancelled_at: true } },
+          third_party_check: { select: { id: true, drawer_name: true } },
         },
       },
     },
@@ -532,6 +641,7 @@ export async function getPaymentOrderDetail(id: string) {
         : null,
       purchaseOrder: l.purchase_order,
       sourceOrder: l.source_line?.payment_order ?? null,
+      rejectedCheck: l.third_party_check ? { id: l.third_party_check.id, label: rejectedCheckLabel(l.third_party_check.number, l.third_party_check.bank) } : null,
     })),
     withholdings: order.withholdings.map((w) => ({
       id: w.id,
@@ -553,6 +663,7 @@ export async function getPaymentOrderDetail(id: string) {
       checkNumber: p.check_number,
       checkBank: p.check_bank,
       checkDueOn: isoDay(p.check_due_on),
+      thirdPartyCheck: p.third_party_check ? { id: p.third_party_check.id, drawerName: p.third_party_check.drawer_name } : null,
       account: p.treasury_account,
       // Movimiento de Tesoreria: fecha valor y si todavia esta "a debitar".
       movement: p.movement
@@ -593,7 +704,10 @@ export async function getPaymentOrderEditValues(id: string): Promise<PaymentOrde
       supplier_id: true,
       planned_on: true,
       notes: true,
-      lines: { orderBy: { position: 'asc' }, select: { kind: true, amount: true, invoice_id: true, source_line_id: true, purchase_order_id: true, description: true } },
+      lines: {
+        orderBy: { position: 'asc' },
+        select: { kind: true, amount: true, invoice_id: true, source_line_id: true, third_party_check_id: true, purchase_order_id: true, description: true },
+      },
       withholdings: { where: { manual: true }, select: { tax: true, amount: true, detail: true } },
     },
   });
@@ -606,9 +720,10 @@ export async function getPaymentOrderEditValues(id: string): Promise<PaymentOrde
     lines: order.lines
       .filter((l) => l.kind !== 'ADVANCE')
       .map((l) => ({
-        kind: l.kind as 'INVOICE' | 'CREDIT_NOTE' | 'ADVANCE_APPLIED',
+        kind: l.kind as 'INVOICE' | 'CREDIT_NOTE' | 'ADVANCE_APPLIED' | 'REJECTED_CHECK',
         invoiceId: l.invoice_id ?? '',
         sourceLineId: l.source_line_id ?? '',
+        checkId: l.third_party_check_id ?? '',
         amount: l.amount.toFixed(2),
       })),
     advance: {

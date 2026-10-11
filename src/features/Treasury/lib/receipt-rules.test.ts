@@ -18,14 +18,9 @@ describe('receiptPaymentMovementDate', () => {
     expect(receiptPaymentMovementDate('TRANSFER', '2026-10-10', null)).toBe('2026-10-10');
     expect(receiptPaymentMovementDate('CASH', '2026-10-10', null)).toBe('2026-10-10');
   });
-  it('un cheque a fecha entra en su vencimiento', () => {
-    expect(receiptPaymentMovementDate('ECHECK', '2026-10-10', '2026-11-09')).toBe('2026-11-09');
-  });
-  it('un cheque ya vencido entra en la fecha del cobro', () => {
+  it('un cheque (aun a fecha) entra a la cartera en la fecha del cobro (etapa 3a)', () => {
+    expect(receiptPaymentMovementDate('ECHECK', '2026-10-10', '2026-11-09')).toBe('2026-10-10');
     expect(receiptPaymentMovementDate('CHECK', '2026-10-10', '2026-10-01')).toBe('2026-10-10');
-  });
-  it('un cheque sin vencimiento es un error', () => {
-    expect(() => receiptPaymentMovementDate('CHECK', '2026-10-10', null)).toThrow();
   });
 });
 

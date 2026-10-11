@@ -49,6 +49,21 @@ describe('fxDifference', () => {
   });
 });
 
+describe('receiptTotals con deudas de cheques rechazados', () => {
+  it('la deuda cobrada de un cheque rechazado suma a lo que se cobra', () => {
+    const totals = receiptTotals({
+      lines: [
+        { kind: 'INVOICE', amountArs: B(100000), fxDifference: B(0) },
+        { kind: 'REJECTED_CHECK', amountArs: B(30000), fxDifference: B(0) },
+      ],
+      withholdings: [],
+      payments: [B(130000)],
+    });
+    expect(totals.invoicesTotal).toBe(B(130000));
+    expect(closingGap(totals)).toBe(B(0));
+  });
+});
+
 describe('receiptTotals y closingGap', () => {
   const totals = receiptTotals({
     lines: [

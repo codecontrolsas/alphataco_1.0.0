@@ -29,13 +29,21 @@ import { useState } from 'react';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 import { searchCollectionCustomers } from '../../actions/customer-statement.server';
-import { confirmReceipt, deleteReceiptDraft, getReceiptFormData, saveReceiptDraft, type ReceiptFormData } from '../../actions/receipts.server';
+import {
+  confirmReceipt,
+  deleteReceiptDraft,
+  findDuplicateReceiptChecks,
+  getReceiptFormData,
+  saveReceiptDraft,
+  type ReceiptFormData,
+} from '../../actions/receipts.server';
 import { attachWithholdingCertificate } from '../../actions/withholdings.server';
 import { invalidateTreasury } from '../../lib/invalidate';
 import { TREASURY_QUERY_KEYS } from '../../lib/query-keys';
 import { previewReceipt } from '../../lib/receipt-preview';
 import { receiptFormSchema, type ReceiptFormValues } from '../../schemas/receipts';
 import { ReceiptAdvancesSection } from './ReceiptAdvancesSection';
+import { ReceiptCheckDebtsSection } from './ReceiptCheckDebtsSection';
 import { ReceiptInvoicesSection } from './ReceiptInvoicesSection';
 import { ReceiptPaymentsSection } from './ReceiptPaymentsSection';
 import { ReceiptSummary } from './ReceiptSummary';
@@ -71,6 +79,8 @@ export function ReceiptEditor({
   const [certificates, setCertificates] = useState<PendingCertificates>({});
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  /** Cheques del recibo que ya están vigentes en una cartera (aviso al confirmar, no bloquea). */
+  const [duplicates, setDuplicates] = useState<{ id: string; number: string; bank: string; status: string }[]>([]);
 
   const form = useForm<ReceiptFormValues>({ resolver: zodResolver(receiptFormSchema), defaultValues: initialValues });
   const values = useWatch({ control: form.control }) as ReceiptFormValues;
@@ -88,12 +98,15 @@ export function ReceiptEditor({
 
   const invoiceInfo = Object.fromEntries((data?.openInvoices ?? []).map((i) => [i.invoiceId, { currency: i.currency, exchangeRate: i.exchangeRate }]));
   const preview = previewReceipt(values, invoiceInfo);
-  const isEmpty = values.invoices.length === 0 && values.advancesApplied.length === 0 && !values.advance.amount;
+  const isEmpty =
+    values.invoices.length === 0 && values.advancesApplied.length === 0 && !values.advance.amount && (values.rejectedChecks ?? []).length === 0;
+  const drawer = data?.customer ? { name: data.customer.name, cuit: data.customer.cuit } : null;
 
   const changeCustomer = (option: { id: string; label: string } | null) => {
     form.setValue('customerId', option?.id ?? '', { shouldValidate: form.formState.isSubmitted });
     form.setValue('invoices', []);
     form.setValue('advancesApplied', []);
+    form.setValue('rejectedChecks', []);
     form.setValue('rates', []);
     setCustomerLabel(option?.label ?? null);
   };
@@ -169,7 +182,14 @@ export function ReceiptEditor({
   const busy = save.isPending || confirm.isPending || remove.isPending;
 
   const askConfirm = async () => {
-    if (await form.trigger()) setConfirming(true);
+    if (!(await form.trigger())) return;
+    const checks = form
+      .getValues('payments')
+      .filter((p) => p.method === 'CHECK' || p.method === 'ECHECK')
+      .map((p) => ({ bank: p.checkBank, number: p.checkNumber, drawerCuit: p.drawerCuit ?? '' }));
+    const found = checks.length ? await findDuplicateReceiptChecks(checks) : null;
+    setDuplicates(found?.ok ? found.data : []);
+    setConfirming(true);
   };
 
   return (
@@ -254,6 +274,7 @@ export function ReceiptEditor({
             </CardHeader>
             <CardContent className="space-y-5">
               <ReceiptInvoicesSection form={form} values={values} invoices={data?.openInvoices ?? []} preview={preview} loading={!data} />
+              <ReceiptCheckDebtsSection form={form} values={values} debts={data?.checkDebts ?? []} />
               <Separator />
               <ReceiptAdvancesSection form={form} values={values} advances={data?.advances ?? []} />
             </CardContent>
@@ -290,7 +311,7 @@ export function ReceiptEditor({
               <CardTitle className="text-base">Medios</CardTitle>
             </CardHeader>
             <CardContent>
-              <ReceiptPaymentsSection form={form} accounts={data?.accounts ?? initialData.accounts} gap={preview.gap} />
+              <ReceiptPaymentsSection form={form} accounts={data?.accounts ?? initialData.accounts} gap={preview.gap} drawer={drawer} />
             </CardContent>
           </Card>
         )}
@@ -344,6 +365,19 @@ export function ReceiptEditor({
               Toma número, cancela {values.invoices.length === 1 ? 'el comprobante' : `${values.invoices.length} comprobantes`} y registra {values.payments.length === 1 ? 'el medio' : `${values.payments.length} medios`} en las cuentas. Un recibo confirmado no se edita: si hay un error, se anula.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {duplicates.length > 0 && (
+            <div role="alert" className="rounded-md border border-red-600 p-3 text-sm text-red-700 dark:border-red-400 dark:text-red-400">
+              <p className="font-medium">Ya hay cheques vigentes con el mismo banco, número y CUIT:</p>
+              <ul className="mt-1 list-disc pl-5">
+                {duplicates.map((d) => (
+                  <li key={d.id}>
+                    Nº {d.number} · {d.bank} ({d.status.toLowerCase()})
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1">Revisá los datos: el recibo no se va a poder confirmar con un cheque repetido.</p>
+            </div>
+          )}
           <ReceiptSummary preview={preview} detailed />
           <AlertDialogFooter>
             <AlertDialogCancel disabled={confirm.isPending}>Volver</AlertDialogCancel>

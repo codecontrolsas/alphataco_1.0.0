@@ -18,7 +18,7 @@ export type ReceiptPdfSource = {
   company: { name: string; cuit: string; address: string | null; city: string | null; province: string | null };
   customer: { name: string; cuit: string; vatConditionId: number | null; street: string | null; city: string | null };
   lines: {
-    kind: 'INVOICE' | 'ADVANCE' | 'ADVANCE_APPLIED';
+    kind: 'INVOICE' | 'ADVANCE' | 'ADVANCE_APPLIED' | 'REJECTED_CHECK';
     /** Comprobante (INVOICE), recibo de origen (ADVANCE_APPLIED) o descripción (ADVANCE). */
     label: string;
     currency: string;
@@ -36,6 +36,8 @@ export type ReceiptPdfSource = {
     checkNumber: string | null;
     checkBank: string | null;
     checkDueOn: string | null;
+    /** Librador del cheque (etapa 3a). */
+    drawerName?: string | null;
   }[];
   totals: { invoices: string; advance: string; advancesApplied: string; withholdings: string; received: string; fxDifference: string };
   notes: string | null;
@@ -84,7 +86,14 @@ export function buildReceiptPdfData(src: ReceiptPdfSource) {
     })),
     payments: src.payments.map((p) => ({
       method: PAYMENT_METHOD_LABELS[p.method],
-      detail: [p.account, p.reference, p.checkNumber ? `N° ${p.checkNumber}` : null, p.checkBank, p.checkDueOn ? `vence ${dateText(p.checkDueOn)}` : null]
+      detail: [
+        p.account,
+        p.reference,
+        p.checkNumber ? `N° ${p.checkNumber}` : null,
+        p.checkBank,
+        p.drawerName ? `librador ${p.drawerName}` : null,
+        p.checkDueOn ? `pago ${dateText(p.checkDueOn)}` : null,
+      ]
         .filter(Boolean)
         .join(' · '),
       amount: money(p.amount),

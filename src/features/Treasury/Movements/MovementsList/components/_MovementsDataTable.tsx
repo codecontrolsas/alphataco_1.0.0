@@ -131,7 +131,7 @@ export function _MovementsDataTable({
       },
       { columnId: 'created_at', title: 'Fecha de alta', type: 'dateRange' as const },
       { columnId: 'description', title: 'Descripción', type: 'text' as const, placeholder: 'Buscar en la descripción...' },
-      { columnId: 'origin', title: 'Origen', type: 'text' as const, placeholder: 'Número, ej: OP-000012, TR-000003 o RE-000001' },
+      { columnId: 'origin', title: 'Origen', type: 'text' as const, placeholder: 'Número, ej: OP-000012, TR-000003, RE-000001 o CD-000001' },
       { columnId: 'income', title: 'Ingreso', type: 'text' as const, placeholder: 'Importe exacto, ej: 1234,56' },
       { columnId: 'expense', title: 'Egreso', type: 'text' as const, placeholder: 'Importe exacto, ej: 1234,56' },
       { columnId: 'cancel_reason', title: 'Motivo de anulación', type: 'text' as const, placeholder: 'Buscar en el motivo...' },

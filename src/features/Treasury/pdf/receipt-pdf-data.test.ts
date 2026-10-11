@@ -40,7 +40,20 @@ describe('buildReceiptPdfData', () => {
 
   it('retenciones con jurisdicción y certificado; medios con los datos del cheque', () => {
     expect(data.withholdings[0]).toEqual({ tax: 'IIBB Neuquén', certificate: 'C-1 · 09/10/2026', amount: '$ 20,00' });
-    expect(data.payments[0]).toEqual({ method: 'E-cheq', detail: 'Galicia · N° 123 · Galicia · vence 09/11/2026', amount: '$ 1.250.430,00' });
+    expect(data.payments[0]).toEqual({ method: 'E-cheq', detail: 'Galicia · N° 123 · Galicia · pago 09/11/2026', amount: '$ 1.250.430,00' });
+  });
+
+  it('etapa 3a: cheque con librador y fecha de pago; la deuda de un cheque rechazado con su label', () => {
+    const withCheck = buildReceiptPdfData(
+      source({
+        lines: [{ kind: 'REJECTED_CHECK', label: 'Cheque rechazado Nº 77 — BANCO GALICIA', currency: 'ARS', applied: '900.00', rate: '1.000000', ars: '900.00', fxDifference: '0.00' }],
+        payments: [
+          { method: 'CHECK', account: 'Cartera', amount: '900.00', reference: null, checkNumber: '88', checkBank: 'BANCO NACIÓN', checkDueOn: '2026-11-09', drawerName: 'Cliente SA' },
+        ],
+      })
+    );
+    expect(withCheck.lines[0]).toEqual({ concept: 'Cheque rechazado Nº 77 — BANCO GALICIA', detail: null, amount: '$ 900,00' });
+    expect(withCheck.payments[0]?.detail).toBe('Cartera · N° 88 · BANCO NACIÓN · librador Cliente SA · pago 09/11/2026');
   });
 
   it('diferencia de cambio informativa con su signo', () => {

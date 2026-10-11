@@ -9,6 +9,7 @@ import { parseSearchParams } from '@/shared/components/common/DataTable/helpers'
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { customerCheckDebtSql } from '../../lib/rejected-checks';
 import { invoiceBalanceSql } from '../../lib/receivables';
 import { COLLECTABLE_CBTE_TYPES, overdueDays, receivableState, type ReceivableState } from '../../lib/receipt-rules';
 import { localToday } from '../../actions/shared';
@@ -44,6 +45,7 @@ const DEFAULT_ORDER = Prisma.sql`r.due_date ASC NULLS LAST, r.issue_date ASC, r.
 function stateSql(today: string): Prisma.Sql {
   return Prisma.sql`(CASE
     WHEN r.pending <= 0 AND r.reserved > 0 THEN 'IN_DRAFT'
+    WHEN r.row_kind = 'CHECK' THEN 'OVERDUE'
     WHEN r.due_date IS NOT NULL AND r.due_date < ${today}::date THEN 'OVERDUE'
     ELSE 'DUE' END)`;
 }
@@ -51,24 +53,45 @@ function stateSql(today: string): Prisma.Sql {
 /** "Factura A 00003-00000124": el mismo texto de la pantalla, para filtrar por lo que el usuario ve. */
 function voucherLabelSql(): Prisma.Sql {
   const branches = COLLECTABLE_CBTE_TYPES.map((t) => Prisma.sql`WHEN ${t}::int THEN ${cbteLabel(t)}::text`);
-  return Prisma.sql`(CASE r.cbte_type ${Prisma.join(branches, ' ')} ELSE '' END
+  return Prisma.sql`COALESCE(r.check_label, CASE r.cbte_type ${Prisma.join(branches, ' ')} ELSE '' END
     || ' ' || lpad(r.sales_point::text, 5, '0') || '-' || lpad(r.number::text, 8, '0'))`;
+}
+
+/** Label de la deuda de un cheque (misma frase que `rejectedCheckLabel`), armado en SQL sobre el alias `d`. */
+function rejectedCheckLabelSql(): Prisma.Sql {
+  return Prisma.sql`('Cheque rechazado Nº ' || d.number || ' — ' || d.bank)`;
 }
 
 const like = (value: string) => `%${value.replace(/[\\%_]/g, '\\$&')}%`;
 
 /**
  * Subconsulta `r`: saldo de cada comprobante cobrable de la empresa (fórmula única de
- * `invoiceBalanceSql`) + nombre del cliente, solo con algo por cobrar.
+ * `invoiceBalanceSql`) UNIDO a las deudas por cheques rechazados de los clientes (fórmula única de
+ * `customerCheckDebtSql`), + nombre del cliente. Solo con algo por cobrar. La deuda de un cheque
+ * se muestra en ARS, con la fecha del rechazo como emisión y vencimiento.
  */
 function baseSql(companyId: string): Prisma.Sql {
   const collectable = [...COLLECTABLE_CBTE_TYPES];
-  const where = Prisma.sql`i.company_id = ${companyId}::uuid AND i.status = 'autorizada' AND i.cbte_type = ANY(${collectable}::int[])`;
+  const invoiceWhere = Prisma.sql`i.company_id = ${companyId}::uuid AND i.status = 'autorizada' AND i.cbte_type = ANY(${collectable}::int[])`;
+  const checkWhere = Prisma.sql`c.company_id = ${companyId}::uuid`;
   return Prisma.sql`
-    SELECT b.*, c.name AS customer_name
-    FROM (${invoiceBalanceSql(where, null)}) b
-    JOIN customers c ON c.id = b.customer_id
-    WHERE b.pending > 0 OR (b.pending = 0 AND b.reserved > 0)
+    SELECT u.*, c.name AS customer_name
+    FROM (
+      SELECT b.id, b.customer_id, b.cbte_type, b.currency::text AS currency, b.sales_point, b.number,
+             b.issue_date::date AS issue_date, b.due_date::date AS due_date, b.total::numeric AS total,
+             b.pending::numeric AS pending, b.reserved::numeric AS reserved,
+             'INVOICE'::text AS row_kind, NULL::text AS check_label
+      FROM (${invoiceBalanceSql(invoiceWhere, null)}) b
+      WHERE b.pending > 0 OR (b.pending = 0 AND b.reserved > 0)
+      UNION ALL
+      SELECT d.id, d.customer_id, NULL::int, 'ARS'::text, NULL::int, NULL::int,
+             d.rejected_on::date, d.rejected_on::date, d.amount::numeric,
+             d.pending::numeric, d.reserved::numeric,
+             'CHECK'::text, ${rejectedCheckLabelSql()}
+      FROM (${customerCheckDebtSql(checkWhere, null)}) d
+      WHERE d.pending::numeric > 0 OR (d.pending::numeric = 0 AND d.reserved::numeric > 0)
+    ) u
+    JOIN customers c ON c.id = u.customer_id
   `;
 }
 
@@ -153,26 +176,34 @@ type ReceivableRow = {
   total: string;
   pending: string;
   reserved: string;
+  row_kind: 'INVOICE' | 'CHECK';
+  check_label: string | null;
 };
 
 const SELECT_COLUMNS = Prisma.sql`
   r.id, r.customer_id, r.customer_name, r.cbte_type, r.sales_point, r.number, trim(r.currency) AS currency,
   r.issue_date::text AS issue_date, r.due_date::text AS due_date,
-  r.total::numeric(15,2)::text AS total, r.pending::numeric(15,2)::text AS pending, r.reserved::numeric(15,2)::text AS reserved`;
+  r.total::numeric(15,2)::text AS total, r.pending::numeric(15,2)::text AS pending, r.reserved::numeric(15,2)::text AS reserved,
+  r.row_kind, r.check_label`;
 
 function shape(rows: ReceivableRow[], today: string) {
   return rows.map((r) => ({
     id: r.id,
     customer: { id: r.customer_id, name: r.customer_name },
     cbteType: r.cbte_type,
-    voucherLabel: formatVoucherLabel(r.cbte_type, r.sales_point, r.number),
+    kind: r.row_kind,
+    voucherLabel: r.check_label ?? formatVoucherLabel(r.cbte_type, r.sales_point, r.number),
     issueDate: r.issue_date,
     dueDate: r.due_date,
     currency: r.currency,
     total: r.total,
     pending: r.pending,
     overdueDays: overdueDays(r.due_date, today),
-    state: receivableState({ free: amountOf(r.pending), reserved: amountOf(r.reserved), dueDate: r.due_date, today }),
+    state:
+      r.row_kind === 'CHECK'
+        ? // La deuda de un cheque rechazado nace vencida (aunque el rechazo sea de hoy)
+          (amountOf(r.pending) > BigInt(0) ? 'OVERDUE' : 'IN_DRAFT')
+        : receivableState({ free: amountOf(r.pending), reserved: amountOf(r.reserved), dueDate: r.due_date, today }),
   }));
 }
 

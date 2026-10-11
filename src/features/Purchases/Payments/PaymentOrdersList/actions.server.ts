@@ -3,7 +3,7 @@
 import { checkPermissionServer } from '@/features/Permissions';
 import { pickFilters } from '@/features/Warehouses/lib/filters';
 import { Prisma } from '@/generated/prisma/client';
-import type { payment_method } from '@/generated/prisma/enums';
+import { payment_method } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
 import {
   buildDateRangeFiltersWhere,
@@ -113,7 +113,9 @@ function buildWhereClause(companyId: string, state: FilterState): OrderWhere {
   const methodValues = f.methods ?? [];
   if (methodValues.length > 0) {
     const wantsNone = methodValues.includes(NULL_FILTER_VALUE);
-    const methods = methodValues.filter((v) => v !== NULL_FILTER_VALUE) as payment_method[];
+    // Solo valores del enum: un texto cualquiera de la URL no puede llegar a Prisma
+    const allowed: readonly string[] = Object.values(payment_method);
+    const methods = methodValues.filter((v): v is payment_method => allowed.includes(v));
     const conditions: OrderWhere[] = [];
     if (methods.length) conditions.push({ payments: { some: { method: { in: methods } } } });
     if (wantsNone) conditions.push({ payments: { none: {} } });

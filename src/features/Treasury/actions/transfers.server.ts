@@ -11,7 +11,7 @@ import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { NO_PERMISSION, UUID_RE, firstIssue, toTreasuryActionError } from '../lib/action-errors';
 import { nextTransferNumber } from '../lib/document-number';
-import { assertActiveAccount, cancelMovements, createMovement, dateOnly } from '../lib/movements';
+import { assertMoneyAccount, cancelMovements, createMovement, dateOnly } from '../lib/movements';
 import { TreasuryError } from '../lib/treasury-errors';
 import { cancelReasonSchema } from '../schemas/movements';
 import { transferFormSchema, type TransferFormValues } from '../schemas/transfers';
@@ -38,8 +38,8 @@ export async function createTransfer(values: TransferFormValues): Promise<Action
     const created = await withActor(
       profile.credentialId,
       async (tx) => {
-        await assertActiveAccount(tx, companyId, v.fromAccountId);
-        await assertActiveAccount(tx, companyId, v.toAccountId);
+        await assertMoneyAccount(tx, companyId, v.fromAccountId);
+        await assertMoneyAccount(tx, companyId, v.toAccountId);
         const cents = parseScaled(v.amount, AMOUNT_SCALE)!;
         const number = await nextTransferNumber(tx, companyId);
         const transfer = await tx.treasury_transfers.create({

@@ -41,6 +41,44 @@ describe('receiptFormSchema', () => {
     expect(issues).toContain('Indicá el vencimiento del cheque');
   });
 
+  it('un cheque exige banco, emisión, librador con CUIT válido y fecha de pago no anterior a la emisión', () => {
+    const payment = {
+      method: 'CHECK' as const,
+      accountId: ACCOUNT,
+      amount: '10',
+      reference: '',
+      checkNumber: '123',
+      checkBank: '',
+      checkDueOn: '2026-10-01',
+      checkIssueDate: '2026-10-05',
+      drawerName: '',
+      drawerCuit: '30712345678',
+    };
+    const issues = messages(base({ payments: [payment] }));
+    expect(issues).toEqual(
+      expect.arrayContaining(['Indicá el banco', 'Indicá el librador', 'CUIT inválido', 'La fecha de pago no puede ser anterior a la de emisión'])
+    );
+    const ok = { ...payment, checkBank: 'Galicia', drawerName: 'Cliente SA', drawerCuit: '30712345671', checkDueOn: '2026-10-20' };
+    expect(messages(base({ payments: [ok] }))).toEqual([]);
+  });
+
+  it('una transferencia no pide datos de cheque', () => {
+    expect(messages(base())).toEqual([]);
+  });
+
+  it('las deudas de cheques rechazados llevan importe y no se repiten', () => {
+    const CHECK = '44444444-4444-4444-8444-444444444444';
+    const issues = messages(
+      base({
+        rejectedChecks: [
+          { checkId: CHECK, amount: '0' },
+          { checkId: CHECK, amount: '5' },
+        ],
+      })
+    );
+    expect(issues).toEqual(expect.arrayContaining(['Importe inválido', 'El cheque rechazado está repetido']));
+  });
+
   it('importes positivos, cuenta elegida y cotización válida', () => {
     const issues = messages(
       base({

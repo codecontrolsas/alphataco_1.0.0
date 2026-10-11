@@ -3,11 +3,11 @@ import { DATE_RE, isNonZeroAmount } from './shared';
 
 /** Cuentas bancarias y cajas (spec Tesorería etapa 1 §2.1). Módulo SIN directiva. */
 
-export const TREASURY_ACCOUNT_KIND_LABELS = { BANK: 'Cuenta bancaria', CASH: 'Caja' } as const;
+export const TREASURY_ACCOUNT_KIND_LABELS = { BANK: 'Cuenta bancaria', CASH: 'Caja', CHECK_PORTFOLIO: 'Cartera de cheques' } as const;
 
 export const treasuryAccountFormSchema = z
   .object({
-    kind: z.enum(['BANK', 'CASH']),
+    kind: z.enum(['BANK', 'CASH', 'CHECK_PORTFOLIO']),
     name: z.string().trim().min(1, 'El nombre es obligatorio').max(80, 'Máximo 80 caracteres'),
     bankName: z.string().trim().max(80, 'Máximo 80 caracteres'),
     accountNumber: z.string().trim().max(40, 'Máximo 40 caracteres'),
@@ -24,6 +24,9 @@ export const treasuryAccountFormSchema = z
     if (v.openingDate && !DATE_RE.test(v.openingDate)) ctx.addIssue({ code: 'custom', path: ['openingDate'], message: 'Fecha inválida' });
     if (v.openingDate && !v.openingAmount) {
       ctx.addIssue({ code: 'custom', path: ['openingAmount'], message: 'Indicá el importe del saldo inicial' });
+    }
+    if (v.kind === 'CHECK_PORTFOLIO' && (v.openingAmount || v.openingDate)) {
+      ctx.addIssue({ code: 'custom', path: ['openingAmount'], message: 'Una cartera no lleva saldo inicial: cargá sus cheques con la carga inicial' });
     }
     if (v.openingAmount && !isNonZeroAmount(v.openingAmount)) {
       ctx.addIssue({ code: 'custom', path: ['openingAmount'], message: 'Importe inválido' });

@@ -37,7 +37,7 @@ export function fxDifference(appliedCents: bigint, rateMicros: bigint, invoiceRa
   return divRound(appliedCents * (rateMicros - invoiceRateMicros), RATE_UNIT);
 }
 
-export type ReceiptLineAmounts = { kind: 'INVOICE' | 'ADVANCE' | 'ADVANCE_APPLIED'; amountArs: bigint; fxDifference: bigint };
+export type ReceiptLineAmounts = { kind: 'INVOICE' | 'ADVANCE' | 'ADVANCE_APPLIED' | 'REJECTED_CHECK'; amountArs: bigint; fxDifference: bigint };
 
 export type ReceiptTotals = {
   invoicesTotal: bigint;
@@ -53,7 +53,8 @@ const sum = (values: bigint[]) => values.reduce((acc, v) => acc + v, ZERO);
 export function receiptTotals(input: { lines: ReceiptLineAmounts[]; withholdings: bigint[]; payments: bigint[] }): ReceiptTotals {
   const of = (kind: ReceiptLineAmounts['kind']) => sum(input.lines.filter((l) => l.kind === kind).map((l) => l.amountArs));
   return {
-    invoicesTotal: of('INVOICE'),
+    // La deuda de un cheque rechazado se cobra como un comprobante más.
+    invoicesTotal: of('INVOICE') + of('REJECTED_CHECK'),
     advanceTotal: of('ADVANCE'),
     advancesAppliedTotal: of('ADVANCE_APPLIED'),
     withholdingsTotal: sum(input.withholdings),

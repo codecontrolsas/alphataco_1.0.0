@@ -1,0 +1,32 @@
+---
+title: Endosar cheques en una orden de pago
+summary: Cómo pagar a un proveedor con cheques de terceros de la cartera, qué pasa con el cheque y la cartera, cómo se ve en la orden de pago y qué pasa si se anula la orden o el cheque vuelve rechazado.
+keywords: endosar, endoso, cheque de tercero, pagar con cheque, cartera de cheques, orden de pago, registrar pago, cheque endosado, cheque rechazado
+updated: 2026-10-11
+---
+
+Un cheque de cliente que está en la **cartera** se puede usar para pagarle a un proveedor: se **endosa** en la orden de pago.
+
+<OpenScreen to="ordenes-de-pago" label="Abrir Pagos" />
+
+## Cómo
+
+1. En una orden **aprobada**, **Registrar pago**.
+2. Agregá un medio **Cheque de tercero** y elegí el cheque de la lista (muestra número, banco, librador, fecha de pago e importe; solo los que están **En cartera**).
+3. El cheque se usa por su **importe completo**. Si no alcanza, sumá otro medio (otra transferencia, otro cheque) hasta llegar al neto a pagar. Si el cheque es mayor que lo que falta, el pago no cierra: no se puede dar vuelto.
+4. **Registrar pago**.
+
+El cheque queda **Endosado** al proveedor y sale de la cartera en la fecha de pago. El PDF de la orden lista cada cheque con número, banco, librador y fecha de pago.
+
+<Callout type="warning" title="Si otro usuario movió el cheque">
+Si mientras armabas el pago alguien depositó o descontó ese cheque, el pago no se registra y el mensaje lo dice. La orden sigue aprobada: elegí otro medio.
+</Callout>
+
+## Qué pasa si…
+
+- **…se anula la orden**: los cheques endosados vuelven a la cartera. No se puede si alguno ya volvió rechazado: primero se anula el rechazo.
+- **…el proveedor devuelve el cheque**: se registra el rechazo desde el detalle del cheque. El cliente vuelve a deber el cheque y la empresa vuelve a deberle al proveedor. Ver <GuideLink to="rechazo-de-un-cheque">Rechazo de un cheque</GuideLink>.
+
+## Permisos
+
+Endosar es parte de registrar el pago: requiere **Pagos → Editar** de Compras.

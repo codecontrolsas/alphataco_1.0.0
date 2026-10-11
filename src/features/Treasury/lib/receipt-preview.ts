@@ -49,6 +49,7 @@ export function previewReceipt(values: ReceiptFormValues, invoices: Record<strin
   }
   for (const line of values.advancesApplied) lines.push({ kind: 'ADVANCE_APPLIED', amountArs: cents(line.amount), fxDifference: ZERO });
   if (values.advance.amount) lines.push({ kind: 'ADVANCE', amountArs: cents(values.advance.amount), fxDifference: ZERO });
+  for (const line of values.rejectedChecks ?? []) lines.push({ kind: 'REJECTED_CHECK', amountArs: cents(line.amount), fxDifference: ZERO });
 
   const totals = receiptTotals({
     lines,

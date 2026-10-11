@@ -12,4 +12,8 @@ export const TREASURY_QUERY_KEYS = {
   withholdings: ['treasury-withholdings'],
   customerStatement: ['treasury-customer-statement'],
   receiptForm: ['treasury-receipt-form'],
+  checks: ['treasury-checks'],
+  checkDetail: ['treasury-check-detail'],
+  checksHeader: ['treasury-checks-header'],
+  checkOperationForm: ['treasury-check-operation-form'],
 } as const;

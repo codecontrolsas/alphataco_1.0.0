@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { PAYMENT_METHODS } from '@/features/Purchases/schemas/payment-orders';
 import { WITHHOLDING_TAXES } from '@/features/Purchases/schemas/payment-settings';
+import { isValidCuit } from '@/features/Empresa/General/lib/company-form';
 import { RATE_SCALE } from '../lib/receipt-math';
 import { DATE_RE, isPositiveAmount } from './shared';
 
@@ -60,9 +61,16 @@ export const receiptFormSchema = z
         reference: z.string().trim().max(60, 'Máximo 60 caracteres'),
         checkNumber: z.string().trim().max(30, 'Máximo 30 caracteres'),
         checkBank: z.string().trim().max(60, 'Máximo 60 caracteres'),
+        /** Fecha de pago del cheque. */
         checkDueOn: z.string().trim(),
+        /** Solo cheques (etapa 3a): emisión y librador. Opcionales en el tipo para no exigirlos en los demás medios. */
+        checkIssueDate: z.string().trim().optional(),
+        drawerName: z.string().trim().max(120, 'Máximo 120 caracteres').optional(),
+        drawerCuit: z.string().trim().optional(),
       })
     ),
+    /** Deudas de cheques rechazados que se cobran (etapa 3a). */
+    rejectedChecks: z.array(z.object({ checkId: z.string().uuid('Cheque inválido'), amount: z.string().trim() })).optional(),
   })
   .superRefine((v, ctx) => {
     const issue = (path: (string | number)[], message: string) => ctx.addIssue({ code: 'custom', path, message });
@@ -101,8 +109,22 @@ export const receiptFormSchema = z
       if (!isPositiveAmount(p.amount)) issue(['payments', i, 'amount'], 'Importe inválido');
       if (p.method === 'CHECK' || p.method === 'ECHECK') {
         if (!p.checkNumber) issue(['payments', i, 'checkNumber'], 'Indicá el número del cheque');
+        if (!p.checkBank) issue(['payments', i, 'checkBank'], 'Indicá el banco');
         if (!DATE_RE.test(p.checkDueOn)) issue(['payments', i, 'checkDueOn'], 'Indicá el vencimiento del cheque');
+        if (!DATE_RE.test(p.checkIssueDate ?? '')) issue(['payments', i, 'checkIssueDate'], 'Indicá la fecha de emisión');
+        else if (DATE_RE.test(p.checkDueOn) && p.checkDueOn < (p.checkIssueDate ?? '')) {
+          issue(['payments', i, 'checkDueOn'], 'La fecha de pago no puede ser anterior a la de emisión');
+        }
+        if (!p.drawerName) issue(['payments', i, 'drawerName'], 'Indicá el librador');
+        if (!isValidCuit(p.drawerCuit ?? '')) issue(['payments', i, 'drawerCuit'], 'CUIT inválido');
       }
+    });
+
+    const checks = new Set<string>();
+    (v.rejectedChecks ?? []).forEach((line, i) => {
+      if (!isPositiveAmount(line.amount)) issue(['rejectedChecks', i, 'amount'], 'Importe inválido');
+      if (checks.has(line.checkId)) issue(['rejectedChecks', i, 'checkId'], 'El cheque rechazado está repetido');
+      checks.add(line.checkId);
     });
   });
 
@@ -120,5 +142,6 @@ export function emptyReceiptForm(date: string, customerId = ''): ReceiptFormValu
     advance: { amount: '', description: '' },
     withholdings: [],
     payments: [],
+    rejectedChecks: [],
   };
 }

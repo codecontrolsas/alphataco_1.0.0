@@ -4,7 +4,8 @@
  *
  * - RE-000001: cobro total por transferencia.
  * - RE-000002: cobro parcial con retenciones de Ganancias (con certificado) e IIBB Neuquén (sin).
- * - RE-000003: factura en USD cobrada en pesos a otra cotización, con un e-cheq a 30 días.
+ * - RE-000003: factura en USD cobrada en pesos a otra cotización, con un e-cheq a 30 días que entra
+ *   a la cartera de cheques (Tesorería etapa 3a).
  * - RE-000004: cobro con excedente a cuenta; RE-000005 aplica ese anticipo a otra factura.
  * - RE-000006: anulado (la transferencia fue rechazada).
  * - Un borrador que reserva una factura ("En borrador" en A cobrar).
@@ -33,7 +34,7 @@ const money = (cents: bigint) => {
 const divRound = (n: bigint, d: bigint) => (n * BigInt(2) + d) / (d * BigInt(2));
 const vat21 = (net: bigint) => divRound(net * BigInt(21), BigInt(100));
 
-type AccountKey = 'galicia' | 'nacion' | 'caja';
+type AccountKey = 'galicia' | 'nacion' | 'caja' | 'cartera';
 const account = (key: AccountKey) => demoId('treasury_account', key);
 const cust = (key: string) => customerId({ key });
 
@@ -210,7 +211,7 @@ export async function seedCustomerReceipts(ctx: Ctx): Promise<void> {
       day: -1,
       status: 'CONFIRMED',
       lines: [{ kind: 'INVOICE', invoice: 'vaca-usd', applied: vacaUsd, rate: 1100 }],
-      payments: [{ method: 'ECHECK', account: 'galicia', amount: vacaUsdArs, check: { number: '40012877', bank: 'Banco Galicia', dueIn: 30 } }],
+      payments: [{ method: 'ECHECK', account: 'cartera', amount: vacaUsdArs, check: { number: '40012877', bank: 'Banco Galicia', dueIn: 30 } }],
     },
     {
       key: 're-petro-1',
@@ -256,7 +257,7 @@ export async function seedCustomerReceipts(ctx: Ctx): Promise<void> {
   const receiptId = (key: string) => demoId('customer_receipt', key);
   const lineId = (receipt: string, i: number) => demoId('customer_receipt_line', `${receipt}-${i}`);
   /** Movimientos esperados por cuenta (vigentes, con fecha ≤ hoy). */
-  const expected: Record<AccountKey, bigint> = { galicia: ZERO, nacion: ZERO, caja: ZERO };
+  const expected: Record<AccountKey, bigint> = { galicia: ZERO, nacion: ZERO, caja: ZERO, cartera: ZERO };
   let sequence = 0;
 
   for (const r of receipts) {
@@ -373,7 +374,8 @@ export async function seedCustomerReceipts(ctx: Ctx): Promise<void> {
 
     for (const [i, p] of r.payments.entries()) {
       const paymentId = demoId('customer_receipt_payment', `${r.key}-${i}`);
-      const dueDay = p.check ? Math.max(r.day + p.check.dueIn, r.day) : r.day;
+      // Desde la etapa 3a los cheques entran a la cartera el día del cobro (no en su fecha de pago).
+      const dueDay = r.day;
       await tx.customer_receipt_payments.create({
         data: {
           id: paymentId,
@@ -383,8 +385,11 @@ export async function seedCustomerReceipts(ctx: Ctx): Promise<void> {
           amount: money(p.amount),
           reference: p.reference ?? null,
           check_number: p.check?.number ?? null,
-          check_bank: p.check?.bank ?? null,
+          check_bank: p.check ? p.check.bank.toUpperCase() : null,
           check_due_on: p.check ? cal.day(r.day + p.check.dueIn) : null,
+          check_issue_date: p.check ? cal.day(r.day) : null,
+          drawer_name: p.check ? customer.name : null,
+          drawer_cuit: p.check ? String(customer.cuit) : null,
         },
       });
       // Tesorería: cada medio de un recibo confirmado (o anulado) es un movimiento CUSTOMER_RECEIPT,
@@ -408,6 +413,32 @@ export async function seedCustomerReceipts(ctx: Ctx): Promise<void> {
         },
       });
       if (!cancelled && dueDay <= 0) expected[p.account] += p.amount;
+      // Cada cheque de un recibo confirmado entra EN CARTERA, con su primer evento.
+      if (p.check && !cancelled) {
+        const checkId = demoId('third_party_check', `${r.key}-${i}`);
+        await tx.third_party_checks.create({
+          data: {
+            id: checkId,
+            company_id: company.id,
+            kind: p.method === 'ECHECK' ? 'ECHECK' : 'PHYSICAL',
+            number: p.check.number,
+            bank: p.check.bank.toUpperCase(),
+            drawer_name: customer.name,
+            drawer_cuit: String(customer.cuit),
+            issue_date: cal.day(r.day),
+            payment_date: cal.day(r.day + p.check.dueIn),
+            amount: money(p.amount),
+            customer_id: cust(r.customer),
+            portfolio_id: account(p.account),
+            receipt_payment_id: paymentId,
+            created_by: actorId,
+            created_at: confirmedAt,
+          },
+        });
+        await tx.third_party_check_events.create({
+          data: { check_id: checkId, to_status: 'IN_PORTFOLIO', date: cal.day(r.day), receipt_id: receiptId(r.key), user_id: actorId, created_at: confirmedAt },
+        });
+      }
     }
   }
 

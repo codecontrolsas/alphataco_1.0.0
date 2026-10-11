@@ -6,3 +6,6 @@ export const MOVEMENT_STATE_LABELS = {
 } as const;
 
 export type MovementState = keyof typeof MOVEMENT_STATE_LABELS;
+
+/** Texto que muestra la tabla para una operación de cheques sin número (la carga inicial). */
+export const OPENING_OPERATION_LABEL = 'Carga inicial';

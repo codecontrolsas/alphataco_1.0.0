@@ -35,6 +35,8 @@ export async function seedSupplierPayments(ctx: Ctx): Promise<string> {
     { key: 'galicia', kind: 'BANK' as const, name: 'Banco Galicia CC $', bank_name: 'Banco Galicia', account_number: '4012-7 123-4' },
     { key: 'nacion', kind: 'BANK' as const, name: 'Banco Nación CC $', bank_name: 'Banco de la Nación Argentina', account_number: '3410-02 554-1' },
     { key: 'caja', kind: 'CASH' as const, name: 'Caja administración', bank_name: null, account_number: null },
+    // Tesorería etapa 3a: los cheques de terceros recibidos (recibos y carga inicial).
+    { key: 'cartera', kind: 'CHECK_PORTFOLIO' as const, name: 'Cartera de cheques', bank_name: null, account_number: null },
   ];
   await tx.treasury_accounts.createMany({
     data: accounts.map((a) => ({ id: demoId('treasury_account', a.key), company_id: company.id, kind: a.kind, name: a.name, bank_name: a.bank_name, account_number: a.account_number })),

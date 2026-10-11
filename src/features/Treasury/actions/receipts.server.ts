@@ -13,9 +13,13 @@ import { prisma } from '@/shared/lib/prisma';
 import { storagePublicUrl, storageRemove } from '@/shared/lib/storage';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
+import type { payment_method } from '@/generated/prisma/enums';
 import { NO_PERMISSION, UUID_RE, firstIssue, toTreasuryActionError } from '../lib/action-errors';
 import { nextReceiptNumber } from '../lib/document-number';
+import { createCheck, findAliveDuplicates, lockChecks, moveCheck } from '../lib/checks';
+import { CHECK_STATUS_LABELS } from '../lib/check-transitions';
 import { cancelMovements, createMovement } from '../lib/movements';
+import { openCheckDebtsOfCustomer, rejectedCheckLabel } from '../lib/rejected-checks';
 import { lockReceipt } from '../lib/receipt-locks';
 import { closingError, closingGap } from '../lib/receipt-math';
 import { receiptPaymentMovementDate } from '../lib/receipt-rules';
@@ -38,6 +42,12 @@ const logger = new Logger('features/Treasury/receipts');
 
 const NOT_FOUND = 'El recibo no existe';
 const COMMERCIAL_PATH = '/dashboard/comercial/facturacion';
+
+/** El CHECK de la base impide un cheque de tercero endosado como medio de cobro. */
+function receiptMethod(method: payment_method): ReceiptFormValues['payments'][number]['method'] {
+  if (method === 'THIRD_PARTY_CHECK') throw new TreasuryError('Un recibo no cobra con un cheque de tercero endosado');
+  return method;
+}
 
 function revalidate() {
   revalidateTreasury();
@@ -144,6 +154,18 @@ export async function confirmReceipt(
             description: `${number} — ${written.customerName}${p.checkNumber ? ` — Cheque N° ${p.checkNumber}` : ''}`,
             createdBy: profile.id,
           });
+          // Cada cheque recibido entra EN CARTERA (etapa 3a); el índice de vigentes rechaza un repetido.
+          if (p.check) {
+            await createCheck(tx, {
+              companyId,
+              portfolioId: p.accountId,
+              customerId: v.customerId,
+              userId: profile.id,
+              date: v.date,
+              data: { ...p.check, amountCents: p.amountCents },
+              origin: { receiptPaymentId: p.id, receiptId },
+            });
+          }
         }
         await tx.customer_receipts.update({
           where: { id: receiptId },
@@ -221,8 +243,22 @@ export async function cancelReceipt(id: string, reason: string): Promise<ActionR
         const applied = applications[0];
         if (applied?.number) throw new TreasuryError(`El anticipo de este recibo se aplicó en ${applied.number}: anulá ese recibo primero`);
         if (applied) throw new TreasuryError('El anticipo de este recibo se aplicó en un recibo en borrador: quitalo de ahí primero');
+        // Sus cheques tienen que seguir en la cartera: si alguno salió, primero se anula esa operación.
+        const received = await tx.third_party_checks.findMany({ where: { receipt_payment: { receipt_id: id } }, select: { id: true } });
+        const checks = await lockChecks(tx, companyId, received.map((c) => c.id));
+        for (const check of checks.values()) {
+          if (check.status !== 'IN_PORTFOLIO') {
+            throw new TreasuryError(
+              `El cheque Nº ${check.number} (${check.bank}) está ${CHECK_STATUS_LABELS[check.status].toLowerCase()}: anulá primero la operación que lo sacó de la cartera`
+            );
+          }
+        }
         const cancel = { by: profile.id, reason: motive.data, at: new Date() };
         await cancelMovements(tx, { customerReceiptId: id }, cancel);
+        const today = localToday();
+        for (const check of checks.values()) {
+          await moveCheck(tx, { check, action: 'CANCEL_ORIGIN', date: today, userId: profile.id, origin: { receiptId: id } });
+        }
         await tx.customer_receipts.update({
           where: { id },
           data: { status: 'CANCELLED', cancelled_by: cancel.by, cancelled_at: cancel.at, cancel_reason: cancel.reason },
@@ -308,9 +344,26 @@ export async function getReceiptFormData(input: { receiptId?: string; customerId
         customer_id: true,
         date: true,
         notes: true,
-        lines: { orderBy: { position: 'asc' }, select: { kind: true, invoice_id: true, source_line_id: true, currency: true, applied_amount: true, exchange_rate: true, description: true } },
+        lines: {
+          orderBy: { position: 'asc' },
+          select: { kind: true, invoice_id: true, source_line_id: true, third_party_check_id: true, currency: true, applied_amount: true, exchange_rate: true, description: true },
+        },
         withholdings: { orderBy: { id: 'asc' }, select: { id: true, tax: true, jurisdiction: true, certificate_number: true, certificate_date: true, amount: true, file_path: true, file_name: true } },
-        payments: { orderBy: { id: 'asc' }, select: { method: true, treasury_account_id: true, amount: true, reference: true, check_number: true, check_bank: true, check_due_on: true } },
+        payments: {
+          orderBy: { id: 'asc' },
+          select: {
+            method: true,
+            treasury_account_id: true,
+            amount: true,
+            reference: true,
+            check_number: true,
+            check_bank: true,
+            check_due_on: true,
+            check_issue_date: true,
+            drawer_name: true,
+            drawer_cuit: true,
+          },
+        },
       },
     });
     if (!row) return null;
@@ -335,14 +388,20 @@ export async function getReceiptFormData(input: { receiptId?: string; customerId
         amount: w.amount.toFixed(2),
       })),
       payments: row.payments.map((p) => ({
-        method: p.method,
+        method: receiptMethod(p.method),
         accountId: p.treasury_account_id,
         amount: p.amount.toFixed(2),
         reference: p.reference ?? '',
         checkNumber: p.check_number ?? '',
         checkBank: p.check_bank ?? '',
         checkDueOn: p.check_due_on ? isoDay(p.check_due_on) : '',
+        checkIssueDate: p.check_issue_date ? isoDay(p.check_issue_date) : '',
+        drawerName: p.drawer_name ?? '',
+        drawerCuit: p.drawer_cuit ?? '',
       })),
+      rejectedChecks: row.lines
+        .filter((l) => l.kind === 'REJECTED_CHECK' && l.third_party_check_id)
+        .map((l) => ({ checkId: l.third_party_check_id as string, amount: l.applied_amount.toFixed(2) })),
     };
     const withholdingFiles: Record<string, { name: string; url: string }> = {};
     for (const w of row.withholdings) {
@@ -354,7 +413,7 @@ export async function getReceiptFormData(input: { receiptId?: string; customerId
   // El cliente que pide el editor manda (puede haberlo cambiado en el borrador); si no, el del borrador.
   const customerId = (input.customerId && UUID_RE.test(input.customerId) ? input.customerId : null) ?? receipt?.values.customerId ?? null;
   const exclude = receipt ? { excludeReceiptId: receipt.id } : {};
-  const [customer, openInvoices, advances, accounts] = await Promise.all([
+  const [customer, openInvoices, advances, accounts, checkDebts] = await Promise.all([
     customerId
       ? prisma.customers.findFirst({ where: { id: customerId, company_id: companyId }, select: { id: true, name: true, cuit: true, client_email: true } })
       : Promise.resolve(null),
@@ -363,18 +422,37 @@ export async function getReceiptFormData(input: { receiptId?: string; customerId
       : Promise.resolve([]),
     customerId ? availableAdvancesOfCustomer(prisma, companyId, customerId, exclude) : Promise.resolve([]),
     getActiveTreasuryAccountOptions(),
+    customerId
+      ? openCheckDebtsOfCustomer(prisma, companyId, customerId, { ...exclude, include: receipt?.values.rejectedChecks?.map((l) => l.checkId) ?? [] })
+      : Promise.resolve([]),
   ]);
   return {
     today: localToday(),
-    customer: customer ? { id: customer.id, label: `${customer.name} · CUIT ${customer.cuit.toString()}`, email: customer.client_email } : null,
+    customer: customer
+      ? { id: customer.id, label: `${customer.name} · CUIT ${customer.cuit.toString()}`, name: customer.name, cuit: customer.cuit.toString(), email: customer.client_email }
+      : null,
     receipt,
     openInvoices,
     advances,
     accounts,
+    checkDebts,
   };
 }
 
 export type ReceiptFormData = NonNullable<Awaited<ReturnType<typeof getReceiptFormData>>>;
+
+/**
+ * Aviso del editor (etapa 3a): cheques vigentes iguales a los que se están cargando. No bloquea;
+ * el índice de la base es el que impide confirmar un repetido.
+ */
+export async function findDuplicateReceiptChecks(
+  checks: { bank: string; number: string; drawerCuit: string }[]
+): Promise<ActionResult<{ id: string; number: string; bank: string; status: string }[]>> {
+  if (!(await checkPermissionServer('tesoreria', 'cobranzas', 'view'))) return fail(NO_PERMISSION);
+  const companyId = await getActiveCompanyId();
+  const found = await findAliveDuplicates(prisma, companyId, checks.slice(0, 50));
+  return ok(found.map((c) => ({ id: c.id, number: c.number, bank: c.bank, status: CHECK_STATUS_LABELS[c.status] })));
+}
 
 /** Detalle de un recibo (cualquier estado) para la página del recibo y el PDF. */
 export async function getReceiptDetail(id: string) {
@@ -420,6 +498,7 @@ export async function getReceiptDetail(id: string) {
           description: true,
           invoice: { select: { id: true, cbte_type: true, number: true, sales_point: { select: { number: true } } } },
           source_line: { select: { receipt: { select: { id: true, number: true } } } },
+          third_party_check: { select: { id: true, number: true, bank: true } },
         },
       },
       withholdings: {
@@ -436,8 +515,10 @@ export async function getReceiptDetail(id: string) {
           check_number: true,
           check_bank: true,
           check_due_on: true,
+          drawer_name: true,
           treasury_account: { select: { id: true, name: true } },
           movement: { select: { id: true, date: true, cancelled_at: true } },
+          check: { select: { id: true, status: true } },
         },
       },
     },
@@ -490,6 +571,9 @@ export async function getReceiptDetail(id: string) {
       description: l.description,
       invoice: l.invoice ? { id: l.invoice.id, label: formatVoucherLabel(l.invoice.cbte_type, l.invoice.sales_point.number, l.invoice.number) } : null,
       sourceReceipt: l.source_line?.receipt ?? null,
+      rejectedCheck: l.third_party_check
+        ? { id: l.third_party_check.id, label: rejectedCheckLabel(l.third_party_check.number, l.third_party_check.bank) }
+        : null,
     })),
     withholdings,
     payments: row.payments.map((p) => {
@@ -502,6 +586,8 @@ export async function getReceiptDetail(id: string) {
         checkNumber: p.check_number,
         checkBank: p.check_bank,
         checkDueOn: p.check_due_on ? isoDay(p.check_due_on) : null,
+        drawerName: p.drawer_name,
+        check: p.check ? { id: p.check.id, status: CHECK_STATUS_LABELS[p.check.status] } : null,
         account: p.treasury_account,
         movement: p.movement
           ? { id: p.movement.id, date: movementDate as string, future: (movementDate as string) > today, cancelled: p.movement.cancelled_at !== null }

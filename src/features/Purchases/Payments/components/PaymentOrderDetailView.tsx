@@ -29,6 +29,7 @@ const KIND_LABELS = {
   CREDIT_NOTE: 'Nota de crédito aplicada',
   ADVANCE: 'Anticipo',
   ADVANCE_APPLIED: 'Anticipo aplicado',
+  REJECTED_CHECK: 'Cheque rechazado',
 } as const;
 
 /** Detalle de la orden de pago: lo que paga, retenciones con certificados, medios e historial. */
@@ -100,6 +101,10 @@ export function PaymentOrderDetailView({ order, accounts }: { order: PaymentOrde
                         {l.invoice ? (
                           <Link href={`/dashboard/purchases/invoices/${l.invoice.id}`} className="underline">
                             {l.invoice.label}
+                          </Link>
+                        ) : l.rejectedCheck ? (
+                          <Link href={`/dashboard/treasury/checks/${l.rejectedCheck.id}`} className="underline">
+                            {l.rejectedCheck.label}
                           </Link>
                         ) : l.sourceOrder ? (
                           <Link href={`/dashboard/purchases/payments/${l.sourceOrder.id}`} className="font-mono underline">
@@ -197,8 +202,15 @@ export function PaymentOrderDetailView({ order, accounts }: { order: PaymentOrde
                   {p.reference && <span className="text-muted-foreground">Ref. {p.reference}</span>}
                   {p.checkNumber && (
                     <span className="text-muted-foreground">
-                      N° {p.checkNumber}
-                      {p.checkBank ? ` · ${p.checkBank}` : ''} · pago {day(p.checkDueOn)}
+                      {p.thirdPartyCheck ? (
+                        <Link href={`/dashboard/treasury/checks/${p.thirdPartyCheck.id}`} className="underline">
+                          N° {p.checkNumber}
+                        </Link>
+                      ) : (
+                        `N° ${p.checkNumber}`
+                      )}
+                      {p.checkBank ? ` · ${p.checkBank}` : ''}
+                      {p.thirdPartyCheck ? ` · librador ${p.thirdPartyCheck.drawerName}` : ''} · pago {day(p.checkDueOn)}
                     </span>
                   )}
                   {p.movement && !p.movement.cancelled && (

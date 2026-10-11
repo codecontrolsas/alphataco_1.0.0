@@ -24,7 +24,7 @@ import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Landmark, Pencil, Plus, Power, RotateCcw, Scale, Trash2, Wallet } from 'lucide-react';
+import { Landmark, Pencil, Plus, Power, RotateCcw, Scale, Trash2, Wallet, WalletCards } from 'lucide-react';
 import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -157,7 +157,7 @@ export function TreasuryAccountsSection({
         ) : (
           <ul className="divide-y">
             {accounts.map((a) => {
-              const Icon = a.kind === 'BANK' ? Landmark : Wallet;
+              const Icon = a.kind === 'BANK' ? Landmark : a.kind === 'CHECK_PORTFOLIO' ? WalletCards : Wallet;
               const opening = openings[a.id];
               return (
                 <li key={a.id} className="flex items-center gap-3 py-2">
@@ -174,15 +174,17 @@ export function TreasuryAccountsSection({
                       {a.cbu ? ` · CBU ${a.cbu}` : ''}
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {opening
-                        ? `Saldo inicial ${formatMoney(opening.amount)} al ${moment(opening.date, 'YYYY-MM-DD').format('DD/MM/YYYY')}`
-                        : 'Sin saldo inicial'}
+                      {a.kind === 'CHECK_PORTFOLIO'
+                        ? 'Cheques en cartera'
+                        : opening
+                          ? `Saldo inicial ${formatMoney(opening.amount)} al ${moment(opening.date, 'YYYY-MM-DD').format('DD/MM/YYYY')}`
+                          : 'Sin saldo inicial'}
                       {' · '}Saldo hoy <span className="tabular-nums">{formatMoney(a.balance)}</span>
                     </p>
                   </div>
                   {canUpdate && (
                     <div className="flex shrink-0 items-center">
-                      {a.is_active && (
+                      {a.is_active && a.kind !== 'CHECK_PORTFOLIO' && (
                         <Button
                           type="button"
                           variant="ghost"
@@ -250,6 +252,7 @@ export function TreasuryAccountsSection({
                       <SelectContent>
                         <SelectItem value="BANK">{TREASURY_ACCOUNT_KIND_LABELS.BANK}</SelectItem>
                         <SelectItem value="CASH">{TREASURY_ACCOUNT_KIND_LABELS.CASH}</SelectItem>
+                        <SelectItem value="CHECK_PORTFOLIO">{TREASURY_ACCOUNT_KIND_LABELS.CHECK_PORTFOLIO}</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -263,7 +266,7 @@ export function TreasuryAccountsSection({
                   <FormItem>
                     <FormLabel>Nombre</FormLabel>
                     <FormControl>
-                      <Input autoFocus placeholder={kind === 'BANK' ? 'Banco Galicia CC $' : 'Caja administración'} {...field} />
+                      <Input autoFocus placeholder={kind === 'BANK' ? 'Banco Galicia CC $' : kind === 'CHECK_PORTFOLIO' ? 'Cartera de cheques' : 'Caja administración'} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -312,7 +315,13 @@ export function TreasuryAccountsSection({
                   />
                 </>
               )}
-              {editing === 'new' && (
+              {editing === 'new' && kind === 'CHECK_PORTFOLIO' && (
+                <p className="text-sm text-muted-foreground">
+                  Una cartera guarda los cheques recibidos de clientes. No lleva saldo inicial: los cheques que ya estén en mano se cargan desde
+                  Tesorería → Cheques → Carga inicial.
+                </p>
+              )}
+              {editing === 'new' && kind !== 'CHECK_PORTFOLIO' && (
                 <>
                   <Separator />
                   <p className="text-sm font-medium">Saldo inicial (opcional)</p>

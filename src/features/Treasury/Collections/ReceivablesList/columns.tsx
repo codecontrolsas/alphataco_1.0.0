@@ -134,7 +134,9 @@ export function getColumns({ canCollect }: ColumnsOptions): ColumnDef<Receivable
           {canCollect && row.original.state !== 'IN_DRAFT' && (
             <Button asChild type="button" variant="outline" size="sm" className="h-8 gap-1">
               <Link
-                href={`/dashboard/treasury/receipts/new?customerId=${row.original.customer.id}&invoiceId=${row.original.id}`}
+                href={`/dashboard/treasury/receipts/new?customerId=${row.original.customer.id}&${
+                  row.original.kind === 'CHECK' ? 'checkId' : 'invoiceId'
+                }=${row.original.id}`}
               >
                 <HandCoins className="h-3.5 w-3.5" />
                 Cobrar
@@ -142,7 +144,13 @@ export function getColumns({ canCollect }: ColumnsOptions): ColumnDef<Receivable
             </Button>
           )}
           <Button asChild type="button" variant="ghost" size="sm" className="h-8 gap-1">
-            <Link href={`/dashboard/comercial/facturacion/${row.original.id}`}>
+            <Link
+              href={
+                row.original.kind === 'CHECK'
+                  ? `/dashboard/treasury/checks/${row.original.id}`
+                  : `/dashboard/comercial/facturacion/${row.original.id}`
+              }
+            >
               <Eye className="h-3.5 w-3.5" />
               Ver
             </Link>

@@ -7,6 +7,7 @@ import type { PaymentOrderFormValues } from '../schemas/payment-orders';
 import { WITHHOLDING_TAXES, WITHHOLDING_TAX_LABELS } from '../schemas/payment-settings';
 import { supplierInvoiceLabel } from './invoices';
 import { advanceAvailable, invoicePending } from './payment-balances';
+import { supplierCheckDebts } from '@/features/Treasury/lib/rejected-checks';
 import {
   PAYMENT_ORDER_STATUS_PAST,
   canApplyPaymentOrderAction,
@@ -202,12 +203,14 @@ async function computeAutomaticWithholdings(
 
 export type BuiltLine = {
   position: number;
-  kind: 'INVOICE' | 'CREDIT_NOTE' | 'ADVANCE' | 'ADVANCE_APPLIED';
+  kind: 'INVOICE' | 'CREDIT_NOTE' | 'ADVANCE' | 'ADVANCE_APPLIED' | 'REJECTED_CHECK';
   amount: string;
   invoiceId: string | null;
   purchaseOrderId: string | null;
   description: string | null;
   sourceLineId: string | null;
+  /** Cheque de tercero endosado y rechazado cuya deuda se paga (Tesoreria etapa 3a). */
+  checkId: string | null;
 };
 
 export type BuiltWithholding = WithholdingResult & { manual: boolean; supplierStatus: withholding_status | null };
@@ -233,8 +236,9 @@ export async function buildPaymentOrder(
   options: { orderId?: string } = {}
 ): Promise<BuiltPaymentOrder> {
   const excludeOrderId = options.orderId ?? null;
-  const invoiceLines = input.lines.filter((l) => l.kind !== 'ADVANCE_APPLIED');
+  const invoiceLines = input.lines.filter((l) => l.kind === 'INVOICE' || l.kind === 'CREDIT_NOTE');
   const appliedLines = input.lines.filter((l) => l.kind === 'ADVANCE_APPLIED');
+  const rejectedLines = input.lines.filter((l) => l.kind === 'REJECTED_CHECK');
   const advanceAmount = input.advance.amount ? money(cents(input.advance.amount)) : '';
   if (input.lines.length === 0 && !advanceAmount) throw new PurchaseError('Agregá qué se paga: comprobantes o un anticipo');
 
@@ -298,6 +302,17 @@ export async function buildPaymentOrder(
     }
   }
 
+  // Deudas por cheques de terceros endosados a este proveedor y rechazados: no llevan retenciones
+  // (ya se retuvo al pagar el comprobante original), solo suman a lo que se paga.
+  const checkIds = rejectedLines.map((l) => l.checkId ?? '');
+  if (checkIds.some((id) => !UUID_RE.test(id))) throw new PurchaseError('El cheque no existe o no es una deuda de este proveedor');
+  const debts = await supplierCheckDebts(tx, checkIds, { excludeOrderId: options.orderId });
+  for (const line of rejectedLines) {
+    const debt = debts.get(line.checkId ?? '');
+    if (!debt || debt.companyId !== companyId || debt.supplierId !== supplier.id) throw new PurchaseError('El cheque no existe o no es una deuda de este proveedor');
+    if (cents(line.amount) > cents(debt.pending)) throw new PurchaseError(`${debt.label}: ${money(cents(line.amount))} supera la deuda (${debt.pending})`);
+  }
+
   let purchaseOrderId: string | null = null;
   if (advanceAmount && input.advance.purchaseOrderId) {
     const po = UUID_RE.test(input.advance.purchaseOrderId)
@@ -344,7 +359,7 @@ export async function buildPaymentOrder(
   }
 
   const totals = computePaymentTotals({
-    invoices: shares.map((s) => s.amount),
+    invoices: [...shares.map((s) => s.amount), ...rejectedLines.map((l) => money(cents(l.amount)))],
     credits: invoiceLines.filter((l) => l.kind === 'CREDIT_NOTE').map((l) => money(cents(l.amount))),
     advancesApplied: appliedLines.map((l) => money(cents(l.amount))),
     advance: advanceAmount || '0',
@@ -362,6 +377,7 @@ export async function buildPaymentOrder(
       purchaseOrderId: null,
       description: null,
       sourceLineId: null,
+      checkId: null,
     })),
     ...appliedLines.map((l) => ({
       kind: 'ADVANCE_APPLIED' as const,
@@ -370,9 +386,19 @@ export async function buildPaymentOrder(
       purchaseOrderId: null,
       description: null,
       sourceLineId: l.sourceLineId,
+      checkId: null,
+    })),
+    ...rejectedLines.map((l) => ({
+      kind: 'REJECTED_CHECK' as const,
+      amount: money(cents(l.amount)),
+      invoiceId: null,
+      purchaseOrderId: null,
+      description: null,
+      sourceLineId: null,
+      checkId: l.checkId ?? null,
     })),
     ...(advanceAmount
-      ? [{ kind: 'ADVANCE' as const, amount: advanceAmount, invoiceId: null, purchaseOrderId, description: input.advance.description || null, sourceLineId: null }]
+      ? [{ kind: 'ADVANCE' as const, amount: advanceAmount, invoiceId: null, purchaseOrderId, description: input.advance.description || null, sourceLineId: null, checkId: null }]
       : []),
   ].map((l, i) => ({ ...l, position: i + 1 }));
 
@@ -399,6 +425,7 @@ export function paymentOrderData(built: BuiltPaymentOrder) {
       purchase_order_id: l.purchaseOrderId,
       description: l.description,
       source_line_id: l.sourceLineId,
+      third_party_check_id: l.checkId,
     })),
     withholdings: built.withholdings.map((w) => ({
       tax: w.tax,
@@ -426,9 +453,19 @@ export async function assertPaymentOrderStillValid(tx: Tx, companyId: string, or
       amount: true,
       invoice_id: true,
       source_line_id: true,
+      third_party_check_id: true,
       invoice: { select: { status: true, cbte_type: true, sales_point: true, number: true } },
     },
   });
+  const checkIds = lines.flatMap((l) => (l.kind === 'REJECTED_CHECK' && l.third_party_check_id ? [l.third_party_check_id] : []));
+  const debts = await supplierCheckDebts(tx, checkIds, { excludeOrderId: orderId });
+  for (const line of lines) {
+    if (line.kind !== 'REJECTED_CHECK' || !line.third_party_check_id) continue;
+    const debt = debts.get(line.third_party_check_id);
+    if (!debt || cents(line.amount.toString()) > cents(debt.pending)) {
+      throw new PurchaseError('La deuda de un cheque rechazado ya no alcanza para esta orden: volvé la orden a borrador');
+    }
+  }
   const invoiceIds = lines.flatMap((l) => (l.invoice_id ? [l.invoice_id] : []));
   const pending = await invoicePending(tx, invoiceIds, { excludeOrderId: orderId });
   for (const line of lines) {

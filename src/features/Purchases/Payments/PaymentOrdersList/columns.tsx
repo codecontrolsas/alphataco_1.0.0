@@ -18,6 +18,7 @@ export const PAYMENT_METHOD_LABELS: Record<payment_method, string> = {
   CHECK: 'Cheque',
   ECHECK: 'E-cheq',
   CASH: 'Efectivo',
+  THIRD_PARTY_CHECK: 'Cheque de tercero',
 };
 
 export const NO_PAYMENT_LABEL = 'Sin pagar';

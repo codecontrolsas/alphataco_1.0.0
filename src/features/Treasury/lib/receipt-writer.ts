@@ -4,7 +4,10 @@ import { AMOUNT_SCALE, formatScaled, parseScaled } from '@/features/Comercial/Fa
 import { Prisma } from '@/generated/prisma/client';
 import { formatAmountText } from '@/shared/utils/amount-text';
 import { CUSTOMER_WITHHOLDING_TAX_LABELS, type ReceiptFormValues } from '../schemas/receipts';
-import { assertActiveAccount, dateOnly } from './movements';
+import { lockChecks } from './checks';
+import { normalizeBank } from './check-number-format';
+import { assertMoneyAccount, assertPortfolioAccount, dateOnly } from './movements';
+import { customerCheckDebts } from './rejected-checks';
 import { lockCustomerCertificates, lockReceivables } from './receipt-locks';
 import { appliedToArs, fxDifference, RATE_SCALE, receiptTotals, type ReceiptLineAmounts, type ReceiptTotals } from './receipt-math';
 import { CREDIT_NOTE_CBTE_TYPES, isCollectable } from './receipt-rules';
@@ -29,6 +32,8 @@ type WriterTx = Pick<
   | 'customers'
   | 'treasury_accounts'
 >;
+
+const isCheckMethod = (method: ReceiptFormValues['payments'][number]['method']) => method === 'CHECK' || method === 'ECHECK';
 
 const RATE_ONE = BigInt(1000000);
 const ZERO = BigInt(0);
@@ -65,6 +70,16 @@ export type WrittenPayment = {
   amountCents: bigint;
   checkNumber: string | null;
   checkDueOn: string | null;
+  /** Datos del cheque para darlo de alta al confirmar (solo CHECK y ECHECK). */
+  check: {
+    kind: 'PHYSICAL' | 'ECHECK';
+    number: string;
+    bank: string;
+    drawerName: string;
+    drawerCuit: string;
+    issueDate: string;
+    paymentDate: string;
+  } | null;
 };
 
 export type WrittenReceipt = {
@@ -147,6 +162,34 @@ export async function writeReceiptDraft(
     });
   }
 
+  // ── Deudas por cheques rechazados (etapa 3a) ──────────────────────────────
+  const rejected = v.rejectedChecks ?? [];
+  if (rejected.length > 0) {
+    await lockChecks(tx, companyId, rejected.map((l) => l.checkId));
+    const debts = await customerCheckDebts(tx, rejected.map((l) => l.checkId), { excludeReceiptId: receiptId });
+    for (const line of rejected) {
+      const debt = debts.get(line.checkId);
+      if (!debt || debt.companyId !== companyId || debt.customerId !== v.customerId) throw new TreasuryError('El cheque rechazado no existe o es de otro cliente');
+      const applied = cents(line.amount);
+      const pending = cents(debt.pending);
+      if (applied > pending) {
+        const reserved = cents(debt.reserved) > ZERO ? ' y está reservada en otro borrador' : '';
+        throw new TreasuryError(`${debt.label}: la deuda es ${inCurrency(pending < ZERO ? ZERO : pending, 'ARS')}${reserved}`);
+      }
+      lines.push({
+        receipt_id: receiptId,
+        position: lines.length,
+        kind: 'REJECTED_CHECK',
+        third_party_check_id: line.checkId,
+        currency: 'ARS',
+        applied_amount: decimal(applied),
+        amount_ars: decimal(applied),
+        amountArs: applied,
+        fxDifference: ZERO,
+      });
+    }
+  }
+
   // ── Cobro a cuenta ────────────────────────────────────────────────────────
   if (v.advance.amount) {
     const amount = cents(v.advance.amount);
@@ -164,7 +207,11 @@ export async function writeReceiptDraft(
   }
 
   // ── Medios ────────────────────────────────────────────────────────────────
-  for (const p of v.payments) await assertActiveAccount(tx, companyId, p.accountId);
+  // Los cheques entran a una cartera; la plata (transferencia, efectivo), a una cuenta o caja.
+  for (const p of v.payments) {
+    if (isCheckMethod(p.method)) await assertPortfolioAccount(tx, companyId, p.accountId);
+    else await assertMoneyAccount(tx, companyId, p.accountId);
+  }
 
   // ── Retenciones: certificado único por cliente, impuesto y número ─────────
   await lockCustomerCertificates(tx, v.customerId);
@@ -223,7 +270,7 @@ export async function writeReceiptDraft(
 
   const payments: WrittenPayment[] = [];
   for (const p of v.payments) {
-    const isCheck = p.method === 'CHECK' || p.method === 'ECHECK';
+    const isCheck = isCheckMethod(p.method);
     const amount = cents(p.amount);
     const created = await tx.customer_receipt_payments.create({
       data: {
@@ -233,8 +280,11 @@ export async function writeReceiptDraft(
         amount: decimal(amount),
         reference: p.reference || null,
         check_number: isCheck ? p.checkNumber : null,
-        check_bank: isCheck ? p.checkBank || null : null,
+        check_bank: isCheck ? normalizeBank(p.checkBank) : null,
         check_due_on: isCheck ? dateOnly(p.checkDueOn) : null,
+        check_issue_date: isCheck && p.checkIssueDate ? dateOnly(p.checkIssueDate) : null,
+        drawer_name: isCheck ? p.drawerName || null : null,
+        drawer_cuit: isCheck ? (p.drawerCuit ?? '').replace(/[-\s]/g, '') || null : null,
       },
       select: { id: true },
     });
@@ -245,6 +295,17 @@ export async function writeReceiptDraft(
       amountCents: amount,
       checkNumber: isCheck ? p.checkNumber : null,
       checkDueOn: isCheck ? p.checkDueOn : null,
+      check: isCheck
+        ? {
+            kind: p.method === 'ECHECK' ? 'ECHECK' : 'PHYSICAL',
+            number: p.checkNumber,
+            bank: p.checkBank,
+            drawerName: p.drawerName ?? '',
+            drawerCuit: p.drawerCuit ?? '',
+            issueDate: p.checkIssueDate ?? '',
+            paymentDate: p.checkDueOn,
+          }
+        : null,
     });
   }
 
