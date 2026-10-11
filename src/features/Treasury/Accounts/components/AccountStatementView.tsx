@@ -40,6 +40,13 @@ function OriginLink({ row }: { row: Row }) {
       </Link>
     );
   }
+  if (row.customerReceipt) {
+    return (
+      <Link href={`/dashboard/treasury/receipts/${row.customerReceipt.id}`} className="font-mono text-xs underline underline-offset-4">
+        {row.customerReceipt.number}
+      </Link>
+    );
+  }
   if (row.transfer) {
     return (
       <Link href="/dashboard/treasury?tab=transferencias" className="font-mono text-xs underline underline-offset-4">
@@ -101,7 +108,7 @@ export function AccountStatementView({
           date: day(r.date),
           kind: TREASURY_MOVEMENT_KIND_LABELS[r.kind],
           detail: detailOf(r),
-          origin: r.paymentOrder?.number ?? r.transfer?.number ?? '',
+          origin: r.paymentOrder?.number ?? r.customerReceipt?.number ?? r.transfer?.number ?? '',
           credit: isNegative(r.amount) ? '' : r.amount,
           debit: isNegative(r.amount) ? abs(r.amount) : '',
           balance: r.balance,

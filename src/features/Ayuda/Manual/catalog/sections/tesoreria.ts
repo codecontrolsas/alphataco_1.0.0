@@ -7,7 +7,7 @@ import { defineSection, tab } from '../define.ts';
 export const tesoreriaSection = defineSection({
   key: 'tesoreria',
   title: 'Tesorería',
-  description: 'Saldos de cuentas bancarias y cajas, extracto, movimientos manuales, transferencias entre cuentas y el reflejo de los pagos a proveedores.',
+  description: 'Saldos de cuentas bancarias y cajas, extracto, movimientos manuales, transferencias entre cuentas, el reflejo de los pagos a proveedores y las cobranzas a clientes con sus retenciones.',
   icon: 'treasury',
   guides: [
     {
@@ -18,9 +18,11 @@ export const tesoreriaSection = defineSection({
         tab('tesoreria', 'movimientos'),
         tab('tesoreria', 'transferencias'),
         tab('tesoreria', 'config-tesoreria'),
+        tab('tesoreria', 'cobranzas'),
+        tab('tesoreria', 'retenciones-sufridas'),
       ],
       screens: [{ path: '/dashboard/treasury' }],
-      related: ['cuentas-y-saldos', 'movimientos-de-tesoreria', 'transferencias', 'configuracion-de-tesoreria', 'ordenes-de-pago'],
+      related: ['cuentas-y-saldos', 'movimientos-de-tesoreria', 'transferencias', 'cobrar-facturas', 'configuracion-de-tesoreria', 'ordenes-de-pago'],
     },
     {
       slug: 'cuentas-y-saldos',
@@ -48,6 +50,45 @@ export const tesoreriaSection = defineSection({
       access: [tab('tesoreria', 'config-tesoreria')],
       screens: [{ path: '/dashboard/treasury', tab: 'config-tesoreria' }],
       related: ['cuentas-y-saldos', 'movimientos-de-tesoreria', 'ordenes-de-pago', 'configuracion-de-compras', 'tesoreria'],
+    },
+      {
+      slug: 'cobrar-facturas',
+      access: [tab('tesoreria', 'cobranzas')],
+      screens: [
+        { path: '/dashboard/treasury', tab: 'cobranzas' },
+        { path: '/dashboard/treasury/receipts/*' },
+      ],
+      related: ['cobros-en-moneda-extranjera', 'anticipos-de-clientes', 'retenciones-sufridas', 'cuenta-corriente-de-clientes', 'anular-un-recibo', 'facturacion'],
+    },
+    {
+      slug: 'cobros-en-moneda-extranjera',
+      access: [tab('tesoreria', 'cobranzas')],
+      screens: [],
+      related: ['cobrar-facturas', 'cuenta-corriente-de-clientes', 'facturacion'],
+    },
+    {
+      slug: 'anticipos-de-clientes',
+      access: [tab('tesoreria', 'cobranzas')],
+      screens: [],
+      related: ['cobrar-facturas', 'cuenta-corriente-de-clientes', 'anular-un-recibo'],
+    },
+    {
+      slug: 'retenciones-sufridas',
+      access: [tab('tesoreria', 'retenciones-sufridas'), tab('tesoreria', 'cobranzas')],
+      screens: [{ path: '/dashboard/treasury', tab: 'retenciones-sufridas' }],
+      related: ['cobrar-facturas', 'retenciones', 'tesoreria'],
+    },
+    {
+      slug: 'cuenta-corriente-de-clientes',
+      access: [tab('tesoreria', 'cobranzas')],
+      screens: [{ path: '/dashboard/treasury/customers/*' }],
+      related: ['cobrar-facturas', 'anticipos-de-clientes', 'cobros-en-moneda-extranjera', 'clientes', 'facturacion'],
+    },
+    {
+      slug: 'anular-un-recibo',
+      access: [tab('tesoreria', 'cobranzas')],
+      screens: [],
+      related: ['cobrar-facturas', 'anticipos-de-clientes', 'cuentas-y-saldos'],
     },
   ],
 });

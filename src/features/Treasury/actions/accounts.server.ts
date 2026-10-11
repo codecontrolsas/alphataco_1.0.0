@@ -55,12 +55,13 @@ export async function getTreasuryAccountCards() {
   return accountsWithIndicators(await getActiveCompanyId(), true);
 }
 
-/** Cuentas activas para elegir en un movimiento o transferencia (con saldo). */
+/** Cuentas activas para elegir en un movimiento, una transferencia o un recibo (con saldo). */
 export async function getActiveTreasuryAccountOptions() {
   const allowed = await Promise.all([
     checkPermissionServer('tesoreria', 'movimientos', 'view'),
     checkPermissionServer('tesoreria', 'transferencias', 'view'),
     checkPermissionServer('tesoreria', 'cuentas', 'view'),
+    checkPermissionServer('tesoreria', 'cobranzas', 'view'),
   ]);
   if (!allowed.some(Boolean)) return [];
   return accountsWithIndicators(await getActiveCompanyId(), true);

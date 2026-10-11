@@ -1502,6 +1502,26 @@ export const PERMISSIONS = {
         allowedActions: ['view', 'update'],
         subtabs: {},
       },
+      // Etapa 2. 'create' crea borradores de recibo; 'update' los edita y confirma, envía el recibo
+      // y adjunta certificados; 'delete' borra borradores y anula recibos confirmados. La cuenta
+      // corriente del cliente hereda 'view'.
+      cobranzas: {
+        slug: 'cobranzas',
+        name: 'Cobranzas',
+        tabId: 'd0000000-0000-0000-0000-000000000005',
+        parent: null,
+        allowedActions: ['view', 'create', 'update', 'delete'],
+        subtabs: {},
+      },
+      // 'update' adjunta o reemplaza el certificado de una retención.
+      'retenciones-sufridas': {
+        slug: 'retenciones-sufridas',
+        name: 'Retenciones sufridas',
+        tabId: 'd0000000-0000-0000-0000-000000000006',
+        parent: null,
+        allowedActions: ['view', 'update'],
+        subtabs: {},
+      },
     },
   },
 

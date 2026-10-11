@@ -1,18 +1,21 @@
 import { getUserPermissionsMapServer } from '@/features/Permissions';
 import { SectionManagerServer } from '@/features/TabsManager';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ArrowLeftRight, Landmark, Repeat, Settings } from 'lucide-react';
+import { ArrowLeftRight, HandCoins, Landmark, Percent, Repeat, Settings } from 'lucide-react';
 import { Suspense } from 'react';
 import AccountsTabContent from './Accounts/AccountsTabContent';
+import CollectionsTabContent from './Collections/CollectionsTabContent';
 import { AccountCardsSkeleton } from './Accounts/fallback/AccountCardsSkeleton';
 import MovementsTabContent from './Movements/MovementsTabContent';
 import SettingsTabContent from './Settings/SettingsTabContent';
 import { TreasurySettingsSkeleton } from './Settings/fallback/TreasurySettingsSkeleton';
 import TransfersTabContent from './Transfers/TransfersTabContent';
+import WithholdingsTabContent from './Withholdings/WithholdingsTabContent';
 import { TreasurySectionSkeleton } from './fallback/TreasurySectionSkeleton';
 
 /**
- * Módulo Tesorería (spec docs/superpowers/specs/2026-10-10-tesoreria-etapa-1-design.md).
+ * Módulo Tesorería (specs docs/superpowers/specs/2026-10-10-tesoreria-etapa-1-design.md y
+ * 2026-10-10-tesoreria-etapa-2-design.md).
  *
  * Secciones elegidas desde el sidebar (`?tab=`). Los íconos son los mismos que `SUB_ITEM_ICONS`
  * de `navigation.ts`.
@@ -64,6 +67,28 @@ export default async function TreasuryComponent({ searchParams }: { searchParams
           content: (
             <Suspense fallback={<TreasurySectionSkeleton />}>
               <TransfersTabContent searchParams={searchParams} permissions={permissions} />
+            </Suspense>
+          ),
+        },
+        {
+          value: 'cobranzas',
+          label: label(HandCoins, 'Cobranzas'),
+          moduleSlug: 'tesoreria',
+          tabSlug: 'cobranzas',
+          content: (
+            <Suspense fallback={<TreasurySectionSkeleton />}>
+              <CollectionsTabContent searchParams={searchParams} permissions={permissions} />
+            </Suspense>
+          ),
+        },
+        {
+          value: 'retenciones-sufridas',
+          label: label(Percent, 'Retenciones sufridas'),
+          moduleSlug: 'tesoreria',
+          tabSlug: 'retenciones-sufridas',
+          content: (
+            <Suspense fallback={<TreasurySectionSkeleton />}>
+              <WithholdingsTabContent searchParams={searchParams} permissions={permissions} />
             </Suspense>
           ),
         },

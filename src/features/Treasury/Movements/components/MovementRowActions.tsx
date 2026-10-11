@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Logger } from '@/lib/logger';
+import type { treasury_movement_kind } from '@/generated/prisma/enums';
 import { useMutation } from '@tanstack/react-query';
 import { Ban, MoreHorizontal, Pencil } from 'lucide-react';
 import { useState } from 'react';
@@ -17,7 +18,7 @@ import { OpeningBalanceDialog } from './OpeningBalanceDialog';
 const logger = new Logger('Treasury/MovementRowActions');
 
 export interface MovementRowActionsProps {
-  movement: { id: string; kind: 'OPENING' | 'MANUAL' | 'TRANSFER' | 'SUPPLIER_PAYMENT'; cancelled: boolean; accountName: string };
+  movement: { id: string; kind: treasury_movement_kind; cancelled: boolean; accountName: string };
   accounts: TreasuryAccountRow[];
   concepts: TreasuryConceptRow[];
 }

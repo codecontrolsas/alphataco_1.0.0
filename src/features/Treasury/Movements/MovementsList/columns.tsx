@@ -5,7 +5,7 @@ import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ArrowLeftRight, Ban, CheckCircle2, Pencil, PiggyBank, Truck, type LucideIcon } from 'lucide-react';
+import { ArrowLeftRight, Ban, CheckCircle2, HandCoins, Pencil, PiggyBank, Truck, type LucideIcon } from 'lucide-react';
 import moment from 'moment';
 import Link from 'next/link';
 import type { TreasuryAccountRow } from '../../actions/accounts.server';
@@ -26,6 +26,7 @@ export const movementKindIcons: Record<MovementKind, LucideIcon> = {
   MANUAL: Pencil,
   TRANSFER: ArrowLeftRight,
   SUPPLIER_PAYMENT: Truck,
+  CUSTOMER_RECEIPT: HandCoins,
 };
 
 export const movementStateIcons: Record<keyof typeof MOVEMENT_STATE_LABELS, LucideIcon> = {
@@ -100,13 +101,13 @@ export function getColumns({ canUpdate, accounts, concepts }: ColumnsOptions): C
     },
     {
       id: 'origin',
-      accessorFn: (row) => row.paymentOrder?.number ?? row.transfer?.number ?? '',
+      accessorFn: (row) => row.paymentOrder?.number ?? row.customerReceipt?.number ?? row.transfer?.number ?? '',
       meta: { title: 'Origen' },
       // Sin orden directo: el numero vive en dos relaciones distintas.
       enableSorting: false,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Origen" />,
       cell: ({ row }) => {
-        const { paymentOrder, transfer } = row.original;
+        const { paymentOrder, transfer, customerReceipt } = row.original;
         if (paymentOrder) {
           return (
             <Link
@@ -114,6 +115,16 @@ export function getColumns({ canUpdate, accounts, concepts }: ColumnsOptions): C
               className="font-mono text-sm font-medium text-blue-600 hover:underline"
             >
               {paymentOrder.number}
+            </Link>
+          );
+        }
+        if (customerReceipt) {
+          return (
+            <Link
+              href={`/dashboard/treasury/receipts/${customerReceipt.id}`}
+              className="font-mono text-sm font-medium text-blue-600 hover:underline"
+            >
+              {customerReceipt.number ?? 'Recibo'}
             </Link>
           );
         }

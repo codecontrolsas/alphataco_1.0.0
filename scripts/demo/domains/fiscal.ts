@@ -3,7 +3,9 @@
  * con `ARCA_MODE=mock` (ARCA simulado), así que no hace falta certificado: con esto y los datos
  * fiscales de los clientes (`customers.ts`) ya se puede emitir desde Comercial → Facturación.
  *
- * No se siembran comprobantes: se emiten durante la demo, que es lo que se quiere mostrar.
+ * Los comprobantes se emiten durante la demo, que es lo que se quiere mostrar. Cobranzas
+ * (`customer-receipts.ts`) siembra algunos ya autorizados en este punto de venta para tener qué
+ * cobrar; el ARCA simulado numera desde la base, así que la emisión en vivo sigue la numeración.
  */
 import type { Ctx } from '../lib/ctx.ts';
 import { demoId } from '../lib/ids.ts';

@@ -7,8 +7,8 @@ import { TreasuryError } from './treasury-errors';
 
 /**
  * Única escritura del libro de movimientos (spec Tesorería etapa 1 §3). La llaman las actions de
- * Tesorería y `registerPayment` / `cancelPaymentOrder` de Compras, siempre dentro de la
- * transacción del documento de origen. Ningún otro código crea ni anula `treasury_movements`.
+ * Tesorería, `registerPayment` / `cancelPaymentOrder` de Compras y los recibos de cobranza,
+ * siempre dentro de la transacción del documento de origen. Ningún otro código crea ni anula `treasury_movements`.
  */
 
 type MovementsTx = Pick<Prisma.TransactionClient, 'treasury_movements' | 'treasury_accounts' | '$queryRaw'>;
@@ -46,6 +46,7 @@ export type CreateMovementInput = {
   description?: string | null;
   transferId?: string | null;
   paymentOrderPaymentId?: string | null;
+  customerReceiptPaymentId?: string | null;
   createdBy: string;
 };
 
@@ -64,6 +65,7 @@ export async function createMovement(tx: MovementsTx, input: CreateMovementInput
       description: input.description?.trim() ? input.description.trim() : null,
       transfer_id: input.transferId ?? null,
       payment_order_payment_id: input.paymentOrderPaymentId ?? null,
+      customer_receipt_payment_id: input.customerReceiptPaymentId ?? null,
       created_by: input.createdBy,
     },
     select: { id: true },
@@ -71,18 +73,19 @@ export async function createMovement(tx: MovementsTx, input: CreateMovementInput
 }
 
 /**
- * Anula los movimientos vigentes de un origen (ids sueltos, una transferencia o los medios de una
- * orden de pago). Los ya anulados no se tocan: conservan su motivo y fecha. Devuelve cuántos anuló.
+ * Anula los movimientos vigentes de un origen (ids sueltos, una transferencia, los medios de una
+ * orden de pago o los de un recibo de cobranza). Los ya anulados no se tocan: conservan su motivo y fecha. Devuelve cuántos anuló.
  */
 export async function cancelMovements(
   tx: Pick<Prisma.TransactionClient, 'treasury_movements'>,
-  where: { ids?: string[]; transferId?: string; paymentOrderId?: string },
+  where: { ids?: string[]; transferId?: string; paymentOrderId?: string; customerReceiptId?: string },
   cancel: { by: string; reason: string; at: Date }
 ): Promise<number> {
   const origin: Prisma.treasury_movementsWhereInput[] = [];
   if (where.ids?.length) origin.push({ id: { in: where.ids } });
   if (where.transferId) origin.push({ transfer_id: where.transferId });
   if (where.paymentOrderId) origin.push({ payment_order_payment: { payment_order_id: where.paymentOrderId } });
+  if (where.customerReceiptId) origin.push({ customer_receipt_payment: { receipt_id: where.customerReceiptId } });
   if (origin.length === 0) return 0;
   const { count } = await tx.treasury_movements.updateMany({
     where: { cancelled_at: null, OR: origin },
@@ -101,6 +104,7 @@ export type LockedMovement = {
   cancelled: boolean;
   transferNumber: string | null;
   paymentOrderNumber: string | null;
+  receiptNumber: string | null;
 };
 
 /** Toma la fila del movimiento con `FOR UPDATE` (editar y anular compiten por ella). */
@@ -117,14 +121,17 @@ export async function lockMovement(tx: Pick<Prisma.TransactionClient, '$queryRaw
       cancelled_at: Date | null;
       transfer_number: string | null;
       payment_order_number: string | null;
+      receipt_number: string | null;
     }[]
   >`
     SELECT m.id, m.account_id, m.concept_id, m.date::text AS date, m.amount::text AS amount, m.kind::text AS kind, m.cancelled_at,
-           t.number AS transfer_number, po.number AS payment_order_number
+           t.number AS transfer_number, po.number AS payment_order_number, cr.number AS receipt_number
     FROM treasury_movements m
     LEFT JOIN treasury_transfers t ON t.id = m.transfer_id
     LEFT JOIN payment_order_payments p ON p.id = m.payment_order_payment_id
     LEFT JOIN payment_orders po ON po.id = p.payment_order_id
+    LEFT JOIN customer_receipt_payments crp ON crp.id = m.customer_receipt_payment_id
+    LEFT JOIN customer_receipts cr ON cr.id = crp.receipt_id
     WHERE m.id = ${id}::uuid AND m.company_id = ${companyId}::uuid
     FOR UPDATE OF m
   `;
@@ -140,6 +147,7 @@ export async function lockMovement(tx: Pick<Prisma.TransactionClient, '$queryRaw
     cancelled: row.cancelled_at !== null,
     transferNumber: row.transfer_number,
     paymentOrderNumber: row.payment_order_number,
+    receiptNumber: row.receipt_number,
   };
 }
 
@@ -150,5 +158,8 @@ export function assertEditableMovement(movement: LockedMovement): void {
   }
   if (movement.kind === 'SUPPLIER_PAYMENT') {
     throw new TreasuryError(`Este movimiento es del pago de la ${movement.paymentOrderNumber}. Para revertirlo, anulá la orden de pago`);
+  }
+  if (movement.kind === 'CUSTOMER_RECEIPT') {
+    throw new TreasuryError(`Este movimiento es del recibo ${movement.receiptNumber}. Para revertirlo, anulá el recibo`);
   }
 }

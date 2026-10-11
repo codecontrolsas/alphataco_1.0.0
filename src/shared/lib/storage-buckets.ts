@@ -30,6 +30,8 @@ export const STORAGE_BUCKETS = [
   'invoice-pdfs',
   /** Documentación de los proveedores de Compras (`<companyId>/<supplierId>/<archivo>`). */
   'supplier-documents',
+  /** Certificados de retenciones sufridas de los clientes (`<companyId>/<customerId>/<archivo>`). */
+  'customer-documents',
 ] as const;
 
 export type StorageBucket = (typeof STORAGE_BUCKETS)[number];
@@ -54,6 +56,7 @@ export const COMPANY_PREFIXED_BUCKETS: readonly StorageBucket[] = [
   'preparte-img',
   'invoice-pdfs',
   'supplier-documents',
+  'customer-documents',
 ];
 
 export function isCompanyPrefixedBucket(bucket: string): bucket is StorageBucket {

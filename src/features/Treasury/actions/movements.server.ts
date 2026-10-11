@@ -273,6 +273,7 @@ export async function getMovementDetail(id: string) {
       cancel_reason: true,
       transfer: { select: { id: true, number: true } },
       payment_order_payment: { select: { payment_order: { select: { id: true, number: true } } } },
+      customer_receipt_payment: { select: { receipt: { select: { id: true, number: true } } } },
     },
   });
   if (!m) return null;
@@ -292,6 +293,7 @@ export async function getMovementDetail(id: string) {
     cancelReason: m.cancel_reason,
     transfer: m.transfer,
     paymentOrder: m.payment_order_payment?.payment_order ?? null,
+    customerReceipt: m.customer_receipt_payment?.receipt ?? null,
   };
 }
 

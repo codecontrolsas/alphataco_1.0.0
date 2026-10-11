@@ -74,6 +74,7 @@ const originNumberContains = (value: string): MovementWhere => ({
   OR: [
     { payment_order_payment: { payment_order: { number: contains(value) } } },
     { transfer: { number: contains(value) } },
+    { customer_receipt_payment: { receipt: { number: contains(value) } } },
   ],
 });
 
@@ -142,11 +143,13 @@ const MOVEMENT_SELECT = {
   concept: { select: { id: true, name: true } },
   transfer: { select: { id: true, number: true } },
   payment_order_payment: { select: { payment_order: { select: { id: true, number: true } } } },
+  customer_receipt_payment: { select: { receipt: { select: { id: true, number: true } } } },
 } as const;
 
 function shape(rows: Prisma.treasury_movementsGetPayload<{ select: typeof MOVEMENT_SELECT }>[]) {
   return rows.map((r) => {
     const order = r.payment_order_payment?.payment_order ?? null;
+    const receipt = r.customer_receipt_payment?.receipt ?? null;
     return {
       id: r.id,
       // Fecha valor (@db.Date): se toma el dia tal cual, sin correr zona horaria
@@ -161,6 +164,7 @@ function shape(rows: Prisma.treasury_movementsGetPayload<{ select: typeof MOVEME
       concept: r.concept ? { id: r.concept.id, name: r.concept.name } : null,
       transfer: r.transfer ? { id: r.transfer.id, number: r.transfer.number } : null,
       paymentOrder: order ? { id: order.id, number: order.number } : null,
+      customerReceipt: receipt ? { id: receipt.id, number: receipt.number } : null,
     };
   });
 }

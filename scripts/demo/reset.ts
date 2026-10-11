@@ -34,6 +34,7 @@ import { seedMaintenance } from './domains/maintenance.ts';
 import { seedCertifications } from './domains/commercial.ts';
 import { seedCandidates, seedClothing, seedKpis } from './domains/hr.ts';
 import { SUPPLIER_DOCUMENTS_BUCKET, seedPurchases } from './domains/purchases.ts';
+import { CUSTOMER_DOCUMENTS_BUCKET, seedCustomerReceipts } from './domains/customer-receipts.ts';
 import { seedTires } from './domains/tires.ts';
 import { seedTreasury } from './domains/treasury.ts';
 import { seedWarehouses } from './domains/warehouses.ts';
@@ -109,6 +110,8 @@ async function main(): Promise<void> {
           await seedPurchases(ctx);
           // Tesoreria despues de Compras: usa sus cuentas y sus pagos ya tienen movimiento.
           await seedTreasury(ctx);
+          // Cobranzas despues de Tesoreria: sus cobros suman a las mismas cuentas.
+          await seedCustomerReceipts(ctx);
           await seedCandidates(ctx, employees);
           await seedClothing(ctx, employees);
           await seedKpis(ctx);
@@ -119,7 +122,7 @@ async function main(): Promise<void> {
           if (dry) throw new DryRunRollback();
 
           // invoice-pdfs: los PDF fiscales que se generan al facturar en vivo durante la demo.
-          await ensureBuckets(s3, [DOCUMENT_BUCKET, REMIT_BUCKET, 'invoice-pdfs', SUPPLIER_DOCUMENTS_BUCKET]);
+          await ensureBuckets(s3, [DOCUMENT_BUCKET, REMIT_BUCKET, 'invoice-pdfs', SUPPLIER_DOCUMENTS_BUCKET, CUSTOMER_DOCUMENTS_BUCKET]);
           await uploadAll(s3, files);
           log(`${files.length} archivos subidos`);
         },
@@ -135,6 +138,7 @@ async function main(): Promise<void> {
       { bucket: DOCUMENT_BUCKET, prefix: `${companyFolder()}/` },
       { bucket: REMIT_BUCKET, prefix: `${REMIT_PREFIX}/` },
       { bucket: SUPPLIER_DOCUMENTS_BUCKET, prefix: `${DEMO_COMPANY_ID}/` },
+      { bucket: CUSTOMER_DOCUMENTS_BUCKET, prefix: `${DEMO_COMPANY_ID}/` },
     ]).catch((error) => {
       log(`no se pudieron limpiar archivos viejos: ${String(error)}`);
       return 0;

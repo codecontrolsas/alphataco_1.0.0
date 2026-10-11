@@ -109,7 +109,7 @@ export const READING_PATHS: ReadingPath[] = [
     id: 'tesoreria',
     title: 'Manejar la plata',
     audience: 'Tesorería y administración',
-    steps: ['tesoreria', 'configuracion-de-tesoreria', 'cuentas-y-saldos', 'movimientos-de-tesoreria', 'transferencias', 'ordenes-de-pago'],
+    steps: ['tesoreria', 'configuracion-de-tesoreria', 'cuentas-y-saldos', 'movimientos-de-tesoreria', 'transferencias', 'ordenes-de-pago', 'cobrar-facturas', 'retenciones-sufridas', 'cuenta-corriente-de-clientes'],
   },
   {
     id: 'comercial',

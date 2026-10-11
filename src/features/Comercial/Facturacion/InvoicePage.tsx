@@ -2,6 +2,7 @@ import { getUserPermissionsMapServer } from '@/features/Permissions';
 import { Lock } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import { cache } from 'react';
+import { getInvoiceReceivable } from '@/features/Treasury/actions/customer-statement.server';
 import { getInvoiceForEditor } from './actions/invoices.server';
 import { InvoiceDetail } from './components/detail/InvoiceDetail';
 import { InvoiceEditor } from './components/editor/InvoiceEditor';
@@ -55,5 +56,15 @@ export async function InvoicePage({ id, result }: { id: string; result: string |
   if (isEditable(data.invoice.status)) {
     return <InvoiceEditor data={data} permissions={permissions} result={result} />;
   }
-  return <InvoiceDetail data={data} permissions={permissions} result={result} />;
+  // Pendiente de cobro: solo con permiso de Cobranzas en Tesorería (spec Tesorería etapa 2 §4.6).
+  const receivable =
+    permissionsMap['tesoreria:cobranzas:view'] === true && data.invoice.status === 'autorizada' ? await getInvoiceReceivable(id) : null;
+  return (
+    <InvoiceDetail
+      data={data}
+      permissions={permissions}
+      result={result}
+      receivable={receivable ? { ...receivable, canCollect: permissionsMap['tesoreria:cobranzas:create'] === true } : null}
+    />
+  );
 }

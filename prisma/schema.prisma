@@ -629,6 +629,7 @@ model company {
   supplier_invoices            supplier_invoices[]
   treasury_accounts            treasury_accounts[]
   treasury_movements           treasury_movements[]
+  customer_receipts            customer_receipts[]
   treasury_concepts            treasury_concepts[]
   treasury_transfers           treasury_transfers[]
   payment_orders               payment_orders[]
@@ -845,6 +846,7 @@ model customers {
   sectors                    sectors[]
   certifications             certifications[]
   invoices                   invoices[]
+  receipts                   customer_receipts[]
   share_company_users        share_company_users[]
   stock_movements            stock_movements[]
   material_requests          material_requests[]
@@ -2172,6 +2174,9 @@ model profile {
   payment_order_rejections    payment_order_rejections[] @relation("payment_order_rejection_author")
   treasury_movements_created  treasury_movements[] @relation("treasury_movement_creator")
   treasury_movements_cancelled treasury_movements[] @relation("treasury_movement_canceller")
+  customer_receipts_created   customer_receipts[] @relation("customer_receipt_creator")
+  customer_receipts_confirmed customer_receipts[] @relation("customer_receipt_confirmer")
+  customer_receipts_cancelled customer_receipts[] @relation("customer_receipt_canceller")
   treasury_transfers_created  treasury_transfers[] @relation("treasury_transfer_creator")
   treasury_transfers_cancelled treasury_transfers[] @relation("treasury_transfer_canceller")
   supplier_documents_uploaded supplier_documents[]
@@ -4172,6 +4177,7 @@ model invoices {
   vat_breakdown             invoice_vat[]
   certifications            invoice_certifications[]
   arca_call_logs            arca_call_logs[]
+  receipt_lines             customer_receipt_lines[]
 
   @@unique([sales_point_id, environment, cbte_type, number], map: "uq_invoices_number")
   @@index([company_id, status], map: "idx_invoices_company_status")
@@ -5250,6 +5256,7 @@ model treasury_accounts {
   updated_at     DateTime                  @default(now()) @updatedAt @db.Timestamptz(6)
   company        company                   @relation(fields: [company_id], references: [id], onDelete: Cascade)
   payments       payment_order_payments[]
+  receipt_payments customer_receipt_payments[]
   movements      treasury_movements[]
   transfers_from treasury_transfers[]      @relation("treasury_transfer_from")
   transfers_to   treasury_transfers[]      @relation("treasury_transfer_to")
@@ -5449,6 +5456,7 @@ enum treasury_movement_kind {
   MANUAL
   TRANSFER
   SUPPLIER_PAYMENT
+  CUSTOMER_RECEIPT
 
   @@schema("public")
 }
@@ -5475,6 +5483,7 @@ model treasury_movements {
   concept_id               String?                 @db.Uuid
   description              String?
   payment_order_payment_id String?                 @unique @db.Uuid
+  customer_receipt_payment_id String?              @unique @db.Uuid
   transfer_id              String?                 @db.Uuid
   created_by               String                  @db.Uuid
   created_at               DateTime                @default(now()) @db.Timestamptz(6)
@@ -5486,6 +5495,7 @@ model treasury_movements {
   account                  treasury_accounts       @relation(fields: [account_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   concept                  treasury_concepts?      @relation(fields: [concept_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   payment_order_payment    payment_order_payments? @relation(fields: [payment_order_payment_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer_receipt_payment customer_receipt_payments? @relation(fields: [customer_receipt_payment_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   transfer                 treasury_transfers?     @relation(fields: [transfer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   creator                  profile                 @relation("treasury_movement_creator", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   canceller                profile?                @relation("treasury_movement_canceller", fields: [cancelled_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -5579,5 +5589,135 @@ enum payment_method {
   ECHECK
   CASH
 
+  @@schema("public")
+}
+
+/// Estado del recibo de cobranza (spec Tesorería etapa 2 §2.1).
+enum customer_receipt_status {
+  DRAFT
+  CONFIRMED
+  CANCELLED
+
+  @@schema("public")
+}
+
+/// Línea del recibo: comprobante cobrado, cobro a cuenta o anticipo anterior aplicado.
+enum customer_receipt_line_kind {
+  INVOICE
+  ADVANCE
+  ADVANCE_APPLIED
+
+  @@schema("public")
+}
+
+/// Recibo de cobranza a un cliente. Sin número mientras es borrador: lo toma al confirmar.
+model customer_receipts {
+  id                     String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id             String                    @db.Uuid
+  customer_id            String                    @db.Uuid
+  number                 String?
+  status                 customer_receipt_status   @default(DRAFT)
+  /// Fecha del cobro. No puede ser futura.
+  date                   DateTime                  @db.Date
+  notes                  String?
+  /// Pesos imputados a comprobantes, cobrados a cuenta, de anticipos aplicados, retenidos y
+  /// recibidos por los medios. Cierre: invoices + advance = advances_applied + withholdings + received.
+  invoices_total         Decimal                   @default(0) @db.Decimal(15, 2)
+  advance_total          Decimal                   @default(0) @db.Decimal(15, 2)
+  advances_applied_total Decimal                   @default(0) @db.Decimal(15, 2)
+  withholdings_total     Decimal                   @default(0) @db.Decimal(15, 2)
+  received_total         Decimal                   @default(0) @db.Decimal(15, 2)
+  /// Diferencia de cambio contra la cotización de los comprobantes. Informativa.
+  fx_difference_total    Decimal                   @default(0) @db.Decimal(15, 2)
+  sent_at                DateTime?                 @db.Timestamptz(6)
+  sent_to                String[]                  @default([])
+  created_by             String                    @db.Uuid
+  created_at             DateTime                  @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime                  @default(now()) @updatedAt @db.Timestamptz(6)
+  confirmed_by           String?                   @db.Uuid
+  confirmed_at           DateTime?                 @db.Timestamptz(6)
+  cancelled_by           String?                   @db.Uuid
+  cancelled_at           DateTime?                 @db.Timestamptz(6)
+  cancel_reason          String?
+  company                company                   @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  customer               customers                 @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  creator                profile                   @relation("customer_receipt_creator", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  confirmer              profile?                  @relation("customer_receipt_confirmer", fields: [confirmed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  canceller              profile?                  @relation("customer_receipt_canceller", fields: [cancelled_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  lines                  customer_receipt_lines[]
+  withholdings           customer_receipt_withholdings[]
+  payments               customer_receipt_payments[]
+
+  @@unique([company_id, number], map: "customer_receipts_company_id_number_key")
+  @@index([company_id, date], map: "idx_customer_receipts_company_date")
+  @@index([customer_id], map: "idx_customer_receipts_customer_id")
+  @@schema("public")
+}
+
+/// Aplicación del recibo. `applied_amount` va en la moneda del comprobante; `amount_ars` son los
+/// pesos a la cotización del cobro.
+model customer_receipt_lines {
+  id                    String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  receipt_id            String                     @db.Uuid
+  position              Int
+  kind                  customer_receipt_line_kind
+  invoice_id            String?                    @db.Uuid
+  source_line_id        String?                    @db.Uuid
+  currency              String                     @db.Char(3)
+  applied_amount        Decimal                    @db.Decimal(15, 2)
+  exchange_rate         Decimal                    @default(1) @db.Decimal(18, 6)
+  invoice_exchange_rate Decimal                    @default(1) @db.Decimal(18, 6)
+  amount_ars            Decimal                    @db.Decimal(15, 2)
+  fx_difference         Decimal                    @default(0) @db.Decimal(15, 2)
+  description           String?
+  receipt               customer_receipts          @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
+  invoice               invoices?                  @relation(fields: [invoice_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  source_line           customer_receipt_lines?    @relation("customer_receipt_line_source", fields: [source_line_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  applications          customer_receipt_lines[]   @relation("customer_receipt_line_source")
+
+  @@index([receipt_id], map: "idx_customer_receipt_lines_receipt_id")
+  @@index([invoice_id], map: "idx_customer_receipt_lines_invoice_id")
+  @@index([source_line_id], map: "idx_customer_receipt_lines_source_line_id")
+  @@schema("public")
+}
+
+/// Retención que practicó el cliente, con su certificado (PDF opcional en `customer-documents`).
+model customer_receipt_withholdings {
+  id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  receipt_id         String            @db.Uuid
+  company_id         String            @db.Uuid
+  customer_id        String            @db.Uuid
+  tax                withholding_tax
+  /// Solo IIBB.
+  jurisdiction       String?
+  certificate_number String
+  certificate_date   DateTime          @db.Date
+  amount             Decimal           @db.Decimal(15, 2)
+  file_path          String?
+  file_name          String?
+  receipt            customer_receipts @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
+
+  @@index([receipt_id], map: "idx_customer_receipt_withholdings_receipt_id")
+  @@index([company_id, customer_id, tax, certificate_number], map: "idx_customer_receipt_withholdings_certificate")
+  @@schema("public")
+}
+
+/// Medio con el que cobró el recibo (uno o varios), a una cuenta o caja.
+model customer_receipt_payments {
+  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  receipt_id          String              @db.Uuid
+  method              payment_method
+  treasury_account_id String              @db.Uuid
+  amount              Decimal             @db.Decimal(15, 2)
+  reference           String?
+  check_number        String?
+  check_bank          String?
+  check_due_on        DateTime?           @db.Date
+  receipt             customer_receipts   @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
+  treasury_account    treasury_accounts   @relation(fields: [treasury_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  movement            treasury_movements?
+
+  @@index([receipt_id], map: "idx_customer_receipt_payments_receipt_id")
+  @@index([treasury_account_id], map: "idx_customer_receipt_payments_account_id")
   @@schema("public")
 }
