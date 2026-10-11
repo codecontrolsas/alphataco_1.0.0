@@ -10,7 +10,7 @@ import {
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { CircleOff, Landmark, Tag, type LucideIcon } from 'lucide-react';
-import moment from 'moment';
+import { formatArgentinaDay } from '../../../lib/today';
 import { useCallback, useMemo, useState } from 'react';
 import type { TreasuryAccountRow } from '../../../actions/accounts.server';
 import type { TreasuryConceptRow } from '../../../actions/concepts.server';
@@ -149,7 +149,7 @@ export function _MovementsDataTable({
       options: { filename: 'movimientos-tesoreria', title: 'Movimientos', sheetName: 'Movimientos' },
       formatters: {
         date: (value) => formatValueDate(value as string),
-        created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : ''),
+        created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : ''),
         income: exportMoney,
         expense: exportMoney,
       },

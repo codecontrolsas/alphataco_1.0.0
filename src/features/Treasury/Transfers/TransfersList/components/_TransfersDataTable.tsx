@@ -9,7 +9,7 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { Landmark } from 'lucide-react';
-import moment from 'moment';
+import { formatArgentinaDay } from '../../../lib/today';
 import { useCallback, useMemo, useState } from 'react';
 import { TREASURY_QUERY_KEYS } from '../../../lib/query-keys';
 import {
@@ -108,7 +108,7 @@ export function _TransfersDataTable({
       options: { filename: 'transferencias-tesoreria', title: 'Transferencias', sheetName: 'Transferencias' },
       formatters: {
         date: (value) => formatValueDate(value as string),
-        created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : ''),
+        created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : ''),
         amount: (value) => formatMoney(value as string),
       },
     }),

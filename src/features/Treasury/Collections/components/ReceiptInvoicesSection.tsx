@@ -13,6 +13,7 @@ import { formatInCurrency } from '../../lib/currency-format';
 import { arsToApplied, RATE_SCALE } from '../../lib/receipt-math';
 import type { ReceiptPreview } from '../../lib/receipt-preview';
 import type { ReceiptFormValues } from '../../schemas/receipts';
+import { treasuryToday } from '../../lib/today';
 
 const dmy = (value: string | null) => (value ? moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY') : null);
 
@@ -82,7 +83,7 @@ export function ReceiptInvoicesSection({
             const computed = preview.lines[invoice.invoiceId];
             const id = `receipt-invoice-${invoice.invoiceId}`;
             const due = dmy(invoice.dueDate);
-            const overdue = invoice.dueDate !== null && invoice.dueDate < moment().format('YYYY-MM-DD');
+            const overdue = invoice.dueDate !== null && invoice.dueDate < treasuryToday();
             return (
               <li key={invoice.invoiceId} className="space-y-2 px-3 py-2">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">

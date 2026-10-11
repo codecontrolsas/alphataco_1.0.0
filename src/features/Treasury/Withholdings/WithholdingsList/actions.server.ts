@@ -4,15 +4,19 @@ import { checkPermissionServer } from '@/features/Permissions';
 import { formatCuit } from '@/features/Purchases/lib/supplier-ids';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
-import {
-  buildDateRangeFiltersWhere,
-  parseSearchParams,
-  stateToPrismaParams,
-} from '@/shared/components/common/DataTable/helpers';
+import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
 import { storagePublicUrl } from '@/shared/lib/storage';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import {
+  buildTreasuryDateRangeWhere,
+  isUuid,
+  ownEntry,
+  parseAmountText,
+  safePaging,
+  textValue,
+} from '../../lib/filter-values';
 import { CUSTOMER_FILES_BUCKET } from '../../lib/storage-files';
 import { CUSTOMER_WITHHOLDING_TAX_LABELS } from '../../schemas/receipts';
 
@@ -27,7 +31,6 @@ type WithholdingTax = keyof typeof CUSTOMER_WITHHOLDING_TAX_LABELS;
 // CONSTANTS
 // ============================================================================
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TAX_VALUES = Object.keys(CUSTOMER_WITHHOLDING_TAX_LABELS) as WithholdingTax[];
 
 /** Ordenables (campos directos). Las FK y los derivados se resuelven en SORT_MAP. */
@@ -55,14 +58,10 @@ async function resolveCompanyId(): Promise<string | null> {
   return getActiveCompanyId();
 }
 
-/** Importe tipeado ("1234,56" o "1234.56") -> Decimal exacto; `null` si no es un numero. */
+/** Importe tipeado ("1234,56" o "1234.56") -> Decimal exacto; `null` si no es un numero o no entra en numeric(15,2). */
 function parseAmount(text: string): Prisma.Decimal | null {
-  const normalized = text
-    .trim()
-    .replace(/\./g, (m, _offset, s: string) => (s.includes(',') ? '' : m))
-    .replace(',', '.');
-  if (!/^\d+(\.\d+)?$/.test(normalized)) return null;
-  return new Prisma.Decimal(normalized);
+  const normalized = parseAmountText(text);
+  return normalized ? new Prisma.Decimal(normalized) : null;
 }
 
 /** Ids de los clientes de la empresa cuyo CUIT contiene los digitos tipeados (el CUIT es numerico en la base). */
@@ -79,7 +78,7 @@ async function buildWhereClause(companyId: string, state: FilterState): Promise<
   const f = state.filters;
   const and: WithholdingWhere[] = [{ company_id: companyId, receipt: { status: 'CONFIRMED' } }];
 
-  const search = state.search?.trim();
+  const search = textValue(state.search);
   if (search) {
     and.push({
       OR: [
@@ -94,7 +93,7 @@ async function buildWhereClause(companyId: string, state: FilterState): Promise<
   const taxes = (f.tax ?? []).filter((v): v is WithholdingTax => (TAX_VALUES as string[]).includes(v));
   if (taxes.length) and.push({ tax: { in: taxes } });
 
-  const customers = (f.customer ?? []).filter((v) => UUID_RE.test(v));
+  const customers = (f.customer ?? []).filter(isUuid);
   if (customers.length) and.push({ customer_id: { in: customers } });
 
   const certificate = f.certificate ?? [];
@@ -103,22 +102,22 @@ async function buildWhereClause(companyId: string, state: FilterState): Promise<
   if (wantsWith && !wantsWithout) and.push({ file_path: { not: null } });
   if (wantsWithout && !wantsWith) and.push({ file_path: null });
 
-  and.push(buildDateRangeFiltersWhere(f, DATE_RANGE_COLUMNS) as WithholdingWhere);
+  and.push(buildTreasuryDateRangeWhere(f, { dateColumns: DATE_RANGE_COLUMNS }) as WithholdingWhere);
 
   // Texto
-  const jurisdiction = f.jurisdiction?.[0]?.trim();
+  const jurisdiction = textValue(f.jurisdiction?.[0]);
   if (jurisdiction) and.push({ jurisdiction: contains(jurisdiction) });
 
-  const certificateNumber = f.certificate_number?.[0]?.trim();
+  const certificateNumber = textValue(f.certificate_number?.[0]);
   if (certificateNumber) and.push({ certificate_number: contains(certificateNumber) });
 
-  const receiptNumber = f.receipt?.[0]?.trim();
+  const receiptNumber = textValue(f.receipt?.[0]);
   if (receiptNumber) and.push({ receipt: { number: contains(receiptNumber) } });
 
-  const cuit = f.cuit?.[0]?.trim();
+  const cuit = textValue(f.cuit?.[0]);
   if (cuit) and.push({ customer_id: { in: await customerIdsByCuit(companyId, cuit) } });
 
-  const amountText = f.amount?.[0]?.trim();
+  const amountText = textValue(f.amount?.[0]);
   if (amountText) {
     const amount = parseAmount(amountText);
     and.push(amount ? { amount } : { id: { in: [] } });
@@ -174,13 +173,13 @@ export async function getWithholdingsPaginated(searchParams: DataTableSearchPara
 
   try {
     const state = parseSearchParams(searchParams);
-    const { skip, take } = stateToPrismaParams(state);
+    const { skip, take } = safePaging(state);
     const where = await buildWhereClause(companyId, state);
 
     const resolvedSorts: WithholdingOrderBy[] = [];
     for (const s of state.sorting) {
       const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-      const mapper = SORT_MAP[s.id];
+      const mapper = ownEntry(SORT_MAP, s.id);
       if (mapper) resolvedSorts.push(...mapper(dir));
       else if (VALID_SORT_FIELDS.has(s.id)) resolvedSorts.push({ [s.id]: dir });
     }

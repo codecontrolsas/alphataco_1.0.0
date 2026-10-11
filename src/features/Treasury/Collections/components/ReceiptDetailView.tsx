@@ -20,11 +20,12 @@ import { CancelReasonDialog } from '../../components/CancelReasonDialog';
 import { formatInCurrency } from '../../lib/currency-format';
 import { invalidateTreasury } from '../../lib/invalidate';
 import { RECEIPT_STATUS_LABELS } from '../../lib/receipt-rules';
+import { formatArgentinaDateTime } from '../../lib/today';
 import { CERTIFICATE_MAX_BYTES, CUSTOMER_WITHHOLDING_TAX_LABELS } from '../../schemas/receipts';
 import { SendReceiptDialog } from './SendReceiptDialog';
 
 const dmy = (value: string) => moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY');
-const dateTime = (value: string) => moment(value).format('DD/MM/YYYY HH:mm');
+const dateTime = (value: string) => formatArgentinaDateTime(value);
 const pesos = (value: string) => formatInCurrency(value, 'ARS');
 
 const STATUS_BADGE: Record<ReceiptDetail['status'], 'default' | 'secondary' | 'destructive'> = {

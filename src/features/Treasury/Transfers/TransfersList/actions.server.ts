@@ -1,18 +1,20 @@
 'use server';
 
 import { checkPermissionServer } from '@/features/Permissions';
-import { pickFilters } from '@/features/Warehouses/lib/filters';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
-import {
-  buildDateRangeFiltersWhere,
-  buildFiltersWhere,
-  parseSearchParams,
-  stateToPrismaParams,
-} from '@/shared/components/common/DataTable/helpers';
+import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import {
+  buildTreasuryDateRangeWhere,
+  facetWhere,
+  ownEntry,
+  parseAmountText,
+  safePaging,
+  textValue,
+} from '../../lib/filter-values';
 
 const logger = new Logger('features/Treasury/Transfers/TransfersList');
 
@@ -33,16 +35,10 @@ const SORT_MAP: Record<string, (dir: 'asc' | 'desc') => TransferOrderBy[]> = {
   state: (dir) => [{ cancelled_at: { sort: dir, nulls: 'first' } }],
 };
 
-const DATE_RANGE_COLUMNS = ['date', 'created_at'];
+/** `date` es @db.Date; `created_at` es timestamptz (el dia elegido es el dia argentino). */
+const DATE_COLUMNS = ['date'];
+const TIMESTAMP_COLUMNS = ['created_at'];
 
-/** Unicas columnas que pasan por `buildFiltersWhere` (lista de permitidas). */
-const FACETED_COLUMNS = ['from_account', 'to_account'] as const;
-
-/** columnId (URL) -> campo Prisma. */
-const COLUMN_MAP: Record<string, string> = {
-  from_account: 'from_account_id',
-  to_account: 'to_account_id',
-};
 
 const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
 
@@ -57,11 +53,10 @@ async function resolveCompanyId(): Promise<string | null> {
   return getActiveCompanyId();
 }
 
-/** Importe tipeado ("1234,56" o "1234.56") -> Decimal exacto; `null` si no es un numero. */
+/** Importe tipeado ("1234,56" o "1234.56") -> Decimal exacto; `null` si no es un numero o no entra en numeric(15,2). */
 function parseAmount(text: string): Prisma.Decimal | null {
-  const normalized = text.trim().replace(/\./g, (m, _offset, s: string) => (s.includes(',') ? '' : m)).replace(',', '.');
-  if (!/^\d+(\.\d+)?$/.test(normalized)) return null;
-  return new Prisma.Decimal(normalized);
+  const normalized = parseAmountText(text);
+  return normalized ? new Prisma.Decimal(normalized) : null;
 }
 
 /** WHERE compartido entre paginated, export y facets. */
@@ -69,7 +64,7 @@ function buildWhereClause(companyId: string, state: FilterState): TransferWhere 
   const f = state.filters;
   const and: TransferWhere[] = [{ company_id: companyId }];
 
-  const search = state.search?.trim();
+  const search = textValue(state.search);
   if (search) {
     and.push({
       OR: [
@@ -81,8 +76,13 @@ function buildWhereClause(companyId: string, state: FilterState): TransferWhere 
     });
   }
 
-  and.push(buildFiltersWhere(pickFilters(f, FACETED_COLUMNS), COLUMN_MAP) as TransferWhere);
-  and.push(buildDateRangeFiltersWhere(f, DATE_RANGE_COLUMNS) as TransferWhere);
+  const fromAccount = facetWhere('from_account_id', f.from_account, { kind: 'uuid' });
+  if (fromAccount) and.push(fromAccount as TransferWhere);
+  const toAccount = facetWhere('to_account_id', f.to_account, { kind: 'uuid' });
+  if (toAccount) and.push(toAccount as TransferWhere);
+  and.push(
+    buildTreasuryDateRangeWhere(f, { dateColumns: DATE_COLUMNS, timestampColumns: TIMESTAMP_COLUMNS }) as TransferWhere
+  );
 
   // Estado (derivado de cancelled_at): ambos valores = sin filtro
   const states = f.state ?? [];
@@ -92,17 +92,17 @@ function buildWhereClause(companyId: string, state: FilterState): TransferWhere 
   if (wantsCancelled && !wantsActive) and.push({ cancelled_at: { not: null } });
 
   // Texto
-  const number = f.number?.[0]?.trim();
+  const number = textValue(f.number?.[0]);
   if (number) and.push({ number: contains(number) });
 
-  const notes = f.notes?.[0]?.trim();
+  const notes = textValue(f.notes?.[0]);
   if (notes) and.push({ notes: contains(notes) });
 
-  const cancelReason = f.cancel_reason?.[0]?.trim();
+  const cancelReason = textValue(f.cancel_reason?.[0]);
   if (cancelReason) and.push({ cancel_reason: contains(cancelReason) });
 
   // Importe (exacto)
-  const amountText = f.amount?.[0]?.trim();
+  const amountText = textValue(f.amount?.[0]);
   if (amountText) {
     const amount = parseAmount(amountText);
     and.push(amount ? { amount } : { id: { in: [] } });
@@ -150,13 +150,13 @@ export async function getTreasuryTransfersPaginated(searchParams: DataTableSearc
 
   try {
     const state = parseSearchParams(searchParams);
-    const { skip, take } = stateToPrismaParams(state);
+    const { skip, take } = safePaging(state);
     const where = buildWhereClause(companyId, state);
 
     const resolvedSorts: TransferOrderBy[] = [];
     for (const s of state.sorting) {
       const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-      const mapper = SORT_MAP[s.id];
+      const mapper = ownEntry(SORT_MAP, s.id);
       if (mapper) resolvedSorts.push(...mapper(dir));
       else if (VALID_SORT_FIELDS.has(s.id)) resolvedSorts.push({ [s.id]: dir });
     }

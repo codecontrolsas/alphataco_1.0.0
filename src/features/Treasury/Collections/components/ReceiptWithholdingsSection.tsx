@@ -11,6 +11,7 @@ import moment from 'moment';
 import type { UseFieldArrayReturn, UseFormReturn } from 'react-hook-form';
 import { toast } from 'sonner';
 import { CERTIFICATE_MAX_BYTES, CUSTOMER_WITHHOLDING_TAX_LABELS, type ReceiptFormValues } from '../../schemas/receipts';
+import { treasuryToday } from '../../lib/today';
 import type { PendingCertificates } from './ReceiptEditor';
 
 /**
@@ -31,7 +32,7 @@ export function ReceiptWithholdingsSection({
   certificates: PendingCertificates;
   onCertificate: (rowId: string, file: File | null) => void;
 }) {
-  const today = moment().format('YYYY-MM-DD');
+  const today = treasuryToday();
 
   const pick = (rowId: string, file: File | undefined) => {
     if (!file) return onCertificate(rowId, null);

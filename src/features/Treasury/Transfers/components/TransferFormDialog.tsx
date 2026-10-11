@@ -23,6 +23,7 @@ import { NegativeCashConfirm } from '../../components/NegativeCashConfirm';
 import { useBalanceAfter } from '../../hooks/useBalanceAfter';
 import { invalidateTreasury } from '../../lib/invalidate';
 import { transferFormSchema, type TransferFormValues } from '../../schemas/transfers';
+import { treasuryToday } from '../../lib/today';
 
 const logger = new Logger('Treasury/TransferFormDialog');
 
@@ -46,7 +47,7 @@ export function TransferFormDialog({ open, onOpenChange, accounts, defaultFromAc
 
   const form = useForm<TransferFormValues>({
     resolver: zodResolver(transferFormSchema),
-    defaultValues: { fromAccountId: defaultFromAccountId ?? '', toAccountId: '', date: moment().format('YYYY-MM-DD'), amount: '', notes: '' },
+    defaultValues: { fromAccountId: defaultFromAccountId ?? '', toAccountId: '', date: treasuryToday(), amount: '', notes: '' },
   });
 
   const [fromId, toId, date, amount] = useWatch({ control: form.control, name: ['fromAccountId', 'toAccountId', 'date', 'amount'] });

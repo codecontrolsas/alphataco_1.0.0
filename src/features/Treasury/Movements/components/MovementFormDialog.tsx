@@ -26,6 +26,7 @@ import { invalidateTreasury } from '../../lib/invalidate';
 import { conceptAllows, signedCents } from '../../lib/movement-rules';
 import { MOVEMENT_DIRECTION_LABELS, manualMovementFormSchema, type ManualMovementFormValues } from '../../schemas/movements';
 import { isPositiveAmount } from '../../schemas/shared';
+import { treasuryToday } from '../../lib/today';
 
 const logger = new Logger('Treasury/MovementFormDialog');
 
@@ -42,7 +43,7 @@ interface MovementFormDialogProps {
 
 const emptyValues = (accountId: string): ManualMovementFormValues => ({
   accountId,
-  date: moment().format('YYYY-MM-DD'),
+  date: treasuryToday(),
   direction: 'OUT',
   amount: '',
   conceptId: '',

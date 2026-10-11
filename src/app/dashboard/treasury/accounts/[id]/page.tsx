@@ -3,14 +3,15 @@ import { getActiveTreasuryAccountOptions } from '@/features/Treasury/actions/acc
 import { getTreasuryConcepts } from '@/features/Treasury/actions/concepts.server';
 import { getAccountStatementData } from '@/features/Treasury/actions/statement.server';
 import { AccountStatementView } from '@/features/Treasury/Accounts/components/AccountStatementView';
-import moment from 'moment';
+import { defaultAccountStatementRange } from '@/features/Treasury/lib/statement-range';
 import { notFound } from 'next/navigation';
 import { cache } from 'react';
 
 // Extracto del mes en curso: una sola lectura para la página y el título.
-const getInitial = cache((id: string) =>
-  getAccountStatementData(id, moment().startOf('month').format('YYYY-MM-DD'), moment().endOf('month').format('YYYY-MM-DD'))
-);
+const getInitial = cache((id: string) => {
+  const { from, to } = defaultAccountStatementRange();
+  return getAccountStatementData(id, from, to);
+});
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const data = await getInitial((await params).id);

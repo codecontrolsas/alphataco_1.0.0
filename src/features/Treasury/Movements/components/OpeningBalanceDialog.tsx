@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { createOpeningBalance, updateOpeningBalance } from '../../actions/movements.server';
 import { invalidateTreasury } from '../../lib/invalidate';
 import { openingBalanceFormSchema, type OpeningBalanceFormValues } from '../../schemas/movements';
+import { treasuryToday } from '../../lib/today';
 
 const logger = new Logger('Treasury/OpeningBalanceDialog');
 
@@ -36,7 +37,7 @@ export function OpeningBalanceDialog({ open, onOpenChange, account, current }: O
   const queryClient = useQueryClient();
   const form = useForm<OpeningBalanceFormValues>({
     resolver: zodResolver(openingBalanceFormSchema),
-    defaultValues: { accountId: account.id, date: current?.date ?? moment().format('YYYY-MM-DD'), amount: current?.amount ?? '' },
+    defaultValues: { accountId: account.id, date: current?.date ?? treasuryToday(), amount: current?.amount ?? '' },
   });
 
   const save = useMutation({

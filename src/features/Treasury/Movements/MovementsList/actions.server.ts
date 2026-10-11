@@ -1,19 +1,21 @@
 'use server';
 
 import { checkPermissionServer } from '@/features/Permissions';
-import { pickFilters } from '@/features/Warehouses/lib/filters';
 import { Prisma } from '@/generated/prisma/client';
+import { treasury_movement_kind } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
-import {
-  buildDateRangeFiltersWhere,
-  buildFiltersWhere,
-  NULL_FILTER_VALUE,
-  parseSearchParams,
-  stateToPrismaParams,
-} from '@/shared/components/common/DataTable/helpers';
+import { NULL_FILTER_VALUE, parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import {
+  buildTreasuryDateRangeWhere,
+  facetWhere,
+  ownEntry,
+  parseAmountText,
+  safePaging,
+  textValue,
+} from '../../lib/filter-values';
 
 const logger = new Logger('features/Treasury/Movements/MovementsList');
 
@@ -37,17 +39,11 @@ const SORT_MAP: Record<string, (dir: 'asc' | 'desc') => MovementOrderBy[]> = {
   state: (dir) => [{ cancelled_at: { sort: dir, nulls: 'first' } }],
 };
 
-const DATE_RANGE_COLUMNS = ['date', 'created_at'];
+/** `date` es @db.Date; `created_at` es timestamptz (el dia elegido es el dia argentino). */
+const DATE_COLUMNS = ['date'];
+const TIMESTAMP_COLUMNS = ['created_at'];
 
-/** Unicas columnas que pasan por `buildFiltersWhere` (lista de permitidas). */
-const FACETED_COLUMNS = ['account', 'kind', 'concept'] as const;
-
-/** columnId (URL) -> campo Prisma. */
-const COLUMN_MAP: Record<string, string> = {
-  account: 'account_id',
-  kind: 'kind',
-  concept: 'concept_id',
-};
+const MOVEMENT_KINDS = Object.values(treasury_movement_kind);
 
 const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
 
@@ -62,11 +58,10 @@ async function resolveCompanyId(): Promise<string | null> {
   return getActiveCompanyId();
 }
 
-/** Importe tipeado ("1234,56" o "1234.56") -> Decimal exacto; `null` si no es un numero. */
+/** Importe tipeado ("1234,56" o "1234.56") -> Decimal exacto; `null` si no es un numero o no entra en numeric(15,2). */
 function parseAmount(text: string): Prisma.Decimal | null {
-  const normalized = text.trim().replace(/\./g, (m, _offset, s: string) => (s.includes(',') ? '' : m)).replace(',', '.');
-  if (!/^\d+(\.\d+)?$/.test(normalized)) return null;
-  return new Prisma.Decimal(normalized);
+  const normalized = parseAmountText(text);
+  return normalized ? new Prisma.Decimal(normalized) : null;
 }
 
 /** Numero de la orden de pago o de la transferencia de origen del movimiento. */
@@ -83,7 +78,7 @@ function buildWhereClause(companyId: string, state: FilterState): MovementWhere 
   const f = state.filters;
   const and: MovementWhere[] = [{ company_id: companyId }];
 
-  const search = state.search?.trim();
+  const search = textValue(state.search);
   if (search) {
     and.push({
       OR: [
@@ -95,8 +90,15 @@ function buildWhereClause(companyId: string, state: FilterState): MovementWhere 
     });
   }
 
-  and.push(buildFiltersWhere(pickFilters(f, FACETED_COLUMNS), COLUMN_MAP) as MovementWhere);
-  and.push(buildDateRangeFiltersWhere(f, DATE_RANGE_COLUMNS) as MovementWhere);
+  const account = facetWhere('account_id', f.account, { kind: 'uuid' });
+  if (account) and.push(account as MovementWhere);
+  const kind = facetWhere('kind', f.kind, { kind: 'enum', allowed: MOVEMENT_KINDS });
+  if (kind) and.push(kind as MovementWhere);
+  const concept = facetWhere('concept_id', f.concept, { kind: 'uuid', nullable: true });
+  if (concept) and.push(concept as MovementWhere);
+  and.push(
+    buildTreasuryDateRangeWhere(f, { dateColumns: DATE_COLUMNS, timestampColumns: TIMESTAMP_COLUMNS }) as MovementWhere
+  );
 
   // Estado (derivado de cancelled_at): ambos valores = sin filtro
   const states = f.state ?? [];
@@ -106,22 +108,22 @@ function buildWhereClause(companyId: string, state: FilterState): MovementWhere 
   if (wantsCancelled && !wantsActive) and.push({ cancelled_at: { not: null } });
 
   // Texto
-  const description = f.description?.[0]?.trim();
+  const description = textValue(f.description?.[0]);
   if (description) and.push({ description: contains(description) });
 
-  const origin = f.origin?.[0]?.trim();
+  const origin = textValue(f.origin?.[0]);
   if (origin) and.push(originNumberContains(origin));
 
-  const cancelReason = f.cancel_reason?.[0]?.trim();
+  const cancelReason = textValue(f.cancel_reason?.[0]);
   if (cancelReason) and.push({ cancel_reason: contains(cancelReason) });
 
   // Importes (exactos): el ingreso es positivo y el egreso se guarda negativo
-  const income = f.income?.[0]?.trim();
+  const income = textValue(f.income?.[0]);
   if (income) {
     const amount = parseAmount(income);
     and.push(amount ? { amount } : { id: { in: [] } });
   }
-  const expense = f.expense?.[0]?.trim();
+  const expense = textValue(f.expense?.[0]);
   if (expense) {
     const amount = parseAmount(expense);
     and.push(amount ? { amount: amount.negated() } : { id: { in: [] } });
@@ -179,13 +181,13 @@ export async function getTreasuryMovementsPaginated(searchParams: DataTableSearc
 
   try {
     const state = parseSearchParams(searchParams);
-    const { skip, take } = stateToPrismaParams(state);
+    const { skip, take } = safePaging(state);
     const where = buildWhereClause(companyId, state);
 
     const resolvedSorts: MovementOrderBy[] = [];
     for (const s of state.sorting) {
       const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-      const mapper = SORT_MAP[s.id];
+      const mapper = ownEntry(SORT_MAP, s.id);
       if (mapper) resolvedSorts.push(...mapper(dir));
       else if (VALID_SORT_FIELDS.has(s.id)) resolvedSorts.push({ [s.id]: dir });
     }

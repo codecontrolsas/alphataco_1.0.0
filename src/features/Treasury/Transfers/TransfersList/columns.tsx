@@ -6,6 +6,7 @@ import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Ban, CheckCircle2, type LucideIcon } from 'lucide-react';
 import moment from 'moment';
+import { formatArgentinaDay } from '../../lib/today';
 import { TransferRowActions } from '../components/TransferRowActions';
 import type { TreasuryTransferListItem } from './actions.server';
 import { TRANSFER_STATE_LABELS } from './constants';
@@ -107,7 +108,7 @@ export function getColumns({ canUpdate }: { canUpdate: boolean }): ColumnDef<Tre
       accessorKey: 'created_at',
       meta: { title: 'Fecha de alta' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de alta" />,
-      cell: ({ row }) => <span>{moment(row.original.created_at).format('DD/MM/YYYY')}</span>,
+      cell: ({ row }) => <span>{formatArgentinaDay(row.original.created_at)}</span>,
     },
   ];
 

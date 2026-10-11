@@ -12,13 +12,13 @@ import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { invoiceBalanceSql } from '../../lib/receivables';
 import { COLLECTABLE_CBTE_TYPES, overdueDays, receivableState, type ReceivableState } from '../../lib/receipt-rules';
 import { localToday } from '../../actions/shared';
+import { isUuid, ownEntry, parseAmountText, parseBoundedInt, parseDay, safePaging, textValue } from '../../lib/filter-values';
 import { RECEIVABLE_CURRENCIES } from './constants';
 
 const logger = new Logger('features/Treasury/Collections/ReceivablesList');
 
 type FilterState = ReturnType<typeof parseSearchParams>;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const STATES: readonly ReceivableState[] = ['OVERDUE', 'DUE', 'IN_DRAFT'];
 
 // ============================================================================
@@ -55,15 +55,6 @@ function voucherLabelSql(): Prisma.Sql {
     || ' ' || lpad(r.sales_point::text, 5, '0') || '-' || lpad(r.number::text, 8, '0'))`;
 }
 
-/** Importe tipeado ("1234,56" o "1234.56") -> texto decimal; `null` si no es un numero. */
-function parseAmount(text: string): string | null {
-  const normalized = text
-    .trim()
-    .replace(/\./g, (m, _offset, s: string) => (s.includes(',') ? '' : m))
-    .replace(',', '.');
-  return /^\d+(\.\d+)?$/.test(normalized) ? normalized : null;
-}
-
 const like = (value: string) => `%${value.replace(/[\\%_]/g, '\\$&')}%`;
 
 /**
@@ -86,14 +77,14 @@ function buildConditions(state: FilterState, today: string, exclude?: string): P
   const f = state.filters;
   const conditions: Prisma.Sql[] = [];
 
-  const search = state.search?.trim();
+  const search = textValue(state.search);
   if (search) {
     const pattern = like(search);
     conditions.push(Prisma.sql`(r.customer_name ILIKE ${pattern} OR ${voucherLabelSql()} ILIKE ${pattern})`);
   }
 
   if (exclude !== 'customer') {
-    const ids = (f.customer ?? []).filter((v) => UUID_RE.test(v));
+    const ids = (f.customer ?? []).filter(isUuid);
     if (ids.length) conditions.push(Prisma.sql`r.customer_id = ANY(${ids}::uuid[])`);
   }
 
@@ -109,31 +100,32 @@ function buildConditions(state: FilterState, today: string, exclude?: string): P
 
   const dateRange = (columnId: 'issue_date' | 'due_date', column: Prisma.Sql) => {
     if (exclude === columnId) return;
-    const from = f[`${columnId}_from`]?.[0];
-    const to = f[`${columnId}_to`]?.[0];
-    if (from && /^\d{4}-\d{2}-\d{2}$/.test(from)) conditions.push(Prisma.sql`${column} >= ${from}::date`);
-    if (to && /^\d{4}-\d{2}-\d{2}$/.test(to)) conditions.push(Prisma.sql`${column} <= ${to}::date`);
+    const from = parseDay(f[`${columnId}_from`]?.[0]);
+    const to = parseDay(f[`${columnId}_to`]?.[0]);
+    if (from) conditions.push(Prisma.sql`${column} >= ${from}::date`);
+    if (to) conditions.push(Prisma.sql`${column} <= ${to}::date`);
   };
   dateRange('issue_date', Prisma.sql`r.issue_date`);
   dateRange('due_date', Prisma.sql`r.due_date`);
 
-  const voucher = f.voucher?.[0]?.trim();
+  const voucher = textValue(f.voucher?.[0]);
   if (voucher) conditions.push(Prisma.sql`${voucherLabelSql()} ILIKE ${like(voucher)}`);
 
   const exactAmount = (columnId: 'total' | 'pending', column: Prisma.Sql) => {
-    const text = f[columnId]?.[0]?.trim();
+    const text = textValue(f[columnId]?.[0]);
     if (!text) return;
-    const amount = parseAmount(text);
+    const amount = parseAmountText(text);
     conditions.push(amount ? Prisma.sql`${column} = ${amount}::numeric` : Prisma.sql`false`);
   };
   exactAmount('total', Prisma.sql`r.total`);
   exactAmount('pending', Prisma.sql`r.pending`);
 
-  const days = f.overdue_days?.[0]?.trim();
-  if (days) {
+  const daysText = textValue(f.overdue_days?.[0]);
+  if (daysText) {
+    const days = parseBoundedInt(daysText);
     conditions.push(
-      /^\d+$/.test(days)
-        ? Prisma.sql`GREATEST(0, ${today}::date - COALESCE(r.due_date, ${today}::date)) = ${Number(days)}::int`
+      days != null
+        ? Prisma.sql`GREATEST(0, ${today}::date - COALESCE(r.due_date, ${today}::date)) = ${days}::int`
         : Prisma.sql`false`
     );
   }
@@ -194,7 +186,7 @@ async function resolveCompanyId(): Promise<string | null> {
 function orderSql(state: FilterState, today: string): Prisma.Sql {
   const parts: Prisma.Sql[] = [];
   for (const s of state.sorting) {
-    const mapper = SORT_SQL[s.id];
+    const mapper = ownEntry(SORT_SQL, s.id);
     if (mapper) parts.push(...mapper(s.desc ? Prisma.sql`DESC` : Prisma.sql`ASC`, today));
   }
   parts.push(DEFAULT_ORDER);
@@ -213,8 +205,7 @@ export async function getReceivablesPaginated(searchParams: DataTableSearchParam
     const state = parseSearchParams(searchParams);
     const today = localToday();
     const where = whereSql(buildConditions(state, today));
-    const skip = state.page * state.pageSize;
-    const take = state.pageSize;
+    const { skip, take } = safePaging(state);
 
     const [rows, counted] = await Promise.all([
       prisma.$queryRaw<ReceivableRow[]>`

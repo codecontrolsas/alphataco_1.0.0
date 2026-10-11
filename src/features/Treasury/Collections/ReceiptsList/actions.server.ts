@@ -1,18 +1,22 @@
 'use server';
 
 import { checkPermissionServer } from '@/features/Permissions';
-import { pickFilters } from '@/features/Warehouses/lib/filters';
 import { Prisma } from '@/generated/prisma/client';
+import { customer_receipt_status } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
-import {
-  buildDateRangeFiltersWhere,
-  buildFiltersWhere,
-  parseSearchParams,
-  stateToPrismaParams,
-} from '@/shared/components/common/DataTable/helpers';
+import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import {
+  buildTreasuryDateRangeWhere,
+  facetWhere,
+  ownEntry,
+  parseAmountText,
+  parseBoundedInt,
+  safePaging,
+  textValue,
+} from '../../lib/filter-values';
 
 const logger = new Logger('features/Treasury/Collections/ReceiptsList');
 
@@ -35,14 +39,7 @@ const SORT_MAP: Record<string, (dir: 'asc' | 'desc') => ReceiptOrderBy[]> = {
 
 const DATE_RANGE_COLUMNS = ['date'];
 
-/** Unicas columnas que pasan por `buildFiltersWhere` (lista de permitidas). */
-const FACETED_COLUMNS = ['customer', 'status'] as const;
-
-/** columnId (URL) -> campo Prisma. */
-const COLUMN_MAP: Record<string, string> = {
-  customer: 'customer_id',
-  status: 'status',
-};
+const RECEIPT_STATUSES = Object.values(customer_receipt_status);
 
 const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
 
@@ -57,14 +54,10 @@ async function resolveCompanyId(): Promise<string | null> {
   return getActiveCompanyId();
 }
 
-/** Importe tipeado ("1234,56" o "1234.56") -> Decimal exacto; `null` si no es un numero. */
+/** Importe tipeado ("1234,56" o "1234.56") -> Decimal exacto; `null` si no es un numero o no entra en numeric(15,2). */
 function parseAmount(text: string): Prisma.Decimal | null {
-  const normalized = text
-    .trim()
-    .replace(/\./g, (m, _offset, s: string) => (s.includes(',') ? '' : m))
-    .replace(',', '.');
-  if (!/^\d+(\.\d+)?$/.test(normalized)) return null;
-  return new Prisma.Decimal(normalized);
+  const normalized = parseAmountText(text);
+  return normalized ? new Prisma.Decimal(normalized) : null;
 }
 
 /** Ids de los recibos con exactamente `wanted` comprobantes (lineas INVOICE) imputados. */
@@ -84,11 +77,14 @@ async function buildWhereClause(companyId: string, state: FilterState): Promise<
   const f = state.filters;
   const and: ReceiptWhere[] = [{ company_id: companyId }];
 
-  const search = state.search?.trim();
+  const search = textValue(state.search);
   if (search) and.push({ OR: [{ number: contains(search) }, { customer: { name: contains(search) } }] });
 
-  and.push(buildFiltersWhere(pickFilters(f, FACETED_COLUMNS), COLUMN_MAP) as ReceiptWhere);
-  and.push(buildDateRangeFiltersWhere(f, DATE_RANGE_COLUMNS) as ReceiptWhere);
+  const customer = facetWhere('customer_id', f.customer, { kind: 'uuid' });
+  if (customer) and.push(customer as ReceiptWhere);
+  const status = facetWhere('status', f.status, { kind: 'enum', allowed: RECEIPT_STATUSES });
+  if (status) and.push(status as ReceiptWhere);
+  and.push(buildTreasuryDateRangeWhere(f, { dateColumns: DATE_RANGE_COLUMNS }) as ReceiptWhere);
 
   // Enviado (derivado de sent_at): ambos valores = sin filtro
   const sent = f.sent ?? [];
@@ -98,21 +94,22 @@ async function buildWhereClause(companyId: string, state: FilterState): Promise<
   if (wantsNotSent && !wantsSent) and.push({ sent_at: null });
 
   // Texto
-  const number = f.number?.[0]?.trim();
+  const number = textValue(f.number?.[0]);
   if (number) and.push({ number: contains(number) });
 
   // Importes (exactos)
   for (const field of ['withholdings_total', 'received_total'] as const) {
-    const text = f[field]?.[0]?.trim();
+    const text = textValue(f[field]?.[0]);
     if (!text) continue;
     const amount = parseAmount(text);
     and.push(amount ? { [field]: amount } : { id: { in: [] } });
   }
 
   // Cantidad de comprobantes (exacta)
-  const count = f.invoices_count?.[0]?.trim();
-  if (count) {
-    and.push({ id: { in: /^\d+$/.test(count) ? await receiptIdsWithInvoiceCount(companyId, Number(count)) : [] } });
+  const countText = textValue(f.invoices_count?.[0]);
+  if (countText) {
+    const count = parseBoundedInt(countText);
+    and.push({ id: { in: count != null ? await receiptIdsWithInvoiceCount(companyId, count) : [] } });
   }
 
   return { AND: and };
@@ -156,13 +153,13 @@ export async function getReceiptsPaginated(searchParams: DataTableSearchParams) 
 
   try {
     const state = parseSearchParams(searchParams);
-    const { skip, take } = stateToPrismaParams(state);
+    const { skip, take } = safePaging(state);
     const where = await buildWhereClause(companyId, state);
 
     const resolvedSorts: ReceiptOrderBy[] = [];
     for (const s of state.sorting) {
       const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-      const mapper = SORT_MAP[s.id];
+      const mapper = ownEntry(SORT_MAP, s.id);
       if (mapper) resolvedSorts.push(...mapper(dir));
       else if (VALID_SORT_FIELDS.has(s.id)) resolvedSorts.push({ [s.id]: dir });
     }

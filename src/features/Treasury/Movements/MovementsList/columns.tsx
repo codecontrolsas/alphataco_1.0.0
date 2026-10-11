@@ -7,6 +7,7 @@ import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers'
 import type { ColumnDef } from '@tanstack/react-table';
 import { ArrowLeftRight, Ban, CheckCircle2, HandCoins, Pencil, PiggyBank, Truck, type LucideIcon } from 'lucide-react';
 import moment from 'moment';
+import { formatArgentinaDay } from '../../lib/today';
 import Link from 'next/link';
 import type { TreasuryAccountRow } from '../../actions/accounts.server';
 import type { TreasuryConceptRow } from '../../actions/concepts.server';
@@ -213,7 +214,7 @@ export function getColumns({ canUpdate, accounts, concepts }: ColumnsOptions): C
       accessorKey: 'created_at',
       meta: { title: 'Fecha de alta' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de alta" />,
-      cell: ({ row }) => <span>{moment(row.original.created_at).format('DD/MM/YYYY')}</span>,
+      cell: ({ row }) => <span>{formatArgentinaDay(row.original.created_at)}</span>,
     },
   ];
 

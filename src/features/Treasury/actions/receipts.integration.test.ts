@@ -734,6 +734,122 @@ describe.skipIf(!RUN)('cobranzas (integracion)', () => {
     });
   });
 
+  describe('filtros hostiles: ningún valor de la URL termina en un error', () => {
+    const NUL = '\u0000';
+    const BIG_INT = '99999999999';
+    const BIG_DIGITS = '9'.repeat(400);
+    const BAD_DATES = ['2026-02-31', '2026-13-01', '0000-01-01', '9999-12-31', '2026-2-1', 'abc', NUL];
+    const BAD_UUIDS = ['nope', "' OR 1=1 --", '__null__', NUL, '3f0e2b1c-1111-4222-8333-44445555666z'];
+    const BAD_ENUMS = ['NOPE', '__null__', NUL, "'; DROP TABLE x;--", 'constructor'];
+    const BAD_AMOUNTS = ['99999999999999999999', '10000000000000.00', BIG_DIGITS, '1e5', 'abc', '-1', '1,2,3', NUL, '0.0000001'];
+    const BAD_INTS = [BIG_INT, '2147483648', BIG_DIGITS, '-1', '1.5', 'abc', NUL];
+    const BAD_TEXT = [NUL, `a${NUL}b`, '%', '_', '\\', "'", 'x'.repeat(100_000)];
+
+    /** Cada pareja clave/valor se prueba sola: un valor roto no puede esconderse detrás de otro. */
+    const cases: Array<[string, string]> = [
+      ...['issue_date_from', 'issue_date_to', 'due_date_from', 'due_date_to', 'date_from', 'date_to', 'created_at_from', 'created_at_to', 'certificate_date_from', 'certificate_date_to'].flatMap((k) => BAD_DATES.map((v): [string, string] => [k, v])),
+      ...['customer', 'account', 'from_account', 'to_account', 'concept'].flatMap((k) => BAD_UUIDS.map((v): [string, string] => [k, v])),
+      ...['status', 'kind', 'tax', 'state', 'sent', 'certificate', 'currency'].flatMap((k) => BAD_ENUMS.map((v): [string, string] => [k, v])),
+      ...['total', 'pending', 'received_total', 'withholdings_total', 'income', 'expense', 'amount'].flatMap((k) => BAD_AMOUNTS.map((v): [string, string] => [k, v])),
+      ...['overdue_days', 'invoices_count'].flatMap((k) => BAD_INTS.map((v): [string, string] => [k, v])),
+      ...['number', 'description', 'origin', 'cancel_reason', 'notes', 'jurisdiction', 'certificate_number', 'receipt', 'cuit', 'voucher', 'search'].flatMap((k) => BAD_TEXT.map((v): [string, string] => [k, v])),
+      ['page', 'abc'], ['page', '1e99'], ['page', '-5'], ['page', '99999999999999999999'],
+      ['pageSize', 'abc'], ['pageSize', '0'], ['pageSize', '-1'], ['pageSize', '99999999999999999999'],
+      ['sort', 'constructor.asc'], ['sort', '__proto__.desc'], ['sort', 'toString.asc'], ['sort', 'hasOwnProperty.desc'],
+    ];
+
+    const lists = async () => {
+      const receivables = await import('../Collections/ReceivablesList/actions.server');
+      const receipts = await import('../Collections/ReceiptsList/actions.server');
+      const withholdings = await import('../Withholdings/WithholdingsList/actions.server');
+      const movements = await import('../Movements/MovementsList/actions.server');
+      const transfers = await import('../Transfers/TransfersList/actions.server');
+      return [
+        ['recibos a cobrar', receivables.getReceivablesPaginated, receivables.getAllReceivablesForExport],
+        ['recibos', receipts.getReceiptsPaginated, receipts.getAllReceiptsForExport],
+        ['retenciones', withholdings.getWithholdingsPaginated, withholdings.getAllWithholdingsForExport],
+        ['movimientos', movements.getTreasuryMovementsPaginated, movements.getAllTreasuryMovementsForExport],
+        ['transferencias', transfers.getTreasuryTransfersPaginated, transfers.getAllTreasuryTransfersForExport],
+      ] as const;
+    };
+
+    it('la consulta paginada y el export responden con cualquier valor', async () => {
+      const failures: string[] = [];
+      for (const [name, paginated, exporter] of await lists()) {
+        for (const [key, value] of cases) {
+          const params = { [key]: value };
+          try {
+            await paginated(params);
+            if (key !== 'page' && key !== 'pageSize' && key !== 'sort') await exporter(params);
+          } catch {
+            failures.push(`${name}: ${key}=${value.slice(0, 30)}`);
+          }
+        }
+      }
+      expect(failures).toEqual([]);
+    }, 120_000);
+
+    it('los facets (cross-filter) responden con cualquier valor', async () => {
+      const receivables = await import('../Collections/ReceivablesList/actions.server');
+      const receipts = await import('../Collections/ReceiptsList/actions.server');
+      const withholdings = await import('../Withholdings/WithholdingsList/actions.server');
+      const movements = await import('../Movements/MovementsList/actions.server');
+      const transfers = await import('../Transfers/TransfersList/actions.server');
+      const facets: Array<[string, (c: string, p: Record<string, string>) => Promise<unknown>, string[]]> = [
+        ['recibos a cobrar', receivables.getReceivableSingleFacet, ['customer', 'currency', 'state']],
+        ['recibos', receipts.getReceiptSingleFacet, ['customer', 'status', 'sent']],
+        ['retenciones', withholdings.getWithholdingSingleFacet, ['customer', 'tax', 'certificate']],
+        ['movimientos', movements.getTreasuryMovementSingleFacet, ['account', 'kind', 'concept', 'state']],
+        ['transferencias', transfers.getTreasuryTransferSingleFacet, ['from_account', 'to_account', 'state']],
+      ];
+      const failures: string[] = [];
+      for (const [name, facet, columns] of facets) {
+        for (const [key, value] of cases) {
+          for (const column of columns) {
+            // El facet traga los errores y devuelve null: null en una columna conocida = la consulta falló
+            if ((await facet(column, { [key]: value })) === null) failures.push(`${name}.${column}: ${key}=${value.slice(0, 30)}`);
+          }
+        }
+      }
+      expect(failures).toEqual([]);
+    }, 240_000);
+
+    it('un importe más grande que numeric(15,2) da cero filas', async () => {
+      const movements = await import('../Movements/MovementsList/actions.server');
+      const result = await movements.getTreasuryMovementsPaginated({ income: '99999999999999999999' });
+      expect(result.total).toBe(0);
+    });
+
+    it('un id de cliente inválido en Recibos se ignora (no da error)', async () => {
+      const { getReceiptsPaginated } = await import('../Collections/ReceiptsList/actions.server');
+      const all = await getReceiptsPaginated({});
+      const filtered = await getReceiptsPaginated({ customer: 'no-es-un-uuid' });
+      expect(filtered.total).toBe(all.total);
+    });
+
+    it('el filtro por fecha de alta usa el día argentino, no el UTC', async () => {
+      const prisma = await db();
+      const { getTreasuryMovementsPaginated } = await import('../Movements/MovementsList/actions.server');
+      // 22:00 del 1/3 en Argentina = 01:00 UTC del 2/3
+      await prisma.treasury_movements.create({
+        data: {
+          company_id: COMPANY,
+          account_id: BANK,
+          date: new Date('2026-03-01T00:00:00.000Z'),
+          amount: '5.00',
+          kind: 'OPENING',
+          description: 'filtro-alta-argentina',
+          created_by: USER,
+          created_at: new Date('2026-03-02T01:00:00.000Z'),
+        },
+      });
+      const day = async (d: string) =>
+        (await getTreasuryMovementsPaginated({ search: 'filtro-alta-argentina', created_at_from: d, created_at_to: d })).total;
+      expect(await day('2026-03-01')).toBe(1);
+      expect(await day('2026-03-02')).toBe(0);
+    });
+  });
+
   describe('revisión final', () => {
     type Values = import('../schemas/receipts').ReceiptFormValues;
     const form = (over: Partial<Values> = {}): Values => ({
