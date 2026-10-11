@@ -5,7 +5,7 @@ import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ArrowLeftRight, Ban, CheckCircle2, HandCoins, Pencil, PiggyBank, Truck, WalletCards, type LucideIcon } from 'lucide-react';
+import { ArrowLeftRight, Ban, CheckCircle2, HandCoins, Pencil, PiggyBank, Truck, WalletCards, type LucideIcon, ScrollText } from 'lucide-react';
 import moment from 'moment';
 import { formatArgentinaDay } from '../../lib/today';
 import Link from 'next/link';
@@ -29,6 +29,7 @@ export const movementKindIcons: Record<MovementKind, LucideIcon> = {
   SUPPLIER_PAYMENT: Truck,
   CUSTOMER_RECEIPT: HandCoins,
   CHECK_OPERATION: WalletCards,
+  OWN_CHECK: ScrollText,
 };
 
 export const movementStateIcons: Record<keyof typeof MOVEMENT_STATE_LABELS, LucideIcon> = {
@@ -104,13 +105,24 @@ export function getColumns({ canUpdate, accounts, concepts }: ColumnsOptions): C
     {
       id: 'origin',
       accessorFn: (row) =>
+        (row.ownCheck ? `Ch. Nº ${row.ownCheck.number}` : null) ??
         row.paymentOrder?.number ?? row.customerReceipt?.number ?? row.transfer?.number ?? row.checkOperation?.number ?? '',
       meta: { title: 'Origen' },
       // Sin orden directo: el numero vive en dos relaciones distintas.
       enableSorting: false,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Origen" />,
       cell: ({ row }) => {
-        const { paymentOrder, transfer, customerReceipt, checkOperation } = row.original;
+        const { paymentOrder, transfer, customerReceipt, checkOperation, ownCheck } = row.original;
+        if (ownCheck) {
+          return (
+            <Link
+              href={`/dashboard/treasury/own-checks/${ownCheck.id}`}
+              className="font-mono text-sm font-medium text-blue-600 hover:underline"
+            >
+              Ch. Nº {ownCheck.number}
+            </Link>
+          );
+        }
         if (paymentOrder) {
           return (
             <Link

@@ -279,6 +279,7 @@ export async function getMovementDetail(id: string) {
       customer_receipt_payment: { select: { receipt: { select: { id: true, number: true } } } },
       check_operation: { select: { id: true, number: true } },
       third_party_check: { select: { id: true, number: true } },
+      own_check: { select: { id: true, number: true, payment_order_payment: { select: { payment_order: { select: { id: true, number: true } } } } } },
     },
   });
   if (!m) return null;
@@ -297,10 +298,11 @@ export async function getMovementDetail(id: string) {
     cancelled: m.cancelled_at !== null,
     cancelReason: m.cancel_reason,
     transfer: m.transfer,
-    paymentOrder: m.payment_order_payment?.payment_order ?? null,
+    paymentOrder: m.payment_order_payment?.payment_order ?? m.own_check?.payment_order_payment?.payment_order ?? null,
     customerReceipt: m.customer_receipt_payment?.receipt ?? null,
     checkOperation: m.check_operation ? { id: m.check_operation.id, number: m.check_operation.number ?? 'Carga inicial' } : null,
     thirdPartyCheck: m.third_party_check,
+    ownCheck: m.own_check ? { id: m.own_check.id, number: m.own_check.number } : null,
   };
 }
 

@@ -634,6 +634,8 @@ model company {
   treasury_transfers           treasury_transfers[]
   third_party_checks           third_party_checks[]
   third_party_check_operations third_party_check_operations[]
+  checkbooks                   checkbooks[]
+  own_checks                   own_checks[]
   payment_orders               payment_orders[]
   withholding_regimes          withholding_regimes[]
   purchase_expense_categories  purchase_expense_categories[]
@@ -2186,6 +2188,10 @@ model profile {
   check_operations_created    third_party_check_operations[] @relation("check_operation_creator")
   check_operations_cancelled  third_party_check_operations[] @relation("check_operation_canceller")
   third_party_check_events    third_party_check_events[] @relation("third_party_check_event_user")
+  checkbooks_created          checkbooks[] @relation("checkbook_creator")
+  checkbooks_retired          checkbooks[] @relation("checkbook_retirer")
+  own_checks_created          own_checks[] @relation("own_check_creator")
+  own_check_events            own_check_events[] @relation("own_check_event_user")
   supplier_documents_uploaded supplier_documents[]
 
   @@index([employee_id], map: "idx_profile_employee_id")
@@ -4708,6 +4714,7 @@ model suppliers {
   supplier_invoices supplier_invoices[]
   payment_orders    payment_orders[]
   endorsed_checks   third_party_checks[]
+  own_checks        own_checks[]
   withholding_profiles supplier_withholding_profiles[]
 
   @@unique([company_id, cuit], map: "suppliers_company_id_cuit_key")
@@ -5271,6 +5278,8 @@ model treasury_accounts {
   portfolio_checks third_party_checks[]    @relation("third_party_check_portfolio")
   deposited_checks third_party_checks[]    @relation("third_party_check_bank")
   check_operations third_party_check_operations[] @relation("check_operation_bank")
+  checkbooks       checkbooks[]
+  own_checks       own_checks[]
 
   @@unique([company_id, name], map: "treasury_accounts_company_id_name_key")
   @@schema("public")
@@ -5322,6 +5331,7 @@ model payment_orders {
   payments           payment_order_payments[]
   rejections         payment_order_rejections[]
   check_events       third_party_check_events[]
+  own_check_events   own_check_events[]
 
   @@unique([company_id, number], map: "payment_orders_company_id_number_key")
   @@index([supplier_id], map: "idx_payment_orders_supplier_id")
@@ -5357,8 +5367,11 @@ model payment_order_lines {
   source_line_id    String?               @db.Uuid
   /// Deuda de un cheque de tercero endosado y rechazado (solo kind = REJECTED_CHECK).
   third_party_check_id String?            @db.Uuid
+  /// Deuda de un cheque propio rechazado (solo kind = REJECTED_CHECK). Exactamente uno de los dos cheques.
+  own_check_id      String?               @db.Uuid
   payment_order     payment_orders        @relation(fields: [payment_order_id], references: [id], onDelete: Cascade)
   third_party_check third_party_checks?   @relation(fields: [third_party_check_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  own_check         own_checks?           @relation(fields: [own_check_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   invoice           supplier_invoices?    @relation(fields: [invoice_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   purchase_order    purchase_orders?      @relation(fields: [purchase_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   source_line       payment_order_lines?  @relation("advance_applications", fields: [source_line_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -5368,6 +5381,7 @@ model payment_order_lines {
   @@index([invoice_id], map: "idx_payment_order_lines_invoice_id")
   @@index([source_line_id], map: "idx_payment_order_lines_source_line_id")
   @@index([third_party_check_id], map: "idx_payment_order_lines_check_id")
+  @@index([own_check_id], map: "idx_payment_order_lines_own_check_id")
   @@schema("public")
 }
 
@@ -5411,6 +5425,8 @@ model payment_order_payments {
   treasury_account    treasury_accounts @relation(fields: [treasury_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   third_party_check   third_party_checks? @relation(fields: [third_party_check_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   movement            treasury_movements?
+  /// Cheque propio emitido por este medio (CHECK / ECHECK).
+  own_check           own_checks?
 
   @@index([payment_order_id], map: "idx_payment_order_payments_order_id")
   @@index([treasury_account_id], map: "idx_payment_order_payments_account_id")
@@ -5479,6 +5495,7 @@ enum treasury_movement_kind {
   SUPPLIER_PAYMENT
   CUSTOMER_RECEIPT
   CHECK_OPERATION
+  OWN_CHECK
 
   @@schema("public")
 }
@@ -5511,6 +5528,8 @@ model treasury_movements {
   check_operation_id       String?                 @db.Uuid
   /// Cheque de tercero del movimiento (null en el neto de un descuento).
   third_party_check_id     String?                 @db.Uuid
+  /// Cheque propio debitado (solo kind = OWN_CHECK).
+  own_check_id             String?                 @db.Uuid
   created_by               String                  @db.Uuid
   created_at               DateTime                @default(now()) @db.Timestamptz(6)
   updated_at               DateTime                @default(now()) @updatedAt @db.Timestamptz(6)
@@ -5525,6 +5544,7 @@ model treasury_movements {
   transfer                 treasury_transfers?     @relation(fields: [transfer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   check_operation          third_party_check_operations? @relation(fields: [check_operation_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   third_party_check        third_party_checks?     @relation(fields: [third_party_check_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  own_check                own_checks?             @relation(fields: [own_check_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   creator                  profile                 @relation("treasury_movement_creator", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   canceller                profile?                @relation("treasury_movement_canceller", fields: [cancelled_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -5533,6 +5553,7 @@ model treasury_movements {
   @@index([transfer_id], map: "idx_treasury_movements_transfer_id")
   @@index([check_operation_id], map: "idx_treasury_movements_check_operation_id")
   @@index([third_party_check_id], map: "idx_treasury_movements_check_id")
+  @@index([own_check_id], map: "idx_treasury_movements_own_check_id")
   @@schema("public")
 }
 
@@ -5916,5 +5937,103 @@ model third_party_check_events {
   user             profile                       @relation("third_party_check_event_user", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([check_id, created_at], map: "idx_third_party_check_events_check_created")
+  @@schema("public")
+}
+
+/// Chequera de una cuenta bancaria (spec Tesorería etapa 3b §2.1): rango de números de cheques
+/// físicos. "Agotada" y "activa" se calculan; la baja lleva motivo.
+model checkbooks {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id    String       @db.Uuid
+  account_id    String       @db.Uuid
+  first_number  Int
+  last_number   Int
+  retired_at    DateTime?    @db.Timestamptz(6)
+  retired_by    String?      @db.Uuid
+  retire_reason String?
+  created_by    String       @db.Uuid
+  created_at    DateTime     @default(now()) @db.Timestamptz(6)
+  company       company      @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  account       treasury_accounts @relation(fields: [account_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  creator       profile      @relation("checkbook_creator", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  retirer       profile?     @relation("checkbook_retirer", fields: [retired_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  checks        own_checks[]
+
+  @@index([company_id], map: "idx_checkbooks_company_id")
+  @@index([account_id], map: "idx_checkbooks_account_id")
+  @@schema("public")
+}
+
+/// Cheque propio emitido en una orden de pago, o número inutilizado de una chequera. El estado lo
+/// cambia solo `lib/own-checks.ts`; el débito lo confirma un usuario (movimiento OWN_CHECK).
+model own_checks {
+  id                       String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id               String                  @db.Uuid
+  kind                     own_check_kind
+  account_id               String                  @db.Uuid
+  checkbook_id             String?                 @db.Uuid
+  number                   String
+  amount                   Decimal?                @db.Decimal(15, 2)
+  issue_date               DateTime                @db.Date
+  payment_date             DateTime?               @db.Date
+  supplier_id              String?                 @db.Uuid
+  payment_order_payment_id String?                 @unique @db.Uuid
+  status                   own_check_status        @default(ISSUED)
+  debited_on               DateTime?               @db.Date
+  rejected_on              DateTime?               @db.Date
+  reject_reason            String?
+  void_reason              String?
+  created_by               String                  @db.Uuid
+  created_at               DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime                @default(now()) @updatedAt @db.Timestamptz(6)
+  company                  company                 @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  account                  treasury_accounts       @relation(fields: [account_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  checkbook                checkbooks?             @relation(fields: [checkbook_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  supplier                 suppliers?              @relation(fields: [supplier_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  payment_order_payment    payment_order_payments? @relation(fields: [payment_order_payment_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  creator                  profile                 @relation("own_check_creator", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  events                   own_check_events[]
+  movements                treasury_movements[]
+  payment_lines            payment_order_lines[]
+
+  @@unique([account_id, kind, number], map: "own_checks_number_key")
+  @@index([company_id, status], map: "idx_own_checks_company_status")
+  @@index([checkbook_id], map: "idx_own_checks_checkbook_id")
+  @@index([supplier_id], map: "idx_own_checks_supplier_id")
+  @@schema("public")
+}
+
+/// Historial de un cheque propio: un evento por cambio de estado. No se borra.
+model own_check_events {
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  check_id         String            @db.Uuid
+  from_status      own_check_status?
+  to_status        own_check_status
+  date             DateTime          @db.Date
+  payment_order_id String?           @db.Uuid
+  reason           String?
+  user_id          String            @db.Uuid
+  created_at       DateTime          @default(now()) @db.Timestamptz(6)
+  check            own_checks        @relation(fields: [check_id], references: [id], onDelete: Cascade)
+  payment_order    payment_orders?   @relation(fields: [payment_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user             profile           @relation("own_check_event_user", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([check_id, created_at], map: "idx_own_check_events_check_created")
+  @@schema("public")
+}
+
+enum own_check_kind {
+  PHYSICAL
+  ECHECK
+
+  @@schema("public")
+}
+
+enum own_check_status {
+  ISSUED
+  DEBITED
+  REJECTED
+  CANCELLED
+
   @@schema("public")
 }

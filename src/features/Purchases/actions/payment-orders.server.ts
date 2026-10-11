@@ -37,12 +37,12 @@ import { sendDocumentSchema, type SendDocumentValues } from '../schemas/send';
 import { mailNotSentMessage, supplierRecipients } from '../lib/supplier-send';
 import { renderPaymentOrderPdf } from '../pdf/render-payment-pdf.server';
 import { sendSupplierDocumentEmail } from '@/shared/lib/mail/templates/purchases';
-import { paymentMovementDate } from '@/features/Treasury/lib/movement-rules';
 import { treasuryToday } from '@/features/Treasury/lib/today';
-import { assertMoneyAccount, cancelMovements, createMovement } from '@/features/Treasury/lib/movements';
+import { assertBankAccount, assertMoneyAccount, cancelMovements, createMovement } from '@/features/Treasury/lib/movements';
+import { assertFreeNumber, assertNumberUnused, issueOwnCheck, lockCheckbook, lockOwnChecks, moveOwnCheck, type LockedCheckbook } from '@/features/Treasury/lib/own-checks';
 import { assertNotBeforeEntry, assertTransition, lockChecks, moveCheck, type LockedCheck } from '@/features/Treasury/lib/checks';
 import { TreasuryError } from '@/features/Treasury/lib/treasury-errors';
-import { openCheckDebtsOfSupplier, rejectedCheckLabel } from '@/features/Treasury/lib/rejected-checks';
+import { openCheckDebtsOfSupplier, rejectedCheckLabel, rejectedOwnCheckLabel } from '@/features/Treasury/lib/rejected-checks';
 
 const logger = new Logger('features/Purchases/payment-orders');
 
@@ -334,9 +334,21 @@ export async function registerPayment(id: string, values: RegisterPaymentFormVal
         }
         const amountOf = (p: (typeof v.payments)[number]) =>
           p.method === 'THIRD_PARTY_CHECK' ? cents(endorsed.get(p.thirdPartyCheckId ?? '')?.amount ?? '0') : cents(p.amount);
+        // Cheques propios (Tesoreria etapa 3b): la chequera se bloquea (dos pagos no toman el mismo
+        // numero) y su cuenta es la del medio. Un e-cheq sale de una cuenta bancaria.
+        const checkbooks = new Map<string, LockedCheckbook>();
+        for (const checkbookId of [...new Set(v.payments.flatMap((p) => (p.method === 'CHECK' && p.checkbookId ? [p.checkbookId] : [])))].sort()) {
+          const checkbook = await lockCheckbook(tx, companyId, checkbookId);
+          if (checkbook.retired) throw new PurchaseError('La chequera está dada de baja');
+          checkbooks.set(checkbookId, checkbook);
+        }
+        const accountOf = (p: (typeof v.payments)[number]) => (p.method === 'CHECK' ? (checkbooks.get(p.checkbookId ?? '')?.accountId ?? '') : p.accountId);
         // Cuenta inexistente, ajena, inactiva o una cartera: el mensaje de Tesoreria nombra la cuenta.
-        for (const accountId of new Set(v.payments.filter((p) => p.method !== 'THIRD_PARTY_CHECK').map((p) => p.accountId))) {
-          await assertMoneyAccount(tx, companyId, accountId);
+        const accountNames = new Map<string, string>();
+        for (const p of v.payments) {
+          if (p.method === 'THIRD_PARTY_CHECK' || accountNames.has(accountOf(p))) continue;
+          const account = p.method === 'CHECK' || p.method === 'ECHECK' ? await assertBankAccount(tx, companyId, accountOf(p)) : await assertMoneyAccount(tx, companyId, accountOf(p));
+          accountNames.set(account.id, account.name);
         }
         const total = v.payments.reduce((acc, p) => acc + amountOf(p), BigInt(0));
         if (total !== cents(order.netTotal)) {
@@ -350,35 +362,71 @@ export async function registerPayment(id: string, values: RegisterPaymentFormVal
           await tx.payment_order_withholdings.update({ where: { id: w.id }, data: { certificate_number: number } });
           certificates.push(number);
         }
-        // Cada medio de pago genera su movimiento de Tesoreria en esta misma transaccion: los
-        // cheques y e-cheqs debitan en su fecha de pago (spec Tesoreria etapa 1 §3.1).
+        // Transferencia y efectivo generan su movimiento en esta misma transaccion. Un cheque propio
+        // (fisico o e-cheq) queda EMITIDO sin movimiento: el debito lo confirma un usuario cuando el
+        // banco lo paga (spec Tesoreria etapa 3b §3.2).
         for (const p of v.payments) {
           if (p.method === 'THIRD_PARTY_CHECK') {
             await endorseCheck(tx, { check: endorsed.get(p.thirdPartyCheckId ?? '') as LockedCheck, companyId, orderId: id, orderNumber: order.number, supplier: order.supplier, paidOn: v.paidOn, userId: profile.id });
             continue;
           }
-          const isCheck = p.method === 'CHECK' || p.method === 'ECHECK';
+          const accountId = accountOf(p);
+          if (p.method === 'CHECK' || p.method === 'ECHECK') {
+            const accountName = accountNames.get(accountId) ?? '';
+            const checkbook = p.method === 'CHECK' ? (checkbooks.get(p.checkbookId ?? '') as LockedCheckbook) : null;
+            // El número de un e-cheq se guarda sin espacios: "1234 5678" y "12345678" son el mismo.
+            let number = p.checkNumber.replace(/\s+/g, '');
+            if (checkbook) number = await assertFreeNumber(tx, checkbook, number);
+            else await assertNumberUnused(tx, accountId, accountName, 'ECHECK', number);
+            const bank = await tx.treasury_accounts.findUniqueOrThrow({ where: { id: accountId }, select: { bank_name: true, name: true } });
+            const payment = await tx.payment_order_payments.create({
+              data: {
+                payment_order_id: id,
+                method: p.method,
+                treasury_account_id: accountId,
+                amount: new Prisma.Decimal(money(cents(p.amount))),
+                reference: p.reference || null,
+                check_number: number,
+                check_bank: bank.bank_name || bank.name,
+                check_due_on: day(p.checkDueOn),
+              },
+              select: { id: true },
+            });
+            await issueOwnCheck(tx, {
+              companyId,
+              kind: p.method === 'CHECK' ? 'PHYSICAL' : 'ECHECK',
+              accountId,
+              accountName,
+              checkbookId: checkbook?.id ?? null,
+              number,
+              amountCents: cents(p.amount),
+              issueDate: v.paidOn,
+              paymentDate: p.checkDueOn,
+              supplierId: order.supplier.id,
+              paymentOrderPaymentId: payment.id,
+              paymentOrderId: id,
+              userId: profile.id,
+            });
+            continue;
+          }
           const payment = await tx.payment_order_payments.create({
             data: {
               payment_order_id: id,
               method: p.method,
-              treasury_account_id: p.accountId,
+              treasury_account_id: accountId,
               amount: new Prisma.Decimal(money(cents(p.amount))),
               reference: p.reference || null,
-              check_number: isCheck ? p.checkNumber : null,
-              check_bank: isCheck ? p.checkBank || null : null,
-              check_due_on: isCheck ? day(p.checkDueOn) : null,
             },
             select: { id: true },
           });
           await createMovement(tx, {
             companyId,
-            accountId: p.accountId,
-            date: paymentMovementDate(p.method, v.paidOn, isCheck ? p.checkDueOn : null),
+            accountId,
+            date: v.paidOn,
             amountCents: -cents(p.amount),
             kind: 'SUPPLIER_PAYMENT',
             paymentOrderPaymentId: payment.id,
-            description: `${order.number} — ${order.supplier.name}${isCheck ? ` — Cheque N° ${p.checkNumber}` : ''}`,
+            description: `${order.number} — ${order.supplier.name}`,
             createdBy: profile.id,
           });
         }
@@ -440,6 +488,17 @@ export async function cancelPaymentOrder(id: string, reason: string): Promise<Ac
           }
           await moveCheck(tx, { check, action: 'UNDO_EXIT', date: treasuryToday(), userId: profile.id, origin: { paymentOrderId: id } });
         }
+        // Cheques propios (Tesoreria etapa 3b): los emitidos se anulan (su numero no se reusa); uno
+        // debitado o rechazado bloquea la anulacion hasta deshacer el debito o el rechazo.
+        const ownPayments = await tx.own_checks.findMany({ where: { payment_order_payment: { payment_order_id: id } }, select: { id: true } });
+        const own = await lockOwnChecks(tx, companyId, ownPayments.map((c) => c.id));
+        for (const check of own.values()) {
+          if (check.status === 'DEBITED') throw new PurchaseError(`El cheque Nº ${check.number} de esta orden ya se debitó: deshacé primero el débito`);
+          if (check.status === 'REJECTED') throw new PurchaseError(`El cheque Nº ${check.number} de esta orden fue rechazado: anulá primero el rechazo`);
+          if (check.status === 'ISSUED') {
+            await moveOwnCheck(tx, { check, action: 'CANCEL', date: treasuryToday(), userId: profile.id, reason: motive.data, paymentOrderId: id });
+          }
+        }
         await tx.payment_order_withholdings.updateMany({ where: { payment_order_id: id }, data: { cancelled_at: now } });
         await cancelMovements(tx, { paymentOrderId: id }, { by: profile.id, reason: motive.data, at: now });
       }
@@ -476,8 +535,8 @@ export async function getPaymentOrderFormData(supplierId?: string, options: { ex
   if (!supplier) return empty;
   const exclude = options.excludeOrderId && UUID_RE.test(options.excludeOrderId) ? options.excludeOrderId : undefined;
   const included = exclude
-    ? (await prisma.payment_order_lines.findMany({ where: { payment_order_id: exclude, kind: 'REJECTED_CHECK' }, select: { third_party_check_id: true } }))
-        .flatMap((l) => (l.third_party_check_id ? [l.third_party_check_id] : []))
+    ? (await prisma.payment_order_lines.findMany({ where: { payment_order_id: exclude, kind: 'REJECTED_CHECK' }, select: { third_party_check_id: true, own_check_id: true } }))
+        .flatMap((l) => (l.third_party_check_id ?? l.own_check_id ? [(l.third_party_check_id ?? l.own_check_id) as string] : []))
     : [];
   const [invoices, advances, purchaseOrders, checkDebts] = await Promise.all([
     openInvoicesOfSupplier(prisma, companyId, supplier.id, { excludeOrderId: exclude }),
@@ -574,6 +633,7 @@ export async function getPaymentOrderDetail(id: string) {
           purchase_order: { select: { id: true, number: true } },
           source_line: { select: { payment_order: { select: { id: true, number: true } } } },
           third_party_check: { select: { id: true, number: true, bank: true } },
+          own_check: { select: { id: true, number: true, account: { select: { name: true, bank_name: true } } } },
         },
       },
       withholdings: {
@@ -603,6 +663,7 @@ export async function getPaymentOrderDetail(id: string) {
           treasury_account: { select: { id: true, name: true } },
           movement: { select: { date: true, cancelled_at: true } },
           third_party_check: { select: { id: true, drawer_name: true } },
+          own_check: { select: { id: true, status: true, debited_on: true } },
         },
       },
     },
@@ -641,7 +702,11 @@ export async function getPaymentOrderDetail(id: string) {
         : null,
       purchaseOrder: l.purchase_order,
       sourceOrder: l.source_line?.payment_order ?? null,
-      rejectedCheck: l.third_party_check ? { id: l.third_party_check.id, label: rejectedCheckLabel(l.third_party_check.number, l.third_party_check.bank) } : null,
+      rejectedCheck: l.third_party_check
+        ? { id: l.third_party_check.id, own: false, label: rejectedCheckLabel(l.third_party_check.number, l.third_party_check.bank) }
+        : l.own_check
+          ? { id: l.own_check.id, own: true, label: rejectedOwnCheckLabel(l.own_check.number, (l.own_check.account.bank_name || l.own_check.account.name).toUpperCase()) }
+          : null,
     })),
     withholdings: order.withholdings.map((w) => ({
       id: w.id,
@@ -664,6 +729,8 @@ export async function getPaymentOrderDetail(id: string) {
       checkBank: p.check_bank,
       checkDueOn: isoDay(p.check_due_on),
       thirdPartyCheck: p.third_party_check ? { id: p.third_party_check.id, drawerName: p.third_party_check.drawer_name } : null,
+      // Cheque propio (Tesoreria etapa 3b): su estado dice si ya se debito.
+      ownCheck: p.own_check ? { id: p.own_check.id, status: p.own_check.status, debitedOn: isoDay(p.own_check.debited_on) } : null,
       account: p.treasury_account,
       // Movimiento de Tesoreria: fecha valor y si todavia esta "a debitar".
       movement: p.movement
@@ -706,7 +773,7 @@ export async function getPaymentOrderEditValues(id: string): Promise<PaymentOrde
       notes: true,
       lines: {
         orderBy: { position: 'asc' },
-        select: { kind: true, amount: true, invoice_id: true, source_line_id: true, third_party_check_id: true, purchase_order_id: true, description: true },
+        select: { kind: true, amount: true, invoice_id: true, source_line_id: true, third_party_check_id: true, own_check_id: true, purchase_order_id: true, description: true },
       },
       withholdings: { where: { manual: true }, select: { tax: true, amount: true, detail: true } },
     },
@@ -723,7 +790,7 @@ export async function getPaymentOrderEditValues(id: string): Promise<PaymentOrde
         kind: l.kind as 'INVOICE' | 'CREDIT_NOTE' | 'ADVANCE_APPLIED' | 'REJECTED_CHECK',
         invoiceId: l.invoice_id ?? '',
         sourceLineId: l.source_line_id ?? '',
-        checkId: l.third_party_check_id ?? '',
+        checkId: l.third_party_check_id ?? l.own_check_id ?? '',
         amount: l.amount.toFixed(2),
       })),
     advance: {

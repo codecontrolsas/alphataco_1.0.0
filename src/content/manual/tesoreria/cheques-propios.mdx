@@ -1,0 +1,62 @@
+---
+title: Cheques propios
+summary: Qué pasa con los cheques y e-cheqs que emite la empresa al pagar a proveedores, cómo confirmar que el banco los debitó (uno o varios a la vez), cómo registrar un rechazo y su deuda con el proveedor, y cómo deshacer cada paso.
+keywords: cheques propios, cheque emitido, e-cheq, emitido, debitado, rechazado, anulado, confirmar débito, débito, pendiente de confirmar, a debitar, rechazo, cheque rechazado, deuda con el proveedor, deshacer débito, anular rechazo, conciliar cheques
+updated: 2026-10-11
+---
+
+Cuando se paga una orden con **Cheque** o **E-cheq**, el cheque queda **emitido**: el proveedor lo tiene, pero la plata todavía no salió del banco. Recién sale cuando alguien confirma que el banco lo **debitó**, con la fecha real. Así el saldo de la cuenta coincide con el del banco.
+
+<OpenScreen />
+
+## La pantalla
+
+En **Tesorería → Cheques propios** ves:
+
+- arriba, lo **emitido sin debitar** de cada cuenta y cuántos cheques están **pendientes de confirmar**;
+- las <GuideLink to="chequeras">chequeras</GuideLink>;
+- la tabla de cheques, que arranca mostrando los **Emitidos**. Con los filtros ves también los debitados, rechazados o anulados (incluidos los números inutilizados).
+
+Cada fila lleva al **detalle del cheque**: sus datos, la orden de pago que lo emitió, el historial (con fecha, hora, usuario y motivo) y las acciones que admite.
+
+## Estados
+
+| Estado | Qué significa |
+| --- | --- |
+| **Emitido** | Se entregó al proveedor. No mueve el saldo: suma en **A debitar** de su cuenta. |
+| **Debitado** | El banco lo pagó: salió de la cuenta en la fecha del débito. |
+| **Rechazado** | El banco no lo pagó. No sale plata y la empresa vuelve a deberle al proveedor. |
+| **Anulado** | Se anuló la orden de pago antes del débito, o es un número inutilizado de una chequera. |
+
+Un cheque **emitido** cuya fecha de pago ya pasó figura **Pendiente de confirmar**: es momento de mirar el banco y confirmar el débito (o registrar el rechazo).
+
+## Confirmar el débito
+
+- **Uno**: desde su detalle, **Confirmar débito**.
+- **Varios**: en la tabla, tildá los cheques emitidos y **Confirmar débito**. Se ve la lista con el total.
+
+Se carga la **fecha del débito**: no puede ser futura ni anterior a la fecha de pago de ningún cheque. Cada cheque sale de su cuenta en esa fecha y queda **Debitado**; el movimiento se ve en el extracto de la cuenta con el origen **Ch. Nº …**.
+
+Si se marcó por error, desde el detalle **Deshacer el débito** (con motivo): se anula el movimiento y el cheque vuelve a **Emitido**.
+
+## Rechazo
+
+Desde el detalle de un cheque **emitido**, **Registrar rechazo**, con la fecha y el motivo:
+
+- no sale plata del banco;
+- nace la **deuda con el proveedor** por el importe del cheque. Se ve en su cuenta corriente y en Vencimientos, y se paga con otra orden de pago, eligiéndola junto a los comprobantes pendientes (esa línea no lleva retenciones). Ver <GuideLink to="cuenta-corriente-y-vencimientos">Cuenta corriente y vencimientos</GuideLink>.
+
+**Anular el rechazo** (con motivo) devuelve el cheque a **Emitido**. No se puede si la deuda ya está en una orden de pago que no esté anulada: primero hay que sacarla de ahí (o anular esa orden).
+
+## Anular la orden de pago
+
+Al anular una orden pagada, sus cheques **emitidos** quedan **anulados** y su número no se vuelve a usar. Si un cheque ya se **debitó** o fue **rechazado**, la orden no se anula: primero hay que deshacer el débito o anular el rechazo. Ver <GuideLink to="ordenes-de-pago">Órdenes de pago</GuideLink>.
+
+## Permisos
+
+| Acción | Permiso |
+| --- | --- |
+| Ver los cheques propios | **Cheques propios → Ver** |
+| Confirmar débitos y registrar rechazos | **Cheques propios → Editar** |
+| Deshacer débitos y anular rechazos | **Cheques propios → Eliminar** |
+| Emitir cheques (pagar una orden) | **Compras → Pagos → Editar** |

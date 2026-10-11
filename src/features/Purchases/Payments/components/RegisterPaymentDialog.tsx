@@ -18,6 +18,7 @@ import { useState } from 'react';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 import { getPortfolioChecksForPayment, registerPayment } from '../../actions/payment-orders.server';
+import { getCheckbooksForPayment } from '@/features/Treasury/actions/own-checks.server';
 import type { TreasuryAccountRow } from '@/features/Treasury/actions/accounts.server';
 import { invalidatePurchases } from '../../lib/invalidate';
 import { cents, money } from '../../lib/payment-totals';
@@ -43,12 +44,15 @@ const emptyPayment = (amount: string, accountId: string): Payment => ({
   checkBank: '',
   checkDueOn: '',
   thirdPartyCheckId: '',
+  checkbookId: '',
 });
 
 /**
  * Registrar el pago de una orden aprobada: fecha real y uno o varios medios desde cuentas o cajas,
- * o cheques de terceros de la cartera que se endosan al proveedor (Tesoreria etapa 3a). El total de
- * los medios se controla en vivo contra el neto a pagar.
+ * cheques de terceros de la cartera que se endosan al proveedor (Tesoreria etapa 3a) o cheques
+ * propios: el fisico sale de una chequera con el proximo numero libre y el e-cheq de una cuenta
+ * bancaria; los dos quedan emitidos hasta que se confirma el debito (etapa 3b). El total de los
+ * medios se controla en vivo contra el neto a pagar.
  */
 export function RegisterPaymentDialog({
   orderId,
@@ -68,6 +72,8 @@ export function RegisterPaymentDialog({
   const [open, setOpen] = useState(false);
   // Una cartera de cheques no paga con transferencia ni efectivo: sus cheques se endosan.
   const active = accounts.filter((a) => a.is_active && a.kind !== 'CHECK_PORTFOLIO');
+  // Un cheque propio (fisico o e-cheq) sale de una cuenta bancaria.
+  const banks = active.filter((a) => a.kind === 'BANK');
   const defaultAccount = active.length === 1 ? active[0]!.id : '';
   // Neto 0: lo pagado queda compensado con NC o anticipos y se registra sin medios de pago.
   const isZero = cents(netTotal) === BigInt(0);
@@ -84,7 +90,28 @@ export function RegisterPaymentDialog({
     enabled: open,
     staleTime: 0,
   });
+  const { data: checkbooks, isLoading: loadingCheckbooks } = useQuery({
+    queryKey: ['purchases-checkbooks', orderId],
+    queryFn: () => getCheckbooksForPayment(),
+    enabled: open,
+    staleTime: 0,
+  });
   const checkOf = (id: string | undefined) => portfolioChecks?.find((c) => c.id === id);
+
+  /** Próximo número libre de la chequera que no esté ya en otro medio de este mismo pago. */
+  const proposedNumber = (i: number, checkbookId: string) => {
+    const checkbook = checkbooks?.find((c) => c.id === checkbookId);
+    const taken = new Set(
+      (form.getValues('payments') ?? []).filter((p, j) => j !== i && p.method === 'CHECK' && p.checkbookId === checkbookId).map((p) => p.checkNumber)
+    );
+    return checkbook?.freeNumbers.find((n) => !taken.has(n)) ?? '';
+  };
+
+  const chooseCheckbook = (i: number, checkbookId: string) => {
+    form.setValue(`payments.${i}.checkbookId`, checkbookId);
+    form.setValue(`payments.${i}.accountId`, checkbooks?.find((c) => c.id === checkbookId)?.account.id ?? '');
+    form.setValue(`payments.${i}.checkNumber`, proposedNumber(i, checkbookId));
+  };
   const amountOf = (p: Payment) => (p.method === 'THIRD_PARTY_CHECK' ? cents(checkOf(p.thirdPartyCheckId)?.amount ?? '0') : cents(p.amount));
   const sum = (watched ?? []).reduce((acc, p) => acc + amountOf(p), BigInt(0));
   const diff = cents(netTotal) - sum;
@@ -100,6 +127,23 @@ export function RegisterPaymentDialog({
     } else if (previous === 'THIRD_PARTY_CHECK') {
       form.setValue(`payments.${i}.accountId`, defaultAccount);
       form.setValue(`payments.${i}.thirdPartyCheckId`, '');
+    }
+    if (previous === 'CHECK' && method !== 'CHECK') {
+      form.setValue(`payments.${i}.checkbookId`, '');
+      form.setValue(`payments.${i}.checkNumber`, '');
+      if (method !== 'THIRD_PARTY_CHECK') form.setValue(`payments.${i}.accountId`, defaultAccount);
+    }
+    if (method === 'CHECK') {
+      // Con una sola chequera, queda elegida con su próximo número.
+      if (checkbooks?.length === 1) chooseCheckbook(i, checkbooks[0]!.id);
+      else {
+        form.setValue(`payments.${i}.checkbookId`, '');
+        form.setValue(`payments.${i}.accountId`, '');
+        form.setValue(`payments.${i}.checkNumber`, '');
+      }
+    }
+    if (method === 'ECHECK' && !banks.some((b) => b.id === form.getValues(`payments.${i}.accountId`))) {
+      form.setValue(`payments.${i}.accountId`, banks.length === 1 ? banks[0]!.id : '');
     }
   };
 
@@ -219,21 +263,49 @@ export function RegisterPaymentDialog({
                             </FormItem>
                           )}
                         />
+                      ) : method === 'CHECK' ? (
+                        <FormField
+                          control={form.control}
+                          name={`payments.${i}.checkbookId`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Chequera</FormLabel>
+                              <Select key={checkbooks?.length ?? 0} value={field.value ?? ''} onValueChange={(value) => chooseCheckbook(i, value)} disabled={loadingCheckbooks}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder={loadingCheckbooks ? 'Cargando chequeras…' : 'Elegí la chequera'} />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {(checkbooks ?? []).length === 0 && (
+                                    <p className="px-2 py-1.5 text-sm text-muted-foreground">No hay chequeras con números libres: cargala en Tesorería → Cheques propios</p>
+                                  )}
+                                  {(checkbooks ?? []).map((c) => (
+                                    <SelectItem key={c.id} value={c.id}>
+                                      {c.account.name} · Nº {c.firstNumber} al {c.lastNumber} · {c.free} libres
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                       ) : (
                       <FormField
                         control={form.control}
                         name={`payments.${i}.accountId`}
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Cuenta o caja</FormLabel>
-                            <Select value={field.value} onValueChange={field.onChange}>
+                            <FormLabel>{method === 'ECHECK' ? 'Cuenta bancaria' : 'Cuenta o caja'}</FormLabel>
+                            <Select key={method} value={field.value} onValueChange={field.onChange}>
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder="Desde dónde se paga" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                {active.map((a) => (
+                                {(method === 'ECHECK' ? banks : active).map((a) => (
                                   <SelectItem key={a.id} value={a.id}>
                                     {a.name} — saldo {formatMoney(a.balance)}
                                   </SelectItem>
@@ -272,6 +344,11 @@ export function RegisterPaymentDialog({
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
+                    {isCheck && (
+                      <p className="text-xs text-muted-foreground">
+                        El cheque queda emitido: sale de la cuenta cuando confirmás su débito en Tesorería → Cheques propios.
+                      </p>
+                    )}
                     {isThirdParty ? (
                       <p className="text-xs text-muted-foreground">
                         Se endosa al proveedor por su importe completo y sale de la cartera en la fecha de pago.

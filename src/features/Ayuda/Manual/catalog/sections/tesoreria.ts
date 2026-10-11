@@ -20,6 +20,7 @@ export const tesoreriaSection = defineSection({
         tab('tesoreria', 'config-tesoreria'),
         tab('tesoreria', 'cobranzas'),
         tab('tesoreria', 'cheques'),
+        tab('tesoreria', 'cheques-propios'),
         tab('tesoreria', 'retenciones-sufridas'),
       ],
       screens: [{ path: '/dashboard/treasury' }],
@@ -99,7 +100,7 @@ export const tesoreriaSection = defineSection({
         { path: '/dashboard/treasury', tab: 'cheques' },
         { path: '/dashboard/treasury/checks/*' },
       ],
-      related: ['depositar-y-descontar-cheques', 'rechazo-de-un-cheque', 'endosar-cheques', 'cobrar-facturas', 'configuracion-de-tesoreria'],
+      related: ['depositar-y-descontar-cheques', 'rechazo-de-un-cheque', 'endosar-cheques', 'cobrar-facturas', 'configuracion-de-tesoreria', 'cheques-propios'],
     },
     {
       slug: 'depositar-y-descontar-cheques',
@@ -112,6 +113,22 @@ export const tesoreriaSection = defineSection({
       access: [tab('tesoreria', 'cheques')],
       screens: [],
       related: ['cartera-de-cheques', 'cuenta-corriente-de-clientes', 'cobrar-facturas', 'cuenta-corriente-y-vencimientos', 'endosar-cheques'],
+    },
+    // Etapa 3b: cheques propios.
+    {
+      slug: 'cheques-propios',
+      access: [tab('tesoreria', 'cheques-propios')],
+      screens: [
+        { path: '/dashboard/treasury', tab: 'cheques-propios' },
+        { path: '/dashboard/treasury/own-checks/*' },
+      ],
+      related: ['chequeras', 'ordenes-de-pago', 'cuentas-y-saldos', 'cuenta-corriente-y-vencimientos', 'cartera-de-cheques'],
+    },
+    {
+      slug: 'chequeras',
+      access: [tab('tesoreria', 'cheques-propios')],
+      screens: [],
+      related: ['cheques-propios', 'ordenes-de-pago', 'configuracion-de-tesoreria'],
     },
   ],
 });

@@ -84,6 +84,8 @@ export type CreateMovementInput = {
   customerReceiptPaymentId?: string | null;
   checkOperationId?: string | null;
   thirdPartyCheckId?: string | null;
+  /** Cheque propio debitado (solo OWN_CHECK). */
+  ownCheckId?: string | null;
   createdBy: string;
 };
 
@@ -105,6 +107,7 @@ export async function createMovement(tx: MovementsTx, input: CreateMovementInput
       customer_receipt_payment_id: input.customerReceiptPaymentId ?? null,
       check_operation_id: input.checkOperationId ?? null,
       third_party_check_id: input.thirdPartyCheckId ?? null,
+      own_check_id: input.ownCheckId ?? null,
       created_by: input.createdBy,
     },
     select: { id: true },
@@ -113,11 +116,11 @@ export async function createMovement(tx: MovementsTx, input: CreateMovementInput
 
 /**
  * Anula los movimientos vigentes de un origen (ids sueltos, una transferencia, los medios de una
- * orden de pago o los de un recibo de cobranza). Los ya anulados no se tocan: conservan su motivo y fecha. Devuelve cuántos anuló.
+ * orden de pago, los de un recibo de cobranza, los de una operación de cheques o el débito de un cheque propio). Los ya anulados no se tocan: conservan su motivo y fecha. Devuelve cuántos anuló.
  */
 export async function cancelMovements(
   tx: Pick<Prisma.TransactionClient, 'treasury_movements'>,
-  where: { ids?: string[]; transferId?: string; paymentOrderId?: string; customerReceiptId?: string; checkOperationId?: string },
+  where: { ids?: string[]; transferId?: string; paymentOrderId?: string; customerReceiptId?: string; checkOperationId?: string; ownCheckId?: string },
   cancel: { by: string; reason: string; at: Date }
 ): Promise<number> {
   const origin: Prisma.treasury_movementsWhereInput[] = [];
@@ -126,6 +129,7 @@ export async function cancelMovements(
   if (where.paymentOrderId) origin.push({ payment_order_payment: { payment_order_id: where.paymentOrderId } });
   if (where.customerReceiptId) origin.push({ customer_receipt_payment: { receipt_id: where.customerReceiptId } });
   if (where.checkOperationId) origin.push({ check_operation_id: where.checkOperationId });
+  if (where.ownCheckId) origin.push({ own_check_id: where.ownCheckId });
   if (origin.length === 0) return 0;
   const { count } = await tx.treasury_movements.updateMany({
     where: { cancelled_at: null, OR: origin },
@@ -146,6 +150,7 @@ export type LockedMovement = {
   paymentOrderNumber: string | null;
   receiptNumber: string | null;
   checkOperationNumber: string | null;
+  ownCheckNumber: string | null;
 };
 
 /** Toma la fila del movimiento con `FOR UPDATE` (editar y anular compiten por ella). */
@@ -164,11 +169,12 @@ export async function lockMovement(tx: Pick<Prisma.TransactionClient, '$queryRaw
       payment_order_number: string | null;
       receipt_number: string | null;
       check_operation_number: string | null;
+      own_check_number: string | null;
     }[]
   >`
     SELECT m.id, m.account_id, m.concept_id, m.date::text AS date, m.amount::text AS amount, m.kind::text AS kind, m.cancelled_at,
            t.number AS transfer_number, po.number AS payment_order_number, cr.number AS receipt_number,
-           co.number AS check_operation_number
+           co.number AS check_operation_number, oc.number AS own_check_number
     FROM treasury_movements m
     LEFT JOIN treasury_transfers t ON t.id = m.transfer_id
     LEFT JOIN payment_order_payments p ON p.id = m.payment_order_payment_id
@@ -176,6 +182,7 @@ export async function lockMovement(tx: Pick<Prisma.TransactionClient, '$queryRaw
     LEFT JOIN customer_receipt_payments crp ON crp.id = m.customer_receipt_payment_id
     LEFT JOIN customer_receipts cr ON cr.id = crp.receipt_id
     LEFT JOIN third_party_check_operations co ON co.id = m.check_operation_id
+    LEFT JOIN own_checks oc ON oc.id = m.own_check_id
     WHERE m.id = ${id}::uuid AND m.company_id = ${companyId}::uuid
     FOR UPDATE OF m
   `;
@@ -193,6 +200,7 @@ export async function lockMovement(tx: Pick<Prisma.TransactionClient, '$queryRaw
     paymentOrderNumber: row.payment_order_number,
     receiptNumber: row.receipt_number,
     checkOperationNumber: row.check_operation_number,
+    ownCheckNumber: row.own_check_number,
   };
 }
 
@@ -213,5 +221,8 @@ export function assertEditableMovement(movement: LockedMovement): void {
         ? `Este movimiento es de la operación de cheques ${movement.checkOperationNumber}. Para revertirlo, anulá la operación`
         : 'Este movimiento es de la carga inicial de cheques. Para revertirlo, anulá el cheque desde su detalle'
     );
+  }
+  if (movement.kind === 'OWN_CHECK') {
+    throw new TreasuryError(`Este movimiento es el débito del cheque propio Nº ${movement.ownCheckNumber}. Para revertirlo, deshacé el débito desde el cheque`);
   }
 }

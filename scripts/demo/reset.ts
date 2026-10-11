@@ -37,6 +37,7 @@ import { seedCandidates, seedClothing, seedKpis } from './domains/hr.ts';
 import { SUPPLIER_DOCUMENTS_BUCKET, seedPurchases } from './domains/purchases.ts';
 import { CUSTOMER_DOCUMENTS_BUCKET, seedCustomerReceipts } from './domains/customer-receipts.ts';
 import { seedThirdPartyChecks } from './domains/third-party-checks.ts';
+import { seedOwnChecks } from './domains/own-checks.ts';
 import { seedTires } from './domains/tires.ts';
 import { seedTreasury } from './domains/treasury.ts';
 import { seedWarehouses } from './domains/warehouses.ts';
@@ -116,6 +117,8 @@ async function main(): Promise<void> {
           await seedCustomerReceipts(ctx);
           // Cheques después de Cobranzas: usa sus clientes, la cartera y una factura de Compras con pendiente.
           await seedThirdPartyChecks(ctx);
+          // Cheques propios después: numera sus órdenes de pago a continuación de las de Compras y del endoso.
+          await seedOwnChecks(ctx);
           await seedCandidates(ctx, employees);
           await seedClothing(ctx, employees);
           await seedKpis(ctx);

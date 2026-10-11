@@ -9,17 +9,23 @@ import type { CheckStatus } from './check-transitions';
  * vencimientos de Compras, las cuentas corrientes y el detalle del cheque.
  *
  * - Deuda del cliente = importe − líneas REJECTED_CHECK en recibos DRAFT o CONFIRMED.
- * - Deuda con el proveedor (solo si se rechazó estando endosado) = importe − líneas REJECTED_CHECK
- *   en órdenes de pago no anuladas.
+ * - Deuda con el proveedor = importe − líneas REJECTED_CHECK en órdenes de pago no anuladas. Nace de un
+ *   cheque de tercero rechazado estando endosado, o de un cheque propio rechazado (etapa 3b): las
+ *   dos fuentes van en la misma fórmula, distinguidas por `source`.
  * Los borradores (recibos DRAFT; órdenes sin pagar) reservan: dos documentos no cobran ni pagan lo mismo.
  */
 
 type RawTx = Pick<Prisma.TransactionClient, '$queryRaw'>;
 
+/** De dónde viene la deuda: un cheque de tercero endosado o un cheque propio. */
+export type CheckDebtSource = 'THIRD_PARTY' | 'OWN';
+
 export type RejectedCheckDebt = {
   checkId: string;
+  source: CheckDebtSource;
   companyId: string;
-  customerId: string;
+  /** Cliente de origen (solo cheques de terceros). */
+  customerId: string | null;
   supplierId: string | null;
   number: string;
   bank: string;
@@ -27,7 +33,8 @@ export type RejectedCheckDebt = {
   amount: string;
   /** Fecha de la operación de rechazo vigente. */
   rejectedOn: string;
-  rejectedFrom: CheckStatus;
+  /** Estado desde el que se rechazó (solo cheques de terceros). */
+  rejectedFrom: CheckStatus | null;
   /** Lo que queda por cobrar (cliente) o pagar (proveedor). */
   pending: string;
   /** Lo reservado en documentos sin confirmar. */
@@ -37,21 +44,25 @@ export type RejectedCheckDebt = {
 
 type DebtRow = {
   id: string;
+  source: CheckDebtSource;
   company_id: string;
-  customer_id: string;
+  customer_id: string | null;
   supplier_id: string | null;
   number: string;
   bank: string;
   drawer_name: string;
   amount: string;
   rejected_on: string;
-  rejected_from: CheckStatus;
+  rejected_from: CheckStatus | null;
   reserved: string;
   pending: string;
 };
 
 /** "Cheque rechazado Nº 123 — BANCO GALICIA". */
 export const rejectedCheckLabel = (number: string, bank: string) => `Cheque rechazado Nº ${number} — ${bank}`;
+
+/** "Cheque propio rechazado Nº 1234 — BANCO GALICIA". */
+export const rejectedOwnCheckLabel = (number: string, bank: string) => `Cheque propio rechazado Nº ${number} — ${bank}`;
 
 /** Fecha del rechazo vigente del cheque (alias `c`). */
 const REJECTED_ON = Prisma.sql`
@@ -69,7 +80,7 @@ const REJECTED_ON = Prisma.sql`
  */
 export function customerCheckDebtSql(where: Prisma.Sql, excludeReceiptId: string | null): Prisma.Sql {
   return Prisma.sql`
-    SELECT c.id, c.company_id, c.customer_id, c.supplier_id, c.number, c.bank, c.drawer_name,
+    SELECT c.id, 'THIRD_PARTY' AS source, c.company_id, c.customer_id, c.supplier_id, c.number, c.bank, c.drawer_name,
            c.amount::numeric(15,2)::text AS amount, (${REJECTED_ON})::text AS rejected_on, c.rejected_from::text AS rejected_from,
            COALESCE(ap.reserved, 0)::numeric(15,2)::text AS reserved,
            (c.amount - COALESCE(ap.collected, 0) - COALESCE(ap.reserved, 0))::numeric(15,2)::text AS pending
@@ -87,30 +98,50 @@ export function customerCheckDebtSql(where: Prisma.Sql, excludeReceiptId: string
   `;
 }
 
-/** Deuda con el proveedor de los cheques endosados y rechazados que cumplen `where`. */
+/** Lo pagado (órdenes PAID) y reservado (sin pagar) de las líneas REJECTED_CHECK de `column` = `id`. */
+function supplierApplied(column: Prisma.Sql, id: Prisma.Sql, excludeOrderId: string | null): Prisma.Sql {
+  return Prisma.sql`
+    SELECT SUM(l.amount) FILTER (WHERE po.status = 'PAID') AS paid,
+           SUM(l.amount) FILTER (
+             WHERE po.status IN ('DRAFT', 'PENDING_APPROVAL', 'APPROVED') AND (${excludeOrderId}::uuid IS NULL OR po.id <> ${excludeOrderId}::uuid)
+           ) AS reserved
+    FROM payment_order_lines l
+    JOIN payment_orders po ON po.id = l.payment_order_id
+    WHERE ${column} = ${id} AND l.kind = 'REJECTED_CHECK'
+  `;
+}
+
+/**
+ * Deuda con el proveedor de los cheques rechazados que cumplen `where`, sobre el alias `c` con las
+ * columnas `company_id`, `supplier_id` y `id`: los de terceros endosados y los propios (etapa 3b).
+ */
 export function supplierCheckDebtSql(where: Prisma.Sql, excludeOrderId: string | null): Prisma.Sql {
   return Prisma.sql`
-    SELECT c.id, c.company_id, c.customer_id, c.supplier_id, c.number, c.bank, c.drawer_name,
+    SELECT c.id, 'THIRD_PARTY' AS source, c.company_id, c.customer_id, c.supplier_id, c.number, c.bank, c.drawer_name,
            c.amount::numeric(15,2)::text AS amount, (${REJECTED_ON})::text AS rejected_on, c.rejected_from::text AS rejected_from,
            COALESCE(ap.reserved, 0)::numeric(15,2)::text AS reserved,
            (c.amount - COALESCE(ap.paid, 0) - COALESCE(ap.reserved, 0))::numeric(15,2)::text AS pending
     FROM third_party_checks c
-    LEFT JOIN LATERAL (
-      SELECT SUM(l.amount) FILTER (WHERE po.status = 'PAID') AS paid,
-             SUM(l.amount) FILTER (
-               WHERE po.status IN ('DRAFT', 'PENDING_APPROVAL', 'APPROVED') AND (${excludeOrderId}::uuid IS NULL OR po.id <> ${excludeOrderId}::uuid)
-             ) AS reserved
-      FROM payment_order_lines l
-      JOIN payment_orders po ON po.id = l.payment_order_id
-      WHERE l.third_party_check_id = c.id AND l.kind = 'REJECTED_CHECK'
-    ) ap ON true
+    LEFT JOIN LATERAL (${supplierApplied(Prisma.sql`l.third_party_check_id`, Prisma.sql`c.id`, excludeOrderId)}) ap ON true
     WHERE c.status = 'REJECTED' AND c.rejected_from = 'ENDORSED' AND ${where}
+    UNION ALL
+    SELECT c.id, 'OWN' AS source, c.company_id, NULL::uuid AS customer_id, c.supplier_id, c.number,
+           UPPER(COALESCE(NULLIF(TRIM(a.bank_name), ''), a.name)) AS bank, co.company_name AS drawer_name,
+           c.amount::numeric(15,2)::text AS amount, c.rejected_on::text AS rejected_on, NULL::text AS rejected_from,
+           COALESCE(ap.reserved, 0)::numeric(15,2)::text AS reserved,
+           (c.amount - COALESCE(ap.paid, 0) - COALESCE(ap.reserved, 0))::numeric(15,2)::text AS pending
+    FROM own_checks c
+    JOIN treasury_accounts a ON a.id = c.account_id
+    JOIN company co ON co.id = c.company_id
+    LEFT JOIN LATERAL (${supplierApplied(Prisma.sql`l.own_check_id`, Prisma.sql`c.id`, excludeOrderId)}) ap ON true
+    WHERE c.status = 'REJECTED' AND ${where}
   `;
 }
 
 function toDebt(row: DebtRow): RejectedCheckDebt {
   return {
     checkId: row.id,
+    source: row.source,
     companyId: row.company_id,
     customerId: row.customer_id,
     supplierId: row.supplier_id,
@@ -122,7 +153,7 @@ function toDebt(row: DebtRow): RejectedCheckDebt {
     rejectedFrom: row.rejected_from,
     pending: row.pending,
     reserved: row.reserved,
-    label: rejectedCheckLabel(row.number, row.bank),
+    label: row.source === 'OWN' ? rejectedOwnCheckLabel(row.number, row.bank) : rejectedCheckLabel(row.number, row.bank),
   };
 }
 

@@ -163,7 +163,7 @@ export function SupplierAccountView({ initial, canCreatePayment }: { initial: Su
                             m.kind === 'PAYMENT'
                               ? `/dashboard/purchases/payments/${m.id}`
                               : m.kind === 'REJECTED_CHECK'
-                                ? `/dashboard/treasury/checks/${m.id}`
+                                ? `/dashboard/treasury/${m.ownCheck ? 'own-checks' : 'checks'}/${m.id}`
                                 : `/dashboard/purchases/invoices/${m.id}`
                           }
                           className="underline"

@@ -15,7 +15,11 @@ type BalancesDb = Pick<Prisma.TransactionClient, '$queryRaw' | 'treasury_movemen
 
 export const ZERO_INDICATORS: AccountIndicators = { balance: '0.00', toDebit: '0.00', toCredit: '0.00', projected: '0.00' };
 
-/** Indicadores por cuenta en UNA consulta. Las cuentas sin movimientos no figuran (usar ZERO_INDICATORS). */
+/**
+ * Indicadores por cuenta en UNA consulta. Las cuentas sin movimientos no figuran (usar ZERO_INDICATORS).
+ * Los cheques propios EMITIDOS (sin débito confirmado) suman a "A debitar" cualquiera sea su fecha
+ * (spec Tesorería etapa 3b §3.8): no mueven el saldo hasta que alguien confirma el débito.
+ */
 export async function getAccountIndicators(
   db: BalancesDb,
   companyId: string,
@@ -25,14 +29,36 @@ export async function getAccountIndicators(
   const onlyAccounts = accountIds ? Prisma.sql`AND account_id = ANY(${accountIds}::uuid[])` : Prisma.empty;
   const rows = await db.$queryRaw<{ account_id: string; balance: string; to_debit: string; to_credit: string }[]>`
     SELECT account_id,
-           COALESCE(SUM(amount) FILTER (WHERE date <= ${today}::date), 0)::numeric(15,2)::text AS balance,
-           COALESCE(SUM(amount) FILTER (WHERE date > ${today}::date AND amount < 0), 0)::numeric(15,2)::text AS to_debit,
-           COALESCE(SUM(amount) FILTER (WHERE date > ${today}::date AND amount > 0), 0)::numeric(15,2)::text AS to_credit
-    FROM treasury_movements
-    WHERE company_id = ${companyId}::uuid AND cancelled_at IS NULL ${onlyAccounts}
+           COALESCE(SUM(amount) FILTER (WHERE kind = 'BOOK' AND date <= ${today}::date), 0)::numeric(15,2)::text AS balance,
+           COALESCE(SUM(amount) FILTER (WHERE kind = 'ISSUED' OR (date > ${today}::date AND amount < 0)), 0)::numeric(15,2)::text AS to_debit,
+           COALESCE(SUM(amount) FILTER (WHERE kind = 'BOOK' AND date > ${today}::date AND amount > 0), 0)::numeric(15,2)::text AS to_credit
+    FROM (
+      SELECT 'BOOK' AS kind, account_id, date, amount FROM treasury_movements
+      WHERE company_id = ${companyId}::uuid AND cancelled_at IS NULL ${onlyAccounts}
+      UNION ALL
+      SELECT 'ISSUED', account_id, payment_date, -amount FROM own_checks
+      WHERE company_id = ${companyId}::uuid AND status = 'ISSUED' ${onlyAccounts}
+    ) t
     GROUP BY account_id
   `;
   return new Map(rows.map((r) => [r.account_id, indicatorsFromBuckets({ balance: r.balance, toDebit: r.to_debit, toCredit: r.to_credit })]));
+}
+
+/** Cheques propios EMITIDOS de una cuenta (lo que forma su parte de "A debitar"), por fecha de pago. */
+export async function getIssuedOwnChecks(db: Pick<Prisma.TransactionClient, 'own_checks'>, companyId: string, accountId: string) {
+  const rows = await db.own_checks.findMany({
+    where: { company_id: companyId, account_id: accountId, status: 'ISSUED' },
+    orderBy: [{ payment_date: 'asc' }, { number: 'asc' }],
+    select: { id: true, number: true, kind: true, amount: true, payment_date: true, supplier: { select: { name: true } } },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    number: r.number,
+    kind: r.kind,
+    amount: r.amount?.toFixed(2) ?? '0.00',
+    paymentDate: r.payment_date ? r.payment_date.toISOString().slice(0, 10) : null,
+    supplier: r.supplier?.name ?? null,
+  }));
 }
 
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
@@ -61,6 +87,7 @@ export async function getAccountStatement(db: BalancesDb, companyId: string, acc
       customer_receipt_payment: { select: { receipt: { select: { id: true, number: true } } } },
       check_operation: { select: { id: true, number: true, kind: true } },
       third_party_check: { select: { id: true, number: true } },
+      own_check: { select: { id: true, number: true, payment_order_payment: { select: { payment_order: { select: { id: true, number: true } } } } } },
     },
   });
   const rows = movements.map((m) => {
@@ -73,7 +100,9 @@ export async function getAccountStatement(db: BalancesDb, companyId: string, acc
       concept: m.concept?.name ?? null,
       description: m.description,
       transfer: m.transfer,
-      paymentOrder: m.payment_order_payment?.payment_order ?? null,
+      // El débito de un cheque propio (OWN_CHECK) cuelga del cheque, que cuelga del medio de la orden.
+      paymentOrder: m.payment_order_payment?.payment_order ?? m.own_check?.payment_order_payment?.payment_order ?? null,
+      ownCheck: m.own_check ? { id: m.own_check.id, number: m.own_check.number } : null,
       customerReceipt: m.customer_receipt_payment?.receipt ?? null,
       checkOperation: m.check_operation ? { id: m.check_operation.id, number: m.check_operation.number ?? 'Carga inicial', kind: m.check_operation.kind } : null,
       thirdPartyCheck: m.third_party_check,

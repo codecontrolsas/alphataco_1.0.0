@@ -130,9 +130,9 @@ export async function seedTreasury(ctx: Ctx): Promise<void> {
 }
 
 /**
- * Cada medio de pago de Compras tiene su movimiento, y el saldo de hoy de cada cuenta es lo
- * esperado: lo cargado acá más los pagos ya debitados (calculados desde `payment_order_payments`,
- * no desde los movimientos).
+ * Cada medio de pago de Compras tiene su movimiento (o, si es un cheque propio, su cheque), y el
+ * saldo de hoy de cada cuenta es lo esperado: lo cargado acá más los pagos ya debitados (calculados
+ * desde `payment_order_payments` y los débitos confirmados de `own_checks`, no desde los movimientos).
  */
 async function verify(ctx: Ctx, expected: Record<AccountKey, bigint>): Promise<void> {
   const { tx, company, cal } = ctx;
@@ -141,6 +141,7 @@ async function verify(ctx: Ctx, expected: Record<AccountKey, bigint>): Promise<v
     JOIN payment_orders po ON po.id = p.payment_order_id
     WHERE po.company_id = ${company.id}::uuid
       AND NOT EXISTS (SELECT 1 FROM treasury_movements m WHERE m.payment_order_payment_id = p.id)
+      AND NOT EXISTS (SELECT 1 FROM own_checks oc WHERE oc.payment_order_payment_id = p.id)
   `;
   if (Number(orphan[0]?.n ?? 0) > 0) throw new Error('demo tesorería: hay medios de pago sin movimiento');
 
@@ -150,10 +151,12 @@ async function verify(ctx: Ctx, expected: Record<AccountKey, bigint>): Promise<v
       SELECT
         (SELECT COALESCE(SUM(amount), 0)::text FROM treasury_movements
           WHERE account_id = ${accountId}::uuid AND cancelled_at IS NULL AND date <= ${cal.today}::date) AS balance,
-        (SELECT COALESCE(SUM(p.amount), 0)::text FROM payment_order_payments p
+        ((SELECT COALESCE(SUM(p.amount), 0) FROM payment_order_payments p
           JOIN payment_orders po ON po.id = p.payment_order_id
           WHERE p.treasury_account_id = ${accountId}::uuid AND po.status = 'PAID'
-            AND CASE WHEN p.method IN ('CHECK', 'ECHECK') THEN p.check_due_on ELSE po.paid_on END <= ${cal.today}::date) AS paid
+            AND p.method NOT IN ('CHECK', 'ECHECK') AND po.paid_on <= ${cal.today}::date)
+          + (SELECT COALESCE(SUM(oc.amount), 0) FROM own_checks oc
+             WHERE oc.account_id = ${accountId}::uuid AND oc.status = 'DEBITED' AND oc.debited_on <= ${cal.today}::date))::text AS paid
     `;
     const toCents = (value: string) => C(Number(value));
     const want = expected[key] - toCents(rows[0]?.paid ?? '0');

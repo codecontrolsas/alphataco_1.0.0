@@ -1,13 +1,14 @@
 import { getUserPermissionsMapServer } from '@/features/Permissions';
 import { SectionManagerServer } from '@/features/TabsManager';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ArrowLeftRight, HandCoins, Landmark, Percent, Repeat, Settings, WalletCards } from 'lucide-react';
+import { ArrowLeftRight, HandCoins, Landmark, Percent, Repeat, ScrollText, Settings, WalletCards } from 'lucide-react';
 import { Suspense } from 'react';
 import AccountsTabContent from './Accounts/AccountsTabContent';
 import ChecksTabContent from './Checks/ChecksTabContent';
 import CollectionsTabContent from './Collections/CollectionsTabContent';
 import { AccountCardsSkeleton } from './Accounts/fallback/AccountCardsSkeleton';
 import MovementsTabContent from './Movements/MovementsTabContent';
+import OwnChecksTabContent from './OwnChecks/OwnChecksTabContent';
 import SettingsTabContent from './Settings/SettingsTabContent';
 import { TreasurySettingsSkeleton } from './Settings/fallback/TreasurySettingsSkeleton';
 import TransfersTabContent from './Transfers/TransfersTabContent';
@@ -16,7 +17,8 @@ import { TreasurySectionSkeleton } from './fallback/TreasurySectionSkeleton';
 
 /**
  * Módulo Tesorería (specs docs/superpowers/specs/2026-10-10-tesoreria-etapa-1-design.md,
- * 2026-10-10-tesoreria-etapa-2-design.md y 2026-10-11-tesoreria-etapa-3a-design.md).
+ * 2026-10-10-tesoreria-etapa-2-design.md, 2026-10-11-tesoreria-etapa-3a-design.md y
+ * 2026-10-11-tesoreria-etapa-3b-design.md).
  *
  * Secciones elegidas desde el sidebar (`?tab=`). Los íconos son los mismos que `SUB_ITEM_ICONS`
  * de `navigation.ts`.
@@ -90,6 +92,17 @@ export default async function TreasuryComponent({ searchParams }: { searchParams
           content: (
             <Suspense fallback={<TreasurySectionSkeleton />}>
               <ChecksTabContent searchParams={searchParams} permissions={permissions} />
+            </Suspense>
+          ),
+        },
+        {
+          value: 'cheques-propios',
+          label: label(ScrollText, 'Cheques propios'),
+          moduleSlug: 'tesoreria',
+          tabSlug: 'cheques-propios',
+          content: (
+            <Suspense fallback={<TreasurySectionSkeleton />}>
+              <OwnChecksTabContent searchParams={searchParams} permissions={permissions} />
             </Suspense>
           ),
         },

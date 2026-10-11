@@ -1524,6 +1524,17 @@ export const PERMISSIONS = {
         allowedActions: ['view', 'create', 'update', 'delete'],
         subtabs: {},
       },
+      // Etapa 3b. 'create' da de alta chequeras e inutiliza números; 'update' confirma débitos y
+      // registra rechazos; 'delete' deshace débitos, anula rechazos y da de baja chequeras. La
+      // emisión usa el permiso de pagos de Compras.
+      'cheques-propios': {
+        slug: 'cheques-propios',
+        name: 'Cheques propios',
+        tabId: 'd0000000-0000-0000-0000-000000000008',
+        parent: null,
+        allowedActions: ['view', 'create', 'update', 'delete'],
+        subtabs: {},
+      },
       // 'update' adjunta o reemplaza el certificado de una retención.
       'retenciones-sufridas': {
         slug: 'retenciones-sufridas',

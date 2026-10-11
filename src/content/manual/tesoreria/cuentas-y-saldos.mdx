@@ -2,7 +2,7 @@
 title: Cuentas y saldos
 summary: Cómo leer las tarjetas de cuentas y cajas (saldo, a debitar, a acreditar y proyectado), cómo usar el extracto de una cuenta con su saldo anterior y acumulado, y cómo exportarlo a Excel.
 keywords: cuentas, saldos, saldo, saldo hoy, a debitar, a acreditar, proyectado, total bancos, total cajas, extracto, resumen de cuenta, saldo anterior, saldo acumulado, saldo final, período, Excel, exportar, cheque a debitar, cuenta en negativo, descubierto
-updated: 2026-10-10
+updated: 2026-10-11
 ---
 
 **Tesorería → Cuentas** muestra cómo está cada cuenta bancaria y cada caja **hoy**, y cuánto tiene programado.
@@ -16,7 +16,7 @@ Arriba, el **Total bancos** y el **Total cajas**. Debajo, una tarjeta por cada c
 | Cifra | Qué es |
 |---|---|
 | **Saldo** | Lo que hay hoy: los movimientos con fecha hasta hoy. |
-| **A debitar** | Egresos con fecha futura (por ejemplo, e-cheqs entregados que todavía no vencieron). |
+| **A debitar** | Egresos con fecha futura y los **cheques propios emitidos** que todavía no se confirmaron como debitados, cualquiera sea su fecha. |
 | **A acreditar** | Ingresos con fecha futura: por ejemplo, un cheque depositado que todavía no se acredita. |
 | **Proyectado** | Saldo + a debitar + a acreditar. |
 
@@ -32,7 +32,7 @@ Elegí el período con **Desde** y **Hasta** (se pueden escribir, DD/MM/AAAA, o 
 2. Cada movimiento del período con su fecha, el detalle (concepto y descripción), el **origen** (la orden de pago o la transferencia, con link), el ingreso o el egreso, y el **saldo acumulado** después de ese movimiento.
 3. **Saldo final** del período.
 
-Los movimientos **anulados** se ven tachados con el motivo y no suman. Los de fecha futura llevan la marca **A debitar** o **A acreditar**.
+Los movimientos **anulados** se ven tachados con el motivo y no suman. Los de fecha futura llevan la marca **A debitar** o **A acreditar**. En una cuenta bancaria, debajo de las cifras aparecen los **cheques emitidos sin debitar** que forman parte de "A debitar"; cada uno lleva a su detalle (ver <GuideLink to="cheques-propios">Cheques propios</GuideLink>).
 
 **Excel** baja el extracto del período, con el saldo anterior, cada movimiento, el saldo acumulado y el saldo final.
 

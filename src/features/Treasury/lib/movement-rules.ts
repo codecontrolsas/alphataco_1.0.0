@@ -17,18 +17,6 @@ export function conceptAllows(conceptDirection: ConceptDirection, direction: Mov
   return conceptDirection === 'BOTH' || conceptDirection === direction;
 }
 
-/**
- * Fecha valor del movimiento de un medio de pago de Compras: los cheques y e-cheqs debitan en su
- * fecha de pago; la transferencia y el efectivo, en la fecha de pago de la orden.
- */
-export function paymentMovementDate(method: PaymentMethodKind, paidOn: string, checkDueOn: string | null): string {
-  if (method === 'CHECK' || method === 'ECHECK') {
-    if (!checkDueOn) throw new Error('El cheque no tiene fecha de pago');
-    return checkDueOn;
-  }
-  return paidOn;
-}
-
 /** Futuro (a debitar / a acreditar) o no (cuenta en el saldo). `date` y `today` en YYYY-MM-DD. */
 export function isFuture(date: string, today: string): boolean {
   return date > today;

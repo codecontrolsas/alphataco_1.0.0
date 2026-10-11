@@ -51,6 +51,8 @@ export async function getSupplierAccount(supplierId: string, range: { from?: str
     debit: string;
     credit: string;
     detail: string | null;
+    /** Cheque propio rechazado (Tesorería etapa 3b): el link va a su detalle. */
+    ownCheck?: boolean;
   };
   const all: Movement[] = [
     ...invoices.map((i): Movement => {
@@ -93,7 +95,8 @@ export async function getSupplierAccount(supplierId: string, range: { from?: str
         dueDate: null,
         debit: c.amount,
         credit: '0.00',
-        detail: `Librador ${c.drawerName}`,
+        detail: c.source === 'OWN' ? 'Cheque propio' : `Librador ${c.drawerName}`,
+        ownCheck: c.source === 'OWN',
       })
     ),
   ].sort((a, b) => a.date.localeCompare(b.date) || (a.kind === 'PAYMENT' ? 1 : 0) - (b.kind === 'PAYMENT' ? 1 : 0) || a.label.localeCompare(b.label));

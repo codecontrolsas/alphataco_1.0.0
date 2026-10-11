@@ -30,10 +30,12 @@ interface CancelReasonDialogProps {
   description: string;
   successMessage: string;
   run: (reason: string) => Promise<ActionResult>;
+  /** Texto del botón (por defecto "Anular"): "Dar de baja", "Deshacer débito"… */
+  confirmLabel?: string;
 }
 
 /** Anulación con motivo obligatorio (movimientos manuales, saldos iniciales y transferencias). */
-export function CancelReasonDialog({ open, onOpenChange, title, description, successMessage, run }: CancelReasonDialogProps) {
+export function CancelReasonDialog({ open, onOpenChange, title, description, successMessage, run, confirmLabel = 'Anular' }: CancelReasonDialogProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const reasonId = useId();
@@ -76,7 +78,7 @@ export function CancelReasonDialog({ open, onOpenChange, title, description, suc
               mutation.mutate();
             }}
           >
-            {mutation.isPending ? 'Anulando…' : 'Anular'}
+            {mutation.isPending ? 'Guardando…' : confirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

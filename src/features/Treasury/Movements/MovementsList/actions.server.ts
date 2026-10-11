@@ -155,11 +155,13 @@ const MOVEMENT_SELECT = {
   customer_receipt_payment: { select: { receipt: { select: { id: true, number: true } } } },
   check_operation: { select: { id: true, number: true } },
   third_party_check_id: true,
+  own_check: { select: { id: true, number: true, payment_order_payment: { select: { payment_order: { select: { id: true, number: true } } } } } },
 } as const;
 
 function shape(rows: Prisma.treasury_movementsGetPayload<{ select: typeof MOVEMENT_SELECT }>[]) {
   return rows.map((r) => {
-    const order = r.payment_order_payment?.payment_order ?? null;
+    // El débito de un cheque propio (OWN_CHECK) cuelga del cheque, que cuelga del medio de la orden.
+    const order = r.payment_order_payment?.payment_order ?? r.own_check?.payment_order_payment?.payment_order ?? null;
     const receipt = r.customer_receipt_payment?.receipt ?? null;
     return {
       id: r.id,
@@ -180,6 +182,7 @@ function shape(rows: Prisma.treasury_movementsGetPayload<{ select: typeof MOVEME
       checkOperation: r.check_operation
         ? { id: r.check_operation.id, number: r.check_operation.number ?? OPENING_OPERATION_LABEL, checkId: r.third_party_check_id }
         : null,
+      ownCheck: r.own_check ? { id: r.own_check.id, number: r.own_check.number } : null,
     };
   });
 }

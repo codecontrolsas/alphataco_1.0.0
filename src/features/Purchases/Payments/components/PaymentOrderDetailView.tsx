@@ -8,6 +8,7 @@ import Link from 'next/link';
 import type { PaymentOrderDetail } from '../../actions/payment-orders.server';
 import type { TreasuryAccountRow } from '@/features/Treasury/actions/accounts.server';
 import { HistoryCard } from '../../components/HistoryCard';
+import { OWN_CHECK_STATUS_LABELS } from '@/features/Treasury/lib/own-check-transitions';
 import { PAYMENT_METHOD_LABELS } from '../../schemas/payment-orders';
 import { WITHHOLDING_TAX_LABELS } from '../../schemas/payment-settings';
 import { PaymentOrderActions } from './PaymentOrderActions';
@@ -103,7 +104,7 @@ export function PaymentOrderDetailView({ order, accounts }: { order: PaymentOrde
                             {l.invoice.label}
                           </Link>
                         ) : l.rejectedCheck ? (
-                          <Link href={`/dashboard/treasury/checks/${l.rejectedCheck.id}`} className="underline">
+                          <Link href={`/dashboard/treasury/${l.rejectedCheck.own ? 'own-checks' : 'checks'}/${l.rejectedCheck.id}`} className="underline">
                             {l.rejectedCheck.label}
                           </Link>
                         ) : l.sourceOrder ? (
@@ -206,6 +207,10 @@ export function PaymentOrderDetailView({ order, accounts }: { order: PaymentOrde
                         <Link href={`/dashboard/treasury/checks/${p.thirdPartyCheck.id}`} className="underline">
                           N° {p.checkNumber}
                         </Link>
+                      ) : p.ownCheck ? (
+                        <Link href={`/dashboard/treasury/own-checks/${p.ownCheck.id}`} className="underline">
+                          N° {p.checkNumber}
+                        </Link>
                       ) : (
                         `N° ${p.checkNumber}`
                       )}
@@ -213,10 +218,17 @@ export function PaymentOrderDetailView({ order, accounts }: { order: PaymentOrde
                       {p.thirdPartyCheck ? ` · librador ${p.thirdPartyCheck.drawerName}` : ''} · pago {day(p.checkDueOn)}
                     </span>
                   )}
-                  {p.movement && !p.movement.cancelled && (
-                    <span className="text-muted-foreground">Débito: {day(p.movement.date)}</span>
+                  {p.ownCheck ? (
+                    <>
+                      {p.ownCheck.debitedOn && <span className="text-muted-foreground">Débito: {day(p.ownCheck.debitedOn)}</span>}
+                      <Badge variant="outline">{OWN_CHECK_STATUS_LABELS[p.ownCheck.status]}</Badge>
+                    </>
+                  ) : (
+                    <>
+                      {p.movement && !p.movement.cancelled && <span className="text-muted-foreground">Débito: {day(p.movement.date)}</span>}
+                      {p.movement?.toDebit && !p.movement.cancelled && <Badge variant="outline">A debitar</Badge>}
+                    </>
                   )}
-                  {p.movement?.toDebit && !p.movement.cancelled && <Badge variant="outline">A debitar</Badge>}
                   <span className="ml-auto tabular-nums">{formatMoney(p.amount)}</span>
                 </li>
               ))}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { conceptAllows, isFuture, paymentMovementDate, signedCents } from './movement-rules';
+import { conceptAllows, isFuture, signedCents } from './movement-rules';
 
 describe('signedCents', () => {
   it('un ingreso es positivo', () => {
@@ -24,20 +24,6 @@ describe('conceptAllows', () => {
     expect(conceptAllows('OUT', 'IN')).toBe(false);
     expect(conceptAllows('OUT', 'OUT')).toBe(true);
     expect(conceptAllows('IN', 'OUT')).toBe(false);
-  });
-});
-
-describe('paymentMovementDate', () => {
-  it('un cheque o e-cheq sale en su fecha de pago', () => {
-    expect(paymentMovementDate('ECHECK', '2026-10-10', '2026-11-15')).toBe('2026-11-15');
-    expect(paymentMovementDate('CHECK', '2026-10-10', '2026-10-20')).toBe('2026-10-20');
-  });
-  it('una transferencia o efectivo sale en la fecha de pago de la orden', () => {
-    expect(paymentMovementDate('TRANSFER', '2026-10-10', null)).toBe('2026-10-10');
-    expect(paymentMovementDate('CASH', '2026-10-10', '2026-11-15')).toBe('2026-10-10');
-  });
-  it('un cheque sin fecha es un error', () => {
-    expect(() => paymentMovementDate('CHECK', '2026-10-10', null)).toThrow();
   });
 });
 

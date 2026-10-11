@@ -172,6 +172,13 @@ export async function setTreasuryAccountActive(id: string, isActive: boolean): P
   if (!UUID_RE.test(id)) return fail(NOT_FOUND);
   const companyId = await getActiveCompanyId();
   try {
+    // Un cheque propio emitido se debita contra su cuenta (etapa 3b): con la cuenta inactiva no se podría confirmar.
+    if (!isActive) {
+      const issued = await prisma.own_checks.count({ where: { account_id: id, company_id: companyId, status: 'ISSUED' } });
+      if (issued > 0) {
+        return fail(`La cuenta tiene ${issued} ${issued === 1 ? 'cheque emitido' : 'cheques emitidos'} sin debitar: confirmá su débito o registrá el rechazo antes de desactivarla`);
+      }
+    }
     const { count } = await prisma.treasury_accounts.updateMany({ where: { id, company_id: companyId }, data: { is_active: isActive } });
     if (count === 0) return fail(NOT_FOUND);
     revalidateTreasury();
@@ -189,11 +196,11 @@ export async function deleteTreasuryAccount(id: string): Promise<ActionResult> {
   try {
     const account = await prisma.treasury_accounts.findFirst({
       where: { id, company_id: companyId },
-      select: { _count: { select: { movements: true, payments: true, transfers_from: true, transfers_to: true } } },
+      select: { _count: { select: { movements: true, payments: true, transfers_from: true, transfers_to: true, checkbooks: true, own_checks: true } } },
     });
     if (!account) return fail(NOT_FOUND);
     const c = account._count;
-    if (c.movements + c.payments + c.transfers_from + c.transfers_to > 0) return fail('La cuenta tiene movimientos: desactivala');
+    if (c.movements + c.payments + c.transfers_from + c.transfers_to + c.checkbooks + c.own_checks > 0) return fail('La cuenta tiene movimientos: desactivala');
     await prisma.treasury_accounts.delete({ where: { id } });
     revalidateTreasury();
     return ok(null);

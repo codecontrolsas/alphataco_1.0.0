@@ -18,7 +18,7 @@ import { getActiveCompanyId } from '@/shared/lib/tenant';
 import moment from 'moment';
 import { supplierInvoiceLabel } from '../../lib/invoices';
 import { isUuid, parseAmountText, parseDay, textValue } from '@/features/Treasury/lib/filter-values';
-import { rejectedCheckLabel, supplierCheckDebtSql } from '@/features/Treasury/lib/rejected-checks';
+import { rejectedCheckLabel, rejectedOwnCheckLabel, supplierCheckDebtSql, type CheckDebtSource } from '@/features/Treasury/lib/rejected-checks';
 import { openInvoicePendingMap } from '../../lib/payment-balances';
 import { treasuryToday } from '@/features/Treasury/lib/today';
 
@@ -216,7 +216,11 @@ type DebtRow = {
   amount: string;
   rejected_on: string;
   pending: string;
+  source: CheckDebtSource;
 };
+
+/** Etiqueta de la deuda según el cheque: de tercero endosado o propio (Tesorería etapa 3b). */
+const debtLabel = (debt: DebtRow) => (debt.source === 'OWN' ? rejectedOwnCheckLabel(debt.number, debt.bank) : rejectedCheckLabel(debt.number, debt.bank));
 
 type OpenDebt = DebtRow & { orders: { id: string; number: string }[] };
 
@@ -224,18 +228,21 @@ type OpenDebt = DebtRow & { orders: { id: string; number: string }[] };
 async function loadOpenCheckDebts(companyId: string): Promise<OpenDebt[]> {
   const rows = await prisma.$queryRaw<DebtRow[]>`
     SELECT d.id, d.supplier_id, s.name AS supplier_name, s.trade_name AS supplier_trade_name, d.number, d.bank,
-           d.amount, d.rejected_on, d.pending
+           d.amount, d.rejected_on, d.pending, d.source
     FROM (${supplierCheckDebtSql(Prisma.sql`c.company_id = ${companyId}::uuid`, null)}) d
     JOIN suppliers s ON s.id = d.supplier_id
     WHERE d.pending::numeric > 0`;
   if (rows.length === 0) return [];
   const lines = await prisma.payment_order_lines.findMany({
-    where: { third_party_check_id: { in: rows.map((r) => r.id) }, payment_order: { status: { in: OPEN_ORDER_STATUSES } } },
-    select: { third_party_check_id: true, payment_order: { select: { id: true, number: true } } },
+    where: {
+      OR: [{ third_party_check_id: { in: rows.map((r) => r.id) } }, { own_check_id: { in: rows.map((r) => r.id) } }],
+      payment_order: { status: { in: OPEN_ORDER_STATUSES } },
+    },
+    select: { third_party_check_id: true, own_check_id: true, payment_order: { select: { id: true, number: true } } },
   });
   return rows.map((r) => {
     const orders = new Map<string, { id: string; number: string }>();
-    for (const l of lines) if (l.third_party_check_id === r.id) orders.set(l.payment_order.id, l.payment_order);
+    for (const l of lines) if ((l.third_party_check_id ?? l.own_check_id) === r.id) orders.set(l.payment_order.id, l.payment_order);
     return { ...r, orders: [...orders.values()].sort((a, b) => a.number.localeCompare(b.number)) };
   });
 }
@@ -250,7 +257,7 @@ function debtMatches(debt: OpenDebt, state: FilterState, today: string): boolean
       debt.supplier_name.toLowerCase().includes(search) ||
       (debt.supplier_trade_name ?? '').toLowerCase().includes(search) ||
       debt.number.toLowerCase().includes(search) ||
-      rejectedCheckLabel(debt.number, debt.bank).toLowerCase().includes(search);
+      debtLabel(debt).toLowerCase().includes(search);
     if (!hit) return false;
   }
 
@@ -309,7 +316,7 @@ function shapeDebt(debt: OpenDebt) {
   return {
     id: debt.id,
     kind: 'CHECK' as 'INVOICE' | 'CHECK',
-    label: rejectedCheckLabel(debt.number, debt.bank),
+    label: debtLabel(debt),
     cbte_type: null as number | null,
     issue_date: due.toDate(),
     due_date: due.toDate() as Date | null,

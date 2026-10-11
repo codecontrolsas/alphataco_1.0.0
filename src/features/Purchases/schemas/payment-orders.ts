@@ -99,6 +99,8 @@ export const registerPaymentFormSchema = z
           checkDueOn: z.string().trim(),
           /** Cheque de la cartera que se endosa (solo THIRD_PARTY_CHECK): su importe y su cartera los pone el servidor. */
           thirdPartyCheckId: z.string().optional(),
+          /** Chequera del cheque propio físico (solo CHECK, Tesorería etapa 3b): la cuenta sale de la chequera. */
+          checkbookId: z.string().optional(),
         })
       ),
   })
@@ -113,11 +115,14 @@ export const registerPaymentFormSchema = z
         checks.add(id);
         return;
       }
-      if (!p.accountId) issue('accountId', 'Elegí la cuenta o caja');
+      if (p.method === 'CHECK') {
+        if (!UUID_RE.test(p.checkbookId ?? '')) issue('checkbookId', 'Elegí la chequera');
+      } else if (!p.accountId) issue('accountId', p.method === 'ECHECK' ? 'Elegí la cuenta bancaria' : 'Elegí la cuenta o caja');
       if (!positive(p.amount)) issue('amount', 'Importe inválido');
       if (p.method === 'CHECK' || p.method === 'ECHECK') {
         if (!p.checkNumber) issue('checkNumber', 'Indicá el número del cheque');
         if (!DATE_RE.test(p.checkDueOn)) issue('checkDueOn', 'Indicá la fecha de pago del cheque');
+        else if (DATE_RE.test(v.paidOn) && p.checkDueOn < v.paidOn) issue('checkDueOn', 'La fecha de pago del cheque no puede ser anterior a la del pago');
       }
     });
   });

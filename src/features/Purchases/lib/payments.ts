@@ -7,7 +7,7 @@ import type { PaymentOrderFormValues } from '../schemas/payment-orders';
 import { WITHHOLDING_TAXES, WITHHOLDING_TAX_LABELS } from '../schemas/payment-settings';
 import { supplierInvoiceLabel } from './invoices';
 import { advanceAvailable, invoicePending } from './payment-balances';
-import { supplierCheckDebts } from '@/features/Treasury/lib/rejected-checks';
+import { supplierCheckDebts, type CheckDebtSource } from '@/features/Treasury/lib/rejected-checks';
 import {
   PAYMENT_ORDER_STATUS_PAST,
   canApplyPaymentOrderAction,
@@ -209,8 +209,10 @@ export type BuiltLine = {
   purchaseOrderId: string | null;
   description: string | null;
   sourceLineId: string | null;
-  /** Cheque de tercero endosado y rechazado cuya deuda se paga (Tesoreria etapa 3a). */
+  /** Cheque rechazado cuya deuda se paga: de tercero endosado (etapa 3a) o propio (etapa 3b). */
   checkId: string | null;
+  /** Origen del cheque de `checkId`: decide si va a `third_party_check_id` o a `own_check_id`. */
+  checkSource?: CheckDebtSource;
 };
 
 export type BuiltWithholding = WithholdingResult & { manual: boolean; supplierStatus: withholding_status | null };
@@ -396,6 +398,7 @@ export async function buildPaymentOrder(
       description: null,
       sourceLineId: null,
       checkId: l.checkId ?? null,
+      checkSource: debts.get(l.checkId ?? '')?.source,
     })),
     ...(advanceAmount
       ? [{ kind: 'ADVANCE' as const, amount: advanceAmount, invoiceId: null, purchaseOrderId, description: input.advance.description || null, sourceLineId: null, checkId: null }]
@@ -425,7 +428,8 @@ export function paymentOrderData(built: BuiltPaymentOrder) {
       purchase_order_id: l.purchaseOrderId,
       description: l.description,
       source_line_id: l.sourceLineId,
-      third_party_check_id: l.checkId,
+      third_party_check_id: l.checkSource === 'OWN' ? null : l.checkId,
+      own_check_id: l.checkSource === 'OWN' ? l.checkId : null,
     })),
     withholdings: built.withholdings.map((w) => ({
       tax: w.tax,
@@ -454,14 +458,17 @@ export async function assertPaymentOrderStillValid(tx: Tx, companyId: string, or
       invoice_id: true,
       source_line_id: true,
       third_party_check_id: true,
+      own_check_id: true,
       invoice: { select: { status: true, cbte_type: true, sales_point: true, number: true } },
     },
   });
-  const checkIds = lines.flatMap((l) => (l.kind === 'REJECTED_CHECK' && l.third_party_check_id ? [l.third_party_check_id] : []));
+  const checkOf = (l: (typeof lines)[number]) => l.third_party_check_id ?? l.own_check_id;
+  const checkIds = lines.flatMap((l) => (l.kind === 'REJECTED_CHECK' && checkOf(l) ? [checkOf(l) as string] : []));
   const debts = await supplierCheckDebts(tx, checkIds, { excludeOrderId: orderId });
   for (const line of lines) {
-    if (line.kind !== 'REJECTED_CHECK' || !line.third_party_check_id) continue;
-    const debt = debts.get(line.third_party_check_id);
+    const checkId = checkOf(line);
+    if (line.kind !== 'REJECTED_CHECK' || !checkId) continue;
+    const debt = debts.get(checkId);
     if (!debt || cents(line.amount.toString()) > cents(debt.pending)) {
       throw new PurchaseError('La deuda de un cheque rechazado ya no alcanza para esta orden: volvé la orden a borrador');
     }

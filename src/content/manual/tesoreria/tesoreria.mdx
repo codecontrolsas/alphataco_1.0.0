@@ -37,9 +37,9 @@ Nadie escribe el saldo de una cuenta. Es siempre la suma de sus movimientos vige
 
 Un movimiento **anulado** no se borra: queda en el extracto tachado, con el motivo, y deja de sumar.
 
-## Los cheques debitan en su fecha
+## Los cheques propios debitan cuando el banco los paga
 
-Cuando se paga con **cheque** o **e-cheq**, el movimiento lleva la **fecha de pago del cheque**, no la del pago de la orden. Hasta ese día figura **a debitar** y no baja el saldo; ese día pasa solo al saldo, sin que nadie haga nada. Las transferencias y el efectivo salen el día del pago.
+Cuando se paga con **cheque** o **e-cheq**, el cheque queda **emitido**: figura **a debitar** y no baja el saldo. Sale del banco recién cuando alguien **confirma el débito** con la fecha real (o se registra el rechazo). Ver <GuideLink to="cheques-propios">Cheques propios</GuideLink>. Las transferencias y el efectivo salen el día del pago.
 
 Los cheques que **recibe** la empresa entran a una **cartera de cheques** el día del cobro. Cuando se depositan, entran al banco en su **fecha de acreditación** y hasta ese día figuran **a acreditar**. Ver <GuideLink to="cartera-de-cheques">Cartera de cheques</GuideLink>.
 
@@ -52,12 +52,13 @@ Los cheques que **recibe** la empresa entran a una **cartera de cheques** el dí
 | **Transferencias** | Los pases de plata entre cuentas. |
 | **Cobranzas** | Lo que está **a cobrar** (facturas y notas de débito con saldo) y los **recibos**. Ver <GuideLink to="cobrar-facturas">Cobrar facturas</GuideLink>. |
 | **Cheques** | La cartera de cheques de terceros: depositar, descontar, rechazos y carga inicial. Ver <GuideLink to="cartera-de-cheques">Cartera de cheques</GuideLink>. |
+| **Cheques propios** | Chequeras y cheques emitidos: confirmar débitos, rechazos y números inutilizados. Ver <GuideLink to="cheques-propios">Cheques propios</GuideLink>. |
 | **Retenciones sufridas** | Las retenciones que practicaron los clientes, por mes, con su certificado. Ver <GuideLink to="retenciones-sufridas">Retenciones sufridas</GuideLink>. |
 | **Configuración** | Cuentas y cajas con su saldo inicial, y los conceptos de los movimientos manuales. |
 
 ## Lo que viene
 
-Tesorería se completa en etapas: ya están las cuentas, las cobranzas y la **cartera de cheques de terceros** (depósitos, descuentos, endosos y rechazos); después vienen las **chequeras propias** y la **conciliación bancaria** con el extracto del banco. Todas escriben en el mismo libro de movimientos.
+Tesorería se completa en etapas: ya están las cuentas, las cobranzas, la **cartera de cheques de terceros** (depósitos, descuentos, endosos y rechazos) y los **cheques propios** con sus chequeras; después viene la **conciliación bancaria** con el extracto del banco. Todas escriben en el mismo libro de movimientos.
 
 ## Permisos
 
@@ -71,4 +72,5 @@ Tesorería se completa en etapas: ya están las cuentas, las cobranzas y la **ca
 | Ver y cambiar cuentas, cajas y conceptos | **Configuración → Ver / Editar** |
 | Cobranzas y cuenta corriente de clientes | **Cobranzas → Ver / Crear / Editar / Eliminar** |
 | Cartera de cheques (depositar, descontar, rechazar, anular) | **Cheques → Ver / Crear / Editar / Eliminar** |
+| Cheques propios (chequeras, débitos, rechazos) | **Cheques propios → Ver / Crear / Editar / Eliminar** |
 | Retenciones sufridas | **Retenciones sufridas → Ver / Editar** |

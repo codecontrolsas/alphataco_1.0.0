@@ -18,6 +18,7 @@ import type { TreasuryAccountRow } from '../../actions/accounts.server';
 import type { TreasuryConceptRow } from '../../actions/concepts.server';
 import { getAccountStatementData, type AccountStatementData } from '../../actions/statement.server';
 import { NewMovementButton } from '../../Movements/components/NewMovementButton';
+import { OWN_CHECK_ALERT_LABEL, OWN_CHECK_KIND_LABELS, ownCheckAlert } from '../../lib/own-check-transitions';
 import { TREASURY_QUERY_KEYS } from '../../lib/query-keys';
 import { TREASURY_ACCOUNT_KIND_LABELS } from '../../schemas/accounts';
 import { TREASURY_MOVEMENT_KIND_LABELS } from '../../schemas/movements';
@@ -33,6 +34,14 @@ type Row = AccountStatementData['rows'][number];
 const detailOf = (r: Row) => [r.concept, r.description].filter(Boolean).join(' — ');
 
 function OriginLink({ row }: { row: Row }) {
+  // El débito de un cheque propio se ve desde el cheque (su orden de pago está en el detalle).
+  if (row.ownCheck) {
+    return (
+      <Link href={`/dashboard/treasury/own-checks/${row.ownCheck.id}`} className="font-mono text-xs underline underline-offset-4">
+        Ch. Nº {row.ownCheck.number}
+      </Link>
+    );
+  }
   if (row.paymentOrder) {
     return (
       <Link href={`/dashboard/purchases/payments/${row.paymentOrder.id}`} className="font-mono text-xs underline underline-offset-4">
@@ -120,7 +129,7 @@ export function AccountStatementView({
           date: day(r.date),
           kind: TREASURY_MOVEMENT_KIND_LABELS[r.kind],
           detail: detailOf(r),
-          origin: r.paymentOrder?.number ?? r.customerReceipt?.number ?? r.transfer?.number ?? r.checkOperation?.number ?? '',
+          origin: (r.ownCheck ? `Ch. Nº ${r.ownCheck.number}` : null) ?? r.paymentOrder?.number ?? r.customerReceipt?.number ?? r.transfer?.number ?? r.checkOperation?.number ?? '',
           credit: isNegative(r.amount) ? '' : r.amount,
           debit: isNegative(r.amount) ? abs(r.amount) : '',
           balance: r.balance,
@@ -174,6 +183,50 @@ export function AccountStatementView({
           </Card>
         ))}
       </div>
+
+      {statement.issuedChecks.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Cheques emitidos sin debitar</CardTitle>
+            <CardDescription>
+              Suman en &quot;A debitar&quot; hasta que se confirma su débito. Los que tienen la fecha de pago vencida están pendientes de confirmar.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Cheque</TableHead>
+                  <TableHead>Proveedor</TableHead>
+                  <TableHead>Fecha de pago</TableHead>
+                  <TableHead className="text-right">Importe</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {statement.issuedChecks.map((c) => (
+                  <TableRow key={c.id}>
+                    <TableCell>
+                      <Link href={`/dashboard/treasury/own-checks/${c.id}`} className="font-mono text-xs underline underline-offset-4">
+                        {OWN_CHECK_KIND_LABELS[c.kind]} Nº {c.number}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{c.supplier ?? '—'}</TableCell>
+                    <TableCell className="tabular-nums">
+                      {c.paymentDate ? day(c.paymentDate) : '—'}
+                      {ownCheckAlert('ISSUED', c.paymentDate, statement.today) && (
+                        <Badge variant="outline" className="ml-2 border-amber-500 text-amber-700 dark:text-amber-400">
+                          {OWN_CHECK_ALERT_LABEL}
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(c.amount)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="flex flex-col gap-3 space-y-0 md:flex-row md:items-end md:justify-between">

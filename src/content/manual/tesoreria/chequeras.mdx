@@ -1,0 +1,53 @@
+---
+title: Chequeras
+summary: Cómo cargar las chequeras de cada cuenta bancaria, cómo el sistema propone el próximo número al pagar con cheque, cómo inutilizar un número roto o perdido y cómo dar de baja una chequera.
+keywords: chequera, chequeras, cheques físicos, números de cheque, próximo número, rango, desde, hasta, inutilizar, cheque roto, cheque perdido, cheque mal llenado, dar de baja, agotada, cheque propio
+updated: 2026-10-11
+---
+
+Una **chequera** es el talonario de cheques físicos que te entrega el banco: una cuenta bancaria y un rango de números (desde / hasta). Al pagar una orden con **Cheque**, el sistema toma el próximo número libre de la chequera que elijas.
+
+<OpenScreen to="cheques-propios" label="Abrir Cheques propios" />
+
+## Cargar una chequera
+
+En **Tesorería → Cheques propios**, en la sección **Chequeras**, **Nueva chequera**:
+
+| Campo | Qué poner |
+| --- | --- |
+| **Cuenta bancaria** | La cuenta de la que salen los cheques. Solo cuentas bancarias activas. |
+| **Desde el Nº** / **Hasta el Nº** | El primer y el último número del talonario (hasta 500 números). Los ceros a la izquierda no cuentan: `00012001` es el `12001`. |
+
+Dos chequeras de la misma cuenta no pueden tener números en común.
+
+## La lista de chequeras
+
+Cada chequera muestra su cuenta, el rango, cuántos números se **usaron** y cuántos quedan **libres**, el **próximo** número y su estado:
+
+- **Activa**: tiene números libres;
+- **Agotada**: ya no le quedan;
+- **Dada de baja**: no se ofrece más al pagar.
+
+Un número cuenta como usado cuando se emitió un cheque con él, aunque después se haya anulado: **un número nunca se repite en la cuenta**.
+
+## Pagar con cheque
+
+Al registrar el pago de una orden con **Cheque**, elegís la chequera (si hay una sola, ya viene elegida) y el **N° de cheque** se completa con el próximo libre. Se puede cambiar por otro número libre de la misma chequera. Ver <GuideLink to="ordenes-de-pago">Órdenes de pago</GuideLink>.
+
+Los **e-cheqs** no usan chequera: se elige la cuenta bancaria y se carga el número que dio el banco.
+
+## Inutilizar un número
+
+Si un cheque se rompió, se perdió o se llenó mal antes de entregarlo, **Inutilizar número** en la fila de la chequera: elegís el número (se propone el próximo libre) y el motivo. El número queda **Anulado** y no se vuelve a ofrecer.
+
+## Dar de baja una chequera
+
+**Dar de baja**, con el motivo (por ejemplo, se perdió el talonario). Sus números libres dejan de ofrecerse; los cheques ya emitidos no cambian.
+
+## Permisos
+
+| Acción | Permiso |
+| --- | --- |
+| Ver las chequeras | **Cheques propios → Ver** |
+| Cargar chequeras e inutilizar números | **Cheques propios → Crear** |
+| Dar de baja una chequera | **Cheques propios → Eliminar** |

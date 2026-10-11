@@ -194,25 +194,56 @@ export async function seedSupplierPayments(ctx: Ctx): Promise<string> {
           : undefined,
       },
     });
-    // Tesoreria: cada medio de pago es un movimiento SUPPLIER_PAYMENT, con la misma regla que
-    // registerPayment (los cheques y e-cheqs debitan en su fecha de pago). No hay trigger.
+    // Tesoreria: la transferencia y el efectivo son un movimiento SUPPLIER_PAYMENT, con la misma
+    // regla que registerPayment. Un cheque o e-cheq propio queda EMITIDO, sin movimiento, hasta que
+    // se confirma su debito (etapa 3b). No hay trigger.
     if (paid && o.payments?.length) {
       const supplier = await tx.suppliers.findUniqueOrThrow({ where: { id: supplierId(o.supplier) }, select: { name: true } });
       const number = `OP-${String(opCounter).padStart(6, '0')}`;
+      const isCheck = (p: { method: string }) => p.method === 'CHECK' || p.method === 'ECHECK';
       await tx.treasury_movements.createMany({
-        data: o.payments.map((p, i) => ({
-          id: demoId('treasury_movement', `${o.key}-${i}`),
-          company_id: company.id,
-          account_id: account(p.account),
-          date: new Date(`${cal.ymd(p.checkDueIn !== undefined ? o.day + p.checkDueIn : o.day)}T00:00:00.000Z`),
-          amount: money(-p.amount),
-          kind: 'SUPPLIER_PAYMENT' as const,
-          description: `${number} — ${supplier.name}${p.checkNumber ? ` — Cheque N° ${p.checkNumber}` : ''}`,
-          payment_order_payment_id: demoId('payment_order_payment', `${o.key}-${i}`),
-          created_by: actorId,
-          created_at: cal.at(o.day, 11),
-        })),
+        data: o.payments.flatMap((p, i) =>
+          isCheck(p)
+            ? []
+            : [
+                {
+                  id: demoId('treasury_movement', `${o.key}-${i}`),
+                  company_id: company.id,
+                  account_id: account(p.account),
+                  date: new Date(`${cal.ymd(o.day)}T00:00:00.000Z`),
+                  amount: money(-p.amount),
+                  kind: 'SUPPLIER_PAYMENT' as const,
+                  description: `${number} — ${supplier.name}`,
+                  payment_order_payment_id: demoId('payment_order_payment', `${o.key}-${i}`),
+                  created_by: actorId,
+                  created_at: cal.at(o.day, 11),
+                },
+              ]
+        ),
       });
+      for (const [i, p] of o.payments.entries()) {
+        if (!isCheck(p)) continue;
+        const checkId = demoId('own_check', `${o.key}-${i}`);
+        await tx.own_checks.create({
+          data: {
+            id: checkId,
+            company_id: company.id,
+            kind: p.method === 'CHECK' ? 'PHYSICAL' : 'ECHECK',
+            account_id: account(p.account),
+            number: p.checkNumber ?? '',
+            amount: money(p.amount),
+            issue_date: date,
+            payment_date: new Date(`${cal.ymd(o.day + (p.checkDueIn ?? 0))}T00:00:00.000Z`),
+            supplier_id: supplierId(o.supplier),
+            payment_order_payment_id: demoId('payment_order_payment', `${o.key}-${i}`),
+            created_by: actorId,
+            created_at: cal.at(o.day, 11),
+          },
+        });
+        await tx.own_check_events.create({
+          data: { check_id: checkId, from_status: null, to_status: 'ISSUED', date, payment_order_id: demoId('payment_order', o.key), user_id: actorId, created_at: cal.at(o.day, 11) },
+        });
+      }
     }
     return net;
   };

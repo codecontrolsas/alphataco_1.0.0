@@ -54,6 +54,11 @@ async function cleanup() {
   const company_id = { in: [COMPANY, OTHER_COMPANY] };
   await prisma.treasury_movements.deleteMany({ where: { company_id } });
   await prisma.payment_order_lines.deleteMany({ where: { payment_order: { company_id }, kind: 'ADVANCE_APPLIED' } });
+  // Cheques propios (Tesorería etapa 3b): las líneas de deuda, los eventos y los cheques apuntan a las órdenes.
+  await prisma.payment_order_lines.deleteMany({ where: { payment_order: { company_id }, own_check_id: { not: null } } });
+  await prisma.own_check_events.deleteMany({ where: { check: { company_id } } });
+  await prisma.own_checks.deleteMany({ where: { company_id } });
+  await prisma.checkbooks.deleteMany({ where: { company_id } });
   // Los eventos de los cheques apuntan a las órdenes: van antes.
   await prisma.third_party_check_events.deleteMany({ where: { check: { company_id } } });
   await prisma.payment_orders.deleteMany({ where: { company_id } });
@@ -558,21 +563,22 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
       });
       const transfer = (amount: string) => ({ method: 'TRANSFER' as const, accountId: chequesId, amount, reference: 'T', checkNumber: '', checkBank: '', checkDueOn: '' });
 
-      it('transferencia + e-cheq a mañana: dos movimientos, el e-cheq a debitar en su fecha; anular la orden anula los dos', async () => {
+      it('transferencia + e-cheq: la transferencia mueve el saldo; el e-cheq queda emitido y a debitar; anular la orden anula los dos', async () => {
         const actions = await import('./payment-orders.server');
         const order = await approvedAdvance('1000');
         expectOk(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [transfer('400'), echeck('600', TOMORROW)] }));
         const prisma = await db();
         const movements = await prisma.treasury_movements.findMany({
           where: { payment_order_payment: { payment_order_id: order.id } },
-          orderBy: { amount: 'asc' },
           select: { amount: true, date: true, kind: true, description: true, account_id: true },
         });
+        // Solo la transferencia: el e-cheq no mueve plata hasta que se confirma su débito (etapa 3b).
         expect(movements.map((m) => [m.kind, m.amount.toString(), m.date.toISOString().slice(0, 10), m.account_id])).toEqual([
-          ['SUPPLIER_PAYMENT', '-600', TOMORROW, chequesId],
           ['SUPPLIER_PAYMENT', '-400', AR_TODAY, chequesId],
         ]);
-        expect(movements[0]!.description).toBe(`${order.number} — Otro proveedor — Cheque N° 987`);
+        expect(movements[0]!.description).toBe(`${order.number} — Otro proveedor`);
+        const own = await prisma.own_checks.findFirstOrThrow({ where: { payment_order_payment: { payment_order_id: order.id } } });
+        expect(own).toMatchObject({ kind: 'ECHECK', number: '987', status: 'ISSUED', account_id: chequesId, supplier_id: OTHER_SUPPLIER });
         expect(await indicatorsOf(chequesId)).toEqual({ balance: '-400.00', toDebit: '-600.00' });
         expect(revalidated.paths).toContain('/dashboard/treasury');
         revalidated.paths.length = 0;
@@ -582,26 +588,29 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
         const reason = (await prisma.payment_orders.findUniqueOrThrow({ where: { id: order.id } })).cancel_reason;
         const cancelled = await prisma.treasury_movements.findMany({ where: { payment_order_payment: { payment_order_id: order.id } } });
         expect(cancelled.every((m) => m.cancelled_at !== null && m.cancel_reason === reason)).toBe(true);
+        expect((await prisma.own_checks.findUniqueOrThrow({ where: { id: own.id } })).status).toBe('CANCELLED');
         expect(revalidated.paths).toContain('/dashboard/treasury');
         expect(await indicatorsOf(chequesId)).toEqual({ balance: '0.00', toDebit: '0.00' });
       });
 
-      it('un e-cheq con fecha de hoy entra al saldo y no queda a debitar', async () => {
+      it('un e-cheq con fecha de hoy tampoco entra al saldo: queda a debitar hasta confirmar el débito', async () => {
         const actions = await import('./payment-orders.server');
         const order = await approvedAdvance('250');
-        expectOk(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [echeck('250', AR_TODAY)] }));
-        expect(await indicatorsOf(chequesId)).toEqual({ balance: '-250.00', toDebit: '0.00' });
+        const second = { ...echeck('250', AR_TODAY), checkNumber: '988' };
+        expectOk(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [second] }));
+        expect(await indicatorsOf(chequesId)).toEqual({ balance: '0.00', toDebit: '-250.00' });
       });
 
       it('pagar desde una cuenta desactivada dice cuál está inactiva', async () => {
         const actions = await import('./payment-orders.server');
         const accounts = await import('@/features/Treasury/actions/accounts.server');
         const order = await approvedAdvance('10');
-        expectOk(await accounts.setTreasuryAccountActive(chequesId, false));
-        expect(expectFail(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [transfer('10')] }))).toBe(
-          'La cuenta «Banco cheques» está inactiva'
+        // Una cuenta propia: la de los cheques tiene e-cheqs emitidos y no se puede desactivar (etapa 3b).
+        const idle = expectOk(await accounts.createTreasuryAccount(accountForm('Banco inactivo'))).id;
+        expectOk(await accounts.setTreasuryAccountActive(idle, false));
+        expect(expectFail(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [{ ...transfer('10'), accountId: idle }] }))).toBe(
+          'La cuenta «Banco inactivo» está inactiva'
         );
-        expectOk(await accounts.setTreasuryAccountActive(chequesId, true));
         expect((await orderRow(order.id)).status).toBe('APPROVED');
       });
     });
@@ -771,6 +780,295 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
       expectOk(await actions.approvePaymentOrder(payDebt.id));
       expectOk(await actions.registerPayment(payDebt.id, { paidOn: AR_TODAY, payments: [transfer('500000')] }));
       expect((await supplierCheckDebts(prisma, [check.id])).get(check.id)?.pending).toBe('0.00');
+    });
+  });
+
+  describe('cheques propios: chequeras, emisión, débito y rechazo (Tesorería etapa 3b)', () => {
+    let bankId = '';
+    let cashId = '';
+    let checkbookId = '';
+
+    beforeAll(async () => {
+      state.denied.clear();
+      const accounts = await import('@/features/Treasury/actions/accounts.server');
+      const own = await import('@/features/Treasury/actions/own-checks.server');
+      bankId = expectOk(await accounts.createTreasuryAccount({ ...accountForm('Banco propios'), bankName: 'Banco Galicia' })).id;
+      cashId = expectOk(await accounts.createTreasuryAccount({ ...accountForm('Caja propios'), kind: 'CASH' })).id;
+      checkbookId = expectOk(await own.createCheckbook({ accountId: bankId, firstNumber: '00001001', lastNumber: '1050' })).id;
+    });
+
+    async function approvedAdvance(amount: string, supplierId = OTHER_SUPPLIER) {
+      const actions = await import('./payment-orders.server');
+      const order = expectOk(await actions.createPaymentOrder(paymentForm(supplierId, [], { plannedOn: AR_TODAY, advance: { amount, purchaseOrderId: '', description: 'Anticipo' } })));
+      expectOk(await actions.submitPaymentOrder(order.id));
+      expectOk(await actions.approvePaymentOrder(order.id));
+      return order;
+    }
+
+    const physical = (amount: string, number: string, dueOn = AR_TODAY) => ({
+      method: 'CHECK' as const,
+      accountId: '',
+      checkbookId,
+      amount,
+      reference: '',
+      checkNumber: number,
+      checkBank: '',
+      checkDueOn: dueOn,
+    });
+    const echeck = (amount: string, number: string, accountId = bankId) => ({
+      method: 'ECHECK' as const,
+      accountId,
+      amount,
+      reference: '',
+      checkNumber: number,
+      checkBank: '',
+      checkDueOn: AR_TODAY,
+    });
+
+    async function nextNumber() {
+      const own = await import('@/features/Treasury/actions/own-checks.server');
+      return (await own.getCheckbooksForPayment()).find((c) => c.id === checkbookId)?.nextNumber ?? null;
+    }
+
+    async function ownCheckOf(orderId: string) {
+      const prisma = await db();
+      return prisma.own_checks.findFirstOrThrow({
+        where: { payment_order_payment: { payment_order_id: orderId } },
+        select: { id: true, number: true, status: true, debited_on: true, events: { select: { to_status: true }, orderBy: { created_at: 'asc' } } },
+      });
+    }
+
+    async function indicatorsOf(id: string) {
+      const accounts = await import('@/features/Treasury/actions/accounts.server');
+      const row = (await accounts.getTreasuryAccounts()).find((r) => r.id === id)!;
+      return { balance: row.balance, toDebit: row.toDebit };
+    }
+
+    async function payWithCheck(amount: string) {
+      const actions = await import('./payment-orders.server');
+      const order = await approvedAdvance(amount);
+      const number = (await nextNumber())!;
+      expectOk(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [physical(amount, number)] }));
+      return { order, check: await ownCheckOf(order.id) };
+    }
+
+    it('pagar con cheque de la chequera: queda emitido con el próximo número, sin movimiento y a debitar', async () => {
+      expect(await nextNumber()).toBe('1001');
+      const { order, check } = await payWithCheck('300');
+      expect(check).toMatchObject({ number: '1001', status: 'ISSUED' });
+      expect(check.events.map((e) => e.to_status)).toEqual(['ISSUED']);
+      const prisma = await db();
+      expect(await prisma.treasury_movements.count({ where: { OR: [{ own_check_id: check.id }, { payment_order_payment: { payment_order_id: order.id } }] } })).toBe(0);
+      const payment = await prisma.payment_order_payments.findFirstOrThrow({ where: { payment_order_id: order.id }, select: { treasury_account_id: true, check_bank: true } });
+      expect(payment).toEqual({ treasury_account_id: bankId, check_bank: 'Banco Galicia' });
+      expect(await indicatorsOf(bankId)).toEqual({ balance: '0.00', toDebit: '-300.00' });
+      expect(await nextNumber()).toBe('1002');
+    });
+
+    it('un número usado, fuera de rango o inutilizado no se emite; el próximo libre los saltea', async () => {
+      const actions = await import('./payment-orders.server');
+      const own = await import('@/features/Treasury/actions/own-checks.server');
+      const order = await approvedAdvance('10');
+      expect(expectFail(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [physical('10', '1001')] }))).toBe(
+        'El cheque Nº 1001 ya se usó en la cuenta «Banco propios»'
+      );
+      expect(expectFail(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [physical('10', '2000')] }))).toBe(
+        'El Nº 2000 no es de la chequera (del 1001 al 1050)'
+      );
+      expect(expectOk(await own.voidOwnCheckNumber({ checkbookId, number: '1002', reason: 'Se rompió' })).number).toBe('1002');
+      expect(expectFail(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [physical('10', '1002')] }))).toBe(
+        'El cheque Nº 1002 ya se usó en la cuenta «Banco propios»'
+      );
+      expect(expectFail(await own.voidOwnCheckNumber({ checkbookId, number: '1002', reason: 'Otra vez' }))).toBe('El cheque Nº 1002 ya se usó en la cuenta «Banco propios»');
+      expect(await nextNumber()).toBe('1003');
+      expect((await orderRow(order.id)).status).toBe('APPROVED');
+    });
+
+    it('un e-cheq sale de una cuenta bancaria y su número no se repite en la cuenta', async () => {
+      const actions = await import('./payment-orders.server');
+      const order = await approvedAdvance('20');
+      expect(expectFail(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [echeck('20', 'E-1', cashId)] }))).toBe('Elegí una cuenta bancaria');
+      expectOk(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [echeck('20', 'E-1')] }));
+      const again = await approvedAdvance('20');
+      expect(expectFail(await actions.registerPayment(again.id, { paidOn: AR_TODAY, payments: [echeck('20', 'E-1')] }))).toBe(
+        'El cheque Nº E-1 ya se usó en la cuenta «Banco propios»'
+      );
+    });
+
+    it('la fecha de pago del cheque no puede ser anterior al pago de la orden', async () => {
+      const actions = await import('./payment-orders.server');
+      const order = await approvedAdvance('5');
+      const yesterday = moment(AR_TODAY).subtract(1, 'day').format('YYYY-MM-DD');
+      expect(expectFail(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [physical('5', '1009', yesterday)] }))).toBe(
+        'La fecha de pago del cheque no puede ser anterior a la del pago'
+      );
+    });
+
+    it('confirmar el débito mueve el saldo; deshacerlo lo devuelve', async () => {
+      const own = await import('@/features/Treasury/actions/own-checks.server');
+      const prisma = await db();
+      const before = await indicatorsOf(bankId);
+      const { check } = await payWithCheck('150');
+      expect(expectFail(await own.debitOwnChecks({ checkIds: [check.id], date: TOMORROW }))).toBe('La fecha no puede ser futura');
+      expectOk(await own.debitOwnChecks({ checkIds: [check.id], date: AR_TODAY }));
+      const movement = await prisma.treasury_movements.findFirstOrThrow({ where: { own_check_id: check.id }, select: { kind: true, amount: true, account_id: true, date: true, description: true } });
+      expect(movement).toMatchObject({ kind: 'OWN_CHECK', account_id: bankId });
+      expect(movement.amount.toString()).toBe('-150');
+      expect(movement.description).toContain(`Débito del cheque Nº ${check.number}`);
+      const after = await indicatorsOf(bankId);
+      expect(Number(after.balance)).toBeCloseTo(Number(before.balance) - 150);
+      expect(Number(after.toDebit)).toBeCloseTo(Number(before.toDebit));
+      expect(expectFail(await own.debitOwnChecks({ checkIds: [check.id], date: AR_TODAY }))).toBe(
+        `El cheque Nº ${check.number} (Banco propios) está debitado: no se puede confirmar el débito`
+      );
+
+      expectOk(await own.undoOwnCheckDebit(check.id, 'Lo marqué por error'));
+      expect((await ownCheckOf((await prisma.own_checks.findUniqueOrThrow({ where: { id: check.id }, select: { payment_order_payment: { select: { payment_order_id: true } } } })).payment_order_payment!.payment_order_id)).status).toBe('ISSUED');
+      expect(await prisma.treasury_movements.count({ where: { own_check_id: check.id, cancelled_at: null } })).toBe(0);
+      expect(await indicatorsOf(bankId)).toEqual({ balance: before.balance, toDebit: (Number(before.toDebit) - 150).toFixed(2) });
+    });
+
+    it('el débito no puede ser anterior a la fecha de pago del cheque', async () => {
+      const actions = await import('./payment-orders.server');
+      const own = await import('@/features/Treasury/actions/own-checks.server');
+      const order = await approvedAdvance('7');
+      const number = (await nextNumber())!;
+      expectOk(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [physical('7', number, TOMORROW)] }));
+      const check = await ownCheckOf(order.id);
+      expect(expectFail(await own.debitOwnChecks({ checkIds: [check.id], date: AR_TODAY }))).toBe(
+        `Cheque Nº ${number}: su fecha de pago es el ${moment(TOMORROW).format('DD/MM/YYYY')}; el débito no puede ser anterior`
+      );
+    });
+
+    it('dos débitos simultáneos del mismo cheque: uno solo gana', async () => {
+      const own = await import('@/features/Treasury/actions/own-checks.server');
+      const prisma = await db();
+      const { check } = await payWithCheck('40');
+      const results = await Promise.all([own.debitOwnChecks({ checkIds: [check.id], date: AR_TODAY }), own.debitOwnChecks({ checkIds: [check.id], date: AR_TODAY })]);
+      expect(results.filter((r) => r.ok)).toHaveLength(1);
+      expect(await prisma.treasury_movements.count({ where: { own_check_id: check.id } })).toBe(1);
+    });
+
+    it('anular la orden: el cheque emitido se anula; uno debitado o rechazado la bloquea', async () => {
+      const actions = await import('./payment-orders.server');
+      const own = await import('@/features/Treasury/actions/own-checks.server');
+      const issued = await payWithCheck('11');
+      expectOk(await actions.cancelPaymentOrder(issued.order.id, 'Error de carga'));
+      const cancelled = await ownCheckOf(issued.order.id);
+      expect(cancelled.status).toBe('CANCELLED');
+      expect(cancelled.events.map((e) => e.to_status)).toEqual(['ISSUED', 'CANCELLED']);
+      expect(await nextNumber()).not.toBe(cancelled.number);
+
+      const debited = await payWithCheck('12');
+      expectOk(await own.debitOwnChecks({ checkIds: [debited.check.id], date: AR_TODAY }));
+      expect(expectFail(await actions.cancelPaymentOrder(debited.order.id, 'x'))).toBe(
+        `El cheque Nº ${debited.check.number} de esta orden ya se debitó: deshacé primero el débito`
+      );
+
+      const rejected = await payWithCheck('13');
+      expectOk(await own.rejectOwnCheck(rejected.check.id, { date: AR_TODAY, reason: 'Sin fondos' }));
+      expect(expectFail(await actions.cancelPaymentOrder(rejected.order.id, 'x'))).toBe(
+        `El cheque Nº ${rejected.check.number} de esta orden fue rechazado: anulá primero el rechazo`
+      );
+      expect((await orderRow(rejected.order.id)).status).toBe('PAID');
+    });
+
+    it('rechazo: vuelve la deuda con el proveedor, se paga con otra orden sin retenciones y el rechazo no se anula mientras tanto', async () => {
+      const actions = await import('./payment-orders.server');
+      const own = await import('@/features/Treasury/actions/own-checks.server');
+      const { supplierCheckDebts, openCheckDebtsOfSupplier } = await import('@/features/Treasury/lib/rejected-checks');
+      const prisma = await db();
+      const { check } = await payWithCheck('900');
+      const before = await indicatorsOf(bankId);
+      expectOk(await own.rejectOwnCheck(check.id, { date: AR_TODAY, reason: 'Firma no coincide' }));
+      // El rechazo no mueve plata: deja de estar a debitar.
+      expect(Number((await indicatorsOf(bankId)).toDebit)).toBeCloseTo(Number(before.toDebit) + 900);
+      const debt = (await supplierCheckDebts(prisma, [check.id])).get(check.id)!;
+      expect(debt).toMatchObject({ source: 'OWN', pending: '900.00', supplierId: OTHER_SUPPLIER, label: `Cheque propio rechazado Nº ${check.number} — BANCO GALICIA` });
+      expect((await openCheckDebtsOfSupplier(prisma, COMPANY, OTHER_SUPPLIER)).some((d) => d.checkId === check.id)).toBe(true);
+
+      const { getSupplierAccount } = await import('./supplier-account.server');
+      const account = await getSupplierAccount(OTHER_SUPPLIER);
+      expect(account?.movements.some((m) => m.kind === 'REJECTED_CHECK' && m.id === check.id && m.ownCheck)).toBe(true);
+
+      const debtLine: PayLine = { kind: 'REJECTED_CHECK', invoiceId: '', sourceLineId: '', checkId: check.id, amount: '900' };
+      const payDebt = expectOk(await actions.createPaymentOrder(paymentForm(OTHER_SUPPLIER, [debtLine], { plannedOn: AR_TODAY })));
+      const line = await prisma.payment_order_lines.findFirstOrThrow({ where: { payment_order_id: payDebt.id, kind: 'REJECTED_CHECK' }, select: { own_check_id: true, third_party_check_id: true } });
+      expect(line).toEqual({ own_check_id: check.id, third_party_check_id: null });
+      expect((await orderRow(payDebt.id)).withholdings_total.toFixed(2)).toBe('0.00');
+      expect(expectFail(await own.undoOwnCheckRejection(check.id, 'x'))).toBe(`La deuda del cheque está en la ${payDebt.number}, sin pagar: quitala de ahí primero`);
+
+      expectOk(await actions.submitPaymentOrder(payDebt.id));
+      expectOk(await actions.approvePaymentOrder(payDebt.id));
+      const transfer = { method: 'TRANSFER' as const, accountId: bankId, amount: '900', reference: 'T', checkNumber: '', checkBank: '', checkDueOn: '' };
+      expectOk(await actions.registerPayment(payDebt.id, { paidOn: AR_TODAY, payments: [transfer] }));
+      expect((await supplierCheckDebts(prisma, [check.id])).get(check.id)?.pending).toBe('0.00');
+      expect(expectFail(await own.undoOwnCheckRejection(check.id, 'x'))).toBe(`La deuda del cheque se pagó en la ${payDebt.number}: anulá esa orden primero`);
+    });
+
+    it('anular un rechazo sin deuda usada devuelve el cheque a emitido', async () => {
+      const own = await import('@/features/Treasury/actions/own-checks.server');
+      const { check } = await payWithCheck('14');
+      expectOk(await own.rejectOwnCheck(check.id, { date: AR_TODAY, reason: 'Error del banco' }));
+      expectOk(await own.undoOwnCheckRejection(check.id, 'El banco lo aceptó'));
+      const prisma = await db();
+      const row = await prisma.own_checks.findUniqueOrThrow({ where: { id: check.id }, select: { status: true, rejected_on: true, events: { select: { to_status: true, reason: true }, orderBy: { created_at: 'asc' } } } });
+      expect(row.status).toBe('ISSUED');
+      expect(row.rejected_on).toBeNull();
+      expect(row.events.at(-1)).toEqual({ to_status: 'ISSUED', reason: 'El banco lo aceptó' });
+    });
+
+    it('chequeras: no se superponen; una dada de baja no emite ni inutiliza', async () => {
+      const actions = await import('./payment-orders.server');
+      const own = await import('@/features/Treasury/actions/own-checks.server');
+      expect(expectFail(await own.createCheckbook({ accountId: bankId, firstNumber: '1050', lastNumber: '1060' }))).toBe(
+        'El rango se superpone con la chequera del 1001 al 1050 de «Banco propios»'
+      );
+      expect(expectFail(await own.createCheckbook({ accountId: cashId, firstNumber: '1', lastNumber: '5' }))).toBe('Elegí una cuenta bancaria');
+      const other = expectOk(await own.createCheckbook({ accountId: bankId, firstNumber: '5001', lastNumber: '5002' })).id;
+      expectOk(await own.retireCheckbook(other, 'Se perdió'));
+      expect((await own.getCheckbooksForPayment()).some((c) => c.id === other)).toBe(false);
+      expect((await own.getCheckbooks()).find((c) => c.id === other)?.status).toBe('RETIRED');
+      expect(expectFail(await own.voidOwnCheckNumber({ checkbookId: other, number: '5001', reason: 'x' }))).toBe('La chequera está dada de baja');
+      const order = await approvedAdvance('3');
+      expect(expectFail(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [{ ...physical('3', '5001'), checkbookId: other }] }))).toBe(
+        'La chequera está dada de baja'
+      );
+    });
+
+    it('el número de un e-cheq se guarda sin espacios: con espacios es el mismo número', async () => {
+      const actions = await import('./payment-orders.server');
+      const order = await approvedAdvance('21');
+      expectOk(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [echeck('21', 'EQ 77 01')] }));
+      expect((await ownCheckOf(order.id)).number).toBe('EQ7701');
+      const again = await approvedAdvance('21');
+      expect(expectFail(await actions.registerPayment(again.id, { paidOn: AR_TODAY, payments: [echeck('21', 'EQ7701')] }))).toBe(
+        'El cheque Nº EQ7701 ya se usó en la cuenta «Banco propios»'
+      );
+    });
+
+    it('la chequera para pagar ofrece sus primeros números libres (saltea los usados del medio)', async () => {
+      const own = await import('@/features/Treasury/actions/own-checks.server');
+      const book = (await own.getCheckbooksForPayment()).find((c) => c.id === checkbookId)!;
+      expect(book.freeNumbers.length).toBeGreaterThan(1);
+      expect(book.freeNumbers[0]).toBe(book.nextNumber);
+      expect(Number(book.freeNumbers[1])).toBeGreaterThan(Number(book.freeNumbers[0]));
+    });
+
+    it('una cuenta con cheques emitidos no se desactiva; una con chequera no se borra', async () => {
+      const accounts = await import('@/features/Treasury/actions/accounts.server');
+      const own = await import('@/features/Treasury/actions/own-checks.server');
+      expect(expectFail(await accounts.setTreasuryAccountActive(bankId, false))).toMatch(/^La cuenta tiene \d+ cheques? emitidos? sin debitar/);
+      const empty = expectOk(await accounts.createTreasuryAccount(accountForm('Banco con chequera'))).id;
+      expectOk(await own.createCheckbook({ accountId: empty, firstNumber: '1', lastNumber: '5' }));
+      expect(expectFail(await accounts.deleteTreasuryAccount(empty))).toBe('La cuenta tiene movimientos: desactivala');
+    });
+
+    it('sin permiso de Cheques propios no se confirma un débito', async () => {
+      const own = await import('@/features/Treasury/actions/own-checks.server');
+      const { check } = await payWithCheck('15');
+      state.denied.add('tesoreria:cheques-propios:update');
+      expect(expectFail(await own.debitOwnChecks({ checkIds: [check.id], date: AR_TODAY }))).toBe('No tenés permiso para realizar esta acción');
     });
   });
 

@@ -4,7 +4,7 @@ import { checkPermissionServer } from '@/features/Permissions';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { UUID_RE } from '../lib/action-errors';
-import { ZERO_INDICATORS, getAccountIndicators, getAccountStatement, getBalanceOn } from '../lib/balances';
+import { ZERO_INDICATORS, getAccountIndicators, getAccountStatement, getBalanceOn, getIssuedOwnChecks } from '../lib/balances';
 import { DATE_RE } from '../schemas/shared';
 import { localToday } from './shared';
 
@@ -23,11 +23,13 @@ export async function getAccountStatementData(accountId: string, from: string, t
   });
   if (!account) return null;
   const today = localToday();
-  const [indicators, statement] = await Promise.all([
+  const [indicators, statement, issuedChecks] = await Promise.all([
     getAccountIndicators(prisma, companyId, today, [accountId]),
     getAccountStatement(prisma, companyId, accountId, from, to, today),
+    // Cheques propios emitidos sin débito confirmado: forman parte de "A debitar" (etapa 3b).
+    account.kind === 'BANK' ? getIssuedOwnChecks(prisma, companyId, accountId) : Promise.resolve([]),
   ]);
-  return { account, indicators: indicators.get(accountId) ?? ZERO_INDICATORS, from, to, ...statement };
+  return { account, indicators: indicators.get(accountId) ?? ZERO_INDICATORS, from, to, issuedChecks, today, ...statement };
 }
 
 export type AccountStatementData = NonNullable<Awaited<ReturnType<typeof getAccountStatementData>>>;
