@@ -587,6 +587,9 @@ Regla del usuario: _"Todas las fechas y horas son hora argentina"_. El contenedo
 - Timestamps a mostrar: `formatArgentinaDay` / `formatArgentinaDateTime` (Intl con `timeZone: 'America/Argentina/Buenos_Aires'`).
 - Las columnas `@db.Date` llegan como medianoche UTC: se leen con `toISOString().slice(0, 10)` o `moment.utc`, no con `moment(date)`.
 - Test: correr el caso de las 22:30 AR con el proceso en otra zona (`TZ=UTC` / `TZ=Asia/Tokyo npx vitest run ...`).
+- La conexión de Prisma va con la sesión en UTC (`src/shared/lib/prisma-pg-config.ts`): `@prisma/adapter-pg` asume UTC (al leer reemplaza el offset por `+00:00`, al escribir manda la hora UTC sin offset). Con la sesión en hora argentina, todo `timestamptz` escrito desde JS quedaba 3 h en el futuro y lo escrito por `NOW()` se leía 3 h atrasado. Todo `new PrismaPg(...)` pasa por `prismaPgConfig()`.
+- Por eso toda función SQL que calcula con fechas lleva `SET TimeZone = 'America/Argentina/Buenos_Aires'` en su definición (un `CREATE OR REPLACE` sin el `SET` lo pierde). Lo verifica `prisma/tests/06_timezone.sql`.
+- Al probar un cambio en `prisma.ts`, reiniciar el dev server matando el proceso por PID: en dev el cliente queda cacheado en `globalThis` y el HMR no lo recrea.
 
 ---
 

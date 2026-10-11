@@ -65,3 +65,6 @@ echo "==> Corriendo pgTAP (pg_prove)..."
 # El glob /tests/*.sql debe expandirse DENTRO del contenedor (el host no
 # tiene ese path), asi que se delega a un shell remoto.
 "${COMPOSE[@]}" exec -T postgres sh -c "pg_prove -U alphataco -d '${TEST_DB}' /tests/*.sql"
+
+echo "==> Zona horaria de la conexion de Prisma..."
+npx vitest run src/shared/lib/prisma-timezone.integration.test.ts

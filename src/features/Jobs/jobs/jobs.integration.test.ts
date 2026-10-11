@@ -70,9 +70,7 @@ function mentions(html: string | undefined, marker: string): boolean {
 /**
  * Envejece una corrida moviendo `started_at` hacia atrás CON SQL.
  *
- * Tiene que ser SQL: escribir un `Date` de JS en una columna `timestamptz` por Prisma guarda
- * el valor corrido por el offset de la sesión (medido: +3 h con TimeZone -03), así que una
- * fila "de hace 2 horas" terminaba grabada en el futuro y el test no probaba nada.
+ * Con SQL, para usar el mismo reloj que `claimRun` (`NOW()` de Postgres) y no el del proceso.
  */
 async function moveStartedAt(id: string, interval: string): Promise<void> {
   await prisma.$executeRawUnsafe(
@@ -632,9 +630,7 @@ describe.skipIf(!RUN)('jobs de P5 (integración contra el compose)', () => {
       expect(first).not.toBeNull();
 
       // Queda `running` desde hace 5 minutos: alguien la está haciendo ahora mismo.
-      // El desfase se aplica con SQL (`NOW() - interval`), no con un `Date` de JS: escribir un
-      // timestamptz desde JavaScript por Prisma en este repo guarda el valor corrido por el
-      // offset de la sesión (ver el comentario de `finishRun`), y el test probaría otra cosa.
+      // El desfase se aplica con SQL (`NOW() - interval`), con el mismo reloj que `claimRun`.
       await moveStartedAt(first!.id, '5 minutes');
 
       expect(await claimRun({ job: 'daily-indicators', runKey: KEY, companyId: null })).toBeNull();
@@ -679,9 +675,8 @@ describe.skipIf(!RUN)('jobs de P5 (integración contra el compose)', () => {
     }, 60_000);
 
     it('la duración registrada es real: finished_at no queda corrido por la zona horaria', async () => {
-      // Regresión: `finishRun` escribía `finished_at: new Date()` por Prisma y el valor se
-      // guardaba 3 horas adelante, así que un job de 5 ms figuraba como `03:00:00.005`. Hoy
-      // lo calcula Postgres con NOW().
+      // Regresión: con la sesión en hora argentina, `finished_at: new Date()` se guardaba 3 horas
+      // adelante y un job de 5 ms figuraba como `03:00:00.005`. Ver `prisma-pg-config.ts`.
       const [row] = await prisma.$queryRawUnsafe<Array<{ duracion_segundos: number }>>(
         `SELECT EXTRACT(EPOCH FROM (finished_at - started_at))::float8 AS duracion_segundos
            FROM jobs_runs

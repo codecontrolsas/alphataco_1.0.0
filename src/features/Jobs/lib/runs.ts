@@ -121,15 +121,10 @@ export async function finishRun(params: {
 }): Promise<void> {
   // `finished_at` lo calcula POSTGRES con NOW(), no JavaScript.
   //
-  // No es preferencia de estilo: escribir un `Date` de JS en una columna `timestamptz` desde
-  // Prisma en este proyecto guarda el valor corrido por el offset de la sesión. Medido contra
-  // el compose (TimeZone = America/Argentina/Buenos_Aires): un `new Date()` quedaba 3 horas
-  // en el futuro, y `finished_at - started_at` daba `03:00:00.005` para un job de 5 ms. La
-  // bitácora mentía sobre cuánto tardó cada corrida, que es justo el dato que viene a dar.
-  //
-  // `claimRun` ya usaba `NOW()` por estar en SQL crudo; esto lo alinea. El desvío afecta a
-  // cualquier escritura de `timestamptz` desde JS en el repo — está reportado como pendiente,
-  // pero acá se resuelve de raíz no mandando la fecha.
+  // `started_at` y `finished_at` salen del mismo reloj (el de Postgres; `claimRun` también usa
+  // `NOW()`), así que la duración de la corrida no depende del reloj del proceso. Antes además
+  // corregía un desvío: con la sesión en hora argentina, un `Date` de JS se guardaba 3 horas en
+  // el futuro. Eso ya se resolvió de raíz con la sesión en UTC (`prisma-pg-config.ts`).
   const errorText = params.error ? params.error.slice(0, 2000) : null;
   const metadata = JSON.stringify(params.metadata ?? {});
 

@@ -14,6 +14,7 @@
  * Ver docs/deploy/runbook.md, "Instancia demo: reset diario".
  */
 import { PrismaPg } from '@prisma/adapter-pg';
+import { prismaPgConfig } from '../../src/shared/lib/prisma-pg-config.ts';
 import { PrismaClient } from '../../src/generated/prisma/client.ts';
 import type { Ctx } from './lib/ctx.ts';
 import { argentinaToday, buildCalendar } from './lib/dates.ts';
@@ -59,7 +60,7 @@ async function main(): Promise<void> {
   const elapsed = () => ((Date.now() - started) / 1000).toFixed(1);
   const log = (message: string) => console.log(`[demo ${elapsed()}s] ${message}`);
 
-  const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
+  const prisma = new PrismaClient({ adapter: new PrismaPg(prismaPgConfig(process.env.DATABASE_URL)) });
   try {
     const s3 = createS3();
     const cal = buildCalendar(argentinaToday());

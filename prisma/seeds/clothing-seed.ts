@@ -6,6 +6,7 @@
  */
 
 import { PrismaPg } from '@prisma/adapter-pg';
+import { prismaPgConfig } from '../../src/shared/lib/prisma-pg-config';
 import 'dotenv/config';
 import { PrismaClient } from '../../src/generated/prisma/client';
 import { clothing_delivery_type } from '../../src/generated/prisma/enums';
@@ -18,7 +19,7 @@ function createClient() {
   if (!connectionString) {
     throw new Error('DATABASE_URL is not defined in the environment variables');
   }
-  const adapter = new PrismaPg({ connectionString });
+  const adapter = new PrismaPg(prismaPgConfig(connectionString));
   return new PrismaClient({ adapter });
 }
 
