@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { fail, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
+import { TreasuryError } from '@/features/Treasury/lib/treasury-errors';
 import { StockError } from '@/features/Warehouses/lib/stock-errors';
 import { Prisma } from '@/generated/prisma/client';
 import type { Logger } from '@/lib/logger';
@@ -12,6 +13,7 @@ import { PurchaseError } from './purchase-errors';
  *
  * - `PurchaseError`: su mensaje.
  * - `StockError`: su mensaje (lo lanza `validateExitDestination`, compartido con Almacenes).
+ * - `TreasuryError`: su mensaje (lo lanza el libro de movimientos de Tesoreria al pagar).
  * - Unicidad (P2002): `duplicateMessage`.
  * - Cualquier otro: se loguea y se devuelve un mensaje generico, nunca SQL crudo.
  */
@@ -21,7 +23,7 @@ export function toPurchaseActionError<T = null>(
   context: string,
   duplicateMessage = 'Ya existe un registro con esos datos'
 ): ActionResult<T> {
-  if (error instanceof PurchaseError || error instanceof StockError) return fail(error.message);
+  if (error instanceof PurchaseError || error instanceof StockError || error instanceof TreasuryError) return fail(error.message);
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return fail(duplicateMessage);
   logger.error(`Error al ${context}`, { data: { error } });
   return fail(`No se pudo ${context}. Intentá de nuevo; si persiste, avisá a soporte.`);

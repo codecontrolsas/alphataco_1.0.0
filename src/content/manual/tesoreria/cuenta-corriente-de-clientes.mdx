@@ -1,0 +1,36 @@
+---
+title: Cuenta corriente del cliente
+summary: Cómo ver lo que debe cada cliente por moneda, con sus facturas, notas de crédito y débito, cobros y anticipos, el saldo anterior y el acumulado de un período, y cómo exportarla.
+keywords: cuenta corriente, cliente, saldo del cliente, deuda, debe, haber, saldo anterior, saldo acumulado, resumen de cuenta, anticipos disponibles, saldo a favor, nota de crédito, dólares, Excel
+updated: 2026-10-11
+---
+
+La **cuenta corriente** de un cliente muestra **cuánto debe** y cómo se llegó a ese número: sus comprobantes al debe y lo cobrado al haber.
+
+<OpenScreen to="cobrar-facturas" label="Abrir Cobranzas" />
+
+## Cómo llegar
+
+- En **Tesorería → Cobranzas**, el buscador **Cuenta corriente de…** (incluye clientes dados de baja).
+- En la ficha del cliente en Comercial, el botón **Cuenta corriente**.
+- En una factura autorizada, el link **Ver cuenta corriente** junto al pendiente de cobro.
+
+## Qué muestra
+
+Arriba, el **saldo por moneda** al final del período (en rojo si debe), los **anticipos disponibles** y el **saldo a favor** por notas de crédito, si hay.
+
+Abajo, una tabla por moneda (pesos y, si tiene, dólares), **sin convertir**:
+
+| Al debe | Al haber |
+|---|---|
+| Facturas y notas de débito | Notas de crédito |
+| Anticipos aplicados | Lo cobrado en cada recibo |
+| Cheques rechazados (a la fecha del rechazo) | Lo cobrado a cuenta |
+
+Cada fila abre su comprobante, su recibo o el cheque rechazado (ver <GuideLink to="rechazo-de-un-cheque">Rechazo de un cheque</GuideLink>). Arranca con el **saldo anterior** al período y termina con el **saldo final**. Por defecto muestra los últimos tres meses; **Desde** y **Hasta** cambian el período, y **Excel** lo exporta.
+
+Los recibos anulados no figuran.
+
+## Saldo a favor por una nota de crédito
+
+Si se emite una nota de crédito sobre una factura que ya estaba cobrada, el cliente queda con **saldo a favor**. Se ve en la cuenta corriente; aplicarlo o devolverlo todavía no se hace desde el sistema.

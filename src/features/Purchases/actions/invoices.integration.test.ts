@@ -48,6 +48,7 @@ async function db() {
 async function cleanup() {
   const prisma = await db();
   const company_id = { in: [COMPANY, OTHER_COMPANY] };
+  await prisma.treasury_movements.deleteMany({ where: { company_id } });
   await prisma.payment_orders.deleteMany({ where: { company_id } });
   await prisma.supplier_invoices.updateMany({ where: { company_id }, data: { related_invoice_id: null } });
   await prisma.supplier_invoices.deleteMany({ where: { company_id } });

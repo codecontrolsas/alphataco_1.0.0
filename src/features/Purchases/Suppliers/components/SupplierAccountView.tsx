@@ -17,7 +17,7 @@ import { getSupplierAccount, type SupplierAccount } from '../../actions/supplier
 
 const day = (value: string | null) => (value ? moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY') : '—');
 
-const KIND_LABELS = { INVOICE: 'Comprobante', CREDIT_NOTE: 'Nota de crédito', PAYMENT: 'Orden de pago' } as const;
+const KIND_LABELS = { INVOICE: 'Comprobante', CREDIT_NOTE: 'Nota de crédito', PAYMENT: 'Orden de pago', REJECTED_CHECK: 'Cheque rechazado' } as const;
 
 /**
  * Cuenta corriente del proveedor (spec Compras etapa 5 §4): movimientos con saldo acumulado,
@@ -159,7 +159,13 @@ export function SupplierAccountView({ initial, canCreatePayment }: { initial: Su
                       <TableCell>
                         <span className="block text-xs text-muted-foreground">{KIND_LABELS[m.kind]}</span>
                         <Link
-                          href={m.kind === 'PAYMENT' ? `/dashboard/purchases/payments/${m.id}` : `/dashboard/purchases/invoices/${m.id}`}
+                          href={
+                            m.kind === 'PAYMENT'
+                              ? `/dashboard/purchases/payments/${m.id}`
+                              : m.kind === 'REJECTED_CHECK'
+                                ? `/dashboard/treasury/${m.ownCheck ? 'own-checks' : 'checks'}/${m.id}`
+                                : `/dashboard/purchases/invoices/${m.id}`
+                          }
                           className="underline"
                         >
                           {m.label}

@@ -579,6 +579,18 @@ Generé `QuotesTabContent.tsx` y `OrdersTabContent.tsx` con un loop de bash que 
 
 Reglas: (1) en heredocs o strings de shell, interpolar SIEMPRE con llaves (`${perm}:create`) o generar el archivo con la herramienta de escritura, no con `cat <<EOF` + variables; (2) las claves `modulo:tab:accion` escritas a mano en las tabs tienen un test que las valida contra `permissions-map.ts` (`src/features/Purchases/tab-permission-keys.test.ts`): replicarlo al crear un módulo nuevo; (3) al verificar en el navegador, entrar a CADA tab nueva como el usuario y confirmar que estén sus botones de alta, no solo los detalles.
 
+### Fechas y horas: SIEMPRE hora argentina, en el servidor y en el navegador
+
+Regla del usuario: _"Todas las fechas y horas son hora argentina"_. El contenedor de la app corre en UTC y el navegador puede estar en cualquier zona: `moment()` pelado para "hoy" o `moment(timestamp).format('DD/MM/YYYY HH:mm')` dan el día o la hora equivocados (entre las 21 y las 24 h AR el proceso ya está en "mañana"), y en un componente que se renderiza en el servidor y se hidrata en el cliente encima difieren entre sí.
+
+- "Hoy" (`YYYY-MM-DD`): `treasuryToday()` / `argentinaDate()` (`src/features/Treasury/lib/today.ts`, `src/features/Jobs/lib/dates.ts`). Rangos por defecto derivados de ese hoy, nunca de `moment()`.
+- Timestamps a mostrar: `formatArgentinaDay` / `formatArgentinaDateTime` (Intl con `timeZone: 'America/Argentina/Buenos_Aires'`).
+- Las columnas `@db.Date` llegan como medianoche UTC: se leen con `toISOString().slice(0, 10)` o `moment.utc`, no con `moment(date)`.
+- Test: correr el caso de las 22:30 AR con el proceso en otra zona (`TZ=UTC` / `TZ=Asia/Tokyo npx vitest run ...`).
+- La conexión de Prisma va con la sesión en UTC (`src/shared/lib/prisma-pg-config.ts`): `@prisma/adapter-pg` asume UTC (al leer reemplaza el offset por `+00:00`, al escribir manda la hora UTC sin offset). Con la sesión en hora argentina, todo `timestamptz` escrito desde JS quedaba 3 h en el futuro y lo escrito por `NOW()` se leía 3 h atrasado. Todo `new PrismaPg(...)` pasa por `prismaPgConfig()`.
+- Por eso toda función SQL que calcula con fechas lleva `SET TimeZone = 'America/Argentina/Buenos_Aires'` en su definición (un `CREATE OR REPLACE` sin el `SET` lo pierde). Lo verifica `prisma/tests/06_timezone.sql`.
+- Al probar un cambio en `prisma.ts`, reiniciar el dev server matando el proceso por PID: en dev el cliente queda cacheado en `globalThis` y el HMR no lo recrea.
+
 ---
 
 _Update this file continuously. Every mistake Claude makes is a learning opportunity._

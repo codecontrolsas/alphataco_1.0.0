@@ -29,6 +29,19 @@ describe('PDF de la orden de pago', () => {
     expect(data.totals.net).toBe('$ 1.057,50');
   });
 
+  it('cheque de tercero endosado con número, banco, librador y fecha de pago; deuda de cheque rechazado suma', () => {
+    const data = buildPaymentPdfData(
+      source({
+        lines: [{ kind: 'REJECTED_CHECK', label: 'Cheque rechazado Nº 77 — BANCO GALICIA', amount: '500.00' }],
+        payments: [
+          { method: 'THIRD_PARTY_CHECK', account: 'Cartera', amount: '500.00', reference: null, checkNumber: '77', checkBank: 'BANCO GALICIA', checkDueOn: '2026-10-20', drawerName: 'Cliente SA' },
+        ],
+      })
+    );
+    expect(data.lines).toEqual([{ concept: 'Cheque rechazado Nº 77 — BANCO GALICIA', amount: '$ 500,00' }]);
+    expect(data.payments[0]).toEqual({ method: 'Cheque de tercero', detail: 'Cartera · N° 77 · BANCO GALICIA · librador Cliente SA · pago 20/10/2026', amount: '$ 500,00' });
+  });
+
   it('borrador y anulada llevan marca de agua', () => {
     expect(buildPaymentPdfData(source({ status: 'APPROVED' })).watermark).toBe('BORRADOR — NO VÁLIDA');
     expect(buildPaymentPdfData(source({ status: 'CANCELLED' })).watermark).toBe('ANULADA');

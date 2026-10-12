@@ -4,7 +4,7 @@ import moment from 'moment';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import type { PaymentOrderDetail, PaymentOrderFormData } from '../actions/payment-orders.server';
-import type { TreasuryAccountRow } from '../actions/treasury-accounts.server';
+import type { TreasuryAccountRow } from '@/features/Treasury/actions/accounts.server';
 import type { PaymentOrderFormValues } from '../schemas/payment-orders';
 import { PaymentOrderDetailView } from './components/PaymentOrderDetailView';
 import { PaymentOrderForm } from './components/PaymentOrderForm';
@@ -26,14 +26,21 @@ function Shell({ title, back, children }: { title?: string; back: { href: string
 
 const LIST = { href: '/dashboard/purchases?tab=pagos', label: 'Pagos' };
 
-/** Alta: con proveedor y comprobantes precargados si viene de Vencimientos (`?supplier=&invoices=`). */
-export function NewPaymentOrderPage({ data, invoiceIds }: { data: PaymentOrderFormData; invoiceIds: string[] }) {
+/**
+ * Alta: con proveedor, comprobantes y deudas de cheques rechazados precargados si viene de
+ * Vencimientos (`?supplier=&invoices=&checks=`).
+ */
+export function NewPaymentOrderPage({ data, invoiceIds, checkIds = [] }: { data: PaymentOrderFormData; invoiceIds: string[]; checkIds?: string[] }) {
   const open = data.openItems.invoices.filter((i) => invoiceIds.includes(i.id));
+  const debts = data.openItems.checkDebts.filter((d) => checkIds.includes(d.checkId));
   const values: PaymentOrderFormValues = {
     supplierId: data.supplier?.id ?? '',
     plannedOn: moment().format('YYYY-MM-DD'),
     notes: '',
-    lines: open.map((i) => ({ kind: i.isCredit ? 'CREDIT_NOTE' : 'INVOICE', invoiceId: i.id, sourceLineId: '', amount: i.pending })),
+    lines: [
+      ...open.map((i) => ({ kind: i.isCredit ? ('CREDIT_NOTE' as const) : ('INVOICE' as const), invoiceId: i.id, sourceLineId: '', amount: i.pending })),
+      ...debts.map((d) => ({ kind: 'REJECTED_CHECK' as const, invoiceId: '', sourceLineId: '', checkId: d.checkId, amount: d.pending })),
+    ],
     advance: { amount: '', purchaseOrderId: '', description: '' },
     manualWithholdings: [],
   };

@@ -1,0 +1,43 @@
+---
+title: Retenciones sufridas y certificados
+summary: Cómo cargar en el recibo las retenciones que practicó el cliente (Ganancias, IVA, IIBB, SUSS) con su certificado en PDF, cómo adjuntarlo después, y el listado mensual con su Excel para la liquidación.
+keywords: retenciones, retenciones sufridas, certificado de retención, ganancias, IVA, IIBB, ingresos brutos, SUSS, jurisdicción, Neuquén, liquidación, listado mensual, Excel, sin certificado, adjuntar certificado
+updated: 2026-10-11
+---
+
+Cuando un cliente paga, puede **retener** parte de lo que debe y entregar un **certificado** en su lugar. Esas retenciones son un pago a cuenta de los impuestos de la empresa: hay que registrarlas con su certificado para computarlas en cada liquidación.
+
+<OpenScreen />
+
+## Cargarlas en el recibo
+
+En **Retenciones que practicó el cliente**, **Agregar retención** por cada certificado:
+
+| Campo | Qué poner |
+|---|---|
+| **Impuesto** | Ganancias, IVA, IIBB o SUSS. |
+| **Jurisdicción** | Solo en IIBB: la provincia ("Neuquén"). |
+| **N° de certificado** y **fecha** | Los del certificado. |
+| **Importe** | Lo retenido. |
+| **Certificado (PDF)** | Opcional: se sube al guardar. |
+
+Las retenciones cuentan como parte de lo que el cliente entregó: el recibo cierra con comprobantes = retenciones + medios. El mismo número de certificado de un cliente, para el mismo impuesto, no se puede cargar dos veces.
+
+## El certificado llega después
+
+Es normal que el certificado llegue días después del pago. El recibo se confirma igual y la retención queda **Sin certificado**. Para adjuntarlo, en el recibo o en el listado: **Adjuntar** (o **Reemplazar**). Solo PDF, hasta 10 MB.
+
+## El listado mensual
+
+**Tesorería → Retenciones sufridas** lista las retenciones de los recibos confirmados. Por defecto muestra el **mes en curso**; con el filtro de fecha se elige otro período. Arriba están los **totales por impuesto** del filtro.
+
+**Excel** exporta el listado con una columna **Certificado** que trae el link a cada PDF (se abre con tu usuario del sistema). Con el filtro **Certificado → Sin certificado** ves cuáles falta pedir.
+
+Las retenciones de un recibo anulado no aparecen.
+
+## Permisos
+
+| Acción | Permiso |
+|---|---|
+| Ver el listado | **Retenciones sufridas → Ver** |
+| Adjuntar o reemplazar certificados | **Retenciones sufridas → Editar** (o **Cobranzas → Editar**) |

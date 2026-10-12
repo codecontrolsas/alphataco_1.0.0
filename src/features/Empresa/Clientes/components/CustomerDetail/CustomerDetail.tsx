@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PermissionGuard } from '@/features/Permissions';
 import type { VisibilityState } from '@tanstack/react-table';
+import Link from 'next/link';
 import type { AreaRow } from '../../actions/areas.server';
 import type { MeasureUnitRow } from '../../actions/measure-units.server';
 import type { SectorRow } from '../../actions/sectors.server';
@@ -61,9 +62,16 @@ export function CustomerDetail({
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Detalles del Cliente {customer.name}</h2>
-        <Button variant="outline" onClick={onClose}>
-          Cerrar
-        </Button>
+        <div className="flex items-center gap-2">
+          <PermissionGuard module="tesoreria" tab="cobranzas" action="view">
+            <Button asChild variant="outline">
+              <Link href={`/dashboard/treasury/customers/${customer.id}`}>Cuenta corriente</Link>
+            </Button>
+          </PermissionGuard>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cerrar
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="detalle">

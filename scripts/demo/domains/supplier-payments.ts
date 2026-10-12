@@ -35,6 +35,8 @@ export async function seedSupplierPayments(ctx: Ctx): Promise<string> {
     { key: 'galicia', kind: 'BANK' as const, name: 'Banco Galicia CC $', bank_name: 'Banco Galicia', account_number: '4012-7 123-4' },
     { key: 'nacion', kind: 'BANK' as const, name: 'Banco Nación CC $', bank_name: 'Banco de la Nación Argentina', account_number: '3410-02 554-1' },
     { key: 'caja', kind: 'CASH' as const, name: 'Caja administración', bank_name: null, account_number: null },
+    // Tesorería etapa 3a: los cheques de terceros recibidos (recibos y carga inicial).
+    { key: 'cartera', kind: 'CHECK_PORTFOLIO' as const, name: 'Cartera de cheques', bank_name: null, account_number: null },
   ];
   await tx.treasury_accounts.createMany({
     data: accounts.map((a) => ({ id: demoId('treasury_account', a.key), company_id: company.id, kind: a.kind, name: a.name, bank_name: a.bank_name, account_number: a.account_number })),
@@ -179,7 +181,8 @@ export async function seedSupplierPayments(ctx: Ctx): Promise<string> {
         },
         payments: paid
           ? {
-              create: (o.payments ?? []).map((p) => ({
+              create: (o.payments ?? []).map((p, i) => ({
+                id: demoId('payment_order_payment', `${o.key}-${i}`),
                 method: p.method,
                 treasury_account_id: account(p.account),
                 amount: money(p.amount),
@@ -191,6 +194,57 @@ export async function seedSupplierPayments(ctx: Ctx): Promise<string> {
           : undefined,
       },
     });
+    // Tesoreria: la transferencia y el efectivo son un movimiento SUPPLIER_PAYMENT, con la misma
+    // regla que registerPayment. Un cheque o e-cheq propio queda EMITIDO, sin movimiento, hasta que
+    // se confirma su debito (etapa 3b). No hay trigger.
+    if (paid && o.payments?.length) {
+      const supplier = await tx.suppliers.findUniqueOrThrow({ where: { id: supplierId(o.supplier) }, select: { name: true } });
+      const number = `OP-${String(opCounter).padStart(6, '0')}`;
+      const isCheck = (p: { method: string }) => p.method === 'CHECK' || p.method === 'ECHECK';
+      await tx.treasury_movements.createMany({
+        data: o.payments.flatMap((p, i) =>
+          isCheck(p)
+            ? []
+            : [
+                {
+                  id: demoId('treasury_movement', `${o.key}-${i}`),
+                  company_id: company.id,
+                  account_id: account(p.account),
+                  date: new Date(`${cal.ymd(o.day)}T00:00:00.000Z`),
+                  amount: money(-p.amount),
+                  kind: 'SUPPLIER_PAYMENT' as const,
+                  description: `${number} — ${supplier.name}`,
+                  payment_order_payment_id: demoId('payment_order_payment', `${o.key}-${i}`),
+                  created_by: actorId,
+                  created_at: cal.at(o.day, 11),
+                },
+              ]
+        ),
+      });
+      for (const [i, p] of o.payments.entries()) {
+        if (!isCheck(p)) continue;
+        const checkId = demoId('own_check', `${o.key}-${i}`);
+        await tx.own_checks.create({
+          data: {
+            id: checkId,
+            company_id: company.id,
+            kind: p.method === 'CHECK' ? 'PHYSICAL' : 'ECHECK',
+            account_id: account(p.account),
+            number: p.checkNumber ?? '',
+            amount: money(p.amount),
+            issue_date: date,
+            payment_date: new Date(`${cal.ymd(o.day + (p.checkDueIn ?? 0))}T00:00:00.000Z`),
+            supplier_id: supplierId(o.supplier),
+            payment_order_payment_id: demoId('payment_order_payment', `${o.key}-${i}`),
+            created_by: actorId,
+            created_at: cal.at(o.day, 11),
+          },
+        });
+        await tx.own_check_events.create({
+          data: { check_id: checkId, from_status: null, to_status: 'ISSUED', date, payment_order_id: demoId('payment_order', o.key), user_id: actorId, created_at: cal.at(o.day, 11) },
+        });
+      }
+    }
     return net;
   };
 

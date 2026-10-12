@@ -1456,6 +1456,107 @@ export const PERMISSIONS = {
     },
   },
 
+  // ============================================
+  // 14. TESORERIA
+  // ============================================
+  // Cuentas, saldos, movimientos y transferencias (spec
+  // docs/superpowers/specs/2026-10-10-tesoreria-etapa-1-design.md). Prefijo de ids `d0000000-`.
+  // El extracto de una cuenta hereda el permiso de 'cuentas'.
+  tesoreria: {
+    slug: 'tesoreria',
+    name: 'Tesorería',
+    moduleId: 'd0000000-0000-0000-0000-000000000000',
+    tabs: {
+      cuentas: {
+        slug: 'cuentas',
+        name: 'Cuentas',
+        tabId: 'd0000000-0000-0000-0000-000000000001',
+        parent: null,
+        allowedActions: ['view'],
+        subtabs: {},
+      },
+      // 'update' edita y anula movimientos manuales y saldos iniciales.
+      movimientos: {
+        slug: 'movimientos',
+        name: 'Movimientos',
+        tabId: 'd0000000-0000-0000-0000-000000000002',
+        parent: null,
+        allowedActions: ['view', 'create', 'update'],
+        subtabs: {},
+      },
+      // 'update' anula transferencias (no se editan).
+      transferencias: {
+        slug: 'transferencias',
+        name: 'Transferencias',
+        tabId: 'd0000000-0000-0000-0000-000000000003',
+        parent: null,
+        allowedActions: ['view', 'create', 'update'],
+        subtabs: {},
+      },
+      // Cuentas y cajas (con saldo inicial) y conceptos.
+      'config-tesoreria': {
+        slug: 'config-tesoreria',
+        name: 'Configuración',
+        tabId: 'd0000000-0000-0000-0000-000000000004',
+        parent: null,
+        allowedActions: ['view', 'update'],
+        subtabs: {},
+      },
+      // Etapa 2. 'create' crea borradores de recibo; 'update' los edita y confirma, envía el recibo
+      // y adjunta certificados; 'delete' borra borradores y anula recibos confirmados. La cuenta
+      // corriente del cliente hereda 'view'.
+      cobranzas: {
+        slug: 'cobranzas',
+        name: 'Cobranzas',
+        tabId: 'd0000000-0000-0000-0000-000000000005',
+        parent: null,
+        allowedActions: ['view', 'create', 'update', 'delete'],
+        subtabs: {},
+      },
+      // Etapa 3a. 'create' deposita, descuenta y hace la carga inicial de cheques; 'update' registra
+      // rechazos; 'delete' anula depósitos, descuentos, rechazos y cargas iniciales. El endoso usa
+      // el permiso de pagos de Compras.
+      cheques: {
+        slug: 'cheques',
+        name: 'Cheques',
+        tabId: 'd0000000-0000-0000-0000-000000000007',
+        parent: null,
+        allowedActions: ['view', 'create', 'update', 'delete'],
+        subtabs: {},
+      },
+      // Etapa 3b. 'create' da de alta chequeras e inutiliza números; 'update' confirma débitos y
+      // registra rechazos; 'delete' deshace débitos, anula rechazos y da de baja chequeras. La
+      // emisión usa el permiso de pagos de Compras.
+      'cheques-propios': {
+        slug: 'cheques-propios',
+        name: 'Cheques propios',
+        tabId: 'd0000000-0000-0000-0000-000000000008',
+        parent: null,
+        allowedActions: ['view', 'create', 'update', 'delete'],
+        subtabs: {},
+      },
+      // Etapa 4. 'create' importa extractos; 'update' concilia, registra e ignora líneas; 'delete'
+      // desconcilia y borra importaciones.
+      conciliacion: {
+        slug: 'conciliacion',
+        name: 'Conciliación',
+        tabId: 'd0000000-0000-0000-0000-000000000009',
+        parent: null,
+        allowedActions: ['view', 'create', 'update', 'delete'],
+        subtabs: {},
+      },
+      // 'update' adjunta o reemplaza el certificado de una retención.
+      'retenciones-sufridas': {
+        slug: 'retenciones-sufridas',
+        name: 'Retenciones sufridas',
+        tabId: 'd0000000-0000-0000-0000-000000000006',
+        parent: null,
+        allowedActions: ['view', 'update'],
+        subtabs: {},
+      },
+    },
+  },
+
 } as const;
 
 // ============================================

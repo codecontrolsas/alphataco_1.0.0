@@ -8,6 +8,7 @@ import { WITHHOLDING_TAXES } from './payment-settings';
  */
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const positive = (value: string) => {
   const scaled = parseScaled(value, AMOUNT_SCALE);
   return scaled !== null && scaled > BigInt(0);
@@ -17,7 +18,7 @@ const nonNegative = (value: string) => {
   return scaled !== null && scaled >= BigInt(0);
 };
 
-export const PAYMENT_LINE_KINDS = ['INVOICE', 'CREDIT_NOTE', 'ADVANCE_APPLIED'] as const;
+export const PAYMENT_LINE_KINDS = ['INVOICE', 'CREDIT_NOTE', 'ADVANCE_APPLIED', 'REJECTED_CHECK'] as const;
 
 export const paymentOrderFormSchema = z
   .object({
@@ -29,6 +30,8 @@ export const paymentOrderFormSchema = z
         kind: z.enum(PAYMENT_LINE_KINDS),
         invoiceId: z.string(),
         sourceLineId: z.string(),
+        /** Cheque de tercero rechazado (solo kind = REJECTED_CHECK). */
+        checkId: z.string().optional(),
         amount: z.string().trim(),
       })
     ),
@@ -51,7 +54,7 @@ export const paymentOrderFormSchema = z
     const seen = new Set<string>();
     v.lines.forEach((line, i) => {
       if (!positive(line.amount)) issue(['lines', i, 'amount'], 'Importe inválido');
-      const key = line.kind === 'ADVANCE_APPLIED' ? line.sourceLineId : line.invoiceId;
+      const key = line.kind === 'ADVANCE_APPLIED' ? line.sourceLineId : line.kind === 'REJECTED_CHECK' ? (line.checkId ?? '') : line.invoiceId;
       if (!key) issue(['lines', i], 'Falta el comprobante o el anticipo');
       else if (seen.has(key)) issue(['lines', i], 'El mismo comprobante o anticipo está dos veces');
       seen.add(key);
@@ -68,13 +71,17 @@ export const paymentOrderFormSchema = z
 
 export type PaymentOrderFormValues = z.infer<typeof paymentOrderFormSchema>;
 
+/** Medios de cobro y pago comunes (el recibo usa solo estos). */
 export const PAYMENT_METHODS = ['TRANSFER', 'CHECK', 'ECHECK', 'CASH'] as const;
+/** Medios del pago a proveedores: suman el endoso de un cheque de tercero de la cartera (Tesorería etapa 3a). */
+export const SUPPLIER_PAYMENT_METHODS = [...PAYMENT_METHODS, 'THIRD_PARTY_CHECK'] as const;
 
-export const PAYMENT_METHOD_LABELS: Record<(typeof PAYMENT_METHODS)[number], string> = {
+export const PAYMENT_METHOD_LABELS: Record<(typeof SUPPLIER_PAYMENT_METHODS)[number], string> = {
   TRANSFER: 'Transferencia',
   CHECK: 'Cheque',
   ECHECK: 'E-cheq',
   CASH: 'Efectivo',
+  THIRD_PARTY_CHECK: 'Cheque de tercero',
 };
 
 export const registerPaymentFormSchema = z
@@ -83,24 +90,39 @@ export const registerPaymentFormSchema = z
     payments: z
       .array(
         z.object({
-          method: z.enum(PAYMENT_METHODS),
+          method: z.enum(SUPPLIER_PAYMENT_METHODS),
           accountId: z.string(),
           amount: z.string().trim(),
           reference: z.string().trim().max(60, 'Máximo 60 caracteres'),
           checkNumber: z.string().trim().max(30, 'Máximo 30 caracteres'),
           checkBank: z.string().trim().max(60, 'Máximo 60 caracteres'),
           checkDueOn: z.string().trim(),
+          /** Cheque de la cartera que se endosa (solo THIRD_PARTY_CHECK): su importe y su cartera los pone el servidor. */
+          thirdPartyCheckId: z.string().optional(),
+          /** Chequera del cheque propio físico (solo CHECK, Tesorería etapa 3b): la cuenta sale de la chequera. */
+          checkbookId: z.string().optional(),
         })
       ),
   })
   .superRefine((v, ctx) => {
+    const checks = new Set<string>();
     v.payments.forEach((p, i) => {
       const issue = (field: string, message: string) => ctx.addIssue({ code: 'custom', path: ['payments', i, field], message });
-      if (!p.accountId) issue('accountId', 'Elegí la cuenta o caja');
+      if (p.method === 'THIRD_PARTY_CHECK') {
+        const id = p.thirdPartyCheckId ?? '';
+        if (!UUID_RE.test(id)) issue('thirdPartyCheckId', 'Elegí el cheque');
+        else if (checks.has(id)) issue('thirdPartyCheckId', 'El cheque está dos veces');
+        checks.add(id);
+        return;
+      }
+      if (p.method === 'CHECK') {
+        if (!UUID_RE.test(p.checkbookId ?? '')) issue('checkbookId', 'Elegí la chequera');
+      } else if (!p.accountId) issue('accountId', p.method === 'ECHECK' ? 'Elegí la cuenta bancaria' : 'Elegí la cuenta o caja');
       if (!positive(p.amount)) issue('amount', 'Importe inválido');
       if (p.method === 'CHECK' || p.method === 'ECHECK') {
         if (!p.checkNumber) issue('checkNumber', 'Indicá el número del cheque');
         if (!DATE_RE.test(p.checkDueOn)) issue('checkDueOn', 'Indicá la fecha de pago del cheque');
+        else if (DATE_RE.test(v.paidOn) && p.checkDueOn < v.paidOn) issue('checkDueOn', 'La fecha de pago del cheque no puede ser anterior a la del pago');
       }
     });
   });

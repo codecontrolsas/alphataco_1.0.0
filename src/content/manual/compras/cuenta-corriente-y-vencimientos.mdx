@@ -17,6 +17,8 @@ El pendiente es el total del comprobante menos lo que ya está en órdenes de pa
 
 Para pagar, tildá los comprobantes de **un mismo proveedor** y tocá **Armar orden de pago**: se abre el formulario de la <GuideLink to="ordenes-de-pago">orden de pago</GuideLink> con esos comprobantes cargados.
 
+También figuran las deudas por **cheques de terceros** que se le endosaron al proveedor y volvieron rechazados (con vencimiento en la fecha del rechazo). Ver <GuideLink to="rechazo-de-un-cheque">Rechazo de un cheque</GuideLink>.
+
 Se puede filtrar por proveedor, por vencimiento y por cualquiera de las columnas, y exportar a Excel.
 
 ## La cuenta corriente del proveedor
@@ -38,6 +40,7 @@ Abajo, los **movimientos** del período elegido (**Desde** y **Hasta**), con el 
 | Nota de crédito | **Haber** |
 | Orden de pago pagada (lo pagado más sus retenciones) | **Haber** |
 | Anticipo pagado | **Haber**, y queda como anticipo disponible |
+| Cheque de tercero endosado y rechazado | **Debe** (se le vuelve a deber) |
 
 Cada fila lleva el **saldo** acumulado y se puede abrir el documento. **Excel** baja los movimientos, y **Nueva orden de pago** abre el formulario con el proveedor ya elegido.
 

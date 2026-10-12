@@ -1,0 +1,42 @@
+---
+title: Depositar y descontar cheques
+summary: Cómo depositar uno o varios cheques de la cartera con su fecha de acreditación, cómo descontarlos en un banco por el neto de intereses y comisión, y cómo anular un depósito o un descuento.
+keywords: depositar cheques, depósito, boleta, CD, acreditación, a acreditar, descontar cheques, descuento, liquidación, CL, intereses, comisión, neto, anular depósito, anular descuento
+updated: 2026-10-11
+---
+
+Los cheques **en cartera** salen hacia un banco de dos formas: se **depositan** (el banco los cobra en su fecha) o se **descuentan** (el banco adelanta la plata y cobra intereses y comisión).
+
+<OpenScreen to="cartera-de-cheques" label="Abrir la cartera de cheques" />
+
+## Depositar
+
+1. En **Tesorería → Cheques**, tildá los cheques **En cartera** que vas a depositar.
+2. **Depositar** abre la boleta: elegí la **cuenta bancaria**, la **fecha** del depósito y, si querés, el número de **boleta**.
+3. Cada cheque trae su **fecha de acreditación**: la mayor entre la del depósito y su fecha de pago. Podés pasarla para adelante (por ejemplo, si el banco acredita a las 48 horas), nunca para atrás.
+4. **Depositar** registra el depósito con número **CD-000001**, **CD-000002**…
+
+Los cheques salen de la cartera el día del depósito y entran al banco **en su fecha de acreditación**: hasta ese día el extracto del banco los muestra **A acreditar**.
+
+## Descontar
+
+1. Tildá los cheques y elegí **Descontar**.
+2. Cargá la **cuenta bancaria**, la **fecha** de la liquidación, los **intereses**, la **comisión** y, si querés, la referencia del banco.
+3. El formulario muestra el **nominal** y el **neto** que entra al banco. Si los intereses y la comisión igualan o superan el nominal, no deja registrarlo.
+4. **Descontar** registra la liquidación con número **CL-000001**…
+
+Los cheques salen de la cartera por su nominal y al banco entra **una sola vez el neto**. Intereses y comisión quedan en la liquidación para consulta.
+
+<Callout type="info" title="Si el banco devuelve un cheque descontado">
+Se registra como cualquier rechazo desde el detalle del cheque: sale del banco el importe del cheque y el cliente vuelve a deberlo. Ver <GuideLink to="rechazo-de-un-cheque">Rechazo de un cheque</GuideLink>.
+</Callout>
+
+## Anular un depósito o un descuento
+
+Desde el detalle de cualquiera de sus cheques, **Anular depósito CD-…** (o **Anular descuento CL-…**) pide el motivo y anula la operación **completa**: todos sus cheques vuelven a la cartera y se anulan sus movimientos.
+
+No se puede si alguno de sus cheques ya fue **rechazado**: primero se anula el rechazo.
+
+## Permisos
+
+Depositar y descontar requieren **Cheques → Crear**; anular, **Cheques → Eliminar**.

@@ -1,0 +1,64 @@
+---
+title: Cartera de cheques
+summary: Dónde quedan los cheques de terceros que entrega un cliente, cómo se ve la cartera, qué estados puede tener un cheque, el plazo de 30 días para depositarlo y la carga inicial de los cheques que ya estaban en mano.
+keywords: cheques, cheques de terceros, cartera, cartera de cheques, e-cheq, librador, en cartera, depositado, endosado, descontado, rechazado, anulado, vence para depositar, por vencer, vencido para depositar, carga inicial, cheque repetido
+updated: 2026-10-11
+---
+
+Los cheques y e-cheqs que entrega un cliente no van directo al banco: entran a una **cartera de cheques**, una cuenta más de Tesorería que suma lo que tenés en mano. Desde ahí cada cheque sale de una de tres formas: se **deposita**, se **endosa** a un proveedor o se **descuenta** en un banco.
+
+<OpenScreen />
+
+## La cartera
+
+La cartera se crea en **Configuración** como una cuenta de tipo **Cartera de cheques** (puede haber más de una, por ejemplo una por sucursal). Su saldo es la suma de los cheques que tiene y su extracto muestra cada entrada y salida.
+
+En **Tesorería → Cheques** ves:
+
+- arriba, el total **en cartera** de cada cartera y cuántos cheques están **por vencer** o **vencidos** para depositar;
+- la tabla de cheques, que arranca mostrando los **En cartera**. Con los filtros ves también los depositados, endosados, descontados o rechazados;
+- el botón **Carga inicial**.
+
+Cada fila lleva al **detalle del cheque**: sus datos, el historial de todo lo que le pasó (con fecha, hora y usuario) y las acciones que admite según su estado.
+
+## Cómo entra un cheque
+
+- **Por un recibo**: al cobrar con **Cheque** o **E-cheq**, elegís la cartera y cargás número, banco, emisión, fecha de pago y **librador** (se completa con el cliente y se puede cambiar). Al confirmar el recibo, el cheque queda **En cartera**. Ver <GuideLink to="cobrar-facturas">Cobrar facturas</GuideLink>.
+- **Por la carga inicial**: para los cheques que ya estaban en la empresa cuando empezaste a usar el sistema. Elegís cartera, fecha y cliente, y cargás uno o varios cheques.
+
+<Callout type="info" title="Cheques repetidos">
+No puede haber dos cheques vigentes con el mismo banco, número y CUIT del librador. Al confirmar un recibo con un cheque que ya está cargado, el sistema avisa y no lo deja confirmar.
+</Callout>
+
+## Estados
+
+| Estado | Qué significa |
+| --- | --- |
+| **En cartera** | Está en la empresa, listo para depositar, endosar o descontar. |
+| **Depositado** | Se depositó en un banco; entra a la cuenta en su fecha de acreditación. |
+| **Endosado** | Se entregó a un proveedor en una orden de pago. |
+| **Descontado** | Se cambió en un banco antes de su fecha, por el neto de intereses y comisión. |
+| **Rechazado** | Lo devolvió el banco o el proveedor: el cliente vuelve a deberlo. |
+| **Anulado** | Se anuló el recibo o la carga inicial que lo trajo. |
+
+## El plazo para depositar
+
+Un cheque tiene **30 días desde su fecha de pago** para presentarse al banco (igual los físicos que los e-cheqs). La tabla y el detalle muestran **Vence para depositar** y avisan:
+
+- **Por vencer**: faltan 5 días o menos;
+- **Vencido para depositar**: el plazo ya pasó.
+
+Es solo un aviso: el sistema no impide depositarlo, eso lo decide el banco.
+
+## Qué pasa si…
+
+- **…cargué mal un cheque de la carga inicial**: desde su detalle, **Anular la carga inicial** (solo mientras siga en cartera).
+- **…un cheque vino de un recibo mal cargado**: se anula el recibo. Si alguno de sus cheques ya salió de la cartera, primero hay que anular esa operación. Ver <GuideLink to="anular-un-recibo">Anular un recibo</GuideLink>.
+
+<Callout type="info" title="Cheques propios">
+Los cheques que emite la empresa para pagar a proveedores no pasan por la cartera: se siguen en **Tesorería → Cheques propios**. Ver <GuideLink to="cheques-propios">Cheques propios</GuideLink>.
+</Callout>
+
+## Permisos
+
+Ver la cartera requiere **Cheques → Ver**; la carga inicial, **Cheques → Crear**.

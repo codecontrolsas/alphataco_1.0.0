@@ -1,0 +1,78 @@
+---
+title: Cómo funciona Tesorería
+summary: Qué es el módulo Tesorería, cómo se calcula el saldo de cada cuenta y caja, la diferencia entre saldo y "a debitar", de dónde salen los movimientos, las cobranzas a clientes y qué viene en las próximas etapas.
+keywords: tesorería, tesoreria, saldo, saldos, banco, bancos, caja, cajas, cuenta bancaria, movimientos, a debitar, a acreditar, proyectado, extracto, cheque, e-cheq, transferencia, pagos a proveedores, cobranzas, conciliación, recibo, cobro, permisos
+updated: 2026-10-12
+---
+
+**Tesorería** muestra **cuánta plata hay en cada cuenta bancaria y en cada caja**, cuánto se va a debitar en los próximos días y **por qué cambió** el saldo. Todo lo que entra o sale de una cuenta queda como un **movimiento**, con el documento que lo originó.
+
+<OpenScreen />
+
+## Las ideas básicas
+
+| Concepto | Qué es |
+|---|---|
+| **Cuenta o caja** | Un lugar donde hay plata: una cuenta bancaria ("Banco Galicia CC $") o una caja de efectivo ("Caja administración"). Se cargan en <GuideLink to="configuracion-de-tesoreria">Configuración de Tesorería</GuideLink>. |
+| **Movimiento** | Una entrada (ingreso) o salida (egreso) de plata de una cuenta, en una **fecha**: la fecha en que la plata entra o sale de verdad. |
+| **Saldo inicial** | Lo que había en la cuenta el día que se empieza a usar Tesorería. Es el primer movimiento de la cuenta. |
+| **Saldo** | La suma de los movimientos con fecha **hasta hoy**. |
+| **A debitar** | Los egresos con fecha **posterior a hoy**: por ejemplo, un e-cheq que se le dio a un proveedor y todavía no venció. No bajan el saldo hasta su fecha. |
+| **A acreditar** | Los ingresos con fecha posterior a hoy. |
+| **Proyectado** | Saldo + a debitar + a acreditar: cómo queda la cuenta cuando pase todo lo programado. |
+
+<Callout type="info" title="El saldo no se carga: se calcula">
+Nadie escribe el saldo de una cuenta. Es siempre la suma de sus movimientos vigentes. Si un saldo no coincide con el banco, se busca el movimiento que falta o sobra en el extracto.
+</Callout>
+
+## De dónde salen los movimientos
+
+| Tipo | Lo genera | Se corrige… |
+|---|---|---|
+| **Saldo inicial** | Quien configura la cuenta. | Editándolo o anulándolo. |
+| **Manual** | Un usuario, en <GuideLink to="movimientos-de-tesoreria">Movimientos</GuideLink>: gastos bancarios, impuestos, aportes, retiros. | Editándolo o anulándolo. |
+| **Transferencia** | Una <GuideLink to="transferencias">transferencia</GuideLink> entre dos cuentas (dos movimientos: uno en cada cuenta). | Anulando la transferencia. |
+| **Pago a proveedor** | El pago de una <GuideLink to="ordenes-de-pago">orden de pago</GuideLink> de Compras: un movimiento por cada medio de pago. | Anulando la orden de pago. |
+| **Cobro a cliente** | La confirmación de un <GuideLink to="cobrar-facturas">recibo</GuideLink>: un movimiento por cada medio con que pagó el cliente. | Anulando el recibo. |
+
+Un movimiento **anulado** no se borra: queda en el extracto tachado, con el motivo, y deja de sumar.
+
+## Los cheques propios debitan cuando el banco los paga
+
+Cuando se paga con **cheque** o **e-cheq**, el cheque queda **emitido**: figura **a debitar** y no baja el saldo. Sale del banco recién cuando alguien **confirma el débito** con la fecha real (o se registra el rechazo). Ver <GuideLink to="cheques-propios">Cheques propios</GuideLink>. Las transferencias y el efectivo salen el día del pago.
+
+Los cheques que **recibe** la empresa entran a una **cartera de cheques** el día del cobro. Cuando se depositan, entran al banco en su **fecha de acreditación** y hasta ese día figuran **a acreditar**. Ver <GuideLink to="cartera-de-cheques">Cartera de cheques</GuideLink>.
+
+## Las secciones
+
+| Sección | Para qué |
+|---|---|
+| **Cuentas** | Una tarjeta por cuenta y caja con su saldo, a debitar, a acreditar y proyectado, y los totales de bancos y de cajas. Cada tarjeta abre el **extracto**. Ver <GuideLink to="cuentas-y-saldos">Cuentas y saldos</GuideLink>. |
+| **Movimientos** | Todos los movimientos de todas las cuentas, y el alta de los manuales. |
+| **Transferencias** | Los pases de plata entre cuentas. |
+| **Cobranzas** | Lo que está **a cobrar** (facturas y notas de débito con saldo) y los **recibos**. Ver <GuideLink to="cobrar-facturas">Cobrar facturas</GuideLink>. |
+| **Cheques** | La cartera de cheques de terceros: depositar, descontar, rechazos y carga inicial. Ver <GuideLink to="cartera-de-cheques">Cartera de cheques</GuideLink>. |
+| **Cheques propios** | Chequeras y cheques emitidos: confirmar débitos, rechazos y números inutilizados. Ver <GuideLink to="cheques-propios">Cheques propios</GuideLink>. |
+| **Conciliación** | El extracto del banco importado y conciliado con el libro: qué está registrado, qué falta y qué todavía no pasó por el banco. Ver <GuideLink to="conciliacion-bancaria">Conciliación bancaria</GuideLink>. |
+| **Retenciones sufridas** | Las retenciones que practicaron los clientes, por mes, con su certificado. Ver <GuideLink to="retenciones-sufridas">Retenciones sufridas</GuideLink>. |
+| **Configuración** | Cuentas y cajas con su saldo inicial, y los conceptos de los movimientos manuales. |
+
+## Un solo libro
+
+Cuentas, cobranzas, cartera de cheques de terceros, cheques propios y conciliación bancaria escriben en el mismo libro de movimientos: el saldo de cada cuenta es la suma de sus movimientos vigentes, y el extracto del banco se concilia contra ese libro.
+
+## Permisos
+
+| Acción | Permiso |
+|---|---|
+| Ver las tarjetas y el extracto | **Cuentas → Ver** |
+| Ver los movimientos | **Movimientos → Ver** |
+| Cargar movimientos manuales | **Movimientos → Crear** |
+| Editar y anular manuales y saldos iniciales | **Movimientos → Editar** |
+| Ver, cargar y anular transferencias | **Transferencias → Ver / Crear / Editar** |
+| Ver y cambiar cuentas, cajas y conceptos | **Configuración → Ver / Editar** |
+| Cobranzas y cuenta corriente de clientes | **Cobranzas → Ver / Crear / Editar / Eliminar** |
+| Cartera de cheques (depositar, descontar, rechazar, anular) | **Cheques → Ver / Crear / Editar / Eliminar** |
+| Cheques propios (chequeras, débitos, rechazos) | **Cheques propios → Ver / Crear / Editar / Eliminar** |
+| Conciliación (importar, conciliar, desconciliar) | **Conciliación → Ver / Crear / Editar / Eliminar** |
+| Retenciones sufridas | **Retenciones sufridas → Ver / Editar** |

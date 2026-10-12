@@ -1,0 +1,32 @@
+---
+title: Perfil de columnas del extracto
+summary: Cómo decirle al sistema en qué columna del Excel o CSV del banco está la fecha, la descripción, la referencia y el importe, con qué formato de fecha y qué separador decimal. Se arma una vez por cuenta.
+keywords: perfil, columnas, extracto, formato, importar extracto, fila del encabezado, columna de fecha, columna de importe, débito, crédito, formato de fecha, separador decimal, coma, punto, CSV, Excel, home banking
+updated: 2026-10-12
+---
+
+Cada banco arma su extracto distinto. El **perfil** le dice al sistema dónde está cada dato. Se completa la primera vez que importás un extracto de una cuenta y **se recuerda**: la próxima vez ya viene cargado (y se puede corregir).
+
+<OpenScreen to="conciliacion-bancaria" label="Abrir Conciliación" />
+
+## Los campos
+
+Al subir el archivo, el diálogo muestra sus primeras filas con la **letra de cada columna** (A, B, C…) y el número de cada fila.
+
+| Campo | Qué poner |
+| --- | --- |
+| **Fila del encabezado** | El número de la fila con los títulos (Fecha, Concepto, Importe…). Los datos empiezan en la siguiente. Si el archivo no tiene títulos, `0`. |
+| **Fecha** | La columna de la fecha del movimiento. |
+| **Descripción** | La columna del concepto o detalle. |
+| **Referencia** (opcional) | La columna del número de comprobante, de cheque o de operación. |
+| **Importe** | **Una columna con signo** (los débitos en negativo) o **débito y crédito separados** (dos columnas). |
+| **Formato de fecha** | `DD/MM/YYYY`, `DD-MM-YYYY`, `YYYY-MM-DD` o `MM/DD/YYYY`. En un Excel, las celdas con formato de fecha se leen solas. |
+| **Separador decimal** | **Coma** (`1.234,56`, lo habitual en Argentina) o **punto** (`1,234.56`). |
+
+Los importes pueden traer el signo `$`, separadores de miles, el signo menos adelante o atrás, o estar entre paréntesis para los negativos.
+
+## La vista previa
+
+Debajo del perfil se ven las líneas tal como se van a importar, con su fecha, descripción, referencia e importe (los débitos en rojo). Las filas vacías y las de importe 0 se saltean. Si una fila tiene una fecha o un importe que no se entiende, aparece el error con su número de fila: corregí el perfil (casi siempre es el formato de fecha o el separador decimal) hasta que no haya errores.
+
+Ver <GuideLink to="conciliacion-bancaria">Conciliación bancaria</GuideLink>.

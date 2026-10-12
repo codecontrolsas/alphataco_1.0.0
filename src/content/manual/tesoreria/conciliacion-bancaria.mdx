@@ -1,0 +1,62 @@
+---
+title: Conciliación bancaria
+summary: Cómo importar el extracto del banco, qué concilia el sistema solo, cómo conciliar a mano, registrar gastos e impuestos desde el extracto, confirmar el débito de un cheque propio, ignorar líneas y deshacer.
+keywords: conciliación, conciliacion bancaria, conciliar, extracto, extracto bancario, resumen del banco, home banking, importar, Excel, CSV, línea, pendiente, conciliada, registrada, ignorada, desconciliar, comisión, gastos bancarios, impuesto a los débitos y créditos, débito de cheque, diferencias con el banco
+updated: 2026-10-12
+---
+
+La conciliación compara el **extracto del banco** con el **libro** de la cuenta: qué movimientos del banco ya están registrados, cuáles faltan (comisiones, intereses, impuestos) y qué movimientos del libro todavía no pasaron por el banco.
+
+<OpenScreen />
+
+## Importar el extracto
+
+En **Tesorería → Conciliación**, elegí la **cuenta bancaria** y **Importar extracto**:
+
+1. Subí el archivo **Excel (.xlsx)** o **CSV** que bajaste del home banking. Se lee en tu navegador: el archivo no se guarda.
+2. Indicá en qué columnas está cada dato (la primera vez; después se recuerda para esa cuenta). Ver <GuideLink to="perfil-de-extracto">Perfil de columnas del extracto</GuideLink>.
+3. Revisá la **vista previa**: las líneas tal como van a quedar. Si una fila tiene una fecha o un importe que no se entiende, se avisa con su número de fila y no se importa nada.
+4. **Importar**.
+
+Si importás un extracto que se superpone con uno anterior, las líneas que ya estaban **no se repiten**: el aviso dice cuántas se saltearon. Dos líneas iguales en el mismo día del mismo archivo (por ejemplo, dos comisiones) se importan las dos.
+
+## Lo que concilia el sistema solo
+
+Al importar, cada línea se compara con los movimientos del libro de esa cuenta que todavía no están conciliados: **mismo importe** y **fecha a 3 días o menos**. Si hay **un solo** movimiento que coincide, se concilian solos. Si hay más de uno, la línea queda pendiente con las sugerencias para que elijas. **Conciliar automáticamente** vuelve a correr esta búsqueda.
+
+## La pantalla
+
+- Arriba: el **saldo del libro** al último día del extracto, lo **pendiente** del extracto (créditos y débitos) y lo **sin conciliar** del libro. Con esas cifras se explica la diferencia con el saldo del banco.
+- **Extracto del banco**: las líneas pendientes (con **Ver todas**, también las conciliadas, registradas e ignoradas).
+- **Libro sin conciliar**: los movimientos vigentes de la cuenta en el período del extracto (±5 días).
+- **Importaciones**: cada archivo importado, con su período y cuántas líneas quedan pendientes.
+
+## Qué hacer con cada línea pendiente
+
+| Acción | Cuándo |
+| --- | --- |
+| **Elegir** y **Conciliar** | El movimiento está en el libro con otra fecha o hay varios candidatos. Elegí la línea (se marcan en verde los movimientos **sugeridos**, con el mismo importe), elegí el movimiento y **Conciliar**. El importe tiene que ser el mismo. |
+| **Débito del cheque Nº …** | La línea es el débito de un cheque propio emitido de esa cuenta. Confirma el débito con la fecha de la línea y la concilia. Ver <GuideLink to="cheques-propios">Cheques propios</GuideLink>. |
+| **Registrar** | El movimiento no está en el libro: una comisión, un interés, un impuesto. Elegís el concepto (y la descripción) y se crea el movimiento manual en la fecha de la línea, ya conciliado. |
+| **Ignorar** | La línea no corresponde (por ejemplo, un movimiento que el banco revirtió el mismo día). Con motivo. |
+
+## Deshacer
+
+**Ver todas** muestra las líneas resueltas:
+
+- **Desconciliar** deja la línea pendiente. Si estaba **registrada**, además se anula el movimiento que se creó desde ella.
+- **Volver a pendiente** saca una línea de **ignoradas**.
+- Una importación sin líneas conciliadas se puede **borrar** (y volver a importar).
+
+<Callout type="info" title="Movimientos conciliados">
+Un movimiento conciliado queda **trabado**: no se edita ni se anula, tampoco anulando su documento (el recibo, la orden de pago, la transferencia o el débito del cheque). Primero hay que desconciliarlo. En el extracto de la cuenta y en Movimientos lleva la marca **Conciliado**.
+</Callout>
+
+## Permisos
+
+| Acción | Permiso |
+| --- | --- |
+| Ver la conciliación | **Conciliación → Ver** |
+| Importar extractos | **Conciliación → Crear** |
+| Conciliar, registrar e ignorar | **Conciliación → Editar** (y **Cheques propios → Editar** para el débito de un cheque) |
+| Desconciliar y borrar importaciones | **Conciliación → Eliminar** |

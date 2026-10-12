@@ -1,11 +1,11 @@
 ---
 title: Configuración de Compras
-summary: Cómo crear, renombrar, desactivar y reactivar los rubros de proveedor y los conceptos de gasto, y cómo cargar las cuentas y cajas desde las que se paga y los regímenes de retención.
+summary: Cómo crear, renombrar, desactivar y reactivar los rubros de proveedor y los conceptos de gasto, cómo cargar los regímenes de retención y dónde están ahora las cuentas y cajas.
 keywords: configuración de compras, cuentas y cajas, cuenta bancaria, caja, CBU, regímenes de retención, régimen, código de régimen, alícuota, mínimo no sujeto, retención mínima, escala, honorarios, concepto de gasto, conceptos de gasto, gastos sin OC, luz, honorarios, fletes, rubro, rubros, rubro de proveedor, categoría de proveedor, repuestos, cubiertas, lubricantes, servicios de taller
-updated: 2026-10-09
+updated: 2026-10-10
 ---
 
-En **Configuración** se mantienen las **cuentas y cajas** y los **regímenes de retención** que usan los pagos, los **conceptos de gasto** (ver más abajo) y los **rubros de proveedor**: qué vende cada proveedor (repuestos, cubiertas, lubricantes, servicios de taller…). Los rubros se asignan en la ficha del proveedor y sirven para filtrar la lista de <GuideLink to="proveedores">Proveedores</GuideLink>.
+En **Configuración** se mantienen los **regímenes de retención** que usan los pagos, los **conceptos de gasto** (ver más abajo) y los **rubros de proveedor**: qué vende cada proveedor (repuestos, cubiertas, lubricantes, servicios de taller…). Los rubros se asignan en la ficha del proveedor y sirven para filtrar la lista de <GuideLink to="proveedores">Proveedores</GuideLink>.
 
 <OpenScreen />
 
@@ -28,19 +28,7 @@ Se crean, renombran, desactivan y reactivan igual que los rubros. Desactivar un 
 
 ## Cuentas y cajas
 
-Desde dónde se les paga a los proveedores: cuentas bancarias y cajas de efectivo. Se eligen al **registrar el pago** de una <GuideLink to="ordenes-de-pago">orden de pago</GuideLink>; sin al menos una activa no se puede registrar ninguno.
-
-| Campo | Qué poner |
-|---|---|
-| **Tipo** | **Cuenta bancaria** o **Caja**. |
-| **Nombre** | Cómo se la reconoce: "Banco Galicia CC $", "Caja administración". |
-| **Banco**, **Número de cuenta** y **CBU** | Opcionales, para las cuentas bancarias. |
-
-Se editan, desactivan y reactivan igual que los rubros. Una cuenta desactivada deja de ofrecerse, pero los pagos ya registrados la conservan.
-
-<Callout type="info" title="Tesorería">
-Estas cuentas y cajas son el punto de partida del futuro módulo de **Tesorería**, que va a llevar los saldos, los movimientos y la conciliación bancaria.
-</Callout>
+Las cuentas bancarias y cajas desde las que se paga se administran en <GuideLink to="configuracion-de-tesoreria">Configuración de Tesorería</GuideLink>, con su saldo inicial. En esta pantalla queda un acceso directo.
 
 ## Regímenes de retención
 
@@ -61,4 +49,4 @@ Los valores dependen de las normas vigentes: revisalos cuando cambien. Cómo se 
 
 ## Permisos
 
-Para ver los rubros, los conceptos, las cuentas y los regímenes alcanza con **Ver** en **Configuración**; para crearlos, cambiarlos, desactivarlos o reactivarlos hace falta **Editar**.
+Para ver los rubros, los conceptos y los regímenes alcanza con **Ver** en **Configuración**; para crearlos, cambiarlos, desactivarlos o reactivarlos hace falta **Editar**.

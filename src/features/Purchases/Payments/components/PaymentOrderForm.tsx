@@ -89,13 +89,20 @@ export function PaymentOrderForm({
     staleTime: 10 * 1000,
   });
 
-  const lineOf = (key: string, kind: Line['kind']) =>
-    lines.findIndex((l) => l.kind === kind && (kind === 'ADVANCE_APPLIED' ? l.sourceLineId === key : l.invoiceId === key));
+  /** La clave de una línea: el anticipo de origen, el cheque rechazado o el comprobante. */
+  const keyOf = (l: Line) => (l.kind === 'ADVANCE_APPLIED' ? l.sourceLineId : l.kind === 'REJECTED_CHECK' ? (l.checkId ?? '') : l.invoiceId);
+  const lineOf = (key: string, kind: Line['kind']) => lines.findIndex((l) => l.kind === kind && keyOf(l) === key);
 
   const toggle = (key: string, kind: Line['kind'], amount: string, checked: boolean) => {
     const next = lines.filter((_, i) => i !== lineOf(key, kind));
     if (checked) {
-      next.push({ kind, invoiceId: kind === 'ADVANCE_APPLIED' ? '' : key, sourceLineId: kind === 'ADVANCE_APPLIED' ? key : '', amount });
+      next.push({
+        kind,
+        invoiceId: kind === 'INVOICE' || kind === 'CREDIT_NOTE' ? key : '',
+        sourceLineId: kind === 'ADVANCE_APPLIED' ? key : '',
+        checkId: kind === 'REJECTED_CHECK' ? key : '',
+        amount,
+      });
     }
     form.setValue('lines', next, { shouldValidate: form.formState.isSubmitted });
   };
@@ -151,6 +158,7 @@ export function PaymentOrderForm({
   const debts = data?.openItems.invoices.filter((i) => !i.isCredit) ?? [];
   const credits = data?.openItems.invoices.filter((i) => i.isCredit) ?? [];
   const advances = data?.openItems.advances ?? [];
+  const checkDebts = data?.openItems.checkDebts ?? [];
   const totals = preview.data?.totals;
 
   return (
@@ -228,6 +236,18 @@ export function PaymentOrderForm({
                 onToggle={toggle}
                 onAmount={setAmount}
               />
+              {checkDebts.length > 0 && (
+                <ItemGroup
+                  title="Cheques de terceros endosados y rechazados (sin retenciones)"
+                  empty=""
+                  items={checkDebts.map((d) => ({ key: d.checkId, title: d.label, subtitle: `Rechazado el ${dmy(d.rejectedOn)}`, max: d.pending, maxLabel: 'se debe' }))}
+                  kind="REJECTED_CHECK"
+                  lines={lines}
+                  lineOf={lineOf}
+                  onToggle={toggle}
+                  onAmount={setAmount}
+                />
+              )}
               {credits.length > 0 && (
                 <ItemGroup
                   title="Notas de crédito para aplicar (restan)"

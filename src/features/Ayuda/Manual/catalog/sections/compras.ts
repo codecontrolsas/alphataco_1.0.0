@@ -100,7 +100,14 @@ export const comprasSection = defineSection({
         { path: '/dashboard/purchases', tab: 'pagos' },
         { path: '/dashboard/purchases/payments/*' },
       ],
-      related: ['cuenta-corriente-y-vencimientos', 'retenciones', 'facturas-de-proveedor', 'proveedores', 'configuracion-de-compras', 'compras'],
+      related: ['cuenta-corriente-y-vencimientos', 'retenciones', 'facturas-de-proveedor', 'proveedores', 'configuracion-de-compras', 'cuentas-y-saldos', 'configuracion-de-tesoreria', 'endosar-cheques', 'cheques-propios', 'chequeras', 'compras'],
+    },
+    {
+      // Tesorería etapa 3a: el endoso se hace al registrar el pago de la orden.
+      slug: 'endosar-cheques',
+      access: [tab('compras', 'pagos')],
+      screens: [],
+      related: ['ordenes-de-pago', 'cartera-de-cheques', 'rechazo-de-un-cheque', 'cuenta-corriente-y-vencimientos'],
     },
     {
       slug: 'cuenta-corriente-y-vencimientos',
@@ -126,7 +133,7 @@ export const comprasSection = defineSection({
       slug: 'configuracion-de-compras',
       access: [tab('compras', 'config-compras')],
       screens: [{ path: '/dashboard/purchases', tab: 'config-compras' }],
-      related: ['proveedores', 'facturas-de-proveedor', 'ordenes-de-pago', 'retenciones', 'compras'],
+      related: ['proveedores', 'facturas-de-proveedor', 'ordenes-de-pago', 'retenciones', 'configuracion-de-tesoreria', 'compras'],
     },
   ],
 });

@@ -13,7 +13,7 @@ import {
   submitPaymentOrder,
   type PaymentOrderDetail,
 } from '../../actions/payment-orders.server';
-import type { TreasuryAccountRow } from '../../actions/treasury-accounts.server';
+import type { TreasuryAccountRow } from '@/features/Treasury/actions/accounts.server';
 import { ConfirmAction } from '../../components/ConfirmAction';
 import { DownloadPdfButton } from '../../components/DownloadPdfButton';
 import { SendToSupplierDialog } from '../../components/SendToSupplierDialog';

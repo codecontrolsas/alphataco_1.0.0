@@ -20,6 +20,7 @@ import { FocusOnMountHeading } from './FocusOnMountHeading';
 import { InvoicePdfActions } from './InvoicePdfActions';
 import { ReconcileInvoicePanel } from './ReconcileInvoicePanel';
 import { TAX_CONDITION_PRINT } from '../../pdf/invoice-pdf-data';
+import { formatInCurrency } from '@/features/Treasury/lib/currency-format';
 
 /** Si el comprobante se autorizó hace menos que esto, el PDF puede estar generándose todavía. */
 const PDF_GRACE_MS = 3 * 60 * 1000;
@@ -43,10 +44,20 @@ export function InvoiceDetail({
   data,
   permissions,
   result,
+  receivable = null,
 }: {
   data: InvoiceEditorData;
   permissions: InvoicePermissions;
   result: string | null;
+  /** Pendiente de cobro (Tesorería): solo llega con `tesoreria:cobranzas:view` y si es cobrable. */
+  receivable?: {
+    pending: string;
+    reserved: string;
+    currency: string;
+    customerId: string;
+    state: 'PENDING' | 'IN_DRAFT' | 'COLLECTED' | 'NO_BALANCE';
+    canCollect: boolean;
+  } | null;
 }) {
   const { invoice } = data;
   const prices = permissions.canViewPrices;
@@ -119,6 +130,35 @@ export function InvoiceDetail({
           <p className="text-sm tabular-nums">
             CAE <span className="font-medium">{invoice.cae}</span> · vence el {date(invoice.caeDueDate)}
           </p>
+          {receivable && (
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm tabular-nums">
+              <span>
+                {receivable.state === 'PENDING' && (
+                  <>
+                    Pendiente de cobro: <span className="font-medium">{formatInCurrency(receivable.pending, receivable.currency)}</span>
+                  </>
+                )}
+                {receivable.state === 'IN_DRAFT' && (
+                  <>
+                    En un recibo en borrador por <span className="font-medium">{formatInCurrency(receivable.reserved, receivable.currency)}</span> (todavía no cobrada)
+                  </>
+                )}
+                {receivable.state === 'COLLECTED' && 'Cobrada'}
+                {receivable.state === 'NO_BALANCE' && 'Sin saldo: la cancelan notas de crédito'}
+              </span>
+              <Link href={`/dashboard/treasury/customers/${receivable.customerId}`} className="underline underline-offset-4">
+                Ver cuenta corriente
+              </Link>
+              {receivable.canCollect && receivable.state === 'PENDING' && (
+                <Link
+                  href={`/dashboard/treasury/receipts/new?customerId=${receivable.customerId}&invoiceId=${invoice.id}`}
+                  className="underline underline-offset-4"
+                >
+                  Cobrar
+                </Link>
+              )}
+            </p>
+          )}
           {invoice.arcaObservations.length > 0 && (
             <div className="flex flex-col gap-1 border border-amber-300 bg-amber-100/40 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
               <p className="flex items-center gap-2 font-medium">

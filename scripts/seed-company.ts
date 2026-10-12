@@ -20,6 +20,7 @@
  */
 import { createHash } from 'node:crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { prismaPgConfig } from '../src/shared/lib/prisma-pg-config.ts';
 import { PrismaClient } from '../src/generated/prisma/client.ts';
 import { ACTIONS, PERMISSIONS } from '../src/features/Permissions/permissions-map.ts';
 import { DEFAULT_MEASUREMENT_UNITS } from '../src/features/Warehouses/lib/default-units.ts';
@@ -94,7 +95,7 @@ async function main(): Promise<void> {
     throw new Error('DATABASE_URL no esta definida en las variables de entorno');
   }
 
-  const adapter = new PrismaPg({ connectionString });
+  const adapter = new PrismaPg(prismaPgConfig(connectionString));
   const prisma = new PrismaClient({ adapter });
 
   try {

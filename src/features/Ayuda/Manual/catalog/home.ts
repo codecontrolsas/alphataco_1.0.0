@@ -106,6 +106,12 @@ export const READING_PATHS: ReadingPath[] = [
     steps: ['compras', 'proveedores', 'solicitudes-de-compra', 'pedidos-de-cotizacion', 'ordenes-de-compra', 'recepciones', 'facturas-de-proveedor', 'libro-iva-compras', 'ordenes-de-pago', 'cuenta-corriente-y-vencimientos', 'retenciones', 'configuracion-de-compras'],
   },
   {
+    id: 'tesoreria',
+    title: 'Manejar la plata',
+    audience: 'Tesorería y administración',
+    steps: ['tesoreria', 'configuracion-de-tesoreria', 'cuentas-y-saldos', 'movimientos-de-tesoreria', 'transferencias', 'ordenes-de-pago', 'cobrar-facturas', 'retenciones-sufridas', 'cuenta-corriente-de-clientes'],
+  },
+  {
     id: 'comercial',
     title: 'Certificar y facturar',
     audience: 'Comercial y facturación',

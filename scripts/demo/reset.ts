@@ -14,6 +14,7 @@
  * Ver docs/deploy/runbook.md, "Instancia demo: reset diario".
  */
 import { PrismaPg } from '@prisma/adapter-pg';
+import { prismaPgConfig } from '../../src/shared/lib/prisma-pg-config.ts';
 import { PrismaClient } from '../../src/generated/prisma/client.ts';
 import type { Ctx } from './lib/ctx.ts';
 import { argentinaToday, buildCalendar } from './lib/dates.ts';
@@ -34,7 +35,12 @@ import { seedMaintenance } from './domains/maintenance.ts';
 import { seedCertifications } from './domains/commercial.ts';
 import { seedCandidates, seedClothing, seedKpis } from './domains/hr.ts';
 import { SUPPLIER_DOCUMENTS_BUCKET, seedPurchases } from './domains/purchases.ts';
+import { CUSTOMER_DOCUMENTS_BUCKET, seedCustomerReceipts } from './domains/customer-receipts.ts';
+import { seedThirdPartyChecks } from './domains/third-party-checks.ts';
+import { seedOwnChecks } from './domains/own-checks.ts';
+import { seedBankReconciliation } from './domains/bank-reconciliation.ts';
 import { seedTires } from './domains/tires.ts';
+import { seedTreasury } from './domains/treasury.ts';
 import { seedWarehouses } from './domains/warehouses.ts';
 import { seedUsers } from './domains/users.ts';
 import { seedIndicators } from './domains/indicators.ts';
@@ -57,7 +63,7 @@ async function main(): Promise<void> {
   const elapsed = () => ((Date.now() - started) / 1000).toFixed(1);
   const log = (message: string) => console.log(`[demo ${elapsed()}s] ${message}`);
 
-  const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
+  const prisma = new PrismaClient({ adapter: new PrismaPg(prismaPgConfig(process.env.DATABASE_URL)) });
   try {
     const s3 = createS3();
     const cal = buildCalendar(argentinaToday());
@@ -106,6 +112,16 @@ async function main(): Promise<void> {
           await seedTires(ctx, vehicles);
           // Compras despues de Almacenes: usa sus materiales y sus pedidos aprobados.
           await seedPurchases(ctx);
+          // Tesoreria despues de Compras: usa sus cuentas y sus pagos ya tienen movimiento.
+          await seedTreasury(ctx);
+          // Cobranzas despues de Tesoreria: sus cobros suman a las mismas cuentas.
+          await seedCustomerReceipts(ctx);
+          // Cheques después de Cobranzas: usa sus clientes, la cartera y una factura de Compras con pendiente.
+          await seedThirdPartyChecks(ctx);
+          // Cheques propios después: numera sus órdenes de pago a continuación de las de Compras y del endoso.
+          await seedOwnChecks(ctx);
+          // Conciliación al final de Tesorería: concilia los movimientos ya cargados del Galicia.
+          await seedBankReconciliation(ctx);
           await seedCandidates(ctx, employees);
           await seedClothing(ctx, employees);
           await seedKpis(ctx);
@@ -116,7 +132,7 @@ async function main(): Promise<void> {
           if (dry) throw new DryRunRollback();
 
           // invoice-pdfs: los PDF fiscales que se generan al facturar en vivo durante la demo.
-          await ensureBuckets(s3, [DOCUMENT_BUCKET, REMIT_BUCKET, 'invoice-pdfs', SUPPLIER_DOCUMENTS_BUCKET]);
+          await ensureBuckets(s3, [DOCUMENT_BUCKET, REMIT_BUCKET, 'invoice-pdfs', SUPPLIER_DOCUMENTS_BUCKET, CUSTOMER_DOCUMENTS_BUCKET]);
           await uploadAll(s3, files);
           log(`${files.length} archivos subidos`);
         },
@@ -132,6 +148,7 @@ async function main(): Promise<void> {
       { bucket: DOCUMENT_BUCKET, prefix: `${companyFolder()}/` },
       { bucket: REMIT_BUCKET, prefix: `${REMIT_PREFIX}/` },
       { bucket: SUPPLIER_DOCUMENTS_BUCKET, prefix: `${DEMO_COMPANY_ID}/` },
+      { bucket: CUSTOMER_DOCUMENTS_BUCKET, prefix: `${DEMO_COMPANY_ID}/` },
     ]).catch((error) => {
       log(`no se pudieron limpiar archivos viejos: ${String(error)}`);
       return 0;

@@ -2,15 +2,15 @@
 title: Cómo funciona Compras
 summary: Qué es el módulo Compras, el circuito de la solicitud al pago al proveedor, qué hace cada sección, cómo se conecta con Almacenes y qué permisos usa.
 keywords: compras, compra, orden de pago, OP, pagos, retenciones, cuenta corriente, vencimientos, proveedor, proveedores, factura de proveedor, libro iva compras, solicitud de compra, SC, pedido de cotización, PC, orden de compra, OC, aprobación, aprobar, rechazar, rubro, CUIT, pedido de materiales, faltante, permisos
-updated: 2026-10-09
+updated: 2026-10-10
 ---
 
 **Compras** es donde se organiza lo que la empresa le compra a terceros. Alguien carga una **solicitud de compra** (qué hace falta, cuánto y para qué) y un responsable la **aprueba**. Compras le **pide precio** a uno o varios proveedores (opcional), compara, arma la **orden de compra**, la hace **aprobar** y se la **envía** al proveedor con su PDF. Después se **recibe** lo comprado, se carga y controla la **factura** del proveedor y se le **paga** con una orden de pago, practicando las **retenciones**. Queda registrado quién pidió, quién decidió, a quién se le compró, por qué y cuándo se le pagó.
 
 <OpenScreen />
 
-<Callout type="info" title="Lo que viene">
-Compras registra **cómo** se le pagó a cada proveedor, pero no mueve los saldos de los bancos ni de las cajas. Eso lo va a hacer el módulo de **Tesorería**: saldos y movimientos de cuentas y cajas, cheques y conciliación bancaria.
+<Callout type="info" title="Compras y Tesorería">
+El pago de una orden de pago mueve el saldo de la cuenta o caja desde la que se paga, en el módulo de <GuideLink to="tesoreria">Tesorería</GuideLink>. Los cheques y e-cheqs debitan en su fecha de pago.
 </Callout>
 
 ## Las ideas básicas

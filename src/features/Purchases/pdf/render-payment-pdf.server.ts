@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { prisma } from '@/shared/lib/prisma';
+import { rejectedCheckLabel, rejectedOwnCheckLabel } from '@/features/Treasury/lib/rejected-checks';
 import { supplierInvoiceLabel } from '../lib/invoices';
 import { PurchaseError } from '../lib/purchase-errors';
 import { trimDecimals } from '../lib/quantity-format';
@@ -34,6 +35,8 @@ export async function renderPaymentOrderPdf(orderId: string, companyId: string):
           invoice: { select: { cbte_type: true, sales_point: true, number: true } },
           purchase_order: { select: { number: true } },
           source_line: { select: { payment_order: { select: { number: true } } } },
+          third_party_check: { select: { number: true, bank: true } },
+          own_check: { select: { number: true, account: { select: { name: true, bank_name: true } } } },
         },
       },
       withholdings: {
@@ -57,6 +60,7 @@ export async function renderPaymentOrderPdf(orderId: string, companyId: string):
           check_bank: true,
           check_due_on: true,
           treasury_account: { select: { name: true } },
+          third_party_check: { select: { drawer_name: true } },
         },
       },
     },
@@ -73,7 +77,11 @@ export async function renderPaymentOrderPdf(orderId: string, companyId: string):
       kind: l.kind,
       label: l.invoice
         ? supplierInvoiceLabel(l.invoice)
-        : l.kind === 'ADVANCE'
+        : l.third_party_check
+          ? rejectedCheckLabel(l.third_party_check.number, l.third_party_check.bank)
+          : l.own_check
+          ? rejectedOwnCheckLabel(l.own_check.number, (l.own_check.account.bank_name || l.own_check.account.name).toUpperCase())
+          : l.kind === 'ADVANCE'
           ? [l.description, l.purchase_order ? `OC ${l.purchase_order.number}` : null].filter(Boolean).join(' · ')
           : (l.source_line?.payment_order.number ?? ''),
       amount: l.amount.toFixed(2),
@@ -96,6 +104,7 @@ export async function renderPaymentOrderPdf(orderId: string, companyId: string):
       checkNumber: p.check_number,
       checkBank: p.check_bank,
       checkDueOn: p.check_due_on ? p.check_due_on.toISOString().slice(0, 10) : null,
+      drawerName: p.third_party_check?.drawer_name ?? null,
     })),
     totals: {
       invoicesTotal: order.invoices_total.toFixed(2),

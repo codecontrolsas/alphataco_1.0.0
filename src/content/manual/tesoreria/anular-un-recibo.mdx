@@ -1,0 +1,33 @@
+---
+title: Anular un recibo
+summary: Cuándo y cómo anular un recibo confirmado, qué pasa con sus movimientos, comprobantes y anticipos, cuándo no se puede, y la diferencia con borrar un borrador.
+keywords: anular recibo, anulación, motivo, cheque rechazado, transferencia rechazada, recibo mal cargado, borrar borrador, liberar factura, anticipo aplicado
+updated: 2026-10-11
+---
+
+Un recibo confirmado **no se edita**: si quedó mal, o el pago no se concretó (una transferencia rechazada), se **anula** y, si hace falta, se carga otro.
+
+<OpenScreen to="cobrar-facturas" label="Abrir Cobranzas" />
+
+## Cómo
+
+En el recibo, **Anular** pide el **motivo** (obligatorio). Al anular:
+
+- sus movimientos en las cuentas quedan **anulados** con ese motivo y dejan de sumar;
+- los comprobantes que cancelaba vuelven a estar **pendientes**;
+- los anticipos que aplicaba vuelven a estar **disponibles**;
+- el recibo conserva su número, marcado **Anulado** (el número no se reusa). Su PDF sale con la marca de agua **ANULADO**.
+
+## Cuándo no se puede
+
+Si el recibo cobró algo **a cuenta** y ese anticipo ya se aplicó en otro recibo, primero hay que anular ese otro recibo (o, si es un borrador, quitarle el anticipo). El mensaje dice cuál es.
+
+Si el recibo trajo **cheques** y alguno ya salió de la cartera (se depositó, se endosó o se descontó), primero hay que anular esa operación. Al anular el recibo, sus cheques quedan **Anulados**. Ver <GuideLink to="cartera-de-cheques">Cartera de cheques</GuideLink>.
+
+## Borrar un borrador
+
+Un recibo en **borrador** no se anula: se **borra** (**Borrar borrador**), porque todavía no tiene número ni movió nada. Libera lo que reservaba y borra sus certificados.
+
+## Permisos
+
+Anular y borrar borradores requiere **Cobranzas → Eliminar**.

@@ -7,12 +7,14 @@ import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { UUID_RE } from '../lib/action-errors';
 import { supplierInvoiceLabel } from '../lib/invoices';
 import { openAdvancesOfSupplier, openInvoicesOfSupplier } from '../lib/payment-balances';
+import { openCheckDebtsOfSupplier } from '@/features/Treasury/lib/rejected-checks';
 import { cents, money } from '../lib/payment-totals';
 
 /**
  * Cuenta corriente de un proveedor (spec Compras etapa 5 §4), derivada de los documentos:
  * - comprobantes a pagar (conformes o aprobados): facturas y ND suman, NC restan;
- * - ordenes de pago pagadas: restan lo pagado (neto + retenciones).
+ * - ordenes de pago pagadas: restan lo pagado (neto + retenciones);
+ * - cheques de terceros endosados al proveedor y rechazados (Tesoreria etapa 3a): suman (se le vuelve a deber).
  * Saldo > 0 = se le debe; < 0 = queda a favor (anticipos sin aplicar).
  */
 
@@ -26,7 +28,7 @@ export async function getSupplierAccount(supplierId: string, range: { from?: str
   const supplier = await prisma.suppliers.findFirst({ where: { id: supplierId, company_id: companyId }, select: { id: true, name: true } });
   if (!supplier) return null;
 
-  const [invoices, orders, openInvoices, advances] = await Promise.all([
+  const [invoices, orders, openInvoices, advances, rejectedChecks] = await Promise.all([
     prisma.supplier_invoices.findMany({
       where: { company_id: companyId, supplier_id: supplierId, status: { in: ['CONFORMING', 'APPROVED'] } },
       select: { id: true, cbte_type: true, sales_point: true, number: true, issue_date: true, due_date: true, total: true },
@@ -37,17 +39,20 @@ export async function getSupplierAccount(supplierId: string, range: { from?: str
     }),
     openInvoicesOfSupplier(prisma, companyId, supplierId),
     openAdvancesOfSupplier(prisma, companyId, supplierId),
+    openCheckDebtsOfSupplier(prisma, companyId, supplierId, { includeSettled: true }),
   ]);
 
   type Movement = {
     date: string;
-    kind: 'INVOICE' | 'CREDIT_NOTE' | 'PAYMENT';
+    kind: 'INVOICE' | 'CREDIT_NOTE' | 'PAYMENT' | 'REJECTED_CHECK';
     id: string;
     label: string;
     dueDate: string | null;
     debit: string;
     credit: string;
     detail: string | null;
+    /** Cheque propio rechazado (Tesorería etapa 3b): el link va a su detalle. */
+    ownCheck?: boolean;
   };
   const all: Movement[] = [
     ...invoices.map((i): Movement => {
@@ -79,6 +84,19 @@ export async function getSupplierAccount(supplierId: string, range: { from?: str
         ]
           .filter(Boolean)
           .join(' · '),
+      })
+    ),
+    ...rejectedChecks.map(
+      (c): Movement => ({
+        date: c.rejectedOn,
+        kind: 'REJECTED_CHECK',
+        id: c.checkId,
+        label: c.label,
+        dueDate: null,
+        debit: c.amount,
+        credit: '0.00',
+        detail: c.source === 'OWN' ? 'Cheque propio' : `Librador ${c.drawerName}`,
+        ownCheck: c.source === 'OWN',
       })
     ),
   ].sort((a, b) => a.date.localeCompare(b.date) || (a.kind === 'PAYMENT' ? 1 : 0) - (b.kind === 'PAYMENT' ? 1 : 0) || a.label.localeCompare(b.label));

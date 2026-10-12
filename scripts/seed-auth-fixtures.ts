@@ -21,11 +21,12 @@
  * placeholders: sirven para que la fila exista en el entorno local, no son datos de negocio.
  */
 import { PrismaPg } from '@prisma/adapter-pg';
+import { prismaPgConfig } from '../src/shared/lib/prisma-pg-config.ts';
 import { PrismaClient } from '../src/generated/prisma/client.ts';
 import { hashPassword } from 'better-auth/crypto';
 import { randomUUID } from 'node:crypto';
 
-const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
+const prisma = new PrismaClient({ adapter: new PrismaPg(prismaPgConfig(process.env.DATABASE_URL)) });
 const COMPANY = '00000000-0000-0000-0000-0000000000f4';
 const PASS = 'P4-verificacion-123';
 

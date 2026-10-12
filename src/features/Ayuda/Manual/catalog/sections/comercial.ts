@@ -23,7 +23,7 @@ export const comercialSection = defineSection({
         { path: '/dashboard/comercial', tab: 'comerce' },
         { path: '/dashboard/configuration/customers/action' },
       ],
-      related: ['contratos', 'del-pedido-a-la-factura', 'diagramas-afectaciones-y-desvios', 'documentos-alertas-y-estado', 'facturacion'],
+      related: ['contratos', 'del-pedido-a-la-factura', 'diagramas-afectaciones-y-desvios', 'documentos-alertas-y-estado', 'facturacion', 'cuenta-corriente-de-clientes'],
     },
     {
       slug: 'contratos',
@@ -67,7 +67,7 @@ export const comercialSection = defineSection({
         { path: '/dashboard/comercial', tab: 'comerce', subtab: 'facturacion' },
         { path: '/dashboard/comercial/facturacion' },
       ],
-      related: ['datos-fiscales', 'certificaciones', 'clientes', 'del-pedido-a-la-factura'],
+      related: ['datos-fiscales', 'certificaciones', 'clientes', 'del-pedido-a-la-factura', 'cobrar-facturas'],
     },
   ],
 });

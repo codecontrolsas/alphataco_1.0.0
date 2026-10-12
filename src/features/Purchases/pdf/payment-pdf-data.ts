@@ -18,7 +18,7 @@ export type PaymentPdfSource = {
   status: PaymentOrderStatus;
   company: { name: string; cuit: string; address: string | null; city: string | null; province: string | null; grossIncomeNumber: string | null };
   supplier: { name: string; cuit: string; vatConditionId: number; street: string | null; city: string | null; province: string | null };
-  lines: { kind: 'INVOICE' | 'CREDIT_NOTE' | 'ADVANCE' | 'ADVANCE_APPLIED'; label: string; amount: string }[];
+  lines: { kind: 'INVOICE' | 'CREDIT_NOTE' | 'ADVANCE' | 'ADVANCE_APPLIED' | 'REJECTED_CHECK'; label: string; amount: string }[];
   withholdings: {
     tax: WithholdingTax;
     regimeCode: string;
@@ -37,6 +37,8 @@ export type PaymentPdfSource = {
     checkNumber: string | null;
     checkBank: string | null;
     checkDueOn: string | null;
+    /** Librador del cheque de tercero endosado (Tesoreria etapa 3a). */
+    drawerName?: string | null;
   }[];
   totals: { invoicesTotal: string; creditsTotal: string; advanceTotal: string; withholdingsTotal: string; netTotal: string };
   notes: string | null;
@@ -81,7 +83,14 @@ export function buildPaymentPdfData(src: PaymentPdfSource) {
     })),
     payments: src.payments.map((p) => ({
       method: PAYMENT_METHOD_LABELS[p.method],
-      detail: [p.account, p.reference, p.checkNumber ? `N° ${p.checkNumber}` : null, p.checkBank, p.checkDueOn ? `pago ${dateText(p.checkDueOn)}` : null]
+      detail: [
+        p.account,
+        p.reference,
+        p.checkNumber ? `N° ${p.checkNumber}` : null,
+        p.checkBank,
+        p.drawerName ? `librador ${p.drawerName}` : null,
+        p.checkDueOn ? `pago ${dateText(p.checkDueOn)}` : null,
+      ]
         .filter(Boolean)
         .join(' · '),
       amount: money(p.amount),

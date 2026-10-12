@@ -1,0 +1,286 @@
+'use client';
+
+import { Badge } from '@/components/ui/badge';
+import { formatMoney } from '@/features/Warehouses/lib/format';
+import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import type { ColumnDef } from '@tanstack/react-table';
+import { ArrowLeftRight, Ban, CheckCheck, CheckCircle2, HandCoins, Pencil, PiggyBank, Truck, WalletCards, type LucideIcon, ScrollText } from 'lucide-react';
+import moment from 'moment';
+import { formatArgentinaDay } from '../../lib/today';
+import Link from 'next/link';
+import type { TreasuryAccountRow } from '../../actions/accounts.server';
+import type { TreasuryConceptRow } from '../../actions/concepts.server';
+import { TREASURY_MOVEMENT_KIND_LABELS } from '../../schemas/movements';
+import { MovementRowActions } from '../components/MovementRowActions';
+import type { TreasuryMovementListItem } from './actions.server';
+import { MOVEMENT_STATE_LABELS } from './constants';
+
+export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['created_at', 'cancel_reason'];
+
+export const NO_CONCEPT_LABEL = 'Sin asignar';
+
+type MovementKind = TreasuryMovementListItem['kind'];
+
+export const movementKindIcons: Record<MovementKind, LucideIcon> = {
+  OPENING: PiggyBank,
+  MANUAL: Pencil,
+  TRANSFER: ArrowLeftRight,
+  SUPPLIER_PAYMENT: Truck,
+  CUSTOMER_RECEIPT: HandCoins,
+  CHECK_OPERATION: WalletCards,
+  OWN_CHECK: ScrollText,
+};
+
+export const movementStateIcons: Record<keyof typeof MOVEMENT_STATE_LABELS, LucideIcon> = {
+  ACTIVE: CheckCircle2,
+  CANCELLED: Ban,
+  RECONCILED: CheckCheck,
+};
+
+/** Fecha valor (YYYY-MM-DD, sin hora): se formatea tal cual para no correr un dia. */
+export const formatValueDate = (value: string | null | undefined) =>
+  value ? moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY') : '-';
+
+const isIncome = (amount: string) => !amount.startsWith('-');
+const absAmount = (amount: string) => (amount.startsWith('-') ? amount.slice(1) : amount);
+
+interface ColumnsOptions {
+  canUpdate: boolean;
+  accounts: TreasuryAccountRow[];
+  concepts: TreasuryConceptRow[];
+}
+
+export function getColumns({ canUpdate, accounts, concepts }: ColumnsOptions): ColumnDef<TreasuryMovementListItem>[] {
+  const columns: ColumnDef<TreasuryMovementListItem>[] = [
+    {
+      id: 'date',
+      accessorKey: 'date',
+      meta: { title: 'Fecha' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha" />,
+      cell: ({ row }) => <span className="tabular-nums">{formatValueDate(row.original.date)}</span>,
+    },
+    {
+      id: 'account',
+      accessorFn: (row) => row.account.name,
+      meta: { title: 'Cuenta' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Cuenta" />,
+      cell: ({ row }) => <span className="font-medium">{row.original.account.name}</span>,
+      filterFn: (row, _id, value: string[]) => value.includes(row.original.account.id),
+    },
+    {
+      id: 'kind',
+      accessorFn: (row) => TREASURY_MOVEMENT_KIND_LABELS[row.kind],
+      meta: { title: 'Tipo' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo" />,
+      cell: ({ row }) => {
+        const Icon = movementKindIcons[row.original.kind];
+        return (
+          <Badge variant="outline" className="gap-1 whitespace-nowrap">
+            <Icon className="h-3 w-3" />
+            {TREASURY_MOVEMENT_KIND_LABELS[row.original.kind]}
+          </Badge>
+        );
+      },
+      filterFn: (row, _id, value: string[]) => value.includes(row.original.kind),
+    },
+    {
+      id: 'concept',
+      accessorFn: (row) => row.concept?.name ?? '',
+      meta: { title: 'Concepto' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Concepto" />,
+      cell: ({ row }) => <span>{row.original.concept?.name ?? '-'}</span>,
+      filterFn: (row, _id, value: string[]) => {
+        const id = row.original.concept?.id;
+        if (id == null) return value.includes(NULL_FILTER_VALUE);
+        return value.includes(id);
+      },
+    },
+    {
+      id: 'description',
+      accessorKey: 'description',
+      meta: { title: 'Descripción' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción" />,
+      cell: ({ row }) => <span className="line-clamp-2 max-w-xs">{row.original.description ?? '-'}</span>,
+    },
+    {
+      id: 'origin',
+      accessorFn: (row) =>
+        (row.ownCheck ? `Ch. Nº ${row.ownCheck.number}` : null) ??
+        row.paymentOrder?.number ?? row.customerReceipt?.number ?? row.transfer?.number ?? row.checkOperation?.number ?? '',
+      meta: { title: 'Origen' },
+      // Sin orden directo: el numero vive en dos relaciones distintas.
+      enableSorting: false,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Origen" />,
+      cell: ({ row }) => {
+        const { paymentOrder, transfer, customerReceipt, checkOperation, ownCheck } = row.original;
+        if (ownCheck) {
+          return (
+            <Link
+              href={`/dashboard/treasury/own-checks/${ownCheck.id}`}
+              className="font-mono text-sm font-medium text-blue-600 hover:underline"
+            >
+              Ch. Nº {ownCheck.number}
+            </Link>
+          );
+        }
+        if (paymentOrder) {
+          return (
+            <Link
+              href={`/dashboard/purchases/payments/${paymentOrder.id}`}
+              className="font-mono text-sm font-medium text-blue-600 hover:underline"
+            >
+              {paymentOrder.number}
+            </Link>
+          );
+        }
+        if (customerReceipt) {
+          return (
+            <Link
+              href={`/dashboard/treasury/receipts/${customerReceipt.id}`}
+              className="font-mono text-sm font-medium text-blue-600 hover:underline"
+            >
+              {customerReceipt.number ?? 'Recibo'}
+            </Link>
+          );
+        }
+        if (checkOperation) {
+          const label = <span className="font-mono text-sm font-medium">{checkOperation.number}</span>;
+          return checkOperation.checkId ? (
+            <Link href={`/dashboard/treasury/checks/${checkOperation.checkId}`} className="text-blue-600 hover:underline">
+              {label}
+            </Link>
+          ) : (
+            label
+          );
+        }
+        if (transfer) {
+          return (
+            <Link
+              href="/dashboard/treasury?tab=transferencias"
+              className="font-mono text-sm font-medium text-blue-600 hover:underline"
+            >
+              {transfer.number}
+            </Link>
+          );
+        }
+        return <span className="text-muted-foreground">-</span>;
+      },
+    },
+    {
+      id: 'income',
+      accessorFn: (row) => (isIncome(row.amount) ? row.amount : ''),
+      meta: { title: 'Ingreso' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Ingreso" />,
+      cell: ({ row }) =>
+        isIncome(row.original.amount) ? (
+          <span
+            className={
+              row.original.cancelled
+                ? 'tabular-nums text-muted-foreground line-through'
+                : 'tabular-nums text-emerald-600'
+            }
+          >
+            {formatMoney(row.original.amount)}
+          </span>
+        ) : null,
+    },
+    {
+      id: 'expense',
+      accessorFn: (row) => (isIncome(row.amount) ? '' : absAmount(row.amount)),
+      meta: { title: 'Egreso' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Egreso" />,
+      cell: ({ row }) =>
+        isIncome(row.original.amount) ? null : (
+          <span
+            className={
+              row.original.cancelled
+                ? 'tabular-nums text-muted-foreground line-through'
+                : 'tabular-nums text-red-600'
+            }
+          >
+            {formatMoney(absAmount(row.original.amount))}
+          </span>
+        ),
+    },
+    {
+      id: 'state',
+      // El export toma este valor: un movimiento vigente y conciliado lo dice explicitamente
+      accessorFn: (row) =>
+        row.cancelled
+          ? MOVEMENT_STATE_LABELS.CANCELLED
+          : row.reconciled
+            ? `${MOVEMENT_STATE_LABELS.ACTIVE} - Conciliado`
+            : MOVEMENT_STATE_LABELS.ACTIVE,
+      meta: { title: 'Estado' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      cell: ({ row }) => {
+        const key = row.original.cancelled ? 'CANCELLED' : 'ACTIVE';
+        const Icon = movementStateIcons[key];
+        return (
+          <div className="space-y-1">
+            <Badge variant={row.original.cancelled ? 'secondary' : 'outline'} className="gap-1 whitespace-nowrap">
+              <Icon className="h-3 w-3" />
+              {MOVEMENT_STATE_LABELS[key]}
+            </Badge>
+            {!row.original.cancelled && row.original.reconciled && (
+              <Badge variant="outline" className="ml-1 gap-1 whitespace-nowrap" title="Conciliado con el extracto">
+                <CheckCheck className="h-3 w-3" />
+                Conciliado
+              </Badge>
+            )}
+            {row.original.cancelled && row.original.cancel_reason && (
+              <p className="max-w-xs text-xs text-muted-foreground">{row.original.cancel_reason}</p>
+            )}
+          </div>
+        );
+      },
+      filterFn: (row, _id, value: string[]) => {
+        if (row.original.cancelled) return value.includes('CANCELLED');
+        // Vigente incluye al conciliado; "Conciliado" es el subconjunto con línea de extracto
+        return value.includes('ACTIVE') || (row.original.reconciled && value.includes('RECONCILED'));
+      },
+    },
+    {
+      id: 'cancel_reason',
+      accessorKey: 'cancel_reason',
+      meta: { title: 'Motivo de anulación' },
+      // El motivo ya se ve debajo del estado; esta columna lo hace exportable y filtrable.
+      enableSorting: false,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Motivo de anulación" />,
+      cell: ({ row }) => <span>{row.original.cancel_reason ?? '-'}</span>,
+    },
+    {
+      id: 'created_at',
+      accessorKey: 'created_at',
+      meta: { title: 'Fecha de alta' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de alta" />,
+      cell: ({ row }) => <span>{formatArgentinaDay(row.original.created_at)}</span>,
+    },
+  ];
+
+  if (canUpdate) {
+    columns.push({
+      id: 'actions',
+      meta: { excludeFromExport: true, title: '' },
+      enableSorting: false,
+      enableHiding: false,
+      header: () => null,
+      cell: ({ row }) => (
+        <MovementRowActions
+          movement={{
+            id: row.original.id,
+            kind: row.original.kind,
+            cancelled: row.original.cancelled,
+            reconciled: row.original.reconciled,
+            accountName: row.original.account.name,
+          }}
+          accounts={accounts}
+          concepts={concepts}
+        />
+      ),
+    });
+  }
+
+  return columns;
+}

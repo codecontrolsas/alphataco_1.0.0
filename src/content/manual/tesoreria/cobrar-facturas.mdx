@@ -1,0 +1,72 @@
+---
+title: Cobrar facturas: el recibo
+summary: Cómo registrar lo que pagó un cliente con un recibo numerado que cancela facturas y notas de débito, con uno o varios medios, retenciones y anticipos; qué es el borrador, cómo se confirma y qué mueve en las cuentas.
+keywords: cobranzas, cobrar, cobro, recibo, RE, recibo de cobranza, cancelar factura, pago parcial, a cobrar, vencido, por vencer, en borrador, medios, transferencia, cheque, e-cheq, efectivo, a acreditar, confirmar, borrador, enviar recibo, PDF del recibo
+updated: 2026-10-11
+---
+
+El **recibo** registra lo que pagó un cliente: qué comprobantes cancela (facturas y notas de débito autorizadas en Comercial), con qué **medios** entró la plata, qué **retenciones** le practicó el cliente y, si pagó de más, cuánto queda **a cuenta**. Al confirmarlo toma un número correlativo (**RE-000001**, **RE-000002**…) y suma en las cuentas y cajas.
+
+<OpenScreen />
+
+## A cobrar
+
+En **Tesorería → Cobranzas → A cobrar** están todas las facturas y notas de débito con saldo pendiente, por vencimiento. Arriba, por moneda, el total a cobrar, lo **vencido** y lo que vence en los próximos 30 días.
+
+| Estado | Qué significa |
+|---|---|
+| **Vencido** | Pasó la fecha de vencimiento y queda saldo. |
+| **Por vencer** | Todavía no venció (o no tiene vencimiento). Si vence hoy, sigue por vencer. |
+| **En borrador** | Todo lo que queda está reservado en un recibo en borrador. |
+
+**Cobrar** abre un recibo nuevo con ese cliente y ese comprobante ya tildado.
+
+## Armar el recibo
+
+**Nuevo recibo** (o **Cobrar** desde una fila) abre el recibo en una sola pantalla:
+
+1. **Cliente y fecha**: la fecha del cobro no puede ser futura. Si hay comprobantes en moneda extranjera, pide la **cotización del cobro** (ver <GuideLink to="cobros-en-moneda-extranjera">Cobros en moneda extranjera</GuideLink>).
+2. **Qué se cobra**: tildá los comprobantes. Se propone el pendiente completo; **Total** lo vuelve a poner si lo cambiaste. Para un pago parcial, escribí el importe.
+3. **Anticipos y cobro a cuenta**: aplicar lo que el cliente pagó antes a cuenta, o dejar a cuenta lo que paga de más. Ver <GuideLink to="anticipos-de-clientes">Anticipos de clientes</GuideLink>.
+4. **Retenciones** que practicó el cliente, con su certificado. Ver <GuideLink to="retenciones-sufridas">Retenciones sufridas y certificados</GuideLink>.
+5. **Medios**: cada uno con su cuenta o caja (se ve el saldo de cada una) y su importe. **Agregar medio** propone lo que falta.
+
+La barra de abajo compara lo que se cobra (comprobantes + cobro a cuenta) con lo que el cliente entrega (anticipos aplicados + retenciones + medios): dice **Cierra**, **Faltan $ …** o **Sobran $ …**.
+
+## Borrador y confirmación
+
+| Botón | Qué hace |
+|---|---|
+| **Guardar borrador** | Guarda sin número y sin tocar las cuentas. Se puede volver a editar o borrar. Mientras existe, **reserva** lo que cobra: otro recibo no puede cobrar lo mismo. |
+| **Confirmar** | Solo si el recibo cierra. Pide confirmación, toma el número, cancela los comprobantes y registra un movimiento por cada medio. |
+
+<Callout type="warning" title="Un recibo confirmado no se edita">
+Si quedó mal, se anula y se hace otro. Ver <GuideLink to="anular-un-recibo">Anular un recibo</GuideLink>.
+</Callout>
+
+Al confirmar se vuelven a calcular los pendientes: si mientras tanto se emitió una nota de crédito sobre una factura del recibo, la confirmación se rechaza con el pendiente nuevo.
+
+## Qué mueve en las cuentas
+
+Cada medio es un **movimiento de cobro** con la fecha del cobro: la transferencia y el efectivo en su cuenta o caja; el **cheque o e-cheq**, en una **cartera de cheques**. Para un cheque se cargan número, banco, emisión, fecha de pago y **librador** (se completa con el cliente y se puede cambiar). Al confirmar, si algún cheque ya está cargado (mismo banco, número y CUIT del librador), el sistema avisa y no deja confirmar. Ver <GuideLink to="cartera-de-cheques">Cartera de cheques</GuideLink>.
+
+Si el cliente tiene **cheques rechazados** sin cobrar, aparecen en **Qué se cobra → Cheques rechazados**: se tildan y se cobran como un comprobante más. Ver <GuideLink to="rechazo-de-un-cheque">Rechazo de un cheque</GuideLink>.
+
+Esos movimientos no se editan desde Movimientos: se revierten anulando el recibo.
+
+## El recibo confirmado
+
+Muestra qué cobró, las retenciones con su certificado, los medios con la fecha en que acreditan y la diferencia de cambio. Las acciones son:
+
+- **Descargar PDF**: el recibo para el cliente.
+- **Enviar al cliente**: por mail con el PDF adjunto. Propone el mail del cliente; podés cargar varios separados por coma. Queda como enviado recién cuando el mail sale.
+- **Anular**, con motivo.
+
+## Permisos
+
+| Acción | Permiso |
+|---|---|
+| Ver A cobrar, los recibos y la cuenta corriente | **Cobranzas → Ver** |
+| Crear recibos (borrador) | **Cobranzas → Crear** |
+| Editar y confirmar borradores, enviar, adjuntar certificados | **Cobranzas → Editar** |
+| Borrar borradores y anular recibos | **Cobranzas → Eliminar** |
