@@ -1,18 +1,22 @@
 'use server';
 
+import { formatVoucherLabel } from '@/features/Comercial/Facturacion/lib/invoice-type';
+import { errorMessage, fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
+import { checkPermissionServer } from '@/features/Permissions';
+import { UUID_RE } from '@/features/Purchases/lib/action-errors';
 import { Prisma } from '@/generated/prisma/client';
 import type { certification_status } from '@/generated/prisma/enums';
-import { checkPermissionServer } from '@/features/Permissions';
 import { Logger } from '@/lib/logger';
+import { toPdfDownload } from '@/shared/lib/pdf/react-pdf.server';
+import type { PdfDownload } from '@/shared/lib/pdf/types';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { errorMessage, fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { revalidatePath } from 'next/cache';
-import { serializeCertification, serializeCertificationLine } from '../lib/serializers';
 import { certificationTotal, lineAmount } from '../lib/certification-amounts';
+import { serializeCertification, serializeCertificationLine } from '../lib/serializers';
 import { canTransition, isDeletable, isEditable, transitionError } from '../lib/state-machine';
-import { formatVoucherLabel } from '@/features/Comercial/Facturacion/lib/invoice-type';
+import { renderCertificationPdf } from '../pdf/render-certification-pdf.server';
 
 const logger = new Logger('features/Comercial/Certificaciones');
 
@@ -95,7 +99,15 @@ export async function getCertificationById(id: string) {
         invoice_certifications: {
           select: {
             released_at: true,
-            invoice: { select: { id: true, cbte_type: true, number: true, status: true, sales_point: { select: { number: true } } } },
+            invoice: {
+              select: {
+                id: true,
+                cbte_type: true,
+                number: true,
+                status: true,
+                sales_point: { select: { number: true } },
+              },
+            },
           },
           orderBy: { invoice: { created_at: 'desc' } },
         },
@@ -424,8 +436,14 @@ export async function voidCertification(id: string, reason: string): Promise<Act
     select: { invoice: { select: { cbte_type: true, sales_point: { select: { number: true } }, number: true } } },
   });
   if (inInvoice) {
-    const label = formatVoucherLabel(inInvoice.invoice.cbte_type, inInvoice.invoice.sales_point.number, inInvoice.invoice.number);
-    return fail(`La certificación está incluida en ${label} (sin emitir). Quitala de ese comprobante o descartalo antes de anularla.`);
+    const label = formatVoucherLabel(
+      inInvoice.invoice.cbte_type,
+      inInvoice.invoice.sales_point.number,
+      inInvoice.invoice.number
+    );
+    return fail(
+      `La certificación está incluida en ${label} (sin emitir). Quitala de ese comprobante o descartalo antes de anularla.`
+    );
   }
 
   return transition(
@@ -465,5 +483,29 @@ export async function deleteCertification(id: string): Promise<ActionResult<null
   } catch (error) {
     logger.error('Error al eliminar la certificación', { data: { error, id } });
     return fail(errorMessage(error, 'Error al eliminar la certificación'));
+  }
+}
+
+/**
+ * PDF de la certificación en cualquier estado. Basta con poder verla; los importes salen solo
+ * con permiso de ver precios, igual que en el detalle.
+ */
+export async function getCertificationPdf(id: string): Promise<ActionResult<PdfDownload>> {
+  const [canView, canViewPrices] = await Promise.all([
+    checkPermissionServer('comercial', 'certificaciones', 'view'),
+    checkPermissionServer('comercial', 'certificaciones', 'view_prices'),
+  ]);
+  if (!canView) return fail('No tenés permiso para ver certificaciones');
+  if (!UUID_RE.test(id)) return fail('La certificación no existe');
+
+  const companyId = await getActiveCompanyId();
+
+  try {
+    const pdf = await renderCertificationPdf(id, companyId, canViewPrices);
+    if (!pdf) return fail('La certificación no existe');
+    return ok(toPdfDownload(pdf));
+  } catch (error) {
+    logger.error('Error al generar el PDF de la certificación', { data: { error, id } });
+    return fail('No se pudo generar el PDF. Intentá de nuevo; si persiste, avisá a soporte.');
   }
 }

@@ -1,6 +1,6 @@
-import 'server-only';
-import type { PdfLogo, ReactPdf } from '@/features/Purchases/pdf/PurchasePdfDocuments';
+import type { PdfLogo, ReactPdf } from '@/shared/lib/pdf/types';
 import type { Styles } from '@react-pdf/renderer';
+import 'server-only';
 import type { ReceiptPdfData } from './receipt-pdf-data';
 
 /**
@@ -11,7 +11,14 @@ import type { ReceiptPdfData } from './receipt-pdf-data';
 const C = { ink: '#111111', muted: '#555555', rule: '#999999', band: '#EEEEEE' };
 
 const s = {
-  page: { paddingTop: 28, paddingBottom: 44, paddingHorizontal: 32, fontFamily: 'Helvetica', fontSize: 8, color: C.ink },
+  page: {
+    paddingTop: 28,
+    paddingBottom: 44,
+    paddingHorizontal: 32,
+    fontFamily: 'Helvetica',
+    fontSize: 8,
+    color: C.ink,
+  },
   watermark: {
     position: 'absolute',
     top: 380,
@@ -34,7 +41,13 @@ const s = {
   boxTitle: { fontSize: 7, color: C.muted, marginBottom: 3, fontFamily: 'Helvetica-Bold' },
   bold: { fontFamily: 'Helvetica-Bold' },
   sectionTitle: { fontFamily: 'Helvetica-Bold', fontSize: 9, marginTop: 6, marginBottom: 3 },
-  tableHead: { flexDirection: 'row', backgroundColor: C.band, borderBottomWidth: 1, borderBottomColor: C.ink, paddingVertical: 3 },
+  tableHead: {
+    flexDirection: 'row',
+    backgroundColor: C.band,
+    borderBottomWidth: 1,
+    borderBottomColor: C.ink,
+    paddingVertical: 3,
+  },
   tableRow: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: C.rule, paddingVertical: 3 },
   th: { fontFamily: 'Helvetica-Bold', fontSize: 7, paddingHorizontal: 3 },
   td: { paddingHorizontal: 3 },
@@ -43,7 +56,14 @@ const s = {
   colAmount: { width: 90, textAlign: 'right' },
   totals: { alignSelf: 'flex-end', width: 260, marginTop: 8 },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 },
-  grandTotal: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: C.ink, paddingTop: 3, marginTop: 2 },
+  grandTotal: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: C.ink,
+    paddingTop: 3,
+    marginTop: 2,
+  },
   note: { marginTop: 8, color: C.muted },
   footer: { position: 'absolute', bottom: 20, left: 32, right: 32, textAlign: 'center', fontSize: 7, color: C.muted },
 } satisfies Styles;
@@ -165,7 +185,11 @@ export function ReceiptPdfDocument(rp: ReactPdf, data: ReceiptPdfData, logo: Pdf
             <Text>{data.notes}</Text>
           </View>
         ) : null}
-        <Text style={s.footer} fixed render={({ pageNumber, totalPages }) => `Recibo ${data.number} · Página ${pageNumber} de ${totalPages}`} />
+        <Text
+          style={s.footer}
+          fixed
+          render={({ pageNumber, totalPages }) => `Recibo ${data.number} · Página ${pageNumber} de ${totalPages}`}
+        />
       </Page>
     </Document>
   );

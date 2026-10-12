@@ -1,6 +1,5 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { QUANTITY_SCALE, formatScaled, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { checkPermissionServer } from '@/features/Permissions';
@@ -8,10 +7,14 @@ import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { sendPurchaseOrderDecisionEmail, sendSupplierDocumentEmail } from '@/shared/lib/mail/templates/purchases';
+import { toPdfDownload } from '@/shared/lib/pdf/react-pdf.server';
+import type { PdfDownload } from '@/shared/lib/pdf/types';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { revalidatePath } from 'next/cache';
 import { NO_PERMISSION, UUID_RE, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import { nextPurchaseDocumentNumber } from '../lib/document-number';
+import { getOrderInvoicesSummary } from '../lib/invoices';
 import {
   findOrderableRequestLines,
   lockRequestsForLines,
@@ -20,7 +23,12 @@ import {
   remainingOf,
   requestLineLabel,
 } from '../lib/order-progress';
-import { canApplyPurchaseOrderAction, purchaseOrderStatusAfter, type PurchaseOrderStatus } from '../lib/order-state-machine';
+import {
+  canApplyPurchaseOrderAction,
+  purchaseOrderStatusAfter,
+  type PurchaseOrderStatus,
+} from '../lib/order-state-machine';
+import { computeOrderLine, computeOrderTotals } from '../lib/order-totals';
 import {
   expiredSupplierDocuments,
   lockPurchaseOrder,
@@ -28,15 +36,18 @@ import {
   validatePurchaseOrderInput,
   type ValidatedOrderLine,
 } from '../lib/orders';
-import { getOrderInvoicesSummary } from '../lib/invoices';
 import { PurchaseError } from '../lib/purchase-errors';
 import { lockPurchaseQuote } from '../lib/quotes';
-import { computeOrderLine, computeOrderTotals } from '../lib/order-totals';
-import { dateColumn } from '../lib/requests';
 import { ORDERABLE_REQUEST_STATUSES, type PurchaseRequestStatus } from '../lib/request-state-machine';
+import { dateColumn } from '../lib/requests';
 import { mailNotSentMessage, supplierRecipients } from '../lib/supplier-send';
 import { renderPurchaseOrderPdf } from '../pdf/render-purchase-pdf.server';
-import { purchaseOrderFormSchema, toPurchaseOrderInput, type PurchaseOrderFormValues, type PurchaseOrderInput } from '../schemas/orders';
+import {
+  purchaseOrderFormSchema,
+  toPurchaseOrderInput,
+  type PurchaseOrderFormValues,
+  type PurchaseOrderInput,
+} from '../schemas/orders';
 import { requiredReasonSchema } from '../schemas/requests';
 import { sendDocumentSchema, type SendDocumentValues } from '../schemas/send';
 
@@ -78,14 +89,19 @@ async function quoteIdOf(tx: Tx, lines: readonly { quote_line_id: string | null 
 async function updateComplementDraft(tx: Tx, orderId: string, input: PurchaseOrderInput): Promise<void> {
   const order = await tx.purchase_orders.findUniqueOrThrow({
     where: { id: orderId },
-    select: { supplier_id: true, lines: { orderBy: { position: 'asc' }, select: { id: true, request_line_id: true, quantity: true } } },
+    select: {
+      supplier_id: true,
+      lines: { orderBy: { position: 'asc' }, select: { id: true, request_line_id: true, quantity: true } },
+    },
   });
   const unchanged =
     input.supplierId === order.supplier_id &&
     input.lines.length === order.lines.length &&
     input.lines.every((line, i) => {
       const current = order.lines[i]!;
-      return line.requestLineId === current.request_line_id && new Prisma.Decimal(line.quantity).equals(current.quantity);
+      return (
+        line.requestLineId === current.request_line_id && new Prisma.Decimal(line.quantity).equals(current.quantity)
+      );
     });
   if (!unchanged) {
     throw new PurchaseError(
@@ -122,7 +138,10 @@ async function updateComplementDraft(tx: Tx, orderId: string, input: PurchaseOrd
 }
 
 async function isComplementOrder(tx: Tx, orderId: string): Promise<boolean> {
-  const order = await tx.purchase_orders.findUniqueOrThrow({ where: { id: orderId }, select: { complements_order_id: true } });
+  const order = await tx.purchase_orders.findUniqueOrThrow({
+    where: { id: orderId },
+    select: { complements_order_id: true },
+  });
   return order.complements_order_id !== null;
 }
 
@@ -261,7 +280,9 @@ export async function createPurchaseOrderFromQuote(
       for (const line of priced) {
         const requestLine = locked.get(line.request_line_id);
         if (!requestLine || !orderable.includes(requestLine.requestStatus)) continue;
-        const remaining = parseScaled(remainingOf(requestLine.requested, ordered.get(line.request_line_id) ?? '0'), QUANTITY_SCALE) ?? BigInt(0);
+        const remaining =
+          parseScaled(remainingOf(requestLine.requested, ordered.get(line.request_line_id) ?? '0'), QUANTITY_SCALE) ??
+          BigInt(0);
         const quoted = parseScaled(line.quantity.toString(), QUANTITY_SCALE) ?? BigInt(0);
         const quantity = remaining < quoted ? remaining : quoted;
         if (quantity <= BigInt(0)) continue;
@@ -279,7 +300,14 @@ export async function createPurchaseOrderFromQuote(
         tx,
         companyId,
         profile.id,
-        { supplierId: quote.supplierId, deliveryDate: null, deliveryPlace: null, paymentTermDays: null, notes: null, lines },
+        {
+          supplierId: quote.supplierId,
+          deliveryDate: null,
+          deliveryPlace: null,
+          paymentTermDays: null,
+          notes: null,
+          lines,
+        },
         { submit: false, quoteId: quote.id }
       );
       return { ...order, skipped: priced.length - lines.length };
@@ -308,7 +336,10 @@ export async function updatePurchaseOrderDraft(id: string, values: PurchaseOrder
       // Se lockean JUNTAS, en orden por id, las solicitudes que el borrador deja y las que suma:
       // lockear solo las nuevas y despues recalcular las viejas permitia leer un avance viejo y
       // cruzar locks con otra edicion (deadlock).
-      const previousLines = await tx.purchase_order_lines.findMany({ where: { order_id: id }, select: { request_line_id: true } });
+      const previousLines = await tx.purchase_order_lines.findMany({
+        where: { order_id: id },
+        select: { request_line_id: true },
+      });
       await lockRequestsForLines(tx, companyId, [
         ...previousLines.map((line) => line.request_line_id),
         ...input.lines.map((line) => line.requestLineId),
@@ -434,7 +465,12 @@ export async function rejectPurchaseOrder(id: string, reason: string): Promise<A
       const now = new Date();
       await tx.purchase_orders.update({
         where: { id },
-        data: { status: purchaseOrderStatusAfter('reject'), rejection_notes: motive.data, rejected_by: profile.id, rejected_at: now },
+        data: {
+          status: purchaseOrderStatusAfter('reject'),
+          rejection_notes: motive.data,
+          rejected_by: profile.id,
+          rejected_at: now,
+        },
       });
       await tx.purchase_order_rejections.create({
         data: { order_id: id, rejected_by: profile.id, rejected_at: now, reason: motive.data },
@@ -460,8 +496,13 @@ export async function cancelPurchaseOrder(id: string, reason: string): Promise<A
   try {
     await prisma.$transaction(async (tx) => {
       // Con recepciones vigentes no se anula (en cualquier estado): se cierra.
-      const receipts = await tx.purchase_receipts.count({ where: { order_id: id, cancelled_at: null, company_id: companyId } });
-      const current = await tx.purchase_orders.findFirst({ where: { id, company_id: companyId }, select: { number: true } });
+      const receipts = await tx.purchase_receipts.count({
+        where: { order_id: id, cancelled_at: null, company_id: companyId },
+      });
+      const current = await tx.purchase_orders.findFirst({
+        where: { id, company_id: companyId },
+        select: { number: true },
+      });
       if (current && receipts > 0) {
         throw new PurchaseError(
           `La orden ${current.number} tiene recepciones: no se puede anular. Si no va a llegar lo que falta, cerrala.`
@@ -479,7 +520,12 @@ export async function cancelPurchaseOrder(id: string, reason: string): Promise<A
       );
       await tx.purchase_orders.update({
         where: { id },
-        data: { status: purchaseOrderStatusAfter('cancel'), cancelled_by: profile.id, cancelled_at: new Date(), cancel_reason: motive.data },
+        data: {
+          status: purchaseOrderStatusAfter('cancel'),
+          cancelled_by: profile.id,
+          cancelled_at: new Date(),
+          cancel_reason: motive.data,
+        },
       });
       await recomputeRequestProgress(tx, requestIds);
     });
@@ -505,7 +551,10 @@ export async function closePurchaseOrder(id: string, reason: string): Promise<Ac
   try {
     await prisma.$transaction(async (tx) => {
       await lockPurchaseOrder(tx, companyId, id, 'close');
-      const lines = await tx.purchase_order_lines.findMany({ where: { order_id: id }, select: { request_line_id: true } });
+      const lines = await tx.purchase_order_lines.findMany({
+        where: { order_id: id },
+        select: { request_line_id: true },
+      });
       const locked = await lockRequestsForLines(
         tx,
         companyId,
@@ -513,7 +562,12 @@ export async function closePurchaseOrder(id: string, reason: string): Promise<Ac
       );
       await tx.purchase_orders.update({
         where: { id },
-        data: { status: purchaseOrderStatusAfter('close'), closed_by: profile.id, closed_at: new Date(), close_reason: motive.data },
+        data: {
+          status: purchaseOrderStatusAfter('close'),
+          closed_by: profile.id,
+          closed_at: new Date(),
+          close_reason: motive.data,
+        },
       });
       await recomputeRequestProgress(tx, [...new Set([...locked.values()].map((line) => line.requestId))]);
     });
@@ -541,7 +595,12 @@ export async function sendPurchaseOrder(id: string, values: SendDocumentValues):
   try {
     const order = await prisma.purchase_orders.findFirst({
       where: { id, company_id: companyId },
-      select: { number: true, status: true, company: { select: { company_name: true } }, supplier: { select: { name: true } } },
+      select: {
+        number: true,
+        status: true,
+        company: { select: { company_name: true } },
+        supplier: { select: { name: true } },
+      },
     });
     if (!order) return fail('La orden de compra no existe');
     if (!canApplyPurchaseOrderAction(order.status, 'send')) {
@@ -570,13 +629,20 @@ export async function sendPurchaseOrder(id: string, values: SendDocumentValues):
       }
       await tx.purchase_orders.update({
         where: { id },
-        data: { status: purchaseOrderStatusAfter('send'), sent_at: new Date(), sent_to: parsed.data.to, sent_by: profile.id },
+        data: {
+          status: purchaseOrderStatusAfter('send'),
+          sent_at: new Date(),
+          sent_to: parsed.data.to,
+          sent_by: profile.id,
+        },
       });
       return true;
     });
     revalidate();
     if (!marked) {
-      return fail(`El mail salió, pero la orden ${order.number} cambió de estado mientras se enviaba: revisala antes de volver a mandarla.`);
+      return fail(
+        `El mail salió, pero la orden ${order.number} cambió de estado mientras se enviaba: revisala antes de volver a mandarla.`
+      );
     }
     logger.info('Orden de compra enviada al proveedor', { data: { number: order.number, to: parsed.data.to } });
     return ok(null);
@@ -608,13 +674,13 @@ export async function markPurchaseOrderSent(id: string): Promise<ActionResult> {
 }
 
 /** PDF de la OC en cualquier estado (con marca de agua hasta que se aprueba). */
-export async function getPurchaseOrderPdf(id: string): Promise<ActionResult<{ filename: string; base64: string }>> {
+export async function getPurchaseOrderPdf(id: string): Promise<ActionResult<PdfDownload>> {
   if (!(await checkPermissionServer('compras', 'ordenes', 'view'))) return fail(NO_PERMISSION);
   if (!UUID_RE.test(id)) return fail('La orden de compra no existe');
   const companyId = await getActiveCompanyId();
   try {
     const pdf = await renderPurchaseOrderPdf(id, companyId);
-    return ok({ filename: pdf.filename, base64: Buffer.from(pdf.content).toString('base64') });
+    return ok(toPdfDownload(pdf));
   } catch (error) {
     return toPurchaseActionError(error, logger, 'generar el PDF');
   }
@@ -668,7 +734,8 @@ export async function getSupplierPurchaseContext(supplierId: string) {
 
 export type SupplierPurchaseContext = NonNullable<Awaited<ReturnType<typeof getSupplierPurchaseContext>>>;
 
-const userName = (p: { fullname: string | null; email: string | null } | null) => (p ? (p.fullname ?? p.email ?? 'Usuario') : null);
+const userName = (p: { fullname: string | null; email: string | null } | null) =>
+  p ? p.fullname ?? p.email ?? 'Usuario' : null;
 
 /** Detalle de la OC: cabecera, lineas con su solicitud de origen, historial y que se puede hacer. */
 export async function getPurchaseOrderDetail(id: string) {
@@ -788,7 +855,11 @@ export async function getPurchaseOrderDetail(id: string) {
       quoteLineId: line.quote_line_id,
       request: line.request_line.request,
       requestPosition: line.request_line.position,
-      itemLabel: requestLineLabel({ ...line.request_line, code: line.request_line.material?.code ?? null, name: line.request_line.material?.name ?? null }),
+      itemLabel: requestLineLabel({
+        ...line.request_line,
+        code: line.request_line.material?.code ?? null,
+        name: line.request_line.material?.name ?? null,
+      }),
       unitAbbr: line.request_line.unit.abbreviation,
       requested,
       available,
@@ -814,7 +885,11 @@ export async function getPurchaseOrderDetail(id: string) {
     deliveryPlace: order.delivery_place,
     paymentTermDays: order.payment_term_days,
     notes: order.notes,
-    totals: { subtotal: order.subtotal.toFixed(2), vatTotal: order.vat_total.toFixed(2), total: order.total.toFixed(2) },
+    totals: {
+      subtotal: order.subtotal.toFixed(2),
+      vatTotal: order.vat_total.toFixed(2),
+      total: order.total.toFixed(2),
+    },
     creator: userName(order.creator),
     rejectionNotes: status === 'DRAFT' ? order.rejection_notes : null,
     sentTo: order.sent_to,
@@ -859,14 +934,18 @@ export async function getPurchaseOrderDetail(id: string) {
     })),
     history: [
       { event: 'Creada', at: at(order.created_at), by: userName(order.creator), notes: null },
-      ...(order.submitted_at ? [{ event: 'Enviada a aprobación', at: at(order.submitted_at), by: null, notes: null }] : []),
+      ...(order.submitted_at
+        ? [{ event: 'Enviada a aprobación', at: at(order.submitted_at), by: null, notes: null }]
+        : []),
       ...order.rejections.map((rejection) => ({
         event: 'Rechazada',
         at: at(rejection.rejected_at),
         by: userName(rejection.rejecter),
         notes: rejection.reason,
       })),
-      ...(order.approved_at ? [{ event: 'Aprobada', at: at(order.approved_at), by: userName(order.approver), notes: null }] : []),
+      ...(order.approved_at
+        ? [{ event: 'Aprobada', at: at(order.approved_at), by: userName(order.approver), notes: null }]
+        : []),
       ...(order.sent_at
         ? [
             {
@@ -883,7 +962,9 @@ export async function getPurchaseOrderDetail(id: string) {
         by: userName(receipt.creator),
         notes: null,
       })),
-      ...(order.closed_at ? [{ event: 'Cerrada', at: at(order.closed_at), by: userName(order.closer), notes: order.close_reason }] : []),
+      ...(order.closed_at
+        ? [{ event: 'Cerrada', at: at(order.closed_at), by: userName(order.closer), notes: order.close_reason }]
+        : []),
       ...(order.cancelled_at
         ? [{ event: 'Anulada', at: at(order.cancelled_at), by: userName(order.canceller), notes: order.cancel_reason }]
         : []),
@@ -893,7 +974,10 @@ export async function getPurchaseOrderDetail(id: string) {
       submit: canApplyPurchaseOrderAction(status, 'submit') && canUpdate,
       approve: canApplyPurchaseOrderAction(status, 'approve') && canApprove,
       send: canApplyPurchaseOrderAction(status, 'send') && canUpdate,
-      cancel: canApplyPurchaseOrderAction(status, 'cancel') && canUpdate && order.receipts.every((receipt) => receipt.cancelled_at),
+      cancel:
+        canApplyPurchaseOrderAction(status, 'cancel') &&
+        canUpdate &&
+        order.receipts.every((receipt) => receipt.cancelled_at),
       receive: canApplyPurchaseOrderAction(status, 'receive') && canReceive,
       close: canApplyPurchaseOrderAction(status, 'close') && canUpdate,
     },

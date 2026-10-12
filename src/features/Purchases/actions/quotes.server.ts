@@ -1,26 +1,34 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { checkPermissionServer } from '@/features/Permissions';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { sendSupplierDocumentEmail } from '@/shared/lib/mail/templates/purchases';
+import { toPdfDownload } from '@/shared/lib/pdf/react-pdf.server';
+import type { PdfDownload } from '@/shared/lib/pdf/types';
 import { prisma } from '@/shared/lib/prisma';
 import { storageRemove, storageUpload } from '@/shared/lib/storage';
 import { buildStorageFileUrl } from '@/shared/lib/storage-url';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import moment from 'moment';
+import { revalidatePath } from 'next/cache';
 import { NO_PERMISSION, UUID_RE, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import { nextPurchaseDocumentNumber } from '../lib/document-number';
-import { assertWithinRemaining, lockRequestsForLines, orderedByLine, remainingOf, requestLineLabel } from '../lib/order-progress';
+import {
+  assertWithinRemaining,
+  lockRequestsForLines,
+  orderedByLine,
+  remainingOf,
+  requestLineLabel,
+} from '../lib/order-progress';
 import { comparePrices, computeOrderTotals } from '../lib/order-totals';
 import { PurchaseError } from '../lib/purchase-errors';
 import { canApplyPurchaseQuoteAction, type PurchaseQuoteStatus } from '../lib/quote-state-machine';
 import { lockPurchaseQuote, quoteHasOrders } from '../lib/quotes';
-import { dateColumn } from '../lib/requests';
 import { ORDERABLE_REQUEST_STATUSES, type PurchaseRequestStatus } from '../lib/request-state-machine';
+import { dateColumn } from '../lib/requests';
 import { SUPPLIER_FILES_BUCKET, safeFileName } from '../lib/storage-files';
 import { mailNotSentMessage, supplierRecipients } from '../lib/supplier-send';
 import { renderPurchaseQuotePdf } from '../pdf/render-purchase-pdf.server';
@@ -58,7 +66,9 @@ async function quotableLines(tx: Tx, companyId: string, requestLineIds: readonly
   const orderable: readonly PurchaseRequestStatus[] = ORDERABLE_REQUEST_STATUSES;
   for (const line of locked.values()) {
     if (!orderable.includes(line.requestStatus)) {
-      throw new PurchaseError(`La solicitud ${line.requestNumber} no está aprobada o ya se pidió: sus líneas no se pueden cotizar`);
+      throw new PurchaseError(
+        `La solicitud ${line.requestNumber} no está aprobada o ya se pidió: sus líneas no se pueden cotizar`
+      );
     }
   }
   const ordered = await orderedByLine(tx, requestLineIds);
@@ -70,7 +80,10 @@ async function quotableLines(tx: Tx, companyId: string, requestLineIds: readonly
   );
   return requestLineIds.map((requestLineId) => {
     const line = locked.get(requestLineId)!;
-    return { requestLineId, quantity: new Prisma.Decimal(remainingOf(line.requested, ordered.get(requestLineId) ?? '0')) };
+    return {
+      requestLineId,
+      quantity: new Prisma.Decimal(remainingOf(line.requested, ordered.get(requestLineId) ?? '0')),
+    };
   });
 }
 
@@ -138,7 +151,9 @@ export async function requestQuotes(
 }
 
 /** Alta desde la tab Cotizaciones: un proveedor y lineas de cualquier solicitud con faltante. */
-export async function createPurchaseQuote(values: PurchaseQuoteFormValues): Promise<ActionResult<{ id: string; number: string }>> {
+export async function createPurchaseQuote(
+  values: PurchaseQuoteFormValues
+): Promise<ActionResult<{ id: string; number: string }>> {
   if (!(await checkPermissionServer('compras', 'cotizaciones', 'create'))) return fail(NO_PERMISSION);
   const parsed = purchaseQuoteFormSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
@@ -203,7 +218,12 @@ export async function sendPurchaseQuote(id: string, values: SendDocumentValues):
   try {
     const quote = await prisma.purchase_quotes.findFirst({
       where: { id, company_id: companyId },
-      select: { number: true, status: true, company: { select: { company_name: true } }, supplier: { select: { name: true } } },
+      select: {
+        number: true,
+        status: true,
+        company: { select: { company_name: true } },
+        supplier: { select: { name: true } },
+      },
     });
     if (!quote) return fail('La cotización no existe');
     if (!canApplyPurchaseQuoteAction(quote.status, 'send')) return fail(`La cotización ${quote.number} ya fue enviada`);
@@ -227,7 +247,10 @@ export async function sendPurchaseQuote(id: string, values: SendDocumentValues):
         logger.warn('La cotización cambió de estado mientras se enviaba el mail', { data: { error, id } });
         return false;
       }
-      await tx.purchase_quotes.update({ where: { id }, data: { status: 'SENT', sent_at: new Date(), sent_to: parsed.data.to } });
+      await tx.purchase_quotes.update({
+        where: { id },
+        data: { status: 'SENT', sent_at: new Date(), sent_to: parsed.data.to },
+      });
       return true;
     });
     revalidate();
@@ -281,7 +304,11 @@ export async function recordPurchaseQuoteResponse(id: string, values: QuoteRespo
           where: { id: line.lineId },
           data: line.notQuoted
             ? { not_quoted: true, unit_price: null, vat_rate_id: null }
-            : { not_quoted: false, unit_price: new Prisma.Decimal(normalizePrice(line.unitPrice)), vat_rate_id: line.vatRateId },
+            : {
+                not_quoted: false,
+                unit_price: new Prisma.Decimal(normalizePrice(line.unitPrice)),
+                vat_rate_id: line.vatRateId,
+              },
         });
       }
       await tx.purchase_quotes.update({
@@ -309,9 +336,13 @@ export async function uploadPurchaseQuoteAttachment(id: string, formData: FormDa
   const file = formData.get('file');
   if (!(file instanceof File) || file.size === 0) return fail('Elegí el archivo');
   if (file.size > QUOTE_ATTACHMENT_MAX_BYTES) return fail('El archivo supera los 10 MB');
-  if (!(QUOTE_ATTACHMENT_TYPES as readonly string[]).includes(file.type)) return fail('El archivo tiene que ser PDF o imagen');
+  if (!(QUOTE_ATTACHMENT_TYPES as readonly string[]).includes(file.type))
+    return fail('El archivo tiene que ser PDF o imagen');
   const companyId = await getActiveCompanyId();
-  const quote = await prisma.purchase_quotes.findFirst({ where: { id, company_id: companyId }, select: { supplier_id: true, status: true } });
+  const quote = await prisma.purchase_quotes.findFirst({
+    where: { id, company_id: companyId },
+    select: { supplier_id: true, status: true },
+  });
   if (!quote) return fail('La cotización no existe');
   if (quote.status === 'CANCELLED') return fail('La cotización está anulada');
 
@@ -335,7 +366,10 @@ export async function declinePurchaseQuote(id: string): Promise<ActionResult> {
   try {
     await prisma.$transaction(async (tx) => {
       await lockPurchaseQuote(tx, companyId, id, 'decline');
-      await tx.purchase_quotes.update({ where: { id }, data: { status: 'DECLINED', received_at: dateColumn(moment().format('YYYY-MM-DD')) } });
+      await tx.purchase_quotes.update({
+        where: { id },
+        data: { status: 'DECLINED', received_at: dateColumn(moment().format('YYYY-MM-DD')) },
+      });
     });
     revalidate();
     return ok(null);
@@ -367,19 +401,20 @@ export async function cancelPurchaseQuote(id: string, reason: string): Promise<A
   }
 }
 
-export async function getPurchaseQuotePdf(id: string): Promise<ActionResult<{ filename: string; base64: string }>> {
+export async function getPurchaseQuotePdf(id: string): Promise<ActionResult<PdfDownload>> {
   if (!(await checkPermissionServer('compras', 'cotizaciones', 'view'))) return fail(NO_PERMISSION);
   if (!UUID_RE.test(id)) return fail('La cotización no existe');
   const companyId = await getActiveCompanyId();
   try {
     const pdf = await renderPurchaseQuotePdf(id, companyId);
-    return ok({ filename: pdf.filename, base64: Buffer.from(pdf.content).toString('base64') });
+    return ok(toPdfDownload(pdf));
   } catch (error) {
     return toPurchaseActionError(error, logger, 'generar el PDF');
   }
 }
 
-const userName = (p: { fullname: string | null; email: string | null } | null) => (p ? (p.fullname ?? p.email ?? 'Usuario') : null);
+const userName = (p: { fullname: string | null; email: string | null } | null) =>
+  p ? p.fullname ?? p.email ?? 'Usuario' : null;
 const dateOnly = (value: Date | null) => (value ? value.toISOString().slice(0, 10) : null);
 
 /** Detalle del pedido de cotizacion: lineas con su solicitud, respuesta, OC generadas e historial. */
@@ -459,7 +494,9 @@ export async function getPurchaseQuoteDetail(id: string) {
     }))
     .sort((a, b) => a.request.number.localeCompare(b.request.number) || a.requestPosition - b.requestPosition);
   const priced = lines.flatMap((line) =>
-    line.unitPrice !== null && line.vatRateId !== null ? [{ quantity: line.quantity, unitPrice: line.unitPrice, vatRateId: line.vatRateId }] : []
+    line.unitPrice !== null && line.vatRateId !== null
+      ? [{ quantity: line.quantity, unitPrice: line.unitPrice, vatRateId: line.vatRateId }]
+      : []
   );
   const hasOrders = quote.orders.some((order) => order.status !== 'CANCELLED');
   const recipients = await supplierRecipients(prisma, quote.supplier_id);
@@ -477,7 +514,10 @@ export async function getPurchaseQuoteDetail(id: string) {
     deliveryDays: quote.delivery_days,
     supplierNotes: quote.supplier_notes,
     attachment: quote.attachment_path
-      ? { name: quote.attachment_name ?? 'presupuesto', url: buildStorageFileUrl(SUPPLIER_FILES_BUCKET, quote.attachment_path) }
+      ? {
+          name: quote.attachment_name ?? 'presupuesto',
+          url: buildStorageFileUrl(SUPPLIER_FILES_BUCKET, quote.attachment_path),
+        }
       : null,
     totals: priced.length > 0 ? computeOrderTotals(priced) : null,
     lines,
@@ -487,12 +527,28 @@ export async function getPurchaseQuoteDetail(id: string) {
     history: [
       { event: 'Creada', at: at(quote.created_at), by: userName(quote.creator), notes: null },
       ...(quote.sent_at
-        ? [{ event: quote.sent_to.length > 0 ? `Enviada a ${quote.sent_to.join(', ')}` : 'Marcada como enviada', at: at(quote.sent_at), by: null, notes: null }]
+        ? [
+            {
+              event: quote.sent_to.length > 0 ? `Enviada a ${quote.sent_to.join(', ')}` : 'Marcada como enviada',
+              at: at(quote.sent_at),
+              by: null,
+              notes: null,
+            },
+          ]
         : []),
       ...(quote.received_at
-        ? [{ event: status === 'DECLINED' ? 'No cotiza' : 'Respondida', at: dateOnly(quote.received_at), by: null, notes: quote.supplier_notes }]
+        ? [
+            {
+              event: status === 'DECLINED' ? 'No cotiza' : 'Respondida',
+              at: dateOnly(quote.received_at),
+              by: null,
+              notes: quote.supplier_notes,
+            },
+          ]
         : []),
-      ...(quote.cancelled_at ? [{ event: 'Anulada', at: at(quote.cancelled_at), by: userName(quote.canceller), notes: quote.cancel_reason }] : []),
+      ...(quote.cancelled_at
+        ? [{ event: 'Anulada', at: at(quote.cancelled_at), by: userName(quote.canceller), notes: quote.cancel_reason }]
+        : []),
     ],
     form: {
       supplierId: quote.supplier_id,
@@ -554,7 +610,11 @@ export async function getRequestQuoteComparison(requestId: string) {
   if (!request) return null;
 
   const quotes = await prisma.purchase_quotes.findMany({
-    where: { company_id: companyId, status: { not: 'CANCELLED' }, lines: { some: { request_line: { request_id: requestId } } } },
+    where: {
+      company_id: companyId,
+      status: { not: 'CANCELLED' },
+      lines: { some: { request_line: { request_id: requestId } } },
+    },
     orderBy: { created_at: 'asc' },
     select: {
       id: true,
@@ -601,10 +661,16 @@ export async function getRequestQuoteComparison(requestId: string) {
       if (!quoteLine) continue;
       if (quoteLine.not_quoted) cells[quote.id] = { state: 'not_quoted' };
       else if (quoteLine.unit_price !== null && quoteLine.vat_rate_id !== null) {
-        cells[quote.id] = { state: 'price', unitPrice: quoteLine.unit_price.toString(), vatRateId: quoteLine.vat_rate_id };
+        cells[quote.id] = {
+          state: 'price',
+          unitPrice: quoteLine.unit_price.toString(),
+          vatRateId: quoteLine.vat_rate_id,
+        };
       } else cells[quote.id] = { state: 'pending' };
     }
-    const prices = Object.entries(cells).flatMap(([quoteId, cell]) => (cell.state === 'price' ? [{ quoteId, price: cell.unitPrice }] : []));
+    const prices = Object.entries(cells).flatMap(([quoteId, cell]) =>
+      cell.state === 'price' ? [{ quoteId, price: cell.unitPrice }] : []
+    );
     const min = prices.reduce<string | null>(
       (acc, entry) => (acc === null || comparePrices(entry.price, acc) < 0 ? entry.price : acc),
       null
@@ -612,11 +678,18 @@ export async function getRequestQuoteComparison(requestId: string) {
     return {
       lineId: line.id,
       position: line.position,
-      itemLabel: requestLineLabel({ code: line.material?.code ?? null, name: line.material?.name ?? null, description: line.description }),
+      itemLabel: requestLineLabel({
+        code: line.material?.code ?? null,
+        name: line.material?.name ?? null,
+        description: line.description,
+      }),
       quantity: line.quantity.toString(),
       unitAbbr: line.unit.abbreviation,
       cells,
-      bestQuoteIds: min === null ? [] : prices.filter((entry) => comparePrices(entry.price, min) === 0).map((entry) => entry.quoteId),
+      bestQuoteIds:
+        min === null
+          ? []
+          : prices.filter((entry) => comparePrices(entry.price, min) === 0).map((entry) => entry.quoteId),
     };
   });
 

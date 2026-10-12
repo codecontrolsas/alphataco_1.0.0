@@ -1,14 +1,46 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { checkPermissionServer } from '@/features/Permissions';
+import {
+  assertNotBeforeEntry,
+  assertTransition,
+  lockChecks,
+  moveCheck,
+  type LockedCheck,
+} from '@/features/Treasury/lib/checks';
+import {
+  assertBankAccount,
+  assertMoneyAccount,
+  cancelMovements,
+  createMovement,
+} from '@/features/Treasury/lib/movements';
+import {
+  assertFreeNumber,
+  assertNumberUnused,
+  issueOwnCheck,
+  lockCheckbook,
+  lockOwnChecks,
+  moveOwnCheck,
+  type LockedCheckbook,
+} from '@/features/Treasury/lib/own-checks';
+import {
+  openCheckDebtsOfSupplier,
+  rejectedCheckLabel,
+  rejectedOwnCheckLabel,
+} from '@/features/Treasury/lib/rejected-checks';
+import { treasuryToday } from '@/features/Treasury/lib/today';
+import { TreasuryError } from '@/features/Treasury/lib/treasury-errors';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { withActor } from '@/shared/lib/actor';
+import { sendSupplierDocumentEmail } from '@/shared/lib/mail/templates/purchases';
+import { toPdfDownload } from '@/shared/lib/pdf/react-pdf.server';
+import type { PdfDownload } from '@/shared/lib/pdf/types';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { revalidatePath } from 'next/cache';
 import { NO_PERMISSION, UUID_RE, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import { nextPurchaseDocumentNumber } from '../lib/document-number';
 import { supplierInvoiceLabel } from '../lib/invoices';
@@ -26,6 +58,8 @@ import {
   type BuiltWithholding,
 } from '../lib/payments';
 import { PurchaseError } from '../lib/purchase-errors';
+import { mailNotSentMessage, supplierRecipients } from '../lib/supplier-send';
+import { renderPaymentOrderPdf } from '../pdf/render-payment-pdf.server';
 import {
   paymentOrderFormSchema,
   registerPaymentFormSchema,
@@ -34,15 +68,6 @@ import {
 } from '../schemas/payment-orders';
 import { requiredReasonSchema } from '../schemas/requests';
 import { sendDocumentSchema, type SendDocumentValues } from '../schemas/send';
-import { mailNotSentMessage, supplierRecipients } from '../lib/supplier-send';
-import { renderPaymentOrderPdf } from '../pdf/render-payment-pdf.server';
-import { sendSupplierDocumentEmail } from '@/shared/lib/mail/templates/purchases';
-import { treasuryToday } from '@/features/Treasury/lib/today';
-import { assertBankAccount, assertMoneyAccount, cancelMovements, createMovement } from '@/features/Treasury/lib/movements';
-import { assertFreeNumber, assertNumberUnused, issueOwnCheck, lockCheckbook, lockOwnChecks, moveOwnCheck, type LockedCheckbook } from '@/features/Treasury/lib/own-checks';
-import { assertNotBeforeEntry, assertTransition, lockChecks, moveCheck, type LockedCheck } from '@/features/Treasury/lib/checks';
-import { TreasuryError } from '@/features/Treasury/lib/treasury-errors';
-import { openCheckDebtsOfSupplier, rejectedCheckLabel, rejectedOwnCheckLabel } from '@/features/Treasury/lib/rejected-checks';
 
 const logger = new Logger('features/Purchases/payment-orders');
 
@@ -79,7 +104,9 @@ export async function previewPaymentOrder(
   try {
     const built = await prisma.$transaction(async (tx) => {
       const supplier = await lockSupplier(tx, companyId, parsed.data.supplierId);
-      return buildPaymentOrder(tx, companyId, supplier, parsed.data, { orderId: options.orderId && UUID_RE.test(options.orderId) ? options.orderId : undefined });
+      return buildPaymentOrder(tx, companyId, supplier, parsed.data, {
+        orderId: options.orderId && UUID_RE.test(options.orderId) ? options.orderId : undefined,
+      });
     });
     return ok({ totals: built.totals, withholdings: built.withholdings });
   } catch (error) {
@@ -88,7 +115,9 @@ export async function previewPaymentOrder(
 }
 
 /** Arma una orden de pago en borrador (spec Compras etapa 5 §3.1). */
-export async function createPaymentOrder(values: PaymentOrderFormValues): Promise<ActionResult<{ id: string; number: string }>> {
+export async function createPaymentOrder(
+  values: PaymentOrderFormValues
+): Promise<ActionResult<{ id: string; number: string }>> {
   if (!(await checkPermissionServer('compras', 'pagos', 'create'))) return fail(NO_PERMISSION);
   const parsed = paymentOrderFormSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
@@ -144,7 +173,8 @@ export async function updatePaymentOrder(id: string, values: PaymentOrderFormVal
       profile.credentialId,
       async (tx) => {
         const order = await lockPaymentOrder(tx, companyId, id, 'edit');
-        if (order.supplierId !== parsed.data.supplierId) throw new PurchaseError('El proveedor de una orden de pago no se cambia: armá otra');
+        if (order.supplierId !== parsed.data.supplierId)
+          throw new PurchaseError('El proveedor de una orden de pago no se cambia: armá otra');
         const built = await buildPaymentOrder(tx, companyId, order.supplier, parsed.data, { orderId: id });
         const data = paymentOrderData(built);
         await tx.payment_order_lines.deleteMany({ where: { payment_order_id: id } });
@@ -200,7 +230,10 @@ export async function approvePaymentOrder(id: string): Promise<ActionResult> {
       const order = await lockPaymentOrder(tx, companyId, id, 'approve');
       await assertPaymentOrderStillValid(tx, companyId, id);
       await assertWithholdingsStillValid(tx, companyId, order.supplier, id);
-      await tx.payment_orders.update({ where: { id }, data: { status: 'APPROVED', approved_by: profile.id, approved_at: new Date() } });
+      await tx.payment_orders.update({
+        where: { id },
+        data: { status: 'APPROVED', approved_by: profile.id, approved_at: new Date() },
+      });
     });
     revalidate();
     return ok(null);
@@ -249,7 +282,10 @@ export async function backToDraftPaymentOrder(id: string): Promise<ActionResult>
   try {
     await withActor(profile.credentialId, async (tx) => {
       await lockPaymentOrder(tx, companyId, id, 'backToDraft');
-      await tx.payment_orders.update({ where: { id }, data: { status: 'DRAFT', approved_by: null, approved_at: null } });
+      await tx.payment_orders.update({
+        where: { id },
+        data: { status: 'DRAFT', approved_by: null, approved_at: null },
+      });
     });
     revalidate();
     return ok(null);
@@ -264,7 +300,15 @@ export async function backToDraftPaymentOrder(id: string): Promise<ActionResult>
  */
 async function endorseCheck(
   tx: Prisma.TransactionClient,
-  input: { check: LockedCheck; companyId: string; orderId: string; orderNumber: string; supplier: { id: string; name: string }; paidOn: string; userId: string }
+  input: {
+    check: LockedCheck;
+    companyId: string;
+    orderId: string;
+    orderNumber: string;
+    supplier: { id: string; name: string };
+    paidOn: string;
+    userId: string;
+  }
 ) {
   const { check } = input;
   if (!check) throw new TreasuryError('El cheque no existe');
@@ -292,16 +336,39 @@ async function endorseCheck(
     description: `${input.orderNumber} — ${input.supplier.name} — Endoso del cheque N° ${check.number} (${check.bank})`,
     createdBy: input.userId,
   });
-  await moveCheck(tx, { check, action: 'ENDORSE', date: input.paidOn, userId: input.userId, origin: { paymentOrderId: input.orderId }, set: { supplierId: input.supplier.id } });
+  await moveCheck(tx, {
+    check,
+    action: 'ENDORSE',
+    date: input.paidOn,
+    userId: input.userId,
+    origin: { paymentOrderId: input.orderId },
+    set: { supplierId: input.supplier.id },
+  });
 }
 
-const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const MONTHS = [
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'septiembre',
+  'octubre',
+  'noviembre',
+  'diciembre',
+];
 
 /**
  * Registra el pago: fecha real (mismo mes que la prevista) y medios que suman el neto, desde
  * cuentas activas. Numera los certificados de retencion y deja la orden pagada.
  */
-export async function registerPayment(id: string, values: RegisterPaymentFormValues): Promise<ActionResult<{ number: string; certificates: string[] }>> {
+export async function registerPayment(
+  id: string,
+  values: RegisterPaymentFormValues
+): Promise<ActionResult<{ number: string; certificates: string[] }>> {
   if (!(await checkPermissionServer('compras', 'pagos', 'update'))) return fail(NO_PERMISSION);
   if (!UUID_RE.test(id)) return fail(NOT_FOUND);
   const parsed = registerPaymentFormSchema.safeParse(values);
@@ -318,44 +385,62 @@ export async function registerPayment(id: string, values: RegisterPaymentFormVal
         const planned = isoDay(order.plannedOn)!;
         if (planned.slice(0, 7) !== v.paidOn.slice(0, 7)) {
           const month = MONTHS[Number(planned.slice(5, 7)) - 1];
-          throw new PurchaseError(`Las retenciones se calcularon para ${month}: volvé la orden a borrador para recalcularlas con la fecha de pago`);
+          throw new PurchaseError(
+            `Las retenciones se calcularon para ${month}: volvé la orden a borrador para recalcularlas con la fecha de pago`
+          );
         }
         await assertPaymentOrderStillValid(tx, companyId, id);
         await assertWithholdingsStillValid(tx, companyId, order.supplier, id);
         // Neto 0 (todo compensado con NC o anticipos): se registra sin medios de pago.
-        if (v.payments.length === 0 && cents(order.netTotal) !== BigInt(0)) throw new PurchaseError('Agregá al menos un medio de pago');
+        if (v.payments.length === 0 && cents(order.netTotal) !== BigInt(0))
+          throw new PurchaseError('Agregá al menos un medio de pago');
         // Cheques de terceros (Tesoreria etapa 3a): se bloquean y tienen que seguir EN CARTERA. Su
         // importe y su cartera salen del cheque, no del formulario.
-        const endorsedIds = v.payments.flatMap((p) => (p.method === 'THIRD_PARTY_CHECK' && p.thirdPartyCheckId ? [p.thirdPartyCheckId] : []));
+        const endorsedIds = v.payments.flatMap((p) =>
+          p.method === 'THIRD_PARTY_CHECK' && p.thirdPartyCheckId ? [p.thirdPartyCheckId] : []
+        );
         const endorsed = await lockChecks(tx, companyId, endorsedIds);
         for (const check of endorsed.values()) {
           assertTransition(check, 'ENDORSE');
           assertNotBeforeEntry(check, v.paidOn);
         }
         const amountOf = (p: (typeof v.payments)[number]) =>
-          p.method === 'THIRD_PARTY_CHECK' ? cents(endorsed.get(p.thirdPartyCheckId ?? '')?.amount ?? '0') : cents(p.amount);
+          p.method === 'THIRD_PARTY_CHECK'
+            ? cents(endorsed.get(p.thirdPartyCheckId ?? '')?.amount ?? '0')
+            : cents(p.amount);
         // Cheques propios (Tesoreria etapa 3b): la chequera se bloquea (dos pagos no toman el mismo
         // numero) y su cuenta es la del medio. Un e-cheq sale de una cuenta bancaria.
         const checkbooks = new Map<string, LockedCheckbook>();
-        for (const checkbookId of [...new Set(v.payments.flatMap((p) => (p.method === 'CHECK' && p.checkbookId ? [p.checkbookId] : [])))].sort()) {
+        for (const checkbookId of [
+          ...new Set(v.payments.flatMap((p) => (p.method === 'CHECK' && p.checkbookId ? [p.checkbookId] : []))),
+        ].sort()) {
           const checkbook = await lockCheckbook(tx, companyId, checkbookId);
           if (checkbook.retired) throw new PurchaseError('La chequera está dada de baja');
           checkbooks.set(checkbookId, checkbook);
         }
-        const accountOf = (p: (typeof v.payments)[number]) => (p.method === 'CHECK' ? (checkbooks.get(p.checkbookId ?? '')?.accountId ?? '') : p.accountId);
+        const accountOf = (p: (typeof v.payments)[number]) =>
+          p.method === 'CHECK' ? checkbooks.get(p.checkbookId ?? '')?.accountId ?? '' : p.accountId;
         // Cuenta inexistente, ajena, inactiva o una cartera: el mensaje de Tesoreria nombra la cuenta.
         const accountNames = new Map<string, string>();
         for (const p of v.payments) {
           if (p.method === 'THIRD_PARTY_CHECK' || accountNames.has(accountOf(p))) continue;
-          const account = p.method === 'CHECK' || p.method === 'ECHECK' ? await assertBankAccount(tx, companyId, accountOf(p)) : await assertMoneyAccount(tx, companyId, accountOf(p));
+          const account =
+            p.method === 'CHECK' || p.method === 'ECHECK'
+              ? await assertBankAccount(tx, companyId, accountOf(p))
+              : await assertMoneyAccount(tx, companyId, accountOf(p));
           accountNames.set(account.id, account.name);
         }
         const total = v.payments.reduce((acc, p) => acc + amountOf(p), BigInt(0));
         if (total !== cents(order.netTotal)) {
-          throw new PurchaseError(`Los medios suman ${money(total)} y no suman el neto a pagar (${money(cents(order.netTotal))})`);
+          throw new PurchaseError(
+            `Los medios suman ${money(total)} y no suman el neto a pagar (${money(cents(order.netTotal))})`
+          );
         }
 
-        const withholdings = await tx.payment_order_withholdings.findMany({ where: { payment_order_id: id }, select: { id: true, tax: true } });
+        const withholdings = await tx.payment_order_withholdings.findMany({
+          where: { payment_order_id: id },
+          select: { id: true, tax: true },
+        });
         const certificates: string[] = [];
         for (const w of withholdings) {
           const number = await nextCertificateNumber(tx, companyId, w.tax);
@@ -367,7 +452,15 @@ export async function registerPayment(id: string, values: RegisterPaymentFormVal
         // banco lo paga (spec Tesoreria etapa 3b §3.2).
         for (const p of v.payments) {
           if (p.method === 'THIRD_PARTY_CHECK') {
-            await endorseCheck(tx, { check: endorsed.get(p.thirdPartyCheckId ?? '') as LockedCheck, companyId, orderId: id, orderNumber: order.number, supplier: order.supplier, paidOn: v.paidOn, userId: profile.id });
+            await endorseCheck(tx, {
+              check: endorsed.get(p.thirdPartyCheckId ?? '') as LockedCheck,
+              companyId,
+              orderId: id,
+              orderNumber: order.number,
+              supplier: order.supplier,
+              paidOn: v.paidOn,
+              userId: profile.id,
+            });
             continue;
           }
           const accountId = accountOf(p);
@@ -378,7 +471,10 @@ export async function registerPayment(id: string, values: RegisterPaymentFormVal
             let number = p.checkNumber.replace(/\s+/g, '');
             if (checkbook) number = await assertFreeNumber(tx, checkbook, number);
             else await assertNumberUnused(tx, accountId, accountName, 'ECHECK', number);
-            const bank = await tx.treasury_accounts.findUniqueOrThrow({ where: { id: accountId }, select: { bank_name: true, name: true } });
+            const bank = await tx.treasury_accounts.findUniqueOrThrow({
+              where: { id: accountId },
+              select: { bank_name: true, name: true },
+            });
             const payment = await tx.payment_order_payments.create({
               data: {
                 payment_order_id: id,
@@ -430,7 +526,10 @@ export async function registerPayment(id: string, values: RegisterPaymentFormVal
             createdBy: profile.id,
           });
         }
-        await tx.payment_orders.update({ where: { id }, data: { status: 'PAID', paid_on: day(v.paidOn), paid_by: profile.id } });
+        await tx.payment_orders.update({
+          where: { id },
+          data: { status: 'PAID', paid_on: day(v.paidOn), paid_by: profile.id },
+        });
         return { number: order.number, certificates };
       },
       prisma,
@@ -461,51 +560,89 @@ export async function cancelPaymentOrder(id: string, reason: string): Promise<Ac
     await withActor(
       profile.credentialId,
       async (tx) => {
-      const order = await lockPaymentOrder(tx, companyId, id, 'cancel');
-      const used = await tx.$queryRaw<{ number: string }[]>`
+        const order = await lockPaymentOrder(tx, companyId, id, 'cancel');
+        const used = await tx.$queryRaw<{ number: string }[]>`
         SELECT po.number FROM payment_order_lines a
         JOIN payment_order_lines x ON x.source_line_id = a.id
         JOIN payment_orders po ON po.id = x.payment_order_id
         WHERE a.payment_order_id = ${id}::uuid AND po.status <> 'CANCELLED'
         ORDER BY po.number LIMIT 1
       `;
-      if (used[0]) throw new PurchaseError(`El anticipo de la ${order.number} se aplicó en la ${used[0].number}: anulá esa primero`);
-      const now = new Date();
-      if (order.status === 'PAID') {
-        // Los cheques de terceros endosados vuelven a la cartera, salvo que ya los hayan rechazado.
-        const endorsedPayments = await tx.payment_order_payments.findMany({
-          where: { payment_order_id: id, method: 'THIRD_PARTY_CHECK', third_party_check_id: { not: null } },
-          select: { third_party_check_id: true },
-        });
-        const endorsed = await lockChecks(tx, companyId, endorsedPayments.map((p) => p.third_party_check_id as string));
-        for (const check of endorsed.values()) {
-          if (check.status === 'REJECTED') {
-            const rejection = await tx.$queryRaw<{ number: string }[]>`
+        if (used[0])
+          throw new PurchaseError(
+            `El anticipo de la ${order.number} se aplicó en la ${used[0].number}: anulá esa primero`
+          );
+        const now = new Date();
+        if (order.status === 'PAID') {
+          // Los cheques de terceros endosados vuelven a la cartera, salvo que ya los hayan rechazado.
+          const endorsedPayments = await tx.payment_order_payments.findMany({
+            where: { payment_order_id: id, method: 'THIRD_PARTY_CHECK', third_party_check_id: { not: null } },
+            select: { third_party_check_id: true },
+          });
+          const endorsed = await lockChecks(
+            tx,
+            companyId,
+            endorsedPayments.map((p) => p.third_party_check_id as string)
+          );
+          for (const check of endorsed.values()) {
+            if (check.status === 'REJECTED') {
+              const rejection = await tx.$queryRaw<{ number: string }[]>`
               SELECT o.number FROM third_party_check_operation_items i JOIN third_party_check_operations o ON o.id = i.operation_id
               WHERE i.check_id = ${check.id}::uuid AND o.kind = 'REJECTION' AND o.cancelled_at IS NULL LIMIT 1
             `;
-            throw new PurchaseError(`El cheque Nº ${check.number} endosado en esta orden fue rechazado: anulá primero el rechazo ${rejection[0]?.number ?? ''}`.trim());
+              throw new PurchaseError(
+                `El cheque Nº ${check.number} endosado en esta orden fue rechazado: anulá primero el rechazo ${rejection[0]?.number ?? ''}`.trim()
+              );
+            }
+            await moveCheck(tx, {
+              check,
+              action: 'UNDO_EXIT',
+              date: treasuryToday(),
+              userId: profile.id,
+              origin: { paymentOrderId: id },
+            });
           }
-          await moveCheck(tx, { check, action: 'UNDO_EXIT', date: treasuryToday(), userId: profile.id, origin: { paymentOrderId: id } });
-        }
-        // Cheques propios (Tesoreria etapa 3b): los emitidos se anulan (su numero no se reusa); uno
-        // debitado o rechazado bloquea la anulacion hasta deshacer el debito o el rechazo.
-        const ownPayments = await tx.own_checks.findMany({ where: { payment_order_payment: { payment_order_id: id } }, select: { id: true } });
-        const own = await lockOwnChecks(tx, companyId, ownPayments.map((c) => c.id));
-        for (const check of own.values()) {
-          if (check.status === 'DEBITED') throw new PurchaseError(`El cheque Nº ${check.number} de esta orden ya se debitó: deshacé primero el débito`);
-          if (check.status === 'REJECTED') throw new PurchaseError(`El cheque Nº ${check.number} de esta orden fue rechazado: anulá primero el rechazo`);
-          if (check.status === 'ISSUED') {
-            await moveOwnCheck(tx, { check, action: 'CANCEL', date: treasuryToday(), userId: profile.id, reason: motive.data, paymentOrderId: id });
+          // Cheques propios (Tesoreria etapa 3b): los emitidos se anulan (su numero no se reusa); uno
+          // debitado o rechazado bloquea la anulacion hasta deshacer el debito o el rechazo.
+          const ownPayments = await tx.own_checks.findMany({
+            where: { payment_order_payment: { payment_order_id: id } },
+            select: { id: true },
+          });
+          const own = await lockOwnChecks(
+            tx,
+            companyId,
+            ownPayments.map((c) => c.id)
+          );
+          for (const check of own.values()) {
+            if (check.status === 'DEBITED')
+              throw new PurchaseError(
+                `El cheque Nº ${check.number} de esta orden ya se debitó: deshacé primero el débito`
+              );
+            if (check.status === 'REJECTED')
+              throw new PurchaseError(
+                `El cheque Nº ${check.number} de esta orden fue rechazado: anulá primero el rechazo`
+              );
+            if (check.status === 'ISSUED') {
+              await moveOwnCheck(tx, {
+                check,
+                action: 'CANCEL',
+                date: treasuryToday(),
+                userId: profile.id,
+                reason: motive.data,
+                paymentOrderId: id,
+              });
+            }
           }
+          await tx.payment_order_withholdings.updateMany({
+            where: { payment_order_id: id },
+            data: { cancelled_at: now },
+          });
+          await cancelMovements(tx, { paymentOrderId: id }, { by: profile.id, reason: motive.data, at: now });
         }
-        await tx.payment_order_withholdings.updateMany({ where: { payment_order_id: id }, data: { cancelled_at: now } });
-        await cancelMovements(tx, { paymentOrderId: id }, { by: profile.id, reason: motive.data, at: now });
-      }
-      await tx.payment_orders.update({
-        where: { id },
-        data: { status: 'CANCELLED', cancelled_by: profile.id, cancelled_at: now, cancel_reason: motive.data },
-      });
+        await tx.payment_orders.update({
+          where: { id },
+          data: { status: 'CANCELLED', cancelled_by: profile.id, cancelled_at: now, cancel_reason: motive.data },
+        });
       },
       prisma,
       TRANSACTION_OPTIONS
@@ -535,14 +672,24 @@ export async function getPaymentOrderFormData(supplierId?: string, options: { ex
   if (!supplier) return empty;
   const exclude = options.excludeOrderId && UUID_RE.test(options.excludeOrderId) ? options.excludeOrderId : undefined;
   const included = exclude
-    ? (await prisma.payment_order_lines.findMany({ where: { payment_order_id: exclude, kind: 'REJECTED_CHECK' }, select: { third_party_check_id: true, own_check_id: true } }))
-        .flatMap((l) => (l.third_party_check_id ?? l.own_check_id ? [(l.third_party_check_id ?? l.own_check_id) as string] : []))
+    ? (
+        await prisma.payment_order_lines.findMany({
+          where: { payment_order_id: exclude, kind: 'REJECTED_CHECK' },
+          select: { third_party_check_id: true, own_check_id: true },
+        })
+      ).flatMap((l) =>
+        l.third_party_check_id ?? l.own_check_id ? [(l.third_party_check_id ?? l.own_check_id) as string] : []
+      )
     : [];
   const [invoices, advances, purchaseOrders, checkDebts] = await Promise.all([
     openInvoicesOfSupplier(prisma, companyId, supplier.id, { excludeOrderId: exclude }),
     openAdvancesOfSupplier(prisma, companyId, supplier.id, { excludeOrderId: exclude }),
     prisma.purchase_orders.findMany({
-      where: { company_id: companyId, supplier_id: supplier.id, status: { in: ['APPROVED', 'SENT', 'PARTIALLY_RECEIVED', 'RECEIVED'] } },
+      where: {
+        company_id: companyId,
+        supplier_id: supplier.id,
+        status: { in: ['APPROVED', 'SENT', 'PARTIALLY_RECEIVED', 'RECEIVED'] },
+      },
       select: { id: true, number: true, total: true },
       orderBy: { number: 'desc' },
       take: 100,
@@ -570,7 +717,13 @@ export async function getPaymentOrderFormData(supplierId?: string, options: { ex
         available: money(cents(a.available)),
       })),
       /** Deudas por cheques de terceros endosados a este proveedor y rechazados (Tesoreria etapa 3a). */
-      checkDebts: checkDebts.map((d) => ({ checkId: d.checkId, label: d.label, rejectedOn: d.rejectedOn, amount: d.amount, pending: d.pending })),
+      checkDebts: checkDebts.map((d) => ({
+        checkId: d.checkId,
+        label: d.label,
+        rejectedOn: d.rejectedOn,
+        amount: d.amount,
+        pending: d.pending,
+      })),
     },
     purchaseOrders: purchaseOrders.map((o) => ({ id: o.id, number: o.number, total: o.total.toFixed(2) })),
   };
@@ -584,7 +737,15 @@ export async function getPortfolioChecksForPayment() {
   const companyId = await getActiveCompanyId();
   const rows = await prisma.third_party_checks.findMany({
     where: { company_id: companyId, status: 'IN_PORTFOLIO', portfolio: { is_active: true } },
-    select: { id: true, number: true, bank: true, drawer_name: true, amount: true, payment_date: true, portfolio: { select: { name: true } } },
+    select: {
+      id: true,
+      number: true,
+      bank: true,
+      drawer_name: true,
+      amount: true,
+      payment_date: true,
+      portfolio: { select: { name: true } },
+    },
     orderBy: [{ payment_date: 'asc' }, { number: 'asc' }],
     take: 500,
   });
@@ -601,7 +762,8 @@ export async function getPortfolioChecksForPayment() {
 
 export type PortfolioCheckOption = Awaited<ReturnType<typeof getPortfolioChecksForPayment>>[number];
 
-const userName = (p: { fullname: string | null; email: string | null } | null) => (p ? (p.fullname ?? p.email ?? 'Usuario') : null);
+const userName = (p: { fullname: string | null; email: string | null } | null) =>
+  p ? p.fullname ?? p.email ?? 'Usuario' : null;
 
 /** Detalle de la orden: lineas, retenciones con certificado, medios, historial y acciones. */
 export async function getPaymentOrderDetail(id: string) {
@@ -621,7 +783,10 @@ export async function getPaymentOrderDetail(id: string) {
       approver: { select: { fullname: true, email: true } },
       payer: { select: { fullname: true, email: true } },
       canceller: { select: { fullname: true, email: true } },
-      rejections: { select: { rejected_at: true, reason: true, rejecter: { select: { fullname: true, email: true } } }, orderBy: { rejected_at: 'asc' } },
+      rejections: {
+        select: { rejected_at: true, reason: true, rejecter: { select: { fullname: true, email: true } } },
+        orderBy: { rejected_at: 'asc' },
+      },
       lines: {
         orderBy: { position: 'asc' },
         select: {
@@ -629,7 +794,9 @@ export async function getPaymentOrderDetail(id: string) {
           kind: true,
           amount: true,
           description: true,
-          invoice: { select: { id: true, cbte_type: true, sales_point: true, number: true, total: true, due_date: true } },
+          invoice: {
+            select: { id: true, cbte_type: true, sales_point: true, number: true, total: true, due_date: true },
+          },
           purchase_order: { select: { id: true, number: true } },
           source_line: { select: { payment_order: { select: { id: true, number: true } } } },
           third_party_check: { select: { id: true, number: true, bank: true } },
@@ -698,14 +865,30 @@ export async function getPaymentOrderDetail(id: string) {
       amount: l.amount.toFixed(2),
       description: l.description,
       invoice: l.invoice
-        ? { id: l.invoice.id, label: supplierInvoiceLabel(l.invoice), total: l.invoice.total.toFixed(2), dueDate: isoDay(l.invoice.due_date) }
+        ? {
+            id: l.invoice.id,
+            label: supplierInvoiceLabel(l.invoice),
+            total: l.invoice.total.toFixed(2),
+            dueDate: isoDay(l.invoice.due_date),
+          }
         : null,
       purchaseOrder: l.purchase_order,
       sourceOrder: l.source_line?.payment_order ?? null,
       rejectedCheck: l.third_party_check
-        ? { id: l.third_party_check.id, own: false, label: rejectedCheckLabel(l.third_party_check.number, l.third_party_check.bank) }
+        ? {
+            id: l.third_party_check.id,
+            own: false,
+            label: rejectedCheckLabel(l.third_party_check.number, l.third_party_check.bank),
+          }
         : l.own_check
-          ? { id: l.own_check.id, own: true, label: rejectedOwnCheckLabel(l.own_check.number, (l.own_check.account.bank_name || l.own_check.account.name).toUpperCase()) }
+          ? {
+              id: l.own_check.id,
+              own: true,
+              label: rejectedOwnCheckLabel(
+                l.own_check.number,
+                (l.own_check.account.bank_name || l.own_check.account.name).toUpperCase()
+              ),
+            }
           : null,
     })),
     withholdings: order.withholdings.map((w) => ({
@@ -728,23 +911,46 @@ export async function getPaymentOrderDetail(id: string) {
       checkNumber: p.check_number,
       checkBank: p.check_bank,
       checkDueOn: isoDay(p.check_due_on),
-      thirdPartyCheck: p.third_party_check ? { id: p.third_party_check.id, drawerName: p.third_party_check.drawer_name } : null,
+      thirdPartyCheck: p.third_party_check
+        ? { id: p.third_party_check.id, drawerName: p.third_party_check.drawer_name }
+        : null,
       // Cheque propio (Tesoreria etapa 3b): su estado dice si ya se debito.
-      ownCheck: p.own_check ? { id: p.own_check.id, status: p.own_check.status, debitedOn: isoDay(p.own_check.debited_on) } : null,
+      ownCheck: p.own_check
+        ? { id: p.own_check.id, status: p.own_check.status, debitedOn: isoDay(p.own_check.debited_on) }
+        : null,
       account: p.treasury_account,
       // Movimiento de Tesoreria: fecha valor y si todavia esta "a debitar".
       movement: p.movement
-        ? { date: isoDay(p.movement.date)!, cancelled: p.movement.cancelled_at !== null, toDebit: isoDay(p.movement.date)! > today }
+        ? {
+            date: isoDay(p.movement.date)!,
+            cancelled: p.movement.cancelled_at !== null,
+            toDebit: isoDay(p.movement.date)! > today,
+          }
         : null,
     })),
     history: [
       { event: 'Creada', at: at(order.created_at), by: userName(order.creator), notes: null },
-      ...order.rejections.map((r) => ({ event: 'Rechazada', at: at(r.rejected_at), by: userName(r.rejecter), notes: r.reason })),
-      ...(order.submitted_at ? [{ event: 'Enviada a aprobación', at: at(order.submitted_at), by: null, notes: null }] : []),
-      ...(order.approved_at ? [{ event: 'Aprobada', at: at(order.approved_at), by: userName(order.approver), notes: null }] : []),
-      ...(order.paid_on ? [{ event: 'Pagada', at: isoDay(order.paid_on), by: userName(order.payer), notes: null }] : []),
-      ...(order.sent_at ? [{ event: 'Enviada al proveedor', at: at(order.sent_at), by: null, notes: order.sent_to.join(', ') }] : []),
-      ...(order.cancelled_at ? [{ event: 'Anulada', at: at(order.cancelled_at), by: userName(order.canceller), notes: order.cancel_reason }] : []),
+      ...order.rejections.map((r) => ({
+        event: 'Rechazada',
+        at: at(r.rejected_at),
+        by: userName(r.rejecter),
+        notes: r.reason,
+      })),
+      ...(order.submitted_at
+        ? [{ event: 'Enviada a aprobación', at: at(order.submitted_at), by: null, notes: null }]
+        : []),
+      ...(order.approved_at
+        ? [{ event: 'Aprobada', at: at(order.approved_at), by: userName(order.approver), notes: null }]
+        : []),
+      ...(order.paid_on
+        ? [{ event: 'Pagada', at: isoDay(order.paid_on), by: userName(order.payer), notes: null }]
+        : []),
+      ...(order.sent_at
+        ? [{ event: 'Enviada al proveedor', at: at(order.sent_at), by: null, notes: order.sent_to.join(', ') }]
+        : []),
+      ...(order.cancelled_at
+        ? [{ event: 'Anulada', at: at(order.cancelled_at), by: userName(order.canceller), notes: order.cancel_reason }]
+        : []),
     ],
     can: {
       edit: canUpdate && canApplyPaymentOrderAction(status, 'edit'),
@@ -773,7 +979,16 @@ export async function getPaymentOrderEditValues(id: string): Promise<PaymentOrde
       notes: true,
       lines: {
         orderBy: { position: 'asc' },
-        select: { kind: true, amount: true, invoice_id: true, source_line_id: true, third_party_check_id: true, own_check_id: true, purchase_order_id: true, description: true },
+        select: {
+          kind: true,
+          amount: true,
+          invoice_id: true,
+          source_line_id: true,
+          third_party_check_id: true,
+          own_check_id: true,
+          purchase_order_id: true,
+          description: true,
+        },
       },
       withholdings: { where: { manual: true }, select: { tax: true, amount: true, detail: true } },
     },
@@ -807,13 +1022,13 @@ export async function getPaymentOrderEditValues(id: string): Promise<PaymentOrde
 }
 
 /** PDF de la orden de pago con sus certificados (marca de agua si no esta pagada). */
-export async function getPaymentOrderPdf(id: string): Promise<ActionResult<{ filename: string; base64: string }>> {
+export async function getPaymentOrderPdf(id: string): Promise<ActionResult<PdfDownload>> {
   if (!(await checkPermissionServer('compras', 'pagos', 'view'))) return fail(NO_PERMISSION);
   if (!UUID_RE.test(id)) return fail(NOT_FOUND);
   const companyId = await getActiveCompanyId();
   try {
     const pdf = await renderPaymentOrderPdf(id, companyId);
-    return ok({ filename: pdf.filename, base64: Buffer.from(pdf.content).toString('base64') });
+    return ok(toPdfDownload(pdf));
   } catch (error) {
     return toPurchaseActionError(error, logger, 'generar el PDF');
   }
@@ -832,10 +1047,16 @@ export async function sendPaymentOrder(id: string, values: SendDocumentValues): 
   try {
     const order = await prisma.payment_orders.findFirst({
       where: { id, company_id: companyId },
-      select: { number: true, status: true, company: { select: { company_name: true } }, supplier: { select: { name: true } } },
+      select: {
+        number: true,
+        status: true,
+        company: { select: { company_name: true } },
+        supplier: { select: { name: true } },
+      },
     });
     if (!order) return fail(NOT_FOUND);
-    if (!canApplyPaymentOrderAction(order.status, 'send')) return fail(`La orden ${order.number} no está pagada: no se envía todavía`);
+    if (!canApplyPaymentOrderAction(order.status, 'send'))
+      return fail(`La orden ${order.number} no está pagada: no se envía todavía`);
     const pdf = await renderPaymentOrderPdf(id, companyId);
     const sent = await sendSupplierDocumentEmail({
       kind: 'payment',

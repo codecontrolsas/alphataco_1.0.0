@@ -1,7 +1,13 @@
-import { RECEIVER_VAT_CONDITIONS, VAT_RATE_LABELS, isReceiverVatConditionId, isVatRateId } from '@/shared/lib/arca/catalogs';
+import {
+  RECEIVER_VAT_CONDITIONS,
+  VAT_RATE_LABELS,
+  isReceiverVatConditionId,
+  isVatRateId,
+} from '@/shared/lib/arca/catalogs';
+import { joinAddress, pdfDateText, unitAmountText } from '@/shared/lib/pdf/pdf-text';
+import type { PdfCompanySource } from '@/shared/lib/pdf/types';
 import { formatAmountText } from '@/shared/utils/amount-text';
 import { formatCuitText } from '@/shared/utils/cuit-text';
-import moment from 'moment';
 import { purchaseOrderWatermark, type PurchaseOrderStatus } from '../lib/order-state-machine';
 import { formatQuantityWithUnit } from '../lib/quantity-format';
 
@@ -15,7 +21,7 @@ export type PurchasePdfSource = {
   number: string;
   /** Fecha del documento, `YYYY-MM-DD`. */
   date: string;
-  company: { name: string; cuit: string; address: string | null; city: string | null; province: string | null };
+  company: PdfCompanySource;
   supplier: {
     name: string;
     cuit: string;
@@ -47,17 +53,7 @@ export type PurchasePdfSource = {
 const money = (value: string) => `$ ${formatAmountText(value)}`;
 
 /** Unitario: 2 decimales, o 4 si los tiene (los precios se guardan a 4). */
-function unitPriceText(value: string): string {
-  const decimals = (value.split('.')[1] ?? '').replace(/0+$/, '');
-  return `$ ${formatAmountText(value, decimals.length > 2 ? 4 : 2)}`;
-}
-
-const dateText = (value: string) => moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY');
-
-function joinAddress(parts: (string | null)[]): string | null {
-  const clean = parts.map((part) => part?.trim()).filter((part): part is string => Boolean(part));
-  return clean.length > 0 ? clean.join(', ') : null;
-}
+const unitPriceText = (value: string) => `$ ${unitAmountText(value)}`;
 
 function itemText(line: PurchasePdfSource['lines'][number]): string {
   if (line.name) return line.code ? `[${line.code}] ${line.name}` : line.name;
@@ -67,7 +63,7 @@ function itemText(line: PurchasePdfSource['lines'][number]): string {
 function header(src: PurchasePdfSource) {
   return {
     number: src.number,
-    date: dateText(src.date),
+    date: pdfDateText(src.date),
     company: {
       name: src.company.name,
       cuit: formatCuitText(src.company.cuit),
@@ -103,7 +99,7 @@ export function buildQuotePdfData(src: PurchasePdfSource) {
 
 export function buildOrderPdfData(src: PurchasePdfSource) {
   const conditions: { label: string; value: string }[] = [];
-  if (src.deliveryDate) conditions.push({ label: 'Fecha de entrega', value: dateText(src.deliveryDate) });
+  if (src.deliveryDate) conditions.push({ label: 'Fecha de entrega', value: pdfDateText(src.deliveryDate) });
   if (src.deliveryPlace?.trim()) conditions.push({ label: 'Lugar de entrega', value: src.deliveryPlace.trim() });
   if (src.paymentTermDays !== null) {
     conditions.push({

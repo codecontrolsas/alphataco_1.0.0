@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
+import { DownloadPdfButton } from '@/shared/components/common/DownloadPdfButton';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ban, CheckCheck, FilePlus2, Pencil, XCircle } from 'lucide-react';
 import Link from 'next/link';
@@ -17,7 +18,6 @@ import {
   type PurchaseQuoteDetail,
 } from '../../actions/quotes.server';
 import { ConfirmAction } from '../../components/ConfirmAction';
-import { DownloadPdfButton } from '../../components/DownloadPdfButton';
 import { SendToSupplierDialog } from '../../components/SendToSupplierDialog';
 import { invalidatePurchases } from '../../lib/invalidate';
 import { QuoteResponseDialog } from './QuoteResponseDialog';
@@ -30,7 +30,10 @@ export function PurchaseQuoteActions({ quote }: { quote: PurchaseQuoteDetail }) 
     mutationFn: async () => unwrapAction(await createPurchaseOrderFromQuote(quote.id)),
     onSuccess: ({ id, number, skipped }) => {
       toast.success(`Se creó la orden de compra ${number}`, {
-        description: skipped > 0 ? `Se omitieron ${skipped} líneas que ya estaban pedidas.` : 'Quedó en borrador: revisala y enviala a aprobación.',
+        description:
+          skipped > 0
+            ? `Se omitieron ${skipped} líneas que ya estaban pedidas.`
+            : 'Quedó en borrador: revisala y enviala a aprobación.',
       });
       invalidatePurchases(queryClient);
       router.push(`/dashboard/purchases/orders/${id}/edit`);
@@ -92,7 +95,11 @@ export function PurchaseQuoteActions({ quote }: { quote: PurchaseQuoteDetail }) 
           icon={Ban}
           label="Anular"
           title={`¿Anular ${quote.number}?`}
-          description={quote.status === 'SENT' ? 'Ya se le pidió al proveedor: avisale que queda sin efecto.' : 'El pedido queda anulado.'}
+          description={
+            quote.status === 'SENT'
+              ? 'Ya se le pidió al proveedor: avisale que queda sin efecto.'
+              : 'El pedido queda anulado.'
+          }
           confirmLabel="Anular"
           successMessage={`Pedido ${quote.number} anulado`}
           motive={{ label: 'Motivo', placeholder: 'Obligatorio', required: true }}

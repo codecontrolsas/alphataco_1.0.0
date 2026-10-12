@@ -1,8 +1,8 @@
 ---
 title: Certificaciones
 summary: Armá el certificado de lo trabajado para un cliente, bajo un contrato, en un período; emitilo con los precios fijos, confirmalo y dejalo listo para facturar.
-keywords: certificación, certificado, período, emitir, confirmar, anular, borrador, facturada, precio congelado, CERT
-updated: 2026-10-07
+keywords: certificación, certificado, período, emitir, confirmar, anular, borrador, facturada, precio congelado, CERT, PDF, imprimir, descargar
+updated: 2026-10-12
 ---
 
 Una certificación es el documento que resume **lo trabajado para un cliente, bajo un contrato, en un período**: qué ítems, qué cantidades y cuánto vale. Sale de las líneas de los partes diarios y es lo que después se factura. La usa el área comercial que cierra cada período con el cliente.
@@ -15,25 +15,36 @@ Se entra desde **Comercial**, solapa **Certificaciones**.
 
 El botón **Nueva certificación** y la tabla de certificaciones:
 
-| Columna | Qué muestra |
-|---|---|
-| **Número** | Se asigna solo al crearla: `CERT-año-número` (por ejemplo `CERT-2026-0007`), con el año del inicio del período. |
-| **Cliente** / **Contrato** | A quién y bajo qué contrato. |
-| **Período** | Desde y hasta. |
-| **Estado** | Borrador, Emitida, Confirmada, Facturada o Anulada. |
-| **Líneas** | Cuántas líneas de parte incluye. |
-| **Total** | El importe, en la moneda del contrato. Solo con permiso **Ver precios**. |
+| Columna                    | Qué muestra                                                                                                     |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **Número**                 | Se asigna solo al crearla: `CERT-año-número` (por ejemplo `CERT-2026-0007`), con el año del inicio del período. |
+| **Cliente** / **Contrato** | A quién y bajo qué contrato.                                                                                    |
+| **Período**                | Desde y hasta.                                                                                                  |
+| **Estado**                 | Borrador, Emitida, Confirmada, Facturada o Anulada.                                                             |
+| **Líneas**                 | Cuántas líneas de parte incluye.                                                                                |
+| **Total**                  | El importe, en la moneda del contrato. Solo con permiso **Ver precios**.                                        |
 
 Cada fila tiene **Ver**, que abre el detalle.
 
 ## El ciclo de vida
 
 <States title="Estados de una certificación">
-  <State name="Borrador" tone="default" next="Emitida">Se arma y se revisa. Las líneas y los precios se recalculan cada vez que tocás **Recalcular líneas**. Se puede eliminar.</State>
-  <State name="Emitida" tone="info" next="Confirmada, Anulada">Ya tiene número firme y **los precios quedan fijos**. No se modifica más.</State>
-  <State name="Confirmada" tone="success" next="Facturada, Anulada">Aprobada (por ejemplo, el cliente la conformó). Es la que se puede facturar.</State>
-  <State name="Facturada" tone="success" next="Confirmada">Se emitió y autorizó su factura. Vuelve a Confirmada solo si se anula esa factura con una nota de crédito total.</State>
-  <State name="Anulada" tone="danger">Se dio de baja con un motivo. Sus líneas de parte quedan libres para otra certificación.</State>
+  <State name="Borrador" tone="default" next="Emitida">
+    Se arma y se revisa. Las líneas y los precios se recalculan cada vez que tocás **Recalcular líneas**. Se puede
+    eliminar.
+  </State>
+  <State name="Emitida" tone="info" next="Confirmada, Anulada">
+    Ya tiene número firme y **los precios quedan fijos**. No se modifica más.
+  </State>
+  <State name="Confirmada" tone="success" next="Facturada, Anulada">
+    Aprobada (por ejemplo, el cliente la conformó). Es la que se puede facturar.
+  </State>
+  <State name="Facturada" tone="success" next="Confirmada">
+    Se emitió y autorizó su factura. Vuelve a Confirmada solo si se anula esa factura con una nota de crédito total.
+  </State>
+  <State name="Anulada" tone="danger">
+    Se dio de baja con un motivo. Sus líneas de parte quedan libres para otra certificación.
+  </State>
 </States>
 
 La regla de fondo: **una certificación emitida no se modifica**. Si hay que corregirla, se anula y se arma otra.
@@ -42,16 +53,23 @@ La regla de fondo: **una certificación emitida no se modifica**. Si hay que cor
 
 <Steps>
   <Step title="Creá el borrador">
-    Hacé clic en **Nueva certificación**. Elegí **Cliente**, después **Contrato** (solo aparecen los de ese cliente) y el período con **Desde** y **Hasta** (podés escribir la fecha o elegirla). **Observaciones** es opcional. Hacé clic en **Crear borrador**: vas a ver **Certificación creada en borrador** y se abre el detalle.
+    Hacé clic en **Nueva certificación**. Elegí **Cliente**, después **Contrato** (solo aparecen los de ese cliente) y
+    el período con **Desde** y **Hasta** (podés escribir la fecha o elegirla). **Observaciones** es opcional. Hacé clic
+    en **Crear borrador**: vas a ver **Certificación creada en borrador** y se abre el detalle.
   </Step>
   <Step title="Traé las líneas">
-    El borrador nace vacío (**Sin líneas. Recalculá para traer lo trabajado en el período.**). Hacé clic en **Recalcular líneas**: el sistema trae las líneas de parte que cumplen las condiciones (ver abajo) con el precio vigente de cada ítem.
+    El borrador nace vacío (**Sin líneas. Recalculá para traer lo trabajado en el período.**). Hacé clic en **Recalcular
+    líneas**: el sistema trae las líneas de parte que cumplen las condiciones (ver abajo) con el precio vigente de cada
+    ítem.
   </Step>
   <Step title="Revisá">
-    En el detalle ves cada línea con **Ítem**, **Descripción**, **Cantidad** y, si tenés permiso, **Unitario** e **Importe**, más el **Total**. Si corregiste partes o precios, volvé a tocar **Recalcular líneas**: el borrador se rearma entero.
+    En el detalle ves cada línea con **Ítem**, **Descripción**, **Cantidad** y, si tenés permiso, **Unitario** e
+    **Importe**, más el **Total**. Si corregiste partes o precios, volvé a tocar **Recalcular líneas**: el borrador se
+    rearma entero.
   </Step>
   <Step title="Emití">
-    Cuando está bien, hacé clic en **Emitir**. Necesita al menos una línea. A partir de acá el precio de cada línea queda fijo.
+    Cuando está bien, hacé clic en **Emitir**. Necesita al menos una línea. A partir de acá el precio de cada línea
+    queda fijo.
   </Step>
   <Step title="Confirmá">
     Cuando el cliente la aprueba, abrila y hacé clic en **Confirmar**. Desde ese momento ya se puede facturar.
@@ -69,7 +87,9 @@ La regla de fondo: **una certificación emitida no se modifica**. Si hay que cor
 - no están ya en **otra certificación viva** (borrador, emitida, confirmada o facturada).
 
 <Callout type="info" title="Una línea de parte, una sola certificación">
-Una misma línea de parte no puede estar en dos certificaciones a la vez: lo que ya tomó otra certificación no se vuelve a traer, para que nada se certifique (ni se facture) dos veces. Si esa otra certificación se anula, sus líneas quedan libres y entran en la próxima que recalcules.
+  Una misma línea de parte no puede estar en dos certificaciones a la vez: lo que ya tomó otra certificación no se
+  vuelve a traer, para que nada se certifique (ni se facture) dos veces. Si esa otra certificación se anula, sus líneas
+  quedan libres y entran en la próxima que recalcules.
 </Callout>
 
 ### Los precios: cuándo se fijan
@@ -81,18 +101,31 @@ Por eso conviene actualizar los precios del período **antes** de emitir. Ver <G
 
 La moneda de la certificación es la del contrato y se copia al crearla.
 
+## Cómo imprimir una certificación
+
+Abrí la certificación con **Ver** y hacé clic en **Descargar PDF** (abajo a la izquierda del detalle). Se descarga un archivo con el número de la certificación como nombre (por ejemplo `CERT-2026-0007.pdf`), listo para imprimir o mandar al cliente.
+
+El PDF lleva el membrete de la empresa, los datos del **cliente** y del **contrato** (servicio, número de contrato, período, moneda y estado), la tabla de líneas con **Ítem**, **Descripción** y **Cantidad** con su unidad, el **Total**, las **Observaciones** y dos recuadros de firma: **Por la empresa** y **Conformidad del cliente**.
+
+- Se puede descargar en **cualquier estado**. Un **Borrador** sale con la marca de agua **BORRADOR** y un aviso de que los importes son provisorios; una **Anulada** sale con la marca **ANULADA**, la fecha y el motivo.
+- Una certificación emitida tiene los precios fijos, así que el PDF sale siempre igual aunque lo descargues meses después.
+- Los importes (**Unitario**, **Importe** y **Total**) solo aparecen si tenés permiso **Ver precios**; si no, el PDF sale con las cantidades y sin montos.
+
 ## Cómo anular o eliminar
 
 - **Eliminar borrador**: solo un borrador se elimina, y desaparece sin dejar rastro.
 - **Anular**: una certificación **Emitida** o **Confirmada** no se borra, se anula. Hacé clic en **Anular**, escribí el motivo (es obligatorio; el botón no se habilita sin él) y confirmá con **Anular**. En el detalle queda a la vista la leyenda **Anulada el** (fecha) con el motivo.
 
 <Callout type="danger" title="Anular no tiene vuelta atrás">
-Una certificación anulada no se puede reactivar. Sus líneas de parte quedan libres y hay que armar una certificación nueva (con número nuevo) para volver a certificarlas.
+  Una certificación anulada no se puede reactivar. Sus líneas de parte quedan libres y hay que armar una certificación
+  nueva (con número nuevo) para volver a certificarlas.
 </Callout>
 
 <Callout type="warning" title="Si ya está en una factura">
-- Si la certificación está incluida en una factura todavía **sin emitir** (borrador, rechazada o pendiente), no se puede anular: primero quitala de esa factura o descartá el borrador. El sistema te dice en cuál está.
-- Si ya está **Facturada**, primero hay que emitir una nota de crédito total sobre la factura; ahí vuelve a **Confirmada** y recién entonces se puede anular.
+  - Si la certificación está incluida en una factura todavía **sin emitir** (borrador, rechazada o pendiente), no se
+  puede anular: primero quitala de esa factura o descartá el borrador. El sistema te dice en cuál está. - Si ya está
+  **Facturada**, primero hay que emitir una nota de crédito total sobre la factura; ahí vuelve a **Confirmada** y recién
+  entonces se puede anular.
 </Callout>
 
 En el detalle, cuando la certificación está en una factura, aparece un aviso con el enlace al comprobante: **Facturada en …** si la factura está autorizada, o **Incluida en … (estado): no se puede incluir en otra factura.** si todavía está en curso. Si se anuló con nota de crédito queda la línea **Estuvo facturada en … (anulada con nota de crédito)**.
@@ -100,10 +133,18 @@ En el detalle, cuando la certificación está en una factura, aparece un aviso c
 ## Cómo se conecta con el resto del sistema
 
 <Flow title="Dónde está la certificación en el circuito">
-  <FlowStep title="Partes diarios" module="Operaciones" to="partes-diarios">Lo trabajado, línea por línea.</FlowStep>
-  <FlowStep title="En certificación" module="Comercial" to="partes-diarios-comercial">Revisión comercial de las líneas.</FlowStep>
-  <FlowStep title="Certificación" module="Comercial" tone="info">Borrador, emitida, confirmada.</FlowStep>
-  <FlowStep title="Factura" module="Comercial" tone="success" to="facturacion">Desde certificaciones confirmadas.</FlowStep>
+  <FlowStep title="Partes diarios" module="Operaciones" to="partes-diarios">
+    Lo trabajado, línea por línea.
+  </FlowStep>
+  <FlowStep title="En certificación" module="Comercial" to="partes-diarios-comercial">
+    Revisión comercial de las líneas.
+  </FlowStep>
+  <FlowStep title="Certificación" module="Comercial" tone="info">
+    Borrador, emitida, confirmada.
+  </FlowStep>
+  <FlowStep title="Factura" module="Comercial" tone="success" to="facturacion">
+    Desde certificaciones confirmadas.
+  </FlowStep>
 </Flow>
 
 - Solo las certificaciones **Confirmadas** aparecen para facturar en **Nueva factura → Desde certificaciones**. Una factura puede juntar varias certificaciones del mismo cliente y la misma moneda.
@@ -114,23 +155,27 @@ El recorrido completo está en <GuideLink to="del-pedido-a-la-factura">Del pedid
 
 ## Permisos
 
-| Acción | Permiso necesario |
-|---|---|
-| Ver la solapa y el detalle | **Ver** en Certificaciones |
-| Ver importes (**Total**, **Unitario**, **Importe**) | **Ver precios** en Certificaciones |
-| **Nueva certificación** | **Crear** en Certificaciones |
-| **Recalcular líneas** y **Emitir** | **Editar** en Certificaciones |
-| **Confirmar** | **Aprobar** en Certificaciones |
-| **Eliminar borrador** y **Anular** | **Eliminar** en Certificaciones |
+| Acción                                              | Permiso necesario                                              |
+| --------------------------------------------------- | -------------------------------------------------------------- |
+| Ver la solapa y el detalle                          | **Ver** en Certificaciones                                     |
+| **Descargar PDF**                                   | **Ver** en Certificaciones (los importes, con **Ver precios**) |
+| Ver importes (**Total**, **Unitario**, **Importe**) | **Ver precios** en Certificaciones                             |
+| **Nueva certificación**                             | **Crear** en Certificaciones                                   |
+| **Recalcular líneas** y **Emitir**                  | **Editar** en Certificaciones                                  |
+| **Confirmar**                                       | **Aprobar** en Certificaciones                                 |
+| **Eliminar borrador** y **Anular**                  | **Eliminar** en Certificaciones                                |
 
 Quien no tiene **Ver precios** ve las certificaciones y sus cantidades, pero ninguna columna de importes.
 
 ## Problemas frecuentes
 
 <Callout type="warning" title="Recalcular no trae nada">
-Revisá que las líneas del período estén en **Ejecutado** o **En certificación**, que tengan ítem, que sean de ese mismo contrato, y que no estén ya en otra certificación (mirá si hay otro borrador del mismo período). Ver <GuideLink to="partes-diarios-comercial">Partes diarios (Comercial)</GuideLink>.
+  Revisá que las líneas del período estén en **Ejecutado** o **En certificación**, que tengan ítem, que sean de ese
+  mismo contrato, y que no estén ya en otra certificación (mirá si hay otro borrador del mismo período). Ver{' '}
+  <GuideLink to="partes-diarios-comercial">Partes diarios (Comercial)</GuideLink>.
 </Callout>
 
 <Callout type="info" title="La certificación cambió de estado mientras tanto">
-Si dos personas trabajan a la vez sobre la misma certificación, la segunda acción se rechaza con **La certificación cambió de estado mientras tanto. Actualizá la pantalla.** Cerrá el detalle y volvé a abrirlo.
+  Si dos personas trabajan a la vez sobre la misma certificación, la segunda acción se rechaza con **La certificación
+  cambió de estado mientras tanto. Actualizá la pantalla.** Cerrá el detalle y volvé a abrirlo.
 </Callout>

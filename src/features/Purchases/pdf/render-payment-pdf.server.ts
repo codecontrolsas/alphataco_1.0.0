@@ -1,13 +1,15 @@
 import 'server-only';
 
-import { prisma } from '@/shared/lib/prisma';
 import { rejectedCheckLabel, rejectedOwnCheckLabel } from '@/features/Treasury/lib/rejected-checks';
+import { COMPANY_SELECT, companySource, loadCompanyLogo, loadReactPdf } from '@/shared/lib/pdf/react-pdf.server';
+import type { RenderedPdf } from '@/shared/lib/pdf/types';
+import { prisma } from '@/shared/lib/prisma';
 import { supplierInvoiceLabel } from '../lib/invoices';
 import { PurchaseError } from '../lib/purchase-errors';
 import { trimDecimals } from '../lib/quantity-format';
 import { PaymentOrderPdfDocument } from './PaymentPdfDocuments';
 import { buildPaymentPdfData } from './payment-pdf-data';
-import { COMPANY_SELECT, SUPPLIER_SELECT, companySource, loadCompanyLogo, loadReactPdf, supplierSource, type RenderedPdf } from './render-purchase-pdf.server';
+import { SUPPLIER_SELECT, supplierSource } from './render-purchase-pdf.server';
 
 /** PDF de la orden de pago con sus certificados de retencion (spec Compras etapa 5 §4). */
 export async function renderPaymentOrderPdf(orderId: string, companyId: string): Promise<RenderedPdf> {
@@ -71,7 +73,10 @@ export async function renderPaymentOrderPdf(orderId: string, companyId: string):
     number: order.number,
     date: (order.paid_on ?? order.planned_on).toISOString().slice(0, 10),
     status: order.status,
-    company: { ...companySource(order.company), grossIncomeNumber: order.company.fiscal_profile?.gross_income_number ?? null },
+    company: {
+      ...companySource(order.company),
+      grossIncomeNumber: order.company.fiscal_profile?.gross_income_number ?? null,
+    },
     supplier: supplierSource(order.supplier),
     lines: order.lines.map((l) => ({
       kind: l.kind,
@@ -80,10 +85,13 @@ export async function renderPaymentOrderPdf(orderId: string, companyId: string):
         : l.third_party_check
           ? rejectedCheckLabel(l.third_party_check.number, l.third_party_check.bank)
           : l.own_check
-          ? rejectedOwnCheckLabel(l.own_check.number, (l.own_check.account.bank_name || l.own_check.account.name).toUpperCase())
-          : l.kind === 'ADVANCE'
-          ? [l.description, l.purchase_order ? `OC ${l.purchase_order.number}` : null].filter(Boolean).join(' · ')
-          : (l.source_line?.payment_order.number ?? ''),
+            ? rejectedOwnCheckLabel(
+                l.own_check.number,
+                (l.own_check.account.bank_name || l.own_check.account.name).toUpperCase()
+              )
+            : l.kind === 'ADVANCE'
+              ? [l.description, l.purchase_order ? `OC ${l.purchase_order.number}` : null].filter(Boolean).join(' · ')
+              : l.source_line?.payment_order.number ?? '',
       amount: l.amount.toFixed(2),
     })),
     withholdings: order.withholdings.map((w) => ({

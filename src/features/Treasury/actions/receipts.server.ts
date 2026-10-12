@@ -1,30 +1,32 @@
 'use server';
 
-import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { formatVoucherLabel } from '@/features/Comercial/Facturacion/lib/invoice-type';
+import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { checkPermissionServer } from '@/features/Permissions';
 import { mailNotSentMessage } from '@/features/Purchases/lib/supplier-send';
 import { sendDocumentSchema, type SendDocumentValues } from '@/features/Purchases/schemas/send';
+import type { payment_method } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { withActor } from '@/shared/lib/actor';
 import { sendCustomerReceiptEmail } from '@/shared/lib/mail/templates/treasury';
+import { toPdfDownload } from '@/shared/lib/pdf/react-pdf.server';
+import type { PdfDownload } from '@/shared/lib/pdf/types';
 import { prisma } from '@/shared/lib/prisma';
 import { storagePublicUrl, storageRemove } from '@/shared/lib/storage';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
-import type { payment_method } from '@/generated/prisma/enums';
 import { NO_PERMISSION, UUID_RE, firstIssue, toTreasuryActionError } from '../lib/action-errors';
-import { nextReceiptNumber } from '../lib/document-number';
-import { createCheck, findAliveDuplicates, lockChecks, moveCheck } from '../lib/checks';
 import { CHECK_STATUS_LABELS } from '../lib/check-transitions';
+import { createCheck, findAliveDuplicates, lockChecks, moveCheck } from '../lib/checks';
+import { nextReceiptNumber } from '../lib/document-number';
 import { cancelMovements, createMovement } from '../lib/movements';
-import { openCheckDebtsOfCustomer, rejectedCheckLabel } from '../lib/rejected-checks';
 import { lockReceipt } from '../lib/receipt-locks';
 import { closingError, closingGap } from '../lib/receipt-math';
 import { receiptPaymentMovementDate } from '../lib/receipt-rules';
 import { assertReceiptCustomer, writeReceiptDraft } from '../lib/receipt-writer';
 import { availableAdvancesOfCustomer, openInvoicesOfCustomer } from '../lib/receivables';
+import { openCheckDebtsOfCustomer, rejectedCheckLabel } from '../lib/rejected-checks';
 import { CUSTOMER_FILES_BUCKET } from '../lib/storage-files';
 import { TreasuryError } from '../lib/treasury-errors';
 import { renderCustomerReceiptPdf } from '../pdf/render-receipt-pdf.server';
@@ -68,7 +70,10 @@ function assertDraft(status: 'DRAFT' | 'CONFIRMED' | 'CANCELLED') {
 }
 
 /** Guarda el borrador (lo crea si `id` es null). No toca saldos ni toma número. */
-export async function saveReceiptDraft(id: string | null, values: ReceiptFormValues): Promise<ActionResult<{ id: string; withholdingIds: string[] }>> {
+export async function saveReceiptDraft(
+  id: string | null,
+  values: ReceiptFormValues
+): Promise<ActionResult<{ id: string; withholdingIds: string[] }>> {
   if (!(await checkPermissionServer('tesoreria', 'cobranzas', id ? 'update' : 'create'))) return fail(NO_PERMISSION);
   if (id !== null && !UUID_RE.test(id)) return fail(NOT_FOUND);
   const parsed = receiptFormSchema.safeParse(values);
@@ -82,7 +87,13 @@ export async function saveReceiptDraft(id: string | null, values: ReceiptFormVal
       profile.credentialId,
       async (tx) => {
         const { receiptId, requireActive } = await openDraft(tx, companyId, id, v, profile.id);
-        const written = await writeReceiptDraft(tx, { companyId, receiptId, requireActiveCustomer: requireActive, values: v, today: localToday() });
+        const written = await writeReceiptDraft(tx, {
+          companyId,
+          receiptId,
+          requireActiveCustomer: requireActive,
+          values: v,
+          today: localToday(),
+        });
         return { id: receiptId, withholdingIds: written.withholdingIds, removedFiles: written.removedFiles };
       },
       prisma,
@@ -103,7 +114,13 @@ async function openDraft(tx: DraftTx, companyId: string, id: string | null, v: R
   if (id === null) {
     await assertReceiptCustomer(tx, companyId, v.customerId, true);
     const created = await tx.customer_receipts.create({
-      data: { company_id: companyId, customer_id: v.customerId, status: 'DRAFT', date: new Date(`${v.date}T00:00:00.000Z`), created_by: profileId },
+      data: {
+        company_id: companyId,
+        customer_id: v.customerId,
+        status: 'DRAFT',
+        date: new Date(`${v.date}T00:00:00.000Z`),
+        created_by: profileId,
+      },
       select: { id: true },
     });
     return { receiptId: created.id, requireActive: true };
@@ -138,8 +155,15 @@ export async function confirmReceipt(
       profile.credentialId,
       async (tx) => {
         const { receiptId, requireActive } = await openDraft(tx, companyId, id, v, profile.id);
-        const written = await writeReceiptDraft(tx, { companyId, receiptId, requireActiveCustomer: requireActive, values: v, today: localToday() });
-        if (written.lineCount === 0) throw new TreasuryError('Cargá al menos un comprobante, un anticipo o un cobro a cuenta');
+        const written = await writeReceiptDraft(tx, {
+          companyId,
+          receiptId,
+          requireActiveCustomer: requireActive,
+          values: v,
+          today: localToday(),
+        });
+        if (written.lineCount === 0)
+          throw new TreasuryError('Cargá al menos un comprobante, un anticipo o un cobro a cuenta');
         const notClosing = closingError(closingGap(written.totals));
         if (notClosing) throw new TreasuryError(notClosing);
         const number = await nextReceiptNumber(tx, companyId);
@@ -180,7 +204,12 @@ export async function confirmReceipt(
     revalidate();
     return ok({ id: confirmed.id, number: confirmed.number, withholdingIds: confirmed.withholdingIds });
   } catch (error) {
-    return toTreasuryActionError(error, logger, 'confirmar el recibo', 'El número de recibo ya está en uso. Intentá de nuevo');
+    return toTreasuryActionError(
+      error,
+      logger,
+      'confirmar el recibo',
+      'El número de recibo ya está en uso. Intentá de nuevo'
+    );
   }
 }
 
@@ -197,7 +226,10 @@ export async function deleteReceiptDraft(id: string): Promise<ActionResult> {
       async (tx) => {
         const locked = await lockReceipt(tx, companyId, id);
         if (locked.status !== 'DRAFT') throw new TreasuryError('Solo se borra un recibo en borrador: anulalo');
-        const files = await tx.customer_receipt_withholdings.findMany({ where: { receipt_id: id, file_path: { not: null } }, select: { file_path: true } });
+        const files = await tx.customer_receipt_withholdings.findMany({
+          where: { receipt_id: id, file_path: { not: null } },
+          select: { file_path: true },
+        });
         await tx.customer_receipts.delete({ where: { id } });
         return files.map((f) => f.file_path).filter((path): path is string => Boolean(path));
       },
@@ -241,11 +273,24 @@ export async function cancelReceipt(id: string, reason: string): Promise<ActionR
           LIMIT 1
         `;
         const applied = applications[0];
-        if (applied?.number) throw new TreasuryError(`El anticipo de este recibo se aplicó en ${applied.number}: anulá ese recibo primero`);
-        if (applied) throw new TreasuryError('El anticipo de este recibo se aplicó en un recibo en borrador: quitalo de ahí primero');
+        if (applied?.number)
+          throw new TreasuryError(
+            `El anticipo de este recibo se aplicó en ${applied.number}: anulá ese recibo primero`
+          );
+        if (applied)
+          throw new TreasuryError(
+            'El anticipo de este recibo se aplicó en un recibo en borrador: quitalo de ahí primero'
+          );
         // Sus cheques tienen que seguir en la cartera: si alguno salió, primero se anula esa operación.
-        const received = await tx.third_party_checks.findMany({ where: { receipt_payment: { receipt_id: id } }, select: { id: true } });
-        const checks = await lockChecks(tx, companyId, received.map((c) => c.id));
+        const received = await tx.third_party_checks.findMany({
+          where: { receipt_payment: { receipt_id: id } },
+          select: { id: true },
+        });
+        const checks = await lockChecks(
+          tx,
+          companyId,
+          received.map((c) => c.id)
+        );
         for (const check of checks.values()) {
           if (check.status !== 'IN_PORTFOLIO') {
             throw new TreasuryError(
@@ -257,7 +302,13 @@ export async function cancelReceipt(id: string, reason: string): Promise<ActionR
         await cancelMovements(tx, { customerReceiptId: id }, cancel);
         const today = localToday();
         for (const check of checks.values()) {
-          await moveCheck(tx, { check, action: 'CANCEL_ORIGIN', date: today, userId: profile.id, origin: { receiptId: id } });
+          await moveCheck(tx, {
+            check,
+            action: 'CANCEL_ORIGIN',
+            date: today,
+            userId: profile.id,
+            origin: { receiptId: id },
+          });
         }
         await tx.customer_receipts.update({
           where: { id },
@@ -275,13 +326,13 @@ export async function cancelReceipt(id: string, reason: string): Promise<ActionR
 }
 
 /** PDF del recibo (generado a demanda, como el de la orden de pago). */
-export async function getReceiptPdf(id: string): Promise<ActionResult<{ filename: string; base64: string }>> {
+export async function getReceiptPdf(id: string): Promise<ActionResult<PdfDownload>> {
   if (!(await checkPermissionServer('tesoreria', 'cobranzas', 'view'))) return fail(NO_PERMISSION);
   if (!UUID_RE.test(id)) return fail(NOT_FOUND);
   const companyId = await getActiveCompanyId();
   try {
     const pdf = await renderCustomerReceiptPdf(id, companyId);
-    return ok({ filename: pdf.filename, base64: Buffer.from(pdf.content).toString('base64') });
+    return ok(toPdfDownload(pdf));
   } catch (error) {
     return toTreasuryActionError(error, logger, 'generar el PDF del recibo');
   }
@@ -297,7 +348,12 @@ export async function sendReceipt(id: string, values: SendDocumentValues): Promi
   try {
     const receipt = await prisma.customer_receipts.findFirst({
       where: { id, company_id: companyId },
-      select: { number: true, status: true, company: { select: { company_name: true } }, customer: { select: { name: true } } },
+      select: {
+        number: true,
+        status: true,
+        company: { select: { company_name: true } },
+        customer: { select: { name: true } },
+      },
     });
     if (!receipt) return fail(NOT_FOUND);
     if (receipt.status === 'DRAFT' || !receipt.number) return fail('El recibo no está confirmado');
@@ -334,7 +390,11 @@ export async function getReceiptFormData(input: { receiptId?: string; customerId
   if (!canCreate && !canUpdate) return null;
   const companyId = await getActiveCompanyId();
 
-  let receipt: { id: string; values: ReceiptFormValues; withholdingFiles: Record<string, { name: string; url: string }> } | null = null;
+  let receipt: {
+    id: string;
+    values: ReceiptFormValues;
+    withholdingFiles: Record<string, { name: string; url: string }>;
+  } | null = null;
   if (input.receiptId) {
     if (!UUID_RE.test(input.receiptId)) return null;
     const row = await prisma.customer_receipts.findFirst({
@@ -346,9 +406,30 @@ export async function getReceiptFormData(input: { receiptId?: string; customerId
         notes: true,
         lines: {
           orderBy: { position: 'asc' },
-          select: { kind: true, invoice_id: true, source_line_id: true, third_party_check_id: true, currency: true, applied_amount: true, exchange_rate: true, description: true },
+          select: {
+            kind: true,
+            invoice_id: true,
+            source_line_id: true,
+            third_party_check_id: true,
+            currency: true,
+            applied_amount: true,
+            exchange_rate: true,
+            description: true,
+          },
         },
-        withholdings: { orderBy: { id: 'asc' }, select: { id: true, tax: true, jurisdiction: true, certificate_number: true, certificate_date: true, amount: true, file_path: true, file_name: true } },
+        withholdings: {
+          orderBy: { id: 'asc' },
+          select: {
+            id: true,
+            tax: true,
+            jurisdiction: true,
+            certificate_number: true,
+            certificate_date: true,
+            amount: true,
+            file_path: true,
+            file_name: true,
+          },
+        },
         payments: {
           orderBy: { id: 'asc' },
           select: {
@@ -368,13 +449,16 @@ export async function getReceiptFormData(input: { receiptId?: string; customerId
     });
     if (!row) return null;
     const rates = new Map<string, string>();
-    for (const l of row.lines) if (l.kind === 'INVOICE' && l.currency !== 'ARS') rates.set(l.currency, l.exchange_rate.toFixed(6));
+    for (const l of row.lines)
+      if (l.kind === 'INVOICE' && l.currency !== 'ARS') rates.set(l.currency, l.exchange_rate.toFixed(6));
     const advance = row.lines.find((l) => l.kind === 'ADVANCE');
     const values: ReceiptFormValues = {
       ...emptyReceiptForm(isoDay(row.date), row.customer_id),
       notes: row.notes ?? '',
       rates: [...rates].map(([currency, rate]) => ({ currency: currency as 'USD' | 'EUR', rate })),
-      invoices: row.lines.filter((l) => l.kind === 'INVOICE' && l.invoice_id).map((l) => ({ invoiceId: l.invoice_id as string, amount: l.applied_amount.toFixed(2) })),
+      invoices: row.lines
+        .filter((l) => l.kind === 'INVOICE' && l.invoice_id)
+        .map((l) => ({ invoiceId: l.invoice_id as string, amount: l.applied_amount.toFixed(2) })),
       advancesApplied: row.lines
         .filter((l) => l.kind === 'ADVANCE_APPLIED' && l.source_line_id)
         .map((l) => ({ sourceLineId: l.source_line_id as string, amount: l.applied_amount.toFixed(2) })),
@@ -405,31 +489,50 @@ export async function getReceiptFormData(input: { receiptId?: string; customerId
     };
     const withholdingFiles: Record<string, { name: string; url: string }> = {};
     for (const w of row.withholdings) {
-      if (w.file_path && w.file_name) withholdingFiles[w.id] = { name: w.file_name, url: await storagePublicUrl(CUSTOMER_FILES_BUCKET, w.file_path) };
+      if (w.file_path && w.file_name)
+        withholdingFiles[w.id] = { name: w.file_name, url: await storagePublicUrl(CUSTOMER_FILES_BUCKET, w.file_path) };
     }
     receipt = { id: row.id, values, withholdingFiles };
   }
 
   // El cliente que pide el editor manda (puede haberlo cambiado en el borrador); si no, el del borrador.
-  const customerId = (input.customerId && UUID_RE.test(input.customerId) ? input.customerId : null) ?? receipt?.values.customerId ?? null;
+  const customerId =
+    (input.customerId && UUID_RE.test(input.customerId) ? input.customerId : null) ??
+    receipt?.values.customerId ??
+    null;
   const exclude = receipt ? { excludeReceiptId: receipt.id } : {};
   const [customer, openInvoices, advances, accounts, checkDebts] = await Promise.all([
     customerId
-      ? prisma.customers.findFirst({ where: { id: customerId, company_id: companyId }, select: { id: true, name: true, cuit: true, client_email: true } })
+      ? prisma.customers.findFirst({
+          where: { id: customerId, company_id: companyId },
+          select: { id: true, name: true, cuit: true, client_email: true },
+        })
       : Promise.resolve(null),
     customerId
-      ? openInvoicesOfCustomer(prisma, companyId, customerId, { ...exclude, include: receipt?.values.invoices.map((l) => l.invoiceId) ?? [] })
+      ? openInvoicesOfCustomer(prisma, companyId, customerId, {
+          ...exclude,
+          include: receipt?.values.invoices.map((l) => l.invoiceId) ?? [],
+        })
       : Promise.resolve([]),
     customerId ? availableAdvancesOfCustomer(prisma, companyId, customerId, exclude) : Promise.resolve([]),
     getActiveTreasuryAccountOptions(),
     customerId
-      ? openCheckDebtsOfCustomer(prisma, companyId, customerId, { ...exclude, include: receipt?.values.rejectedChecks?.map((l) => l.checkId) ?? [] })
+      ? openCheckDebtsOfCustomer(prisma, companyId, customerId, {
+          ...exclude,
+          include: receipt?.values.rejectedChecks?.map((l) => l.checkId) ?? [],
+        })
       : Promise.resolve([]),
   ]);
   return {
     today: localToday(),
     customer: customer
-      ? { id: customer.id, label: `${customer.name} · CUIT ${customer.cuit.toString()}`, name: customer.name, cuit: customer.cuit.toString(), email: customer.client_email }
+      ? {
+          id: customer.id,
+          label: `${customer.name} · CUIT ${customer.cuit.toString()}`,
+          name: customer.name,
+          cuit: customer.cuit.toString(),
+          email: customer.client_email,
+        }
       : null,
     receipt,
     openInvoices,
@@ -503,7 +606,16 @@ export async function getReceiptDetail(id: string) {
       },
       withholdings: {
         orderBy: { id: 'asc' },
-        select: { id: true, tax: true, jurisdiction: true, certificate_number: true, certificate_date: true, amount: true, file_path: true, file_name: true },
+        select: {
+          id: true,
+          tax: true,
+          jurisdiction: true,
+          certificate_number: true,
+          certificate_date: true,
+          amount: true,
+          file_path: true,
+          file_name: true,
+        },
       },
       payments: {
         orderBy: { id: 'asc' },
@@ -524,7 +636,7 @@ export async function getReceiptDetail(id: string) {
     },
   });
   if (!row) return null;
-  const who = (p: { fullname: string | null; email: string | null } | null) => (p ? (p.fullname ?? p.email ?? '') : null);
+  const who = (p: { fullname: string | null; email: string | null } | null) => (p ? p.fullname ?? p.email ?? '' : null);
   const withholdings = await Promise.all(
     row.withholdings.map(async (w) => ({
       id: w.id,
@@ -533,7 +645,10 @@ export async function getReceiptDetail(id: string) {
       certificateNumber: w.certificate_number,
       certificateDate: isoDay(w.certificate_date),
       amount: w.amount.toFixed(2),
-      file: w.file_path && w.file_name ? { name: w.file_name, url: await storagePublicUrl(CUSTOMER_FILES_BUCKET, w.file_path) } : null,
+      file:
+        w.file_path && w.file_name
+          ? { name: w.file_name, url: await storagePublicUrl(CUSTOMER_FILES_BUCKET, w.file_path) }
+          : null,
     }))
   );
   return {
@@ -558,7 +673,12 @@ export async function getReceiptDetail(id: string) {
     cancelledBy: who(row.canceller),
     cancelledAt: row.cancelled_at?.toISOString() ?? null,
     cancelReason: row.cancel_reason,
-    customer: { id: row.customer.id, name: row.customer.name, cuit: row.customer.cuit.toString(), email: row.customer.client_email },
+    customer: {
+      id: row.customer.id,
+      name: row.customer.name,
+      cuit: row.customer.cuit.toString(),
+      email: row.customer.client_email,
+    },
     lines: row.lines.map((l) => ({
       id: l.id,
       kind: l.kind,
@@ -569,10 +689,18 @@ export async function getReceiptDetail(id: string) {
       ars: l.amount_ars.toFixed(2),
       fxDifference: l.fx_difference.toFixed(2),
       description: l.description,
-      invoice: l.invoice ? { id: l.invoice.id, label: formatVoucherLabel(l.invoice.cbte_type, l.invoice.sales_point.number, l.invoice.number) } : null,
+      invoice: l.invoice
+        ? {
+            id: l.invoice.id,
+            label: formatVoucherLabel(l.invoice.cbte_type, l.invoice.sales_point.number, l.invoice.number),
+          }
+        : null,
       sourceReceipt: l.source_line?.receipt ?? null,
       rejectedCheck: l.third_party_check
-        ? { id: l.third_party_check.id, label: rejectedCheckLabel(l.third_party_check.number, l.third_party_check.bank) }
+        ? {
+            id: l.third_party_check.id,
+            label: rejectedCheckLabel(l.third_party_check.number, l.third_party_check.bank),
+          }
         : null,
     })),
     withholdings,
@@ -590,7 +718,12 @@ export async function getReceiptDetail(id: string) {
         check: p.check ? { id: p.check.id, status: CHECK_STATUS_LABELS[p.check.status] } : null,
         account: p.treasury_account,
         movement: p.movement
-          ? { id: p.movement.id, date: movementDate as string, future: (movementDate as string) > today, cancelled: p.movement.cancelled_at !== null }
+          ? {
+              id: p.movement.id,
+              date: movementDate as string,
+              future: (movementDate as string) > today,
+              cancelled: p.movement.cancelled_at !== null,
+            }
           : null,
       };
     }),
