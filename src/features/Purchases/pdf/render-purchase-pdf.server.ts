@@ -1,32 +1,12 @@
 import 'server-only';
 
-import { Logger } from '@/lib/logger';
-import { toDateOnly } from '@/shared/lib/date-only';
+import { timestampToLocalDateOnly, toDateOnly } from '@/shared/lib/date-only';
+import { COMPANY_SELECT, companySource, loadCompanyLogo, loadReactPdf } from '@/shared/lib/pdf/react-pdf.server';
+import type { RenderedPdf } from '@/shared/lib/pdf/types';
 import { prisma } from '@/shared/lib/prisma';
-import { storageDownload } from '@/shared/lib/storage';
-import { isSafeStorageKey, parseStorageFileUrl } from '@/shared/lib/storage-url';
-import moment from 'moment';
 import { PurchaseError } from '../lib/purchase-errors';
-import { PurchaseOrderPdfDocument, PurchaseQuotePdfDocument, type PdfLogo, type ReactPdf } from './PurchasePdfDocuments';
+import { PurchaseOrderPdfDocument, PurchaseQuotePdfDocument } from './PurchasePdfDocuments';
 import { buildOrderPdfData, buildQuotePdfData, type PurchasePdfSource } from './purchase-pdf-data';
-
-const logger = new Logger('features/Purchases/pdf');
-
-/** Ver `render-invoice-pdf.server.ts`: react-pdf se resuelve desde node_modules, fuera del bundle. */
-export function loadReactPdf(): Promise<ReactPdf> {
-  return import(/* webpackIgnore: true */ /* turbopackIgnore: true */ '@react-pdf/renderer');
-}
-
-export type RenderedPdf = { filename: string; content: Uint8Array };
-
-export const COMPANY_SELECT = {
-  company_name: true,
-  company_cuit: true,
-  address: true,
-  company_logo: true,
-  cities: { select: { name: true } },
-  provinces: { select: { name: true } },
-} as const;
 
 export const SUPPLIER_SELECT = {
   name: true,
@@ -43,44 +23,14 @@ const REQUEST_LINE_SELECT = {
   unit: { select: { abbreviation: true } },
 } as const;
 
-/**
- * Logo de la empresa leido directo de MinIO (la URL guardada apunta al proxy `/api/files`, que
- * pide sesion). Si no se puede leer, el PDF sale sin logo: nunca se cae por eso.
- */
-export async function loadCompanyLogo(logoUrl: string | null): Promise<PdfLogo> {
-  if (!logoUrl) return null;
-  const parsed = parseStorageFileUrl(logoUrl);
-  if (!parsed || !isSafeStorageKey(parsed.path)) return null;
-  const extension = parsed.path.split('.').pop()?.toLowerCase();
-  const format = extension === 'png' ? 'png' : extension === 'jpg' || extension === 'jpeg' ? 'jpg' : null;
-  if (!format) return null;
-  const downloaded = await storageDownload(parsed.bucket, parsed.path);
-  if (!downloaded.ok) {
-    logger.warn('No se pudo leer el logo de la empresa: el PDF sale sin logo', { data: { path: parsed.path } });
-    return null;
-  }
-  return { data: Buffer.from(await downloaded.data.arrayBuffer()), format };
-}
-
-type CompanyRow = {
-  company_name: string;
-  company_cuit: string;
-  address: string;
-  cities: { name: string } | null;
-  provinces: { name: string } | null;
+type SupplierRow = {
+  name: string;
+  cuit: bigint;
+  vat_condition_id: number;
+  street: string | null;
+  city: string | null;
+  province: string | null;
 };
-
-export function companySource(company: CompanyRow): PurchasePdfSource['company'] {
-  return {
-    name: company.company_name,
-    cuit: company.company_cuit,
-    address: company.address,
-    city: company.cities?.name ?? null,
-    province: company.provinces?.name ?? null,
-  };
-}
-
-type SupplierRow = { name: string; cuit: bigint; vat_condition_id: number; street: string | null; city: string | null; province: string | null };
 
 export function supplierSource(supplier: SupplierRow): PurchasePdfSource['supplier'] {
   return {
@@ -93,8 +43,6 @@ export function supplierSource(supplier: SupplierRow): PurchasePdfSource['suppli
   };
 }
 
-const dateOnly = (value: Date) => moment(value).format('YYYY-MM-DD');
-
 export async function renderPurchaseQuotePdf(quoteId: string, companyId: string): Promise<RenderedPdf> {
   const quote = await prisma.purchase_quotes.findFirst({
     where: { id: quoteId, company_id: companyId },
@@ -105,7 +53,10 @@ export async function renderPurchaseQuotePdf(quoteId: string, companyId: string)
       company: { select: COMPANY_SELECT },
       supplier: { select: SUPPLIER_SELECT },
       lines: {
-        select: { quantity: true, request_line: { select: { ...REQUEST_LINE_SELECT, position: true, request: { select: { number: true } } } } },
+        select: {
+          quantity: true,
+          request_line: { select: { ...REQUEST_LINE_SELECT, position: true, request: { select: { number: true } } } },
+        },
       },
     },
   });
@@ -113,11 +64,12 @@ export async function renderPurchaseQuotePdf(quoteId: string, companyId: string)
 
   const lines = [...quote.lines].sort(
     (a, b) =>
-      a.request_line.request.number.localeCompare(b.request_line.request.number) || a.request_line.position - b.request_line.position
+      a.request_line.request.number.localeCompare(b.request_line.request.number) ||
+      a.request_line.position - b.request_line.position
   );
   const data = buildQuotePdfData({
     number: quote.number,
-    date: dateOnly(quote.created_at),
+    date: timestampToLocalDateOnly(quote.created_at),
     company: companySource(quote.company),
     supplier: supplierSource(quote.supplier),
     lines: lines.map((line) => ({
@@ -180,7 +132,7 @@ export async function renderPurchaseOrderPdf(orderId: string, companyId: string)
   const data = buildOrderPdfData({
     number: order.number,
     // La OC vale desde que se aprueba: esa es su fecha. Antes, la de alta.
-    date: dateOnly(order.approved_at ?? order.created_at),
+    date: timestampToLocalDateOnly(order.approved_at ?? order.created_at),
     company: companySource(order.company),
     supplier: supplierSource(order.supplier),
     lines: order.lines.map((line) => ({
@@ -194,7 +146,11 @@ export async function renderPurchaseOrderPdf(orderId: string, companyId: string)
       netTotal: line.net_total.toFixed(2),
       vatAmount: line.vat_amount.toFixed(2),
     })),
-    totals: { subtotal: order.subtotal.toFixed(2), vatTotal: order.vat_total.toFixed(2), total: order.total.toFixed(2) },
+    totals: {
+      subtotal: order.subtotal.toFixed(2),
+      vatTotal: order.vat_total.toFixed(2),
+      total: order.total.toFixed(2),
+    },
     deliveryDate: toDateOnly(order.delivery_date),
     deliveryPlace: order.delivery_place,
     paymentTermDays: order.payment_term_days,

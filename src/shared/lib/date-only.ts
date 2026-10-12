@@ -38,3 +38,12 @@ export function fromDateOnly(value: Date | string | null | undefined): Date | nu
   if (Number.isNaN(parsed.getTime())) throw new Error(`Fecha inválida: ${value}`);
   return parsed;
 }
+
+/**
+ * Timestamp (`@db.Timestamptz`, ej. `created_at`) → `'YYYY-MM-DD'` del día en la hora LOCAL del
+ * servidor. A diferencia de `toDateOnly`, que es para columnas `@db.Date` y toma el día UTC: una
+ * emisión a las 22 h en Argentina ya es el día siguiente en UTC.
+ */
+export function timestampToLocalDateOnly(value: Date): string {
+  return moment(value).format('YYYY-MM-DD');
+}

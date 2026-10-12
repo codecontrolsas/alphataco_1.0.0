@@ -1,10 +1,10 @@
 import { RECEIVER_VAT_CONDITIONS, isReceiverVatConditionId } from '@/shared/lib/arca/catalogs';
+import { joinAddress, pdfDateText } from '@/shared/lib/pdf/pdf-text';
 import { formatAmountText } from '@/shared/utils/amount-text';
 import { formatCuitText } from '@/shared/utils/cuit-text';
-import moment from 'moment';
+import type { PaymentOrderStatus } from '../lib/payment-order-state-machine';
 import { PAYMENT_METHOD_LABELS } from '../schemas/payment-orders';
 import { WITHHOLDING_TAX_LABELS, type WithholdingTax } from '../schemas/payment-settings';
-import type { PaymentOrderStatus } from '../lib/payment-order-state-machine';
 
 /**
  * View-model del PDF de la orden de pago y de sus certificados de retencion (spec Compras etapa 5
@@ -16,9 +16,27 @@ export type PaymentPdfSource = {
   /** Fecha de pago (o prevista si no se pago), `YYYY-MM-DD`. */
   date: string;
   status: PaymentOrderStatus;
-  company: { name: string; cuit: string; address: string | null; city: string | null; province: string | null; grossIncomeNumber: string | null };
-  supplier: { name: string; cuit: string; vatConditionId: number; street: string | null; city: string | null; province: string | null };
-  lines: { kind: 'INVOICE' | 'CREDIT_NOTE' | 'ADVANCE' | 'ADVANCE_APPLIED' | 'REJECTED_CHECK'; label: string; amount: string }[];
+  company: {
+    name: string;
+    cuit: string;
+    address: string | null;
+    city: string | null;
+    province: string | null;
+    grossIncomeNumber: string | null;
+  };
+  supplier: {
+    name: string;
+    cuit: string;
+    vatConditionId: number;
+    street: string | null;
+    city: string | null;
+    province: string | null;
+  };
+  lines: {
+    kind: 'INVOICE' | 'CREDIT_NOTE' | 'ADVANCE' | 'ADVANCE_APPLIED' | 'REJECTED_CHECK';
+    label: string;
+    amount: string;
+  }[];
   withholdings: {
     tax: WithholdingTax;
     regimeCode: string;
@@ -40,13 +58,18 @@ export type PaymentPdfSource = {
     /** Librador del cheque de tercero endosado (Tesoreria etapa 3a). */
     drawerName?: string | null;
   }[];
-  totals: { invoicesTotal: string; creditsTotal: string; advanceTotal: string; withholdingsTotal: string; netTotal: string };
+  totals: {
+    invoicesTotal: string;
+    creditsTotal: string;
+    advanceTotal: string;
+    withholdingsTotal: string;
+    netTotal: string;
+  };
   notes: string | null;
 };
 
-const money = (value: string) => (value.startsWith('-') ? `-$ ${formatAmountText(value.slice(1))}` : `$ ${formatAmountText(value)}`);
-const dateText = (value: string) => moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY');
-const join = (parts: (string | null)[]) => parts.map((p) => p?.trim()).filter(Boolean).join(', ') || null;
+const money = (value: string) =>
+  value.startsWith('-') ? `-$ ${formatAmountText(value.slice(1))}` : `$ ${formatAmountText(value)}`;
 const rateText = (value: string) => `${value.replace('.', ',')} %`;
 
 const SUBTRACTS = new Set(['CREDIT_NOTE', 'ADVANCE_APPLIED']);
@@ -55,25 +78,31 @@ export function buildPaymentPdfData(src: PaymentPdfSource) {
   const company = {
     name: src.company.name,
     cuit: formatCuitText(src.company.cuit),
-    address: join([src.company.address, src.company.city, src.company.province]),
+    address: joinAddress([src.company.address, src.company.city, src.company.province]),
     grossIncomeNumber: src.company.grossIncomeNumber,
   };
   const supplier = {
     name: src.supplier.name,
     cuit: formatCuitText(src.supplier.cuit),
-    vatCondition: isReceiverVatConditionId(src.supplier.vatConditionId) ? RECEIVER_VAT_CONDITIONS[src.supplier.vatConditionId].label : '',
-    address: join([src.supplier.street, src.supplier.city, src.supplier.province]),
+    vatCondition: isReceiverVatConditionId(src.supplier.vatConditionId)
+      ? RECEIVER_VAT_CONDITIONS[src.supplier.vatConditionId].label
+      : '',
+    address: joinAddress([src.supplier.street, src.supplier.city, src.supplier.province]),
   };
   return {
     title: 'ORDEN DE PAGO',
     number: src.number,
-    date: dateText(src.date),
+    date: pdfDateText(src.date),
     watermark: src.status === 'PAID' ? null : src.status === 'CANCELLED' ? 'ANULADA' : 'BORRADOR — NO VÁLIDA',
     company,
     supplier,
     lines: src.lines.map((l) => ({
       concept:
-        l.kind === 'ADVANCE' ? `Anticipo${l.label ? ` · ${l.label}` : ''}` : l.kind === 'ADVANCE_APPLIED' ? `Anticipo aplicado · ${l.label}` : l.label,
+        l.kind === 'ADVANCE'
+          ? `Anticipo${l.label ? ` · ${l.label}` : ''}`
+          : l.kind === 'ADVANCE_APPLIED'
+            ? `Anticipo aplicado · ${l.label}`
+            : l.label,
       amount: SUBTRACTS.has(l.kind) ? money(`-${l.amount}`) : money(l.amount),
     })),
     withholdings: src.withholdings.map((w) => ({
@@ -89,7 +118,7 @@ export function buildPaymentPdfData(src: PaymentPdfSource) {
         p.checkNumber ? `N° ${p.checkNumber}` : null,
         p.checkBank,
         p.drawerName ? `librador ${p.drawerName}` : null,
-        p.checkDueOn ? `pago ${dateText(p.checkDueOn)}` : null,
+        p.checkDueOn ? `pago ${pdfDateText(p.checkDueOn)}` : null,
       ]
         .filter(Boolean)
         .join(' · '),
@@ -109,7 +138,7 @@ export function buildPaymentPdfData(src: PaymentPdfSource) {
       .filter((w) => w.certificateNumber)
       .map((w) => ({
         number: w.certificateNumber!,
-        date: dateText(src.date),
+        date: pdfDateText(src.date),
         tax: WITHHOLDING_TAX_LABELS[w.tax],
         regime: `${w.regimeCode} · ${w.regimeDescription}`,
         base: money(w.base),

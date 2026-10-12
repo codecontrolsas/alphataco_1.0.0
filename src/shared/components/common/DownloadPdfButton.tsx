@@ -3,17 +3,21 @@
 import { Button } from '@/components/ui/button';
 import type { ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
+import type { PdfDownload } from '@/shared/lib/pdf/types';
 import { useMutation } from '@tanstack/react-query';
 import { FileDown } from 'lucide-react';
+import type { ComponentProps } from 'react';
 import { toast } from 'sonner';
 
-/** Descarga un PDF que arma el servidor en el momento (pedido de cotizacion u OC). */
+/** Descarga un PDF que arma el servidor en el momento (pedido de cotización, OC, orden de pago, certificación). */
 export function DownloadPdfButton({
   load,
   label = 'Descargar PDF',
+  size = 'sm',
 }: {
-  load: () => Promise<ActionResult<{ filename: string; base64: string }>>;
+  load: () => Promise<ActionResult<PdfDownload>>;
   label?: string;
+  size?: ComponentProps<typeof Button>['size'];
 }) {
   const download = useMutation({
     mutationFn: async () => unwrapAction(await load()),
@@ -30,7 +34,7 @@ export function DownloadPdfButton({
   });
 
   return (
-    <Button type="button" size="sm" variant="outline" onClick={() => download.mutate()} disabled={download.isPending}>
+    <Button type="button" size={size} variant="outline" onClick={() => download.mutate()} disabled={download.isPending}>
       <FileDown className="mr-1 h-4 w-4" />
       {download.isPending ? 'Generando…' : label}
     </Button>

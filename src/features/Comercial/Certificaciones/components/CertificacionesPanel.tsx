@@ -15,8 +15,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
 import { INVOICE_STATUS_LABELS } from '@/features/Comercial/Facturacion/lib/invoice-state-machine';
+import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
+import { DownloadPdfButton } from '@/shared/components/common/DownloadPdfButton';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Receipt } from 'lucide-react';
 import moment from 'moment';
@@ -28,6 +29,7 @@ import {
   confirmCertification,
   createCertification,
   deleteCertification,
+  getCertificationPdf,
   issueCertification,
   refreshCertificationLines,
   voidCertification,
@@ -246,8 +248,8 @@ export function CertificacionesPanel({ certifications, customers, onOpenDetail }
           <DialogHeader>
             <DialogTitle>Nueva certificación</DialogTitle>
             <DialogDescription>
-              Se crea en borrador. Las líneas se arman con lo trabajado en el período y los precios se
-              congelan recién al emitirla.
+              Se crea en borrador. Las líneas se arman con lo trabajado en el período y los precios se congelan recién
+              al emitirla.
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
@@ -442,6 +444,10 @@ export function CertificacionesPanel({ certifications, customers, onOpenDetail }
               )}
 
               <DialogFooter className="gap-2">
+                {/* Imprimir no cambia nada: va separado de las acciones que mueven el estado. */}
+                <div className="sm:mr-auto">
+                  <DownloadPdfButton load={() => getCertificationPdf(detail.id)} size="default" />
+                </div>
                 {isEditable(detail.status) && canUpdate && (
                   <Button
                     type="button"
@@ -491,7 +497,12 @@ export function CertificacionesPanel({ certifications, customers, onOpenDetail }
                   </Button>
                 )}
                 {(detail.status === 'emitida' || detail.status === 'confirmada') && canDelete && (
-                  <Button type="button" variant="destructive" disabled={pending} onClick={() => setVoidingId(detail.id)}>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    disabled={pending}
+                    onClick={() => setVoidingId(detail.id)}
+                  >
                     Anular
                   </Button>
                 )}

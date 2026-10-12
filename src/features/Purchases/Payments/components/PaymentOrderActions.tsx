@@ -1,6 +1,8 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import type { TreasuryAccountRow } from '@/features/Treasury/actions/accounts.server';
+import { DownloadPdfButton } from '@/shared/components/common/DownloadPdfButton';
 import { Ban, CheckCircle2, CircleX, Pencil, SendHorizontal, Undo2 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -13,14 +15,18 @@ import {
   submitPaymentOrder,
   type PaymentOrderDetail,
 } from '../../actions/payment-orders.server';
-import type { TreasuryAccountRow } from '@/features/Treasury/actions/accounts.server';
 import { ConfirmAction } from '../../components/ConfirmAction';
-import { DownloadPdfButton } from '../../components/DownloadPdfButton';
 import { SendToSupplierDialog } from '../../components/SendToSupplierDialog';
 import { RegisterPaymentDialog } from './RegisterPaymentDialog';
 
 /** Botones del detalle de la orden de pago segun su estado y los permisos (calculados en el servidor). */
-export function PaymentOrderActions({ order, accounts }: { order: PaymentOrderDetail; accounts: TreasuryAccountRow[] }) {
+export function PaymentOrderActions({
+  order,
+  accounts,
+}: {
+  order: PaymentOrderDetail;
+  accounts: TreasuryAccountRow[];
+}) {
   const { can } = order;
   return (
     <div className="flex flex-wrap gap-2">
@@ -68,7 +74,15 @@ export function PaymentOrderActions({ order, accounts }: { order: PaymentOrderDe
           />
         </>
       )}
-      {can.pay && <RegisterPaymentDialog orderId={order.id} number={order.number} netTotal={order.totals.netTotal} plannedOn={order.plannedOn} accounts={accounts} />}
+      {can.pay && (
+        <RegisterPaymentDialog
+          orderId={order.id}
+          number={order.number}
+          netTotal={order.totals.netTotal}
+          plannedOn={order.plannedOn}
+          accounts={accounts}
+        />
+      )}
       {can.backToDraft && (
         <ConfirmAction
           icon={Undo2}

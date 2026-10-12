@@ -1,7 +1,8 @@
 import 'server-only';
 
 import { formatVoucherLabel } from '@/features/Comercial/Facturacion/lib/invoice-type';
-import { COMPANY_SELECT, companySource, loadCompanyLogo, loadReactPdf, type RenderedPdf } from '@/features/Purchases/pdf/render-purchase-pdf.server';
+import { COMPANY_SELECT, companySource, loadCompanyLogo, loadReactPdf } from '@/shared/lib/pdf/react-pdf.server';
+import type { RenderedPdf } from '@/shared/lib/pdf/types';
 import { prisma } from '@/shared/lib/prisma';
 import { rejectedCheckLabel } from '../lib/rejected-checks';
 import { TreasuryError } from '../lib/treasury-errors';
@@ -42,7 +43,10 @@ export async function renderCustomerReceiptPdf(receiptId: string, companyId: str
           third_party_check: { select: { number: true, bank: true } },
         },
       },
-      withholdings: { orderBy: { id: 'asc' }, select: { tax: true, jurisdiction: true, certificate_number: true, certificate_date: true, amount: true } },
+      withholdings: {
+        orderBy: { id: 'asc' },
+        select: { tax: true, jurisdiction: true, certificate_number: true, certificate_date: true, amount: true },
+      },
       payments: {
         orderBy: { id: 'asc' },
         select: {
@@ -79,8 +83,8 @@ export async function renderCustomerReceiptPdf(receiptId: string, companyId: str
         : l.third_party_check
           ? rejectedCheckLabel(l.third_party_check.number, l.third_party_check.bank)
           : l.kind === 'ADVANCE_APPLIED'
-          ? (l.source_line?.receipt.number ?? '')
-          : (l.description ?? ''),
+            ? l.source_line?.receipt.number ?? ''
+            : l.description ?? '',
       currency: l.currency.trim(),
       applied: l.applied_amount.toFixed(2),
       rate: l.exchange_rate.toFixed(6),

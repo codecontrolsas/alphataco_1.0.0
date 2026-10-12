@@ -2,13 +2,21 @@
 
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import type { ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
+import { DownloadPdfButton } from '@/shared/components/common/DownloadPdfButton';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Mail } from 'lucide-react';
@@ -19,7 +27,6 @@ import { toast } from 'sonner';
 import { z } from 'zod';
 import { invalidatePurchases } from '../lib/invalidate';
 import type { SendDocumentValues } from '../schemas/send';
-import { DownloadPdfButton } from './DownloadPdfButton';
 
 const logger = new Logger('Purchases/SendToSupplierDialog');
 
@@ -109,7 +116,9 @@ export function SendToSupplierDialog({ documentLabel, recipients, send, loadPdf,
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Enviar al proveedor</DialogTitle>
-          <DialogDescription>Se manda por mail {documentLabel} con el PDF adjunto. Recién cuando el mail sale queda como enviado.</DialogDescription>
+          <DialogDescription>
+            Se manda por mail {documentLabel} con el PDF adjunto. Recién cuando el mail sale queda como enviado.
+          </DialogDescription>
         </DialogHeader>
         {warning}
         <Form {...form}>
@@ -128,13 +137,17 @@ export function SendToSupplierDialog({ documentLabel, recipients, send, loadPdf,
                             checked={field.value.includes(recipient.email)}
                             onCheckedChange={(checked) =>
                               field.onChange(
-                                checked ? [...field.value, recipient.email] : field.value.filter((email) => email !== recipient.email)
+                                checked
+                                  ? [...field.value, recipient.email]
+                                  : field.value.filter((email) => email !== recipient.email)
                               )
                             }
                           />
                           <span>
                             {recipient.name} <span className="text-muted-foreground">({recipient.email})</span>
-                            {recipient.isPrimary && <span className="ml-1 text-xs text-muted-foreground">· principal</span>}
+                            {recipient.isPrimary && (
+                              <span className="ml-1 text-xs text-muted-foreground">· principal</span>
+                            )}
                           </span>
                         </label>
                       ))}
@@ -144,7 +157,9 @@ export function SendToSupplierDialog({ documentLabel, recipients, send, loadPdf,
                 )}
               />
             ) : (
-              <p className="text-sm text-muted-foreground">El proveedor no tiene contactos con mail: escribí a quién enviarlo.</p>
+              <p className="text-sm text-muted-foreground">
+                El proveedor no tiene contactos con mail: escribí a quién enviarlo.
+              </p>
             )}
             <FormField
               control={form.control}

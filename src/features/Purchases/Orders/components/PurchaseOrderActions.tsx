@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { DownloadPdfButton } from '@/shared/components/common/DownloadPdfButton';
 import { Ban, Check, CheckCheck, Lock, PackageCheck, Pencil, Send, X } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -15,7 +16,6 @@ import {
   type PurchaseOrderDetail,
 } from '../../actions/orders.server';
 import { ConfirmAction } from '../../components/ConfirmAction';
-import { DownloadPdfButton } from '../../components/DownloadPdfButton';
 import { ExpiredSupplierDocumentsAlert } from '../../components/ExpiredSupplierDocumentsAlert';
 import { SendToSupplierDialog } from '../../components/SendToSupplierDialog';
 
