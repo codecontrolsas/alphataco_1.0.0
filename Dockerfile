@@ -73,7 +73,7 @@ ENV NEXT_PUBLIC_PROJECT_URL=$NEXT_PUBLIC_PROJECT_URL \
     NEXT_PUBLIC_SHOW_LOGS=$NEXT_PUBLIC_SHOW_LOGS \
     DATABASE_URL=postgresql://build:build@localhost:5432/build \
     NEXT_TELEMETRY_DISABLED=1 \
-    NODE_OPTIONS=--max-old-space-size=4096
+    NODE_OPTIONS=--max-old-space-size=8192
 # Las NEXT_PUBLIC_* se hornean en el bundle. Sin BASE_URL, auth.ts y los mails
 # caen a http://localhost:3000 y el build pasaria igual, dejando localhost en
 # produccion sin ningun aviso. Se corta aca.

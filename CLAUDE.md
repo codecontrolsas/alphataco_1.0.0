@@ -591,6 +591,10 @@ Regla del usuario: _"Todas las fechas y horas son hora argentina"_. El contenedo
 - Por eso toda función SQL que calcula con fechas lleva `SET TimeZone = 'America/Argentina/Buenos_Aires'` en su definición (un `CREATE OR REPLACE` sin el `SET` lo pierde). Lo verifica `prisma/tests/06_timezone.sql`.
 - Al probar un cambio en `prisma.ts`, reiniciar el dev server matando el proceso por PID: en dev el cliente queda cacheado en `globalThis` y el HMR no lo recrea.
 
+### Idioma: español SIEMPRE, también después de compactar el contexto
+
+Tras una compactación de la conversación, retomé con un mensaje en inglés porque el resumen estaba escrito en inglés. El idioma de la respuesta no lo define el idioma del contexto (resúmenes, salida de herramientas, recordatorios del sistema): **toda respuesta al usuario va en español**, sin excepción.
+
 ---
 
 _Update this file continuously. Every mistake Claude makes is a learning opportunity._
