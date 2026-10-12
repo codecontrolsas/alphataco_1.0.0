@@ -18,7 +18,7 @@ import { ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useMemo } from 'react';
-import { SUB_ITEM_ICONS, navigationLinks, type NavBadge } from '../constants/navigation';
+import { NAV_GROUP_LABELS, SUB_ITEM_ICONS, navigationLinks, type NavBadge, type NavigationLink } from '../constants/navigation';
 import { buildSidebarItems, createLinkRegex, findBestMatch, resolveActiveTab } from '../utils/sidebar.utils';
 
 /**
@@ -104,101 +104,121 @@ export function NavMain({ accessibleModuleSlugs, visibleTabs }: NavMainProps) {
     );
   }
 
-  return (
-    <SidebarGroup>
-      <SidebarGroupLabel className="text-overline text-muted-foreground">
-        Módulos
-      </SidebarGroupLabel>
-      <SidebarMenu className="gap-0.5">
-        {items.map((item) => {
-          const isActive = item.name === activeName;
-          // Con sub-items, el contador del modulo sale de los sub-items VISIBLES (ya filtrados
-          // por permiso): quien ve Ayuda solo por el Manual no tiene tickets que leer.
-          const badgeCount = item.items?.length
-            ? Math.max(0, ...item.items.map((subItem) => countFor(subItem.badge)))
-            : countFor(item.badge);
-          const activeTab = isActive ? resolveActiveTab(item, tabParam) : null;
+  const renderItem = (item: NavigationLink) => {
+    const isActive = item.name === activeName;
+    // Con sub-items, el contador del modulo sale de los sub-items VISIBLES (ya filtrados
+    // por permiso): quien ve Ayuda solo por el Manual no tiene tickets que leer.
+    const badgeCount = item.items?.length
+      ? Math.max(0, ...item.items.map((subItem) => countFor(subItem.badge)))
+      : countFor(item.badge);
+    const activeTab = isActive ? resolveActiveTab(item, tabParam) : null;
 
-          // Sin sub-items visibles (modulo de una sola tab, sin tabs, o sin permisos sobre
-          // ninguna): link directo, sin desplegable.
-          if (!item.items?.length) {
-            return (
-              <SidebarMenuItem key={item.name}>
-                <SidebarMenuButton
-                  asChild
-                  tooltip={item.name}
-                  isActive={isActive}
-                  className={MODULE_BUTTON}
-                >
-                  <Link href={item.href}>
-                    <item.icon />
-                    <span>{item.name}</span>
-                  </Link>
-                </SidebarMenuButton>
-                {badgeCount > 0 && (
-                  <SidebarMenuBadge className={BADGE_CLASS}>{badgeLabel(badgeCount)}</SidebarMenuBadge>
-                )}
-              </SidebarMenuItem>
-            );
-          }
+    // Sin sub-items visibles (modulo de una sola tab, sin tabs, o sin permisos sobre
+    // ninguna): link directo, sin desplegable.
+    if (!item.items?.length) {
+      return (
+        <SidebarMenuItem key={item.name}>
+          <SidebarMenuButton
+            asChild
+            tooltip={item.name}
+            isActive={isActive}
+            className={MODULE_BUTTON}
+          >
+            <Link href={item.href}>
+              <item.icon />
+              <span>{item.name}</span>
+            </Link>
+          </SidebarMenuButton>
+          {badgeCount > 0 && (
+            <SidebarMenuBadge className={BADGE_CLASS}>{badgeLabel(badgeCount)}</SidebarMenuBadge>
+          )}
+        </SidebarMenuItem>
+      );
+    }
 
-          return (
-            <Collapsible key={item.name} asChild defaultOpen={isActive} className="group/collapsible">
-              <SidebarMenuItem>
-                <CollapsibleTrigger asChild>
-                  <SidebarMenuButton tooltip={item.name} isActive={isActive} className={MODULE_BUTTON}>
-                    <item.icon />
-                    <span>{item.name}</span>
-                    <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
-                  </SidebarMenuButton>
-                </CollapsibleTrigger>
-                {/* Con el desplegable cerrado el contador del sub-item no se ve: se repite
-                    sobre el modulo, corrido a la izquierda del chevron. */}
-                {badgeCount > 0 && (
-                  <SidebarMenuBadge
-                    className={cn(BADGE_CLASS, 'right-8 group-data-[state=open]/collapsible:hidden')}
-                  >
-                    {badgeLabel(badgeCount)}
-                  </SidebarMenuBadge>
-                )}
-                <CollapsibleContent>
-                  <SidebarMenuSub className="border-sidebar-border/70">
-                    {item.items.map((subItem) => {
-                      const SubIcon = SUB_ITEM_ICONS[`${item.moduleSlug}:${subItem.tabSlug}`];
-                      const subCount = countFor(subItem.badge);
+    return (
+      <Collapsible key={item.name} asChild defaultOpen={isActive} className="group/collapsible">
+        <SidebarMenuItem>
+          <CollapsibleTrigger asChild>
+            <SidebarMenuButton tooltip={item.name} isActive={isActive} className={MODULE_BUTTON}>
+              <item.icon />
+              <span>{item.name}</span>
+              <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+            </SidebarMenuButton>
+          </CollapsibleTrigger>
+          {/* Con el desplegable cerrado el contador del sub-item no se ve: se repite
+              sobre el modulo, corrido a la izquierda del chevron. */}
+          {badgeCount > 0 && (
+            <SidebarMenuBadge
+              className={cn(BADGE_CLASS, 'right-8 group-data-[state=open]/collapsible:hidden')}
+            >
+              {badgeLabel(badgeCount)}
+            </SidebarMenuBadge>
+          )}
+          <CollapsibleContent>
+            <SidebarMenuSub className="border-sidebar-border/70">
+              {item.items.map((subItem) => {
+                const SubIcon = SUB_ITEM_ICONS[`${item.moduleSlug}:${subItem.tabSlug}`];
+                const subCount = countFor(subItem.badge);
 
-                      return (
-                        <SidebarMenuSubItem key={subItem.tabSlug}>
-                          <SidebarMenuSubButton
-                            asChild
-                            isActive={subItem.tabSlug === activeTab}
-                            className={SUB_ITEM_BUTTON}
+                return (
+                  <SidebarMenuSubItem key={subItem.tabSlug}>
+                    <SidebarMenuSubButton
+                      asChild
+                      isActive={subItem.tabSlug === activeTab}
+                      className={SUB_ITEM_BUTTON}
+                    >
+                      <Link href={`${item.href}?tab=${subItem.tabSlug}`}>
+                        {SubIcon && <SubIcon />}
+                        <span>{subItem.name}</span>
+                        {subCount > 0 && (
+                          <span
+                            className={cn(
+                              BADGE_CLASS,
+                              'ml-auto flex h-5 min-w-5 items-center justify-center px-1 text-xs font-medium tabular-nums'
+                            )}
                           >
-                            <Link href={`${item.href}?tab=${subItem.tabSlug}`}>
-                              {SubIcon && <SubIcon />}
-                              <span>{subItem.name}</span>
-                              {subCount > 0 && (
-                                <span
-                                  className={cn(
-                                    BADGE_CLASS,
-                                    'ml-auto flex h-5 min-w-5 items-center justify-center px-1 text-xs font-medium tabular-nums'
-                                  )}
-                                >
-                                  {badgeLabel(subCount)}
-                                </span>
-                              )}
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      );
-                    })}
-                  </SidebarMenuSub>
-                </CollapsibleContent>
-              </SidebarMenuItem>
-            </Collapsible>
-          );
-        })}
-      </SidebarMenu>
-    </SidebarGroup>
+                            {badgeLabel(subCount)}
+                          </span>
+                        )}
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                );
+              })}
+            </SidebarMenuSub>
+          </CollapsibleContent>
+        </SidebarMenuItem>
+      </Collapsible>
+    );
+  };
+
+  // Mapa v2: arriba "Hoy" (sin grupo), después los grupos con rótulo en su orden, y al pie del
+  // menú Ajustes y Soporte. Un grupo sin ningún módulo accesible no se dibuja.
+  const ungrouped = items.filter((item) => !item.group);
+  const footer = items.filter((item) => item.group === 'pie');
+  const sections = (Object.keys(NAV_GROUP_LABELS) as Array<keyof typeof NAV_GROUP_LABELS>)
+    .map((group) => ({ group, label: NAV_GROUP_LABELS[group], links: items.filter((item) => item.group === group) }))
+    .filter((section) => section.links.length > 0);
+
+  return (
+    <>
+      {ungrouped.length > 0 && (
+        <SidebarGroup>
+          <SidebarMenu className="gap-0.5">{ungrouped.map(renderItem)}</SidebarMenu>
+        </SidebarGroup>
+      )}
+      {sections.map((section) => (
+        <SidebarGroup key={section.group} className="py-1">
+          <SidebarGroupLabel className="text-overline text-muted-foreground">{section.label}</SidebarGroupLabel>
+          <SidebarMenu className="gap-0.5">{section.links.map(renderItem)}</SidebarMenu>
+        </SidebarGroup>
+      ))}
+      {footer.length > 0 && (
+        <SidebarGroup className="mt-auto">
+          <SidebarMenu className="gap-0.5">{footer.map(renderItem)}</SidebarMenu>
+        </SidebarGroup>
+      )}
+    </>
   );
 }

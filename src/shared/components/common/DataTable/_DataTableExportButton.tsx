@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ExcelExportOptions } from '@/shared/lib/excel-export';
 
 export interface DataTableExportConfig<TData> {
@@ -90,24 +90,28 @@ export function _DataTableExportButton<TData extends Record<string, unknown>, TV
 }: Props<TData, TValue>) {
   const { handleExport, isExporting } = useDataTableExport(columns, exportConfig);
 
+  // Provider propio: el DataTable también se usa fuera del dashboard (ej. /clothing/delivery), donde no hay
+  // un TooltipProvider global y Radix tira error sin él.
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={handleExport}
-          disabled={isExporting}
-          aria-busy={isExporting}
-        >
-          {isExporting ? <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Download aria-hidden="true" />}
-          {isExporting ? 'Exportando…' : 'Exportar'}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>
-        <p>Exportar todos los datos filtrados a Excel</p>
-      </TooltipContent>
-    </Tooltip>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={handleExport}
+            disabled={isExporting}
+            aria-busy={isExporting}
+          >
+            {isExporting ? <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Download aria-hidden="true" />}
+            {isExporting ? 'Exportando…' : 'Exportar'}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Exportar todos los datos filtrados a Excel</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

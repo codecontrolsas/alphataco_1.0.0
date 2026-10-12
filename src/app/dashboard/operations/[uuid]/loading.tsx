@@ -16,7 +16,7 @@ export default function Loading() {
       </CardHeader>
       <CardContent>
         <div className="flex gap-1 border-b mb-6">
-          <Skeleton className="h-10 w-24 rounded-none border-b-2 border-primary" />
+          <Skeleton className="h-10 w-24 rounded-md border-b-2 border-primary" />
         </div>
         <TableSkeleton columnCount={6} rowCount={6} />
       </CardContent>

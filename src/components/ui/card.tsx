@@ -37,9 +37,9 @@ const cardVariants = cva('border border-border bg-card text-card-foreground', {
     },
     rounded: {
       none: 'rounded-none',
-      sm: 'rounded-none',
-      default: 'rounded-none',
-      lg: 'rounded-none',
+      sm: 'rounded-lg',
+      default: 'rounded-xl',
+      lg: 'rounded-2xl',
       full: 'rounded-full',
     },
   },

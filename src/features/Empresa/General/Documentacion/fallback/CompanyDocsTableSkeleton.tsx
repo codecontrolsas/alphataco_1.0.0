@@ -16,9 +16,9 @@ export function CompanyDocsTableSkeleton() {
           </div>
           {/* Table skeleton */}
           <div className="rounded-md border">
-            <Skeleton className="h-10 w-full rounded-none rounded-t-md" />
+            <Skeleton className="h-10 w-full rounded-md rounded-t-md" />
             {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-12 w-full rounded-none border-t" />
+              <Skeleton key={i} className="h-12 w-full rounded-md border-t" />
             ))}
           </div>
           {/* Pagination skeleton */}

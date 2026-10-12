@@ -24,13 +24,14 @@ export function TextFilterBody({ title, placeholder, state, autoFocus = true, in
 
   return (
     <div className="space-y-2">
-      <p className="text-xs font-medium text-muted-foreground">Filtrar por {title.toLowerCase()}</p>
+      <p className="text-caption font-medium text-muted-foreground">Filtrar por {title.toLowerCase()}</p>
       <div className="flex gap-2">
         <Input
           placeholder={placeholder ?? `Buscar ${title.toLowerCase()}...`}
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
+          aria-label={`Filtrar por ${title.toLowerCase()}`}
           className={cn('h-8 text-sm', inputClassName)}
           autoFocus={autoFocus}
         />

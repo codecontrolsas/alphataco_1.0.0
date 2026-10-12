@@ -13,7 +13,7 @@ const NEUTRAL = 'border-neutral-border bg-neutral-soft text-neutral-text';
 const BRAND = 'border-primary/30 bg-primary-soft text-primary-text';
 
 const badgeVariants = cva(
-  'inline-flex w-fit shrink-0 items-center justify-center gap-1 min-h-5 px-1.5 py-px border rounded-none text-caption font-medium whitespace-nowrap overflow-hidden [&>svg]:size-3 [&>svg]:pointer-events-none transition-[color,background-color]',
+  'inline-flex w-fit shrink-0 items-center justify-center gap-1 min-h-5 px-1.5 py-px border rounded-full text-caption font-medium whitespace-nowrap overflow-hidden [&>svg]:size-3 [&>svg]:pointer-events-none transition-[color,background-color]',
   {
     variants: {
       variant: {

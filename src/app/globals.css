@@ -95,16 +95,17 @@
 
 /* Valores estáticos */
 @theme {
-  /* Radios: todo 0. `rounded-full` no sale de acá: queda en 9999px (avatar, punto de estado, switch). */
-  --radius: 0; /* `rounded` a secas (sin esto Tailwind lo deja en 0.25rem) */
-  --radius-xs: 0;
-  --radius-sm: 0;
-  --radius-md: 0;
-  --radius-lg: 0;
-  --radius-xl: 0;
-  --radius-2xl: 0;
-  --radius-3xl: 0;
-  --radius-4xl: 0;
+  /* Radios (v2, como el boceto aprobado el 2026-10-10): controles 8px, tarjetas 12px. Son tokens:
+     el redondeo podrá configurarse por empresa junto con el color. rounded-full queda en 9999px. */
+  --radius: 0.5rem; /* rounded a secas */
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.5rem;
+  --radius-4xl: 2rem;
 
   /* Escala tipográfica por rol (DISENO.md §3), base 16px */
   --text-display: 2rem;
@@ -143,7 +144,7 @@
 }
 
 :root {
-  --radius: 0;
+  --radius: 0.5rem;
 
   /* Superficies (canvas gris + paneles blancos separados por hairline) */
   --canvas: oklch(0.975 0.003 240);

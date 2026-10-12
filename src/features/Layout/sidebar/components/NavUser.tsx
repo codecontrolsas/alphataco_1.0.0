@@ -19,8 +19,7 @@ import { logout as serverLogout } from '@/features/Auth/actions/login-actions';
 import { Logger } from '@/lib/logger';
 import { UploadImage } from '@/shared/components/common/UploadImage';
 import cookie from 'js-cookie';
-import { ChevronsUpDown, LogOut, Settings, ShieldCheck, UserCircle2 } from 'lucide-react';
-import Link from 'next/link';
+import { ChevronsUpDown, LogOut, Settings, UserCircle2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
@@ -29,18 +28,10 @@ import type { UserMenuProps } from '../types/types';
 
 const logger = new Logger('NavUser');
 
-interface NavUserProps extends UserMenuProps {
-  /** Habilita el acceso a `/admin/panel`. Se resuelve en el servidor a partir del rol. */
-  isAdmin: boolean;
-}
-
 /**
  * Menu de usuario en el footer del sidebar — ocupa el lugar del `NavUser` del bloque sidebar-07.
- *
- * El acceso al panel de admin era un boton suelto del navbar; al desaparecer el navbar pasa a
- * ser un item mas de este menu, para no perder la unica entrada a `/admin/panel`.
  */
-export function NavUser({ user, isAdmin }: NavUserProps) {
+export function NavUser({ user }: UserMenuProps) {
   const { isMobile } = useSidebar();
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const form = useForm();
@@ -120,16 +111,8 @@ export function NavUser({ user, isAdmin }: NavUserProps) {
               <DropdownMenuGroup>
                 <DropdownMenuItem onSelect={() => setShowProfileDialog(true)} className="cursor-pointer">
                   <Settings />
-                  Editar perfil
+                  Mi perfil
                 </DropdownMenuItem>
-                {isAdmin && (
-                  <DropdownMenuItem asChild className="cursor-pointer">
-                    <Link href="/admin/panel">
-                      <ShieldCheck />
-                      Panel de administración
-                    </Link>
-                  </DropdownMenuItem>
-                )}
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -140,7 +123,7 @@ export function NavUser({ user, isAdmin }: NavUserProps) {
                 }}
               >
                 <LogOut />
-                Cerrar Sesión
+                Salir
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -152,9 +135,9 @@ export function NavUser({ user, isAdmin }: NavUserProps) {
           <AlertDialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <UserCircle2 className="h-5 w-5" />
-              Editar perfil
+              Mi perfil
             </DialogTitle>
-            <DialogDescription>Aquí podrás actualizar tu imagen de perfil</DialogDescription>
+            <DialogDescription>Elegí la foto que te identifica en alphataco.</DialogDescription>
           </AlertDialogHeader>
 
           <div className="py-6">
@@ -173,9 +156,9 @@ export function NavUser({ user, isAdmin }: NavUserProps) {
                           </Avatar>
                         </div>
                         <UploadImage
-                          labelInput="Cambiar avatar"
+                          labelInput="Cambiar foto"
                           imageBucket="avatar"
-                          desciption="Sube una imagen para tu perfil"
+                          desciption="JPG o PNG, cuadrada si puede ser."
                           onImageChange={handleAvatarUpdate}
                           inputStyle={{ width: '100%' }}
                         />

@@ -1,5 +1,7 @@
 # Inventario funcional "antes"
 
+> Plan v2 (2026-10-09): la columna "Fase del plan" es del plan v1 (archivado). El orden vigente está en `../PLAN.md` §5.
+
 Ficha de lo que la app hace HOY, pantalla por pantalla. Es el contrato del rediseño: cada `- [ ]` se prueba y se
 tilda después de rediseñar su pantalla. Una ficha sin tildar = la fase no cerró (`PLAN.md` §3, punto 4).
 
@@ -20,8 +22,9 @@ tiene, se agrega a la ficha antes de tocarlo.
 | `formularios.md` | 8 | 76 | 6.8 |
 | `dashboard.md` | 4 | 111 | 6.9 |
 | `ayuda.md` | 4 | 108 | 6.10 |
+| `almacenes.md` | 17 | 155 | 6.11 |
 | `paneles-de-campo.md` | 20 | 198 | 4 (indumentaria) y 7 |
-| **Total** | **159** | **2346** | |
+| **Total** | **176** | **2501** | |
 
 Notas que cruzan módulos:
 - Las tablas de documentos de empleados y de equipos son las mismas en `/dashboard/document`, en las fichas de
@@ -29,6 +32,11 @@ Notas que cruzan módulos:
 - **Equipos → Mantenimiento** (`/dashboard/equipment?tab=type_of_repairs`) es la vista del circuito anterior, pero
   **está viva**: monta 5 de las tablas viejas en uso. Se rediseña igual (el funcionamiento no cambia), aunque el
   manual no la documente.
+- **Almacenes** (`almacenes.md`, relevado el 2026-10-08) modificó pantallas que ya tenían ficha: entregas de ropa
+  (`paneles-de-campo.md` §3, `empleados.md` pestaña Indumentaria, `configuracion.md` Indumentaria), Gomería y el
+  `OrderDetailDialog` (`mantenimiento.md`), cubiertas de la ficha del vehículo (`equipos.md`) y el detalle de OT del
+  operario (`paneles-de-campo.md` §1). El detalle de cada cambio está en la sección "Afectaciones cruzadas" de
+  `almacenes.md`: sumarlo a la ficha correspondiente antes de rediseñar esa pantalla.
 
 ## Tablas del sistema viejo (`BaseDataTable`): clasificación
 

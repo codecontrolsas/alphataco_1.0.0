@@ -44,7 +44,7 @@ export function DataTableColumnHeader<TData, TValue>({
           <Button
             type="button"
             variant="ghost"
-            className="group -mx-3 h-8 gap-1.5 rounded-none px-3 text-overline text-inherit data-[state=open]:bg-accent"
+            className="group -mx-3 h-8 gap-1.5 rounded-md px-3 text-overline text-inherit data-[state=open]:bg-accent"
             data-testid={`column-header-${column.id}`}
           >
             <span>{title}</span>

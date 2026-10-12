@@ -101,7 +101,7 @@ export function DataTableDesktop<TData>({
                         className={cn(
                           'px-3 py-0 align-middle group-data-[state=selected]/row:first:shadow-[inset_2px_0_0_var(--primary)]',
                           isActions &&
-                            'sticky right-0 z-[1] bg-card shadow-[inset_1px_0_0_var(--border)] group-hover/row:bg-accent group-data-[state=selected]/row:bg-primary-soft'
+                            'sticky right-0 z-1 bg-card shadow-[inset_1px_0_0_var(--border)] group-hover/row:bg-accent group-data-[state=selected]/row:bg-primary-soft'
                         )}
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}

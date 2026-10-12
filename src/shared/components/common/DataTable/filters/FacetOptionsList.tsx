@@ -50,9 +50,9 @@ export function FacetOptionsList({ title, state, className }: FacetOptionsListPr
           <CommandGroup>
             {Array.from({ length: 4 }, (_, i) => (
               <div key={i} className="flex items-center gap-2 px-2 py-1.5">
-                <Skeleton className="h-4 w-4 rounded-sm" />
-                <Skeleton className="h-4 w-20 rounded-sm" />
-                <Skeleton className="ml-auto h-4 w-6 rounded-sm" />
+                <Skeleton className="h-4 w-4" />
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="ml-auto h-4 w-6" />
               </div>
             ))}
           </CommandGroup>
@@ -73,8 +73,11 @@ export function FacetOptionsList({ title, state, className }: FacetOptionsListPr
                   >
                     <div
                       className={cn(
-                        'mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border border-primary',
-                        isSelected ? 'bg-primary text-primary-foreground' : 'opacity-50 [&_svg]:invisible'
+                        'mr-2 flex h-4 w-4 shrink-0 items-center justify-center border',
+                        // Sin opacidad en el no seleccionado: el borde `input` mantiene 3:1 (la caja a 50% no llegaba).
+                        isSelected
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-input [&_svg]:invisible'
                       )}
                     >
                       <Check className="h-4 w-4" />

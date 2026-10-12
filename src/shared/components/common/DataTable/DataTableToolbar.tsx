@@ -15,7 +15,7 @@ import { DataTableFilterOptions } from './DataTableFilterOptions';
 import { useDataTablePending } from './DataTablePendingContext';
 import { DataTableTextFilter } from './DataTableTextFilter';
 import { DataTableViewOptions } from './DataTableViewOptions';
-import { getColumnLabel } from './mobile-columns';
+import { getColumnTitle } from './mobile-columns';
 import type { DataTableFacetedFilterConfig, DataTableFilterVariant, DataTableToolbarProps } from './types';
 
 /**
@@ -144,7 +144,7 @@ export function DataTableToolbar<TData>({
   const firstSort = sortingState[0];
   const firstSortColumn = firstSort ? table.getColumn(firstSort.id) : undefined;
   const sortValue = firstSort
-    ? `${firstSortColumn ? getColumnLabel(firstSortColumn) : firstSort.id} ${firstSort.desc ? '↓' : '↑'}`
+    ? `${firstSortColumn ? getColumnTitle(firstSortColumn) : firstSort.id} ${firstSort.desc ? '↓' : '↑'}`
     : '';
   const isMultiSort = sortingState.length > 1;
 
@@ -279,7 +279,7 @@ export function DataTableToolbar<TData>({
       {/* Acciones */}
       <div className="order-2 flex w-full min-w-0 flex-wrap items-center gap-2 @3xl/table:order-3 @3xl/table:ml-auto @3xl/table:w-auto">
         {hasMobileFilters && <div className="flex items-center gap-2 @3xl/table:hidden">{mobileFiltersTrigger}</div>}
-        {mobileSort && <div className="flex items-center gap-2 @3xl/table:hidden">{mobileSort}</div>}
+        {mobileSort && <div className="flex min-w-0 max-w-full items-center gap-2 @3xl/table:hidden">{mobileSort}</div>}
 
         <div className={desktopOnlyClass}>
           {showFilterOptions && (
@@ -298,7 +298,7 @@ export function DataTableToolbar<TData>({
           {exportActions}
         </div>
 
-        <div className="ml-auto flex items-center gap-2 @3xl/table:ml-0 @3xl/table:flex-wrap">
+        <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2 @3xl/table:ml-0">
           {toolbarActions}
           {moreMenu && <div className="@3xl/table:hidden">{moreMenu}</div>}
         </div>

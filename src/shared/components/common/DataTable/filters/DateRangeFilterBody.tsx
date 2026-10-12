@@ -21,12 +21,12 @@ export function DateRangeFilterBody({ state, autoFocus = true }: DateRangeFilter
   return (
     <div className="p-3 space-y-3">
       <div className="space-y-1">
-        <p className="text-xs font-medium text-muted-foreground">Desde</p>
+        <p className="text-caption font-medium text-muted-foreground">Desde</p>
         <Calendar mode="single" selected={fromDate} onSelect={setFrom} initialFocus={autoFocus} />
       </div>
       <Separator />
       <div className="space-y-1">
-        <p className="text-xs font-medium text-muted-foreground">Hasta</p>
+        <p className="text-caption font-medium text-muted-foreground">Hasta</p>
         <Calendar mode="single" selected={toDate} onSelect={setTo} />
       </div>
       {hasValue && (

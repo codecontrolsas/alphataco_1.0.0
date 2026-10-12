@@ -6,17 +6,17 @@ export default function Loading() {
     <div className="space-y-6">
       {/* 5 tabs */}
       <div className="flex gap-1 border-b">
-        <Skeleton className="h-10 w-28 rounded-none" />
-        <Skeleton className="h-10 w-44 rounded-none" />
-        <Skeleton className="h-10 w-28 rounded-none" />
-        <Skeleton className="h-10 w-40 rounded-none" />
-        <Skeleton className="h-10 w-16 rounded-none" />
+        <Skeleton className="h-10 w-28 rounded-md" />
+        <Skeleton className="h-10 w-44 rounded-md" />
+        <Skeleton className="h-10 w-28 rounded-md" />
+        <Skeleton className="h-10 w-40 rounded-md" />
+        <Skeleton className="h-10 w-16 rounded-md" />
       </div>
 
       {/* 2 subtabs */}
       <div className="flex gap-1 border-b">
-        <Skeleton className="h-9 w-40 rounded-none" />
-        <Skeleton className="h-9 w-40 rounded-none" />
+        <Skeleton className="h-9 w-40 rounded-md" />
+        <Skeleton className="h-9 w-40 rounded-md" />
       </div>
 
       {/* Employee DataTable in Card */}

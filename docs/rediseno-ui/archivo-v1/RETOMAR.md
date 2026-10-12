@@ -66,6 +66,11 @@ Fase 2 cerrada el 2026-10-08.
 | `features/fase-3-auditoria.md` | `ui-skills` | Auditoría de la Fase 3 (AUDITORIA-UI.md A-H) hasta S1=S2=0, contra el contrato §5 de `fase-3-datatable.md`. |
 | ola 2 (integración) | `table-expert` | `DataTable.tsx`, `index.ts`, `DOCS.md`, `DataTableMobileFilters.tsx`. Solo con B1-B4 completos. |
 
+### Almacenes (entró a main el 2026-10-08)
+| Archivo esperado | Agente | Encargo |
+|---|---|---|
+| `inventario/almacenes.md` | general-purpose | Ficha "antes" del módulo Almacenes (formato de las otras fichas) + afectaciones cruzadas + crecimiento D7; fila en `inventario/README.md` y subfase 6.11 en `PLAN.md`. |
+
 ### Fases siguientes
 Seguir `PLAN.md` §4 en orden. Para cada feature: plan `ui-skills` (`features/<feature>.md`) → implementación →
 auditoría `ui-skills` en cero (`AUDITORIA-UI.md`). Al terminar cada paso, anotar en la bitácora.

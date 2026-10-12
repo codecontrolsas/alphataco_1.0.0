@@ -17,11 +17,8 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Separator } from '@/components/ui/separator';
 
-import { getColumnLabel } from './mobile-columns';
+import { getColumnTitle } from './mobile-columns';
 import type { DataTableViewOptionsProps } from './types';
-
-/** Título legible de la columna (el mismo que usan el toggle de columnas, el export a Excel y las tarjetas) */
-const getColumnTitle = getColumnLabel;
 
 /**
  * Columnas que el usuario puede mostrar/ocultar y, por lo tanto, tambien reordenar.
@@ -192,8 +189,8 @@ function ColumnOrderPanel<TData>({ table }: { table: Table<TData> }) {
   return (
     <>
         <div className="px-3 pb-2 pt-3">
-          <p className="text-sm font-medium">Columnas</p>
-          <p className="text-muted-foreground mt-1 text-xs">
+          <p className="text-label font-medium">Columnas</p>
+          <p className="text-muted-foreground mt-1 text-caption">
             Elegí cuáles ver y movelas para cambiar el orden. La primera de la lista es la que aparece más a la
             izquierda en la tabla.
           </p>
@@ -202,7 +199,7 @@ function ColumnOrderPanel<TData>({ table }: { table: Table<TData> }) {
         <Separator />
 
         {movableColumns.length === 0 ? (
-          <p className="text-muted-foreground px-3 py-4 text-sm">Esta tabla no tiene columnas configurables.</p>
+          <p className="text-muted-foreground px-3 py-4 text-cell">Esta tabla no tiene columnas configurables.</p>
         ) : (
           <ul className="max-h-72 overflow-y-auto overscroll-contain px-2 py-2">
             {movableColumns.map((column, index) => {
@@ -214,7 +211,7 @@ function ColumnOrderPanel<TData>({ table }: { table: Table<TData> }) {
               return (
                 <li
                   key={column.id}
-                  className="hover:bg-accent/60 focus-within:bg-accent flex items-center gap-2 rounded-md py-0.5 pl-2 pr-1"
+                  className="hover:bg-accent/60 focus-within:bg-accent flex items-center gap-2 py-0.5 pl-2 pr-1"
                 >
                   <Checkbox
                     id={checkboxId}
@@ -224,7 +221,7 @@ function ColumnOrderPanel<TData>({ table }: { table: Table<TData> }) {
                   />
                   <label
                     htmlFor={checkboxId}
-                    className="min-w-0 flex-1 cursor-pointer truncate py-1.5 text-sm"
+                    className="min-w-0 flex-1 cursor-pointer truncate py-1.5 text-cell"
                     title={title}
                   >
                     {title}
@@ -269,8 +266,8 @@ function ColumnOrderPanel<TData>({ table }: { table: Table<TData> }) {
           <>
             <Separator />
             <div className="flex items-center justify-between gap-2 px-3 py-2">
-              <p className="text-muted-foreground text-xs">No hay ninguna columna visible.</p>
-              <Button type="button" variant="outline" size="xs" onClick={showAllColumns}>
+              <p className="text-muted-foreground text-caption">No hay ninguna columna visible.</p>
+              <Button type="button" variant="secondary" size="xs" onClick={showAllColumns}>
                 Mostrar todas
               </Button>
             </div>
@@ -282,7 +279,7 @@ function ColumnOrderPanel<TData>({ table }: { table: Table<TData> }) {
         <div className="p-1">
           {orderBeforeReset ? (
             <div className="flex items-center justify-between gap-2 py-1 pl-2 pr-1">
-              <p className="text-muted-foreground min-w-0 truncate text-xs">Se restableció el orden original.</p>
+              <p className="text-muted-foreground min-w-0 truncate text-caption">Se restableció el orden original.</p>
               <Button type="button" variant="ghost" size="xs" onClick={undoReset}>
                 <Undo2 aria-hidden="true" />
                 Deshacer
@@ -316,7 +313,7 @@ function ColumnVisibilityPanel<TData>({ table }: { table: Table<TData> }) {
   const columns = getMovableColumns(table.getAllColumns());
 
   if (columns.length === 0) {
-    return <p className="text-muted-foreground px-3 py-4 text-sm">Esta tabla no tiene columnas configurables.</p>;
+    return <p className="text-muted-foreground px-3 py-4 text-cell">Esta tabla no tiene columnas configurables.</p>;
   }
 
   return (
@@ -331,7 +328,7 @@ function ColumnVisibilityPanel<TData>({ table }: { table: Table<TData> }) {
               onCheckedChange={(value) => column.toggleVisibility(!!value)}
               data-testid={`toggle-column-${column.id}`}
             />
-            <label htmlFor={checkboxId} className="min-w-0 flex-1 cursor-pointer truncate py-2.5 text-sm">
+            <label htmlFor={checkboxId} className="min-w-0 flex-1 cursor-pointer truncate py-2.5 text-cell">
               {getColumnTitle(column)}
             </label>
           </li>

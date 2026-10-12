@@ -34,7 +34,7 @@ export { DataTableColumnsPanel, DataTableViewOptions } from './DataTableViewOpti
 export { useDataTableExport } from './_DataTableExportButton';
 
 // Modo mobile (puro, sin directiva): resolución de roles de la tarjeta y label de columna
-export { getColumnLabel, resolveMobileLayout } from './mobile-columns';
+export { getColumnLabel, getColumnTitle, resolveMobileLayout } from './mobile-columns';
 
 // Hook (solo cliente)
 export { useDataTable } from './useDataTable';

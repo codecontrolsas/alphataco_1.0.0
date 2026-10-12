@@ -52,6 +52,21 @@ export type NavigationSubLink = {
   badge?: NavBadge;
 };
 
+/**
+ * Grupos del menú (mapa v2, `docs/rediseno-ui/etapa-0/mapa-nuevo.md`): el menú se agrupa por lo que
+ * hace la empresa y no por tipo de registro. Un link sin `group` va arriba de todo (Hoy); `pie`
+ * queda pegado al final del menú (Ajustes, Soporte).
+ */
+export type NavGroup = 'trabajo' | 'recursos' | 'control' | 'negocio' | 'pie';
+
+/** Rótulo visible de cada grupo, en el orden en que se dibujan. `pie` no lleva rótulo. */
+export const NAV_GROUP_LABELS: Record<Exclude<NavGroup, 'pie'>, string> = {
+  trabajo: 'Trabajo',
+  recursos: 'Recursos',
+  control: 'Control',
+  negocio: 'Negocio',
+};
+
 /** Contadores que puede llevar un item del sidebar. */
 export type NavBadge = 'support-tickets';
 
@@ -61,6 +76,8 @@ export type NavigationLink = {
   href: string;
   icon: NavIcon;
   position: number;
+  /** Grupo del menú; sin grupo, el link va primero y sin rótulo. */
+  group?: NavGroup;
   /**
    * Tabs de primer nivel del modulo, en el orden en que las declara su componente.
    * Se omite en los modulos de una sola tab (Comercial, Formularios, Seleccion): un
@@ -88,7 +105,7 @@ export type NavigationLink = {
  */
 export const navigationLinks: NavigationLink[] = [
   {
-    name: 'Dashboard',
+    name: 'Hoy',
     moduleSlug: 'dashboard',
     href: '/dashboard',
     icon: MODULE_ICONS.dashboard,
@@ -100,11 +117,12 @@ export const navigationLinks: NavigationLink[] = [
     ],
   },
   {
-    name: 'Empleados',
+    name: 'Personas',
     moduleSlug: 'empleados',
     href: '/dashboard/employee',
     icon: MODULE_ICONS.empleados,
-    position: 2,
+    position: 5,
+    group: 'recursos',
     items: [
       { name: 'Empleados', tabSlug: 'employees' },
       { name: 'Diagramas', tabSlug: 'diagrams' },
@@ -112,18 +130,20 @@ export const navigationLinks: NavigationLink[] = [
   },
   {
     // Una sola seccion: se dibuja como link directo, sin desplegable.
-    name: 'Selección',
+    name: 'Ingresos',
     moduleSlug: 'seleccion',
     href: '/dashboard/recruitment',
     icon: MODULE_ICONS.seleccion,
-    position: 3,
+    position: 6,
+    group: 'recursos',
   },
   {
-    name: 'Equipos',
+    name: 'Flota',
     moduleSlug: 'equipos',
     href: '/dashboard/equipment',
     icon: MODULE_ICONS.equipos,
-    position: 4,
+    position: 7,
+    group: 'recursos',
     items: [
       { name: 'Equipos', tabSlug: 'equipos' },
       { name: 'Documentos de Equipos', tabSlug: 'documentos-de-equipos' },
@@ -136,18 +156,20 @@ export const navigationLinks: NavigationLink[] = [
     ],
   },
   {
-    name: 'Comercial',
+    name: 'Clientes',
     moduleSlug: 'comercial',
     href: '/dashboard/comercial',
     icon: MODULE_ICONS.comercial,
-    position: 5,
+    position: 10,
+    group: 'negocio',
   },
   {
-    name: 'Documentación',
+    name: 'Cumplimiento',
     moduleSlug: 'documentacion',
     href: '/dashboard/document',
     icon: MODULE_ICONS.documentacion,
-    position: 6,
+    position: 8,
+    group: 'control',
     items: [
       { name: 'Documentos de Empleados', tabSlug: 'documentos-de-empleados' },
       { name: 'Documentos de Equipos', tabSlug: 'documentos-de-equipos' },
@@ -155,22 +177,24 @@ export const navigationLinks: NavigationLink[] = [
     ],
   },
   {
-    name: 'Operaciones',
+    name: 'Servicios',
     moduleSlug: 'operaciones',
     href: '/dashboard/operations',
     icon: MODULE_ICONS.operaciones,
-    position: 7,
+    position: 2,
+    group: 'trabajo',
     items: [
       { name: 'Gestor de Pedidos', tabSlug: 'preparte' },
       { name: 'Partes Diarios', tabSlug: 'dailyreportstable' },
     ],
   },
   {
-    name: 'Mantenimiento',
+    name: 'Taller',
     moduleSlug: 'mantenimiento',
     href: '/dashboard/maintenance',
     icon: MODULE_ICONS.mantenimiento,
-    position: 8,
+    position: 3,
+    group: 'trabajo',
     items: [
       { name: 'Operaciones', tabSlug: 'maint_operaciones' },
       { name: 'Vista Taller', tabSlug: 'workshop_view' },
@@ -181,11 +205,12 @@ export const navigationLinks: NavigationLink[] = [
     ],
   },
   {
-    name: 'Almacenes',
+    name: 'Depósito',
     moduleSlug: 'almacenes',
     href: '/dashboard/warehouse',
     icon: MODULE_ICONS.almacenes,
-    position: 9,
+    position: 4,
+    group: 'trabajo',
     items: [
       { name: 'Stock', tabSlug: 'stock' },
       { name: 'Movimientos', tabSlug: 'movimientos' },
@@ -197,29 +222,32 @@ export const navigationLinks: NavigationLink[] = [
     ],
   },
   {
-    name: 'Formularios',
+    name: 'Inspecciones',
     moduleSlug: 'formularios',
     href: '/dashboard/forms',
     icon: MODULE_ICONS.formularios,
-    position: 10,
+    position: 9,
+    group: 'control',
   },
   {
-    name: 'Ayuda',
+    name: 'Soporte',
     moduleSlug: 'ayuda',
     href: '/dashboard/help',
     icon: MODULE_ICONS.ayuda,
-    position: 11,
+    position: 12,
+    group: 'pie',
     items: [
       { name: 'Tickets', tabSlug: 'tickets', badge: 'support-tickets' },
       { name: 'Manual de uso', tabSlug: 'manual' },
     ],
   },
   {
-    name: 'Configuración',
+    name: 'Ajustes',
     moduleSlug: 'configuracion',
     href: '/dashboard/configuration',
     icon: MODULE_ICONS.configuracion,
-    position: 12,
+    position: 11,
+    group: 'pie',
     items: [
       { name: 'General', tabSlug: 'general' },
       { name: 'RRHH', tabSlug: 'rrhh' },

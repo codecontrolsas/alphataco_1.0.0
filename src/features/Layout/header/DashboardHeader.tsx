@@ -2,6 +2,7 @@ import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { ModeToggle } from '@/components/ui/ToogleDarkButton';
 import { ContextualHelp } from '@/features/Ayuda/Manual/components/header/ContextualHelp';
+import { GlobalSearchAsync } from '@/features/Layout/search/components/GlobalSearchAsync';
 import { DashboardBreadcrumb } from '@/features/Layout/sidebar/components/DashboardBreadcrumb';
 import { Suspense } from 'react';
 
@@ -10,7 +11,7 @@ import { Suspense } from 'react';
  *
  * Reemplaza al navbar: el hamburger pasó a ser `SidebarTrigger` (el estado lo maneja
  * `SidebarProvider`), y el selector de empresa y el menú de usuario se mudaron al sidebar.
- * Acá quedan las migas, la ayuda contextual ("?", abre la guía del manual de la pantalla actual)
+ * Acá quedan las migas, el buscador "Ir a…" (Ctrl+K), la ayuda contextual ("?", abre la guía del manual de la pantalla actual)
  * y el cambio de tema.
  *
  * El Suspense es obligatorio: `DashboardBreadcrumb` lee `useSearchParams` y con
@@ -26,6 +27,10 @@ export function DashboardHeader() {
           <DashboardBreadcrumb />
         </Suspense>
         <div className="ml-auto flex items-center gap-1">
+          {/* Buscador "Ir a…" (mapa v2): resuelve permisos en el servidor, su propio Suspense. */}
+          <Suspense fallback={null}>
+            <GlobalSearchAsync />
+          </Suspense>
           {/* Lee permisos y el manual: dinámico, necesita su propio límite de Suspense. */}
           <Suspense fallback={null}>
             <ContextualHelp />

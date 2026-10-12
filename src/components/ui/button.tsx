@@ -15,7 +15,7 @@ const LINK = 'text-primary-text underline-offset-4 hover:underline';
 const SIZE_MD = 'h-8 px-3 has-[>svg]:px-2.5';
 
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-none text-label font-medium transition-[background-color,color,border-color] duration-(--duration-fast) disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-danger pointer-coarse:min-h-11 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-label font-medium transition-[background-color,color,border-color] duration-(--duration-fast) disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-danger pointer-coarse:min-h-11 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {

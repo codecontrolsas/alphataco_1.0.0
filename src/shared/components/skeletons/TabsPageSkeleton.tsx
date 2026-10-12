@@ -25,7 +25,7 @@ export function TabsPageSkeleton({
       {/* Tab bar */}
       <div className="flex gap-1 border-b">
         {Array.from({ length: tabCount }).map((_, i) => (
-          <Skeleton key={i} className={`h-10 ${i === 0 ? 'w-32 ' : 'w-28'} rounded-none`} />
+          <Skeleton key={i} className={`h-10 ${i === 0 ? 'w-32 ' : 'w-28'} rounded-md`} />
         ))}
       </div>
 
@@ -33,7 +33,7 @@ export function TabsPageSkeleton({
       {hasSubtabs && (
         <div className="flex gap-1 border-b">
           {Array.from({ length: subtabCount }).map((_, i) => (
-            <Skeleton key={i} className={`h-9 ${i === 0 ? 'w-36 ' : 'w-32'} rounded-none`} />
+            <Skeleton key={i} className={`h-9 ${i === 0 ? 'w-36 ' : 'w-32'} rounded-md`} />
           ))}
         </div>
       )}

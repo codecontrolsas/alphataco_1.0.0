@@ -56,7 +56,7 @@ export function CompanySwitcher({ sharedCompanies, allCompanies, currentCompany 
 
   const groups = [
     {
-      label: 'Compañia actual',
+      label: 'Estás en',
       teams:
         totalCompanies?.length === 1
           ? totalCompanies?.map((company) => ({
@@ -73,7 +73,7 @@ export function CompanySwitcher({ sharedCompanies, allCompanies, currentCompany 
               })),
     },
     {
-      label: 'Otras compañias',
+      label: 'Tus otras empresas',
       teams:
         totalCompanies?.length === 1
           ? []
@@ -96,7 +96,7 @@ export function CompanySwitcher({ sharedCompanies, allCompanies, currentCompany 
               size="lg"
               role="combobox"
               aria-expanded={open}
-              aria-label="Selecciona una compañía"
+              aria-label="Cambiar de empresa"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
               <Avatar className="size-8 rounded-lg">
@@ -113,9 +113,9 @@ export function CompanySwitcher({ sharedCompanies, allCompanies, currentCompany 
                 {selectedCompany ? (
                   <span className="truncate font-semibold uppercase">{selectedCompany.company_name}</span>
                 ) : (
-                  <span className="truncate text-muted-foreground">Seleccionar compañía</span>
+                  <span className="truncate text-muted-foreground">Elegí una empresa</span>
                 )}
-                <span className="truncate text-xs text-sidebar-foreground/70">Empresa activa</span>
+                <span className="truncate text-xs text-sidebar-foreground/70">Cambiar de empresa</span>
               </div>
               <ChevronsUpDown className="ml-auto size-4 shrink-0 opacity-50" />
             </SidebarMenuButton>
@@ -128,8 +128,8 @@ export function CompanySwitcher({ sharedCompanies, allCompanies, currentCompany 
           >
             <Command>
               <CommandList>
-                <CommandInput placeholder="Buscar compañia" />
-                <CommandEmpty>Compañia no encontrada</CommandEmpty>
+                <CommandInput placeholder="Buscar empresa" />
+                <CommandEmpty>No hay empresas con ese nombre</CommandEmpty>
                 {groups?.map((group) => (
                   <CommandGroup key={group.label} heading={group.label}>
                     {group?.teams?.map((team) => (
@@ -169,7 +169,7 @@ export function CompanySwitcher({ sharedCompanies, allCompanies, currentCompany 
                   className={cn(buttonVariants({ variant: 'outline' }), 'flex w-full justify-center p-4')}
                 >
                   <PlusCircle className="mr-2 size-4" />
-                  Agregar compañía
+                  Sumar empresa
                 </Link>
               </div>
             </Command>

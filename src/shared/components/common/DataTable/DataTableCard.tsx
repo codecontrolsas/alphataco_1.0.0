@@ -12,7 +12,8 @@ import { DataTableDetailActions, DataTableDetailBody, getRowTitleText, renderRow
 import type { MobileLayout } from './types';
 
 // Elementos que conservan su propio comportamiento y no abren el detalle al tocar la tarjeta.
-const INTERACTIVE_SELECTOR = 'a,button,input,label,[role="checkbox"],[role="menuitem"]';
+const INTERACTIVE_SELECTOR =
+  'a,button,input,select,textarea,label,[role="button"],[role="link"],[role="checkbox"],[role="switch"],[role="combobox"],[role="menuitem"]';
 
 export interface DataTableCardProps<TData> {
   row: Row<TData>;
@@ -78,11 +79,12 @@ function DataTableCardComponent<TData>({
           selectable ? 'col-start-2' : 'col-start-1 col-span-2'
         )}
       >
-        {/* El primer título suele ser un código (legajo, Nº de pedido): no se parte; el segundo pasa abajo si no entra. */}
+        {/* El primer título suele ser un código (legajo, Nº de pedido): no se parte, y si es un texto largo (tabla sin
+            anotar) se trunca en vez de desbordar la tarjeta; el segundo pasa abajo si no entra. */}
         {layout.titles.map((entry, index) => (
           <span
             key={entry.column.id}
-            className={index === 0 ? 'whitespace-nowrap' : 'min-w-0 line-clamp-2 break-words'}
+            className={index === 0 ? 'max-w-full truncate' : 'min-w-0 line-clamp-2 break-words'}
           >
             {renderRowCell(row, entry.column.id)}
           </span>

@@ -18,6 +18,15 @@ export function getColumnLabel<TData>(column: Column<TData, unknown>): string {
   return meta?.mobile?.label ?? meta?.title ?? (typeof header === 'string' && header ? header : column.id);
 }
 
+/**
+ * Texto de la columna en las superficies de desktop (menú de columnas, chip de orden): `meta.title` primero, como
+ * antes de la Fase 3. `mobile.label` es solo para la tarjeta y el detalle (plan §3.1): un label corto ("Baja",
+ * "Km") no reemplaza al título en desktop. Sin `meta.title`, cae a `getColumnLabel`.
+ */
+export function getColumnTitle<TData>(column: Column<TData, unknown>): string {
+  return column.columnDef.meta?.title || getColumnLabel(column);
+}
+
 function isSelectColumn<TData>(column: Column<TData, unknown>): boolean {
   return column.id === 'select';
 }

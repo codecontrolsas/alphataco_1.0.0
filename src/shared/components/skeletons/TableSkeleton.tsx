@@ -20,7 +20,10 @@ export function TableSkeleton({
   filterCount = 2,
 }: TableSkeletonProps) {
   return (
-    <div aria-hidden="true" className="w-full min-w-0 overflow-hidden border border-border bg-card">
+    <div
+      aria-hidden="true"
+      className="w-full min-w-0 overflow-hidden border border-border bg-card in-data-[slot=card-content]:border-0 in-data-[slot=panel-body]:border-0"
+    >
       {/* Toolbar */}
       <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
         <div className="flex flex-wrap gap-2">

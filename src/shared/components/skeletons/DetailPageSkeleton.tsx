@@ -35,7 +35,7 @@ export function DetailPageSkeleton({
             {Array.from({ length: tabCount }).map((_, i) => (
               <Skeleton
                 key={i}
-                className={`h-10 ${i === 0 ? 'w-32 border-b-2 border-primary' : 'w-28'} rounded-none`}
+                className={`h-10 ${i === 0 ? 'w-32 border-b-2 border-primary' : 'w-28'} rounded-md`}
               />
             ))}
           </div>

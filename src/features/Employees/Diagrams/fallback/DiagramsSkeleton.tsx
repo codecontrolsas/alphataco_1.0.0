@@ -6,10 +6,10 @@ export function DiagramsSkeleton() {
     <div className="space-y-4">
       {/* Subtabs */}
       <div className="flex gap-1 border-b">
-        <Skeleton className="h-9 w-40 rounded-none" />
-        <Skeleton className="h-9 w-36 rounded-none" />
-        <Skeleton className="h-9 w-32 rounded-none" />
-        <Skeleton className="h-9 w-28 rounded-none" />
+        <Skeleton className="h-9 w-40 rounded-md" />
+        <Skeleton className="h-9 w-36 rounded-md" />
+        <Skeleton className="h-9 w-32 rounded-md" />
+        <Skeleton className="h-9 w-28 rounded-md" />
       </div>
 
       {/* Search form card */}

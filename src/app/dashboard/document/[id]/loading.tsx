@@ -14,10 +14,10 @@ export default function Loading() {
         </div>
         {/* Tabs */}
         <div className="flex gap-1 border-b">
-          <Skeleton className="h-9 w-24 rounded-none" />
-          <Skeleton className="h-9 w-28 rounded-none" />
-          <Skeleton className="h-9 w-28 rounded-none" />
-          <Skeleton className="h-9 w-28 rounded-none" />
+          <Skeleton className="h-9 w-24 rounded-md" />
+          <Skeleton className="h-9 w-28 rounded-md" />
+          <Skeleton className="h-9 w-28 rounded-md" />
+          <Skeleton className="h-9 w-28 rounded-md" />
         </div>
         <Card>
           <CardContent className="pt-4 space-y-3">

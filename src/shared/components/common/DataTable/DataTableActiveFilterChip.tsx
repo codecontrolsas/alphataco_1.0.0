@@ -27,7 +27,8 @@ export interface DataTableActiveFilterChipProps {
   removeTestId?: string;
 }
 
-const CHIP_BASE = 'inline-flex h-7 max-w-full shrink-0 items-stretch border border-input bg-card text-caption whitespace-nowrap';
+const CHIP_BASE =
+  'inline-flex h-7 max-w-full shrink-0 items-stretch border border-input bg-card text-caption whitespace-nowrap pointer-coarse:h-11';
 const BODY_BASE = 'flex min-w-0 items-center gap-1 px-2';
 
 /**

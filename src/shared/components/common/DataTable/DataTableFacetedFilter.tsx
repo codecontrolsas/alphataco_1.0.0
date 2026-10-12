@@ -53,7 +53,7 @@ export function DataTableFacetedFilter<TData, TValue>({
           valueTitle={selectedLabels.map((o) => o.label).join(', ')}
           extraCount={triggerShowsSkeleton ? undefined : Math.max(selectedValues.size - 1, 0)}
           loading={triggerShowsSkeleton}
-          skeleton={<Skeleton className="h-4 w-16 rounded-sm" />}
+          skeleton={<Skeleton className="h-4 w-16" />}
           onClear={state.clear}
           disabled={disabled}
           testId={testId}

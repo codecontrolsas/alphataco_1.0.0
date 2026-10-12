@@ -6,18 +6,18 @@ export default function Loading() {
     <div className="space-y-6">
       {/* 1 top tab */}
       <div className="flex gap-1 border-b">
-        <Skeleton className="h-10 w-28 rounded-none" />
+        <Skeleton className="h-10 w-28 rounded-md" />
       </div>
 
       {/* 7 subtabs */}
       <div className="flex gap-1 border-b overflow-x-auto">
-        <Skeleton className="h-9 w-24 rounded-none" />
-        <Skeleton className="h-9 w-20 rounded-none" />
-        <Skeleton className="h-9 w-24 rounded-none" />
-        <Skeleton className="h-9 w-24 rounded-none" />
-        <Skeleton className="h-9 w-28 rounded-none" />
-        <Skeleton className="h-9 w-36 rounded-none" />
-        <Skeleton className="h-9 w-32 rounded-none" />
+        <Skeleton className="h-9 w-24 rounded-md" />
+        <Skeleton className="h-9 w-20 rounded-md" />
+        <Skeleton className="h-9 w-24 rounded-md" />
+        <Skeleton className="h-9 w-24 rounded-md" />
+        <Skeleton className="h-9 w-28 rounded-md" />
+        <Skeleton className="h-9 w-36 rounded-md" />
+        <Skeleton className="h-9 w-32 rounded-md" />
       </div>
 
       {/* DataTable */}

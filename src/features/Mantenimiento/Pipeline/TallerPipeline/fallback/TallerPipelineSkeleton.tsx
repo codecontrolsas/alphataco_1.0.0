@@ -7,7 +7,7 @@ export function TallerPipelineSkeleton() {
       {/* Skeleton de chevrones del pipeline */}
       <div className="flex gap-0">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-[88px] flex-1 rounded-none" />
+          <Skeleton key={i} className="h-[88px] flex-1 rounded-md" />
         ))}
       </div>
       {/* Skeleton del contenido */}

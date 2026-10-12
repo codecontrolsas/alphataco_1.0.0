@@ -71,8 +71,8 @@ export function DataTablePagination<TData>({
       className="flex min-h-11 flex-wrap items-center justify-center gap-x-3 gap-y-2 border-t border-border bg-panel-2 px-3 py-1 text-caption tabular-nums @3xl/table:justify-between"
     >
       {/* Rango + selección */}
+      {/* Sin aria-live: el total y la selección los anuncia la live region de la raíz (siempre montada). */}
       <div
-        aria-live="polite"
         className="order-2 min-w-0 text-center text-muted-foreground @3xl/table:order-none @3xl/table:text-left"
       >
         {totalRows === 0 ? (

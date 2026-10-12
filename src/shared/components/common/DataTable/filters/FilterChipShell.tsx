@@ -71,7 +71,7 @@ export function FilterChip({
   return (
     <div
       className={cn(
-        'inline-flex h-7 items-center rounded-md border border-input bg-card text-caption whitespace-nowrap',
+        'inline-flex h-7 items-center border border-input bg-card text-caption whitespace-nowrap pointer-coarse:h-11',
         disabled && 'opacity-50'
       )}
     >
@@ -80,7 +80,7 @@ export function FilterChip({
           type="button"
           disabled={disabled}
           data-testid={testId}
-          className="inline-flex h-full items-center gap-1 rounded-l-md px-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex h-full items-center gap-1 px-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <span className="text-muted-foreground">{title}:</span>
           {loading ? (
@@ -99,7 +99,7 @@ export function FilterChip({
         disabled={disabled}
         onClick={onClear}
         data-testid={clearTestId}
-        className="inline-flex size-6 items-center justify-center rounded-r-md text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:size-11"
+        className="inline-flex size-6 items-center justify-center text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:size-11"
       >
         <X className="size-3" aria-hidden="true" />
       </button>

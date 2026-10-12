@@ -6,10 +6,10 @@ export default function Loading() {
     <div className="space-y-6">
       {/* 4 tabs */}
       <div className="flex gap-1 border-b">
-        <Skeleton className="h-10 w-44 rounded-none" />
-        <Skeleton className="h-10 w-44 rounded-none" />
-        <Skeleton className="h-10 w-44 rounded-none" />
-        <Skeleton className="h-10 w-40 rounded-none" />
+        <Skeleton className="h-10 w-44 rounded-md" />
+        <Skeleton className="h-10 w-44 rounded-md" />
+        <Skeleton className="h-10 w-44 rounded-md" />
+        <Skeleton className="h-10 w-40 rounded-md" />
       </div>
 
       {/* Action buttons row */}
@@ -20,8 +20,8 @@ export default function Loading() {
 
       {/* 2 subtabs */}
       <div className="flex gap-1 border-b">
-        <Skeleton className="h-9 w-44 rounded-none" />
-        <Skeleton className="h-9 w-40 rounded-none" />
+        <Skeleton className="h-9 w-44 rounded-md" />
+        <Skeleton className="h-9 w-40 rounded-md" />
       </div>
 
       {/* DataTable in Card */}

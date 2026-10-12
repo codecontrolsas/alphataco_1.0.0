@@ -53,6 +53,16 @@ export function DataTableMoreMenu<TData>({
   showColumnToggle = true,
 }: DataTableMoreMenuProps<TData>) {
   const [openDialog, setOpenDialog] = React.useState<OpenDialog>(null);
+  // Los diálogos se montan recién al abrirlos por primera vez: cada `ResponsiveDialog` escucha un media query y una
+  // página puede tener ~25 tablas (Mantenimiento). Una vez montados quedan, para conservar la animación de cierre.
+  const [mountedDialogs, setMountedDialogs] = React.useState<{ columns: boolean; filters: boolean }>({
+    columns: false,
+    filters: false,
+  });
+  const openPanel = (dialog: 'columns' | 'filters') => {
+    setMountedDialogs((current) => (current[dialog] ? current : { ...current, [dialog]: true }));
+    setOpenDialog(dialog);
+  };
   const pageSize = table.getState().pagination.pageSize;
   const hasPageSizes = !!pageSizeOptions && pageSizeOptions.length > 0;
 
@@ -74,13 +84,13 @@ export function DataTableMoreMenu<TData>({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           {showColumnToggle && (
-            <DropdownMenuItem onSelect={() => setOpenDialog('columns')}>
+            <DropdownMenuItem onSelect={() => openPanel('columns')}>
               <Columns3 aria-hidden="true" />
               Columnas…
             </DropdownMenuItem>
           )}
           {filterOptions && (
-            <DropdownMenuItem onSelect={() => setOpenDialog('filters')}>
+            <DropdownMenuItem onSelect={() => openPanel('filters')}>
               <SlidersHorizontal aria-hidden="true" />
               Mostrar filtros…
             </DropdownMenuItem>
@@ -115,16 +125,18 @@ export function DataTableMoreMenu<TData>({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <ResponsiveDialog
-        open={openDialog === 'columns'}
-        onOpenChange={(open) => setOpenDialog(open ? 'columns' : null)}
-        title="Columnas"
-        size="sm"
-      >
-        <DataTableColumnsPanel table={table} enableColumnReorder={enableColumnReorder} />
-      </ResponsiveDialog>
+      {mountedDialogs.columns && (
+        <ResponsiveDialog
+          open={openDialog === 'columns'}
+          onOpenChange={(open) => setOpenDialog(open ? 'columns' : null)}
+          title="Columnas"
+          size="sm"
+        >
+          <DataTableColumnsPanel table={table} enableColumnReorder={enableColumnReorder} />
+        </ResponsiveDialog>
+      )}
 
-      {filterOptions && (
+      {filterOptions && mountedDialogs.filters && (
         <ResponsiveDialog
           open={openDialog === 'filters'}
           onOpenChange={(open) => setOpenDialog(open ? 'filters' : null)}
