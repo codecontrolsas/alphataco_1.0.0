@@ -157,59 +157,57 @@ export default async function VehiclePage({ searchParams }: VehiclePageProps) {
 
   const actualMode = id === 'new' ? 'new' : mode;
 
-  return (
-    <div className="p-6 space-y-6">
-      <Card className="p-4">
-        {/* Vehicle Header */}
-        {mode !== 'new' ? (
-          <Suspense fallback={<VehicleHeaderSkeleton />}>
-            <VehicleHeader mode={actualMode} vehicle={vehicle} />
-          </Suspense>
-        ) : (
-          <div className="flex justify-end p-4 pb-0">
-            <BackButton />
-          </div>
-        )}
+  // `vehicle.sector` guarda el id del sector: se resuelve el nombre una sola vez y la misma promesa
+  // (ya resuelta) alimenta el formulario.
+  const hierarchicalPositionsPromise = getHierarchicalPositions();
+  const sectorName =
+    actualMode === 'view' && vehicle?.sector
+      ? (await hierarchicalPositionsPromise).find((position) => position.id === vehicle.sector)?.name
+      : undefined;
 
-        {/* Vehicle Form */}
-        {/* key ligada al id: fuerza re-montaje al navegar entre equipos para que RHF reinicialice los defaultValues */}
-        <VehicleForm
-          key={vehicle?.id ?? 'new'}
-          vehicleId={vehicle?.id}
-          mode={mode}
-          vehicle={vehicle}
-          contractorsPromise={fetchAllContractorForVehicles()}
-          costCentersPromise={getCostCenterOptions()}
-          brandsPromise={getVehicleBrands()}
-          typesPromise={getVehicleTypes('vehicle')}
-          ownersPromise={getVehicleOwners()}
-          subTypesPromise={getSubTypesByType(vehicle?.type.id!)}
-          modelsPromise={getModelsByBrand(vehicle?.brand_vehicles?.id!)}
-          typesOfVehiclesPromise={getTypesOfVehicles()}
-          hierarchicalPositionsPromise={getHierarchicalPositions()}
-          documentsComponent={
-            <EquipmentDocumentDetail equipmentId={vehicle?.id || ''} searchParams={resolvedSearchParams} />
-          }
-          qrComponent={<VehicleQr vehicle={vehicle} />}
-          checklistsComponent={<VehicleChecklistsTabContent equipmentId={vehicle?.id || ''} />}
-          operationsComponent={
-            <VehicleOperationsHistory
-              equipmentId={vehicle?.id || ''}
-              initialData={initialOrders}
-              initialRejectedRequests={initialRejectedRequests}
-            />
-          }
-          tiresComponent={
-            vehicle?.id ? (
-              <VehicleTiresTab
-                vehicleId={vehicle.id}
-                permissionsMap={permissions}
-                searchParams={resolvedSearchParams}
-              />
-            ) : undefined
-          }
-        />
-      </Card>
+  return (
+    <div className="space-y-6">
+      {/* La cabecera es de la ficha en lectura; edición y alta traen su propio título. */}
+      {actualMode === 'view' && vehicle && (
+        <Suspense fallback={<VehicleHeaderSkeleton />}>
+          <VehicleHeader vehicle={vehicle} sectorName={sectorName} />
+        </Suspense>
+      )}
+
+      {/* Vehicle Form */}
+      {/* key ligada al id: fuerza re-montaje al navegar entre equipos para que RHF reinicialice los defaultValues */}
+      <VehicleForm
+        key={vehicle?.id ?? 'new'}
+        vehicleId={vehicle?.id}
+        mode={mode}
+        vehicle={vehicle}
+        contractorsPromise={fetchAllContractorForVehicles()}
+        costCentersPromise={getCostCenterOptions()}
+        brandsPromise={getVehicleBrands()}
+        typesPromise={getVehicleTypes('vehicle')}
+        ownersPromise={getVehicleOwners()}
+        subTypesPromise={getSubTypesByType(vehicle?.type.id!)}
+        modelsPromise={getModelsByBrand(vehicle?.brand_vehicles?.id!)}
+        typesOfVehiclesPromise={getTypesOfVehicles()}
+        hierarchicalPositionsPromise={hierarchicalPositionsPromise}
+        documentsComponent={
+          <EquipmentDocumentDetail equipmentId={vehicle?.id || ''} searchParams={resolvedSearchParams} />
+        }
+        qrComponent={<VehicleQr vehicle={vehicle} />}
+        checklistsComponent={<VehicleChecklistsTabContent equipmentId={vehicle?.id || ''} />}
+        operationsComponent={
+          <VehicleOperationsHistory
+            equipmentId={vehicle?.id || ''}
+            initialData={initialOrders}
+            initialRejectedRequests={initialRejectedRequests}
+          />
+        }
+        tiresComponent={
+          vehicle?.id ? (
+            <VehicleTiresTab vehicleId={vehicle.id} permissionsMap={permissions} searchParams={resolvedSearchParams} />
+          ) : undefined
+        }
+      />
     </div>
   );
 }

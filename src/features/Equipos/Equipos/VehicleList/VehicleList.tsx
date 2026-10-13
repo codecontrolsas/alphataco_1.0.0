@@ -2,8 +2,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { Suspense } from 'react';
 import { getVehiclesPaginated } from './actions/actions.server';
+import { VehicleMetricsSection } from './components/VehicleMetricsSection';
 import { _VehicleDataTable } from './components/_VehicleDataTable';
+import { VehicleMetricsSkeleton } from './fallback/VehicleMetricsSkeleton';
 
 // ============================================================================
 // TYPES
@@ -30,18 +33,25 @@ export async function VehicleList({ searchParams, permissions }: VehicleListProp
   ]);
 
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <_VehicleDataTable
-          data={data}
-          totalRows={total}
-          searchParams={tableParams}
-          tableId={tableId}
-          permissionsMap={permissions}
-          initialColumnVisibility={preferences.columnVisibility ?? {}}
-          initialFilterVisibility={preferences.filterVisibility ?? {}}
-        />
-      </CardContent>
-    </Card>
+    <div className="space-y-6">
+      {/* Las tarjetas resumen llegan por su propio Suspense: no frenan la tabla. */}
+      <Suspense fallback={<VehicleMetricsSkeleton />}>
+        <VehicleMetricsSection tableId={tableId} />
+      </Suspense>
+
+      <Card>
+        <CardContent className="pt-6">
+          <_VehicleDataTable
+            data={data}
+            totalRows={total}
+            searchParams={tableParams}
+            tableId={tableId}
+            permissionsMap={permissions}
+            initialColumnVisibility={preferences.columnVisibility ?? {}}
+            initialFilterVisibility={preferences.filterVisibility ?? {}}
+          />
+        </CardContent>
+      </Card>
+    </div>
   );
 }

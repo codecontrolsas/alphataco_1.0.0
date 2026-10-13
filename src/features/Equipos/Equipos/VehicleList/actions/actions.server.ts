@@ -1,7 +1,6 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   buildDateRangeFiltersWhere,
   buildFiltersWhere,
@@ -13,6 +12,7 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { VEHICLE_SELECT } from '@/shared/prisma-selects/vehicle-select';
 
 const logger = new Logger('Vehicles/list/actions.server');
@@ -334,11 +334,16 @@ export async function getVehiclesPaginated(searchParams: DataTableSearchParams) 
       prisma.vehicles.count({ where }),
     ]);
 
-    return { data: rawData, total };
+    return { data: rawData.map(withNumericPrice), total };
   } catch (error) {
     logger.error('Error al obtener vehículos paginados', { data: { error } });
     throw new Error(`Error al obtener los vehículos: ${error instanceof Error ? error.message : String(error)}`);
   }
+}
+
+/** `price` es Decimal: no se puede pasar a un Client Component. Se entrega como número. */
+function withNumericPrice<T extends { price: { toString(): string } | null }>(vehicle: T) {
+  return { ...vehicle, price: vehicle.price === null ? null : Number(vehicle.price) };
 }
 
 export type VehicleListItem = Awaited<ReturnType<typeof getVehiclesPaginated>>['data'][number];
@@ -364,7 +369,7 @@ export async function getAllVehiclesForExport(searchParams: DataTableSearchParam
       select: VEHICLE_LIST_SELECT,
     });
 
-    return rawData;
+    return rawData.map(withNumericPrice);
   } catch (error) {
     logger.error('Error al exportar vehículos', { data: { error } });
     throw new Error('Error al exportar los vehículos');
