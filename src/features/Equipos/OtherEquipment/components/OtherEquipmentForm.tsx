@@ -1,8 +1,6 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { getCostCenterOptions } from '@/features/Empresa/General/actions/cost-centers.server';
 import { fetchAllContractorForVehicles } from '@/features/Equipos/EquipoID/actions/vehicle-actions';
 import {
@@ -27,6 +25,7 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { OtherEquipmentTabs } from './OtherEquipmentTabs';
+import { OtherEquipmentEditLayout } from './form/OtherEquipmentEditLayout';
 
 const logger = new Logger('OtherEquipmentForm');
 
@@ -310,30 +309,52 @@ export function OtherEquipmentForm({ equipment, mode, equipmentId, ...otherProps
 
   const isBusy = isSubmitting || form.formState.isSubmitting;
 
+  const handleCancel = () => {
+    if (mode === 'new') {
+      router.push('/dashboard/equipment?tab=others');
+      return;
+    }
+    // El form no se remonta al volver a la ficha (la key es el id del equipo): sin reset, lo editado y
+    // no guardado reaparecería al tocar "Editar" otra vez.
+    form.reset();
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('action', 'view');
+    router.push(`${pathname}?${params.toString()}`);
+  };
+
+  // Lectura: ficha con pestañas. Edición y alta: formulario completo en una página.
+  if (readOnly && equipment) {
+    return (
+      <OtherEquipmentTabs
+        equipment={equipment}
+        certificationsComponent={otherProps.certificationsComponent}
+        qrComponent={otherProps.qrComponent}
+      />
+    );
+  }
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="w-full">
-        <OtherEquipmentTabs equipment={equipment} mode={mode} equipmentId={equipmentId} form={form} {...otherProps} />
-
-        <TooltipProvider delayDuration={100}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="w-fit">
-                {!readOnly && (
-                  // form.formState.isSubmitting se activa al inicio de handleSubmit (antes de
-                  // validar), asi que cubre la ventana en la que el resolver consulta duplicados.
-                  <Button type="submit" className="mt-5 ml-2" disabled={isBusy}>
-                    {isBusy ? 'Guardando...' : mode === 'new' ? 'Agregar equipo' : 'Guardar cambios'}
-                  </Button>
-                )}
-              </div>
-            </TooltipTrigger>
-            <TooltipContent className="max-w-[250px]">
-              {form.formState.isValid ? '¡Todo listo para guardar!' : 'Completa todos los campos requeridos'}
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </form>
+      <OtherEquipmentEditLayout
+        form={form}
+        equipment={mode === 'new' ? null : equipment}
+        isBusy={isBusy}
+        onSubmit={() => form.handleSubmit(onSubmit)()}
+        onCancel={handleCancel}
+        basicProps={{
+          brandsPromise: otherProps.brandsPromise,
+          modelsPromise: otherProps.modelsPromise,
+          typesPromise: otherProps.typesPromise,
+          subTypesPromise: otherProps.subTypesPromise,
+          ownersPromise: otherProps.ownersPromise,
+          vehiclesPromise: otherProps.vehiclesPromise,
+        }}
+        assignmentProps={{
+          contractorsPromise: otherProps.contractorsPromise,
+          costCentersPromise: otherProps.costCentersPromise,
+          hierarchicalPositionsPromise: otherProps.hierarchicalPositionsPromise,
+        }}
+      />
     </Form>
   );
 }

@@ -28,13 +28,14 @@ import type { LucideIcon } from 'lucide-react';
 import { CircleOff } from 'lucide-react';
 import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
+import { conditionIcons } from '../../../VehicleList/columns';
 import {
   getAllInactiveVehiclesForExport,
   getInactiveVehicleSingleFacet,
   getInactiveVehiclesPaginated,
   type InactiveVehicleListItem,
 } from '../actions/actions.server';
-import { HIDDEN_COLUMNS_BY_DEFAULT, columns, conditionIcons } from './columns';
+import { HIDDEN_COLUMNS_BY_DEFAULT, columns } from './columns';
 
 // ============================================================================
 // TYPES
@@ -389,7 +390,9 @@ export function _InactiveVehicleDataTable({
       queryFn={tableQueryFn}
       queryKey={['inactive-vehicles-list']}
       onStateChange={handleStateChange}
-      searchPlaceholder="Buscar por dominio, N° interno, chassis..."
+      searchPlaceholder="Buscar por dominio, interno, chasis o motor"
+      showSearch
+      mobileCards
       facetedFilters={facetedFilters}
       initialColumnVisibility={mergedColumnVisibility}
       initialFilterVisibility={mergedFilterVisibility}
@@ -412,9 +415,9 @@ export function _InactiveVehicleDataTable({
           currency: (val) => currencyLabels[val as string] ?? String(val ?? ''),
           type_of_contract: (val) => contractTypeVehiclesLabels[val as string] ?? String(val ?? ''),
           reason_for_termination: (val) => terminationReasonEquipmentLabels[val as string] ?? String(val ?? ''),
-          termination_date: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
-          contract_start_date: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
-          contract_expiration_date: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
+          termination_date: (val) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
+          contract_start_date: (val) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
+          contract_expiration_date: (val) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
           created_at: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
           price: (val) => (val != null ? String(val) : ''),
         },

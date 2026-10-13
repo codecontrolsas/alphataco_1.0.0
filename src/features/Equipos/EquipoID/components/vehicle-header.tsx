@@ -3,84 +3,16 @@
 import type { VehicleById } from '@/app/dashboard/equipment/action/page';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { conditionIcons, conditionVariants } from '@/features/Equipos/Equipos/VehicleList/columns';
+import { EquipmentConditionControl } from '@/features/Equipos/components/EquipmentConditionControl';
 import { PermissionGuard } from '@/features/Permissions';
-import { condition_enum } from '@/generated/prisma/enums';
 import { RecordHeader } from '@/shared/components/common/RecordHeader';
-import { conditionLabels, reasonForTerminationLabels } from '@/shared/utils/mappers';
-import { ArrowLeft, CheckCircle2, ChevronDown, Pencil, Truck } from 'lucide-react';
+import { reasonForTerminationLabels } from '@/shared/utils/mappers';
+import { ArrowLeft, Pencil, Truck } from 'lucide-react';
 import moment from 'moment';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useState } from 'react';
-import { toast } from 'sonner';
-import { updateEquipmentCondition } from '../lib/actions/vehicle-actions';
 import { VehicleQuickActions } from './vehicle-quick-actions';
 
 type Vehicle = NonNullable<VehicleById>;
-
-/**
- * Condición del equipo. Solo `en preparación` se puede cambiar a mano (a operativo): el resto de
- * las condiciones las mueve el circuito de mantenimiento, así que ahí es solo un indicador.
- */
-function ConditionControl({ vehicle }: { vehicle: Vehicle }) {
-  const router = useRouter();
-  const [isChanging, setIsChanging] = useState(false);
-  const condition = vehicle.condition;
-  if (!condition) return null;
-
-  const Icon = conditionIcons[condition];
-  const pill = (
-    <Badge variant={conditionVariants[condition] ?? 'default'}>
-      {Icon && <Icon />}
-      {conditionLabels[condition] ?? condition}
-    </Badge>
-  );
-
-  if (condition !== condition_enum.en_preparacion) return pill;
-
-  const markOperative = async () => {
-    setIsChanging(true);
-    try {
-      await updateEquipmentCondition(vehicle.id, 'operativo', 'vehicles');
-      toast.success('Equipo actualizado a Operativo');
-      router.refresh();
-    } catch {
-      toast.error('Error al actualizar la condición');
-    } finally {
-      setIsChanging(false);
-    }
-  };
-
-  return (
-    <PermissionGuard module="equipos" tab="detalle-equipo" action="update" fallback={pill}>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            disabled={isChanging}
-            aria-label="Cambiar la condición del equipo"
-            className="focus-visible:ring-ring/50 inline-flex items-center gap-1 rounded-full outline-none focus-visible:ring-[3px]"
-          >
-            {pill}
-            <ChevronDown className="text-muted-foreground size-4" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          <DropdownMenuItem onClick={markOperative}>
-            <CheckCircle2 className="text-ok" />
-            Marcar como operativo
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </PermissionGuard>
-  );
-}
 
 function VehicleIdentity({ vehicle }: { vehicle: Vehicle }) {
   const name = [vehicle.brand_vehicles?.name, vehicle.model_vehicles?.name].filter(Boolean).join(' ');
@@ -107,7 +39,12 @@ function VehicleIdentity({ vehicle }: { vehicle: Vehicle }) {
         </h1>
         <p className="text-muted-foreground">{details}</p>
         <div className="flex flex-wrap items-center gap-2 pt-1">
-          <ConditionControl vehicle={vehicle} />
+          <EquipmentConditionControl
+            equipmentId={vehicle.id}
+            condition={vehicle.condition}
+            table="vehicles"
+            permissionTab="detalle-equipo"
+          />
           <Badge variant={vehicle.is_active ? 'success' : 'destructive'}>
             {vehicle.is_active ? 'Activo' : 'Dado de baja'}
           </Badge>

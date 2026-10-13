@@ -2,8 +2,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { applyTablePreferences, stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { Suspense } from 'react';
 import { getOtherEquipmentPaginated } from './actions.server';
+import { OtherEquipmentMetricsSection } from './components/OtherEquipmentMetricsSection';
 import { _OtherEquipmentDataTable } from './components/_OtherEquipmentDataTable';
+import { OtherEquipmentMetricsSkeleton } from './fallback/OtherEquipmentMetricsSkeleton';
 
 // ============================================================================
 // TYPES
@@ -32,21 +35,28 @@ export async function OtherEquipmentList({ searchParams, permissions }: OtherEqu
   const { data, total } = await getOtherEquipmentPaginated(tableParams);
 
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <_OtherEquipmentDataTable
-          data={data}
-          totalRows={total}
-          searchParams={tableParams}
-          tableId={tableId}
-          permissionsMap={permissions}
-          initialColumnVisibility={preferences.columnVisibility ?? {}}
-          initialFilterVisibility={preferences.filterVisibility ?? {}}
-          initialPageSize={preferences.pageSize}
-          initialSorting={preferences.sorting}
-          initialColumnOrder={preferences.columnOrder}
-        />
-      </CardContent>
-    </Card>
+    <div className="space-y-6">
+      {/* Las tarjetas resumen llegan por su propio Suspense: no frenan la tabla. */}
+      <Suspense fallback={<OtherEquipmentMetricsSkeleton />}>
+        <OtherEquipmentMetricsSection tableId={tableId} />
+      </Suspense>
+
+      <Card>
+        <CardContent className="pt-6">
+          <_OtherEquipmentDataTable
+            data={data}
+            totalRows={total}
+            searchParams={tableParams}
+            tableId={tableId}
+            permissionsMap={permissions}
+            initialColumnVisibility={preferences.columnVisibility ?? {}}
+            initialFilterVisibility={preferences.filterVisibility ?? {}}
+            initialPageSize={preferences.pageSize}
+            initialSorting={preferences.sorting}
+            initialColumnOrder={preferences.columnOrder}
+          />
+        </CardContent>
+      </Card>
+    </div>
   );
 }
