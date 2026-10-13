@@ -1,43 +1,51 @@
 'use client';
 
-import { VehicleById } from '@/app/dashboard/equipment/action/page';
+import type { VehicleById } from '@/app/dashboard/equipment/action/page';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CardContent } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { conditionIcons, conditionVariants } from '@/features/Equipos/Equipos/VehicleList/columns';
-import { condition_enum } from '@/generated/prisma/enums';
-import { conditionLabels } from '@/shared/utils/mappers';
 import { PermissionGuard } from '@/features/Permissions';
-import BackButton from '@/shared/components/common/BackButton';
-import { CheckCircle2, Edit, Truck } from 'lucide-react';
+import { condition_enum } from '@/generated/prisma/enums';
+import { RecordHeader } from '@/shared/components/common/RecordHeader';
+import { conditionLabels, reasonForTerminationLabels } from '@/shared/utils/mappers';
+import { ArrowLeft, CheckCircle2, ChevronDown, Pencil, Truck } from 'lucide-react';
+import moment from 'moment';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { updateEquipmentCondition } from '../lib/actions/vehicle-actions';
-import { useVehicleFormReset } from '../lib/store/vehicleFormReset';
 import { VehicleQuickActions } from './vehicle-quick-actions';
 
-interface VehicleHeaderProps {
-  vehicle: VehicleById;
-  mode: 'view' | 'edit' | 'new';
-  onSave?: (data: VehicleById) => Promise<void>;
-}
+type Vehicle = NonNullable<VehicleById>;
 
-export function VehicleHeader({ vehicle, mode, onSave }: VehicleHeaderProps) {
+/**
+ * Condición del equipo. Solo `en preparación` se puede cambiar a mano (a operativo): el resto de
+ * las condiciones las mueve el circuito de mantenimiento, así que ahí es solo un indicador.
+ */
+function ConditionControl({ vehicle }: { vehicle: Vehicle }) {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const { triggerReset } = useVehicleFormReset();
-  const [isChangingCondition, setIsChangingCondition] = useState(false);
+  const [isChanging, setIsChanging] = useState(false);
+  const condition = vehicle.condition;
+  if (!condition) return null;
 
-  const isEnPreparacion = vehicle?.condition === condition_enum.en_preparacion;
-  const conditionIcon = vehicle?.condition ? conditionIcons[vehicle.condition] : undefined;
+  const Icon = conditionIcons[condition];
+  const pill = (
+    <Badge variant={conditionVariants[condition] ?? 'default'}>
+      {Icon && <Icon />}
+      {conditionLabels[condition] ?? condition}
+    </Badge>
+  );
 
-  const handleConditionChange = async (newCondition: string) => {
-    if (!vehicle?.id || newCondition !== 'operativo') return;
-    setIsChangingCondition(true);
+  if (condition !== condition_enum.en_preparacion) return pill;
+
+  const markOperative = async () => {
+    setIsChanging(true);
     try {
       await updateEquipmentCondition(vehicle.id, 'operativo', 'vehicles');
       toast.success('Equipo actualizado a Operativo');
@@ -45,159 +53,149 @@ export function VehicleHeader({ vehicle, mode, onSave }: VehicleHeaderProps) {
     } catch {
       toast.error('Error al actualizar la condición');
     } finally {
-      setIsChangingCondition(false);
+      setIsChanging(false);
     }
   };
+
+  return (
+    <PermissionGuard module="equipos" tab="detalle-equipo" action="update" fallback={pill}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            disabled={isChanging}
+            aria-label="Cambiar la condición del equipo"
+            className="focus-visible:ring-ring/50 inline-flex items-center gap-1 rounded-full outline-none focus-visible:ring-[3px]"
+          >
+            {pill}
+            <ChevronDown className="text-muted-foreground size-4" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuItem onClick={markOperative}>
+            <CheckCircle2 className="text-ok" />
+            Marcar como operativo
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </PermissionGuard>
+  );
+}
+
+function VehicleIdentity({ vehicle }: { vehicle: Vehicle }) {
+  const name = [vehicle.brand_vehicles?.name, vehicle.model_vehicles?.name].filter(Boolean).join(' ');
+  const details = [vehicle.type?.name, vehicle.year, vehicle.intern_number].filter(Boolean).join(' · ');
+
+  return (
+    <div className="flex min-w-0 items-center gap-5">
+      <div className="bg-muted flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-xl">
+        {vehicle.picture ? (
+          <img src={vehicle.picture} alt={name} className="size-full object-cover" />
+        ) : (
+          <Truck className="text-muted-foreground size-8" aria-hidden />
+        )}
+      </div>
+
+      <div className="min-w-0 space-y-1.5">
+        <h1 className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {vehicle.domain && (
+            <span className="border-foreground bg-card rounded-md border-2 px-2.5 font-mono text-xl font-semibold tracking-wider">
+              {vehicle.domain}
+            </span>
+          )}
+          <span className="text-xl font-semibold tracking-tight">{name || 'Equipo sin marca'}</span>
+        </h1>
+        <p className="text-muted-foreground">{details}</p>
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <ConditionControl vehicle={vehicle} />
+          <Badge variant={vehicle.is_active ? 'success' : 'destructive'}>
+            {vehicle.is_active ? 'Activo' : 'Dado de baja'}
+          </Badge>
+          {!vehicle.is_active && vehicle.termination_date && (
+            <span className="text-danger-subtle-foreground text-sm">
+              Baja el <span className="font-mono">{moment.utc(vehicle.termination_date).format('DD/MM/YYYY')}</span>
+              {vehicle.reason_for_termination &&
+                ` · ${reasonForTerminationLabels[vehicle.reason_for_termination] ?? vehicle.reason_for_termination}`}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Franja con los datos de uso del equipo. */
+function VehicleFacts({ vehicle, sectorName }: { vehicle: Vehicle; sectorName?: string }) {
+  const contractors = vehicle.contractor_equipment.map((ce) => ce.customers?.name).filter(Boolean);
+  const facts = [
+    {
+      label: 'Kilometraje',
+      value: vehicle.kilometer ? `${Number(vehicle.kilometer).toLocaleString('es-AR')} km` : 'Sin dato',
+      mono: true,
+    },
+    {
+      label: 'Horas de motor',
+      value: vehicle.engine_hours ? `${Number(vehicle.engine_hours).toLocaleString('es-AR')} h` : 'Sin dato',
+      mono: true,
+    },
+    { label: 'Sector', value: sectorName || 'Sin dato', mono: false },
+    { label: 'Afectado a', value: contractors.length ? contractors.join(', ') : 'Sin afectar', mono: false },
+  ];
+
+  return (
+    <dl className="bg-card grid grid-cols-2 divide-x divide-y rounded-xl border md:grid-cols-4 md:divide-y-0">
+      {facts.map((fact) => (
+        <div key={fact.label} className="space-y-1 px-5 py-4">
+          <dt className="text-muted-foreground text-sm">{fact.label}</dt>
+          <dd className={fact.mono ? 'font-mono text-xl font-semibold tabular-nums' : 'truncate text-lg font-semibold'}>
+            {fact.value}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** Cabecera de la ficha del vehículo (modo lectura): identidad, acciones y datos de uso. */
+export function VehicleHeader({ vehicle, sectorName }: { vehicle: VehicleById; sectorName?: string }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  if (!vehicle) return null;
 
   const handleEdit = () => {
     const params = new URLSearchParams(searchParams.toString());
     params.set('action', 'edit');
     router.push(`${pathname}?${params.toString()}`);
   };
-  const handleCancelEdit = () => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('action', 'view');
-    router.push(`${pathname}?${params.toString()}`);
-    triggerReset(); // Reset del formulario
-  };
 
   return (
-    <div className="w-full">
-      <CardContent className="p-2">
-        <div className="flex items-start gap-6">
-          {/* Vehicle Image */}
-          <div className="flex-shrink-0">
-            <div className="size-28 bg-muted rounded-lg flex items-center justify-center">
-              {vehicle?.picture ? (
-                <img
-                  src={vehicle.picture || '/placeholder.svg'}
-                  alt={`${vehicle.brand} ${vehicle.model}`}
-                  className="h-full w-full object-cover rounded-lg"
-                />
-              ) : (
-                <Truck className="h-8 w-8 text-muted-foreground" />
-              )}
-            </div>
-          </div>
+    <div className="space-y-6">
+      <Button variant="ghost" size="sm" onClick={() => router.back()} className="-ml-2">
+        <ArrowLeft />
+        Volver
+      </Button>
 
-          {/* Vehicle Info */}
-          <div className="flex-1 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <div>
-                  <h1 className="text-2xl font-bold">{vehicle?.domain || 'Nuevo Equipo'}</h1>
-                  {isEnPreparacion ? (
-                    <PermissionGuard module="equipos" tab="detalle-equipo" action="update">
-                      <Select
-                        value={condition_enum.en_preparacion}
-                        onValueChange={handleConditionChange}
-                        disabled={isChangingCondition}
-                      >
-                        <SelectTrigger className="h-7 w-auto gap-1 text-xs font-semibold border-dashed">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={condition_enum.en_preparacion} disabled>
-                            <div className="flex items-center gap-1.5">
-                              {React.createElement(conditionIcons.en_preparacion, { className: 'size-3.5' })}
-                              En preparación
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="operativo">
-                            <div className="flex items-center gap-1.5">
-                              <CheckCircle2 className="size-3.5 text-green-600" />
-                              Operativo
-                            </div>
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </PermissionGuard>
-                  ) : (
-                    <Badge variant={vehicle?.condition ? conditionVariants[vehicle.condition] ?? 'default' : 'default'}>
-                      {conditionIcon && React.createElement(conditionIcon, { className: 'mr-2 size-4' })}
-                      {vehicle?.condition ? conditionLabels[vehicle.condition] ?? vehicle.condition : ''}
-                    </Badge>
-                  )}
-                </div>
-              </div>
+      <RecordHeader
+        identity={<VehicleIdentity vehicle={vehicle} />}
+        actions={
+          <>
+            <PermissionGuard module="equipos" tab="detalle-equipo" action="update">
+              <Button variant="outline" onClick={handleEdit}>
+                <Pencil />
+                Editar
+              </Button>
+              <VehicleQuickActions
+                condition={vehicle.condition}
+                equipmentId={vehicle.id}
+                isActive={vehicle.is_active ?? undefined}
+              />
+            </PermissionGuard>
+          </>
+        }
+      />
 
-              <div className="flex items-center gap-2">
-                <div className="flex gap-2">
-                  {mode === 'view' && (
-                    <PermissionGuard module="equipos" tab="detalle-equipo" action="update">
-                      <Button onClick={handleEdit} size="sm">
-                        <Edit className="h-4 w-4 mr-2" />
-                        Editar
-                      </Button>
-                    </PermissionGuard>
-                  )}
-                  {mode === 'edit' && (
-                    <Button type="button" variant="outline" onClick={handleCancelEdit}>
-                      Cancelar
-                    </Button>
-                  )}
-                </div>
-
-                <PermissionGuard module="equipos" tab="detalle-equipo" action="update">
-                  <VehicleQuickActions
-                    condition={vehicle?.condition!}
-                    equipmentId={vehicle?.id}
-                    isActive={vehicle?.is_active!}
-                  />
-                </PermissionGuard>
-                <Separator orientation="vertical" className="w-[1px] h-10 my-0" />
-
-                <div className="flex items-center justify-end gap-4 ">
-                  <BackButton size="sm" />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Año</p>
-                <p className="font-medium">{vehicle?.year || '-'}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Tipo</p>
-                <p className="font-medium">{vehicle?.type?.name || '-'}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Subtipo</p>
-                <p className="font-medium">{vehicle?.sub_type?.name || '-'}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">N° Interno</p>
-                <p className="font-medium">{vehicle?.intern_number || '-'}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Estado</p>
-                <Badge variant={vehicle?.is_active ? 'success' : 'destructive'} className="font-medium">
-                  {vehicle?.is_active ? 'Activo' : 'Dado de Baja'}
-                </Badge>
-              </div>
-            </div>
-          </div>
-        </div>
-        {!vehicle?.is_active && (
-          <div className="mt-4 border-t pt-4">
-            <div className="grid grid-cols-2 gap-4">
-              {vehicle?.termination_date && (
-                <div className="flex gap-2 text-red-400">
-                  <p className="font-medium">Fecha de Baja:</p>
-                  <p className="font-medium">{new Date(vehicle.termination_date).toLocaleDateString()}</p>
-                </div>
-              )}
-              {vehicle?.reason_for_termination && (
-                <div className="flex gap-2 text-red-400">
-                  <p className="font-medium">Razón de Baja:</p>
-                  <p className="font-medium">{vehicle.reason_for_termination}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </CardContent>
+      <VehicleFacts vehicle={vehicle} sectorName={sectorName} />
     </div>
   );
 }

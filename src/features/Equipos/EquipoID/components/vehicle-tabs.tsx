@@ -1,22 +1,10 @@
 'use client';
 import { VehicleById } from '@/app/dashboard/equipment/action/page';
-import { Badge } from '@/components/ui/badge';
 import { getCostCenterOptions } from '@/features/Empresa/General/actions/cost-centers.server';
-import { fetchAllContractorForVehicles } from '@/features/Equipos/EquipoID/actions/vehicle-actions';
 import { TabsManagerClientSide } from '@/features/TabsManager/TabsManagerClientSide';
 import type { TabDefinition } from '@/features/TabsManager/types';
-import { useEffect, useState } from 'react';
-import { UseFormReturn } from 'react-hook-form';
-import { VehicleAssignmentDataForm } from '../forms/vehicle-assignment-data-form';
-import { VehicleBasicDataForm } from '../forms/vehicle-basic-data-form';
-import {
-  getModelsByBrand,
-  getSubTypesByType,
-  getTypesOfVehicles,
-  getVehicleBrands,
-  getVehicleOwnersType,
-  getVehicleTypes,
-} from '../lib/actions/vehicle-catalog-actions';
+import { Suspense } from 'react';
+import { VehicleAssignmentView, VehicleBasicDataView } from './view/VehicleDataView';
 
 // Tipo para los datos del formulario de vehículo
 export type VehicleFormData = {
@@ -51,14 +39,7 @@ export type VehicleFormData = {
 };
 
 interface VehicleTabsProps {
-  vehicle?: VehicleById;
-  mode: 'view' | 'edit' | 'new';
-  vehicleId?: string;
-  form: UseFormReturn<VehicleFormData>;
-  brandsPromise: ReturnType<typeof getVehicleBrands>;
-  modelsPromise: ReturnType<typeof getModelsByBrand>;
-  typesOfVehiclesPromise: ReturnType<typeof getTypesOfVehicles>;
-  contractorsPromise: ReturnType<typeof fetchAllContractorForVehicles>;
+  vehicle: NonNullable<VehicleById>;
   costCentersPromise: ReturnType<typeof getCostCenterOptions>;
   hierarchicalPositionsPromise: Promise<Array<{ id: string; name: string }>>;
   documentsComponent?: React.ReactNode;
@@ -66,20 +47,16 @@ interface VehicleTabsProps {
   checklistsComponent?: React.ReactNode;
   operationsComponent?: React.ReactNode;
   tiresComponent?: React.ReactNode;
-  typesPromise: ReturnType<typeof getVehicleTypes>;
-  subTypesPromise: ReturnType<typeof getSubTypesByType>;
-  ownersPromise: Promise<getVehicleOwnersType>;
 }
 
+const TabLabel = ({ text }: { text: string }) => <span>{text}</span>;
+
+/**
+ * Pestañas de la ficha del vehículo en modo lectura. La edición y el alta no pasan por acá: usan
+ * `form/VehicleEditLayout`, con el formulario completo en una sola página.
+ */
 export function VehicleTabs({
   vehicle,
-  mode,
-  vehicleId,
-  form,
-  brandsPromise,
-  modelsPromise,
-  typesOfVehiclesPromise,
-  contractorsPromise,
   costCentersPromise,
   hierarchicalPositionsPromise,
   documentsComponent,
@@ -87,161 +64,76 @@ export function VehicleTabs({
   checklistsComponent,
   operationsComponent,
   tiresComponent,
-  typesPromise,
-  subTypesPromise,
-  ownersPromise,
 }: VehicleTabsProps) {
-  const readOnly = mode === 'view';
-  const showDocuments = vehicleId && mode !== 'new';
-  const showChecklists = vehicleId && mode !== 'new';
-  const showOperations = vehicleId && mode !== 'new';
-
-  const [errors, setErrors] = useState<{
-    basicData: boolean;
-    // technicalData: boolean;
-    assignmentData: boolean;
-  }>({
-    basicData: false,
-    // technicalData: false,
-    assignmentData: false,
-  });
-
-  useEffect(() => {
-    const basicDataFields = [
-      'type_of_vehicle',
-      'brand',
-      'model',
-      'year',
-      'engine',
-      'type',
-      'subType',
-      'chassis',
-      'serie',
-      'domain',
-      'owner_id',
-      'type_of_contract',
-      'contract_expiration_date',
-      'contract_start_date',
-    ];
-    // const technicalDataFields = ['engine', 'type', 'subType', 'chassis', 'serie', 'domain'];
-    const assignmentDataFields = ['allocated_to', 'cost_center_id', 'cost_type', 'sector'];
-
-    const basicDataErrors = basicDataFields.some(
-      (field) => form.formState.errors[field as keyof typeof form.formState.errors]
-    );
-    // const technicalDataErrors = technicalDataFields.some(
-    //   (field) => form.formState.errors[field as keyof typeof form.formState.errors]
-    // );
-    const assignmentDataErrors = assignmentDataFields.some(
-      (field) => form.formState.errors[field as keyof typeof form.formState.errors]
-    );
-
-    setErrors({
-      basicData: basicDataErrors,
-      // technicalData: technicalDataErrors,
-      assignmentData: assignmentDataErrors,
-    });
-  }, [form.formState.errors]);
-
   const tabs = [
     {
       value: 'basicData',
-      label: (
-        <div className="relative">
-          Datos Básicos
-          {errors?.basicData && <Badge variant="destructive" className="ml-2 h-2 w-2 p-0" />}
-        </div>
-      ),
+      label: <TabLabel text="Datos del equipo" />,
       moduleSlug: 'equipos',
       tabSlug: 'datos-basicos',
-      content: (
-        <div className="space-y-4">
-          <VehicleBasicDataForm
-            ownersPromise={ownersPromise}
-            brandsPromise={brandsPromise}
-            modelsPromise={modelsPromise}
-            typesPromise={typesPromise}
-            subTypesPromise={subTypesPromise}
-            typesOfVehiclesPromise={typesOfVehiclesPromise}
-            form={form}
-            readOnly={readOnly}
-          />
-        </div>
-      ),
+      content: <VehicleBasicDataView vehicle={vehicle} />,
     },
     {
       value: 'assignmentData',
-      label: (
-        <div className="relative">
-          Asignación
-          {errors?.assignmentData && <Badge variant="destructive" className="ml-2 h-2 w-2 p-0" />}
-        </div>
-      ),
+      label: <TabLabel text="Asignación" />,
       moduleSlug: 'equipos',
       tabSlug: 'asignacion',
       content: (
-        <div className="space-y-4">
-          <VehicleAssignmentDataForm
-            contractorsPromise={contractorsPromise}
+        <Suspense fallback={null}>
+          <VehicleAssignmentView
+            vehicle={vehicle}
             costCentersPromise={costCentersPromise}
             hierarchicalPositionsPromise={hierarchicalPositionsPromise}
-            form={form}
-            readOnly={readOnly}
           />
-        </div>
+        </Suspense>
       ),
     },
     {
       value: 'documents',
-      label: 'Documentos',
+      label: <TabLabel text="Documentación" />,
       // Hereda permisos de documentacion/documentos-de-equipos
       moduleSlug: 'documentacion',
       tabSlug: 'documentos-de-equipos',
-      disabled: !showDocuments,
-      content: showDocuments ? <div className="space-y-4">{documentsComponent}</div> : null,
-    },
-    {
-      value: 'qr',
-      label: 'QR',
-      moduleSlug: 'equipos',
-      tabSlug: 'qr-equipo',
-      content: <div className="space-y-4">{qrComponent}</div>,
-    },
-    {
-      value: 'operations',
-      label: 'Historial de Mantenimiento',
-      moduleSlug: 'equipos',
-      tabSlug: 'historial-mantenimiento-equipo',
-      disabled: !showOperations,
-      content: showOperations ? <div className="space-y-4">{operationsComponent}</div> : null,
+      content: documentsComponent,
     },
     {
       value: 'checklists',
-      label: 'Checklist',
+      label: <TabLabel text="Checklists" />,
       moduleSlug: 'equipos',
       tabSlug: 'checklist-equipo',
-      disabled: !showChecklists,
-      content: showChecklists ? <div className="space-y-4">{checklistsComponent}</div> : null,
+      content: checklistsComponent,
+    },
+    {
+      value: 'operations',
+      label: <TabLabel text="Mantenimiento" />,
+      moduleSlug: 'equipos',
+      tabSlug: 'historial-mantenimiento-equipo',
+      content: operationsComponent,
     },
     {
       value: 'tires',
-      label: 'Cubiertas',
+      label: <TabLabel text="Cubiertas" />,
       moduleSlug: 'equipos',
       tabSlug: 'cubiertas-equipo',
-      disabled: mode === 'new',
       content: tiresComponent ?? <div />,
+    },
+    {
+      value: 'qr',
+      label: <TabLabel text="Código QR" />,
+      moduleSlug: 'equipos',
+      tabSlug: 'qr-equipo',
+      content: qrComponent,
     },
   ] satisfies TabDefinition[];
 
   return (
-    <div className="">
-      <TabsManagerClientSide
-        paramName="tab"
-        defaultTab="basicData"
-        tabs={tabs}
-        listClassName="grid w-full grid-cols-8"
-        triggerClassName="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
-      />
-    </div>
+    <TabsManagerClientSide
+      paramName="tab"
+      defaultTab="basicData"
+      variant="line"
+      tabs={tabs}
+      listClassName="h-11 w-full justify-start overflow-x-auto"
+      triggerClassName="text-foreground/60 hover:text-foreground data-[state=active]:text-foreground flex-none px-4 font-medium transition-colors data-[state=active]:font-semibold data-[state=active]:shadow-none"
+    />
   );
 }

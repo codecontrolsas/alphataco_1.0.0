@@ -1,8 +1,6 @@
 'use client';
 import { VehicleById } from '@/app/dashboard/equipment/action/page';
-import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { getCostCenterOptions } from '@/features/Empresa/General/actions/cost-centers.server';
 import { fetchAllContractorForVehicles } from '@/features/Equipos/EquipoID/actions/vehicle-actions';
 import { Logger } from '@/lib/logger';
@@ -12,7 +10,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import { createVehicle, updateVehicle, isVehicleDomainTaken } from '../lib/actions/vehicle-actions';
+import { createVehicle, isVehicleDomainTaken, updateVehicle } from '../lib/actions/vehicle-actions';
 import {
   getModelsByBrand,
   getSubTypesByType,
@@ -24,6 +22,7 @@ import {
 import { useVehicleFormReset } from '../lib/store/vehicleFormReset';
 import { VEHICLE_TYPE_OF_VEHICLE_ID } from '../lib/utils/vehicle-utils';
 import { vehicleFormSchema } from '../schemas/vehicle';
+import { VehicleEditLayout } from './form/VehicleEditLayout';
 import { VehicleFormData, VehicleTabs } from './vehicle-tabs';
 
 const logger = new Logger('VehicleForm');
@@ -55,7 +54,11 @@ interface VehicleFormProps {
  */
 const vehicleSchema = vehicleFormSchema.refine(
   async (data) => {
-    if (data.type_of_vehicle === '1' && data.domain && window.location.href.includes('/dashboard/equipment/action?action=new')) {
+    if (
+      data.type_of_vehicle === '1' &&
+      data.domain &&
+      window.location.href.includes('/dashboard/equipment/action?action=new')
+    ) {
       return !(await isVehicleDomainTaken(data.domain));
     }
     return true;
@@ -73,7 +76,7 @@ export function VehicleForm({ vehicle, mode, vehicleId, ...otherProps }: Vehicle
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { resetTrigger } = useVehicleFormReset();
+  const { resetTrigger, triggerReset } = useVehicleFormReset();
 
   const onSubmit = async (data: VehicleFormData) => {
     if (submitLockRef.current) {
@@ -191,35 +194,56 @@ export function VehicleForm({ vehicle, mode, vehicleId, ...otherProps }: Vehicle
 
   const isBusy = isSubmitting || form.formState.isSubmitting;
 
+  const handleCancel = () => {
+    if (mode === 'new') {
+      router.push('/dashboard/equipment');
+      return;
+    }
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('action', 'view');
+    router.push(`${pathname}?${params.toString()}`);
+    triggerReset();
+  };
+
+  // Lectura: ficha con pestañas. Edición y alta: formulario completo en una página.
+  if (readOnly && vehicle) {
+    return (
+      <VehicleTabs
+        vehicle={vehicle}
+        costCentersPromise={otherProps.costCentersPromise}
+        hierarchicalPositionsPromise={otherProps.hierarchicalPositionsPromise}
+        documentsComponent={otherProps.documentsComponent}
+        qrComponent={otherProps.qrComponent}
+        checklistsComponent={otherProps.checklistsComponent}
+        operationsComponent={otherProps.operationsComponent}
+        tiresComponent={otherProps.tiresComponent}
+      />
+    );
+  }
+
   return (
     <Form {...form}>
-      <div className="w-full">
-        <VehicleTabs vehicle={vehicle} mode={mode} vehicleId={vehicleId} form={form} {...otherProps} />
-
-        {!readOnly && (
-          <TooltipProvider delayDuration={100}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="w-fit">
-                  {/* form.formState.isSubmitting se activa al inicio de handleSubmit (antes de
-                      validar), asi que cubre la ventana en la que el resolver consulta el dominio. */}
-                  <Button
-                    type="button"
-                    className="mt-5 ml-2"
-                    disabled={isBusy}
-                    onClick={() => form.handleSubmit(onSubmit)()}
-                  >
-                    {isBusy ? 'Guardando...' : mode === 'new' ? 'Agregar equipo' : 'Guardar cambios'}
-                  </Button>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-[250px]">
-                {form.formState.isValid ? '¡Todo listo para guardar!' : 'Completa todos los campos requeridos'}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
-      </div>
+      <VehicleEditLayout
+        form={form}
+        isNew={mode === 'new'}
+        domain={vehicle?.domain}
+        isBusy={isBusy}
+        onSubmit={() => form.handleSubmit(onSubmit)()}
+        onCancel={handleCancel}
+        basicProps={{
+          ownersPromise: otherProps.ownersPromise,
+          brandsPromise: otherProps.brandsPromise,
+          modelsPromise: otherProps.modelsPromise,
+          typesPromise: otherProps.typesPromise,
+          subTypesPromise: otherProps.subTypesPromise,
+          typesOfVehiclesPromise: otherProps.typesOfVehiclesPromise,
+        }}
+        assignmentProps={{
+          contractorsPromise: otherProps.contractorsPromise,
+          costCentersPromise: otherProps.costCentersPromise,
+          hierarchicalPositionsPromise: otherProps.hierarchicalPositionsPromise,
+        }}
+      />
     </Form>
   );
 }

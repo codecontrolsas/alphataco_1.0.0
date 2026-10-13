@@ -167,7 +167,7 @@ export function VehicleBasicDataForm({
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 gap-6 md:grid-cols-2 [&_button[role=combobox]]:w-full">
       {!readOnly && (
         <div className="space-y-2">
           <FormLabel>Foto del equipo</FormLabel>

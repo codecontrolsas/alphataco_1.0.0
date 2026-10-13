@@ -104,6 +104,8 @@ function buildBooleanFacetResult(
   };
 }
 
+const DEFAULT_VISIBLE_FILTERS = ['condition', 'type', 'contractor_equipment'];
+
 // ============================================================================
 // CLIENT COMPONENT
 // ============================================================================
@@ -168,53 +170,6 @@ export function _VehicleDataTable({
     const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((col) => [col, false]));
     return { ...defaults, ...initialColumnVisibility };
   }, [initialColumnVisibility]);
-
-  // Filtros visibles por defecto: solo los 3 más comunes.
-  // El resto se crean pero ocultos — el usuario los activa con el toggle de filtros.
-  const DEFAULT_VISIBLE_FILTERS = ['condition', 'status', 'type'];
-  const mergedFilterVisibility = useMemo(() => {
-    // Si el usuario ya tiene preferencias guardadas, usarlas
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
-      return initialFilterVisibility;
-    }
-    // Caso contrario, solo mostrar los 3 filtros por defecto
-    const allFilterIds = [
-      'condition',
-      'status',
-      'type',
-      'sub_type',
-      'brand',
-      'model',
-      'owner',
-      'sector',
-      'cost_center',
-      'contractor_equipment',
-      'type_of_contract',
-      'cost_type',
-      'currency',
-      'reason_for_termination',
-      'domain',
-      'chassis',
-      'engine',
-      'serie',
-      'intern_number',
-      'contract_number',
-      'year',
-      'kilometer',
-      'engine_hours',
-      'price',
-      'contract_expiration_date',
-      'contract_start_date',
-      'termination_date',
-      'created_at',
-      'checklist_count',
-      'last_checklist_date',
-      'has_certification',
-      'certification_expiration_date',
-      'certification_number',
-    ];
-    return Object.fromEntries(allFilterIds.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
-  }, [initialFilterVisibility]);
 
   // ─── Filtros facetados — lazy-load con fetchFacet ─────────────────────────
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
@@ -446,6 +401,16 @@ export function _VehicleDataTable({
     [makeFkFetchFacet, makeEnumFetchFacet, makeBooleanFetchFacet]
   );
 
+  // Filtros visibles por defecto: solo los 3 más comunes (condición, tipo, afectación).
+  // El resto existe pero oculto — el usuario lo activa con el toggle de filtros.
+  const mergedFilterVisibility = useMemo(() => {
+    // Si el usuario ya tiene preferencias guardadas, usarlas
+    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
+      return initialFilterVisibility;
+    }
+    return Object.fromEntries(facetedFilters.map((f) => [f.columnId, DEFAULT_VISIBLE_FILTERS.includes(f.columnId)]));
+  }, [initialFilterVisibility, facetedFilters]);
+
   // ─── Botón "Nuevo vehículo" protegido por permisos ────────────────────────
   const toolbarActions = (
     <PermissionGuard module="equipos" tab="vehicles" action="create">
@@ -468,7 +433,9 @@ export function _VehicleDataTable({
       queryFn={tableQueryFn}
       queryKey={['vehicles-list']}
       onStateChange={handleStateChange}
-      searchPlaceholder="Buscar por dominio, chassis, N° Interno..."
+      searchPlaceholder="Buscar por dominio, interno, chasis o motor"
+      showSearch
+      mobileCards
       facetedFilters={facetedFilters}
       initialColumnVisibility={mergedColumnVisibility}
       initialFilterVisibility={mergedFilterVisibility}
