@@ -1,7 +1,9 @@
+import { Button } from '@/components/ui/button';
 import { getUserPermissionsMapServer } from '@/features/Permissions';
 import { SectionManagerServer } from '@/features/TabsManager';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { UserSearch } from 'lucide-react';
+import { Plus, UserSearch } from 'lucide-react';
+import Link from 'next/link';
 import CandidatosTabContent from './CandidatosTabContent';
 
 /**
@@ -14,12 +16,26 @@ import CandidatosTabContent from './CandidatosTabContent';
 export default async function SeleccionComponent({ searchParams }: { searchParams: DataTableSearchParams }) {
   const permissions = await getUserPermissionsMapServer();
 
+  // Ojo: la clave se arma a mano y TypeScript no la verifica. Si el módulo o la tab se
+  // renombran, esto pasa a ser `undefined` y el botón desaparece sin que nada falle.
+  const canCreate = permissions['seleccion:candidatos:create'] === true;
+
   return (
     <SectionManagerServer
       paramName="tab"
       searchParams={searchParams}
       defaultTab="candidatos"
       permissions={permissions}
+      actions={
+        canCreate && (
+          <Button asChild>
+            <Link href="/dashboard/recruitment/detail?action=new">
+              <Plus />
+              Nuevo candidato
+            </Link>
+          </Button>
+        )
+      }
       tabs={[
         {
           value: 'candidatos',

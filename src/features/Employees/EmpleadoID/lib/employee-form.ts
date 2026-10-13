@@ -1,3 +1,4 @@
+import { requiredFieldsOf } from '@/shared/components/common/FormCompleteness';
 import moment from 'moment';
 import type { DefaultValues } from 'react-hook-form';
 import { CONTACT_DATA_FIELD_NAMES, PERSONAL_DATA_FIELD_NAMES } from '../../shared/schemas/person-data-schemas';
@@ -7,25 +8,14 @@ import { employeeFormSchema, employeeWorkDataSchema, type EmployeeFormData } fro
 type FieldName = keyof EmployeeFormData;
 
 /** Secciones del formulario del legajo y los campos de cada una. */
-export const EMPLOYEE_FORM_SECTIONS: readonly { id: string; title: string; fields: readonly FieldName[] }[] = [
+export const EMPLOYEE_FORM_SECTIONS: readonly { id: string; title: string; fields: readonly string[] }[] = [
   { id: 'personal', title: 'Datos personales', fields: PERSONAL_DATA_FIELD_NAMES },
   { id: 'contact', title: 'Contacto y dirección', fields: CONTACT_DATA_FIELD_NAMES },
   { id: 'work', title: 'Datos laborales', fields: Object.keys(employeeWorkDataSchema.shape) as FieldName[] },
 ];
 
-/** Campos obligatorios: los que el schema rechaza cuando faltan. Se calcula una sola vez. */
-export const REQUIRED_EMPLOYEE_FIELDS: ReadonlySet<FieldName> = new Set(
-  (Object.keys(employeeFormSchema.shape) as FieldName[]).filter(
-    (field) => !employeeFormSchema.shape[field].safeParse(undefined).success
-  )
-);
-
-/** ¿El valor de un campo cuenta como completado? (cadena no vacía, lista con elementos, número) */
-export function isFieldFilled(value: unknown): boolean {
-  if (Array.isArray(value)) return value.length > 0;
-  if (value === undefined || value === null) return false;
-  return String(value).trim() !== '';
-}
+/** Campos obligatorios del legajo (los calcula el helper compartido a partir del schema). */
+export const REQUIRED_EMPLOYEE_FIELDS = requiredFieldsOf(employeeFormSchema);
 
 /** Valores iniciales del formulario: vacíos para un alta, los del legajo para una edición. */
 export function buildEmployeeDefaultValues(employee: EmployeeDetailData | null): DefaultValues<EmployeeFormData> {

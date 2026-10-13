@@ -69,18 +69,13 @@ export function PreEmployeeTransitionButtons({
       {transitions.map((transition) => (
         <Button
           key={transition.action}
-          size="sm"
-          variant={
-            transition.action === 'reject' ? 'destructive' : transition.action === 'approve' ? 'default' : 'outline'
-          }
+          variant={transition.action === 'reject' ? 'outline' : 'default'}
           onClick={() => runTransition(transition.action)}
           disabled={pendingAction !== null}
-          className="flex items-center gap-2"
+          className={transition.action === 'reject' ? 'text-danger-subtle-foreground border-danger/40' : undefined}
         >
           {ACTION_ICONS[transition.action]}
-          <span className="hidden sm:inline">
-            {pendingAction === transition.action ? 'Procesando...' : transition.label}
-          </span>
+          {pendingAction === transition.action ? 'Procesando…' : transition.label}
         </Button>
       ))}
     </>

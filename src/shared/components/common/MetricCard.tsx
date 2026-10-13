@@ -1,12 +1,13 @@
 import { cn } from '@/lib/utils';
 import * as React from 'react';
 
-export type MetricTone = 'default' | 'ok' | 'warn' | 'danger';
+export type MetricTone = 'default' | 'brand' | 'ok' | 'warn' | 'danger';
 
-/** Fondo y texto de la tarjeta cuando pide acción. Solo `warn` y `danger` se pintan: el resto es neutro. */
+/** Fondo y texto de la tarjeta cuando pide atención (`brand`: esperando una decisión; `warn`/`danger`: pide acción). */
 const TONE_STYLES: Record<MetricTone, string> = {
   default: '',
   ok: '',
+  brand: 'border-brand/40 bg-brand-subtle text-brand-subtle-foreground',
   warn: 'border-warn/35 bg-warn-subtle text-warn-subtle-foreground',
   danger: 'border-danger/30 bg-danger-subtle text-danger-subtle-foreground',
 };

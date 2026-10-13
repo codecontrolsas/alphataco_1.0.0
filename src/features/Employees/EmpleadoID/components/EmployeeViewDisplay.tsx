@@ -1,11 +1,10 @@
 import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
+import { Field, FieldGrid, enumLabel } from '@/shared/components/common/FieldGrid';
 import { SectionCard } from '@/shared/components/common/SectionCard';
 import {
   costTypeLabels,
   documentTypeLabels,
   genderLabels,
-  getEnumLabel,
   levelOfEducationLabels,
   maritalStatusLabels,
   nationalityLabels,
@@ -17,24 +16,6 @@ type Employee = NonNullable<EmployeeDetailData>;
 
 const formatDate = (value: Date | string | null | undefined) => (value ? moment.utc(value).format('DD/MM/YYYY') : null);
 
-/** Dato de solo lectura: rótulo chico y atenuado, valor al frente. `mono` para identificadores y fechas. */
-function Field({ label, value, mono = false }: { label: string; value: string | null | undefined; mono?: boolean }) {
-  return (
-    <div className="space-y-1">
-      <dt className="text-muted-foreground text-sm">{label}</dt>
-      <dd
-        className={cn('font-medium', mono && 'font-mono tabular-nums', !value && 'text-muted-foreground font-normal')}
-      >
-        {value || 'Sin dato'}
-      </dd>
-    </div>
-  );
-}
-
-function FieldGrid({ children }: { children: React.ReactNode }) {
-  return <dl className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2 xl:grid-cols-3">{children}</dl>;
-}
-
 /** Datos personales y, si el usuario puede verlos, los de contacto. */
 export function PersonalDataView({ employee, showContact }: { employee: Employee; showContact: boolean }) {
   const address = [employee.street, employee.street_number].filter(Boolean).join(' ');
@@ -45,18 +26,15 @@ export function PersonalDataView({ employee, showContact }: { employee: Employee
         <FieldGrid>
           <Field label="Nombre" value={employee.firstname} />
           <Field label="Apellido" value={employee.lastname} />
-          <Field label="Tipo de documento" value={getEnumLabel(employee.document_type, documentTypeLabels)} />
+          <Field label="Tipo de documento" value={enumLabel(employee.document_type, documentTypeLabels)} />
           <Field label="Número de documento" value={employee.document_number} mono />
           <Field label="CUIL" value={employee.cuil} mono />
           <Field label="Fecha de nacimiento" value={formatDate(employee.born_date)} mono />
-          <Field label="Nacionalidad" value={getEnumLabel(employee.nationality, nationalityLabels)} />
+          <Field label="Nacionalidad" value={enumLabel(employee.nationality, nationalityLabels)} />
           <Field label="País de nacimiento" value={employee.countries?.name} />
-          <Field label="Sexo" value={getEnumLabel(employee.gender, genderLabels)} />
-          <Field label="Estado civil" value={getEnumLabel(employee.marital_status, maritalStatusLabels)} />
-          <Field
-            label="Nivel de instrucción"
-            value={getEnumLabel(employee.level_of_education, levelOfEducationLabels)}
-          />
+          <Field label="Sexo" value={enumLabel(employee.gender, genderLabels)} />
+          <Field label="Estado civil" value={enumLabel(employee.marital_status, maritalStatusLabels)} />
+          <Field label="Nivel de instrucción" value={enumLabel(employee.level_of_education, levelOfEducationLabels)} />
         </FieldGrid>
       </SectionCard>
 
@@ -122,7 +100,7 @@ export function WorkDataView({ employee }: { employee: Employee }) {
           <Field label="Convenio" value={employee.covenant?.name} />
           <Field label="Categoría" value={employee.category?.name} />
           <Field label="Centro de costo" value={employee.cost_center?.name} />
-          <Field label="Tipo de costo" value={getEnumLabel(employee.cost_type, costTypeLabels)} />
+          <Field label="Tipo de costo" value={enumLabel(employee.cost_type, costTypeLabels)} />
           <Field label="Sectores de taller" value={workshopSectors} />
         </FieldGrid>
       </SectionCard>

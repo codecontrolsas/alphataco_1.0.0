@@ -1,7 +1,6 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   buildDateRangeFiltersWhere,
   buildFiltersWhere,
@@ -13,6 +12,7 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 
 const logger = new Logger('Employees/PreLegajos/PreEmployeeList/actions.server');
 
@@ -76,6 +76,18 @@ const PRE_EMPLOYEE_SELECT = {
   reviewed_at: true,
   hierarchy: { select: { id: true, name: true } },
   company_positions: { select: { id: true, name: true } },
+  // Documentos obligatorios ya cargados (para la barra de progreso X/Y)
+  _count: {
+    select: {
+      // Misma regla que el checklist y que `getRequiredPreEmployeeDocumentsCount`: si el numerador
+      // contara tipos que el denominador no, el avance podría salir 5/4.
+      documents_pre_employees: {
+        where: {
+          document_types: { mandatory: true, is_active: true, available_for_pre_file: true, applies: 'Persona' },
+        },
+      },
+    },
+  },
 } as const;
 
 // ============================================================================
@@ -168,6 +180,33 @@ export async function getPreEmployeesPaginated(searchParams: DataTableSearchPara
   } catch (error) {
     logger.error('Error al obtener candidatos paginados', { data: { error } });
     throw new Error(`Error al obtener los candidatos: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+// ============================================================================
+// REQUIRED DOCUMENTS COUNT
+// ============================================================================
+
+/**
+ * Cantidad de tipos de documento obligatorios para un candidato (el "Y" de X/Y).
+ * Misma regla que `getPreEmployeeDocumentChecklist`: tipos globales o de la empresa activa.
+ */
+export async function getRequiredPreEmployeeDocumentsCount() {
+  const companyId = await getActiveCompanyId();
+
+  try {
+    return await prisma.document_types.count({
+      where: {
+        available_for_pre_file: true,
+        is_active: true,
+        applies: 'Persona',
+        mandatory: true,
+        OR: [{ company_id: null }, { company_id: companyId }],
+      },
+    });
+  } catch (error) {
+    logger.error('Error al contar documentos obligatorios de candidatos', { data: { error } });
+    throw new Error('Error al contar los documentos obligatorios');
   }
 }
 

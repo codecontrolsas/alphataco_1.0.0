@@ -3,9 +3,9 @@
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getAllCompanyPositionOptions, getAllHierarchyOptions } from '@/features/Employees/EmpleadoID/actions.server';
 import { useQuery } from '@tanstack/react-query';
 import { useFormContext } from 'react-hook-form';
-import { getAllCompanyPositionOptions, getAllHierarchyOptions } from '@/features/Employees/EmpleadoID/actions.server';
 import type { PreEmployeeFormData } from '../../schemas/pre-employee-schema';
 
 /**
@@ -49,7 +49,7 @@ export function PreEmployeeWorkDataForm() {
         al aprobar el candidato y crear el legajo definitivo.
       </p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 [&_button[role=combobox]]:w-full">
         {/* Sector propuesto */}
         <FormField
           control={form.control}

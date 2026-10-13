@@ -1,6 +1,6 @@
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { getPreEmployeeByIdCached } from '@/features/Seleccion/actions/pre-employee-actions.server';
 import { PreEmployeeDetailClient } from '@/features/Seleccion/components/PreEmployeeDetailClient';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { Logger } from '@/lib/logger';
 import { notFound } from 'next/navigation';
 
@@ -8,7 +8,7 @@ const logger = new Logger('PreLegajoPage');
 
 interface PreLegajoPageProps {
   searchParams: Promise<{
-    action?: 'view' | 'new';
+    action?: 'view' | 'new' | 'edit';
     pre_employee_id?: string;
     [key: string]: string | string[] | undefined;
   }>;
@@ -16,7 +16,7 @@ interface PreLegajoPageProps {
 
 export default async function PreLegajoPage({ searchParams }: PreLegajoPageProps) {
   const resolvedSearchParams = await searchParams;
-  const mode = resolvedSearchParams.action === 'new' ? 'new' : 'view';
+  const mode = resolvedSearchParams.action === 'new' ? 'new' : resolvedSearchParams.action === 'edit' ? 'edit' : 'view';
   const preEmployeeId = resolvedSearchParams.pre_employee_id ?? '';
 
   const canView = await checkPermissionServer('seleccion', 'candidatos', 'view');
@@ -37,12 +37,12 @@ export default async function PreLegajoPage({ searchParams }: PreLegajoPageProps
   }
 
   return (
-    <div className="p-6">
+    <>
       {/* La key fuerza el remontaje al cambiar de candidato (o al pasar a "nuevo"): sin ella
           Next reutiliza el componente entre searchParams y react-hook-form conserva los
           defaultValues del anterior, arrastrando los datos del ultimo abierto. */}
       <PreEmployeeDetailClient key={preEmployee?.id ?? 'new'} preEmployee={preEmployee} mode={mode} />
-    </div>
+    </>
   );
 }
 
