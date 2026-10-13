@@ -18,31 +18,25 @@ import { ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useMemo } from 'react';
-import { SUB_ITEM_ICONS, navigationLinks, type NavBadge } from '../constants/navigation';
+import { SUB_ITEM_ICONS, navigationLinks, subLinkHref, subLinkKey, type NavBadge } from '../constants/navigation';
 import { buildSidebarItems, createLinkRegex, findBestMatch, resolveActiveTab } from '../utils/sidebar.utils';
 
 /**
- * Estilos del item de módulo.
+ * Estilos de los items.
  *
  * Las clases van escritas completas y no compuestas en runtime: Tailwind v4 escanea el código
  * como texto plano y una clase armada por concatenación nunca se genera.
  *
- * El módulo activo se marca con la barra de marca a la izquierda (`before:`) más texto e icono
- * en color; el relleno sólido se reserva para la hoja —la tab— que es donde realmente está
- * parado el usuario. Con `--radius: 0` no hay esquinas que ablanden nada, así que el peso
- * visual lo lleva el color.
+ * Lo activo se marca con el tinte de marca (`sidebar-active`) y texto en el color de marca; el
+ * hover es un neutro aparte (`sidebar-accent`), para que lo elegido no se confunda con lo que
+ * se está tocando.
  */
-const MODULE_BUTTON = cn(
-  'relative transition-colors',
-  // Barra de marca del item activo. Se reserva el espacio siempre para que el texto no salte.
-  'before:absolute before:inset-y-1 before:left-0 before:w-[3px] before:bg-brand before:opacity-0 before:transition-opacity',
-  'hover:bg-brand/10 hover:text-brand',
-  'data-[active=true]:before:opacity-100',
-  'data-[active=true]:bg-brand/10 data-[active=true]:font-semibold data-[active=true]:text-brand',
-  'data-[active=true]:hover:bg-brand/15 data-[active=true]:hover:text-brand',
-  // El icono acompaña al estado del item.
+const ITEM_BUTTON = cn(
+  'transition-colors',
+  'data-[active=true]:bg-sidebar-active data-[active=true]:font-semibold data-[active=true]:text-sidebar-active-foreground',
+  'data-[active=true]:hover:bg-sidebar-active data-[active=true]:hover:text-sidebar-active-foreground',
   '[&>svg]:text-sidebar-foreground/60 [&>svg]:transition-colors',
-  'hover:[&>svg]:text-brand data-[active=true]:[&>svg]:text-brand'
+  'data-[active=true]:[&>svg]:text-sidebar-active-foreground'
 );
 
 const BADGE_CLASS = 'bg-destructive text-destructive-foreground pointer-events-none';
@@ -51,20 +45,10 @@ function badgeLabel(count: number): string {
   return count > 9 ? '9+' : String(count);
 }
 
-/** Igual que el módulo, pero la tab activa va con relleno sólido: es la hoja del árbol. */
-const SUB_ITEM_BUTTON = cn(
-  'transition-colors',
-  'hover:bg-brand/10 hover:text-brand',
-  'data-[active=true]:bg-brand data-[active=true]:font-medium data-[active=true]:text-brand-foreground',
-  'data-[active=true]:hover:bg-brand data-[active=true]:hover:text-brand-foreground',
-  '[&>svg]:text-sidebar-foreground/50 [&>svg]:transition-colors',
-  'hover:[&>svg]:text-brand data-[active=true]:[&>svg]:text-brand-foreground'
-);
-
 interface NavMainProps {
   /** Modulos a los que el usuario tiene acceso (`getUserAccessibleModulesServer`). */
   accessibleModuleSlugs: string[];
-  /** Por modulo, los `tabSlug` de primer nivel visibles (`resolveVisibleTabs`). */
+  /** Por modulo, las claves de sub-item visibles (`resolveVisibleTabs`). */
   visibleTabs: Record<string, string[]>;
 }
 
@@ -79,6 +63,7 @@ export function NavMain({ accessibleModuleSlugs, visibleTabs }: NavMainProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
+  const subTabParam = searchParams.get('subtab');
 
   // Contadores de los items que declaran `badge` (hoy: tickets de soporte sin leer).
   const unreadTickets = useUnreadSupportTicketsCount();
@@ -90,7 +75,11 @@ export function NavMain({ accessibleModuleSlugs, visibleTabs }: NavMainProps) {
   );
 
   const activeName = useMemo(
-    () => findBestMatch(items.map((item) => ({ ...item, regex: createLinkRegex(item.href) })), pathname),
+    () =>
+      findBestMatch(
+        items.map((item) => ({ ...item, regex: createLinkRegex(item.href) })),
+        pathname
+      ),
     [items, pathname]
   );
 
@@ -107,7 +96,7 @@ export function NavMain({ accessibleModuleSlugs, visibleTabs }: NavMainProps) {
 
   return (
     <SidebarGroup>
-      <SidebarGroupLabel className="text-sidebar-foreground/50 text-[11px] font-semibold tracking-[0.12em] uppercase">
+      <SidebarGroupLabel className="text-sidebar-foreground/60 text-xs font-semibold tracking-wider uppercase">
         Módulos
       </SidebarGroupLabel>
       <SidebarMenu className="gap-0.5">
@@ -118,24 +107,14 @@ export function NavMain({ accessibleModuleSlugs, visibleTabs }: NavMainProps) {
           const badgeCount = item.items?.length
             ? Math.max(0, ...item.items.map((subItem) => countFor(subItem.badge)))
             : countFor(item.badge);
-          const activeTab = isActive ? resolveActiveTab(item, tabParam) : null;
+          const activeTab = isActive ? resolveActiveTab(item, tabParam, subTabParam) : null;
 
           // Sin sub-items visibles (modulo de una sola tab, sin tabs, o sin permisos sobre
           // ninguna): link directo, sin desplegable. Al ser la hoja, va con relleno sólido.
           if (!item.items?.length) {
             return (
               <SidebarMenuItem key={item.name}>
-                <SidebarMenuButton
-                  asChild
-                  tooltip={item.name}
-                  isActive={isActive}
-                  className={cn(
-                    MODULE_BUTTON,
-                    'data-[active=true]:bg-brand data-[active=true]:text-brand-foreground',
-                    'data-[active=true]:hover:bg-brand data-[active=true]:hover:text-brand-foreground',
-                    'data-[active=true]:[&>svg]:text-brand-foreground'
-                  )}
-                >
+                <SidebarMenuButton asChild tooltip={item.name} isActive={isActive} className={ITEM_BUTTON}>
                   <Link href={item.href}>
                     <item.icon />
                     <span>{item.name}</span>
@@ -152,7 +131,15 @@ export function NavMain({ accessibleModuleSlugs, visibleTabs }: NavMainProps) {
             <Collapsible key={item.name} asChild defaultOpen={isActive} className="group/collapsible">
               <SidebarMenuItem>
                 <CollapsibleTrigger asChild>
-                  <SidebarMenuButton tooltip={item.name} isActive={isActive} className={MODULE_BUTTON}>
+                  {/* El módulo padre no se rellena: lo elegido es el sub-item, y dos rellenos juntos compiten. */}
+                  <SidebarMenuButton
+                    tooltip={item.name}
+                    isActive={isActive}
+                    className={cn(
+                      ITEM_BUTTON,
+                      'data-[active=true]:bg-transparent data-[active=true]:hover:bg-sidebar-accent'
+                    )}
+                  >
                     <item.icon />
                     <span>{item.name}</span>
                     <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
@@ -161,26 +148,21 @@ export function NavMain({ accessibleModuleSlugs, visibleTabs }: NavMainProps) {
                 {/* Con el desplegable cerrado el contador del sub-item no se ve: se repite
                     sobre el modulo, corrido a la izquierda del chevron. */}
                 {badgeCount > 0 && (
-                  <SidebarMenuBadge
-                    className={cn(BADGE_CLASS, 'right-8 group-data-[state=open]/collapsible:hidden')}
-                  >
+                  <SidebarMenuBadge className={cn(BADGE_CLASS, 'right-8 group-data-[state=open]/collapsible:hidden')}>
                     {badgeLabel(badgeCount)}
                   </SidebarMenuBadge>
                 )}
                 <CollapsibleContent>
                   <SidebarMenuSub className="border-sidebar-border/70">
                     {item.items.map((subItem) => {
-                      const SubIcon = SUB_ITEM_ICONS[`${item.moduleSlug}:${subItem.tabSlug}`];
+                      const subKey = subLinkKey(subItem);
+                      const SubIcon = SUB_ITEM_ICONS[`${item.moduleSlug}:${subKey}`];
                       const subCount = countFor(subItem.badge);
 
                       return (
-                        <SidebarMenuSubItem key={subItem.tabSlug}>
-                          <SidebarMenuSubButton
-                            asChild
-                            isActive={subItem.tabSlug === activeTab}
-                            className={SUB_ITEM_BUTTON}
-                          >
-                            <Link href={`${item.href}?tab=${subItem.tabSlug}`}>
+                        <SidebarMenuSubItem key={subKey}>
+                          <SidebarMenuSubButton asChild isActive={subKey === activeTab} className={ITEM_BUTTON}>
+                            <Link href={subLinkHref(item.href, subItem)}>
                               {SubIcon && <SubIcon />}
                               <span>{subItem.name}</span>
                               {subCount > 0 && (

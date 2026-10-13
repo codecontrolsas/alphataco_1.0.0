@@ -1,8 +1,8 @@
 import { createTabVisibilityChecker } from '@/features/Permissions/lib/tab-visibility';
-import { navigationLinks } from '../constants/navigation';
+import { navigationLinks, subLinkKey } from '../constants/navigation';
 
 /**
- * Tabs de primer nivel que el usuario puede ver, por modulo.
+ * Tabs de primer nivel (y subtabs elegidas desde el sidebar) que el usuario puede ver, por modulo.
  *
  * La decision de "esta tab se ve" NO vive aca: la toma `createTabVisibilityChecker`, la misma
  * que usan `SectionManagerServer` (que monta la seccion) y `TabsManagerServer` (que monta las
@@ -10,7 +10,7 @@ import { navigationLinks } from '../constants/navigation';
  * la pagina no renderiza.
  *
  * @param permissions - mapa `"<modulo>:<tab>:<accion>" -> boolean` (`getUserPermissionsMapServer`)
- * @returns por `moduleSlug`, los `tabSlug` visibles en el orden declarado en `navigationLinks`
+ * @returns por `moduleSlug`, las claves (`subLinkKey`) visibles en el orden declarado en `navigationLinks`
  */
 export function resolveVisibleTabs(permissions: Readonly<Record<string, boolean>>): Record<string, string[]> {
   const isTabVisible = createTabVisibilityChecker(permissions);
@@ -19,9 +19,7 @@ export function resolveVisibleTabs(permissions: Readonly<Record<string, boolean>
   for (const link of navigationLinks) {
     if (!link.items) continue;
 
-    visibleTabs[link.moduleSlug] = link.items
-      .filter((item) => isTabVisible(link.moduleSlug, item.tabSlug))
-      .map(({ tabSlug }) => tabSlug);
+    visibleTabs[link.moduleSlug] = link.items.map(subLinkKey).filter((key) => isTabVisible(link.moduleSlug, key));
   }
 
   return visibleTabs;

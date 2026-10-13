@@ -109,10 +109,14 @@ export function CertificateUploadStep({
         {uploading ? (
           <Loader2 className="text-muted-foreground size-8 animate-spin" aria-hidden />
         ) : (
-          <Upload className={cn('size-8', isDragging ? 'text-brand' : 'text-muted-foreground')} aria-hidden />
+          <Upload className={cn('size-8', isDragging ? 'text-brand-ink' : 'text-muted-foreground')} aria-hidden />
         )}
         <p className="text-sm">
-          {uploading ? 'Cargando certificado…' : isDragging ? 'Soltá el archivo acá' : 'Arrastrá el archivo .crt o elegilo.'}
+          {uploading
+            ? 'Cargando certificado…'
+            : isDragging
+              ? 'Soltá el archivo acá'
+              : 'Arrastrá el archivo .crt o elegilo.'}
         </p>
         <Button
           type="button"

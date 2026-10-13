@@ -220,6 +220,11 @@ export interface DataTableProps<TData, TValue = unknown> {
   clearSelectionTrigger?: number;
   /** Mensaje cuando no hay resultados */
   emptyMessage?: string;
+  /**
+   * Debajo de `md` dibuja cada fila como una tarjeta (rótulo + valor por columna) en vez de una tabla
+   * con scroll horizontal. Opt-in: asume que la 1.ª columna es el selector y la 2.ª la identidad de la fila.
+   */
+  mobileCards?: boolean;
   /** Tamaños de página disponibles */
   pageSizeOptions?: number[];
   /** Componente de acciones para el toolbar */

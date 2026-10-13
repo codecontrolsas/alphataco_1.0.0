@@ -1,36 +1,44 @@
 'use client';
+
 import { Button } from '@/components/ui/button';
 import { GoogleIcon } from '@/components/ui/icons/google';
 import { googleLogin } from '@/features/Auth/actions/login-actions';
-import { useFormStatus } from 'react-dom';
-import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
+import { useState, useTransition } from 'react';
 
 /**
- * Login con Google. El servidor arma la URL del proveedor y redirige; el `callbackURL` es una
- * ruta relativa de la app, no la manda el navegador.
+ * Login con Google. El servidor arma la URL del proveedor y redirige; el destino es una ruta
+ * interna que el servidor vuelve a validar, no un dato confiable del navegador.
  */
-function GoogleButton() {
-  const { pending } = useFormStatus();
+function GoogleButton({ next }: { next: string }) {
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   return (
-    <Button
-      variant="outline"
-      type="submit"
-      className="w-full"
-      disabled={pending}
-      formAction={async () => {
-        const result = await googleLogin('/dashboard');
-        if (result?.error) {
-          toast.error(result.error);
+    <div className="space-y-2">
+      <Button
+        type="button"
+        variant="outline"
+        size="lg"
+        className="w-full"
+        disabled={isPending}
+        onClick={() =>
+          startTransition(async () => {
+            setError(null);
+            const result = await googleLogin(next);
+            if (result?.error) setError(result.error);
+          })
         }
-      }}
-    >
-      <span className="mr-2">
-        {' '}
-        <GoogleIcon />
-      </span>{' '}
-      {pending ? 'Cargando...' : 'Iniciar sesión con Google'}
-    </Button>
+      >
+        {isPending ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : <GoogleIcon />}
+        Continuar con Google
+      </Button>
+      {error && (
+        <p role="alert" className="text-danger-subtle-foreground text-sm">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 

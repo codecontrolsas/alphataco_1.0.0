@@ -64,7 +64,7 @@ export function PersonalDataFields({ hidePicture = false }: PersonalDataFieldsPr
                 <img
                   src={imagePreview || '/placeholder.svg'}
                   alt="Preview"
-                  className="w-24 h-24 rounded-full object-cover border-2 border-gray-200"
+                  className="w-24 h-24 rounded-full object-cover border-2 border-border"
                 />
                 <Button
                   type="button"
@@ -77,8 +77,8 @@ export function PersonalDataFields({ hidePicture = false }: PersonalDataFieldsPr
                 </Button>
               </div>
             ) : (
-              <div className="w-24 h-24 rounded-full  border-2 border-dashed border-gray-300 flex items-center justify-center">
-                <Upload className="h-8 w-8 text-gray-400" />
+              <div className="w-24 h-24 rounded-full  border-2 border-dashed border-input flex items-center justify-center">
+                <Upload className="h-8 w-8 text-muted-foreground" />
               </div>
             )}
             <div>
@@ -95,7 +95,7 @@ export function PersonalDataFields({ hidePicture = false }: PersonalDataFieldsPr
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 [&_[data-slot=select-trigger]]:w-full">
         {/* Nombre */}
         <FormField
           control={form.control}

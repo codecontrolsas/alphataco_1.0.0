@@ -1,24 +1,35 @@
+import { AuthShell } from '@/features/Auth/components/AuthShell';
 import { LoginForm } from '@/features/Auth/components/LoginForm';
-import { BRAND_NAME } from '@/shared/lib/branding';
-import Link from 'next/link';
+import { safeNextPath } from '@/features/Auth/lib/redirect';
+import { showGoogleLoginButton } from '@/shared/lib/auth';
+import { getSessionUserId } from '@/shared/lib/session';
+import { redirect } from 'next/navigation';
 
-/**
- * Pantalla de ingreso — bloque `login-03` de shadcn: tarjeta centrada sobre fondo `muted`.
- *
- * Reemplaza al layout partido con el banner lateral (`RenderBanner`), que sigue en pie en las
- * pantallas de recupero de contraseña.
- */
-export default async function Login({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const { error } = await searchParams;
+export const metadata = { title: 'Ingresar' };
+
+interface LoginPageProps {
+  searchParams: Promise<{ error?: string; next?: string; reset?: string }>;
+}
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const { error, next, reset } = await searchParams;
+  const nextPath = safeNextPath(next);
+
+  // Con la sesión abierta no hay nada que hacer acá.
+  if (await getSessionUserId()) redirect(nextPath);
 
   return (
-    <div className="bg-muted flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">
-      <div className="flex w-full max-w-sm flex-col gap-6">
-        <Link href="/" className="flex items-center gap-2 self-center font-medium">
-          <span className="text-brand text-2xl font-bold tracking-tight lowercase">{BRAND_NAME}</span>
-        </Link>
-        <LoginForm error={error} />
-      </div>
-    </div>
+    <AuthShell
+      kicker="Acceso"
+      title="Ingresá a tu espacio de trabajo"
+      description="Usá el correo con el que tu empresa te dio de alta."
+    >
+      <LoginForm
+        next={nextPath}
+        oauthFailed={error === 'oauth'}
+        passwordUpdated={reset === 'ok'}
+        showGoogle={showGoogleLoginButton}
+      />
+    </AuthShell>
   );
 }

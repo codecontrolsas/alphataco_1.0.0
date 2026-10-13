@@ -1,5 +1,6 @@
 import { CertificationAmount } from '@/features/Comercial/Certificaciones/components/CertificationAmount';
 import { CertificationStatusBadge } from '@/features/Comercial/Certificaciones/components/CertificationStatusBadge';
+import { formatInCurrency } from '@/features/Treasury/lib/currency-format';
 import { CONCEPTS, VAT_RATE_LABELS, isVatRateId, type ConceptId } from '@/shared/lib/arca/catalogs';
 import { AlertTriangle, ArrowLeft, CheckCircle2, Clock, SearchCheck } from 'lucide-react';
 import moment from 'moment';
@@ -8,19 +9,18 @@ import type { ReactNode } from 'react';
 import type { InvoiceEditorData } from '../../actions/invoices.server';
 import { INVOICE_STATUS_LABELS } from '../../lib/invoice-state-machine';
 import { formatAddress } from '../../lib/snapshots';
+import { TAX_CONDITION_PRINT } from '../../pdf/invoice-pdf-data';
 import { INVOICING_TAB_HREF, formatCuitText, invoiceHref } from '../../utils/invoice-links';
 import { formatDecimalText } from '../../utils/number-text';
 import { ArcaMessagesList } from '../ArcaMessagesList';
-import type { InvoicePermissions } from '../editor/InvoiceDraftForm';
 import { InvoiceEnvironmentNotice } from '../InvoiceEnvironmentNotice';
 import { InvoiceLetterBox } from '../InvoiceLetterBox';
 import { InvoiceStatusBadge } from '../InvoiceStatusBadge';
+import type { InvoicePermissions } from '../editor/InvoiceDraftForm';
 import { AdjustmentActions } from './AdjustmentActions';
 import { FocusOnMountHeading } from './FocusOnMountHeading';
 import { InvoicePdfActions } from './InvoicePdfActions';
 import { ReconcileInvoicePanel } from './ReconcileInvoicePanel';
-import { TAX_CONDITION_PRINT } from '../../pdf/invoice-pdf-data';
-import { formatInCurrency } from '@/features/Treasury/lib/currency-format';
 
 /** Si el comprobante se autorizó hace menos que esto, el PDF puede estar generándose todavía. */
 const PDF_GRACE_MS = 3 * 60 * 1000;
@@ -77,7 +77,10 @@ export function InvoiceDetail({
   const hasAuthorizedCredit = invoice.adjustments.some((a) => a.kind === 'credit_note' && a.status === 'autorizada');
   const showAdjustments = isAuthorized && permissions.canCreate && invoice.kind !== 'credit_note';
   const waitForPdf =
-    isAuthorized && !invoice.hasPdf && invoice.authorizedAt !== null && Date.now() - Date.parse(invoice.authorizedAt) < PDF_GRACE_MS;
+    isAuthorized &&
+    !invoice.hasPdf &&
+    invoice.authorizedAt !== null &&
+    Date.now() - Date.parse(invoice.authorizedAt) < PDF_GRACE_MS;
 
   return (
     <div className="flex flex-col gap-6 py-4">
@@ -98,7 +101,10 @@ export function InvoiceDetail({
               <p className="text-muted-foreground text-sm">
                 <span className="break-words">{receiverName}</span>
                 {invoice.authorizedAt && (
-                  <span className="tabular-nums"> · Emitida el {moment(invoice.authorizedAt).format('DD/MM/YYYY')}</span>
+                  <span className="tabular-nums">
+                    {' '}
+                    · Emitida el {moment(invoice.authorizedAt).format('DD/MM/YYYY')}
+                  </span>
                 )}
               </p>
             </div>
@@ -124,7 +130,7 @@ export function InvoiceDetail({
             documentTitle={`${voucherLabel} autorizada · Facturación`}
             className="flex items-center gap-2 font-semibold"
           >
-            <CheckCircle2 className="text-brand size-5 shrink-0" aria-hidden />
+            <CheckCircle2 className="text-brand-ink size-5 shrink-0" aria-hidden />
             {voucherLabel} autorizada.
           </FocusOnMountHeading>
           <p className="text-sm tabular-nums">
@@ -135,18 +141,24 @@ export function InvoiceDetail({
               <span>
                 {receivable.state === 'PENDING' && (
                   <>
-                    Pendiente de cobro: <span className="font-medium">{formatInCurrency(receivable.pending, receivable.currency)}</span>
+                    Pendiente de cobro:{' '}
+                    <span className="font-medium">{formatInCurrency(receivable.pending, receivable.currency)}</span>
                   </>
                 )}
                 {receivable.state === 'IN_DRAFT' && (
                   <>
-                    En un recibo en borrador por <span className="font-medium">{formatInCurrency(receivable.reserved, receivable.currency)}</span> (todavía no cobrada)
+                    En un recibo en borrador por{' '}
+                    <span className="font-medium">{formatInCurrency(receivable.reserved, receivable.currency)}</span>{' '}
+                    (todavía no cobrada)
                   </>
                 )}
                 {receivable.state === 'COLLECTED' && 'Cobrada'}
                 {receivable.state === 'NO_BALANCE' && 'Sin saldo: la cancelan notas de crédito'}
               </span>
-              <Link href={`/dashboard/treasury/customers/${receivable.customerId}`} className="underline underline-offset-4">
+              <Link
+                href={`/dashboard/treasury/customers/${receivable.customerId}`}
+                className="underline underline-offset-4"
+              >
                 Ver cuenta corriente
               </Link>
               {receivable.canCollect && receivable.state === 'PENDING' && (
@@ -211,15 +223,18 @@ export function InvoiceDetail({
             ARCA no confirmó si autorizó el comprobante.
           </FocusOnMountHeading>
           <p className="text-pretty">
-            Puede haberse autorizado como <span className="font-medium tabular-nums">{voucherLabel}</span>. No lo vuelvas a
-            emitir: consultá su estado.
+            Puede haberse autorizado como <span className="font-medium tabular-nums">{voucherLabel}</span>. No lo
+            vuelvas a emitir: consultá su estado.
           </p>
           <ReconcileInvoicePanel invoiceId={invoice.id} voucherLabel={voucherLabel} canReconcile={canEmit} />
         </section>
       )}
 
       {invoice.needsReview && (
-        <div role="note" className="border-destructive/40 text-destructive flex items-start gap-3 border px-4 py-3 text-sm">
+        <div
+          role="note"
+          className="border-destructive/40 text-destructive flex items-start gap-3 border px-4 py-3 text-sm"
+        >
           <SearchCheck className="mt-0.5 size-4 shrink-0" aria-hidden />
           <p className="min-w-0 flex-1 text-pretty">
             Este comprobante necesita una revisión manual.{invoice.reviewNote ? ` ${invoice.reviewNote}` : ''}
@@ -228,7 +243,10 @@ export function InvoiceDetail({
       )}
 
       {/* ── Documento ── */}
-      <article aria-labelledby="invoice-document-title" className="@container/doc flex flex-col gap-6 border p-4 sm:p-6">
+      <article
+        aria-labelledby="invoice-document-title"
+        className="@container/doc flex flex-col gap-6 border p-4 sm:p-6"
+      >
         <h2 id="invoice-document-title" className="sr-only">
           Datos del comprobante
         </h2>
@@ -336,7 +354,9 @@ export function InvoiceDetail({
                   <tr key={line.id} className="align-top">
                     <td className="py-2 pe-3 text-pretty break-words">{line.description}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{formatDecimalText(line.quantity, 0)}</td>
-                    {prices && <td className="px-3 py-2 text-right tabular-nums">{formatDecimalText(line.unitPrice, 2)}</td>}
+                    {prices && (
+                      <td className="px-3 py-2 text-right tabular-nums">{formatDecimalText(line.unitPrice, 2)}</td>
+                    )}
                     {showVat && (
                       <td className="px-3 py-2 text-right tabular-nums">
                         {line.vatRateId !== null && isVatRateId(line.vatRateId) ? VAT_RATE_LABELS[line.vatRateId] : '—'}
@@ -408,7 +428,10 @@ export function InvoiceDetail({
       {invoice.associatedInvoice && (
         <p className="text-sm">
           Asociada a{' '}
-          <Link href={invoiceHref(invoice.associatedInvoice.id)} className="font-medium tabular-nums underline underline-offset-4">
+          <Link
+            href={invoiceHref(invoice.associatedInvoice.id)}
+            className="font-medium tabular-nums underline underline-offset-4"
+          >
             {invoice.associatedInvoice.label}
           </Link>
           .

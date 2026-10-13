@@ -1,116 +1,117 @@
 'use client';
+
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { resetPasswordAction } from '@/features/Auth/actions/auth-actions';
 import { recoveryPassSchema } from '@/shared/schemas/schemas';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import { CircleAlert, Loader2, MailCheck } from 'lucide-react';
+import Link from 'next/link';
+import { useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
-import { toast } from 'sonner';
-import { z } from 'zod';
+import type { z } from 'zod';
 
-export const RecoveryPasswordForm = () => {
-  const [showLoader, setShowLoader] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
+type RecoveryValues = z.infer<typeof recoveryPassSchema>;
 
-  const form = useForm<z.infer<typeof recoveryPassSchema>>({
+/**
+ * Pedido de recuperación de contraseña. La respuesta es la misma exista o no la cuenta (no
+ * revela qué correos están dados de alta), y se muestra en pantalla, no en un toast.
+ */
+export function RecoveryPasswordForm() {
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const form = useForm<RecoveryValues>({
     resolver: zodResolver(recoveryPassSchema),
-    defaultValues: {
-      email: '',
-    },
+    defaultValues: { email: '' },
   });
 
-  const onSubmit = async (values: z.infer<typeof recoveryPassSchema>) => {
-    setShowLoader(true);
-
-    toast.promise(resetPasswordAction(values.email), {
-      loading: 'Enviando enlace de recuperación...',
-      success: (result) => {
-        if (result.success) {
-          setEmailSent(true);
-          return 'Si existe una cuenta con ese email, recibirás un correo con instrucciones seguras para restablecer tu contraseña.';
-        } else {
-          throw new Error(result.error);
-        }
-      },
-      error: (error) => {
-        return error.message || 'Error al enviar el email de recuperación';
-      },
-      finally: () => {
-        setShowLoader(false);
-      },
+  const onSubmit = (values: RecoveryValues) => {
+    startTransition(async () => {
+      const result = await resetPasswordAction(values.email);
+      if (result.success) {
+        setSentTo(values.email);
+        return;
+      }
+      form.setError('root', { message: result.error });
     });
   };
 
-  if (emailSent) {
+  if (sentTo) {
     return (
-      <div className="text-center p-6 bg-green-50 border border-green-200 rounded-lg">
-        <div className="text-green-600 font-medium text-lg mb-2">✓ Solicitud enviada exitosamente</div>
-        <p className="text-green-700 mb-4">
-          Hemos enviado un enlace seguro a <strong>{form.getValues('email')}</strong>. Revisa tu bandeja de entrada y
-          sigue las instrucciones para restablecer tu contraseña.
-        </p>
-        <p className="text-gray-600 text-sm">
-          ¿No recibiste el email?{' '}
-          <button
-            type="button"
-            onClick={() => setEmailSent(false)}
-            className="text-blue-600 hover:text-blue-800 font-medium"
-          >
-            Reenviar
-          </button>
-        </p>
+      <div className="space-y-6">
+        <Alert variant="success" role="status">
+          <MailCheck />
+          <AlertTitle>Enlace enviado</AlertTitle>
+          <AlertDescription>
+            Si <span className="font-mono">{sentTo}</span> tiene una cuenta, en unos minutos recibís un correo con el
+            enlace. Revisá también la carpeta de spam.
+          </AlertDescription>
+        </Alert>
+        <Button type="button" variant="outline" size="lg" className="w-full" onClick={() => setSentTo(null)}>
+          Volver a enviar
+        </Button>
+        <BackToLogin />
       </div>
     );
   }
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+      <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-5">
+        {form.formState.errors.root?.message && (
+          <Alert variant="destructive">
+            <CircleAlert />
+            <AlertTitle className="line-clamp-none">{form.formState.errors.root.message}</AlertTitle>
+          </Alert>
+        )}
+
         <FormField
           control={form.control}
           name="email"
           render={({ field }) => (
-            <FormItem className="flex flex-col gap-2">
-              <FormLabel className="text-lg">Email</FormLabel>
+            <FormItem>
+              <FormLabel>Correo electrónico</FormLabel>
               <FormControl>
                 <Input
-                  className="text-lg"
-                  placeholder="email@hotmail.com"
-                  type="email"
-                  autoComplete="email"
                   {...field}
+                  type="email"
+                  inputMode="email"
+                  autoComplete="username"
+                  placeholder="nombre@empresa.com"
+                  autoFocus
                 />
               </FormControl>
-              <FormDescription className="text-lg">
-                Ingresa tu email para recibir un enlace seguro y recuperar tu contraseña.
-              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
         />
-        <Button type="submit" disabled={showLoader} className="w-full">
-          {showLoader ? (
+
+        <Button type="submit" size="lg" className="w-full" disabled={isPending} aria-busy={isPending}>
+          {isPending ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Enviando...
+              <Loader2 className="animate-spin motion-reduce:animate-none" />
+              Enviando…
             </>
           ) : (
-            'Enviar enlace de recuperación'
+            'Enviar enlace'
           )}
         </Button>
 
-        <div className="text-center text-sm text-gray-600">
-          <p>
-            ¿Recordaste tu contraseña?{' '}
-            <a href="/login" className="text-blue-600 hover:text-blue-800 font-medium">
-              Iniciar sesión
-            </a>
-          </p>
-        </div>
+        <BackToLogin />
       </form>
     </Form>
   );
-};
+}
+
+function BackToLogin() {
+  return (
+    <p className="text-muted-foreground border-t pt-5 text-sm">
+      <Link href="/login" className="text-brand-ink font-medium hover:underline">
+        ← Volver a ingresar
+      </Link>
+    </p>
+  );
+}

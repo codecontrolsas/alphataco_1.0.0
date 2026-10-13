@@ -1,9 +1,9 @@
 'use client';
 
-import { BRAND_NAME } from '@/shared/lib/branding';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMaintenanceLayout } from '@/features/Mantenimiento/shared/components/maintenance-layout-provider';
+import { BRAND_NAME } from '@/shared/lib/branding';
 import { ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEmployeeDataMaintenance } from './use-employee-data-maintenance';
@@ -71,7 +71,7 @@ export function MaintenanceHeader({
             </Button>
           )}
           <div className="flex items-center gap-2 min-w-0 flex-1">
-            <span className="text-brand text-base font-bold tracking-tight lowercase shrink-0">{BRAND_NAME}</span>
+            <span className="text-brand-ink text-base font-bold tracking-tight lowercase shrink-0">{BRAND_NAME}</span>
             {title && <h1 className="text-lg font-semibold text-foreground truncate min-w-0">{title}</h1>}
           </div>
         </div>

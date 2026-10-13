@@ -1,8 +1,8 @@
 'use client';
 
-import { BRAND_NAME } from '@/shared/lib/branding';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader } from '@/components/ui/card';
+import { BRAND_NAME } from '@/shared/lib/branding';
 import { ArrowRight, CheckCircle, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
@@ -24,7 +24,7 @@ export default function ThanksPage() {
       <Card className="w-full max-w-md space-y-6 rounded-xl border shadow-lg">
         <CardHeader className="space-y-4 text-center">
           <div className="flex items-center justify-center">
-            <span className="text-brand text-2xl font-bold tracking-tight lowercase mb-2">{BRAND_NAME}</span>
+            <span className="text-brand-ink text-2xl font-bold tracking-tight lowercase mb-2">{BRAND_NAME}</span>
           </div>
           <div className="space-y-2">
             <CardDescription className="text-base text-muted-foreground">Sistema de Mantenimiento</CardDescription>

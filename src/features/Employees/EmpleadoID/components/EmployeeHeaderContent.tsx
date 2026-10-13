@@ -1,8 +1,11 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { CardContent } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { FileText, Mail } from 'lucide-react';
+import {
+  employeeStatusBadges,
+  employeeStatusLabels,
+  getEnumLabel,
+  reasonForTerminationLabels,
+} from '@/shared/utils/mappers';
 import moment from 'moment';
 import type { EmployeeDetailData } from '../actions.server';
 
@@ -10,77 +13,45 @@ interface EmployeeHeaderContentProps {
   employee: NonNullable<EmployeeDetailData>;
 }
 
+/**
+ * Identidad del empleado en la cabecera del legajo: foto, nombre, puesto, identificadores en
+ * mono y estados. Sin tarjeta propia: la envuelve `EmployeeHeaderShell`, que le suma las acciones.
+ */
 export function EmployeeHeaderContent({ employee }: EmployeeHeaderContentProps) {
   const fullName = `${employee.lastname} ${employee.firstname}`;
-  const initials = `${employee.lastname?.[0] || ''}${employee.firstname?.[0] || ''}`;
+  const initials = `${employee.lastname?.[0] ?? ''}${employee.firstname?.[0] ?? ''}`;
+  const role = [employee.company_positions?.name, employee.hierarchy?.name].filter(Boolean).join(' · ');
 
   return (
-    <div>
-      <CardContent className="p-6">
-        <div className="flex items-start gap-6">
-          {/* Foto de perfil */}
-          <div className="flex-shrink-0">
-            <Avatar className="h-24 w-24">
-              <AvatarImage src={employee.picture || undefined} alt={fullName} />
-              <AvatarFallback className="text-lg font-semibold">{initials}</AvatarFallback>
-            </Avatar>
-          </div>
+    <div className="flex min-w-0 items-center gap-5">
+      <Avatar className="size-16 shrink-0">
+        <AvatarImage src={employee.picture || undefined} alt={fullName} />
+        <AvatarFallback className="bg-foreground text-background text-lg font-semibold">{initials}</AvatarFallback>
+      </Avatar>
 
-          {/* Información del empleado */}
-          <div className="flex-1 space-y-3">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">{fullName}</h1>
-              <p className="text-muted-foreground">{employee.company_positions?.name || 'Sin posición asignada'}</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="flex items-center gap-2">
-                <Mail className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">{employee.email || 'Sin email'}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">DNI: {employee.document_number || '-'}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge
-                  variant={employee.is_active ? 'default' : 'secondary'}
-                  className={employee.is_active ? 'bg-green-100 text-green-800' : ''}
-                >
-                  {employee.is_active ? 'Activo' : 'Inactivo'}
-                </Badge>
-              </div>
-            </div>
-
-            {employee.hierarchy?.name && (
-              <div className="text-sm text-muted-foreground">
-                <strong>Posición Jerárquica:</strong> {employee.hierarchy.name}
-              </div>
-            )}
-          </div>
+      <div className="min-w-0 space-y-1.5">
+        <h1 className="truncate text-2xl font-semibold tracking-tight">{fullName}</h1>
+        <p className="text-muted-foreground truncate">{role || 'Sin puesto asignado'}</p>
+        <p className="text-muted-foreground flex flex-wrap gap-x-4 font-mono text-sm tabular-nums">
+          <span>Legajo {employee.file ?? '-'}</span>
+          <span>DNI {employee.document_number ?? '-'}</span>
+        </p>
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <Badge variant={employee.is_active ? 'success' : 'secondary'}>{employee.is_active ? 'Activo' : 'Baja'}</Badge>
+          {employee.status && (
+            <Badge variant={employeeStatusBadges[employee.status] ?? 'default'}>
+              {getEnumLabel(employee.status, employeeStatusLabels)}
+            </Badge>
+          )}
+          {!employee.is_active && employee.termination_date && (
+            <span className="text-danger-subtle-foreground text-sm">
+              Baja el <span className="font-mono">{moment.utc(employee.termination_date).format('DD/MM/YYYY')}</span>
+              {employee.reason_for_termination &&
+                ` · ${getEnumLabel(employee.reason_for_termination, reasonForTerminationLabels)}`}
+            </span>
+          )}
         </div>
-
-        {/* Sección de baja (solo si el empleado está inactivo) */}
-        {!employee.is_active && (
-          <div className="mt-4 pt-4">
-            <div className="grid grid-cols-2 gap-4">
-              {employee.termination_date && (
-                <div className="flex gap-2 text-red-400">
-                  <p className="font-medium">Fecha de Baja:</p>
-                  <p className="font-medium">{moment(employee.termination_date).format('DD/MM/YYYY')}</p>
-                </div>
-              )}
-              {employee.reason_for_termination && (
-                <div className="flex gap-2 text-red-400">
-                  <p className="font-medium">Razón de Baja:</p>
-                  <p className="font-medium">{employee.reason_for_termination}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </CardContent>
-      <Separator className="my-2 mt-0" />
+      </div>
     </div>
   );
 }

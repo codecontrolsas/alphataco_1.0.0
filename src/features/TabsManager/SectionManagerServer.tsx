@@ -59,7 +59,7 @@ export async function SectionManagerServer<M extends ModuleSlug = ModuleSlug>({
     <div className="flex h-full flex-col gap-4">
       {(!activeTab.hideTitle || actions) && (
         <div className="flex items-center justify-between gap-4">
-          {!activeTab.hideTitle && <h1 className="text-lg font-semibold tracking-tight">{activeTab.label}</h1>}
+          {!activeTab.hideTitle && <h1 className="text-2xl font-semibold tracking-tight">{activeTab.label}</h1>}
           {actions && <div className="flex items-center gap-2">{actions}</div>}
         </div>
       )}

@@ -1,24 +1,24 @@
 import 'server-only';
 
-import { prismaAdapter } from 'better-auth/adapters/prisma';
-import { betterAuth } from 'better-auth';
-import { nextCookies } from 'better-auth/next-js';
-import { anonymous } from 'better-auth/plugins/anonymous';
-import { randomUUID } from 'node:crypto';
-import { prisma } from '@/shared/lib/prisma';
 import { Logger } from '@/lib/logger';
-import { APIError, createAuthMiddleware, getIP } from 'better-auth/api';
-import { sendPasswordResetEmail } from '@/shared/lib/mail';
 import {
-  clearAttempts,
-  consumeAttempt,
   LOGIN_BY_EMAIL,
   LOGIN_BY_IP,
   RESET_BY_EMAIL,
   RESET_BY_IP,
+  clearAttempts,
+  consumeAttempt,
   type RateLimitRule,
 } from '@/shared/lib/login-rate-limit';
+import { sendPasswordResetEmail } from '@/shared/lib/mail';
+import { prisma } from '@/shared/lib/prisma';
 import { resolveDefaultCompanyId } from '@/shared/lib/session-claims';
+import { betterAuth } from 'better-auth';
+import { prismaAdapter } from 'better-auth/adapters/prisma';
+import { APIError, createAuthMiddleware, getIP } from 'better-auth/api';
+import { nextCookies } from 'better-auth/next-js';
+import { anonymous } from 'better-auth/plugins/anonymous';
+import { randomUUID } from 'node:crypto';
 
 /**
  * Instancia de Better Auth. Es el reemplazo de Supabase Auth (P4) y el ÚNICO lugar donde se
@@ -70,6 +70,13 @@ const googleClientSecret = requiredEnv('GOOGLE_CLIENT_SECRET');
 
 /** `true` si el login con Google está configurado (lo mira la UI para mostrar el botón). */
 export const isGoogleLoginEnabled = Boolean(googleClientId && googleClientSecret);
+
+/**
+ * El botón de Google es opcional por instancia: aparece sólo si el proveedor está configurado Y
+ * la instancia lo pidió (`AUTH_SHOW_GOOGLE_BUTTON=true`). En un entorno empresarial se entra con
+ * el correo de la empresa; tener credenciales de Google no implica querer el botón.
+ */
+export const showGoogleLoginButton = isGoogleLoginEnabled && process.env.AUTH_SHOW_GOOGLE_BUTTON === 'true';
 
 /** Endpoints con tope de intentos, y con qué presupuesto. */
 const RATE_LIMITED_PATHS: Record<string, { byEmail: RateLimitRule; byIp: RateLimitRule }> = {

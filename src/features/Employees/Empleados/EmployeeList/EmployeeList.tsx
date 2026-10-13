@@ -2,8 +2,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { Suspense } from 'react';
 import { getEmployeesPaginated } from './actions.server';
+import { EmployeeMetricsSection } from './components/EmployeeMetricsSection';
 import _EmployeeDataTable from './components/_EmployeeDataTable';
+import { EmployeeMetricsSkeleton } from './fallback/EmployeeMetricsSkeleton';
 
 // ============================================================================
 // TYPES
@@ -32,19 +35,28 @@ export default async function EmployeeList({ searchParams, isActive, permissions
   ]);
 
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <_EmployeeDataTable
-          data={data}
-          totalRows={total}
-          searchParams={tableParams}
-          isActive={isActive}
-          tableId={tableId}
-          permissionsMap={permissions}
-          initialColumnVisibility={preferences.columnVisibility ?? {}}
-          initialFilterVisibility={preferences.filterVisibility ?? {}}
-        />
-      </CardContent>
-    </Card>
+    <div className="space-y-6">
+      {/* Las tarjetas resumen sólo existen para los activos y llegan por su propio Suspense. */}
+      {isActive && (
+        <Suspense fallback={<EmployeeMetricsSkeleton />}>
+          <EmployeeMetricsSection tableId={tableId} />
+        </Suspense>
+      )}
+
+      <Card>
+        <CardContent className="pt-6">
+          <_EmployeeDataTable
+            data={data}
+            totalRows={total}
+            searchParams={tableParams}
+            isActive={isActive}
+            tableId={tableId}
+            permissionsMap={permissions}
+            initialColumnVisibility={preferences.columnVisibility ?? {}}
+            initialFilterVisibility={preferences.filterVisibility ?? {}}
+          />
+        </CardContent>
+      </Card>
+    </div>
   );
 }

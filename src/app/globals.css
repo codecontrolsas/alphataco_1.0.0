@@ -36,20 +36,46 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  /* `max(0px, ...)`: con --radius: 0 el calc daria negativo, que es un border-radius
-     invalido y el navegador descarta la declaracion entera. Clamp explicito. */
-  --radius-sm: max(0px, calc(var(--radius) - 4px));
-  --radius-md: max(0px, calc(var(--radius) - 2px));
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
 
+  /* Tipografia: sans para la interfaz, mono para todo identificador (legajo, CUIL, fechas, importes). */
+  --font-sans: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+
   /* Colores de marca. `brand` es el color de accion principal de la plataforma y
-     sigue al theme: cambiar `--primary` mas abajo lo cambia en toda la app. */
+     sigue al theme: cambiar `--primary` mas abajo lo cambia en toda la app.
+     `brand-ink` es su version legible como TEXTO sobre fondo claro (contraste >= 4.5:1). */
   --color-brand: var(--primary);
   --color-brand-foreground: var(--primary-foreground);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-subtle: var(--brand-subtle);
+  --color-brand-subtle-foreground: var(--brand-subtle-foreground);
+
+  /* Estado semantico (solido + fondo suave + texto sobre el suave). Nunca decorativo. */
+  --color-ok: var(--status-ok);
+  --color-ok-subtle: var(--status-ok-subtle);
+  --color-ok-subtle-foreground: var(--status-ok-subtle-foreground);
+  --color-warn: var(--status-warn);
+  --color-warn-subtle: var(--status-warn-subtle);
+  --color-warn-subtle-foreground: var(--status-warn-subtle-foreground);
+  --color-danger: var(--status-danger);
+  --color-danger-subtle: var(--status-danger-subtle);
+  --color-danger-subtle-foreground: var(--status-danger-subtle-foreground);
+  --color-pending: var(--status-pending);
+  --color-pending-subtle: var(--status-pending-subtle);
+  --color-pending-subtle-foreground: var(--status-pending-subtle-foreground);
+  --color-info: var(--status-info);
+  --color-info-subtle: var(--status-info-subtle);
+  --color-info-subtle-foreground: var(--status-info-subtle-foreground);
+
+  --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-active-foreground: var(--sidebar-active-foreground);
   --color-surface: var(--card);
   --color-surface-foreground: var(--card-foreground);
   --color-surface-muted: var(--muted);
@@ -64,75 +90,127 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.148 0.004 228.8);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.148 0.004 228.8);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.148 0.004 228.8);
-  --primary: oklch(0.508 0.118 165.612);
-  --primary-foreground: oklch(0.979 0.021 166.113);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.963 0.002 197.1);
-  --muted-foreground: oklch(0.56 0.021 213.5);
-  --accent: oklch(0.963 0.002 197.1);
-  --accent-foreground: oklch(0.218 0.008 223.9);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.925 0.005 214.3);
-  --input: oklch(0.925 0.005 214.3);
-  --ring: oklch(0.723 0.014 214.4);
-  --chart-1: oklch(0.845 0.143 164.978);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.596 0.145 163.225);
-  --chart-4: oklch(0.508 0.118 165.612);
-  --chart-5: oklch(0.432 0.095 166.913);
-  --radius: 0;
-  --sidebar: oklch(0.987 0.002 197.1);
-  --sidebar-foreground: oklch(0.148 0.004 228.8);
-  --sidebar-primary: oklch(0.596 0.145 163.225);
-  --sidebar-primary-foreground: oklch(0.979 0.021 166.113);
-  --sidebar-accent: oklch(0.963 0.002 197.1);
-  --sidebar-accent-foreground: oklch(0.218 0.008 223.9);
-  --sidebar-border: oklch(0.925 0.005 214.3);
-  --sidebar-ring: oklch(0.723 0.014 214.4);
-  /* No viene en el theme, pero `--color-destructive-foreground` esta mapeado y en uso. */
-  --destructive-foreground: oklch(0.985 0 0);
+  /* Superficies y texto: neutros con tinte frio. */
+  --background: #f5f7fa;
+  --foreground: #161c24;
+  --card: #ffffff;
+  --card-foreground: #161c24;
+  --popover: #ffffff;
+  --popover-foreground: #161c24;
+
+  /* Accion principal = azul de marca (landing). Texto oscuro encima: 5,4:1. */
+  --primary: #3597c7;
+  --primary-foreground: #13202b;
+  --brand-ink: #1f6c94;
+  --brand-subtle: #e6f2f9;
+  --brand-subtle-foreground: #1f5d7a;
+
+  --secondary: #eef1f6;
+  --secondary-foreground: #2b3441;
+  --muted: #eef1f6;
+  --muted-foreground: #566170;
+  --accent: #f0f4f9;
+  --accent-foreground: #161c24;
+  --destructive: #c7303a;
+  --destructive-foreground: #ffffff;
+  --border: #e0e5ec;
+  --input: #c9d1db;
+  --ring: #3597c7;
+
+  --status-ok: #2d8949;
+  --status-ok-subtle: #e5f5e9;
+  --status-ok-subtle-foreground: #1d5f32;
+  --status-warn: #e0a21b;
+  --status-warn-subtle: #fcf1d3;
+  --status-warn-subtle-foreground: #7a5410;
+  --status-danger: #c7303a;
+  --status-danger-subtle: #fdeceb;
+  --status-danger-subtle-foreground: #a1222b;
+  --status-pending: #8a95a5;
+  --status-pending-subtle: #eceef3;
+  --status-pending-subtle-foreground: #4a5565;
+  --status-info: #1b9cb5;
+  --status-info-subtle: #def3f8;
+  --status-info-subtle-foreground: #145a6b;
+
+  /* Graficos: escala de la marca. */
+  --chart-1: #9fd0e8;
+  --chart-2: #6bb7da;
+  --chart-3: #3597c7;
+  --chart-4: #247aa6;
+  --chart-5: #1b5d80;
+  --radius: 0.5rem;
+
+  --sidebar: #ffffff;
+  --sidebar-foreground: #334155;
+  --sidebar-primary: #3597c7;
+  --sidebar-primary-foreground: #13202b;
+  --sidebar-accent: #f0f4f9;
+  --sidebar-accent-foreground: #161c24;
+  --sidebar-active: #e1eff8;
+  --sidebar-active-foreground: #1f5d7a;
+  --sidebar-border: #e0e5ec;
+  --sidebar-ring: #3597c7;
 }
 
 .dark {
-  --background: oklch(0.148 0.004 228.8);
-  --foreground: oklch(0.987 0.002 197.1);
-  --card: oklch(0.218 0.008 223.9);
-  --card-foreground: oklch(0.987 0.002 197.1);
-  --popover: oklch(0.218 0.008 223.9);
-  --popover-foreground: oklch(0.987 0.002 197.1);
-  --primary: oklch(0.432 0.095 166.913);
-  --primary-foreground: oklch(0.979 0.021 166.113);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.275 0.011 216.9);
-  --muted-foreground: oklch(0.723 0.014 214.4);
-  --accent: oklch(0.275 0.011 216.9);
-  --accent-foreground: oklch(0.987 0.002 197.1);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.56 0.021 213.5);
-  --chart-1: oklch(0.845 0.143 164.978);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.596 0.145 163.225);
-  --chart-4: oklch(0.508 0.118 165.612);
-  --chart-5: oklch(0.432 0.095 166.913);
-  --sidebar: oklch(0.218 0.008 223.9);
-  --sidebar-foreground: oklch(0.987 0.002 197.1);
-  --sidebar-primary: oklch(0.696 0.17 162.48);
-  --sidebar-primary-foreground: oklch(0.262 0.051 172.552);
-  --sidebar-accent: oklch(0.275 0.011 216.9);
-  --sidebar-accent-foreground: oklch(0.987 0.002 197.1);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.56 0.021 213.5);
-  --destructive-foreground: oklch(0.985 0 0);
+  --background: #12171d;
+  --foreground: #eef1f6;
+  --card: #1a212a;
+  --card-foreground: #eef1f6;
+  --popover: #1a212a;
+  --popover-foreground: #eef1f6;
+
+  --primary: #3597c7;
+  --primary-foreground: #0d1a24;
+  --brand-ink: #66b6db;
+  --brand-subtle: #16303f;
+  --brand-subtle-foreground: #8fd0ef;
+
+  --secondary: #232b36;
+  --secondary-foreground: #eef1f6;
+  --muted: #232b36;
+  --muted-foreground: #a4afbd;
+  --accent: #232b36;
+  --accent-foreground: #eef1f6;
+  --destructive: #e5636b;
+  --destructive-foreground: #1a0a0c;
+  --border: rgb(255 255 255 / 10%);
+  --input: rgb(255 255 255 / 18%);
+  --ring: #66b6db;
+
+  --status-ok: #4fb36d;
+  --status-ok-subtle: #173324;
+  --status-ok-subtle-foreground: #86d4a0;
+  --status-warn: #e0a21b;
+  --status-warn-subtle: #3a2f12;
+  --status-warn-subtle-foreground: #f0cd75;
+  --status-danger: #e5636b;
+  --status-danger-subtle: #3c1a1d;
+  --status-danger-subtle-foreground: #ff9aa0;
+  --status-pending: #8a95a5;
+  --status-pending-subtle: #262d38;
+  --status-pending-subtle-foreground: #b3bdca;
+  --status-info: #3bb5cc;
+  --status-info-subtle: #12333b;
+  --status-info-subtle-foreground: #7fd3e6;
+
+  --chart-1: #9fd0e8;
+  --chart-2: #6bb7da;
+  --chart-3: #3597c7;
+  --chart-4: #247aa6;
+  --chart-5: #1b5d80;
+
+  --sidebar: #151b22;
+  --sidebar-foreground: #dbe2ec;
+  --sidebar-primary: #3597c7;
+  --sidebar-primary-foreground: #0d1a24;
+  --sidebar-accent: #232b36;
+  --sidebar-accent-foreground: #eef1f6;
+  --sidebar-active: #1c3342;
+  --sidebar-active-foreground: #8fd0ef;
+  --sidebar-border: rgb(255 255 255 / 10%);
+  --sidebar-ring: #66b6db;
 }
 
 @layer base {
@@ -140,7 +218,7 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-muted/90;
+    @apply bg-background text-foreground font-sans antialiased;
   }
 }
 
@@ -148,56 +226,8 @@ html {
   scroll-behavior: smooth;
 }
 
-details[open] summary ~ * {
-  animation: sweep 0.5s ease-in-out;
-}
-
-@keyframes sweep {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-summary::after {
-  content: '';
-  width: 18px;
-  height: 10px;
-  background: url('https://uploads.sitepoint.com/wp-content/uploads/2023/10/1697699669arrow.svg') no-repeat;
-  background-size: cover;
-  transition: 0.2s;
-}
-
-details[open] > summary::after {
-  transform: rotate(180deg);
-}
-
-summary::-webkit-details-marker {
-  display: none;
-}
-
 @layer components {
   input[type='checkbox']:checked ~ label span svg {
     @apply inline-flex;
-  }
-
-  .sticky .header-logo {
-    @apply py-5 lg:py-2;
-  }
-
-  .sticky .menu-scroll.active {
-    @apply opacity-70;
-  }
-
-  input#togglePlan:checked ~ .dot {
-    @apply translate-x-full;
-  }
-
-  input#checkboxLabel:checked ~ .box span {
-    @apply opacity-100;
   }
 }

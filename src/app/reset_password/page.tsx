@@ -1,27 +1,16 @@
+import { AuthShell } from '@/features/Auth/components/AuthShell';
 import { RecoveryPasswordForm } from '@/features/Auth/components/RecoveryPasswordForm';
 
-import { CardTitle } from '@/components/ui/card';
-import RenderBanner from '@/features/Auth/components/RenderBanner';
-import Link from 'next/link';
-import { BRAND_NAME } from '@/shared/lib/branding';
+export const metadata = { title: 'Recuperar acceso' };
 
-export default function PasswordRecovery() {
+export default function PasswordRecoveryPage() {
   return (
-    <section className="min-h-screen overflow-hidden bg-white dark:bg-transparent">
-      <div className="container relative flex-col grid-cols-1 justify-center md:grid lg:max-w-none lg:grid-cols-2 lg:px-0  md:px-2 p-0">
-        <RenderBanner />
-        <div className="lg:p-8 relative z-50   md:p-8 pt-7 p-0 flex flex-col justify-center items-center w-full">
-          <Link className="relative z-20 lg:hidden items-center font-bold text-2xl flex" href="/">
-            <span className="text-brand lowercase">{BRAND_NAME}</span>
-          </Link>
-          <div className="w-full overflow-y-auto ">
-            <CardTitle className="text-3xl font-semibold tracking-tight lg:text-left text-center mb-5 text-balance">
-              ¿Olvidaste tu contraseña? No te preocupes, te ayudaremos a restablecerla.
-            </CardTitle>
-            <RecoveryPasswordForm />
-          </div>
-        </div>
-      </div>
-    </section>
+    <AuthShell
+      kicker="Recuperar acceso"
+      title="Restablecé tu contraseña"
+      description="Te enviamos un enlace por correo para elegir una nueva."
+    >
+      <RecoveryPasswordForm />
+    </AuthShell>
   );
 }

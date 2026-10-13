@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { LoadingSwap } from '@/components/ui/loading-swap';
-import { ChevronDown, CheckCircle2, XCircle } from 'lucide-react';
+import { CheckCircle2, ChevronDown, XCircle } from 'lucide-react';
 import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
@@ -79,7 +79,7 @@ export function ConnectionTestStep({
             {result.checks.map((check) => (
               <li key={check.key} className="flex items-start gap-2 text-sm">
                 {check.ok ? (
-                  <CheckCircle2 className="text-brand mt-0.5 size-4 shrink-0" aria-hidden />
+                  <CheckCircle2 className="text-brand-ink mt-0.5 size-4 shrink-0" aria-hidden />
                 ) : (
                   <XCircle className="text-destructive mt-0.5 size-4 shrink-0" aria-hidden />
                 )}
@@ -111,7 +111,11 @@ function TechnicalDetail({ technical }: { technical: string }) {
         <pre className="bg-muted max-w-full overflow-x-auto p-3 font-mono text-xs break-all whitespace-pre-wrap">
           {technical}
         </pre>
-        <CopyTextButton value={technical} label="Copiar respuesta" successMessage="Respuesta copiada al portapapeles." />
+        <CopyTextButton
+          value={technical}
+          label="Copiar respuesta"
+          successMessage="Respuesta copiada al portapapeles."
+        />
       </CollapsibleContent>
     </Collapsible>
   );

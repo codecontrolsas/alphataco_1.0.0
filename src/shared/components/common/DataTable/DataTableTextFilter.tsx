@@ -88,7 +88,7 @@ export function DataTableTextFilter({ columnId, title, placeholder, paramNamespa
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className={cn('h-8 border-dashed gap-1.5', hasValue && 'border-solid')}>
+        <Button variant="outline" size="sm" className={cn('h-9 border-dashed gap-1.5', hasValue && 'border-solid')}>
           <Search className="h-3.5 w-3.5" />
           {title}
           {hasValue && (
@@ -110,10 +110,10 @@ export function DataTableTextFilter({ columnId, title, placeholder, paramNamespa
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              className="h-8 text-sm"
+              className="h-9 text-sm"
               autoFocus
             />
-            <Button size="sm" className="h-8 shrink-0" onClick={() => applyFilter(inputValue)}>
+            <Button size="sm" className="h-9 shrink-0" onClick={() => applyFilter(inputValue)}>
               Aplicar
             </Button>
           </div>

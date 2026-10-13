@@ -5,7 +5,7 @@ import { EmployeeTableSkeleton } from '@/features/Employees/Empleados/EmployeeLi
 import { getCompanyName } from '@/features/Empresa/General/actions/company.server';
 import { getUserPermissionsMapServer } from '@/features/Permissions';
 import { SectionManagerServer, TabsManagerServer } from '@/features/TabsManager';
-import { GitBranch, UserCheck, Users, UserX } from 'lucide-react';
+import { GitBranch, UserCheck, UserX, Users } from 'lucide-react';
 import { cookies } from 'next/headers';
 import { Suspense } from 'react';
 
@@ -65,7 +65,7 @@ export default async function EmployeePage({
                   label: (
                     <span className="flex items-center gap-2">
                       <UserCheck className="h-4 w-4" />
-                      Empleados Activos
+                      Activos
                     </span>
                   ),
                   moduleSlug: 'empleados',
@@ -81,7 +81,7 @@ export default async function EmployeePage({
                   label: (
                     <span className="flex items-center gap-2">
                       <UserX className="h-4 w-4" />
-                      Empleados Inactivos
+                      Bajas
                     </span>
                   ),
                   moduleSlug: 'empleados',

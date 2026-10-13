@@ -1,10 +1,12 @@
-import { LoginForm } from '@/features/OperatorPanel/components/LoginForm';
+import { AuthShell } from '@/features/Auth/components/AuthShell';
+import { CredentialsLoginForm } from '@/features/Auth/components/CredentialsLoginForm';
+import { operatorLogin } from '@/features/OperatorPanel/actions/session.server';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';
 import { redirect } from 'next/navigation';
 
 export const metadata = {
-  title: 'Iniciar Sesion - Panel de Operario',
+  title: 'Panel de operario',
 };
 
 export default async function OperatorLoginPage() {
@@ -32,10 +34,16 @@ export default async function OperatorLoginPage() {
   }
 
   return (
-    <div className="bg-muted flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">
-      <div className="w-full max-w-sm">
-        <LoginForm />
-      </div>
-    </div>
+    <AuthShell
+      kicker="Panel de operario"
+      title="Ingresá al panel de taller"
+      description="Acceso exclusivo para operarios de taller."
+    >
+      <CredentialsLoginForm
+        action={operatorLogin}
+        redirectTo="/operator/dashboard"
+        helpText="Si no tenés acceso, pedíselo al jefe de taller o a un administrador."
+      />
+    </AuthShell>
   );
 }

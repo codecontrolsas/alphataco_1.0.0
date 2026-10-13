@@ -1,5 +1,6 @@
 'use client';
 
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -26,7 +27,7 @@ import {
   nationalityLabels,
   reasonForTerminationLabels,
 } from '@/shared/utils/mappers';
-import type { ColumnDef } from '@tanstack/react-table';
+import type { Column, ColumnDef } from '@tanstack/react-table';
 import type { LucideIcon } from 'lucide-react';
 import {
   AlertTriangle,
@@ -57,11 +58,8 @@ import {
 } from 'lucide-react';
 import moment from 'moment';
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import type { EmployeeListItem } from './actions.server';
-
-// ============================================================================
-// HIDDEN COLUMNS BY DEFAULT
-// ============================================================================
 
 // ============================================================================
 // STATUS ICONS (exported for use in filters)
@@ -134,6 +132,7 @@ export const reasonForTerminationIcons: Record<string, LucideIcon> = {
 // ============================================================================
 
 export const HIDDEN_COLUMNS_BY_DEFAULT = [
+  'email', // se muestra bajo el nombre en la columna fullName
   'nationality',
   'born_date',
   'document_type',
@@ -161,6 +160,187 @@ export const HIDDEN_COLUMNS_BY_DEFAULT = [
   'created_at',
   'is_active',
 ];
+
+// ============================================================================
+// COLUMN HELPERS
+// ============================================================================
+
+type Col = ColumnDef<EmployeeListItem>;
+type EmployeeKey = keyof EmployeeListItem & string;
+
+const EMPTY = '-';
+
+const renderHeader =
+  (title: string) =>
+  ({ column }: { column: Column<EmployeeListItem, unknown> }) => (
+    <DataTableColumnHeader column={column} title={title} />
+  );
+
+/** filterFn para enums (null → "Sin asignar") */
+const enumFilterFn: Col['filterFn'] = (row, id, value: string[]) => {
+  const val = row.getValue(id) as string | null;
+  if (val == null) return value.includes(NULL_FILTER_VALUE);
+  return value.includes(val);
+};
+
+/** Columna de texto/numero simple (accessor directo al campo) */
+function textColumn(key: EmployeeKey, title: string, className?: string): Col {
+  return {
+    id: key,
+    accessorFn: (row) => row[key],
+    header: renderHeader(title),
+    cell: ({ row }) => {
+      const val = row.original[key];
+      return <div className={className}>{val == null ? EMPTY : String(val)}</div>;
+    },
+    meta: { title },
+  };
+}
+
+/** Columna de fecha: `format` recibe el valor no nulo y devuelve el texto a mostrar */
+function dateColumn<K extends EmployeeKey>(
+  key: K,
+  title: string,
+  format: (value: NonNullable<EmployeeListItem[K]>) => string
+): Col {
+  return {
+    id: key,
+    accessorFn: (row) => row[key],
+    header: renderHeader(title),
+    cell: ({ row }) => {
+      const val = row.original[key];
+      return (
+        <div className="font-mono tabular-nums">{val ? format(val as NonNullable<EmployeeListItem[K]>) : EMPTY}</div>
+      );
+    },
+    meta: { title },
+  };
+}
+
+type EnumColumnOptions = {
+  /** Icono por valor del enum */
+  icons?: Record<string, LucideIcon>;
+  /** Icono fijo para todos los valores (cuando no hay mapa por valor) */
+  fixedIcon?: LucideIcon;
+  /** Mostrar como Badge outline en vez de texto con icono */
+  badge?: boolean;
+};
+
+/** Columna de enum con label del mapper, icono opcional y filtro con NULL_FILTER_VALUE */
+function enumColumn(
+  key: EmployeeKey,
+  title: string,
+  labels: Record<string, string>,
+  { icons, fixedIcon, badge }: EnumColumnOptions = {}
+): Col {
+  return {
+    id: key,
+    accessorFn: (row) => row[key],
+    header: renderHeader(title),
+    cell: ({ row }) => {
+      const raw = row.original[key];
+      if (!raw) return <div>{EMPTY}</div>;
+      const val = String(raw);
+      const Icon = fixedIcon ?? icons?.[val];
+      const label = getEnumLabel(val, labels);
+      if (badge) {
+        return (
+          <Badge variant="outline" className="gap-1">
+            {Icon && <Icon className="h-3 w-3" />}
+            {label}
+          </Badge>
+        );
+      }
+      return (
+        <div className="inline-flex items-center gap-1.5">
+          {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground" />}
+          {label}
+        </div>
+      );
+    },
+    filterFn: enumFilterFn,
+    meta: { title },
+  };
+}
+
+/**
+ * Columna FK: muestra el nombre de la relacion y filtra por la key de la FK
+ * (id UUID, o id numerico convertido a string).
+ */
+function fkColumn(
+  id: string,
+  title: string,
+  getName: (row: EmployeeListItem) => string | null | undefined,
+  getKey: (row: EmployeeListItem) => string | null | undefined
+): Col {
+  return {
+    id,
+    accessorFn: (row) => getName(row) ?? '',
+    header: renderHeader(title),
+    cell: ({ row }) => <div>{getName(row.original) ?? EMPTY}</div>,
+    filterFn: (row, _id, value: string[]) => {
+      const key = getKey(row.original);
+      if (key == null) return value.includes(NULL_FILTER_VALUE);
+      return value.includes(key);
+    },
+    meta: { title },
+  };
+}
+
+/** Columna M:M: texto exportable = nombres unidos; filtra si algun id coincide */
+function manyColumn(
+  id: string,
+  title: string,
+  getItems: (row: EmployeeListItem) => Array<{ id: string; name: string }>,
+  renderCell: (items: Array<{ id: string; name: string }>) => ReactNode
+): Col {
+  return {
+    id,
+    accessorFn: (row) =>
+      getItems(row)
+        .map((i) => i.name)
+        .join(', '),
+    header: renderHeader(title),
+    cell: ({ row }) => renderCell(getItems(row.original)),
+    filterFn: (row, _id, value: string[]) => {
+      if (!value?.length) return true;
+      const items = getItems(row.original);
+      if (items.length === 0) return value.includes(NULL_FILTER_VALUE);
+      return items.some((i) => value.includes(i.id));
+    },
+    enableSorting: false,
+    meta: { title },
+  };
+}
+
+/** Badge con el primer nombre y "+N"; tooltip con la lista completa */
+function NamesBadge({ names }: { names: string[] }) {
+  return (
+    <TooltipProvider delayDuration={100}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="inline-flex">
+            <Badge variant="outline">
+              {names[0] ?? EMPTY}
+              {names.length > 1 && ` +${names.length - 1}`}
+            </Badge>
+          </div>
+        </TooltipTrigger>
+        {names.length > 1 && (
+          <TooltipContent className="rounded-lg bg-black p-2 text-white">
+            <div className="flex flex-col gap-1">
+              {names.map((name, index) => (
+                <span key={index}>{name}</span>
+              ))}
+            </div>
+          </TooltipContent>
+        )}
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+const formatUtcDate = (value: string | Date) => moment.utc(value).format('DD/MM/YYYY');
 
 // ============================================================================
 // COLUMNS
@@ -196,78 +376,71 @@ export function getColumns(permissions: Permissions, isActive: boolean): ColumnD
       meta: { excludeFromExport: true },
     },
 
-    // --- Full Name (visible) ---
+    // --- Full Name: avatar + nombre (link) + email debajo ---
     {
       id: 'fullName',
       accessorFn: (row) => `${row.lastname ?? ''} ${row.firstname ?? ''}`.trim(),
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre completo" />,
+      header: renderHeader('Nombre completo'),
       enableSorting: false,
       cell: ({ row }) => {
-        const pic = row.original.picture;
-        const fallback = (
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
-            <User className="h-4 w-4 text-muted-foreground" />
-          </div>
+        const { id, picture, lastname, firstname, email } = row.original;
+        const name = `${lastname ?? ''} ${firstname ?? ''}`.trim();
+        const initials = `${lastname?.[0] ?? ''}${firstname?.[0] ?? ''}`.toUpperCase();
+
+        const avatar = (
+          <Avatar>
+            {picture && <AvatarImage src={picture} alt="" />}
+            <AvatarFallback>{initials || <User className="h-4 w-4" />}</AvatarFallback>
+          </Avatar>
         );
 
         return (
-          <div className="inline-flex items-center gap-2">
-            {pic ? (
+          <div className="inline-flex items-center gap-3">
+            {picture ? (
               <Dialog>
                 <DialogTrigger asChild>
                   <button
                     type="button"
-                    className="shrink-0 cursor-pointer rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    aria-label={`Ver foto de ${name}`}
+                    className="shrink-0 cursor-pointer rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   >
-                    <img src={pic} alt="" className="h-7 w-7 rounded-full object-cover" />
+                    {avatar}
                   </button>
                 </DialogTrigger>
                 <DialogContent className="max-w-sm p-2">
-                  <img
-                    src={pic}
-                    alt={`${row.original.lastname} ${row.original.firstname}`}
-                    className="h-auto w-full rounded-lg"
-                  />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={picture} alt={name} className="h-auto w-full rounded-lg" />
                 </DialogContent>
               </Dialog>
             ) : (
-              fallback
+              avatar
             )}
-            <Link
-              href={`/dashboard/employee/action?action=view&employee_id=${row.original.id}`}
-              className="font-medium text-blue-600 hover:underline"
-            >
-              {row.original.lastname} {row.original.firstname}
-            </Link>
+            <div className="flex min-w-0 flex-col">
+              <Link
+                href={`/dashboard/employee/action?action=view&employee_id=${id}`}
+                className="font-semibold text-foreground hover:text-brand-ink hover:underline"
+              >
+                {lastname} {firstname}
+              </Link>
+              {email && <span className="text-sm text-muted-foreground">{email}</span>}
+            </div>
           </div>
         );
       },
       meta: { title: 'Nombre completo' },
     },
 
-    // --- Email (visible) ---
-    {
-      id: 'email',
-      accessorKey: 'email',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Email" />,
-      cell: ({ row }) => <div>{row.original.email ?? '-'}</div>,
-      meta: { title: 'Email' },
-    },
+    // --- Email (oculta por defecto: se ve bajo el nombre) ---
+    textColumn('email', 'Email'),
 
-    // --- File / Legajo (visible) ---
-    {
-      id: 'file',
-      accessorKey: 'file',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Legajo" />,
-      cell: ({ row }) => <div>{row.original.file ?? '-'}</div>,
-      meta: { title: 'Legajo' },
-    },
+    // --- Legajo (siempre visible y filtrable) ---
+    textColumn('file', 'Legajo', 'font-mono tabular-nums text-muted-foreground'),
 
-    // --- Status (visible) ---
+    // --- Status ---
     {
       id: 'status',
       accessorKey: 'status',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      header: renderHeader('Estado'),
       cell: ({ row }) => {
         const status = row.original.status;
         if (!status) return <Badge variant="default">Sin estado</Badge>;
@@ -279,614 +452,163 @@ export function getColumns(permissions: Permissions, isActive: boolean): ColumnD
           </Badge>
         );
       },
-      filterFn: (row, id, value: string[]) => {
-        const val = row.getValue(id) as string | null;
-        if (val == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(val);
-      },
+      filterFn: enumFilterFn,
       meta: { title: 'Estado' },
     },
 
-    // --- Hierarchy / Sector (visible) ---
-    {
-      id: 'hierarchy',
-      accessorFn: (row) => row.hierarchy?.name ?? '',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Sector" />,
-      cell: ({ row }) => <div>{row.original.hierarchy?.name ?? '-'}</div>,
-      filterFn: (row, _id, value: string[]) => {
-        const id = row.original.hierarchy?.id;
-        if (id == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(id);
-      },
-      meta: { title: 'Sector' },
-    },
+    // --- Sector / Puesto ---
+    fkColumn(
+      'hierarchy',
+      'Sector',
+      (r) => r.hierarchy?.name,
+      (r) => r.hierarchy?.id
+    ),
+    fkColumn(
+      'company_positions',
+      'Puesto',
+      (r) => r.company_positions?.name,
+      (r) => r.company_positions?.id
+    ),
 
-    // --- Company Position (visible) ---
-    {
-      id: 'company_positions',
-      accessorFn: (row) => row.company_positions?.name ?? '',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Puesto" />,
-      cell: ({ row }) => <div>{row.original.company_positions?.name ?? '-'}</div>,
-      filterFn: (row, _id, value: string[]) => {
-        const id = row.original.company_positions?.id;
-        if (id == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(id);
-      },
-      meta: { title: 'Puesto' },
-    },
+    // --- Fecha de ingreso ---
+    dateColumn('date_of_admission', 'Fecha de ingreso', formatUtcDate),
 
-    // --- Date of Admission (visible) ---
-    {
-      id: 'date_of_admission',
-      accessorKey: 'date_of_admission',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de ingreso" />,
-      cell: ({ row }) => (
-        <div>
-          {row.original.date_of_admission ? moment.utc(row.original.date_of_admission).format('DD/MM/YYYY') : '-'}
-        </div>
-      ),
-      meta: { title: 'Fecha de ingreso' },
-    },
-
-    // --- Contractor Employee / Afectaciones (visible) ---
-    {
-      id: 'contractor_employee',
-      accessorFn: (row) =>
-        (row.contractor_employee ?? [])
-          .map((c) => c.customers?.name ?? '')
-          .filter(Boolean)
-          .join(', '),
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Afectaciones" />,
-      cell: ({ row }) => {
-        const contractors = row.original.contractor_employee ?? [];
-        if (contractors.length === 0) return <Badge variant="outline">Sin afectar</Badge>;
-
-        const names = contractors.map((c) => c.customers?.name ?? '').filter(Boolean);
-        const first = names[0] ?? '-';
-
-        return (
-          <TooltipProvider delayDuration={100}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="inline-flex">
-                  <Badge variant="outline">
-                    {first}
-                    {names.length > 1 && ` +${names.length - 1}`}
-                  </Badge>
-                </div>
-              </TooltipTrigger>
-              {names.length > 1 && (
-                <TooltipContent className="rounded-lg bg-black p-2 text-white">
-                  <div className="flex flex-col gap-1">
-                    {names.map((name, index) => (
-                      <span key={index}>{name}</span>
-                    ))}
-                  </div>
-                </TooltipContent>
-              )}
-            </Tooltip>
-          </TooltipProvider>
-        );
-      },
-      filterFn: (row, _id, value: string[]) => {
-        if (!value?.length) return true;
-        const contractors = row.original.contractor_employee ?? [];
-        if (contractors.length === 0) return value.includes(NULL_FILTER_VALUE);
-        const matchesReal = contractors.some((c) => c.customers && value.includes(c.customers.id));
-        return matchesReal;
-      },
-      enableSorting: false,
-      meta: { title: 'Afectaciones' },
-    },
+    // --- Afectaciones (M:M) ---
+    manyColumn(
+      'contractor_employee',
+      'Afectaciones',
+      (r) =>
+        (r.contractor_employee ?? []).flatMap((c) =>
+          c.customers ? [{ id: c.customers.id, name: c.customers.name ?? '' }] : []
+        ),
+      (items) => {
+        if (items.length === 0) return <Badge variant="outline">Sin afectar</Badge>;
+        return <NamesBadge names={items.map((i) => i.name).filter(Boolean)} />;
+      }
+    ),
 
     // =========================================================================
     // HIDDEN COLUMNS (ocultas por defecto)
     // =========================================================================
 
-    // --- Nationality ---
-    {
-      id: 'nationality',
-      accessorKey: 'nationality',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nacionalidad" />,
-      cell: ({ row }) => {
-        const val = row.original.nationality;
-        if (!val) return <div>-</div>;
-        return (
-          <div className="inline-flex items-center gap-1.5">
-            <Globe className="h-3.5 w-3.5 text-muted-foreground" />
-            {getEnumLabel(val, nationalityLabels)}
-          </div>
-        );
-      },
-      filterFn: (row, id, value: string[]) => {
-        const val = row.getValue(id) as string | null;
-        if (val == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(val);
-      },
-      meta: { title: 'Nacionalidad' },
-    },
+    enumColumn('nationality', 'Nacionalidad', nationalityLabels, { fixedIcon: Globe }),
+    dateColumn('born_date', 'Nacimiento', (d) => {
+      const parsed = moment(d, ['YYYY-MM-DD', 'DD/MM/YYYY'], true);
+      return parsed.isValid() ? parsed.format('DD/MM/YYYY') : String(d);
+    }),
+    textColumn('cuil', 'CUIL'),
+    enumColumn('document_type', 'Tipo de Documento', documentTypeLabels, { icons: documentTypeIcons }),
+    textColumn('document_number', 'Documento'),
+    enumColumn('gender', 'Genero', genderLabels, { icons: genderIcons }),
+    enumColumn('marital_status', 'Estado Civil', maritalStatusLabels, { icons: maritalStatusIcons }),
+    enumColumn('level_of_education', 'Nivel de Educacion', levelOfEducationLabels, { fixedIcon: GraduationCap }),
+    textColumn('street', 'Calle'),
+    textColumn('street_number', 'Altura'),
+    fkColumn(
+      'province',
+      'Provincia',
+      (r) => r.provinces?.name,
+      (r) => (r.province == null ? null : String(r.province))
+    ),
+    fkColumn(
+      'city',
+      'Ciudad',
+      (r) => r.cities?.name,
+      (r) => (r.city == null ? null : String(r.city))
+    ),
+    textColumn('postal_code', 'CP'),
+    textColumn('phone', 'Telefono'),
+    textColumn('normal_hours', 'Horas'),
+    fkColumn(
+      'types_of_contract',
+      'Tipo de Contrato',
+      (r) => r.types_of_contract?.name,
+      (r) => r.types_of_contract?.id
+    ),
+    fkColumn(
+      'work_diagram',
+      'Diagrama',
+      (r) => r.work_diagram?.name,
+      (r) => r.work_diagram?.id
+    ),
+    fkColumn(
+      'cost_center',
+      'Centro de costo',
+      (r) => r.cost_center?.name,
+      (r) => r.cost_center?.id
+    ),
+    enumColumn('cost_type', 'Tipo de costo', costTypeLabels, { icons: costTypeIcons, badge: true }),
+    enumColumn('affiliate_status', 'Estado de afiliacion', affiliateStatusLabels, { icons: affiliateStatusIcons }),
 
-    // --- Born Date ---
-    {
-      id: 'born_date',
-      accessorKey: 'born_date',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nacimiento" />,
-      cell: ({ row }) => {
-        const d = row.original.born_date;
-        if (!d) return <div>-</div>;
-        const parsed = moment(d, ['YYYY-MM-DD', 'DD/MM/YYYY'], true);
-        return <div>{parsed.isValid() ? parsed.format('DD/MM/YYYY') : d}</div>;
-      },
-      meta: { title: 'Nacimiento' },
-    },
+    // --- Aptitudes tecnicas (M:M) ---
+    manyColumn(
+      'empleado_aptitudes',
+      'Aptitudes tecnicas',
+      (r) =>
+        (r.empleado_aptitudes ?? []).flatMap((a) =>
+          a.aptitudes_tecnicas ? [{ id: a.aptitudes_tecnicas.id, name: a.aptitudes_tecnicas.nombre ?? '' }] : []
+        ),
+      (items) => {
+        if (items.length === 0) return <div>{EMPTY}</div>;
+        return <NamesBadge names={items.map((i) => i.name).filter(Boolean)} />;
+      }
+    ),
 
-    // --- CUIL ---
-    {
-      id: 'cuil',
-      accessorKey: 'cuil',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="CUIL" />,
-      cell: ({ row }) => <div>{row.original.cuil ?? '-'}</div>,
-      meta: { title: 'CUIL' },
-    },
+    fkColumn(
+      'category',
+      'Categoria',
+      (r) => r.category?.name,
+      (r) => r.category?.id
+    ),
+    fkColumn(
+      'covenant',
+      'Convenio',
+      (r) => r.covenant?.name,
+      (r) => r.covenant?.id
+    ),
+    fkColumn(
+      'guild',
+      'Sindicato',
+      (r) => r.guild?.name,
+      (r) => r.guild?.id
+    ),
 
-    // --- Document Type ---
-    {
-      id: 'document_type',
-      accessorKey: 'document_type',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo de Documento" />,
-      cell: ({ row }) => {
-        const val = row.original.document_type;
-        if (!val) return <div>-</div>;
-        const Icon = documentTypeIcons[val];
-        return (
-          <div className="inline-flex items-center gap-1.5">
-            {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground" />}
-            {getEnumLabel(val, documentTypeLabels)}
-          </div>
-        );
-      },
-      filterFn: (row, id, value: string[]) => {
-        const val = row.getValue(id) as string | null;
-        if (val == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(val);
-      },
-      meta: { title: 'Tipo de Documento' },
-    },
+    // --- Sectores de taller (M:M) ---
+    manyColumn(
+      'workshop_sectors',
+      'Sectores de taller',
+      (r) =>
+        (r.employee_workshop_sectors ?? []).flatMap((ews) =>
+          ews.workshop_sectors ? [{ id: ews.workshop_sectors.id, name: ews.workshop_sectors.name ?? '' }] : []
+        ),
+      (items) => <div>{items.length > 0 ? items.map((i) => i.name).join(', ') : EMPTY}</div>
+    ),
 
-    // --- Document Number ---
-    {
-      id: 'document_number',
-      accessorKey: 'document_number',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Documento" />,
-      cell: ({ row }) => <div>{row.original.document_number ?? '-'}</div>,
-      meta: { title: 'Documento' },
-    },
+    fkColumn(
+      'countries',
+      'Pais de nacimiento',
+      (r) => r.countries?.name,
+      (r) => r.countries?.id
+    ),
 
-    // --- Gender ---
-    {
-      id: 'gender',
-      accessorKey: 'gender',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Genero" />,
-      cell: ({ row }) => {
-        const val = row.original.gender;
-        if (!val) return <div>-</div>;
-        const Icon = genderIcons[val];
-        return (
-          <div className="inline-flex items-center gap-1.5">
-            {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground" />}
-            {getEnumLabel(val, genderLabels)}
-          </div>
-        );
-      },
-      filterFn: (row, id, value: string[]) => {
-        const val = row.getValue(id) as string | null;
-        if (val == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(val);
-      },
-      meta: { title: 'Genero' },
-    },
-
-    // --- Marital Status ---
-    {
-      id: 'marital_status',
-      accessorKey: 'marital_status',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado Civil" />,
-      cell: ({ row }) => {
-        const val = row.original.marital_status;
-        if (!val) return <div>-</div>;
-        const Icon = maritalStatusIcons[val];
-        return (
-          <div className="inline-flex items-center gap-1.5">
-            {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground" />}
-            {getEnumLabel(val, maritalStatusLabels)}
-          </div>
-        );
-      },
-      filterFn: (row, id, value: string[]) => {
-        const val = row.getValue(id) as string | null;
-        if (val == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(val);
-      },
-      meta: { title: 'Estado Civil' },
-    },
-
-    // --- Level of Education ---
-    {
-      id: 'level_of_education',
-      accessorKey: 'level_of_education',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nivel de Educacion" />,
-      cell: ({ row }) => {
-        const val = row.original.level_of_education;
-        if (!val) return <div>-</div>;
-        return (
-          <div className="inline-flex items-center gap-1.5">
-            <GraduationCap className="h-3.5 w-3.5 text-muted-foreground" />
-            {getEnumLabel(val, levelOfEducationLabels)}
-          </div>
-        );
-      },
-      filterFn: (row, id, value: string[]) => {
-        const val = row.getValue(id) as string | null;
-        if (val == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(val);
-      },
-      meta: { title: 'Nivel de Educacion' },
-    },
-
-    // --- Street ---
-    {
-      id: 'street',
-      accessorKey: 'street',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Calle" />,
-      cell: ({ row }) => <div>{row.original.street ?? '-'}</div>,
-      meta: { title: 'Calle' },
-    },
-
-    // --- Street Number ---
-    {
-      id: 'street_number',
-      accessorKey: 'street_number',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Altura" />,
-      cell: ({ row }) => <div>{row.original.street_number ?? '-'}</div>,
-      meta: { title: 'Altura' },
-    },
-
-    // --- Province ---
-    {
-      id: 'province',
-      accessorFn: (row) => row.provinces?.name ?? '',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Provincia" />,
-      cell: ({ row }) => <div>{row.original.provinces?.name ?? '-'}</div>,
-      filterFn: (row, _id, value: string[]) => {
-        const val = row.original.province;
-        if (val == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(String(val));
-      },
-      meta: { title: 'Provincia' },
-    },
-
-    // --- City ---
-    {
-      id: 'city',
-      accessorFn: (row) => row.cities?.name ?? '',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Ciudad" />,
-      cell: ({ row }) => <div>{row.original.cities?.name ?? '-'}</div>,
-      filterFn: (row, _id, value: string[]) => {
-        const val = row.original.city;
-        if (val == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(String(val));
-      },
-      meta: { title: 'Ciudad' },
-    },
-
-    // --- Postal Code ---
-    {
-      id: 'postal_code',
-      accessorKey: 'postal_code',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="CP" />,
-      cell: ({ row }) => <div>{row.original.postal_code ?? '-'}</div>,
-      meta: { title: 'CP' },
-    },
-
-    // --- Phone ---
-    {
-      id: 'phone',
-      accessorKey: 'phone',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Telefono" />,
-      cell: ({ row }) => <div>{row.original.phone ?? '-'}</div>,
-      meta: { title: 'Telefono' },
-    },
-
-    // --- Normal Hours ---
-    {
-      id: 'normal_hours',
-      accessorKey: 'normal_hours',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Horas" />,
-      cell: ({ row }) => <div>{row.original.normal_hours ?? '-'}</div>,
-      meta: { title: 'Horas' },
-    },
-
-    // --- Types of Contract ---
-    {
-      id: 'types_of_contract',
-      accessorFn: (row) => row.types_of_contract?.name ?? '',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo de Contrato" />,
-      cell: ({ row }) => <div>{row.original.types_of_contract?.name ?? '-'}</div>,
-      filterFn: (row, _id, value: string[]) => {
-        const id = row.original.types_of_contract?.id;
-        if (id == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(id);
-      },
-      meta: { title: 'Tipo de Contrato' },
-    },
-
-    // --- Work Diagram ---
-    {
-      id: 'work_diagram',
-      accessorFn: (row) => row.work_diagram?.name ?? '',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Diagrama" />,
-      cell: ({ row }) => <div>{row.original.work_diagram?.name ?? '-'}</div>,
-      filterFn: (row, _id, value: string[]) => {
-        const id = row.original.work_diagram?.id;
-        if (id == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(id);
-      },
-      meta: { title: 'Diagrama' },
-    },
-
-    // --- Cost Center ---
-    {
-      id: 'cost_center',
-      accessorFn: (row) => row.cost_center?.name ?? '',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Centro de costo" />,
-      cell: ({ row }) => <div>{row.original.cost_center?.name ?? '-'}</div>,
-      filterFn: (row, _id, value: string[]) => {
-        const id = row.original.cost_center?.id;
-        if (id == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(id);
-      },
-      meta: { title: 'Centro de costo' },
-    },
-
-    // --- Cost Type ---
-    {
-      id: 'cost_type',
-      accessorKey: 'cost_type',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo de costo" />,
-      cell: ({ row }) => {
-        const val = row.original.cost_type;
-        if (!val) return <div>-</div>;
-        const Icon = costTypeIcons[val];
-        return (
-          <Badge variant="outline" className="gap-1">
-            {Icon && <Icon className="h-3 w-3" />}
-            {getEnumLabel(val, costTypeLabels)}
-          </Badge>
-        );
-      },
-      filterFn: (row, id, value: string[]) => {
-        const val = row.getValue(id) as string | null;
-        if (val == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(val);
-      },
-      meta: { title: 'Tipo de costo' },
-    },
-
-    // --- Affiliate Status ---
-    {
-      id: 'affiliate_status',
-      accessorKey: 'affiliate_status',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado de afiliacion" />,
-      cell: ({ row }) => {
-        const val = row.original.affiliate_status;
-        if (!val) return <div>-</div>;
-        const Icon = affiliateStatusIcons[val];
-        return (
-          <div className="inline-flex items-center gap-1.5">
-            {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground" />}
-            {getEnumLabel(val, affiliateStatusLabels)}
-          </div>
-        );
-      },
-      filterFn: (row, id, value: string[]) => {
-        const val = row.getValue(id) as string | null;
-        if (val == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(val);
-      },
-      meta: { title: 'Estado de afiliacion' },
-    },
-
-    // --- Empleado Aptitudes (M:M) ---
-    {
-      id: 'empleado_aptitudes',
-      accessorFn: (row) =>
-        (row.empleado_aptitudes ?? [])
-          .map((a) => a.aptitudes_tecnicas?.nombre ?? '')
-          .filter(Boolean)
-          .join(', '),
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Aptitudes tecnicas" />,
-      cell: ({ row }) => {
-        const aptitudes = row.original.empleado_aptitudes ?? [];
-        if (aptitudes.length === 0) return <div>-</div>;
-
-        const names = aptitudes.map((a) => a.aptitudes_tecnicas?.nombre ?? '').filter(Boolean);
-        const first = names[0] ?? '-';
-
-        return (
-          <TooltipProvider delayDuration={100}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="inline-flex">
-                  <Badge variant="outline">
-                    {first}
-                    {names.length > 1 && ` +${names.length - 1}`}
-                  </Badge>
-                </div>
-              </TooltipTrigger>
-              {names.length > 1 && (
-                <TooltipContent className="rounded-lg bg-black p-2 text-white">
-                  <div className="flex flex-col gap-1">
-                    {names.map((name, index) => (
-                      <span key={index}>{name}</span>
-                    ))}
-                  </div>
-                </TooltipContent>
-              )}
-            </Tooltip>
-          </TooltipProvider>
-        );
-      },
-      filterFn: (row, _id, value: string[]) => {
-        if (!value?.length) return true;
-        const aptitudes = row.original.empleado_aptitudes ?? [];
-        if (aptitudes.length === 0) return value.includes(NULL_FILTER_VALUE);
-        return aptitudes.some((a) => a.aptitudes_tecnicas && value.includes(a.aptitudes_tecnicas.id));
-      },
-      enableSorting: false,
-      meta: { title: 'Aptitudes tecnicas' },
-    },
-
-    // --- Category ---
-    {
-      id: 'category',
-      accessorFn: (row) => row.category?.name ?? '',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Categoria" />,
-      cell: ({ row }) => <div>{row.original.category?.name ?? '-'}</div>,
-      filterFn: (row, _id, value: string[]) => {
-        const id = row.original.category?.id;
-        if (id == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(id);
-      },
-      meta: { title: 'Categoria' },
-    },
-
-    // --- Covenant ---
-    {
-      id: 'covenant',
-      accessorFn: (row) => row.covenant?.name ?? '',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Convenio" />,
-      cell: ({ row }) => <div>{row.original.covenant?.name ?? '-'}</div>,
-      filterFn: (row, _id, value: string[]) => {
-        const id = row.original.covenant?.id;
-        if (id == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(id);
-      },
-      meta: { title: 'Convenio' },
-    },
-
-    // --- Guild ---
-    {
-      id: 'guild',
-      accessorFn: (row) => row.guild?.name ?? '',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Sindicato" />,
-      cell: ({ row }) => <div>{row.original.guild?.name ?? '-'}</div>,
-      filterFn: (row, _id, value: string[]) => {
-        const id = row.original.guild?.id;
-        if (id == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(id);
-      },
-      meta: { title: 'Sindicato' },
-    },
-
-    // --- Workshop Sectors (M:M) ---
-    {
-      id: 'workshop_sectors',
-      accessorFn: (row) =>
-        row.employee_workshop_sectors
-          ?.map((ews) => ews.workshop_sectors?.name)
-          .filter(Boolean)
-          .join(', ') ?? '',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Sectores de taller" />,
-      cell: ({ row }) => {
-        const names =
-          row.original.employee_workshop_sectors?.map((ews) => ews.workshop_sectors?.name).filter(Boolean) ?? [];
-        return <div>{names.length > 0 ? names.join(', ') : '-'}</div>;
-      },
-      enableSorting: false,
-      filterFn: (row, _id, value: string[]) => {
-        const ids =
-          (row.original.employee_workshop_sectors
-            ?.map((ews) => ews.workshop_sectors?.id)
-            .filter(Boolean) as string[]) ?? [];
-        if (ids.length === 0) return value.includes(NULL_FILTER_VALUE);
-        return ids.some((id) => value.includes(id));
-      },
-      meta: { title: 'Sectores de taller' },
-    },
-
-    // --- Countries (birthplace) ---
-    {
-      id: 'countries',
-      accessorFn: (row) => row.countries?.name ?? '',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Pais de nacimiento" />,
-      cell: ({ row }) => <div>{row.original.countries?.name ?? '-'}</div>,
-      filterFn: (row, _id, value: string[]) => {
-        const id = row.original.countries?.id;
-        if (id == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(id);
-      },
-      meta: { title: 'Pais de nacimiento' },
-    },
-
-    // --- Reason for Termination (solo inactivos) ---
+    // --- Motivo y fecha de baja (solo inactivos) ---
     ...(!isActive
       ? [
-          {
-            id: 'reason_for_termination',
-            accessorKey: 'reason_for_termination',
-            header: ({ column }: { column: import('@tanstack/react-table').Column<EmployeeListItem> }) => (
-              <DataTableColumnHeader column={column} title="Motivo de baja" />
-            ),
-            cell: ({ row }: { row: import('@tanstack/react-table').Row<EmployeeListItem> }) => {
-              const val = row.original.reason_for_termination;
-              if (!val) return <div>-</div>;
-              const Icon = reasonForTerminationIcons[val];
-              return (
-                <div className="inline-flex items-center gap-1.5">
-                  {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground" />}
-                  {getEnumLabel(val, reasonForTerminationLabels)}
-                </div>
-              );
-            },
-            filterFn: (row: import('@tanstack/react-table').Row<EmployeeListItem>, id: string, value: string[]) => {
-              const val = row.getValue(id) as string | null;
-              if (val == null) return value.includes(NULL_FILTER_VALUE);
-              return value.includes(val);
-            },
-            meta: { title: 'Motivo de baja' },
-          } satisfies ColumnDef<EmployeeListItem>,
-          {
-            id: 'termination_date',
-            accessorKey: 'termination_date',
-            header: ({ column }: { column: import('@tanstack/react-table').Column<EmployeeListItem> }) => (
-              <DataTableColumnHeader column={column} title="Fecha de baja" />
-            ),
-            cell: ({ row }: { row: import('@tanstack/react-table').Row<EmployeeListItem> }) => (
-              <div>
-                {row.original.termination_date ? moment.utc(row.original.termination_date).format('DD/MM/YYYY') : '-'}
-              </div>
-            ),
-            meta: { title: 'Fecha de baja' },
-          } satisfies ColumnDef<EmployeeListItem>,
+          enumColumn('reason_for_termination', 'Motivo de baja', reasonForTerminationLabels, {
+            icons: reasonForTerminationIcons,
+          }),
+          dateColumn('termination_date', 'Fecha de baja', formatUtcDate),
         ]
       : []),
 
-    // --- Created At ---
-    {
-      id: 'created_at',
-      accessorKey: 'created_at',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de creacion" />,
-      cell: ({ row }) => (
-        <div>{row.original.created_at ? moment(row.original.created_at).format('DD/MM/YYYY') : '-'}</div>
-      ),
-      meta: { title: 'Fecha de creacion' },
-    },
+    // --- Created At (hora local, como antes) ---
+    dateColumn('created_at', 'Fecha de creacion', (d) => moment(d).format('DD/MM/YYYY')),
 
     // --- Is Active ---
     {
       id: 'is_active',
       accessorKey: 'is_active',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Activo" />,
+      header: renderHeader('Activo'),
       cell: ({ row }) => (
         <Badge variant={row.original.is_active ? 'success' : 'destructive'} className="gap-1">
           {row.original.is_active ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
@@ -902,7 +624,7 @@ export function getColumns(permissions: Permissions, isActive: boolean): ColumnD
       cell: ({ row }) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
+            <Button variant="ghost" className="h-8 w-8 p-0" aria-label="Abrir menu de acciones">
               <span className="sr-only">Abrir menu</span>
               <MoreHorizontal className="h-4 w-4" />
             </Button>

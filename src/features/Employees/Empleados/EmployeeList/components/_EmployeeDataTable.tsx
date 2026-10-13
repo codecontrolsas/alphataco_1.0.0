@@ -160,57 +160,6 @@ export default function _EmployeeDataTable({
     return { ...defaults, ...initialColumnVisibility };
   }, [initialColumnVisibility]);
 
-  // Filtros visibles por defecto: solo los 3 más comunes (distintos para activos/inactivos)
-  const DEFAULT_VISIBLE_FILTERS = isActive
-    ? ['status', 'hierarchy', 'company_positions']
-    : ['reason_for_termination', 'status', 'hierarchy'];
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
-      return initialFilterVisibility;
-    }
-    const allFilterIds = [
-      'status',
-      'gender',
-      'nationality',
-      'document_type',
-      'marital_status',
-      'level_of_education',
-      'cost_type',
-      'affiliate_status',
-      'reason_for_termination',
-      'is_active',
-      'hierarchy',
-      'company_positions',
-      'types_of_contract',
-      'work_diagram',
-      'workshop_sectors',
-      'category',
-      'covenant',
-      'guild',
-      'cost_center',
-      'countries',
-      'province',
-      'city',
-      'contractor_employee',
-      'empleado_aptitudes',
-      'fullName',
-      'email',
-      'cuil',
-      'document_number',
-      'phone',
-      'street',
-      'street_number',
-      'postal_code',
-      'file',
-      'normal_hours',
-      'born_date',
-      'date_of_admission',
-      'created_at',
-      'termination_date',
-    ];
-    return Object.fromEntries(allFilterIds.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
-  }, [initialFilterVisibility]);
-
   // ─── fetchFacet factories: cada filtro tiene su fetchFacet lazy ────────────
 
   // Helper genérico para enum facets
@@ -391,6 +340,18 @@ export default function _EmployeeDataTable({
     [makeEnumFetchFacet, makeFkFetchFacet, isActive]
   );
 
+  // Filtros visibles por defecto: solo los 3 más comunes (distintos para activos/inactivos).
+  // Las preferencias guardadas tienen prioridad; el resto de filtros arranca oculto.
+  const mergedFilterVisibility = useMemo(() => {
+    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
+      return initialFilterVisibility;
+    }
+    const defaultVisible = isActive
+      ? ['status', 'hierarchy', 'company_positions']
+      : ['reason_for_termination', 'status', 'hierarchy'];
+    return Object.fromEntries(facetedFilters.map((f) => [f.columnId, defaultVisible.includes(f.columnId)]));
+  }, [initialFilterVisibility, facetedFilters, isActive]);
+
   // ─── Botón de creación protegido por permisos (solo en tab activos) ─────────
   const toolbarActions = isActive ? (
     <PermissionGuard module="empleados" tab="employees" action="create">
@@ -416,6 +377,9 @@ export default function _EmployeeDataTable({
       initialColumnVisibility={mergedColumnVisibility}
       initialFilterVisibility={mergedFilterVisibility}
       toolbarActions={toolbarActions}
+      showSearch
+      mobileCards
+      searchPlaceholder="Buscar por legajo, nombre o CUIL"
       showFilterToggle
       // Client-side navigation: fetch instantáneo via React Query, sin router.push
       queryFn={tableQueryFn}
