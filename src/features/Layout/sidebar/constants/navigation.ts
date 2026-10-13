@@ -2,7 +2,9 @@ import type { ModuleSlug } from '@/features/Permissions/permissions-map';
 import { MODULE_ICONS, type ModuleIcon } from '@/shared/constants/module-icons';
 import {
   ArrowLeftRight,
+  Banknote,
   BookOpen,
+  BookOpenText,
   Building2,
   Car,
   ChartColumn,
@@ -16,25 +18,24 @@ import {
   HandCoins,
   HandHelping,
   House,
+  Landmark,
   Layers,
   LifeBuoy,
+  ListChecks,
   Package,
   PackageCheck,
-  ReceiptText,
-  Banknote,
-  WalletCards,
-  ScrollText,
-  ListChecks,
   Percent,
-  BookOpenText,
-  Landmark,
   Plus,
+  ReceiptText,
   Repeat,
+  ScrollText,
   Settings,
   TriangleAlert,
   Truck,
-  UserPlus,
+  UserCheck,
+  UserX,
   Users,
+  WalletCards,
   Warehouse,
   Wrench,
   XCircle,
@@ -53,9 +54,25 @@ export type NavIcon = ModuleIcon;
 export type NavigationSubLink = {
   name: string;
   tabSlug: string;
+  /**
+   * Segundo nivel de la tab (`?subtab=<subTabSlug>`), para las secciones cuyas subtabs se
+   * eligen desde el sidebar (hoy: Empleados > Activos / Bajas). Es también el slug de permiso.
+   */
+  subTabSlug?: string;
   /** Contador a mostrar junto al sub-item (y, plegado, sobre el modulo). */
   badge?: NavBadge;
 };
+
+/** Clave única de un sub-item dentro de su módulo: la subtab si la tiene y, si no, la tab. */
+export function subLinkKey(subLink: NavigationSubLink): string {
+  return subLink.subTabSlug ?? subLink.tabSlug;
+}
+
+/** URL de un sub-item: `?tab=` y, si corresponde, `&subtab=`. */
+export function subLinkHref(moduleHref: string, subLink: NavigationSubLink): string {
+  const subTab = subLink.subTabSlug ? `&subtab=${subLink.subTabSlug}` : '';
+  return `${moduleHref}?tab=${subLink.tabSlug}${subTab}`;
+}
 
 /** Contadores que puede llevar un item del sidebar. */
 export type NavBadge = 'support-tickets';
@@ -111,7 +128,8 @@ export const navigationLinks: NavigationLink[] = [
     icon: MODULE_ICONS.empleados,
     position: 2,
     items: [
-      { name: 'Empleados', tabSlug: 'employees' },
+      { name: 'Activos', tabSlug: 'employees', subTabSlug: 'empleados-activos' },
+      { name: 'Bajas', tabSlug: 'employees', subTabSlug: 'empleados-inactivos' },
       { name: 'Diagramas', tabSlug: 'diagrams' },
     ],
   },
@@ -270,7 +288,7 @@ export const navigationLinks: NavigationLink[] = [
 /**
  * Iconos por tab, para los sub-items. Son los mismos que usa cada modulo en el label de su
  * `TabsManagerServer`: el precedente manda, para que la tab se vea igual en los dos lados.
- * La clave es `<moduleSlug>:<tabSlug>` porque hay slugs repetidos entre modulos
+ * La clave es `<moduleSlug>:<tabSlug o subTabSlug>` (ver `subLinkKey`) porque hay slugs repetidos entre modulos
  * (`documentos-de-equipos` esta en documentacion y en el detalle del equipo, `vehicles` en
  * equipos y configuracion).
  */
@@ -283,7 +301,8 @@ export const SUB_ITEM_ICONS: Record<string, NavIcon> = {
   'configuracion:vehicles': Truck,
   'configuracion:mantenimiento': Wrench,
   'configuracion:documentos': FileType,
-  'empleados:employees': Users,
+  'empleados:empleados-activos': UserCheck,
+  'empleados:empleados-inactivos': UserX,
   'empleados:diagrams': GitBranch,
   'equipos:vehicles': Car,
   'equipos:others': Package,

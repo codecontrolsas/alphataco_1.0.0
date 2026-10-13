@@ -114,7 +114,11 @@ export function DataTableFacetedFilter<TData, TValue>({
         <Button
           variant="outline"
           size="sm"
-          className="h-8 border-dashed"
+          className={cn(
+            'h-9 border-dashed',
+            selectedValues.size > 0 &&
+              'border-brand bg-brand-subtle text-brand-subtle-foreground hover:bg-brand-subtle border-solid'
+          )}
           disabled={disabled}
           data-testid={`filter-${column?.id}`}
         >

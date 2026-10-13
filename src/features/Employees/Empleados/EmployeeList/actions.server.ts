@@ -1,7 +1,6 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   buildDateRangeFiltersWhere,
   buildFiltersWhere,
@@ -13,6 +12,7 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { EMPLOYEE_SELECT } from '@/shared/prisma-selects/employee-select';
 
 const logger = new Logger('Employees/list/actions.server');
@@ -626,5 +626,33 @@ export async function getEmployeeSingleFacet(
 // ============================================================================
 // EXPORTED TYPES
 // ============================================================================
+
+/**
+ * Resumen para las tarjetas del listado de activos: cuántos empleados hay en cada estado
+ * documental. Una sola consulta agrupada (no un `count` por estado).
+ */
+export async function getEmployeeStatusMetrics() {
+  const companyId = await getActiveCompanyId();
+
+  try {
+    const rows = await prisma.employees.groupBy({
+      by: ['status'],
+      where: { company_id: companyId, is_active: true },
+      _count: { _all: true },
+    });
+
+    const byStatus: Partial<Record<NonNullable<(typeof rows)[number]['status']>, number>> = {};
+    let total = 0;
+    for (const row of rows) {
+      total += row._count._all;
+      if (row.status) byStatus[row.status] = row._count._all;
+    }
+
+    return { total, byStatus };
+  } catch (error) {
+    logger.error('Error al obtener las métricas de empleados', { data: { error } });
+    throw error;
+  }
+}
 
 export type EmployeeListItem = Awaited<ReturnType<typeof getEmployeesPaginated>>['data'][number];

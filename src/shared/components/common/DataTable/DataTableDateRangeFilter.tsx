@@ -93,7 +93,7 @@ export function DataTableDateRangeFilter({ columnId, title, paramNamespace }: Da
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className={cn('h-8 border-dashed gap-1.5', hasValue && 'border-solid')}>
+        <Button variant="outline" size="sm" className={cn('h-9 border-dashed gap-1.5', hasValue && 'border-solid')}>
           <CalendarIcon className="h-3.5 w-3.5" />
           {title}
           {hasValue && (

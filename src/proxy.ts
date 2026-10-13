@@ -28,7 +28,10 @@ export async function proxy(req: NextRequest) {
   // 1. Verificar autenticación
   if (!session?.user.id) {
     logger.debug('Usuario no autenticado, redirigiendo a login');
-    return NextResponse.redirect(new URL('/login', req.url));
+    // Se recuerda adónde iba para volver ahí después de ingresar (el login valida el destino).
+    const loginUrl = new URL('/login', req.url);
+    if (req.method === 'GET') loginUrl.searchParams.set('next', req.nextUrl.pathname + req.nextUrl.search);
+    return NextResponse.redirect(loginUrl);
   }
 
   // 2. Usuarios anónimos no pueden acceder a /dashboard, redirigir a /maintenance

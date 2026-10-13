@@ -36,7 +36,7 @@ export function DataTablePagination<TData>({
   const endRow = Math.min((pageIndex + 1) * pageSize, totalRows);
 
   return (
-    <div className="flex items-center justify-between px-2">
+    <div className="flex flex-col gap-3 px-2 sm:flex-row sm:items-center sm:justify-between">
       {/* Información de total + selección */}
       <div className="flex-1 text-sm text-muted-foreground">
         <span>{totalRows} registros</span>
@@ -45,7 +45,7 @@ export function DataTablePagination<TData>({
         )}
       </div>
 
-      <div className="flex items-center space-x-6 lg:space-x-8">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 lg:gap-x-8">
         {/* Selector de filas por página */}
         <div className="flex items-center space-x-2">
           <p className="text-sm font-medium">Filas por página</p>
@@ -55,7 +55,7 @@ export function DataTablePagination<TData>({
               table.setPageSize(Number(value));
             }}
           >
-            <SelectTrigger className="h-8 w-[70px]" data-testid="page-size-select">
+            <SelectTrigger className="h-9 w-[70px]" data-testid="page-size-select">
               <SelectValue placeholder={pageSize} />
             </SelectTrigger>
             <SelectContent side="top">
@@ -77,7 +77,7 @@ export function DataTablePagination<TData>({
         <div className="flex items-center space-x-2">
           <Button
             variant="outline"
-            className="hidden h-8 w-8 p-0 lg:flex"
+            className="hidden h-9 w-9 p-0 lg:flex"
             onClick={() => table.setPageIndex(0)}
             disabled={!table.getCanPreviousPage()}
             data-testid="pagination-first"
@@ -87,7 +87,7 @@ export function DataTablePagination<TData>({
           </Button>
           <Button
             variant="outline"
-            className="h-8 w-8 p-0"
+            className="h-9 w-9 p-0"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
             data-testid="pagination-prev"
@@ -97,7 +97,7 @@ export function DataTablePagination<TData>({
           </Button>
           <Button
             variant="outline"
-            className="h-8 w-8 p-0"
+            className="h-9 w-9 p-0"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
             data-testid="pagination-next"
@@ -107,7 +107,7 @@ export function DataTablePagination<TData>({
           </Button>
           <Button
             variant="outline"
-            className="hidden h-8 w-8 p-0 lg:flex"
+            className="hidden h-9 w-9 p-0 lg:flex"
             onClick={() => table.setPageIndex(pageCount - 1)}
             disabled={!table.getCanNextPage()}
             data-testid="pagination-last"

@@ -99,7 +99,7 @@ export function EmployeeQuickActions({ employeeId, isActive, email }: EmployeeQu
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="icon" aria-label="Más acciones">
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
@@ -114,7 +114,7 @@ export function EmployeeQuickActions({ employeeId, isActive, email }: EmployeeQu
               Dar de Baja Empleado
             </DropdownMenuItem>
           ) : (
-            <DropdownMenuItem onClick={() => setShowActivateDialog(true)} className="text-green-600">
+            <DropdownMenuItem onClick={() => setShowActivateDialog(true)} className="text-ok-subtle-foreground">
               <UserCheck className="h-4 w-4 mr-2" />
               Activar Empleado
             </DropdownMenuItem>
@@ -126,20 +126,27 @@ export function EmployeeQuickActions({ employeeId, isActive, email }: EmployeeQu
       <AlertDialog open={showDeactivateDialog} onOpenChange={setShowDeactivateDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Dar de baja empleado?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta accion dara de baja al empleado. Podras reactivarlo mas tarde si es necesario.
-            </AlertDialogDescription>
+            <AlertDialogTitle>¿Dar de baja al empleado?</AlertDialogTitle>
+            <AlertDialogDescription>Podés reactivarlo más tarde si hace falta.</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="w-full">
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
                 <TerminationFormFields form={form} />
-                <div className="flex gap-4 justify-end">
+                <div className="bg-muted text-muted-foreground rounded-lg p-3 text-sm">
+                  <p className="text-foreground font-medium">Al confirmar</p>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                    <li>Pasa a Bajas y se actualiza el estado de sus diagramas.</li>
+                    <li>Si tiene usuario en el sistema, se le revoca el acceso y se cierran sus sesiones.</li>
+                  </ul>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <AlertDialogCancel type="button" onClick={() => setShowDeactivateDialog(false)}>
+                    Cancelar
+                  </AlertDialogCancel>
                   <Button variant="destructive" type="submit" disabled={isPending}>
-                    {isPending ? 'Procesando...' : 'Dar de Baja'}
+                    {isPending ? 'Procesando…' : 'Dar de baja'}
                   </Button>
-                  <AlertDialogCancel onClick={() => setShowDeactivateDialog(false)}>Cancelar</AlertDialogCancel>
                 </div>
               </form>
             </Form>
@@ -153,7 +160,7 @@ export function EmployeeQuickActions({ employeeId, isActive, email }: EmployeeQu
           <AlertDialogHeader>
             <AlertDialogTitle>¿Activar empleado?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta accion activara al empleado y podra acceder al sistema.
+              Vuelve a figurar entre los activos y recupera su acceso al sistema.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

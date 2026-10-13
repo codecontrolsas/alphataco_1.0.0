@@ -226,19 +226,19 @@ export default function ServiceTable({
             <TabsList className="flex gap-1 bg-surface-muted/50">
               {/* Hereda permisos de comercial/service/detalle-contrato */}
               <PermissionGuard module="comercial" tab="detalle-contrato" action="view">
-                <TabsTrigger value="detail" className="text-brand font-semibold">
+                <TabsTrigger value="detail" className="text-brand-ink font-semibold">
                   Detalle
                 </TabsTrigger>
               </PermissionGuard>
               {/* Hereda permisos de comercial/service/documentos-contrato */}
               <PermissionGuard module="comercial" tab="documentos-contrato" action="view">
-                <TabsTrigger value="documents" className="text-brand font-semibold">
+                <TabsTrigger value="documents" className="text-brand-ink font-semibold">
                   Documentos
                 </TabsTrigger>
               </PermissionGuard>
               {/* Hereda permisos de comercial/service/items-contrato */}
               <PermissionGuard module="comercial" tab="items-contrato" action="view">
-                <TabsTrigger value="items" className="text-brand font-semibold">
+                <TabsTrigger value="items" className="text-brand-ink font-semibold">
                   Items del Servicio
                 </TabsTrigger>
               </PermissionGuard>

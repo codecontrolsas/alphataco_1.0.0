@@ -1,33 +1,13 @@
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
-import { ClothingLoginForm } from '@/features/Clothing/ClothingDelivery/components/ClothingLoginForm';
-import { getClothingOperatorContext } from '@/features/Clothing/actions/session.server';
+import { AuthShell } from '@/features/Auth/components/AuthShell';
+import { AuthSkeleton } from '@/features/Auth/components/AuthSkeleton';
+import { CredentialsLoginForm } from '@/features/Auth/components/CredentialsLoginForm';
+import { clothingLogin, getClothingOperatorContext } from '@/features/Clothing/actions/session.server';
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 
 export const metadata = {
-  title: 'Iniciar Sesion - Entrega de Indumentaria',
+  title: 'Entrega de indumentaria',
 };
-
-function LoginSkeleton() {
-  return (
-    <div className="bg-muted flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">
-      <div className="w-full max-w-sm">
-        <Card>
-          <CardHeader className="space-y-2">
-            <Skeleton className="h-7 w-48 mx-auto" />
-            <Skeleton className="h-4 w-64 mx-auto" />
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
 
 async function ClothingLoginContent() {
   const context = await getClothingOperatorContext();
@@ -37,17 +17,23 @@ async function ClothingLoginContent() {
   }
 
   return (
-    <div className="bg-muted flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">
-      <div className="w-full max-w-sm">
-        <ClothingLoginForm />
-      </div>
-    </div>
+    <AuthShell
+      kicker="Entrega de indumentaria"
+      title="Ingresá para registrar entregas"
+      description="Acceso para el registro de entregas de ropa de trabajo y EPP."
+    >
+      <CredentialsLoginForm
+        action={clothingLogin}
+        redirectTo="/clothing/delivery"
+        helpText="Si no tenés acceso, pedíselo al responsable de indumentaria o a un administrador."
+      />
+    </AuthShell>
   );
 }
 
 export default function ClothingLoginPage() {
   return (
-    <Suspense fallback={<LoginSkeleton />}>
+    <Suspense fallback={<AuthSkeleton />}>
       <ClothingLoginContent />
     </Suspense>
   );

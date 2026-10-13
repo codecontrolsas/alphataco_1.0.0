@@ -85,7 +85,7 @@ export function DataTableToolbar<TData>({
   return (
     <div className="space-y-2">
       {/* Fila principal: busqueda + filtros facetados + acciones */}
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-1 flex-wrap items-center gap-2">
           {/* Input de busqueda */}
           {showSearch && (
@@ -93,7 +93,7 @@ export function DataTableToolbar<TData>({
               placeholder={searchPlaceholder}
               value={searchValue}
               onChange={(event) => handleSearchChange(event.target.value)}
-              className="h-8 w-[150px] lg:w-[250px]"
+              className="h-9 w-full sm:w-[250px]"
               data-testid="search-input"
             />
           )}
@@ -124,7 +124,7 @@ export function DataTableToolbar<TData>({
             <Button
               variant="ghost"
               onClick={() => table.resetSorting()}
-              className="h-8 px-2 lg:px-3"
+              className="h-9 px-2 lg:px-3"
               data-testid="clear-sorting"
             >
               <ArrowUpDown className="mr-1 h-3.5 w-3.5" />
@@ -145,7 +145,7 @@ export function DataTableToolbar<TData>({
                   table.resetColumnFilters();
                 }
               }}
-              className="h-8 px-2 lg:px-3"
+              className="h-9 px-2 lg:px-3"
               data-testid="clear-filters"
             >
               Limpiar filtros
@@ -154,7 +154,7 @@ export function DataTableToolbar<TData>({
           )}
         </div>
 
-        <div className="flex items-center space-x-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
           {exportActions}
 
           {showFilterToggle && tableId && facetedFilters.length > 0 && onFilterVisibilityChange && (

@@ -11,7 +11,7 @@ export type StepStatus = 'done' | 'current' | 'locked';
 /** Marcador del paso. Clases completas por estado (Tailwind v4). */
 const MARKER_STYLES: Record<StepStatus, string> = {
   done: 'border-brand bg-brand text-brand-foreground',
-  current: 'border-brand text-brand',
+  current: 'border-brand text-brand-ink',
   locked: 'border-border text-muted-foreground',
 };
 

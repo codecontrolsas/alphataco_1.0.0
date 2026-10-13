@@ -18,8 +18,8 @@ import { Pencil, Plus, Power, PowerOff, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { deleteSalesPoint, setSalesPointActive } from '../actions/sales-points.server';
 import type { FiscalDataOverview } from '../actions/fiscal-data.server';
+import { deleteSalesPoint, setSalesPointActive } from '../actions/sales-points.server';
 import { formatSalesPointNumber } from '../utils/format';
 import { FiscalSection } from './FiscalSection';
 import { SalesPointFormDialog } from './SalesPointFormDialog';
@@ -28,7 +28,7 @@ type SalesPoint = FiscalDataOverview['salesPoints'][number];
 
 /** Clases escritas completas (Tailwind v4 no genera clases armadas en runtime). */
 const STATUS_STYLES = {
-  active: 'border-brand/30 bg-brand/10 text-brand',
+  active: 'border-brand/30 bg-brand/10 text-brand-ink',
   inactive: 'bg-muted text-muted-foreground',
 } as const;
 
@@ -122,7 +122,10 @@ export function SalesPointsSection({ salesPoints, canUpdate }: { salesPoints: Sa
                   <TableCell>
                     <Badge
                       variant="outline"
-                      className={cn('whitespace-nowrap', point.is_active ? STATUS_STYLES.active : STATUS_STYLES.inactive)}
+                      className={cn(
+                        'whitespace-nowrap',
+                        point.is_active ? STATUS_STYLES.active : STATUS_STYLES.inactive
+                      )}
                     >
                       {point.is_active ? 'Activo' : 'Inactivo'}
                     </Badge>

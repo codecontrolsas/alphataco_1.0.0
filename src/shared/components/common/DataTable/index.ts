@@ -22,6 +22,7 @@ export { DataTableViewOptions } from './DataTableViewOptions';
 
 // Hook (solo cliente)
 export { useDataTable } from './useDataTable';
+export { useDataTableFilter } from './useDataTableFilter';
 
 // Helpers del modo in-memory (filtros y ordenamiento resueltos en el cliente)
 export { inMemoryDateSortingFn, inMemoryFacetedFilterFn, inMemoryTextFilterFn } from './in-memory';

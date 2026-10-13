@@ -90,7 +90,7 @@ export function TabsManagerClient<M extends ModuleSlug = ModuleSlug>({
   // sidebar, esto ya no navega — cambia la VISTA dentro de una sección. Tiene que leerse
   // distinto para que no parezca un segundo menú.
   //
-  // Antes el trigger llevaba `text-brand font-semibold` fijo, así que activos e inactivos se
+  // Antes el trigger llevaba `text-brand-ink font-semibold` fijo, así que activos e inactivos se
   // veían igual de fuertes y no se distinguía cuál estaba elegido.
   const defaultListClass = isLine
     ? 'flex gap-1 justify-start w-fit bg-transparent'
@@ -98,7 +98,7 @@ export function TabsManagerClient<M extends ModuleSlug = ModuleSlug>({
 
   const defaultTriggerClass = isLine
     ? 'font-semibold data-[state=active]:text-foreground text-foreground/60 hover:text-foreground/80 data-[state=active]:shadow-none transition-colors'
-    : 'text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-brand transition-colors data-[state=active]:font-semibold';
+    : 'text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-brand-ink transition-colors data-[state=active]:font-semibold';
 
   return (
     <div className="flex flex-col gap-4 h-full">

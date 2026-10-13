@@ -5,22 +5,21 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 
 const badgeVariants = cva(
-  'inline-flex items-center justify-center rounded-md border border-transparent px-2 py-0.5 text-xs font-semibold w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive transition-[color,box-shadow] overflow-hidden',
+  'inline-flex items-center justify-center rounded-full border border-transparent px-2.5 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive transition-[color,box-shadow] overflow-hidden',
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground [a&]:hover:bg-primary/90',
-        secondary: 'bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90',
-        destructive:
-          'bg-destructive bg-red-700 text-white [a&]:hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60',
+        default: 'bg-brand-subtle text-brand-subtle-foreground [a&]:hover:bg-brand-subtle/80',
+        secondary: 'bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/80',
+        destructive: 'bg-danger-subtle text-danger-subtle-foreground [a&]:hover:bg-danger-subtle/80',
         outline: 'border-border text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
         ghost: '[a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
-        link: 'text-primary underline-offset-4 [a&]:hover:underline',
-        success: 'bg-green-700/80 text-green-50 [a&]:hover:bg-green-500/90',
-        yellow: 'bg-yellow-500 text-yellow-50 [a&]:hover:bg-yellow-500/80',
-        red: 'bg-red-700/80 text-yellow-50 [a&]:hover:bg-red-500/80',
-        info: 'bg-blue-500 text-blue-50 [a&]:hover:bg-blue-500/80',
-        warning: 'bg-yellow-500/80 text-yellow-50 [a&]:hover:bg-yellow-500/90',
+        link: 'text-brand-ink underline-offset-4 [a&]:hover:underline',
+        success: 'bg-ok-subtle text-ok-subtle-foreground [a&]:hover:bg-ok-subtle/80',
+        yellow: 'bg-warn-subtle text-warn-subtle-foreground [a&]:hover:bg-warn-subtle/80',
+        warning: 'bg-warn-subtle text-warn-subtle-foreground [a&]:hover:bg-warn-subtle/80',
+        red: 'bg-danger-subtle text-danger-subtle-foreground [a&]:hover:bg-danger-subtle/80',
+        info: 'bg-info-subtle text-info-subtle-foreground [a&]:hover:bg-info-subtle/80',
       },
     },
     defaultVariants: {

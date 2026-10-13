@@ -1,4 +1,3 @@
-import { Card } from '@/components/ui/card';
 import { EmployeeDeliveriesTableSkeleton } from '@/features/Clothing/EmployeeDeliveries/EmployeeDeliveriesList/fallback/EmployeeDeliveriesTableSkeleton';
 import { EmployeeDeliveriesTabContent } from '@/features/Clothing/EmployeeDeliveries/EmployeeDeliveriesTabContent';
 import { getEmployeeByIdCached } from '@/features/Employees/EmpleadoID/actions.server';
@@ -56,39 +55,38 @@ export default async function EmployeePage({ searchParams }: EmployeePageProps) 
   );
 
   return (
-    <div className="p-6 space-y-6">
-      <Card>
-        <EmployeeDetailClient
-          employee={employee}
-          employeeId={employeeId}
-          initialMode={mode}
-          companyId={companyId}
-          header={employee ? <EmployeeHeaderContent employee={employee} /> : null}
-          documentsSlot={
-            employeeId ? <EmployeeDocumentDetail employeeId={employeeId} searchParams={resolvedSearchParams} /> : null
-          }
-          diagramsSlot={
-            employeeId && employee ? (
-              <Suspense fallback={<EmployeeDiagramsSkeleton />}>
-                <EmployeeDiagramsSection
-                  employeeId={employeeId}
-                  companyId={companyId}
-                  employee={employee}
-                  searchParams={searchParamsForSlots}
-                />
-              </Suspense>
-            ) : null
-          }
-          clothingSlot={
-            employeeId ? (
-              <Suspense fallback={<EmployeeDeliveriesTableSkeleton />}>
-                <EmployeeDeliveriesTabContent employeeId={employeeId} searchParams={resolvedSearchParams} />
-              </Suspense>
-            ) : null
-          }
-        />
-      </Card>
-    </div>
+    <EmployeeDetailClient
+      // Al cambiar de empleado (o al terminar un alta) el estado interno se reinicia. NO incluye el
+      // modo: `Editar` lo cambia con `replaceState`, y un `key` que cambiara al guardar desmontaría
+      // el formulario con el guardado en curso.
+      key={employeeId}
+      employee={employee}
+      employeeId={employeeId}
+      initialMode={mode}
+      header={employee ? <EmployeeHeaderContent employee={employee} /> : null}
+      documentsSlot={
+        employeeId ? <EmployeeDocumentDetail employeeId={employeeId} searchParams={resolvedSearchParams} /> : null
+      }
+      diagramsSlot={
+        employeeId && employee ? (
+          <Suspense fallback={<EmployeeDiagramsSkeleton />}>
+            <EmployeeDiagramsSection
+              employeeId={employeeId}
+              companyId={companyId}
+              employee={employee}
+              searchParams={searchParamsForSlots}
+            />
+          </Suspense>
+        ) : null
+      }
+      clothingSlot={
+        employeeId ? (
+          <Suspense fallback={<EmployeeDeliveriesTableSkeleton />}>
+            <EmployeeDeliveriesTabContent employeeId={employeeId} searchParams={resolvedSearchParams} />
+          </Suspense>
+        ) : null
+      }
+    />
   );
 }
 

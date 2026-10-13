@@ -3,22 +3,22 @@ import * as React from 'react';
 
 import { cn } from '@/lib/utils';
 
-const cardVariants = cva('rounded-xl border bg-card text-card-foreground shadow', {
+const cardVariants = cva('rounded-xl border bg-card text-card-foreground', {
   variants: {
     variant: {
       default: 'border-border bg-card text-card-foreground',
       outlined: 'border-2 border-border bg-transparent',
       filled: 'border-0 bg-muted text-muted-foreground',
-      elevated: 'border-0 shadow-lg bg-card text-card-foreground',
+      elevated: 'border-0 shadow-md bg-card text-card-foreground',
       ghost: 'border-0 shadow-none bg-transparent',
       primary: 'border-primary bg-primary/5 text-primary border-2',
       secondary: 'border-secondary bg-secondary/5 text-secondary border-2',
       success:
-        'border-emerald-500 bg-emerald-50 text-emerald-700 border-2 dark:bg-emerald-950 dark:text-emerald-300 [&_*]:text-emerald-700 dark:[&_*]:text-emerald-300 [&_.card-description]:text-emerald-600 dark:[&_.card-description]:text-emerald-400 [&_.card-footer]:text-emerald-600 dark:[&_.card-footer]:text-emerald-400',
+        'border-ok/40 bg-ok-subtle text-ok-subtle-foreground border [&_*]:text-ok-subtle-foreground [&_.card-description]:opacity-80 [&_.card-footer]:opacity-80',
       warning:
-        'border-yellow-500 bg-yellow-50 text-yellow-700 border-2 dark:bg-yellow-950 dark:text-yellow-300 [&_*]:text-yellow-700 dark:[&_*]:text-yellow-300 [&_.card-description]:text-yellow-600 dark:[&_.card-description]:text-yellow-400 [&_.card-footer]:text-yellow-600 dark:[&_.card-footer]:text-yellow-400',
+        'border-warn/40 bg-warn-subtle text-warn-subtle-foreground border [&_*]:text-warn-subtle-foreground [&_.card-description]:opacity-80 [&_.card-footer]:opacity-80',
       destructive:
-        'border-destructive bg-destructive/5 text-destructive border-2 [&_*]:text-destructive [&_.card-description]:text-destructive/80 [&_.card-footer]:text-destructive/80',
+        'border-danger/40 bg-danger-subtle text-danger-subtle-foreground border [&_*]:text-danger-subtle-foreground [&_.card-description]:opacity-80 [&_.card-footer]:opacity-80',
     },
     size: {
       sm: 'text-sm',
@@ -34,8 +34,8 @@ const cardVariants = cva('rounded-xl border bg-card text-card-foreground shadow'
     },
     text_color: {
       default: 'text-card-foreground',
-      success: 'text-emerald-700',
-      warning: 'text-yellow-700',
+      success: 'text-ok-subtle-foreground',
+      warning: 'text-warn-subtle-foreground',
       destructive: 'text-destructive',
     },
     rounded: {

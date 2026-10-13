@@ -17,3 +17,13 @@
 
 /** Nombre del producto, tal como se escribe en la interfaz. */
 export const BRAND_NAME = 'alphataco';
+
+/**
+ * Texto del panel de producto de las pantallas de acceso (`features/Auth/components/AuthProductPanel`).
+ * Se cambia por instancia junto con `BRAND_NAME`.
+ */
+export const AUTH_PANEL = {
+  eyebrow: 'Cumplimiento en tiempo real',
+  headline: 'Personal, equipos y documentación, al día y a la vista.',
+  description: 'Cada vencimiento con su semáforo. Cada persona, con su legajo.',
+} as const;

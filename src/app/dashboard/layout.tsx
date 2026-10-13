@@ -6,7 +6,7 @@ import { DashboardHeader } from '@/features/Layout/header/DashboardHeader';
 import { AppSidebar } from '@/features/Layout/sidebar/AppSidebar';
 import { PasswordChangeAlertWrapper } from '@/shared/components/auth/PasswordChangeAlertWrapper';
 import TanstackQueryInicializador from '@/shared/providers/TanstackQueryInicializador';
-import { dehydrate, HydrationBoundary, QueryClient } from '@tanstack/react-query';
+import { HydrationBoundary, QueryClient, dehydrate } from '@tanstack/react-query';
 import { Suspense } from 'react';
 
 /**
@@ -63,7 +63,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
           <Suspense fallback={null}>
             <PasswordChangeAlertWrapper />
           </Suspense>
-          <div className="min-w-0 flex-1 px-6 pb-4">{children}</div>
+          <div className="min-w-0 flex-1 px-4 py-6 sm:px-8">{children}</div>
         </SidebarInset>
       </SidebarProvider>
     </SupportTicketsRealtimeProvider>

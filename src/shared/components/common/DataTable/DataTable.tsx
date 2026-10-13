@@ -83,6 +83,23 @@ function getActiveFilterColumnIds(
  * Para datos que no se pueden paginar server-side (ej: un RPC que devuelve un JSON
  * entero). La URL se actualiza igual que en client-side mode, sin navegación.
  */
+/**
+ * Estilos de `mobileCards`: debajo de `md` la tabla se convierte en una pila de tarjetas. Van
+ * escritos completos (Tailwind v4 no genera clases armadas en runtime). Las dos primeras celdas
+ * (selector e identidad) ocupan todo el ancho y sin rótulo; las demás llevan su `meta.title`.
+ */
+const MOBILE_CARDS_WRAPPER = [
+  'max-md:max-h-none max-md:overflow-visible max-md:border-0',
+  'max-md:[&_table]:block max-md:[&_thead]:hidden max-md:[&_tbody]:block max-md:[&_tbody]:space-y-3',
+  'max-md:[&_tr]:bg-card max-md:[&_tr]:grid max-md:[&_tr]:grid-cols-2 max-md:[&_tr]:gap-x-4 max-md:[&_tr]:gap-y-2 max-md:[&_tr]:rounded-xl max-md:[&_tr]:border max-md:[&_tr]:p-4',
+  'max-md:[&_td]:block max-md:[&_td]:min-w-0 max-md:[&_td]:p-0 max-md:[&_td]:whitespace-normal',
+  'max-md:[&_td:nth-child(-n+2)]:col-span-2',
+  // Se muestran selector, identidad y las 5 columnas siguientes; el resto queda en la tabla de escritorio.
+  'max-md:[&_td:nth-child(n+8):not(:last-child)]:hidden',
+  'max-md:[&_td:nth-child(n+3):not(:last-child)]:before:text-muted-foreground max-md:[&_td:nth-child(n+3):not(:last-child)]:before:block max-md:[&_td:nth-child(n+3):not(:last-child)]:before:text-xs max-md:[&_td:nth-child(n+3):not(:last-child)]:before:content-[attr(data-label)]',
+  'max-md:[&_td:last-child]:col-span-2 max-md:[&_td:last-child]:justify-self-end',
+].join(' ');
+
 export function DataTable<TData extends Record<string, unknown>, TValue = unknown>({
   columns,
   data: propData,
@@ -103,6 +120,7 @@ export function DataTable<TData extends Record<string, unknown>, TValue = unknow
   exportConfig,
   showExportButton = true,
   showSearch = false,
+  mobileCards = false,
   initialColumnVisibility = {},
   initialPageSize,
   initialSorting,
@@ -506,8 +524,8 @@ export function DataTable<TData extends Record<string, unknown>, TValue = unknow
         />
 
         {/* Table */}
-        <div className="rounded-md border overflow-auto max-h-[60vh]">
-          <Table containerClassName="overflow-x-visible overflow-y-visible min-w-fit">
+        <div className={cn('overflow-auto rounded-md border max-h-[60vh]', mobileCards && MOBILE_CARDS_WRAPPER)}>
+          <Table containerClassName="overflow-x-visible overflow-y-visible min-w-fit max-md:min-w-0">
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>
@@ -533,7 +551,12 @@ export function DataTable<TData extends Record<string, unknown>, TValue = unknow
                     className={rowClassName ? rowClassName(row.original) : undefined}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                      <TableCell
+                        key={cell.id}
+                        data-label={(cell.column.columnDef.meta as { title?: string } | undefined)?.title}
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
                     ))}
                   </TableRow>
                 ))

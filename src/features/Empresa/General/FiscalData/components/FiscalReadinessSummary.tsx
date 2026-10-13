@@ -19,7 +19,7 @@ const ITEM_ICONS = {
 } as const;
 
 const ITEM_ICON_STYLES: Record<ItemState, string> = {
-  ok: 'text-brand',
+  ok: 'text-brand-ink',
   warning: 'text-amber-600 dark:text-amber-400',
   missing: 'text-muted-foreground',
   error: 'text-destructive',

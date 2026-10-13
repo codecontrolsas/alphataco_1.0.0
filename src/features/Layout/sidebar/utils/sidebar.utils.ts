@@ -1,4 +1,4 @@
-import { NavigationLink } from '../constants/navigation';
+import { subLinkKey, type NavigationLink } from '../constants/navigation';
 
 /**
  * Crea una expresión regular para matching de rutas
@@ -58,7 +58,7 @@ export function buildSidebarItems(
       if (!link.items) return link;
 
       const visible = new Set(visibleTabs[link.moduleSlug] ?? []);
-      return { ...link, items: link.items.filter((item) => visible.has(item.tabSlug)) };
+      return { ...link, items: link.items.filter((item) => visible.has(subLinkKey(item))) };
     });
 }
 
@@ -70,12 +70,22 @@ export function buildSidebarItems(
  * primera tab de la lista. En los 9 modulos con tabs el `defaultTab` declarado ES la primera,
  * asi que "la primera visible" y "la que el modulo abre por defecto" coinciden.
  *
- * @returns el `tabSlug` activo, o `null` si el modulo no tiene sub-items visibles
+ * Si la tab tiene varios sub-items (cada uno con su `subTabSlug`), elige el del `?subtab=` y,
+ * sin ese param, el primero.
+ *
+ * @returns la clave del sub-item activo (`subLinkKey`), o `null` si el modulo no tiene sub-items visibles
  */
-export function resolveActiveTab(item: NavigationLink, tabParam: string | null): string | null {
-  if (!item.items?.length) return null;
+export function resolveActiveTab(
+  item: NavigationLink,
+  tabParam: string | null,
+  subTabParam: string | null = null
+): string | null {
+  const items = item.items;
+  if (!items?.length) return null;
 
-  if (tabParam && item.items.some((sub) => sub.tabSlug === tabParam)) return tabParam;
+  const activeTab = tabParam && items.some((sub) => sub.tabSlug === tabParam) ? tabParam : items[0].tabSlug;
+  const candidates = items.filter((sub) => sub.tabSlug === activeTab);
+  const active = candidates.find((sub) => sub.subTabSlug && sub.subTabSlug === subTabParam) ?? candidates[0];
 
-  return item.items[0].tabSlug;
+  return subLinkKey(active);
 }

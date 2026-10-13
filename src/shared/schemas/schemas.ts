@@ -1,5 +1,5 @@
-import { isCompanyCuitAvailable } from '@/shared/actions/company-validation.server';
 import { validarCUIL } from '@/lib/utils';
+import { isCompanyCuitAvailable } from '@/shared/actions/company-validation.server';
 import * as z from 'zod';
 
 /** true si NO existe otra empresa con ese CUIT (validación asíncrona del form de empresa). */
@@ -22,10 +22,17 @@ const passwordSchema = z
     message: 'La contraseña debe tener al menos un carácter especial.',
   });
 
+/**
+ * Ingreso. La contraseña sólo se exige NO vacía: la política de complejidad (`passwordSchema`)
+ * rige al crearla o cambiarla. Aplicarla acá bloquearía a quien tiene una contraseña anterior a
+ * la política y le mostraría las reglas antes de saber si el mail existe.
+ */
 export const loginSchema = z.object({
-  email: z.string().email({ message: 'Email inválido' }),
-  password: passwordSchema,
+  email: z.string().trim().min(1, { message: 'Ingresá tu correo.' }).email({ message: 'Ingresá un correo válido.' }),
+  password: z.string().min(1, { message: 'Ingresá tu contraseña.' }),
 });
+
+export type LoginValues = z.infer<typeof loginSchema>;
 
 export const registerSchema = z
   .object({

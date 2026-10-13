@@ -62,7 +62,7 @@ function ColumnVisibilityOptions<TData>({ table }: { table: Table<TData> }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="ml-auto hidden h-8 lg:flex" data-testid="column-toggle">
+        <Button variant="outline" size="sm" className="ml-auto hidden h-9 lg:flex" data-testid="column-toggle">
           <Settings2 className="mr-2 h-4 w-4" />
           Columnas
         </Button>
@@ -176,7 +176,7 @@ function ColumnOrderOptions<TData>({ table }: { table: Table<TData> }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="ml-auto hidden h-8 lg:flex" data-testid="column-toggle">
+        <Button variant="outline" size="sm" className="ml-auto hidden h-9 lg:flex" data-testid="column-toggle">
           <Settings2 className="mr-2 h-4 w-4" />
           Columnas
         </Button>

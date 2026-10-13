@@ -82,7 +82,7 @@ export function WorkflowPipelineChevrons({ steps, counts, activeStep, onStepClic
                 <span
                   className={cn(
                     'shrink-0 inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-bold min-w-[24px] tabular-nums',
-                    isActive ? 'bg-card text-brand' : 'bg-brand text-white'
+                    isActive ? 'bg-card text-brand-ink' : 'bg-brand text-white'
                   )}
                 >
                   {count}

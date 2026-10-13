@@ -10,6 +10,9 @@ import {
   SidebarSeparator,
 } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
+import { BrandMark } from '@/shared/components/brand/BrandMark';
+import { BRAND_NAME } from '@/shared/lib/branding';
+import Link from 'next/link';
 import { Suspense } from 'react';
 import { CompanySwitcherAsync } from './components/async/CompanySwitcherAsync';
 import { NavMainAsync } from './components/async/NavMainAsync';
@@ -17,7 +20,7 @@ import { NavUserAsync } from './components/async/NavUserAsync';
 
 /**
  * AppSidebar — el sidebar del dashboard, con la anatomía del bloque `sidebar-07` de shadcn:
- * header (selector de empresa), content (módulos con sus tabs), footer (usuario) y rail.
+ * header (marca y selector de empresa), content (módulos con sus tabs), footer (usuario) y rail.
  *
  * Es un Server Component: la estructura se renderiza de inmediato y cada pieza que depende
  * de datos (empresas, permisos, perfil) llega por streaming en su propio Suspense, igual que
@@ -29,7 +32,14 @@ import { NavUserAsync } from './components/async/NavUserAsync';
 export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r">
-      <SidebarHeader className="bg-brand/5 border-b p-2">
+      <SidebarHeader className="gap-2 border-b p-3">
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-2.5 px-1 text-lg font-bold lowercase group-data-[collapsible=icon]:justify-center"
+        >
+          <BrandMark size={28} />
+          <span className="group-data-[collapsible=icon]:hidden">{BRAND_NAME}</span>
+        </Link>
         <Suspense fallback={<Skeleton className="h-12 w-full rounded-md" />}>
           <CompanySwitcherAsync />
         </Suspense>

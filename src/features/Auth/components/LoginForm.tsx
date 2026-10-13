@@ -1,101 +1,171 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import GoogleButton from '@/features/Auth/components/GoogleButton';
-import { LoginButton } from '@/features/Auth/components/LoginButton';
-import { cn } from '@/lib/utils';
-import { isGoogleLoginEnabled } from '@/shared/lib/auth';
-import Link from 'next/link';
+'use client';
 
-interface LoginFormProps extends React.ComponentPropsWithoutRef<'div'> {
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { login } from '@/features/Auth/actions/login-actions';
+import { loginSchema, type LoginValues } from '@/shared/schemas/schemas';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { CircleAlert, CircleCheck, Loader2, TriangleAlert } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useTransition } from 'react';
+import { useForm } from 'react-hook-form';
+import GoogleButton from './GoogleButton';
+import { PasswordInput } from './PasswordInput';
+
+interface LoginFormProps {
+  /** Ruta interna a la que ir después de ingresar (ya validada por el servidor). */
+  next: string;
   /** `googleLogin()` manda a `/login?error=oauth` cuando el callback de Google falla. */
-  error?: string;
+  oauthFailed?: boolean;
+  /** Botón de Google: opcional por instancia (ver `showGoogleLoginButton`). */
+  showGoogle?: boolean;
+  /** Llegó desde "Guardar contraseña": avisa que ya puede ingresar con la nueva. */
+  passwordUpdated?: boolean;
 }
 
 /**
- * Formulario de ingreso — bloque `login-03` de shadcn adaptado al login de la app.
- *
- * Diferencias con el bloque original, todas por cómo funciona el sistema:
- * - No hay "Login with Apple": el único proveedor social configurado es Google, y sólo aparece
- *   si hay credenciales (`isGoogleLoginEnabled`); sin ellas se va también el separador.
- * - No hay "Sign up": el alta de usuarios la hace un administrador (`disableSignUp`).
- * - No hay pie de Términos y Privacidad: esas páginas no existen.
- *
- * Los `<p id="email_error">` / `<p id="password_error">` NO son decorativos: `LoginButton`
- * valida con Zod en el cliente y escribe los mensajes ahí por `getElementById`. Si se les
- * cambia el id, la validación deja de mostrar errores sin que nada falle.
+ * Formulario de ingreso. Los errores de validación salen junto a cada campo y el rechazo del
+ * servidor en un aviso fijo arriba del formulario (no en un toast que se va solo).
  */
-export function LoginForm({ className, error, ...props }: LoginFormProps) {
-  return (
-    <div className={cn('flex flex-col gap-6', className)} {...props}>
-      <Card>
-        <CardHeader className="text-center">
-          <CardTitle className="text-xl">¡Es un placer verte de nuevo!</CardTitle>
-          <CardDescription>Ingresá con tu correo y contraseña</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {error === 'oauth' && (
-            <div className="mb-6 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-              No pudimos iniciar sesión con Google. Si es la primera vez que entrás, pedile a un
-              administrador de tu empresa que te dé de alta: el sistema no crea cuentas solo.
-            </div>
-          )}
-          <form>
-            <div className="grid gap-6">
-              {isGoogleLoginEnabled && (
-                <>
-                  <div className="flex flex-col gap-4">
-                    <GoogleButton />
-                  </div>
-                  <div className="after:border-border relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t">
-                    <span className="bg-card text-muted-foreground relative z-10 px-2">O continuá con</span>
-                  </div>
-                </>
-              )}
+export function LoginForm({ next, oauthFailed = false, showGoogle = false, passwordUpdated = false }: LoginFormProps) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
 
-              <div className="grid gap-6">
-                <div className="grid gap-2">
-                  <Label htmlFor="email">Email</Label>
+  const form = useForm<LoginValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: '', password: '' },
+  });
+
+  const rejection = form.formState.errors.root;
+
+  const onSubmit = (values: LoginValues) => {
+    startTransition(async () => {
+      const result = await login(values);
+      if ('success' in result) {
+        // Sigue "pendiente" hasta que la navegación termina: el botón no se rehabilita a mitad de camino.
+        router.replace(next);
+        router.refresh();
+        return;
+      }
+      form.setError('root', { type: result.code, message: result.error });
+      if (result.code === 'invalid_credentials') form.resetField('password');
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      {passwordUpdated && (
+        <Alert variant="success" role="status">
+          <CircleCheck />
+          <AlertTitle className="line-clamp-none">Contraseña actualizada</AlertTitle>
+          <AlertDescription>Ya podés ingresar con la nueva.</AlertDescription>
+        </Alert>
+      )}
+
+      {oauthFailed && (
+        <Alert variant="warning">
+          <TriangleAlert />
+          <AlertTitle>No pudimos entrar con Google</AlertTitle>
+          <AlertDescription>
+            Si es tu primera vez, pedile a un administrador de tu empresa que te dé de alta: el sistema no crea cuentas
+            solo.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {rejection?.message && (
+        <Alert variant="destructive">
+          <CircleAlert />
+          <AlertTitle className="line-clamp-none">{rejection.message}</AlertTitle>
+          {rejection.type === 'invalid_credentials' && (
+            <AlertDescription>
+              Revisá los datos e intentá de nuevo. Si no la recordás, podés{' '}
+              <Link href="/reset_password" className="text-foreground font-medium underline underline-offset-4">
+                recuperarla
+              </Link>
+              .
+            </AlertDescription>
+          )}
+        </Alert>
+      )}
+
+      {showGoogle && (
+        <>
+          <GoogleButton next={next} />
+          <div className="text-muted-foreground flex items-center gap-3 text-sm">
+            <span className="bg-border h-px flex-1" />o con tu correo
+            <span className="bg-border h-px flex-1" />
+          </div>
+        </>
+      )}
+
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-5">
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Correo electrónico</FormLabel>
+                <FormControl>
                   <Input
-                    id="email"
-                    name="email"
+                    {...field}
                     type="email"
-                    placeholder="ejemplo@correo.com"
-                    autoComplete="email"
+                    inputMode="email"
+                    autoComplete="username"
+                    placeholder="nombre@empresa.com"
+                    autoFocus
                     data-testid="login-email-input"
                   />
-                  <p id="email_error" className="text-sm" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <div className="flex items-baseline justify-between">
+                  <FormLabel>Contraseña</FormLabel>
+                  <Link href="/reset_password" className="text-brand-ink text-sm font-medium hover:underline">
+                    ¿La olvidaste?
+                  </Link>
                 </div>
+                <FormControl>
+                  <PasswordInput {...field} autoComplete="current-password" data-testid="login-password-input" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-                <div className="grid gap-2">
-                  <div className="flex items-center">
-                    <Label htmlFor="password">Contraseña</Label>
-                    <Link
-                      href="/reset_password"
-                      className="ml-auto text-sm underline-offset-4 hover:underline"
-                    >
-                      ¿Olvidaste tu contraseña?
-                    </Link>
-                  </div>
-                  <Input
-                    id="password"
-                    name="password"
-                    type="password"
-                    placeholder="Tu contraseña"
-                    autoComplete="current-password"
-                    data-testid="login-password-input"
-                  />
-                  <p id="password_error" className="text-sm" />
-                </div>
+          <Button
+            type="submit"
+            size="lg"
+            className="w-full"
+            disabled={isPending}
+            aria-busy={isPending}
+            data-testid="login-submit-button"
+          >
+            {isPending ? (
+              <>
+                <Loader2 className="animate-spin motion-reduce:animate-none" />
+                Ingresando…
+              </>
+            ) : (
+              'Ingresar'
+            )}
+          </Button>
+        </form>
+      </Form>
 
-                <LoginButton />
-              </div>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-
-      <p className="text-muted-foreground text-center text-xs text-balance">
+      <p className="text-muted-foreground border-t pt-5 text-sm text-pretty">
         ¿No tenés cuenta? El alta la hace un administrador de tu empresa.
       </p>
     </div>
