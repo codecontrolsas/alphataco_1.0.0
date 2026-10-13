@@ -1,7 +1,6 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   buildDateRangeFiltersWhere,
   buildFiltersWhere,
@@ -13,6 +12,7 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 
 const logger = new Logger('Equipos/DadosDeBaja/OtrosEquipos/actions.server');
 
@@ -250,7 +250,7 @@ export async function getInactiveOtherEquipmentPaginated(searchParams: DataTable
       }
     }
 
-    const safeOrderBy = [...resolvedSorts, { created_at: 'desc' as const }];
+    const safeOrderBy = [...resolvedSorts, { termination_date: 'desc' as const }, { created_at: 'desc' as const }];
 
     const [rawData, total] = await Promise.all([
       prisma.other_equipment.findMany({
@@ -263,11 +263,22 @@ export async function getInactiveOtherEquipmentPaginated(searchParams: DataTable
       prisma.other_equipment.count({ where }),
     ]);
 
-    return { data: rawData, total };
+    return { data: rawData.map(withNumericDecimals), total };
   } catch (error) {
     logger.error('Error al obtener equipos dados de baja paginados', { data: { error } });
     throw new Error('Error al obtener los equipos dados de baja');
   }
+}
+
+/** `horometer` e `initial_value` son Decimal: no se pueden pasar a un Client Component. Se entregan como número. */
+function withNumericDecimals<
+  T extends { horometer: { toString(): string } | null; initial_value: { toString(): string } | null },
+>(equipment: T) {
+  return {
+    ...equipment,
+    horometer: equipment.horometer === null ? null : Number(equipment.horometer),
+    initial_value: equipment.initial_value === null ? null : Number(equipment.initial_value),
+  };
 }
 
 export type InactiveOtherEquipmentListItem = Awaited<
@@ -290,12 +301,12 @@ export async function getAllInactiveOtherEquipmentForExport(searchParams: DataTa
     const where = buildWhereClause(companyId, state);
 
     const rawData = await prisma.other_equipment.findMany({
-      orderBy: [{ created_at: 'desc' }],
+      orderBy: [{ termination_date: 'desc' }, { created_at: 'desc' }],
       where,
       select: INACTIVE_OTHER_EQUIPMENT_SELECT,
     });
 
-    return rawData;
+    return rawData.map(withNumericDecimals);
   } catch (error) {
     logger.error('Error al exportar equipos dados de baja', { data: { error } });
     throw new Error('Error al exportar los equipos dados de baja');

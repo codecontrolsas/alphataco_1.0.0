@@ -3,7 +3,6 @@ import { VehicleHeaderSkeleton } from '@/features/Equipos/EquipoID/skeletons/veh
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 
-import { Card } from '@/components/ui/card';
 import { getCostCenterOptions } from '@/features/Empresa/General/actions/cost-centers.server';
 import { fetchAllContractorForVehicles } from '@/features/Equipos/EquipoID/actions/vehicle-actions';
 import { EquipmentDocumentDetail } from '@/features/Equipos/EquipoID/components/equipment-document-detail';
@@ -28,7 +27,6 @@ import {
 } from '@/features/Equipos/EquipoID/lib/actions/vehicle-operations-actions';
 import { getUserPermissionsMapServer } from '@/features/Permissions';
 import { Logger } from '@/lib/logger';
-import BackButton from '@/shared/components/common/BackButton';
 
 // Componentes de Otros Equipos
 import {
@@ -62,17 +60,27 @@ export default async function VehiclePage({ searchParams }: VehiclePageProps) {
   // ─── OTROS EQUIPOS ────────────────────────────────────────────────────────
 
   if (isOtherEquipment) {
-    let equipment: OtherEquipmentById = null;
+    const actualMode = mode === 'new' || !id ? 'new' : mode;
 
-    if (mode !== 'new') {
+    // Las certificaciones (tab Documentos) solo se muestran en la ficha en lectura, y el id ya está en la URL:
+    // se piden junto con el equipo en vez de esperar a tenerlo. Si fallan solas, la ficha sigue existiendo.
+    let equipment: OtherEquipmentById = null;
+    let certificationsData: Awaited<ReturnType<typeof getOtherEquipmentCertifications>> = [];
+
+    if (actualMode !== 'new') {
+      const certificationsRequest =
+        actualMode === 'view'
+          ? getOtherEquipmentCertifications(id!).catch((error) => {
+              logger.error('Error fetching other equipment certifications', { data: { error } });
+              return [];
+            })
+          : Promise.resolve([]);
       try {
-        equipment = await getOtherEquipmentById(id!);
+        [equipment, certificationsData] = await Promise.all([getOtherEquipmentById(id!), certificationsRequest]);
       } catch {
         notFound();
       }
     }
-
-    const actualMode = mode === 'new' || !id ? 'new' : mode;
 
     // Catálogos compartidos con vehículos
     const brandsPromise = getVehicleBrands();
@@ -85,54 +93,44 @@ export default async function VehiclePage({ searchParams }: VehiclePageProps) {
     const hierarchicalPositionsPromise = getHierarchicalPositions();
     const vehiclesPromise = getVehiclesForSelect();
 
-    // Certificaciones (solo cuando hay equipo)
-    const certificationsData = equipment?.id ? await getOtherEquipmentCertifications(equipment.id) : [];
-
     return (
-      <div className="p-6 space-y-6">
-        <Card className="p-4">
-          {/* Header del equipo */}
-          {actualMode !== 'new' ? (
-            <Suspense fallback={<OtherEquipmentHeaderSkeleton />}>
-              <OtherEquipmentHeader mode={actualMode as 'view' | 'edit'} equipment={equipment!} />
-            </Suspense>
-          ) : (
-            <div className="flex justify-end p-4 pb-0">
-              <BackButton />
-            </div>
-          )}
+      <div className="space-y-6">
+        {/* La cabecera es de la ficha en lectura; edición y alta traen su propio título. */}
+        {actualMode === 'view' && equipment && (
+          <Suspense fallback={<OtherEquipmentHeaderSkeleton />}>
+            <OtherEquipmentHeader equipment={equipment} />
+          </Suspense>
+        )}
 
-          {/* Formulario del equipo */}
-          {/* key ligada al id: fuerza re-montaje al navegar entre equipos para que RHF reinicialice los defaultValues */}
-          <OtherEquipmentForm
-            key={equipment?.id ?? 'new'}
-            equipmentId={equipment?.id}
-            mode={actualMode as 'view' | 'edit' | 'new'}
-            equipment={equipment}
-            brandsPromise={brandsPromise}
-            modelsPromise={modelsPromise}
-            typesPromise={typesPromise}
-            subTypesPromise={subTypesPromise}
-            ownersPromise={ownersPromise}
-            contractorsPromise={contractorsPromise}
-            costCentersPromise={costCentersPromise}
-            hierarchicalPositionsPromise={hierarchicalPositionsPromise}
-            vehiclesPromise={vehiclesPromise}
-            certificationsComponent={
-              equipment?.id ? (
-                <OtherEquipmentCertifications equipmentId={equipment.id} initialData={certificationsData} />
-              ) : null
-            }
-            qrComponent={
-              equipment?.id && equipment.type?.generates_qr ? (
-                <OtherEquipmentQr
-                  equipmentId={equipment.id}
-                  equipmentLabel={equipment.serial_number || equipment.intern_number || equipment.id}
-                />
-              ) : null
-            }
-          />
-        </Card>
+        {/* key ligada al id: fuerza re-montaje al navegar entre equipos para que RHF reinicialice los defaultValues */}
+        <OtherEquipmentForm
+          key={equipment?.id ?? 'new'}
+          equipmentId={equipment?.id}
+          mode={actualMode as 'view' | 'edit' | 'new'}
+          equipment={equipment}
+          brandsPromise={brandsPromise}
+          modelsPromise={modelsPromise}
+          typesPromise={typesPromise}
+          subTypesPromise={subTypesPromise}
+          ownersPromise={ownersPromise}
+          contractorsPromise={contractorsPromise}
+          costCentersPromise={costCentersPromise}
+          hierarchicalPositionsPromise={hierarchicalPositionsPromise}
+          vehiclesPromise={vehiclesPromise}
+          certificationsComponent={
+            equipment?.id ? (
+              <OtherEquipmentCertifications equipmentId={equipment.id} initialData={certificationsData} />
+            ) : null
+          }
+          qrComponent={
+            equipment?.id && equipment.type?.generates_qr ? (
+              <OtherEquipmentQr
+                equipmentId={equipment.id}
+                equipmentLabel={equipment.serial_number || equipment.intern_number || equipment.id}
+              />
+            ) : null
+          }
+        />
       </div>
     );
   }

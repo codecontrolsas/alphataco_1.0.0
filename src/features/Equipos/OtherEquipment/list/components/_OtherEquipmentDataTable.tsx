@@ -149,7 +149,7 @@ export function _OtherEquipmentDataTable({
 
   // Filtros visibles por defecto: solo los 3 mas comunes.
   // El resto se crean pero ocultos — el usuario los activa con el toggle de filtros.
-  const DEFAULT_VISIBLE_FILTERS = ['condition', 'status', 'type'];
+  const DEFAULT_VISIBLE_FILTERS = ['condition', 'type', 'contractor_other_equipment', 'status'];
   const mergedFilterVisibility = useMemo(() => {
     // Si el usuario ya tiene preferencias guardadas, usarlas
     if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
@@ -246,7 +246,7 @@ export function _OtherEquipmentDataTable({
       },
       {
         columnId: 'status',
-        title: 'Estado',
+        title: 'Documentación',
         fetchFacet: makeEnumFetchFacet('status', Object.values(status_type), otherEquipmentStatusLabels, {}),
       },
       {
@@ -302,7 +302,7 @@ export function _OtherEquipmentDataTable({
       // ── M:M ─────────────────────────────────────────────────────────────────
       {
         columnId: 'contractor_other_equipment',
-        title: 'Afectaciones',
+        title: 'Afectado a',
         fetchFacet: makeFkFetchFacet('contractor_other_equipment', 'Sin afectar'),
       },
 
@@ -394,7 +394,9 @@ export function _OtherEquipmentDataTable({
       persistViewPreferences={true}
       enableColumnReorder={true}
       initialColumnOrder={initialColumnOrder}
-      searchPlaceholder="Buscar por N° Serie, N° Interno, placa..."
+      searchPlaceholder="Buscar por serie, interno o placa del fabricante"
+      showSearch
+      mobileCards
       showFilterToggle={true}
       toolbarActions={toolbarActions}
       emptyMessage="No hay equipos registrados"
@@ -413,13 +415,13 @@ export function _OtherEquipmentDataTable({
           currency: (val) => currencyLabels[val as string] ?? String(val ?? ''),
           type_of_contract: (val) => contractTypeVehiclesLabels[val as string] ?? String(val ?? ''),
           reason_for_termination: (val) => terminationReasonEquipmentLabels[val as string] ?? String(val ?? ''),
-          purchase_date: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
-          termination_date: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
+          purchase_date: (val) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
+          termination_date: (val) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
           created_at: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
           initial_value: (val) => (val != null ? String(val) : ''),
           horometer: (val) => (val != null ? `${String(val)} h` : ''),
           has_certification: (val) => (val ? 'Sí' : 'No'),
-          certification_expiration_date: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
+          certification_expiration_date: (val) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
         },
       }}
     />

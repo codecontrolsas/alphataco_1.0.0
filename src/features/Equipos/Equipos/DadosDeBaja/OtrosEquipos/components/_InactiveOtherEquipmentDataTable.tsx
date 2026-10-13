@@ -26,13 +26,14 @@ import type { LucideIcon } from 'lucide-react';
 import { CircleOff } from 'lucide-react';
 import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
+import { conditionIcons } from '../../../VehicleList/columns';
 import {
   getAllInactiveOtherEquipmentForExport,
   getInactiveOtherEquipmentPaginated,
   getInactiveOtherEquipmentSingleFacet,
   type InactiveOtherEquipmentListItem,
 } from '../actions/actions.server';
-import { HIDDEN_COLUMNS_BY_DEFAULT, columns, conditionIcons } from './columns';
+import { HIDDEN_COLUMNS_BY_DEFAULT, columns } from './columns';
 
 // ============================================================================
 // TYPES
@@ -363,7 +364,9 @@ export function _InactiveOtherEquipmentDataTable({
       queryFn={tableQueryFn}
       queryKey={['inactive-other-equipment-list']}
       onStateChange={handleStateChange}
-      searchPlaceholder="Buscar por N° Serie, N° Interno, placa..."
+      searchPlaceholder="Buscar por serie, interno o placa del fabricante"
+      showSearch
+      mobileCards
       facetedFilters={facetedFilters}
       initialColumnVisibility={mergedColumnVisibility}
       initialFilterVisibility={mergedFilterVisibility}
@@ -385,8 +388,8 @@ export function _InactiveOtherEquipmentDataTable({
           cost_type: (val) => costTypeLabels[val as string] ?? String(val ?? ''),
           currency: (val) => currencyLabels[val as string] ?? String(val ?? ''),
           reason_for_termination: (val) => terminationReasonEquipmentLabels[val as string] ?? String(val ?? ''),
-          purchase_date: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
-          termination_date: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
+          purchase_date: (val) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
+          termination_date: (val) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
           created_at: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
           initial_value: (val) => (val != null ? String(val) : ''),
           horometer: (val) => (val != null ? `${String(val)} h` : ''),

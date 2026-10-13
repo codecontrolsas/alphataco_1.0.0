@@ -1,7 +1,6 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   buildDateRangeFiltersWhere,
   buildFiltersWhere,
@@ -13,6 +12,7 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 
 const logger = new Logger('InactiveVehicles/actions.server');
 
@@ -270,11 +270,16 @@ export async function getInactiveVehiclesPaginated(searchParams: DataTableSearch
       prisma.vehicles.count({ where }),
     ]);
 
-    return { data: rawData, total };
+    return { data: rawData.map(withNumericPrice), total };
   } catch (error) {
     logger.error('Error al obtener vehículos dados de baja paginados', { data: { error } });
     throw new Error('Error al obtener los vehículos dados de baja');
   }
+}
+
+/** `price` es Decimal: no se puede pasar a un Client Component. Se entrega como número. */
+function withNumericPrice<T extends { price: { toString(): string } | null }>(vehicle: T) {
+  return { ...vehicle, price: vehicle.price === null ? null : Number(vehicle.price) };
 }
 
 export type InactiveVehicleListItem = Awaited<ReturnType<typeof getInactiveVehiclesPaginated>>['data'][number];
@@ -300,7 +305,7 @@ export async function getAllInactiveVehiclesForExport(searchParams: DataTableSea
       select: INACTIVE_VEHICLE_SELECT,
     });
 
-    return rawData;
+    return rawData.map(withNumericPrice);
   } catch (error) {
     logger.error('Error al exportar vehículos dados de baja', { data: { error } });
     throw new Error('Error al exportar los vehículos dados de baja');

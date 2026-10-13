@@ -1,6 +1,13 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
@@ -13,41 +20,44 @@ import {
   terminationReasonEquipmentLabels,
 } from '@/shared/utils/mappers';
 import type { ColumnDef } from '@tanstack/react-table';
-import { AlertTriangle, CheckCircle2, Clock, Wrench, XCircle } from 'lucide-react';
+import { Eye, MoreHorizontal } from 'lucide-react';
 import moment from 'moment';
 import Link from 'next/link';
-import React from 'react';
+import { conditionIcons, conditionVariants } from '../../../VehicleList/columns';
 import type { InactiveVehicleListItem } from '../actions/actions.server';
 
 // ============================================================================
-// CONDITION CONFIG — debe coincidir con los iconos de los filtros
+// HELPERS
 // ============================================================================
 
-type ConditionIconMap = Record<string, React.ComponentType<{ className?: string }>>;
+const getEquipmentHref = (id: string) => `/dashboard/equipment/action?action=view&id=${id}`;
 
-export const conditionIcons: ConditionIconMap = {
-  operativo: CheckCircle2,
-  no_operativo: XCircle,
-  en_reparacion: Wrench,
-  operativo_condicionado: AlertTriangle,
-  en_preparacion: Clock,
-};
+function EmptyCell() {
+  return <span className="text-muted-foreground">-</span>;
+}
 
-type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'yellow' | 'info';
-
-const conditionVariants: Record<string, BadgeVariant> = {
-  operativo: 'success',
-  no_operativo: 'destructive',
-  en_reparacion: 'yellow',
-  operativo_condicionado: 'info',
-  en_preparacion: 'secondary',
-};
+/** Fecha @db.Date: llega como medianoche UTC, se lee en UTC para no correrla un día. */
+function DateCell({ value }: { value: Date | string | null | undefined }) {
+  if (!value) return <EmptyCell />;
+  return <span className="font-mono tabular-nums">{moment.utc(value).format('DD/MM/YYYY')}</span>;
+}
 
 // ============================================================================
 // HIDDEN COLUMNS BY DEFAULT
 // ============================================================================
 
 export const HIDDEN_COLUMNS_BY_DEFAULT = [
+  // Su dato ya se ve en la columna 'equipment'
+  'intern_number',
+  'type',
+  'brand',
+  'model',
+  'year',
+  // Secundarias
+  'condition',
+  'status',
+  'engine_hours',
+  'contractor_equipment',
   'chassis',
   'engine',
   'serie',
@@ -70,28 +80,96 @@ export const HIDDEN_COLUMNS_BY_DEFAULT = [
 // ============================================================================
 
 export const columns: ColumnDef<InactiveVehicleListItem>[] = [
-  // ─── Dominio ──────────────────────────────────────────────────────────────
+  // ─── Dominio (identidad de la fila) ──────────────────────────────────────
   {
     accessorKey: 'domain',
     meta: { title: 'Dominio' },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Dominio" />,
     cell: ({ row }) => (
       <Link
-        href={`/dashboard/equipment/action?action=view&id=${row.original.id}`}
-        className="font-medium hover:underline"
+        href={getEquipmentHref(row.original.id)}
+        className="font-mono font-semibold tabular-nums text-foreground hover:text-brand-ink hover:underline"
       >
         {row.original.domain ?? '-'}
       </Link>
     ),
   },
 
-  // ─── N° Interno ──────────────────────────────────────────────────────────
+  // ─── Equipo (identidad compuesta: Marca Modelo / Tipo · Año · N° interno) ─
+  {
+    id: 'equipment',
+    accessorFn: (row) => [row.brand_vehicles?.name, row.model_vehicles?.name].filter(Boolean).join(' '),
+    meta: { title: 'Equipo', excludeFromExport: true },
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Equipo" />,
+    cell: ({ row }) => {
+      const v = row.original;
+      const title = [v.brand_vehicles?.name, v.model_vehicles?.name].filter(Boolean).join(' ');
+      const details = [
+        v.type_vehicles_typeTotype?.name,
+        v.year != null ? String(v.year) : null,
+        v.intern_number ? `N° ${v.intern_number}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      if (!title && !details) return <EmptyCell />;
+      return (
+        <div className="min-w-0">
+          <div className="font-semibold text-foreground">{title || '-'}</div>
+          {details && <div className="truncate text-sm text-muted-foreground">{details}</div>}
+        </div>
+      );
+    },
+    // 'equipment' no es un campo ordenable en actions.server.ts (VALID_SORT_FIELDS)
+    enableSorting: false,
+  },
+
+  // ─── Motivo de baja (enum nullable) ─────────────────────────────────────
+  {
+    accessorKey: 'reason_for_termination',
+    meta: { title: 'Motivo de baja' },
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Motivo de baja" />,
+    cell: ({ row }) => {
+      const r = row.original.reason_for_termination;
+      if (!r) return <EmptyCell />;
+      return <span>{terminationReasonEquipmentLabels[r] ?? r}</span>;
+    },
+    filterFn: (row, id, value: string[]) => {
+      const val = row.getValue(id);
+      if (val == null) return value.includes(NULL_FILTER_VALUE);
+      return value.includes(val as string);
+    },
+  },
+
+  // ─── Fecha de baja ────────────────────────────────────────────────────────
+  {
+    accessorKey: 'termination_date',
+    meta: { title: 'Fecha de baja' },
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de baja" />,
+    cell: ({ row }) => <DateCell value={row.original.termination_date} />,
+  },
+
+  // ─── Kilómetros ───────────────────────────────────────────────────────────
+  {
+    accessorKey: 'kilometer',
+    meta: { title: 'Kilómetros' },
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Kilómetros" />,
+    cell: ({ row }) => {
+      const km = row.original.kilometer;
+      if (km == null || km === '') return <EmptyCell />;
+      const value = Number(km);
+      return (
+        <span className="font-mono tabular-nums">{Number.isFinite(value) ? value.toLocaleString('es-AR') : km} km</span>
+      );
+    },
+  },
+
+  // ─── N° Interno — OCULTA POR DEFAULT ─────────────────────────────────────
   {
     accessorKey: 'intern_number',
     meta: { title: 'N° Interno' },
     header: ({ column }) => <DataTableColumnHeader column={column} title="N° Interno" />,
     cell: ({ row }) => (
-      <Link href={`/dashboard/equipment/action?action=view&id=${row.original.id}`} className="hover:underline">
+      <Link href={getEquipmentHref(row.original.id)} className="font-mono tabular-nums hover:underline">
         {row.original.intern_number ?? '-'}
       </Link>
     ),
@@ -183,7 +261,7 @@ export const columns: ColumnDef<InactiveVehicleListItem>[] = [
     cell: ({ row }) => {
       const cond = row.original.condition;
       if (!cond) return <span className="text-muted-foreground">-</span>;
-      const variant = (conditionVariants[cond] ?? 'default') as BadgeVariant;
+      const variant = conditionVariants[cond] ?? 'default';
       const IconComponent = conditionIcons[cond];
       const label = conditionLabels[cond] ?? cond;
       return (
@@ -217,19 +295,6 @@ export const columns: ColumnDef<InactiveVehicleListItem>[] = [
     },
   },
 
-  // ─── Kilometros ───────────────────────────────────────────────────────────
-  {
-    accessorKey: 'kilometer',
-    meta: { title: 'Kilómetros' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Kilómetros" />,
-    cell: ({ row }) =>
-      row.original.kilometer != null ? (
-        <Badge variant="outline">{row.original.kilometer} km</Badge>
-      ) : (
-        <span className="text-muted-foreground">-</span>
-      ),
-  },
-
   // ─── Horómetro ────────────────────────────────────────────────────────────
   {
     accessorKey: 'engine_hours',
@@ -237,39 +302,9 @@ export const columns: ColumnDef<InactiveVehicleListItem>[] = [
     header: ({ column }) => <DataTableColumnHeader column={column} title="Horómetro" />,
     cell: ({ row }) =>
       row.original.engine_hours != null ? (
-        <Badge variant="outline">{row.original.engine_hours} hs</Badge>
+        <span className="font-mono tabular-nums">{row.original.engine_hours} hs</span>
       ) : (
-        <span className="text-muted-foreground">-</span>
-      ),
-  },
-
-  // ─── Motivo de baja (enum nullable) ─────────────────────────────────────
-  {
-    accessorKey: 'reason_for_termination',
-    meta: { title: 'Motivo de baja' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Motivo de baja" />,
-    cell: ({ row }) => {
-      const r = row.original.reason_for_termination;
-      if (!r) return <span className="text-muted-foreground">-</span>;
-      return <Badge variant="secondary">{terminationReasonEquipmentLabels[r] ?? r}</Badge>;
-    },
-    filterFn: (row, id, value: string[]) => {
-      const val = row.getValue(id);
-      if (val == null) return value.includes(NULL_FILTER_VALUE);
-      return value.includes(val as string);
-    },
-  },
-
-  // ─── Fecha de baja ────────────────────────────────────────────────────────
-  {
-    accessorKey: 'termination_date',
-    meta: { title: 'Fecha de baja' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de baja" />,
-    cell: ({ row }) =>
-      row.original.termination_date ? (
-        <span>{moment(row.original.termination_date).format('DD/MM/YYYY')}</span>
-      ) : (
-        <span className="text-muted-foreground">-</span>
+        <EmptyCell />
       ),
   },
 
@@ -432,7 +467,7 @@ export const columns: ColumnDef<InactiveVehicleListItem>[] = [
     header: ({ column }) => <DataTableColumnHeader column={column} title="Inicio de contrato" />,
     cell: ({ row }) =>
       row.original.contract_start_date ? (
-        <span>{moment(row.original.contract_start_date).format('DD/MM/YYYY')}</span>
+        <span>{moment.utc(row.original.contract_start_date).format('DD/MM/YYYY')}</span>
       ) : (
         <span className="text-muted-foreground">-</span>
       ),
@@ -445,7 +480,7 @@ export const columns: ColumnDef<InactiveVehicleListItem>[] = [
     header: ({ column }) => <DataTableColumnHeader column={column} title="Vencimiento de contrato" />,
     cell: ({ row }) =>
       row.original.contract_expiration_date ? (
-        <span>{moment(row.original.contract_expiration_date).format('DD/MM/YYYY')}</span>
+        <span>{moment.utc(row.original.contract_expiration_date).format('DD/MM/YYYY')}</span>
       ) : (
         <span className="text-muted-foreground">-</span>
       ),
@@ -518,14 +553,23 @@ export const columns: ColumnDef<InactiveVehicleListItem>[] = [
   // ─── Acciones ─────────────────────────────────────────────────────────────
   {
     id: 'actions',
-    meta: { excludeFromExport: true },
+    meta: { title: '', excludeFromExport: true },
     cell: ({ row }) => (
-      <Link
-        href={`/dashboard/equipment/action?action=view&id=${row.original.id}`}
-        className="text-sm text-muted-foreground hover:text-foreground underline"
-      >
-        Ver
-      </Link>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="size-8" aria-label="Acciones del equipo">
+            <MoreHorizontal className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem asChild>
+            <Link href={getEquipmentHref(row.original.id)}>
+              <Eye className="mr-2 size-4" />
+              Ver ficha
+            </Link>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     ),
     enableSorting: false,
     enableHiding: false,

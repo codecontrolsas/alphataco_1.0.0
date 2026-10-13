@@ -1,7 +1,6 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   buildDateRangeFiltersWhere,
   buildFiltersWhere,
@@ -13,6 +12,7 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 
 const logger = new Logger('OtherEquipment/list/actions.server');
 
@@ -279,11 +279,22 @@ export async function getOtherEquipmentPaginated(searchParams: DataTableSearchPa
       prisma.other_equipment.count({ where }),
     ]);
 
-    return { data: rawData, total };
+    return { data: rawData.map(withNumericDecimals), total };
   } catch (error) {
     logger.error('Error al obtener equipos paginados', { data: { error } });
     throw new Error('Error al obtener los equipos');
   }
+}
+
+/** `horometer` e `initial_value` son Decimal: no se pueden pasar a un Client Component. Se entregan como número. */
+function withNumericDecimals<
+  T extends { horometer: { toString(): string } | null; initial_value: { toString(): string } | null },
+>(equipment: T) {
+  return {
+    ...equipment,
+    horometer: equipment.horometer === null ? null : Number(equipment.horometer),
+    initial_value: equipment.initial_value === null ? null : Number(equipment.initial_value),
+  };
 }
 
 export type OtherEquipmentListItem = Awaited<ReturnType<typeof getOtherEquipmentPaginated>>['data'][number];
@@ -309,7 +320,7 @@ export async function getAllOtherEquipmentForExport(searchParams: DataTableSearc
       select: OTHER_EQUIPMENT_SELECT,
     });
 
-    return rawData;
+    return rawData.map(withNumericDecimals);
   } catch (error) {
     logger.error('Error al exportar equipos', { data: { error } });
     throw new Error('Error al exportar los equipos');

@@ -86,7 +86,8 @@ function getActiveFilterColumnIds(
 /**
  * Estilos de `mobileCards`: debajo de `md` la tabla se convierte en una pila de tarjetas. Van
  * escritos completos (Tailwind v4 no genera clases armadas en runtime). Las dos primeras celdas
- * (selector e identidad) ocupan todo el ancho y sin rótulo; las demás llevan su `meta.title`.
+ * (selector e identidad) ocupan todo el ancho y sin rótulo; las demás llevan su `meta.title`. La tarjeta muestra
+ * todas las columnas que estén visibles: el selector de columnas manda, no hay tope.
  */
 const MOBILE_CARDS_WRAPPER = [
   'max-md:max-h-none max-md:overflow-visible max-md:border-0',
@@ -94,8 +95,8 @@ const MOBILE_CARDS_WRAPPER = [
   'max-md:[&_tr]:bg-card max-md:[&_tr]:grid max-md:[&_tr]:grid-cols-2 max-md:[&_tr]:gap-x-4 max-md:[&_tr]:gap-y-2 max-md:[&_tr]:rounded-xl max-md:[&_tr]:border max-md:[&_tr]:p-4',
   'max-md:[&_td]:block max-md:[&_td]:min-w-0 max-md:[&_td]:p-0 max-md:[&_td]:whitespace-normal',
   'max-md:[&_td:nth-child(-n+2)]:col-span-2',
-  // Se muestran selector, identidad y las 5 columnas siguientes; el resto queda en la tabla de escritorio.
-  'max-md:[&_td:nth-child(n+8):not(:last-child)]:hidden',
+  // Las etiquetas (pills) de una celda no pueden ser más anchas que la tarjeta: se parten en líneas.
+  'max-md:[&_td_[data-slot=badge]]:max-w-full max-md:[&_td_[data-slot=badge]]:whitespace-normal max-md:[&_td_[data-slot=badge]]:text-left max-md:[&_td_div.inline-flex]:max-w-full',
   'max-md:[&_td:nth-child(n+3):not(:last-child)]:before:text-muted-foreground max-md:[&_td:nth-child(n+3):not(:last-child)]:before:block max-md:[&_td:nth-child(n+3):not(:last-child)]:before:text-xs max-md:[&_td:nth-child(n+3):not(:last-child)]:before:content-[attr(data-label)]',
   'max-md:[&_td:last-child]:col-span-2 max-md:[&_td:last-child]:justify-self-end',
 ].join(' ');
