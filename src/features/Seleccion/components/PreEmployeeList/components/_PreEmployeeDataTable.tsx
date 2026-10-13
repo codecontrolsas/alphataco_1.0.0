@@ -30,6 +30,8 @@ interface PreEmployeeDataTableProps {
   totalRows: number;
   searchParams: DataTableSearchParams;
   tableId: string;
+  /** Cantidad de documentos obligatorios (el Y de la columna Documentos) */
+  requiredDocs: number;
   initialColumnVisibility?: Record<string, boolean>;
   initialFilterVisibility?: Record<string, boolean>;
 }
@@ -61,6 +63,7 @@ export function _PreEmployeeDataTable({
   totalRows,
   searchParams,
   tableId,
+  requiredDocs,
   initialColumnVisibility,
   initialFilterVisibility,
 }: PreEmployeeDataTableProps) {
@@ -75,7 +78,7 @@ export function _PreEmployeeDataTable({
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getPreEmployeesPaginated(params), []);
 
   // Columns
-  const columns = useMemo(() => getColumns(), []);
+  const columns = useMemo(() => getColumns(requiredDocs), [requiredDocs]);
 
   // Initial column visibility: merge defaults with saved preferences
   const mergedColumnVisibility = useMemo(() => {
@@ -85,29 +88,6 @@ export function _PreEmployeeDataTable({
     }
     return { ...defaults, ...initialColumnVisibility };
   }, [initialColumnVisibility]);
-
-  // Filtros visibles por defecto: solo los 3 mas comunes
-  const DEFAULT_VISIBLE_FILTERS = ['status', 'hierarchy', 'company_positions'];
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
-      return initialFilterVisibility;
-    }
-    const allFilterIds = [
-      'status',
-      'hierarchy',
-      'company_positions',
-      'pre_file_number',
-      'fullName',
-      'document_number',
-      'cuil',
-      'phone',
-      'email',
-      'rejection_reason',
-      'created_at',
-      'reviewed_at',
-    ];
-    return Object.fromEntries(allFilterIds.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
-  }, [initialFilterVisibility]);
 
   // ─── fetchFacet factories: cada filtro tiene su fetchFacet lazy ────────────
 
@@ -174,6 +154,17 @@ export function _PreEmployeeDataTable({
     [makeFkFetchFacet]
   );
 
+  // Filtros visibles por defecto: solo los 3 mas comunes
+  const DEFAULT_VISIBLE_FILTERS = ['status', 'hierarchy', 'company_positions'];
+  const mergedFilterVisibility = useMemo(() => {
+    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
+      return initialFilterVisibility;
+    }
+    return Object.fromEntries(
+      facetedFilters.map((filter) => [filter.columnId, DEFAULT_VISIBLE_FILTERS.includes(filter.columnId)])
+    );
+  }, [initialFilterVisibility, facetedFilters]);
+
   // ─── Exportacion a Excel ────────────────────────────────────────────────
   const exportConfig: DataTableExportConfig<PreEmployeeListItem> = useMemo(
     () => ({
@@ -205,13 +196,15 @@ export function _PreEmployeeDataTable({
       initialColumnVisibility={mergedColumnVisibility}
       initialFilterVisibility={mergedFilterVisibility}
       showFilterToggle
+      showSearch
+      mobileCards
       // Client-side navigation: fetch instantaneo via React Query, sin router.push
       queryFn={tableQueryFn}
       queryKey={['pre-employees-paginated']}
       onStateChange={handleStateChange}
       enableRowSelection
       showRowSelection
-      searchPlaceholder="Buscar por N° de candidato, nombre, DNI o CUIL"
+      searchPlaceholder="Buscar por nombre, CUIL o N° de candidato"
       emptyMessage="No hay candidatos cargados"
       exportConfig={exportConfig}
       data-testid="pre-employees-table"

@@ -94,48 +94,46 @@ export function PreEmployeeDocumentChecklist({ preEmployeeId, readOnly = false }
     );
   }
 
-  const uploadedCount = checklist.filter((item) => item.document).length;
-  const progress = Math.round((uploadedCount / checklist.length) * 100);
+  // El avance cuenta sólo los obligatorios: son los que condicionan pasar a pre ingreso.
+  const mandatory = checklist.filter((item) => item.documentType.mandatory);
+  const uploadedCount = mandatory.filter((item) => item.document).length;
+  const progress = mandatory.length ? Math.round((uploadedCount / mandatory.length) * 100) : 100;
 
   return (
     <div className="space-y-4">
       {/* Progreso de carga */}
       <div className="space-y-2">
         <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">Documentación cargada</span>
-          <span className="font-medium">
-            {uploadedCount} de {checklist.length}
+          <span className="text-muted-foreground">Obligatorios cargados</span>
+          <span className="font-mono font-semibold tabular-nums">
+            {uploadedCount} / {mandatory.length}
           </span>
         </div>
         <Progress value={progress} />
       </div>
 
       {/* Listado */}
-      <div className="divide-y rounded-md border">
+      <div className="divide-y rounded-lg border">
         {checklist.map((item) => (
           <div key={item.documentType.id} className="flex items-center justify-between gap-4 p-3">
             <div className="flex items-start gap-3 min-w-0">
               {item.document ? (
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-ok" />
               ) : (
                 <Circle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
               )}
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="truncate font-medium">{item.documentType.name}</span>
-                  {item.documentType.mandatory && (
-                    <Badge variant="secondary" className="text-xs">
-                      Obligatorio
-                    </Badge>
-                  )}
+                  {item.documentType.mandatory && <Badge variant="secondary">Obligatorio</Badge>}
                 </div>
                 {item.document ? (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-sm text-muted-foreground">
                     Cargado el {moment(item.document.uploaded_at).format('DD/MM/YYYY')}
                     {item.document.validity ? ` · Vence el ${moment(item.document.validity).format('DD/MM/YYYY')}` : ''}
                   </p>
                 ) : (
-                  <p className="text-xs text-muted-foreground">Pendiente de carga</p>
+                  <p className="text-sm text-muted-foreground">Pendiente de carga</p>
                 )}
               </div>
             </div>
@@ -149,6 +147,7 @@ export function PreEmployeeDocumentChecklist({ preEmployeeId, readOnly = false }
                   variant="ghost"
                   size="sm"
                   onClick={() => handleView(item.document!.document_path)}
+                  aria-label={`Ver ${item.documentType.name}`}
                 >
                   <Download className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Ver</span>
@@ -157,7 +156,13 @@ export function PreEmployeeDocumentChecklist({ preEmployeeId, readOnly = false }
 
               {!readOnly && (
                 <>
-                  <Button type="button" variant="outline" size="sm" onClick={() => setUploadTarget(item)}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setUploadTarget(item)}
+                    aria-label={`${item.document ? 'Reemplazar' : 'Subir'} ${item.documentType.name}`}
+                  >
                     {item.document ? <RefreshCw className="h-3.5 w-3.5" /> : <Upload className="h-3.5 w-3.5" />}
                     <span className="hidden sm:inline">{item.document ? 'Reemplazar' : 'Subir'}</span>
                   </Button>
@@ -169,8 +174,9 @@ export function PreEmployeeDocumentChecklist({ preEmployeeId, readOnly = false }
                       size="sm"
                       onClick={() => deleteMutation.mutate(item.document!.id)}
                       disabled={deleteMutation.isPending}
+                      aria-label={`Eliminar ${item.documentType.name}`}
                     >
-                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      <Trash2 className="text-danger-subtle-foreground h-3.5 w-3.5" />
                     </Button>
                   )}
                 </>

@@ -4,22 +4,22 @@ import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
 import { Logger } from '@/lib/logger';
+import { FormCompletenessAside, SectionErrorsAlert } from '@/shared/components/common/FormCompleteness';
 import { SectionCard } from '@/shared/components/common/SectionCard';
 import { SplitLayout } from '@/shared/components/common/SplitLayout';
+import { useRefreshAndWait } from '@/shared/hooks/useRefreshAndWait';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { ContactDataFields } from '../../../shared/forms/ContactDataFields';
 import { PersonalDataFields } from '../../../shared/forms/PersonalDataFields';
 import type { EmployeeDetailData } from '../../actions.server';
 import { createEmployee, updateEmployee } from '../../actions.server';
-import { buildEmployeeDefaultValues } from '../../lib/employee-form';
+import { EMPLOYEE_FORM_SECTIONS, REQUIRED_EMPLOYEE_FIELDS, buildEmployeeDefaultValues } from '../../lib/employee-form';
 import { employeeFormSchema, type EmployeeFormData } from '../../schemas/employee-schema';
 import { EmployeeWorkDataForm } from '../forms/employee-work-data-form';
-import { EmployeeFormAside, SectionErrorsAlert } from './EmployeeFormAside';
 
 const logger = new Logger('EmployeeFormView');
 
@@ -40,17 +40,7 @@ export function EmployeeFormView({ employee, mode, onClose }: EmployeeFormViewPr
   const { canView } = usePermissions();
   // Mismo criterio que la lectura: sin permiso sobre contacto, esa sección no se ofrece.
   const showContact = canView('empleados', 'datos-contacto');
-  const [isRefreshing, startRefreshTransition] = useTransition();
-  const refreshResolveRef = useRef<(() => void) | null>(null);
-
-  // Resuelve la promesa pendiente cuando termina la transición de `router.refresh()`: el toast
-  // queda abierto hasta que el servidor volvió a renderizar el legajo con los datos nuevos.
-  useEffect(() => {
-    if (!isRefreshing && refreshResolveRef.current) {
-      refreshResolveRef.current();
-      refreshResolveRef.current = null;
-    }
-  }, [isRefreshing]);
+  const { refreshAndWait, isRefreshing } = useRefreshAndWait();
 
   const form = useForm<EmployeeFormData>({
     resolver: zodResolver(employeeFormSchema),
@@ -74,10 +64,7 @@ export function EmployeeFormView({ employee, mode, onClose }: EmployeeFormViewPr
     if (employee) {
       const saving = (async () => {
         await updateEmployee(employee.id, data);
-        await new Promise<void>((resolve) => {
-          refreshResolveRef.current = resolve;
-          startRefreshTransition(() => router.refresh());
-        });
+        await refreshAndWait();
         onClose();
       })();
       toast.promise(saving, {
@@ -115,11 +102,14 @@ export function EmployeeFormView({ employee, mode, onClose }: EmployeeFormViewPr
                 <SectionCard title="Datos personales" description="Tal como figuran en el DNI.">
                   <PersonalDataFields />
                 </SectionCard>
-                {showContact && (
+                {/* Sin permiso sobre contacto la sección se oculta pero los campos siguen montados: así el
+                    formulario conserva sus valores y valida (el schema los exige) en vez de fallar sin
+                    mostrar qué falta. */}
+                <div hidden={!showContact}>
                   <SectionCard title="Contacto y dirección" description="Domicilio y medios de contacto.">
                     <ContactDataFields />
                   </SectionCard>
-                )}
+                </div>
                 <SectionCard
                   title="Datos laborales"
                   description="El puesto depende del sector y las aptitudes dependen del puesto."
@@ -128,7 +118,7 @@ export function EmployeeFormView({ employee, mode, onClose }: EmployeeFormViewPr
                 </SectionCard>
 
                 <div className="bg-background/90 sticky bottom-0 -mx-1 space-y-3 px-1 py-4 backdrop-blur-sm">
-                  <SectionErrorsAlert />
+                  <SectionErrorsAlert sections={EMPLOYEE_FORM_SECTIONS} required={REQUIRED_EMPLOYEE_FIELDS} />
                   <div className="flex justify-end gap-2">
                     <Button type="button" variant="outline" onClick={onClose} disabled={isSaving}>
                       Cancelar
@@ -141,7 +131,22 @@ export function EmployeeFormView({ employee, mode, onClose }: EmployeeFormViewPr
                 </div>
               </>
             }
-            aside={<EmployeeFormAside isNew={isNew} />}
+            aside={
+              <>
+                <FormCompletenessAside
+                  title="Completitud del legajo"
+                  sections={EMPLOYEE_FORM_SECTIONS}
+                  required={REQUIRED_EMPLOYEE_FIELDS}
+                />
+                <SectionCard title="Qué pasa al guardar">
+                  <p className="text-muted-foreground text-sm text-pretty">
+                    {isNew
+                      ? 'Se crea el legajo y después podés cargar su documentación desde la ficha.'
+                      : 'Los cambios se aplican al legajo. La documentación ya cargada se conserva.'}
+                  </p>
+                </SectionCard>
+              </>
+            }
           />
         </form>
       </Form>

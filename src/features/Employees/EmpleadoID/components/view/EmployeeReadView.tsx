@@ -4,12 +4,12 @@ import { Button } from '@/components/ui/button';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
 import { TabsManagerClientSide } from '@/features/TabsManager/TabsManagerClientSide';
+import { RecordHeader } from '@/shared/components/common/RecordHeader';
 import { ArrowLeft, BarChart3, Briefcase, FileText, Pencil, Shirt, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import type { EmployeeDetailData } from '../../actions.server';
 import { PersonalDataView, WorkDataView } from '../EmployeeViewDisplay';
 import { EmployeeQuickActions } from '../employee-quick-actions';
-import { EmployeeHeaderShell } from './EmployeeHeaderShell';
 
 interface EmployeeReadViewProps {
   employee: NonNullable<EmployeeDetailData>;
@@ -98,8 +98,8 @@ export function EmployeeReadView({
         Volver
       </Button>
 
-      <EmployeeHeaderShell
-        header={header}
+      <RecordHeader
+        identity={header}
         actions={
           <>
             <EmployeeQuickActions

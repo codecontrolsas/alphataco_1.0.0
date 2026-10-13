@@ -95,7 +95,7 @@ export function PersonalDataFields({ hidePicture = false }: PersonalDataFieldsPr
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 [&_[data-slot=select-trigger]]:w-full">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 [&_button[role=combobox]]:w-full">
         {/* Nombre */}
         <FormField
           control={form.control}

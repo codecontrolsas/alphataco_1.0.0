@@ -16,9 +16,9 @@ import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getSessionUserId } from '@/shared/lib/session';
 import { callScalar } from '@/shared/lib/sql';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { cache } from 'react';
+import { z } from 'zod';
 import { assertTransition, type PreEmployeeStatus, type PreEmployeeTransitionAction } from '../lib/state-machine';
 import { rejectPreEmployeeSchema, type PreEmployeeFormData } from '../schemas/pre-employee-schema';
 
@@ -94,6 +94,8 @@ export const getPreEmployeeByIdCached = cache(async (preEmployeeId: string) => {
         hierarchy: { select: { id: true, name: true } },
         company_positions: { select: { id: true, name: true } },
         countries: { select: { id: true, name: true } },
+        provinces: { select: { id: true, name: true } },
+        cities: { select: { id: true, name: true } },
         reviewed_by_profile: { select: { id: true, fullname: true } },
         created_by_profile: { select: { id: true, fullname: true } },
         employees: { select: { id: true, file: true } },
@@ -148,6 +150,11 @@ export type PreEmployeeIdentityCheck = Awaited<ReturnType<typeof checkPreEmploye
 export async function createPreEmployee(data: PreEmployeeFormData) {
   logger.debug('Creando candidato', { data: { document_number: data.document_number } });
 
+  // La UI oculta el botón, pero la barrera es esta: la action se puede invocar directamente.
+  if (!(await checkPermissionServer('seleccion', 'candidatos', 'create'))) {
+    throw new Error('No tenés permiso para crear candidatos');
+  }
+
   const [companyId, profile] = await Promise.all([getActiveCompanyId(), requireServerAuthProfile()]);
 
   const { blockingEmployee } = await checkPreEmployeeIdentity(data.document_number, data.cuil);
@@ -190,6 +197,10 @@ export async function createPreEmployee(data: PreEmployeeFormData) {
 /** Actualiza los datos de un candidato. Solo mientras es editable (en proceso / pre ingreso). */
 export async function updatePreEmployee(preEmployeeId: string, data: PreEmployeeFormData) {
   logger.debug('Actualizando candidato', { data: { preEmployeeId } });
+
+  if (!(await checkPermissionServer('seleccion', 'candidatos', 'update'))) {
+    throw new Error('No tenés permiso para editar candidatos');
+  }
   const companyId = await getActiveCompanyId();
 
   const current = await prisma.pre_employees.findFirstOrThrow({
