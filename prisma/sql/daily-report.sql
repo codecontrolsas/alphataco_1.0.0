@@ -70,6 +70,7 @@ $function$;
 CREATE OR REPLACE FUNCTION public.reconcile_daily_report_rows_status(p_row_ids uuid[])
  RETURNS integer
  LANGUAGE sql
+ SET "TimeZone" TO 'America/Argentina/Buenos_Aires'
 AS $function$
   WITH calc AS (
     SELECT r.id,

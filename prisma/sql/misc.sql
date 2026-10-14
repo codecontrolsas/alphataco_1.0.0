@@ -1022,6 +1022,7 @@ $function$;
 CREATE OR REPLACE FUNCTION public.set_updated_at()
  RETURNS trigger
  LANGUAGE plpgsql
+ SET "TimeZone" TO 'America/Argentina/Buenos_Aires'
 AS $function$
 BEGIN
   NEW.updated_at = now();
