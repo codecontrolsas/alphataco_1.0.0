@@ -55,7 +55,8 @@ export default async function VehiclePage({ searchParams }: VehiclePageProps) {
   const mode = resolvedSearchParams.action || 'view';
   const isOtherEquipment = resolvedSearchParams.type === 'other';
 
-  const permissions = await getUserPermissionsMapServer();
+  // Solo la ficha de vehículo los usa (pestaña de cubiertas): se pide ya y se espera recién ahí.
+  const permissionsPromise = getUserPermissionsMapServer();
 
   // ─── OTROS EQUIPOS ────────────────────────────────────────────────────────
 
@@ -137,6 +138,16 @@ export default async function VehiclePage({ searchParams }: VehiclePageProps) {
 
   // ─── VEHÍCULOS (comportamiento original) ──────────────────────────────────
 
+  const actualMode = id === 'new' ? 'new' : mode;
+
+  // Todo lo que solo depende del id arranca junto con el vehículo. Las órdenes y rechazos son del historial
+  // de la ficha (lectura); al editar o dar de alta no se usan, así que no se piden.
+  const hierarchicalPositionsPromise = getHierarchicalPositions();
+  const operationsRequest =
+    actualMode === 'view' && id
+      ? Promise.all([getMaintenanceOrdersForEquipment(id), getRejectedRequestsForEquipment(id)])
+      : undefined;
+
   let vehicle: null | VehicleById = null;
 
   if (mode !== 'new') {
@@ -148,16 +159,11 @@ export default async function VehiclePage({ searchParams }: VehiclePageProps) {
     }
   }
 
-  // Pre-fetch maintenance orders + rejected requests for the operations tab
-  const [initialOrders, initialRejectedRequests] = vehicle?.id
-    ? await Promise.all([getMaintenanceOrdersForEquipment(vehicle.id), getRejectedRequestsForEquipment(vehicle.id)])
-    : [[], []];
-
-  const actualMode = id === 'new' ? 'new' : mode;
+  const [operations, permissions] = await Promise.all([operationsRequest, permissionsPromise]);
+  const [initialOrders, initialRejectedRequests] = operations ?? [[], []];
 
   // `vehicle.sector` guarda el id del sector: se resuelve el nombre una sola vez y la misma promesa
   // (ya resuelta) alimenta el formulario.
-  const hierarchicalPositionsPromise = getHierarchicalPositions();
   const sectorName =
     actualMode === 'view' && vehicle?.sector
       ? (await hierarchicalPositionsPromise).find((position) => position.id === vehicle.sector)?.name

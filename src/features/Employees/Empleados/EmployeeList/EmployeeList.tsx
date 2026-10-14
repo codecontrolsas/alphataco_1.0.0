@@ -3,7 +3,7 @@ import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { Suspense } from 'react';
-import { getEmployeesPaginated } from './actions.server';
+import { getEmployeeStatusMetrics, getEmployeesPaginated } from './actions.server';
 import { EmployeeMetricsSection } from './components/EmployeeMetricsSection';
 import _EmployeeDataTable from './components/_EmployeeDataTable';
 import { EmployeeMetricsSkeleton } from './fallback/EmployeeMetricsSkeleton';
@@ -29,6 +29,8 @@ export default async function EmployeeList({ searchParams, isActive, permissions
   const tableParams = stripPrefixFromSearchParams(searchParams as DataTableSearchParams, tableId);
 
   // Facets se cargan lazy (on-demand al abrir cada popover) — no en SSR
+  // Las tarjetas arrancan YA, en paralelo con la tabla (si no, su consulta esperaría a que la tabla resuelva).
+  const metrics = isActive ? getEmployeeStatusMetrics() : undefined;
   const [{ data, total }, preferences] = await Promise.all([
     getEmployeesPaginated(tableParams, isActive),
     getTablePreferences(tableId),
@@ -37,9 +39,9 @@ export default async function EmployeeList({ searchParams, isActive, permissions
   return (
     <div className="space-y-6">
       {/* Las tarjetas resumen sólo existen para los activos y llegan por su propio Suspense. */}
-      {isActive && (
+      {metrics && (
         <Suspense fallback={<EmployeeMetricsSkeleton />}>
-          <EmployeeMetricsSection tableId={tableId} />
+          <EmployeeMetricsSection tableId={tableId} metrics={metrics} />
         </Suspense>
       )}
 

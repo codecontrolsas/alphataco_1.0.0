@@ -7,6 +7,7 @@ import { getVehiclesPaginated } from './actions/actions.server';
 import { VehicleMetricsSection } from './components/VehicleMetricsSection';
 import { _VehicleDataTable } from './components/_VehicleDataTable';
 import { VehicleMetricsSkeleton } from './fallback/VehicleMetricsSkeleton';
+import { getVehicleConditionMetrics } from './metrics.server';
 
 // ============================================================================
 // TYPES
@@ -27,6 +28,8 @@ export async function VehicleList({ searchParams, permissions }: VehicleListProp
   // Extraer solo los params de esta tabla (quitar prefijo)
   const tableParams = stripPrefixFromSearchParams(searchParams as DataTableSearchParams, tableId);
 
+  // Las tarjetas arrancan YA, en paralelo con la tabla (si no, su consulta esperaría a que la tabla resuelva).
+  const metrics = getVehicleConditionMetrics();
   const [{ data, total }, preferences] = await Promise.all([
     getVehiclesPaginated(tableParams),
     getTablePreferences(tableId),
@@ -36,7 +39,7 @@ export async function VehicleList({ searchParams, permissions }: VehicleListProp
     <div className="space-y-6">
       {/* Las tarjetas resumen llegan por su propio Suspense: no frenan la tabla. */}
       <Suspense fallback={<VehicleMetricsSkeleton />}>
-        <VehicleMetricsSection tableId={tableId} />
+        <VehicleMetricsSection tableId={tableId} metrics={metrics} />
       </Suspense>
 
       <Card>

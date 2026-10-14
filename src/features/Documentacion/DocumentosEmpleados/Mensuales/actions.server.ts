@@ -2,7 +2,6 @@
 
 import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   buildDateRangeFiltersWhere,
   buildFiltersWhere,
@@ -12,6 +11,7 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 
 const logger = new Logger('MonthlyEmployeeDocs/actions.server');
 
@@ -231,10 +231,12 @@ async function buildWhereClause(
     ...(employeeId ? [{ applies: employeeId }] : []),
   ];
 
-  // Búsqueda global por nombre de empleado
+  // Búsqueda global: legajo (coincidencia exacta), nombre del empleado o nombre del documento
   if (state.search) {
     andConditions.push({
       OR: [
+        { employees: { file: { equals: state.search } } },
+        { document_types: { name: { contains: state.search, mode: 'insensitive' as const } } },
         { employees: { lastname: { contains: state.search, mode: 'insensitive' as const } } },
         { employees: { firstname: { contains: state.search, mode: 'insensitive' as const } } },
       ],

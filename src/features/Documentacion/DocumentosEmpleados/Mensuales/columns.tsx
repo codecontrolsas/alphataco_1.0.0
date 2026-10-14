@@ -1,93 +1,78 @@
 'use client';
 
-import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  DocumentNameCell,
+  DocumentRowActions,
+  DocumentStatePill,
+  documentStateIcons,
+} from '@/features/Documentacion/shared/components/DocumentCells';
 import SimpleDocument from '@/features/Documentacion/shared/components/SimpleDocument';
-import { PermissionGuard } from '@/features/Permissions';
+import { formatArgentinaDay } from '@/features/Treasury/lib/today';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { documentStateLabels } from '@/shared/utils/mappers';
 import type { ColumnDef } from '@tanstack/react-table';
-import { AlertCircle, Archive, CheckCircle2, Clock, FileText, HelpCircle, XCircle } from 'lucide-react';
-import moment from 'moment';
+import { HelpCircle } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
 import type { MonthlyEmployeeDocumentListItem } from './actions.server';
 
 // ============================================================================
 // COLUMN DEFAULTS
 // ============================================================================
 
-/** Columnas ocultas por defecto (visibles al hacer toggle) */
-export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['mandatory', 'multiresource', 'deny_reason'];
+/** Columnas ocultas por defecto: su dato ya se ve en las columnas principales (Documento) o es secundario. */
+export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = [
+  'contractor',
+  'mandatory',
+  'multiresource',
+  'period',
+  'deny_reason',
+];
+
+/** Íconos y labels de estado: los mismos que usa la pill de la tabla (los consume el filtro de Estado). */
+export const stateIcons = documentStateIcons;
+export const stateLabels = documentStateLabels;
 
 // ============================================================================
-// ICONS — Estado
+// ACTIONS CELL
 // ============================================================================
 
-export const stateIcons: Record<string, React.ComponentType<{ className?: string }>> = {
-  presentado: FileText,
-  aprobado: CheckCircle2,
-  rechazado: XCircle,
-  vencido: AlertCircle,
-  pendiente: Clock,
-};
+function ActionsCell({ row }: { row: MonthlyEmployeeDocumentListItem }) {
+  const isPrivateDocType = row.document_types?.private === true;
 
-// ============================================================================
-// BADGE VARIANTS — Estado
-// ============================================================================
-
-type BadgeVariant = NonNullable<React.ComponentProps<typeof Badge>['variant']>;
-
-const stateBadgeVariants: Record<string, BadgeVariant> = {
-  presentado: 'default',
-  aprobado: 'success',
-  rechazado: 'destructive',
-  vencido: 'yellow',
-  pendiente: 'destructive',
-};
-
-// ============================================================================
-// STATE LABELS
-// ============================================================================
-
-export const stateLabels: Record<string, string> = {
-  presentado: 'Presentado',
-  aprobado: 'Aprobado',
-  rechazado: 'Rechazado',
-  vencido: 'Vencido',
-  pendiente: 'Pendiente',
-};
+  return (
+    <DocumentRowActions
+      documentId={row.id}
+      documentName={row.document_types?.name}
+      state={row.state}
+      archived={row.archived_at != null}
+      resource={row.employees ? 'Persona' : 'Equipos'}
+      viewTab="docs-empleados-mensuales"
+      upload={{
+        // Para tipos privados, verificar permiso upload_private en la tab padre
+        tab: isPrivateDocType ? 'documentos-de-empleados' : 'docs-empleados-mensuales',
+        action: isPrivateDocType ? 'upload_private' : 'update',
+        render: (close) => (
+          <SimpleDocument
+            resource="empleado"
+            handleOpen={close}
+            defaultDocumentId={row.id_document_types ?? undefined}
+            numberDocument={row.employees?.document_number ?? undefined}
+          />
+        ),
+      }}
+    />
+  );
+}
 
 // ============================================================================
 // COLUMNS
 // ============================================================================
 
 export const columns: ColumnDef<MonthlyEmployeeDocumentListItem>[] = [
-  // ─── Empleado ────────────────────────────────────────────────────────────
-  {
-    id: 'employee',
-    accessorFn: (row) => (row.employees ? `${row.employees.lastname} ${row.employees.firstname}` : ''),
-    meta: { title: 'Empleado' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Empleado" />,
-    cell: ({ row }) => {
-      const employee = row.original.employees;
-      if (!employee) return <span className="text-muted-foreground">-</span>;
-      return (
-        <Link
-          href={`/dashboard/employee/action?action=view&employee_id=${employee.id}`}
-          className="hover:underline font-medium"
-          target="_blank"
-        >
-          {employee.lastname} {employee.firstname}
-        </Link>
-      );
-    },
-    enableSorting: true,
-  },
-
-  // ─── Legajo ───────────────────────────────────────────────────────────────
+  // ─── Legajo (identidad: mono, negrita, antes del nombre) ──────────────────
   {
     id: 'fileNumber',
     accessorFn: (row) => row.employees?.file ?? '',
@@ -98,7 +83,7 @@ export const columns: ColumnDef<MonthlyEmployeeDocumentListItem>[] = [
         <TooltipProvider delayDuration={100}>
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="cursor-help">
+              <span className="cursor-help" aria-label="Coincidencia exacta: ingrese el legajo completo">
                 <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
               </span>
             </TooltipTrigger>
@@ -110,22 +95,88 @@ export const columns: ColumnDef<MonthlyEmployeeDocumentListItem>[] = [
     cell: ({ row }) => {
       const file = row.original.employees?.file;
       if (!file) return <span className="text-muted-foreground">-</span>;
-      return <span className="font-mono text-sm">{file}</span>;
+      return <span className="font-mono font-semibold tabular-nums text-foreground">{file}</span>;
     },
     enableSorting: false,
   },
 
-  // ─── Tipo de Documento ────────────────────────────────────────────────────
+  // ─── Empleado (identidad) ─────────────────────────────────────────────────
+  {
+    id: 'employee',
+    accessorFn: (row) => (row.employees ? `${row.employees.lastname} ${row.employees.firstname}` : ''),
+    meta: { title: 'Empleado' },
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Empleado" />,
+    cell: ({ row }) => {
+      const employee = row.original.employees;
+      if (!employee) return <span className="text-muted-foreground">-</span>;
+      return (
+        <Link
+          href={`/dashboard/employee/action?action=view&employee_id=${employee.id}`}
+          className="font-semibold text-foreground hover:text-brand-ink hover:underline"
+          target="_blank"
+        >
+          {employee.lastname} {employee.firstname}
+        </Link>
+      );
+    },
+    enableSorting: true,
+  },
+
+  // ─── Documento (nombre + obligatorio/opcional + período + motivo de rechazo) ─
   {
     id: 'documentType',
     accessorFn: (row) => row.document_types?.name ?? '',
-    meta: { title: 'Tipo de Documento' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo de Documento" />,
-    cell: ({ row }) => <span className="font-medium">{row.original.document_types?.name ?? '-'}</span>,
+    meta: { title: 'Documento' },
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Documento" />,
+    cell: ({ row }) => (
+      <DocumentNameCell
+        name={row.original.document_types?.name}
+        mandatory={row.original.document_types?.mandatory}
+        period={row.original.period}
+        denyReason={row.original.deny_reason}
+        state={row.original.state}
+      />
+    ),
     filterFn: (row, _id, value: string[]) => {
       const id = row.original.id_document_types;
       if (id == null) return value.includes(NULL_FILTER_VALUE);
       return value.includes(id);
+    },
+    enableSorting: true,
+  },
+
+  // ─── Estado ──────────────────────────────────────────────────────────────
+  {
+    id: 'state',
+    accessorKey: 'state',
+    meta: { title: 'Estado' },
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+    cell: ({ row }) => (
+      // Documento archivado: historial / ya no aplica (solo visible en el detalle del empleado)
+      <DocumentStatePill state={row.original.state} archived={row.original.archived_at != null} />
+    ),
+    filterFn: (row, id, value: string[]) => {
+      const val = row.getValue(id) as string | null;
+      if (val == null) return value.includes(NULL_FILTER_VALUE);
+      return value.includes(val);
+    },
+    enableSorting: true,
+  },
+
+  // ─── Subido el ───────────────────────────────────────────────────────────
+  {
+    id: 'created_at',
+    accessorKey: 'created_at',
+    meta: { title: 'Subido el' },
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Subido el" />,
+    cell: ({ row }) => {
+      const isPending = row.original.state === 'pendiente';
+      if (isPending) return <span className="text-muted-foreground">No disponible</span>;
+
+      // Usar el log más reciente si existe, sino created_at
+      const latestLog = row.original.documents_employees_logs?.[0];
+      const date = latestLog?.updated_at ?? row.original.created_at;
+      return <span className="font-mono tabular-nums">{formatArgentinaDay(date)}</span>;
     },
     enableSorting: true,
   },
@@ -176,45 +227,6 @@ export const columns: ColumnDef<MonthlyEmployeeDocumentListItem>[] = [
     enableSorting: false,
   },
 
-  // ─── Estado ──────────────────────────────────────────────────────────────
-  {
-    id: 'state',
-    accessorKey: 'state',
-    meta: { title: 'Estado' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
-    cell: ({ row }) => {
-      // Documento archivado: historial / ya no aplica (solo visible en el detalle del empleado)
-      if (row.original.archived_at != null) {
-        return (
-          <Badge variant="secondary" className="flex items-center gap-1 w-fit">
-            <Archive className="h-3 w-3" />
-            Ya no aplica
-          </Badge>
-        );
-      }
-
-      const state = row.original.state as string | null;
-      if (!state) return <Badge variant="outline">Sin estado</Badge>;
-
-      const Icon = stateIcons[state];
-      const variant = stateBadgeVariants[state] ?? 'default';
-      const label = stateLabels[state] ?? state;
-
-      return (
-        <Badge variant={variant} className="capitalize flex items-center gap-1 w-fit">
-          {Icon && <Icon className="h-3 w-3" />}
-          {label}
-        </Badge>
-      );
-    },
-    filterFn: (row, id, value: string[]) => {
-      const val = row.getValue(id) as string | null;
-      if (val == null) return value.includes(NULL_FILTER_VALUE);
-      return value.includes(val);
-    },
-    enableSorting: true,
-  },
-
   // ─── Mandatorio ──────────────────────────────────────────────────────────
   {
     id: 'mandatory',
@@ -253,7 +265,7 @@ export const columns: ColumnDef<MonthlyEmployeeDocumentListItem>[] = [
     enableSorting: false,
   },
 
-  // ─── Período ─────────────────────────────────────────────────────────────
+  // ─── Período (oculta: ya se ve en la columna Documento) ───────────────────
   {
     id: 'period',
     accessorKey: 'period',
@@ -263,25 +275,7 @@ export const columns: ColumnDef<MonthlyEmployeeDocumentListItem>[] = [
     enableSorting: true,
   },
 
-  // ─── Subido el ───────────────────────────────────────────────────────────
-  {
-    id: 'created_at',
-    accessorKey: 'created_at',
-    meta: { title: 'Subido el' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Subido el" />,
-    cell: ({ row }) => {
-      const isPending = row.original.state === 'pendiente';
-      if (isPending) return <span className="text-muted-foreground">No disponible</span>;
-
-      // Usar el log más reciente si existe, sino created_at
-      const latestLog = row.original.documents_employees_logs?.[0];
-      const date = latestLog?.updated_at ?? row.original.created_at;
-      return <span>{moment(date).format('DD/MM/YYYY')}</span>;
-    },
-    enableSorting: true,
-  },
-
-  // ─── Razón de rechazo ─────────────────────────────────────────────────────
+  // ─── Razón de rechazo (oculta: se ve en rojo en la columna Documento) ─────
   {
     id: 'deny_reason',
     accessorKey: 'deny_reason',
@@ -300,51 +294,3 @@ export const columns: ColumnDef<MonthlyEmployeeDocumentListItem>[] = [
     cell: ({ row }) => <ActionsCell row={row.original} />,
   },
 ];
-
-// ============================================================================
-// ACTIONS CELL
-// ============================================================================
-
-function ActionsCell({ row }: { row: MonthlyEmployeeDocumentListItem }) {
-  const isPending = row.state === 'pendiente';
-  const [open, setOpen] = useState(false);
-  const isPrivateDocType = row.document_types?.private === true;
-
-  if (isPending) {
-    // Para tipos privados, verificar permiso upload_private en la tab padre
-    const guardTab = isPrivateDocType ? 'documentos-de-empleados' : 'docs-empleados-mensuales';
-    const guardAction = isPrivateDocType ? 'upload_private' : 'update';
-
-    return (
-      <PermissionGuard module="documentacion" tab={guardTab} action={guardAction}>
-        <AlertDialog open={open} onOpenChange={setOpen}>
-          <AlertDialogTrigger asChild>
-            <Button variant="outline" size="sm">
-              Subir documento
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <div className="max-h-[90vh] overflow-y-auto">
-                <SimpleDocument
-                  resource="empleado"
-                  handleOpen={() => setOpen(false)}
-                  defaultDocumentId={row.id_document_types ?? undefined}
-                  numberDocument={row.employees?.document_number ?? undefined}
-                />
-              </div>
-            </AlertDialogHeader>
-          </AlertDialogContent>
-        </AlertDialog>
-      </PermissionGuard>
-    );
-  }
-
-  return (
-    <PermissionGuard module="documentacion" tab="docs-empleados-mensuales" action="view">
-      <Link href={`/dashboard/document/${row.id}?resource=${row.employees ? 'Persona' : 'Equipos'}`}>
-        <Button size="sm">Ver documento</Button>
-      </Link>
-    </PermissionGuard>
-  );
-}

@@ -1,9 +1,11 @@
 import { Card, CardContent } from '@/components/ui/card';
+import { DocumentStateMetricsSection } from '@/features/Documentacion/shared/components/DocumentStateMetricsSection';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { getEquipmentPermanentDocumentsPaginated } from './queries.server';
 import { _EquipmentPermanentDocumentsDataTable } from './components/_EquipmentPermanentDocumentsDataTable';
+import { getEquipmentPermanentDocumentStateCounts } from './metrics.server';
+import { getEquipmentPermanentDocumentsPaginated } from './queries.server';
 
 // ============================================================================
 // CONSTANTS
@@ -24,28 +26,38 @@ interface EquipmentPermanentDocumentsListProps {
 // SERVER COMPONENT
 // ============================================================================
 
-export async function EquipmentPermanentDocumentsList({ searchParams, equipmentId }: EquipmentPermanentDocumentsListProps) {
+export async function EquipmentPermanentDocumentsList({
+  searchParams,
+  equipmentId,
+}: EquipmentPermanentDocumentsListProps) {
   // Extraer solo los params de esta tabla (quitar prefijo)
   const tableParams = stripPrefixFromSearchParams(searchParams as DataTableSearchParams, TABLE_ID);
 
+  // Las tarjetas arrancan YA, en paralelo con la tabla (si no, su consulta esperaría a que la tabla resuelva).
+  const counts = equipmentId ? undefined : getEquipmentPermanentDocumentStateCounts();
   const [{ data, total }, preferences] = await Promise.all([
     getEquipmentPermanentDocumentsPaginated(tableParams, equipmentId),
     getTablePreferences(TABLE_ID),
   ]);
 
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <_EquipmentPermanentDocumentsDataTable
-          data={data}
-          totalRows={total}
-          searchParams={tableParams}
-          tableId={TABLE_ID}
-          initialColumnVisibility={preferences.columnVisibility ?? {}}
-          initialFilterVisibility={preferences.filterVisibility ?? {}}
-          equipmentId={equipmentId}
-        />
-      </CardContent>
-    </Card>
+    <div className="space-y-6">
+      {/* Embebida en la ficha de un equipo (equipmentId) no se muestran las tarjetas. */}
+      {counts && <DocumentStateMetricsSection tableId={TABLE_ID} counts={counts} />}
+
+      <Card>
+        <CardContent className="pt-6">
+          <_EquipmentPermanentDocumentsDataTable
+            data={data}
+            totalRows={total}
+            searchParams={tableParams}
+            tableId={TABLE_ID}
+            initialColumnVisibility={preferences.columnVisibility ?? {}}
+            initialFilterVisibility={preferences.filterVisibility ?? {}}
+            equipmentId={equipmentId}
+          />
+        </CardContent>
+      </Card>
+    </div>
   );
 }

@@ -184,16 +184,22 @@ async function getDocTypesPaginated(applies: document_applies, searchParams: Dat
     // Inactivos siempre al final, luego por nombre
     const safeOrderBy = [{ is_active: 'desc' as const }, ...resolvedSorts, { name: 'asc' as const }];
 
-    const [data, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       prisma.document_types.findMany({
         skip,
         take,
         orderBy: safeOrderBy,
         where,
-        select: DOC_TYPE_SELECT,
+        select: { ...DOC_TYPE_SELECT, conditions: true },
       }),
       prisma.document_types.count({ where }),
     ]);
+
+    // Al cliente solo viaja la cantidad de condiciones efectivas (pill "N condiciones"), no el JSON.
+    const data = rows.map(({ conditions, ...rest }) => ({
+      ...rest,
+      conditions_count: parseDocumentConditions(conditions).length,
+    }));
 
     return { data, total };
   } catch (error) {
@@ -234,11 +240,17 @@ async function getDocTypesForExport(applies: document_applies, searchParams: Dat
 
     const where = await buildWhereClause(applies, companyId, state);
 
-    return await prisma.document_types.findMany({
+    const rows = await prisma.document_types.findMany({
       orderBy: [{ name: 'asc' }],
       where,
-      select: DOC_TYPE_SELECT,
+      select: { ...DOC_TYPE_SELECT, conditions: true },
     });
+
+    // Misma forma que la lista paginada (la tabla tipa sus filas y su export con un único TData).
+    return rows.map(({ conditions, ...rest }) => ({
+      ...rest,
+      conditions_count: parseDocumentConditions(conditions).length,
+    }));
   } catch (error) {
     logger.error('Error al exportar tipos de documento', { data: { error, applies } });
     throw new Error('Error al exportar tipos de documento');

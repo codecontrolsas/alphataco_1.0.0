@@ -280,6 +280,59 @@ export function _DocumentTypeFormModal({
     [form]
   );
 
+  // Opciones del tipo: una tarjeta por casilla. `visible` respeta qué aplica a cada recurso.
+  const options = useMemo(
+    () =>
+      [
+        { name: 'mandatory', label: 'Obligatorio', description: 'Se le exige a todos los que aplican', visible: true },
+        {
+          name: 'explired',
+          label: 'Con vencimiento',
+          description: 'Hay que cargar la fecha de vencimiento',
+          visible: true,
+        },
+        { name: 'is_it_montlhy', label: 'Mensual', description: 'Se pide un documento por período', visible: true },
+        { name: 'private', label: 'Privado', description: 'Solo lo ven quienes tienen permiso', visible: true },
+        {
+          name: 'down_document',
+          label: 'Documento de baja',
+          description: 'Documentación de egreso del recurso dado de baja',
+          visible: true,
+        },
+        // Ticket 505: habilita el tipo en el checklist de un candidato
+        {
+          name: 'available_for_pre_file',
+          label: 'Puede cargarse desde un candidato',
+          description: 'Se puede pedir antes del ingreso',
+          visible: applies === 'Persona',
+        },
+        {
+          name: 'multiresource',
+          label: 'Multirrecurso',
+          description: 'Un mismo archivo sirve para varios recursos',
+          visible: applies !== 'Empresa',
+          // N° de póliza depende de multirecurso: limpiar al destildar
+          onChange: (checked: boolean) => {
+            if (!checked) form.setValue('has_policy_number', false);
+          },
+        },
+        // N° de póliza: solo para tipos de Equipos multirecurso
+        {
+          name: 'has_policy_number',
+          label: 'Lleva N° de póliza',
+          description: 'Se registra el número de póliza',
+          visible: applies === 'Equipos' && multiresource,
+        },
+      ] satisfies {
+        name: keyof FormValues;
+        label: string;
+        description: string;
+        visible: boolean;
+        onChange?: (checked: boolean) => void;
+      }[],
+    [applies, multiresource, form]
+  );
+
   const onSubmit = useCallback(
     (values: FormValues) => {
       // Validar que si es especial, tenga al menos una condición
@@ -365,28 +418,27 @@ export function _DocumentTypeFormModal({
                       name="applies"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Aplica a *</FormLabel>
-                          <Select
-                            value={field.value}
-                            onValueChange={(v) => handleAppliesChange(v as document_applies)}
-                            disabled={isEditing}
+                          <FormLabel id="applies-label">Aplica a *</FormLabel>
+                          <div
+                            role="radiogroup"
+                            aria-labelledby="applies-label"
+                            className="bg-muted grid grid-cols-3 gap-1 rounded-lg p-1"
                           >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {APPLIES_OPTIONS.map((opt) => (
-                                <SelectItem key={opt.value} value={opt.value}>
-                                  <div className="flex items-center gap-2">
-                                    <opt.icon className="h-4 w-4" />
-                                    {opt.label}
-                                  </div>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            {APPLIES_OPTIONS.map((opt) => (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                role="radio"
+                                aria-checked={field.value === opt.value}
+                                disabled={isEditing}
+                                onClick={() => handleAppliesChange(opt.value)}
+                                className="text-muted-foreground aria-checked:bg-card aria-checked:text-foreground aria-checked:ring-border focus-visible:ring-ring/50 flex h-9 items-center justify-center gap-2 rounded-md text-sm font-medium outline-none transition-colors focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-60 aria-checked:shadow-xs aria-checked:ring-1"
+                              >
+                                <opt.icon className="size-4" aria-hidden />
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -420,132 +472,41 @@ export function _DocumentTypeFormModal({
                       />
                     )}
 
-                    {/* Opciones (checkboxes) */}
+                    {/* Opciones */}
                     <div className="space-y-3">
                       <FormLabel>Opciones</FormLabel>
                       <div className="grid gap-3 sm:grid-cols-2">
-                        <FormField
-                          control={form.control}
-                          name="mandatory"
-                          render={({ field }) => (
-                            <FormItem className="flex items-center space-x-2 space-y-0">
-                              <FormControl>
-                                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                              </FormControl>
-                              <FormLabel className="font-normal text-sm">Es obligatorio</FormLabel>
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="explired"
-                          render={({ field }) => (
-                            <FormItem className="flex items-center space-x-2 space-y-0">
-                              <FormControl>
-                                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                              </FormControl>
-                              <FormLabel className="font-normal text-sm">Tiene vencimiento</FormLabel>
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="is_it_montlhy"
-                          render={({ field }) => (
-                            <FormItem className="flex items-center space-x-2 space-y-0">
-                              <FormControl>
-                                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                              </FormControl>
-                              <FormLabel className="font-normal text-sm">Es mensual</FormLabel>
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="private"
-                          render={({ field }) => (
-                            <FormItem className="flex items-center space-x-2 space-y-0">
-                              <FormControl>
-                                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                              </FormControl>
-                              <FormLabel className="font-normal text-sm">Es privado</FormLabel>
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="down_document"
-                          render={({ field }) => (
-                            <FormItem className="flex items-center space-x-2 space-y-0">
-                              <FormControl>
-                                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                              </FormControl>
-                              <FormLabel className="font-normal text-sm">Documento de baja</FormLabel>
-                            </FormItem>
-                          )}
-                        />
-
-                        {/* Ticket 505: habilita el tipo en el checklist de un candidato */}
-                        {applies === 'Persona' && (
-                          <FormField
-                            control={form.control}
-                            name="available_for_pre_file"
-                            render={({ field }) => (
-                              <FormItem className="flex items-center space-x-2 space-y-0">
-                                <FormControl>
-                                  <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                                </FormControl>
-                                <FormLabel className="font-normal text-sm">
-                                  Puede cargarse desde un candidato
-                                </FormLabel>
-                              </FormItem>
-                            )}
-                          />
-                        )}
-
-                        {applies !== 'Empresa' && (
-                          <FormField
-                            control={form.control}
-                            name="multiresource"
-                            render={({ field }) => (
-                              <FormItem className="flex items-center space-x-2 space-y-0">
-                                <FormControl>
-                                  <Checkbox
-                                    checked={field.value}
-                                    onCheckedChange={(checked) => {
-                                      field.onChange(checked);
-                                      // N° de póliza depende de multirecurso: limpiar al destildar
-                                      if (!checked) {
-                                        form.setValue('has_policy_number', false);
-                                      }
-                                    }}
-                                  />
-                                </FormControl>
-                                <FormLabel className="font-normal text-sm">Es multirrecurso</FormLabel>
-                              </FormItem>
-                            )}
-                          />
-                        )}
-
-                        {/* N° de póliza: solo para tipos de Equipos multirecurso */}
-                        {applies === 'Equipos' && multiresource && (
-                          <FormField
-                            control={form.control}
-                            name="has_policy_number"
-                            render={({ field }) => (
-                              <FormItem className="flex items-center space-x-2 space-y-0">
-                                <FormControl>
-                                  <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                                </FormControl>
-                                <FormLabel className="font-normal text-sm">Lleva N° de póliza</FormLabel>
-                              </FormItem>
-                            )}
-                          />
-                        )}
+                        {options
+                          .filter((option) => option.visible)
+                          .map((option) => (
+                            <FormField
+                              key={option.name}
+                              control={form.control}
+                              name={option.name}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <label className="hover:bg-accent/50 has-[:focus-visible]:ring-ring/50 flex h-full cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors has-[:focus-visible]:ring-[3px]">
+                                    <FormControl>
+                                      <Checkbox
+                                        className="mt-0.5"
+                                        checked={field.value}
+                                        onCheckedChange={(checked) => {
+                                          field.onChange(checked);
+                                          option.onChange?.(checked === true);
+                                        }}
+                                      />
+                                    </FormControl>
+                                    <span className="space-y-0.5">
+                                      <span className="block text-sm font-medium">{option.label}</span>
+                                      <span className="text-muted-foreground block text-sm text-pretty">
+                                        {option.description}
+                                      </span>
+                                    </span>
+                                  </label>
+                                </FormItem>
+                              )}
+                            />
+                          ))}
                       </div>
                     </div>
 
@@ -575,16 +536,21 @@ export function _DocumentTypeFormModal({
                       initialNamesMap={initialNamesMap}
                     />
 
-                    {/* Contador de coincidencias */}
+                    {/* Impacto: a cuántos recursos se les exigiría */}
                     {isSpecial && hasActive && applies !== 'Empresa' && (
-                      <div className="flex items-center gap-2 rounded-md border border-dashed p-3 text-sm">
-                        <Users className="h-4 w-4 text-muted-foreground" />
+                      <div
+                        className="bg-warn-subtle text-warn-subtle-foreground flex items-center gap-2 rounded-lg p-3 text-sm"
+                        role="status"
+                        aria-live="polite"
+                      >
+                        <Users className="size-4 shrink-0" aria-hidden />
                         {isCountLoading ? (
-                          <span className="text-muted-foreground">Calculando coincidencias...</span>
+                          <span>Calculando coincidencias…</span>
                         ) : (
                           <span>
-                            <strong>{matchCount ?? 0}</strong> {applies === 'Persona' ? 'empleado' : 'equipo'}
-                            {(matchCount ?? 0) !== 1 ? 's' : ''} coinciden con las condiciones configuradas
+                            Se le exigirá a <strong>{matchCount ?? 0}</strong>{' '}
+                            {applies === 'Persona' ? 'empleado' : 'equipo'}
+                            {(matchCount ?? 0) !== 1 ? 's' : ''} que coinciden con las condiciones configuradas.
                           </span>
                         )}
                       </div>

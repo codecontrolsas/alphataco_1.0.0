@@ -14,6 +14,7 @@ import { useRefreshAndWait } from '@/shared/hooks/useRefreshAndWait';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import {
@@ -43,6 +44,8 @@ export function PreEmployeeFormView({ preEmployee, onClose }: PreEmployeeFormVie
   const router = useRouter();
   const { refreshAndWait, isRefreshing } = useRefreshAndWait();
   const isNew = !preEmployee;
+  // Tras crear, la navegación a la ficha tarda: el botón sigue bloqueado para no crear el mismo candidato dos veces.
+  const [isCreated, setIsCreated] = useState(false);
 
   const form = useForm<PreEmployeeFormData>({
     resolver: zodResolver(preEmployeeFormSchema),
@@ -54,6 +57,7 @@ export function PreEmployeeFormView({ preEmployee, onClose }: PreEmployeeFormVie
       if (!preEmployee) {
         const created = await createPreEmployee(values);
         toast.success('Candidato creado');
+        setIsCreated(true);
         router.push(`/dashboard/recruitment/detail?action=view&pre_employee_id=${created.id}`);
         return;
       }
@@ -68,7 +72,7 @@ export function PreEmployeeFormView({ preEmployee, onClose }: PreEmployeeFormVie
     }
   };
 
-  const isSaving = form.formState.isSubmitting || isRefreshing;
+  const isSaving = form.formState.isSubmitting || isRefreshing || isCreated;
 
   return (
     <div className="space-y-6">

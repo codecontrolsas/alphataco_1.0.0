@@ -1,8 +1,10 @@
 import { Card, CardContent } from '@/components/ui/card';
+import { DocumentStateMetricsSection } from '@/features/Documentacion/shared/components/DocumentStateMetricsSection';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { getCompanyDocsPaginated } from '../actions.server';
+import { getCompanyDocumentStateCounts } from '../metrics.server';
 import _CompanyDocsPermanentesDataTable from './_CompanyDocsPermanentesDataTable';
 
 // ============================================================================
@@ -23,23 +25,29 @@ export default async function CompanyDocsPermanentesList({ searchParams }: Props
   // Extraer solo los params de esta tabla (quitar prefijo del namespace)
   const tableParams = stripPrefixFromSearchParams(searchParams, PERMANENTES_TABLE_ID);
 
+  // Las tarjetas arrancan YA, en paralelo con la tabla (si no, su consulta esperaría a que la tabla resuelva).
+  const counts = getCompanyDocumentStateCounts(false);
   const [{ data, total }, preferences] = await Promise.all([
     getCompanyDocsPaginated(tableParams, false),
     getTablePreferences(PERMANENTES_TABLE_ID),
   ]);
 
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <_CompanyDocsPermanentesDataTable
-          data={data}
-          totalRows={total}
-          searchParams={tableParams}
-          tableId={PERMANENTES_TABLE_ID}
-          initialColumnVisibility={preferences.columnVisibility ?? {}}
-          initialFilterVisibility={preferences.filterVisibility ?? {}}
-        />
-      </CardContent>
-    </Card>
+    <div className="space-y-6">
+      <DocumentStateMetricsSection tableId={PERMANENTES_TABLE_ID} counts={counts} />
+
+      <Card>
+        <CardContent className="pt-6">
+          <_CompanyDocsPermanentesDataTable
+            data={data}
+            totalRows={total}
+            searchParams={tableParams}
+            tableId={PERMANENTES_TABLE_ID}
+            initialColumnVisibility={preferences.columnVisibility ?? {}}
+            initialFilterVisibility={preferences.filterVisibility ?? {}}
+          />
+        </CardContent>
+      </Card>
+    </div>
   );
 }

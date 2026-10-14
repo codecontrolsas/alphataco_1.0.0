@@ -57,7 +57,15 @@ export const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Record<string,
 };
 
 /** Columnas con filtro de texto libre */
-const TEXT_FILTER_COLUMNS: string[] = ['vehicle', 'deny_reason', 'serie', 'policy_number', 'vehicle_year', 'vehicle_chassis', 'vehicle_engine'];
+const TEXT_FILTER_COLUMNS: string[] = [
+  'vehicle',
+  'deny_reason',
+  'serie',
+  'policy_number',
+  'vehicle_year',
+  'vehicle_chassis',
+  'vehicle_engine',
+];
 
 /** Columnas con filtro de rango de fechas (solo campos directos de documents_equipment) */
 const DATE_RANGE_COLUMNS = ['created_at', 'validity'];
@@ -108,6 +116,9 @@ export const DOCS_EQUIPMENT_PERMANENTES_SELECT = {
         select: { id: true, name: true },
       },
       brand_vehicles: {
+        select: { id: true, name: true },
+      },
+      model_vehicles: {
         select: { id: true, name: true },
       },
       equipment_owners: {
@@ -165,7 +176,7 @@ export async function buildWhereClause(
   const canViewPrivate = await checkPermissionServer('documentacion', 'documentos-de-equipos', 'view_private');
   const filtersWhere = buildFiltersWhere(state.filters, COLUMN_MAP, {
     exclude: [
-      ...TEXT_FILTER_COLUMNS,  // includes 'policy_number', 'serie', 'vehicle', 'deny_reason', etc.
+      ...TEXT_FILTER_COLUMNS, // includes 'policy_number', 'serie', 'vehicle', 'deny_reason', etc.
       ...DATE_RANGE_COLUMNS.flatMap((c) => [`${c}_from`, `${c}_to`]),
       'mandatory',
       'multiresource',
@@ -241,6 +252,7 @@ export async function buildWhereClause(
         { vehicles: { domain: { contains: state.search, mode: 'insensitive' } } },
         { vehicles: { serie: { contains: state.search, mode: 'insensitive' } } },
         { vehicles: { intern_number: { contains: state.search, mode: 'insensitive' } } },
+        { document_types: { name: { contains: state.search, mode: 'insensitive' } } },
       ],
     });
   }
@@ -476,4 +488,3 @@ export async function buildBaseWhereClause(companyId: string, equipmentId?: stri
     document_types: { is_it_montlhy: false, is_active: true, ...(!canViewPrivate && { private: { not: true } }) },
   };
 }
-

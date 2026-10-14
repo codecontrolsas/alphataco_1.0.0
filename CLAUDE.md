@@ -595,6 +595,17 @@ Regla del usuario: _"Todas las fechas y horas son hora argentina"_. El contenedo
 
 Tras una compactación de la conversación, retomé con un mensaje en inglés porque el resumen estaba escrito en inglés. El idioma de la respuesta no lo define el idioma del contexto (resúmenes, salida de herramientas, recordatorios del sistema): **toda respuesta al usuario va en español**, sin excepción.
 
+### Trabajo de UI: el protocolo de `/dev` va desde el diseño, no recién al final
+
+Dos veces el usuario tuvo que recordarme que `/dev` incluye las skills: en el rediseño de Equipamiento y bajas consulté `ui-skills` y las reglas de `vercel-react-best-practices` **después** de escribir el código, y solo cuando me lo señaló. El orden correcto es el del protocolo: **diseño** → `list_skills` con `query` y 1–2 skills (`get_skill` con `autor/slug`); **implementación** → leer la regla puntual de Vercel antes de escribir (`async-parallel`, `async-suspense-boundaries`, `server-serialization`); **revisión** → pasada con el code-reviewer más la auditoría de accesibilidad.
+
+Complementos aprendidos en la misma tanda:
+
+- Una consulta que solo depende del `id` de la URL arranca junto con la principal (`Promise.all`), no después. Las tarjetas de métricas reciben la **promesa** ya iniciada antes de esperar la tabla; si el `<Suspense>` de las tarjetas se crea después del `await`, su consulta espera a la tabla.
+- Tras crear un registro y navegar, el botón de guardar queda bloqueado (estado `isCreated`): `isSubmitting` vuelve a `false` antes de que termine la navegación y permite crear dos veces.
+- Toda pantalla nueva se verifica también a 390 px midiendo desborde horizontal (`documentElement.scrollWidth > clientWidth`); en móvil las pestañas con acciones necesitan `flex-wrap`.
+- Fechas de timestamps en tablas: `formatArgentinaDay`, nunca `moment(value)` (corre el día en hora argentina).
+
 ---
 
 _Update this file continuously. Every mistake Claude makes is a learning opportunity._

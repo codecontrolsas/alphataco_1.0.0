@@ -228,8 +228,9 @@ export default function _CompanyDocsMensualesDataTable({
       isFetchingFacets={isFetchingFacets}
       exportConfig={exportConfig}
       showFilterToggle
-      searchPlaceholder="Buscar por nombre de documento..."
+      searchPlaceholder="Documento"
       showSearch
+      mobileCards
       emptyMessage="No se encontraron documentos mensuales"
       data-testid="company-docs-mensuales-table"
     />

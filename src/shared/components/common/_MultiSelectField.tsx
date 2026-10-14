@@ -186,7 +186,7 @@ export function _MultiSelectField({
             <CommandList>
               {isLoading ? (
                 <div className="flex items-center justify-center py-6">
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground motion-reduce:animate-none" />
                 </div>
               ) : options.length === 0 ? (
                 <CommandEmpty>{searchValue ? 'No se encontraron resultados' : 'Escribe para buscar...'}</CommandEmpty>
