@@ -24,6 +24,12 @@ vi.mock('@/features/Permissions', () => ({
   checkPermissionServer: async (_module: string, _tab: string, action: string) =>
     action === 'view_prices' ? canViewPrices : true,
 }));
+vi.mock('@/features/Permissions/actionsServer', () => ({
+  checkPermissionServer: async (_module: string, _tab: string, action: string) =>
+    action === 'view_prices' ? canViewPrices : true,
+  checkMultiplePermissionsServer: async (checks: Array<{ moduleSlug: string; tabSlug: string; actionSlug: string }>) =>
+    new Map(checks.map((c) => [`${c.moduleSlug}:${c.tabSlug}:${c.actionSlug}`, true])),
+}));
 vi.mock('@/shared/lib/tenant', () => ({ getActiveCompanyId: async () => COMPANY }));
 vi.mock('@/shared/actions/auth.actions', () => ({
   getServerAuthProfile: async () => ({ id: PROFILE, credentialId: PROFILE, fullname: null, email: null }),
@@ -82,12 +88,20 @@ describe.skipIf(!RUN)('materiales de la orden de mantenimiento (integracion)', (
         company_cuit: '30999999992',
       },
     });
-    await prisma.profile.create({ data: { id: PROFILE, credential_id: PROFILE, email: 'orden-materiales@alphataco.local' } });
-    await prisma.measurement_units.create({ data: { id: UNIT, company_id: COMPANY, name: 'Litro', abbreviation: 'l' } });
+    await prisma.profile.create({
+      data: { id: PROFILE, credential_id: PROFILE, email: 'orden-materiales@alphataco.local' },
+    });
+    await prisma.measurement_units.create({
+      data: { id: UNIT, company_id: COMPANY, name: 'Litro', abbreviation: 'l' },
+    });
     await prisma.warehouses.create({ data: { id: WAREHOUSE, company_id: COMPANY, code: 'B', name: 'Base' } });
-    await prisma.materials.create({ data: { id: MATERIAL, company_id: COMPANY, code: 'ACE', name: 'Aceite', unit_id: UNIT } });
+    await prisma.materials.create({
+      data: { id: MATERIAL, company_id: COMPANY, code: 'ACE', name: 'Aceite', unit_id: UNIT },
+    });
     await prisma.workshops.create({ data: { id: WORKSHOP, company_id: COMPANY, name: 'Taller' } });
-    await prisma.workshop_sectors.create({ data: { id: SECTOR, company_id: COMPANY, workshop_id: WORKSHOP, name: 'Mecánica' } });
+    await prisma.workshop_sectors.create({
+      data: { id: SECTOR, company_id: COMPANY, workshop_id: WORKSHOP, name: 'Mecánica' },
+    });
     await prisma.maintenance_orders.createMany({
       data: [
         { id: ORDER, company_id: COMPANY, status: 'in_workshop', order_number: 'OM-M1' },
@@ -97,8 +111,26 @@ describe.skipIf(!RUN)('materiales de la orden de mantenimiento (integracion)', (
     const planned = { planned_start_date: new Date('2026-10-01'), planned_end_date: new Date('2026-10-02') };
     await prisma.work_orders.createMany({
       data: [
-        { id: WO, company_id: COMPANY, workshop_id: WORKSHOP, sector_id: SECTOR, status: 'in_progress', order_number: 'OT-M1', sequence_number: 1, ...planned },
-        { id: WO_OF_OTHER_ORDER, company_id: COMPANY, workshop_id: WORKSHOP, sector_id: SECTOR, status: 'in_progress', order_number: 'OT-M2', sequence_number: 2, ...planned },
+        {
+          id: WO,
+          company_id: COMPANY,
+          workshop_id: WORKSHOP,
+          sector_id: SECTOR,
+          status: 'in_progress',
+          order_number: 'OT-M1',
+          sequence_number: 1,
+          ...planned,
+        },
+        {
+          id: WO_OF_OTHER_ORDER,
+          company_id: COMPANY,
+          workshop_id: WORKSHOP,
+          sector_id: SECTOR,
+          status: 'in_progress',
+          order_number: 'OT-M2',
+          sequence_number: 2,
+          ...planned,
+        },
       ],
     });
     await prisma.maintenance_order_items.createMany({
