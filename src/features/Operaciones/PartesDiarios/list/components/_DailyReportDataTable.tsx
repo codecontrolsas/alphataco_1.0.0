@@ -8,22 +8,13 @@ import {
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { dailyReportStatusLabels } from '@/shared/utils/mappers';
 import { useQuery } from '@tanstack/react-query';
-import { BookOpen, CheckCircle2, CircleOff, Clock, XCircle, type LucideIcon } from 'lucide-react';
+import { CheckCircle2, CircleOff, XCircle } from 'lucide-react';
 import moment from 'moment';
 import { useMemo } from 'react';
 import { getAllDailyReportsForExport, getDailyReportFacets, type DailyReportListItem } from '../actions.server';
+import { CreateDailyReportButton } from '../../components/CreateDailyReportButton';
+import { DAILY_REPORT_STATUS_ICONS } from '../../lib/daily-report-status-ui';
 import { HIDDEN_COLUMNS_BY_DEFAULT, getColumns } from '../columns';
-
-// ============================================================================
-// ICONOS POR STATUS
-// ============================================================================
-
-const statusIcons: Record<string, LucideIcon> = {
-  abierto: Clock,
-  cerrado: XCircle,
-  cerrado_completo: CheckCircle2,
-  cerrado_incompleto: BookOpen,
-};
 
 // ============================================================================
 // PROPS
@@ -36,6 +27,8 @@ interface Props {
   tableId: string;
   /** Flat permissions map from server: "module:tab:action" → boolean */
   permissionsMap: Record<string, boolean>;
+  /** Muestra el alta de parte diario en la barra de la tabla. */
+  canCreate: boolean;
   initialColumnVisibility: Record<string, boolean>;
   initialFilterVisibility: Record<string, boolean>;
 }
@@ -50,6 +43,7 @@ export function _DailyReportDataTable({
   searchParams,
   tableId,
   permissionsMap,
+  canCreate,
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
@@ -108,7 +102,7 @@ export function _DailyReportDataTable({
           ...Object.entries(dailyReportStatusLabels).map(([value, label]) => ({
             value,
             label,
-            icon: statusIcons[value],
+            icon: DAILY_REPORT_STATUS_ICONS[value],
           })),
           ...(facets?.status?.has(NULL_FILTER_VALUE)
             ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
@@ -149,6 +143,8 @@ export function _DailyReportDataTable({
       totalRows={totalRows}
       searchParams={searchParams}
       searchPlaceholder="Buscar partes diarios..."
+      mobileCards
+      toolbarActions={canCreate ? <CreateDailyReportButton /> : undefined}
       facetedFilters={facetedFilters}
       initialColumnVisibility={mergedColumnVisibility}
       initialFilterVisibility={mergedFilterVisibility}

@@ -240,7 +240,7 @@ function EmployeeRoleMultiSelect({
                   onClick={() => onChange(value.filter((id) => id !== employeeId))}
                   className="ml-1 hover:opacity-80"
                 >
-                  <X className="h-3 w-3 text-red-500" />
+                  <X className="h-3 w-3 text-danger-subtle-foreground" />
                 </button>
               </div>
             );
@@ -516,7 +516,7 @@ export function EmployeeSection({
                       }}
                       className="ml-1 hover:opacity-80"
                     >
-                      <X className="h-3 w-3 text-red-500" />
+                      <X className="h-3 w-3 text-danger-subtle-foreground" />
                     </button>
                   </div>
                 );

@@ -45,6 +45,36 @@ export async function getDailyReportHeader(dailyReportId: string) {
 
 export type DailyReportHeaderData = Awaited<ReturnType<typeof getDailyReportHeader>>;
 
+/**
+ * Resumen de la franja del detalle: total de registros del parte y cantidad por estado.
+ * Mismo universo que la tabla (parte de la empresa activa, sin filtros), en una consulta agrupada.
+ */
+export async function getDailyReportRowStatusSummary(dailyReportId: string) {
+  try {
+    const companyId = await getActiveCompanyId();
+
+    const rows = await prisma.dailyreportrows.groupBy({
+      by: ['status'],
+      where: { daily_report_id: dailyReportId, dailyreport: { company_id: companyId } },
+      _count: { _all: true },
+    });
+
+    const byStatus: Partial<Record<(typeof rows)[number]['status'], number>> = {};
+    let total = 0;
+    for (const row of rows) {
+      total += row._count._all;
+      byStatus[row.status] = row._count._all;
+    }
+
+    return { total, byStatus };
+  } catch (error) {
+    logger.error('Error al obtener el resumen del parte diario', { data: { error, dailyReportId } });
+    throw new Error('No se pudo obtener el resumen del parte diario. Intente nuevamente.');
+  }
+}
+
+export type DailyReportRowStatusSummary = Awaited<ReturnType<typeof getDailyReportRowStatusSummary>>;
+
 // ============================================================================
 // 2. PAGINATED QUERY
 // ============================================================================

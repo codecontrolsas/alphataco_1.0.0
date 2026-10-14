@@ -102,7 +102,7 @@ export function EquipmentSection({
                             asignados al cliente.
                           </p>
                           <p>
-                            Los equipos en <span className="text-red-600 font-medium">rojo</span> tienen problemas de
+                            Los equipos en <span className="text-danger-subtle-foreground font-medium">rojo</span> tienen problemas de
                             condición.
                           </p>
                         </div>
@@ -145,7 +145,7 @@ export function EquipmentSection({
                                         field.onChange(newValues);
                                       }}
                                       className={cn(
-                                        hasConditionIssue && 'text-red-700 bg-red-50 hover:bg-red-100',
+                                        hasConditionIssue && 'text-danger-subtle-foreground bg-danger-subtle hover:bg-danger-subtle/80',
                                         !isAssigned &&
                                           !hasConditionIssue &&
                                           'text-orange-700 bg-orange-50 hover:bg-orange-100'
@@ -156,7 +156,7 @@ export function EquipmentSection({
                                           <Check
                                             className={cn(
                                               'mr-2 h-4 w-4',
-                                              hasConditionIssue && 'text-red-600',
+                                              hasConditionIssue && 'text-danger-subtle-foreground',
                                               !isAssigned && !hasConditionIssue && 'text-orange-600',
                                               field.value?.includes(vehicle.id) ? 'opacity-100' : 'opacity-0'
                                             )}
@@ -167,7 +167,7 @@ export function EquipmentSection({
                                           {hasConditionIssue && (
                                             <Badge
                                               variant="outline"
-                                              className="ml-2 bg-red-100 text-red-800 border-red-300"
+                                              className="ml-2 bg-danger-subtle text-danger-subtle-foreground border-danger/30"
                                             >
                                               {conditionLabel}
                                             </Badge>
@@ -229,7 +229,7 @@ export function EquipmentSection({
                       className={cn(
                         'text-xs px-2 py-1 rounded-md flex items-center gap-1',
                         hasConditionIssue
-                          ? 'bg-red-100 text-red-800 border border-red-300'
+                          ? 'bg-danger-subtle text-danger-subtle-foreground border border-danger/30'
                           : isAssigned
                             ? 'bg-primary/10 text-primary'
                             : 'bg-orange-100 text-orange-800 border border-orange-300'
@@ -239,7 +239,7 @@ export function EquipmentSection({
                       {hasConditionIssue && (
                         <Badge
                           variant="outline"
-                          className="ml-1 bg-red-200 text-red-900 border-red-400 text-[10px] px-1 py-0"
+                          className="ml-1 bg-danger/20 text-danger-subtle-foreground border-danger/40 text-[10px] px-1 py-0"
                         >
                           {conditionLabel}
                         </Badge>
@@ -260,7 +260,7 @@ export function EquipmentSection({
                         }}
                         className="ml-1 hover:opacity-80"
                       >
-                        <X className="h-3 w-3 text-red-500" />
+                        <X className="h-3 w-3 text-danger-subtle-foreground" />
                       </button>
                     </div>
                   );
@@ -366,7 +366,7 @@ export function EquipmentSection({
                                       <div className="flex gap-1">
                                         <Badge
                                           variant="outline"
-                                          className="ml-2 bg-blue-100 text-blue-800 border-blue-300 text-[10px]"
+                                          className="ml-2 bg-info-subtle text-info-subtle-foreground border-info/30 text-[10px]"
                                         >
                                           Otro Equipo
                                         </Badge>
@@ -404,12 +404,12 @@ export function EquipmentSection({
                     return (
                       <div
                         key={eqId}
-                        className="text-xs px-2 py-1 rounded-md flex items-center gap-1 bg-red-50 text-red-800 border border-red-300"
+                        className="text-xs px-2 py-1 rounded-md flex items-center gap-1 bg-danger-subtle text-danger-subtle-foreground border border-danger/30"
                       >
                         {saved.intern_number ?? saved.serial_number ?? 'Sin número'}
                         <Badge
                           variant="outline"
-                          className="ml-1 bg-red-100 text-red-900 border-red-400 text-[10px] px-1 py-0"
+                          className="ml-1 bg-danger/20 text-danger-subtle-foreground border-danger/40 text-[10px] px-1 py-0"
                         >
                           {saved.is_active ? 'No operativo' : 'Dado de baja'}
                         </Badge>
@@ -420,7 +420,7 @@ export function EquipmentSection({
                           disabled={disabled}
                           className="ml-1 hover:opacity-80"
                         >
-                          <X className="h-3 w-3 text-red-500" />
+                          <X className="h-3 w-3 text-danger-subtle-foreground" />
                         </button>
                       </div>
                     );
@@ -434,7 +434,7 @@ export function EquipmentSection({
                       className={cn(
                         'text-xs px-2 py-1 rounded-md flex items-center gap-1',
                         isAssigned
-                          ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                          ? 'bg-info-subtle text-info-subtle-foreground border border-info/30'
                           : 'bg-orange-100 text-orange-800 border border-orange-300'
                       )}
                     >
@@ -461,7 +461,7 @@ export function EquipmentSection({
                         }}
                         className="ml-1 hover:opacity-80"
                       >
-                        <X className="h-3 w-3 text-red-500" />
+                        <X className="h-3 w-3 text-danger-subtle-foreground" />
                       </button>
                     </div>
                   );

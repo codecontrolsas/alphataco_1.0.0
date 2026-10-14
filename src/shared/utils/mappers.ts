@@ -156,10 +156,10 @@ export const dailyReportStatusLabels: Record<string, string> = {
 };
 
 export const dailyReportStatusBadges: Record<string, BadgeVariant> = {
-  abierto: 'default',
-  cerrado: 'destructive',
+  abierto: 'info',
+  cerrado: 'secondary',
   cerrado_completo: 'success',
-  cerrado_incompleto: 'destructive',
+  cerrado_incompleto: 'warning',
 };
 
 /**
@@ -176,12 +176,12 @@ export const dailyReportRowStatusLabels: Record<string, string> = {
 };
 
 export const dailyReportRowStatusBadges: Record<string, BadgeVariant> = {
-  pendiente: 'yellow',
+  pendiente: 'pending',
   sin_recursos_asignados: 'destructive',
   ejecutado: 'success',
-  reprogramado: 'default',
-  cancelado: 'destructive',
-  en_certificacion: 'default',
+  reprogramado: 'warning',
+  cancelado: 'secondary',
+  en_certificacion: 'info',
 };
 
 /**

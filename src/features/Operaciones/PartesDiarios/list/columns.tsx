@@ -13,11 +13,13 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { dailyReportStatusBadges, dailyReportStatusLabels } from '@/shared/utils/mappers';
 import { useQueryClient } from '@tanstack/react-query';
 import { type ColumnDef } from '@tanstack/react-table';
 import { Eye, Trash2 } from 'lucide-react';
+import { DAILY_REPORT_STATUS_ICONS } from '../lib/daily-report-status-ui';
 import moment from 'moment';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -58,11 +60,13 @@ function DeleteDailyReportCell({ row }: { row: { original: DailyReportListItem }
       <AlertDialogTrigger asChild>
         <Button
           variant="ghost"
-          className="h-8 w-8 p-0"
+          size="icon-sm"
+          className="text-danger-subtle-foreground hover:text-danger-subtle-foreground"
           disabled={hasRows}
           title={hasRows ? 'No se puede eliminar un parte con registros' : 'Eliminar parte diario'}
+          aria-label="Eliminar parte diario"
         >
-          <Trash2 className={hasRows ? 'h-4 w-4 text-gray-400' : 'h-4 w-4 text-red-500'} />
+          <Trash2 className="size-4" />
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
@@ -74,12 +78,21 @@ function DeleteDailyReportCell({ row }: { row: { original: DailyReportListItem }
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancelar</AlertDialogCancel>
-          <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600">
+          <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90 text-white">
             Eliminar
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  );
+}
+
+// ── Conteo de registros: número en mono; con color solo si pide atención ────────
+function CountCell({ count, attentionClassName }: { count: number; attentionClassName?: string }) {
+  return (
+    <span className={cn('font-mono tabular-nums', count > 0 ? attentionClassName : 'text-muted-foreground')}>
+      {count}
+    </span>
   );
 }
 
@@ -94,7 +107,12 @@ export function getColumns(permissions: Permissions): ColumnDef<DailyReportListI
       meta: { title: 'Fecha' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha" />,
       cell: ({ row }) => (
-        <span className="font-medium whitespace-nowrap">{moment.utc(row.original.date).format('DD/MM/YYYY')}</span>
+        <Link
+          href={`/dashboard/operations/${row.original.id}`}
+          className="text-foreground hover:text-brand-ink font-mono font-semibold whitespace-nowrap tabular-nums hover:underline"
+        >
+          {moment.utc(row.original.date).format('DD/MM/YYYY')}
+        </Link>
       ),
     },
 
@@ -107,8 +125,10 @@ export function getColumns(permissions: Permissions): ColumnDef<DailyReportListI
         const status = row.original.status;
         const label = dailyReportStatusLabels[status] ?? status.replaceAll('_', ' ');
         const variant = dailyReportStatusBadges[status] ?? 'default';
+        const Icon = DAILY_REPORT_STATUS_ICONS[status];
         return (
-          <Badge variant={variant} className="whitespace-nowrap">
+          <Badge variant={variant}>
+            {Icon && <Icon aria-hidden="true" />}
             {label}
           </Badge>
         );
@@ -121,9 +141,12 @@ export function getColumns(permissions: Permissions): ColumnDef<DailyReportListI
       accessorKey: 'creation_date',
       meta: { title: 'Fecha de creación' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de creación" />,
-      cell: ({ row }) => (
-        <span>{row.original.creation_date ? moment.utc(row.original.creation_date).format('DD/MM/YYYY') : '—'}</span>
-      ),
+      cell: ({ row }) =>
+        row.original.creation_date ? (
+          <span className="font-mono tabular-nums">{moment.utc(row.original.creation_date).format('DD/MM/YYYY')}</span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        ),
     },
 
     // ── Sin Recursos (virtual — count de rows con status sin_recursos_asignados) ─
@@ -135,11 +158,7 @@ export function getColumns(permissions: Permissions): ColumnDef<DailyReportListI
       header: ({ column }) => <DataTableColumnHeader column={column} title="Sin Recursos" />,
       cell: ({ row }) => {
         const count = row.original.dailyreportrows.filter((r) => r.status === 'sin_recursos_asignados').length;
-        return (
-          <Badge variant={count > 0 ? 'warning' : 'secondary'} className="min-w-[28px] justify-center">
-            {count}
-          </Badge>
-        );
+        return <CountCell count={count} attentionClassName="text-danger-subtle-foreground font-semibold" />;
       },
     },
 
@@ -152,11 +171,7 @@ export function getColumns(permissions: Permissions): ColumnDef<DailyReportListI
       header: ({ column }) => <DataTableColumnHeader column={column} title="Pendientes" />,
       cell: ({ row }) => {
         const count = row.original.dailyreportrows.filter((r) => r.status === 'pendiente').length;
-        return (
-          <Badge variant={count > 0 ? 'default' : 'secondary'} className="min-w-[28px] justify-center">
-            {count}
-          </Badge>
-        );
+        return <CountCell count={count} attentionClassName="text-warn-subtle-foreground font-semibold" />;
       },
     },
 
@@ -168,12 +183,7 @@ export function getColumns(permissions: Permissions): ColumnDef<DailyReportListI
       accessorFn: (row) => row.dailyreportrows.length,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Total" />,
       cell: ({ row }) => {
-        const count = row.original.dailyreportrows.length;
-        return (
-          <Badge variant="outline" className="min-w-[28px] justify-center">
-            {count}
-          </Badge>
-        );
+        return <CountCell count={row.original.dailyreportrows.length} />;
       },
     },
 
@@ -183,7 +193,7 @@ export function getColumns(permissions: Permissions): ColumnDef<DailyReportListI
       meta: { title: 'Activo' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Activo" />,
       cell: ({ row }) => (
-        <Badge variant={row.original.is_active ? 'default' : 'secondary'}>
+        <Badge variant={row.original.is_active ? 'success' : 'secondary'}>
           {row.original.is_active ? 'Activo' : 'Inactivo'}
         </Badge>
       ),
@@ -202,14 +212,16 @@ export function getColumns(permissions: Permissions): ColumnDef<DailyReportListI
       enableHiding: false,
       header: () => null,
       cell: ({ row }) => (
-        <div className="flex items-center gap-1">
-          <Link
-            href={`/dashboard/operations/${row.original.id}`}
-            className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors"
-          >
-            <Eye className="h-3.5 w-3.5" />
-            Ver
-          </Link>
+        <div className="flex items-center justify-end gap-1">
+          <Button asChild variant="ghost" size="sm">
+            <Link
+              href={`/dashboard/operations/${row.original.id}`}
+              aria-label={`Ver parte del ${moment.utc(row.original.date).format('DD/MM/YYYY')}`}
+            >
+              <Eye className="size-4" />
+              Ver
+            </Link>
+          </Button>
           {canDelete && <DeleteDailyReportCell row={row} />}
         </div>
       ),

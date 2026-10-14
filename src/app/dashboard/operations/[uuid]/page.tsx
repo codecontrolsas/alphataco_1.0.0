@@ -22,7 +22,7 @@ async function Page({
   if (!canView) redirect('/dashboard');
 
   return (
-    <div className="mx-6 mt-4 space-y-6">
+    <div className="space-y-6">
       <Suspense fallback={<DailyReportHeaderSkeleton />}>
         <DailyReportHeader uuid={resolvedParams.uuid} />
       </Suspense>

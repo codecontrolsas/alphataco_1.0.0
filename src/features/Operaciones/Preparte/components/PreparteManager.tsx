@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { confirmPreparteToDailyReport } from '@/features/Operaciones/Preparte/actions/bulk.server';
 import {
   createPreparte,
@@ -51,7 +51,8 @@ interface PreparteManagerProps {
   permissionsMap: Record<string, boolean>;
   initialColumnVisibility: Record<string, boolean>;
   initialFilterVisibility: Record<string, boolean>;
-  statusCards?: React.ReactNode;
+  /** Tarjetas de métricas (Server Component con su propio Suspense). */
+  metrics?: React.ReactNode;
 }
 
 // Helper para parsear fechas de BD (timestamptz guardadas como UTC midnight)
@@ -84,7 +85,7 @@ export function PreparteManager({
   permissionsMap,
   initialColumnVisibility,
   initialFilterVisibility,
-  statusCards,
+  metrics,
 }: PreparteManagerProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [currentItem, setCurrentItem] = useState<PreparteItem | null>(null);
@@ -483,90 +484,51 @@ export function PreparteManager({
     [Customers, contratos]
   );
 
+  const emptyFormData: PreparteFormData = {
+    id: '',
+    cliente_id: '',
+    contrato_id: '',
+    item: [],
+    requestDate: new Date(),
+    solicitante: '',
+    status: 'pendiente',
+    sector_service_id: '',
+    areas_service_id: '',
+    equipos_cliente: [],
+  };
+
+  const toolbarActions = (
+    <>
+      <Button variant="outline" size="sm" onClick={() => setReportModalOpen(true)}>
+        <FileSpreadsheet className="mr-2 size-4" />
+        Generar informe
+      </Button>
+      <PermissionGuard module="operaciones" tab="preparte" action="create">
+        <Button
+          variant="brand"
+          size="sm"
+          data-testid="nuevo-pedido-button"
+          onClick={() => {
+            // Limpiar el formulario al abrir para nuevo pedido
+            setIsEditing(false);
+            setCurrentItem(null);
+            setFormData(emptyFormData);
+            setOpen(true);
+          }}
+        >
+          <Plus className="mr-2 size-4" />
+          Nuevo pedido
+        </Button>
+      </PermissionGuard>
+    </>
+  );
+
   return (
-    <div className="space-y-6 w-full max-w-[100vw] px-4">
-      <div className="overflow-y-auto flex justify-between items-center w-full">
-        <h2 className="text-2xl font-bold" data-testid="preparte-title">
-          Gestión de Pedidos
-        </h2>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setReportModalOpen(true)}>
-            <FileSpreadsheet className="mr-2 h-4 w-4" />
-            Generar Informe
-          </Button>
-          <PermissionGuard module="operaciones" tab="preparte" action="create">
-            <Button
-              data-testid="nuevo-pedido-button"
-              onClick={() => {
-                // Limpiar el formulario al abrir para nuevo pedido
-                setIsEditing(false);
-                setCurrentItem(null);
-                setFormData({
-                  id: '',
-                  cliente_id: '',
-                  contrato_id: '',
-                  item: [],
-                  requestDate: new Date(),
-                  solicitante: '',
-                  status: 'pendiente',
-                  sector_service_id: '',
-                  areas_service_id: '',
-                  equipos_cliente: [],
-                });
-                setOpen(true);
-              }}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Nuevo Pedido
-            </Button>
-          </PermissionGuard>
-        </div>
-      </div>
+    <div className="space-y-6">
+      {metrics}
 
-      {/* Sheet fuera del contenedor flex para no afectar el layout */}
-      <Sheet open={open} onOpenChange={setOpen}>
-        {/* SheetTrigger vacío ya que controlamos la apertura manualmente */}
-        <SheetTrigger asChild>
-          <span className="hidden" />
-        </SheetTrigger>
-        <SheetContent side="right" className="overflow-y-auto w-[750px] max-w-[75vw] sm:max-w-[75vw]">
-          <SheetHeader className="mb-6">
-            <SheetTitle>{isEditing ? 'Editar Pedido' : 'Nuevo Pedido'}</SheetTitle>
-          </SheetHeader>
-          <PreparteForm
-            // Key para forzar remontaje cuando se cambia entre editar y crear
-            key={isEditing ? `edit-${currentItem?.id}` : 'create-new'}
-            formData={formData}
-            clientes={Customers}
-            contratos={contratos}
-            isEditing={isEditing}
-            onInputChange={handleInputChange}
-            onSubmit={(formData: PreparteFormData) => handleSubmit(formData)}
-            onCancel={() => {
-              setOpen(false);
-              setIsEditing(false);
-              setCurrentItem(null);
-              // PP-3: Reset (campos por ítem ya no están a nivel global)
-              setFormData({
-                id: '',
-                cliente_id: '',
-                contrato_id: '',
-                item: [],
-                requestDate: new Date(),
-                solicitante: '',
-                status: 'pendiente',
-                sector_service_id: '',
-                areas_service_id: '',
-                equipos_cliente: [],
-              });
-            }}
-          />
-        </SheetContent>
-      </Sheet>
-
-      <Card className="w-full">
-        <CardContent className="p-2">
-          {statusCards}
+      <Card>
+        <CardContent className="pt-6">
           <_PreparteDataTable
             data={prepartes}
             totalRows={totalRows}
@@ -577,9 +539,41 @@ export function PreparteManager({
             initialFilterVisibility={initialFilterVisibility}
             callbacks={tableCallbacks}
             clearSelectionTrigger={clearSelectionTrigger}
+            extraToolbarActions={toolbarActions}
           />
         </CardContent>
       </Card>
+
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-3xl">
+          <SheetHeader className="border-b">
+            <SheetTitle>{isEditing ? 'Editar pedido' : 'Nuevo pedido'}</SheetTitle>
+            <SheetDescription>
+              {isEditing
+                ? `Pedido ${currentItem?.numero_pedido ?? ''}`.trim()
+                : 'Cargá el cliente, el lugar y los ítems que se piden.'}
+            </SheetDescription>
+          </SheetHeader>
+          <div className="px-4 pb-4">
+            <PreparteForm
+              // Key para forzar remontaje cuando se cambia entre editar y crear
+              key={isEditing ? `edit-${currentItem?.id}` : 'create-new'}
+              formData={formData}
+              clientes={Customers}
+              contratos={contratos}
+              isEditing={isEditing}
+              onInputChange={handleInputChange}
+              onSubmit={(formData: PreparteFormData) => handleSubmit(formData)}
+              onCancel={() => {
+                setOpen(false);
+                setIsEditing(false);
+                setCurrentItem(null);
+                setFormData(emptyFormData);
+              }}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {detailItem && (
         <PreparteDetailModal

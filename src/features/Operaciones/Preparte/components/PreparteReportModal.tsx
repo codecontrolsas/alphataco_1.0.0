@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -10,7 +11,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
+import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { preparte_status } from '@/generated/prisma/enums';
@@ -497,7 +498,7 @@ export function PreparteReportModal({ open, onOpenChange, customers }: PreparteR
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             {/* Fechas */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <FormField
                 control={form.control}
                 name="from"
@@ -505,7 +506,12 @@ export function PreparteReportModal({ open, onOpenChange, customers }: PreparteR
                   <FormItem>
                     <FormLabel>Desde</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <EnhancedDatePicker
+                        id={field.name}
+                        name={field.name}
+                        date={field.value || undefined}
+                        setDate={(date) => field.onChange(date ? moment(date).format('YYYY-MM-DD') : '')}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -518,7 +524,12 @@ export function PreparteReportModal({ open, onOpenChange, customers }: PreparteR
                   <FormItem>
                     <FormLabel>Hasta</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <EnhancedDatePicker
+                        id={field.name}
+                        name={field.name}
+                        date={field.value || undefined}
+                        setDate={(date) => field.onChange(date ? moment(date).format('YYYY-MM-DD') : '')}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -542,17 +553,15 @@ export function PreparteReportModal({ open, onOpenChange, customers }: PreparteR
                           key={c.id}
                           className="flex items-center gap-2 text-sm cursor-pointer hover:bg-accent rounded px-1 py-0.5"
                         >
-                          <input
-                            type="checkbox"
+                          <Checkbox
                             checked={field.value.includes(c.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
+                            onCheckedChange={(checked) => {
+                              if (checked === true) {
                                 field.onChange([...field.value, c.id]);
                               } else {
                                 field.onChange(field.value.filter((id) => id !== c.id));
                               }
                             }}
-                            className="rounded"
                           />
                           {c.name}
                         </label>
@@ -574,23 +583,21 @@ export function PreparteReportModal({ open, onOpenChange, customers }: PreparteR
                     Estados <span className="text-muted-foreground font-normal">(vacío = todos)</span>
                   </FormLabel>
                   <FormControl>
-                    <div className="grid grid-cols-2 gap-1 border rounded-md p-2">
+                    <div className="grid grid-cols-1 gap-1 rounded-md border p-2 sm:grid-cols-2">
                       {ALL_STATUSES.map((s) => (
                         <label
                           key={s}
                           className="flex items-center gap-2 text-sm cursor-pointer hover:bg-accent rounded px-1 py-0.5"
                         >
-                          <input
-                            type="checkbox"
+                          <Checkbox
                             checked={field.value.includes(s)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
+                            onCheckedChange={(checked) => {
+                              if (checked === true) {
                                 field.onChange([...field.value, s]);
                               } else {
                                 field.onChange(field.value.filter((v) => v !== s));
                               }
                             }}
-                            className="rounded"
                           />
                           {STATUS_LABELS[s] || s}
                         </label>

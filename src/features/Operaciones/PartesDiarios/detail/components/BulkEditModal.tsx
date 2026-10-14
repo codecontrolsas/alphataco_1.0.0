@@ -214,12 +214,9 @@ export function BulkEditModal({ open, onOpenChange, selectedRows, dailyReportId,
         <DialogHeader>
           <DialogTitle>Edición masiva por estado</DialogTitle>
           <DialogDescription>
-            Actualizando{' '}
-            <strong className="text-foreground">
-              {snapshotRows.length} registro{snapshotRows.length !== 1 ? 's' : ''}
-            </strong>
-            . Cada bloque se procesa <strong className="text-foreground">por separado</strong> con su propio botón
-            Guardar — el estado seleccionado en una sección NO afecta a las demás.
+            <strong className="text-foreground font-mono tabular-nums">{snapshotRows.length}</strong> registro
+            {snapshotRows.length !== 1 ? 's' : ''} seleccionado{snapshotRows.length !== 1 ? 's' : ''}, agrupados por
+            jornada. Cada grupo se guarda por separado.
           </DialogDescription>
         </DialogHeader>
 
@@ -343,20 +340,20 @@ function SectionBlock({
   return (
     <div
       className={cn(
-        'rounded-lg border p-4 space-y-3 transition-colors w-full min-w-0',
-        isProcessed && 'bg-green-50/50 border-green-300 dark:bg-green-950/20 dark:border-green-800',
-        isFlashing && 'ring-2 ring-green-400'
+        'w-full min-w-0 space-y-3 rounded-xl border p-4 transition-colors',
+        isProcessed && 'border-ok/40 bg-ok-subtle/40',
+        isFlashing && 'ring-ok/40 ring-[3px]'
       )}
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
         <div className="space-y-0.5">
           <div className="flex items-center gap-2">
-            <h4 className="font-semibold text-sm">{title}</h4>
+            <h3 className="text-sm font-semibold">{title}</h3>
             {isProcessed && (
-              <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300 gap-1">
-                <CheckCircle2 className="h-3 w-3" />
-                Procesado
+              <Badge variant="success">
+                <CheckCircle2 aria-hidden="true" />
+                Guardado
               </Badge>
             )}
           </div>
@@ -385,11 +382,11 @@ function SectionBlock({
             return (
               <li key={row.id} className="flex w-full min-w-0 items-center gap-2 text-xs">
                 <span className="block min-w-0 flex-1 truncate font-medium text-foreground">
-                  {row.customers?.name ?? '—'}
+                  {row.customers?.name ?? '-'}
                 </span>
                 <span className="shrink-0 text-muted-foreground/60">→</span>
                 <span className="block min-w-0 flex-1 truncate text-muted-foreground">
-                  {row.customer_services?.service_name ?? '—'}
+                  {row.customer_services?.service_name ?? '-'}
                 </span>
                 {completedLabel && (
                   <span className="shrink-0 text-[10px] italic text-muted-foreground">{completedLabel}</span>
@@ -426,7 +423,7 @@ function SectionBlock({
         {state.status === 'cancelado' && (
           <div className="space-y-1.5">
             <Label className="text-xs">
-              Motivo de cancelación <span className="text-red-500">*</span>
+              Motivo de cancelación <span className="text-destructive">*</span>
             </Label>
             <Input
               value={state.cancelReason}
@@ -440,7 +437,7 @@ function SectionBlock({
         {state.status === 'reprogramado' && (
           <div className="space-y-1.5">
             <Label className="text-xs">
-              Fecha de reprogramación <span className="text-red-500">*</span>
+              Fecha de reprogramación <span className="text-destructive">*</span>
             </Label>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <AlertTriangle className="h-3 w-3" />
@@ -472,15 +469,24 @@ function SectionBlock({
 
         {/* Botón guardar de la sección */}
         <div className="flex justify-end pt-1">
-          <Button type="button" size="sm" onClick={onSave} disabled={!isValid || isSaving || isProcessed}>
-            {isSaving && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+          <Button
+            type="button"
+            variant="brand"
+            size="sm"
+            onClick={onSave}
+            disabled={!isValid || isSaving || isProcessed}
+            aria-busy={isSaving}
+          >
+            {isSaving && <Loader2 className="mr-2 size-3.5 animate-spin" />}
             {isProcessed ? (
               <span className="flex items-center gap-1.5">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Procesado
+                <CheckCircle2 className="size-3.5" />
+                Guardado
               </span>
             ) : (
-              `Guardar (${rows.length})`
+              <>
+                Guardar este grupo <span className="font-mono tabular-nums">({rows.length})</span>
+              </>
             )}
           </Button>
         </div>

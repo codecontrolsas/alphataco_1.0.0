@@ -2,8 +2,9 @@
 
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Logger } from '@/lib/logger';
+import { SectionCard } from '@/shared/components/common/SectionCard';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
@@ -400,10 +401,10 @@ export function DailyReportRowForm({
         if (!open) handleClose();
       }}
     >
-      <SheetContent className="sm:max-w-screen-md overflow-y-auto">
-        <SheetHeader>
+      <SheetContent className="w-full overflow-y-auto sm:max-w-3xl">
+        <SheetHeader className="border-b">
           <SheetTitle>
-            {resourcesOnly ? 'Asignar Recursos' : `${isEditMode ? 'Editar' : 'Agregar'} Fila del Parte Diario`}
+            {resourcesOnly ? 'Asignar recursos' : `${isEditMode ? 'Editar' : 'Agregar'} fila del parte diario`}
           </SheetTitle>
           <SheetDescription>
             {resourcesOnly
@@ -420,17 +421,22 @@ export function DailyReportRowForm({
             <p className="text-sm text-muted-foreground">Cargando datos de la fila...</p>
           </div>
         ) : (
-          <div className="grid gap-4 py-4">
+          <div className="px-4">
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 {/* En modo "solo recursos" estas secciones se muestran pero quedan
                     bloqueadas: el fieldset deshabilita todos sus controles. */}
-                <fieldset disabled={resourcesOnly} className="space-y-4 disabled:opacity-70">
-                  <CustomerServiceSection form={form} customers={customers} isEditMode={isEditMode} />
+                <fieldset disabled={resourcesOnly} className="disabled:opacity-70">
+                  <SectionCard title="Cliente y servicio">
+                    <div className="space-y-4">
+                      <CustomerServiceSection form={form} customers={customers} isEditMode={isEditMode} />
 
-                  <JornadaSection form={form} />
+                      <JornadaSection form={form} />
+                    </div>
+                  </SectionCard>
                 </fieldset>
 
+                <SectionCard title="Personal">
                 {itemNeedsPersonnel && (
                   <EmployeeSection
                     form={form}
@@ -444,11 +450,11 @@ export function DailyReportRowForm({
                 )}
 
                 {!itemNeedsPersonnel && (
-                  <div className="text-sm text-muted-foreground italic px-1">
-                    {selectedItemName} no requiere personal.
-                  </div>
+                  <p className="text-muted-foreground text-sm">{selectedItemName} no requiere personal.</p>
                 )}
+                </SectionCard>
 
+                <SectionCard title="Equipos">
                 <EquipmentSection
                   form={form}
                   vehicles={vehicles}
@@ -462,7 +468,9 @@ export function DailyReportRowForm({
                     logger.info('Equipment selector dialog — pendiente de implementación');
                   }}
                 />
+                </SectionCard>
 
+                <SectionCard title="Estado y horario">
                 <ScheduleSection
                   form={form}
                   isEditMode={isEditMode}
@@ -470,13 +478,19 @@ export function DailyReportRowForm({
                   showReasigmentReason={showReasigmentReason}
                   disabled={resourcesOnly}
                 />
+                </SectionCard>
 
-                <div className="flex justify-end space-x-4 pt-4">
+                <div className="bg-background/90 sticky bottom-0 -mx-4 flex justify-end gap-2 border-t px-4 py-3 backdrop-blur-sm">
                   <Button type="button" variant="outline" onClick={handleClose}>
                     Cancelar
                   </Button>
-                  <Button type="submit" disabled={form.formState.isSubmitting}>
-                    {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  <Button
+                    type="submit"
+                    variant="brand"
+                    disabled={form.formState.isSubmitting}
+                    aria-busy={form.formState.isSubmitting}
+                  >
+                    {form.formState.isSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
                     {resourcesOnly ? 'Guardar' : isEditMode ? 'Actualizar' : 'Crear'}
                   </Button>
                 </div>
@@ -485,7 +499,6 @@ export function DailyReportRowForm({
           </div>
         )}
 
-        <SheetFooter />
       </SheetContent>
     </Sheet>
   );

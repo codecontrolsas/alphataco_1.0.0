@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -220,15 +221,13 @@ export function PreparteBulkStatusModal({ isOpen, onClose, selectedRows, onSucce
           {status === 'reprogramado' && (
             <div className="space-y-2 mb-4">
               <Label htmlFor="reprogram-date">
-                Fecha de reprogramación <span className="text-red-500">*</span>
+                Fecha de reprogramación <span className="text-destructive">*</span>
               </Label>
-              <Input
+              <EnhancedDatePicker
                 id="reprogram-date"
-                type="date"
-                min={todayStr}
-                value={reprogramDate}
-                onChange={(e) => setReprogramDate(e.target.value)}
-                required
+                date={reprogramDate || undefined}
+                setDate={(date) => setReprogramDate(date ? moment(date).format('YYYY-MM-DD') : '')}
+                minDate={moment(todayStr, 'YYYY-MM-DD').toDate()}
               />
               <p className="text-xs text-muted-foreground">
                 Se creará un nuevo pedido pendiente por cada uno seleccionado, con esta fecha de ejecución.
@@ -246,7 +245,7 @@ export function PreparteBulkStatusModal({ isOpen, onClose, selectedRows, onSucce
                   : status === 'rechazado'
                     ? 'de rechazo'
                     : 'de reprogramación'}{' '}
-                <span className="text-red-500">*</span>
+                <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="reason"
@@ -262,7 +261,7 @@ export function PreparteBulkStatusModal({ isOpen, onClose, selectedRows, onSucce
           {requiresConfirmant && (
             <div className="space-y-2">
               <Label htmlFor="confirmedBy">
-                Confirmado por <span className="text-red-500">*</span>
+                Confirmado por <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="confirmedBy"
