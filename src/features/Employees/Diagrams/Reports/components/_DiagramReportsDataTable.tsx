@@ -7,6 +7,8 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import type { LucideIcon } from 'lucide-react';
 import { CircleOff } from 'lucide-react';
 import moment from 'moment';
@@ -230,7 +232,7 @@ export default function _DiagramReportsDataTable({
       searchPlaceholder="Buscar por nombre, apellido, legajo o CUIL..."
       emptyMessage="No se encontraron registros de novedades"
       exportConfig={{
-        fetchAllData: () => getDiagramReportsForExport(currentParams),
+        fetchAllData: async () => unwrapExportResult(await getDiagramReportsForExport(currentParams)),
         options: {
           filename: 'reporte-novedades-diagramas',
           sheetName: 'Novedades',
@@ -251,7 +253,7 @@ export default function _DiagramReportsDataTable({
             return moment(dateStr, 'YYYY-MM-DD').format('DD/MM/YYYY');
           },
           // Timestamps
-          created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
+          created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
         },
       }}
     />

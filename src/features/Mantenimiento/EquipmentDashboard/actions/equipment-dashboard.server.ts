@@ -1,5 +1,6 @@
 'use server';
 
+import { requireResourceAccess } from '@/features/Mantenimiento/shared/resource-access.server';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 
@@ -8,13 +9,15 @@ const logger = new Logger('features/Mantenimiento/EquipmentDashboard/equipment')
 /**
  * Datos del equipo escaneado por el QR, para la cabecera del dashboard de mantenimiento.
  *
- * El `equipmentId` llega por la ruta y es el ÚNICO perímetro que hay: este flujo corre sin
- * sesión de dashboard y sin empresa activa, así que la empresa la define el propio vehículo
- * (misma regla que `shared/resource-company.ts::getResourceCompanyId`). Un equipo sin
- * empresa se trata como inexistente, igual que antes.
+ * El `equipmentId` llega por la ruta. La empresa la define el propio vehículo (este flujo
+ * corre sin empresa activa), pero quien llama tiene que probar que pertenece a ella
+ * (`requireResourceAccess`): operario del QR con legajo de esa empresa, o usuario del
+ * dashboard con la empresa activa. Sin acceso (o equipo sin empresa) devuelve `null`.
  */
 export async function fetchEquipmentForDashboard(equipmentId: string) {
   try {
+    await requireResourceAccess('vehicle', equipmentId);
+
     const vehicle = await prisma.vehicles.findUnique({
       where: { id: equipmentId },
       select: {

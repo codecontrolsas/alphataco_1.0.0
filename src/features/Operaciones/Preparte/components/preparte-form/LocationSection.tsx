@@ -13,17 +13,19 @@ import { Textarea } from '@/components/ui/textarea';
 import { Logger } from '@/lib/logger';
 import { resolveServiceAreaId, resolveServiceSectorId } from '../../lib/service-relation-id';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { CalendarIcon, Plus, Trash2 } from 'lucide-react';
 import moment from 'moment';
-import type { Dispatch, SetStateAction } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
 import type { PreparteFormData } from '../../schemas/preparte-form';
-import type { Cliente } from '../PreparteManager';
+import type { Cliente } from '../../types/entities';
 import type { AreaOption, ContractItemOption, Contrato, EquipmentOption, ItemRow, SectorOption } from './types';
 
 const logger = new Logger('PreparteForm');
+
+function PageGrid({ children }: { children: ReactNode }) {
+  return <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{children}</div>;
+}
 
 interface LocationSectionProps {
   form: UseFormReturn<PreparteFormData>;
@@ -36,15 +38,18 @@ interface LocationSectionProps {
   isLoadingSectors: boolean;
   isLoadingAreas: boolean;
   isLoadingEquipments: boolean;
+  /** `page`: campos en grilla de dos columnas dentro de un SectionCard. Por defecto, el Sheet. */
+  variant?: 'sheet' | 'page';
 }
 
 /**
  * Ubicación del servicio: sector, área y equipos del cliente.
  * Sección extraída de `PreparteForm` (el formulario superaba las 1.000 líneas).
  */
-export function LocationSection({ form, clientes, isEditing, isLoading, sectorList, areaList, equipmentList, isLoadingSectors, isLoadingAreas, isLoadingEquipments }: LocationSectionProps) {
+export function LocationSection({ form, clientes, isEditing, isLoading, sectorList, areaList, equipmentList, isLoadingSectors, isLoadingAreas, isLoadingEquipments, variant = 'sheet' }: LocationSectionProps) {
+  const Wrapper = variant === 'page' ? PageGrid : Fragment;
   return (
-    <>
+    <Wrapper>
             {/* Sector del Cliente */}
             <FormField
               control={form.control}
@@ -211,6 +216,6 @@ export function LocationSection({ form, clientes, isEditing, isLoading, sectorLi
                 );
               }}
             />
-    </>
+    </Wrapper>
   );
 }

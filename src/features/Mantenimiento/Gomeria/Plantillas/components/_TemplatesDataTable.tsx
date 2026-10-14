@@ -13,18 +13,20 @@ import {
 import { Button } from '@/components/ui/button';
 import { DataTable, type DataTableSearchParams } from '@/shared/components/common/DataTable';
 import { Plus } from 'lucide-react';
-import moment from 'moment';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { deleteTemplate } from '../actions/template-crud.server';
 import {
-  deleteTemplate,
   getTemplatesForExport,
   getTemplatesPaginated,
   type TemplateListItem,
 } from '../actions/actions.server';
 import { TemplateAssignDialog } from './TemplateAssignDialog';
 import { TemplateForm } from './TemplateForm';
-import { getColumns } from './columns';
+import { computePositionCount, getColumns, templateSizesStatusLabels } from './columns';
 
 // ============================================================================
 // CONSTANTS
@@ -70,6 +72,7 @@ export default function _TemplatesDataTable({
     [permissionsMap]
   );
 
+  const queryClient = useQueryClient();
   const canCreate = permissions.hasPermission('mantenimiento', 'plantillas_cubiertas', 'create');
 
   // ─── Dialog state ─────────────────────────────────────────────────────────
@@ -139,6 +142,8 @@ export default function _TemplatesDataTable({
     try {
       await deleteTemplate(deletingTemplate.id);
       toast.success('Plantilla eliminada correctamente');
+      queryClient.invalidateQueries({ queryKey: ['tire-templates'] });
+      queryClient.invalidateQueries({ queryKey: ['datatable-facet'] });
       setDeletingTemplate(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Error al eliminar la plantilla');
@@ -168,16 +173,17 @@ export default function _TemplatesDataTable({
         emptyMessage="No hay plantillas registradas"
         searchPlaceholder="Buscar por nombre..."
         exportConfig={{
-          fetchAllData: () => getTemplatesForExport(currentParams),
+          fetchAllData: async () => unwrapExportResult(await getTemplatesForExport(currentParams)),
           options: {
             filename: 'plantillas-cubiertas',
             sheetName: 'Plantillas',
             title: 'Plantillas de Cubiertas',
           },
           formatters: {
-            created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
+            created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
             axle_count: (_value, row) => String(row._count?.axles ?? 0),
-            position_count: (_value, _row) => '-',
+            position_count: (_value, row) => String(computePositionCount(row)),
+            sizes_status: (value) => templateSizesStatusLabels[value as string] ?? String(value ?? '-'),
             description: (value) => (value ? String(value) : '-'),
           },
         }}

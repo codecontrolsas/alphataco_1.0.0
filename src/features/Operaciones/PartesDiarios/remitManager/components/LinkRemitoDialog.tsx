@@ -5,9 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { FileText, Link2, Search } from 'lucide-react';
+import moment from 'moment';
+import 'moment/locale/es';
 import React from 'react';
 
 import { useAvailableRemitosForLinking, useLinkExistingRemito } from '../hooks/useRemitos';
@@ -35,20 +35,19 @@ export function LinkRemitoDialog({ dailyReportRowId, isOpen, onClose, onRemitoLi
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  // Resetear búsqueda al cerrar
-  React.useEffect(() => {
-    if (!isOpen) {
-      setSearchInput('');
-      setDebouncedSearch('');
-    }
-  }, [isOpen]);
+  // Cierra y resetea la búsqueda (sin efecto: el reseteo vive en el punto de origen).
+  const handleClose = () => {
+    setSearchInput('');
+    setDebouncedSearch('');
+    onClose();
+  };
 
   const handleLink = async (sourceRemitId: string) => {
     try {
       const newRemito = await linkRemito.mutateAsync(sourceRemitId);
       if (newRemito) {
         onRemitoLinked?.(newRemito.id);
-        onClose();
+        handleClose();
       }
     } catch (error) {
       // El error ya se maneja en el hook con toast
@@ -56,7 +55,7 @@ export function LinkRemitoDialog({ dailyReportRowId, isOpen, onClose, onRemitoLi
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -141,7 +140,7 @@ export function LinkRemitoDialog({ dailyReportRowId, isOpen, onClose, onRemitoLi
 
                           {reportDate && (
                             <p className="text-xs text-muted-foreground">
-                              Parte diario: {format(new Date(reportDate), "d 'de' MMMM, yyyy", { locale: es })}
+                              Parte diario: {moment.utc(reportDate).locale('es').format('D [de] MMMM, YYYY')}
                             </p>
                           )}
 

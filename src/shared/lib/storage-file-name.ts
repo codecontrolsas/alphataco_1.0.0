@@ -1,3 +1,5 @@
+import { argentinaDate } from '@/features/Jobs/lib/dates';
+
 /**
  * Saneo del nombre de archivo que manda el cliente.
  *
@@ -40,4 +42,21 @@ export function extensionOf(name: string): string {
   if (dot <= 0) return 'jpg';
   const ext = clean.slice(dot + 1).toLowerCase();
   return ext && ext.length <= 10 ? ext : 'jpg';
+}
+
+/** Extensión segura para una key: minúsculas, sólo `[a-z0-9]`, hasta 10 caracteres; `bin` si no queda nada. */
+export function toPathExtension(extension: string): string {
+  const clean = extension.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10);
+  return clean || 'bin';
+}
+
+/** Identificador (CUIT, documento, serie) como segmento de path: sólo `[A-Za-z0-9]`, sin espacios, puntos ni barras. */
+export function toPathIdentifier(value: string): string {
+  return value.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]/g, '');
+}
+
+/** Fecha `DD-MM-YYYY` del día ARGENTINO de `validity` (no depende de la zona del servidor). */
+export function formatValidityDay(validity: Date): string {
+  const [y, m, d] = argentinaDate(validity).split('-');
+  return `${d}-${m}-${y}`;
 }

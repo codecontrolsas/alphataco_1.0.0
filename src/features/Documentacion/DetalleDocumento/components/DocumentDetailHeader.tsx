@@ -13,6 +13,8 @@ interface DocumentDetailHeaderProps {
   documentPath: string;
   state: string | null;
   denyReason: string | null;
+  /** Días hasta el vencimiento si el documento vigente vence pronto; `null` si no corresponde avisar. */
+  expiringSoonDays?: number | null;
   /** 358: un documento archivado ya no aplica al recurso; se muestra como historial, sin vigencia. */
   isArchived: boolean;
 }
@@ -23,6 +25,7 @@ export function DocumentDetailHeader({
   documentPath,
   state,
   denyReason,
+  expiringSoonDays = null,
   isArchived,
 }: DocumentDetailHeaderProps) {
   return (
@@ -41,6 +44,13 @@ export function DocumentDetailHeader({
                 <Badge variant={documentStateBadgeVariant(state)} className="mb-3 capitalize w-fit">
                   {state}
                 </Badge>
+                {expiringSoonDays !== null && (
+                  <Badge variant="outline" className="mb-3 w-fit">
+                    {expiringSoonDays === 0
+                      ? 'Vence hoy'
+                      : `Vence en ${expiringSoonDays} ${expiringSoonDays === 1 ? 'día' : 'días'}`}
+                  </Badge>
+                )}
                 {denyReason && (
                   <Badge variant={denyReasonBadgeVariant(state)} className="mb-3 capitalize w-fit">
                     {denyReason}

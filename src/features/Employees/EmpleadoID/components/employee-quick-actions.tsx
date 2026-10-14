@@ -23,13 +23,28 @@ import {
   terminationSchema,
   type TerminationFormValues,
 } from '@/features/Employees/components/shared/TerminationFormFields';
+import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
+import { Logger } from '@/lib/logger';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQueryClient } from '@tanstack/react-query';
 import { Mail, MoreHorizontal, UserCheck, UserX } from 'lucide-react';
+import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { toggleEmployeeStatus } from '../lib/actions/document-actions';
+
+const logger = new Logger('EmployeeQuickActions');
+
+/** Si el servidor reporta un aviso (ej. no se pudo revocar el acceso del usuario), lo devuelve. */
+function getStatusWarning(result: unknown): string | null {
+  if (typeof result === 'object' && result !== null && 'warning' in result) {
+    const { warning } = result;
+    return typeof warning === 'string' && warning.length > 0 ? warning : null;
+  }
+  return null;
+}
 
 interface EmployeeQuickActionsProps {
   employeeId: string;
@@ -42,6 +57,14 @@ export function EmployeeQuickActions({ employeeId, isActive, email }: EmployeeQu
   const [showDeactivateDialog, setShowDeactivateDialog] = useState(false);
   const [showActivateDialog, setShowActivateDialog] = useState(false);
   const router = useRouter();
+  const queryClient = useQueryClient();
+
+  /** Las listas de empleados (activos/bajas) y sus filtros quedan viejos tras cambiar un estado. */
+  const refreshLists = () => {
+    queryClient.invalidateQueries({ queryKey: ['employees-paginated'] });
+    queryClient.invalidateQueries({ queryKey: ['datatable-facet'] });
+    router.refresh();
+  };
 
   const form = useForm<TerminationFormValues>({
     resolver: zodResolver(terminationSchema),
@@ -54,37 +77,46 @@ export function EmployeeQuickActions({ employeeId, isActive, email }: EmployeeQu
   async function onSubmit(values: TerminationFormValues) {
     startTransition(async () => {
       try {
-        await toggleEmployeeStatus(
+        const result: unknown = await toggleEmployeeStatus(
           employeeId,
           false,
           values.reason_for_termination as Parameters<typeof toggleEmployeeStatus>[2],
-          values.termination_date
+          // Día calendario elegido, como YYYY-MM-DD (nunca un Date: corre el día según la zona).
+          moment(values.termination_date).format('YYYY-MM-DD')
         );
-        toast.success('Empleado dado de baja correctamente');
+        const warning = getStatusWarning(result);
+        if (warning) {
+          toast.warning('Empleado dado de baja, pero requiere atención', { description: warning, duration: 10000 });
+        } else {
+          toast.success('Empleado dado de baja correctamente');
+        }
         setShowDeactivateDialog(false);
         form.reset();
-        router.refresh();
-      } catch {
-        toast.error('Error al dar de baja al empleado');
+        refreshLists();
+      } catch (error) {
+        logger.error('Error al dar de baja al empleado', { data: { error, employeeId } });
+        toast.error(error instanceof Error && error.message ? error.message : 'Error al dar de baja al empleado');
       }
     });
   }
 
-  const handleToggleStatus = (activate: boolean) => {
-    if (activate) {
-      startTransition(async () => {
-        try {
-          await toggleEmployeeStatus(employeeId, true);
+  const handleActivate = () => {
+    startTransition(async () => {
+      try {
+        const result: unknown = await toggleEmployeeStatus(employeeId, true);
+        const warning = getStatusWarning(result);
+        if (warning) {
+          toast.warning('Empleado activado, pero requiere atención', { description: warning, duration: 10000 });
+        } else {
           toast.success('Empleado activado correctamente');
-          setShowActivateDialog(false);
-          router.refresh();
-        } catch {
-          toast.error('Error al activar al empleado');
         }
-      });
-    } else {
-      setShowDeactivateDialog(true);
-    }
+        setShowActivateDialog(false);
+        refreshLists();
+      } catch (error) {
+        logger.error('Error al activar al empleado', { data: { error, employeeId } });
+        toast.error(error instanceof Error && error.message ? error.message : 'Error al activar al empleado');
+      }
+    });
   };
 
   const handleSendEmail = () => {
@@ -108,17 +140,20 @@ export function EmployeeQuickActions({ employeeId, isActive, email }: EmployeeQu
             <Mail className="h-4 w-4 mr-2" />
             Enviar Email
           </DropdownMenuItem>
-          {isActive ? (
-            <DropdownMenuItem onClick={() => setShowDeactivateDialog(true)} className="text-destructive">
-              <UserX className="h-4 w-4 mr-2" />
-              Dar de Baja Empleado
-            </DropdownMenuItem>
-          ) : (
-            <DropdownMenuItem onClick={() => setShowActivateDialog(true)} className="text-ok-subtle-foreground">
-              <UserCheck className="h-4 w-4 mr-2" />
-              Activar Empleado
-            </DropdownMenuItem>
-          )}
+          {/* Baja y reactivación se atan a la edición del legajo (no existe permiso de borrado). */}
+          <PermissionGuard module="empleados" tab="employees" action="update">
+            {isActive ? (
+              <DropdownMenuItem onClick={() => setShowDeactivateDialog(true)} className="text-destructive">
+                <UserX className="h-4 w-4 mr-2" />
+                Dar de Baja Empleado
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem onClick={() => setShowActivateDialog(true)} className="text-ok-subtle-foreground">
+                <UserCheck className="h-4 w-4 mr-2" />
+                Activar Empleado
+              </DropdownMenuItem>
+            )}
+          </PermissionGuard>
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -165,7 +200,13 @@ export function EmployeeQuickActions({ employeeId, isActive, email }: EmployeeQu
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => handleToggleStatus(true)} disabled={isPending}>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                handleActivate();
+              }}
+              disabled={isPending}
+            >
               {isPending ? 'Activando...' : 'Activar'}
             </AlertDialogAction>
           </AlertDialogFooter>

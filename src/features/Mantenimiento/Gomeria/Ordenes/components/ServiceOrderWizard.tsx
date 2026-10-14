@@ -17,11 +17,13 @@ import {
   closeServiceOrder,
   closeServiceOrderForVehicle,
   createServiceOrder,
+} from '../actions/service-order-lifecycle.server';
+import {
   getVehicleTypeInfo,
   searchCompatibleHitchVehicles,
   searchVehicleByDomain,
   type VehicleSearchResult,
-} from '../actions/actions.server';
+} from '../actions/service-order-queries.server';
 import { TireDiagram } from './TireDiagram';
 
 const logger = new Logger('features/Mantenimiento/Gomeria/Ordenes/ServiceOrderWizard');

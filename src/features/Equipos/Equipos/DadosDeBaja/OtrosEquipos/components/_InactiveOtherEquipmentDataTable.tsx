@@ -15,6 +15,8 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import {
   conditionLabels,
   costTypeLabels,
@@ -53,11 +55,11 @@ interface Props {
 // ============================================================================
 
 function buildFkFacetResult(
-  resolvedOptions: { value: string; label: string }[] | undefined,
+  resolvedOptions: Array<{ id: string; name: string | null }> | undefined,
   counts: Map<string, number>,
   nullLabel = 'Sin asignar'
 ): FacetResult {
-  const options: DataTableFilterOption[] = (resolvedOptions ?? []).map((o) => ({ value: o.value, label: o.label }));
+  const options: DataTableFilterOption[] = (resolvedOptions ?? []).map((o) => ({ value: o.id, label: o.name ?? '' }));
   if (counts.has(NULL_FILTER_VALUE)) {
     options.push({ value: NULL_FILTER_VALUE, label: nullLabel, icon: CircleOff });
   }
@@ -376,7 +378,7 @@ export function _InactiveOtherEquipmentDataTable({
       emptyMessage="No hay equipos dados de baja"
       data-testid="inactive-other-equipment-table"
       exportConfig={{
-        fetchAllData: () => getAllInactiveOtherEquipmentForExport(currentParams),
+        fetchAllData: async () => unwrapExportResult(await getAllInactiveOtherEquipmentForExport(currentParams)),
         options: {
           filename: 'otros-equipos-dados-de-baja',
           title: 'Listado de Otros Equipos Dados de Baja',
@@ -390,7 +392,7 @@ export function _InactiveOtherEquipmentDataTable({
           reason_for_termination: (val) => terminationReasonEquipmentLabels[val as string] ?? String(val ?? ''),
           purchase_date: (val) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
           termination_date: (val) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
-          created_at: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
+          created_at: (val) => (val ? formatArgentinaDay(val as string | Date) : ''),
           initial_value: (val) => (val != null ? String(val) : ''),
           horometer: (val) => (val != null ? `${String(val)} h` : ''),
         },

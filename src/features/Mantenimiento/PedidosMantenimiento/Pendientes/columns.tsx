@@ -8,6 +8,7 @@ import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { type ColumnDef } from '@tanstack/react-table';
 import { Calendar, ClipboardList, Clock, Eye, History, HourglassIcon, Shield, Wrench, XCircle } from 'lucide-react';
 import moment from 'moment';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import { getResourceInternNumber, getResourceKindLabel, getResourceLabel } from '../../shared/maintenance-resource';
 import { type PendingOrderListItem } from './actions.server';
 
@@ -168,7 +169,7 @@ export function getPendingOrderColumns(callbacks: PendingOrdersColumnCallbacks):
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha Aprobación" />,
       cell: ({ row }) => {
         const date = row.original.created_at;
-        return <span>{date ? moment(date).format('DD/MM/YYYY HH:mm') : '—'}</span>;
+        return <span>{date ? formatArgentinaDateTime(date) : '—'}</span>;
       },
     },
 
@@ -181,7 +182,8 @@ export function getPendingOrderColumns(callbacks: PendingOrdersColumnCallbacks):
       cell: ({ row }) => {
         const date = row.original.scheduled_date;
         if (!date) return <span className="text-muted-foreground">Sin planificar</span>;
-        return <span>{moment(date).format('DD/MM/YYYY')}</span>;
+        // `scheduled_date` es @db.Date (medianoche UTC): se lee por el día UTC para no correrlo.
+        return <span>{moment.utc(date).format('DD/MM/YYYY')}</span>;
       },
     },
 
@@ -217,38 +219,54 @@ export function getPendingOrderColumns(callbacks: PendingOrdersColumnCallbacks):
 
         return (
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" onClick={() => callbacks.onView(order)} title="Ver detalle">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => callbacks.onView(order)}
+              title="Ver detalle"
+              aria-label="Ver detalle"
+            >
               <Eye className="h-4 w-4" />
             </Button>
             <Button
+              type="button"
               variant="ghost"
               size="icon"
               onClick={() => callbacks.onViewHistory(order)}
               title="Ver historial"
+              aria-label="Ver historial"
               className="text-purple-600 hover:text-purple-700"
             >
               <History className="h-4 w-4" />
             </Button>
+            {/* Planificar la fecha requiere `update` en esta tab (ver permissions-map). */}
             {isPendingScheduling && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => callbacks.onSchedule(order)}
-                title="Planificar fecha"
-                className="text-blue-600 hover:text-blue-700"
-              >
-                <Calendar className="h-4 w-4" />
-              </Button>
+              <PermissionGuard module="mantenimiento" tab="pedidos_pendientes" action="update">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => callbacks.onSchedule(order)}
+                  title="Planificar fecha"
+                  aria-label="Planificar fecha"
+                  className="text-blue-600 hover:text-blue-700"
+                >
+                  <Calendar className="h-4 w-4" />
+                </Button>
+              </PermissionGuard>
             )}
             {/* Ticket 676: rechazo del taller (ej. solicitud duplicada). Se oculta
                 la accion puntual, nunca la columna completa. */}
             {isPendingScheduling && (
               <PermissionGuard module="mantenimiento" tab="pedidos_pendientes" action="update">
                 <Button
+                  type="button"
                   variant="ghost"
                   size="icon"
                   onClick={() => callbacks.onReject(order)}
                   title="Rechazar pedido"
+                  aria-label="Rechazar pedido"
                   className="text-destructive hover:text-destructive"
                 >
                   <XCircle className="h-4 w-4" />

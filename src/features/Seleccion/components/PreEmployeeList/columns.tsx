@@ -10,8 +10,8 @@ import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers'
 import type { ColumnDef } from '@tanstack/react-table';
 import type { LucideIcon } from 'lucide-react';
 import { CheckCircle2, Clock, Eye, Send, XCircle } from 'lucide-react';
-import moment from 'moment';
 import Link from 'next/link';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { PreEmployeeListItem } from './actions.server';
 
 // ============================================================================
@@ -67,7 +67,25 @@ export function getColumns(requiredDocs: number): ColumnDef<PreEmployeeListItem>
       meta: { excludeFromExport: true },
     },
 
-    // --- N° de Candidato ---
+    // --- N° de Candidato (antes del nombre) ---
+    {
+      id: 'pre_file_number',
+      accessorKey: 'pre_file_number',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="N° Candidato" />,
+      cell: ({ row }) => (
+        // Sin color de link: en la tabla de empleados el legajo es texto plano.
+        // Igual navega al detalle; el subrayado en hover lo delata como clickeable.
+        <Link
+          href={`/dashboard/recruitment/detail?action=view&pre_employee_id=${row.original.id}`}
+          className="font-mono tabular-nums text-sm text-muted-foreground hover:underline"
+        >
+          {row.original.pre_file_number}
+        </Link>
+      ),
+      meta: { title: 'N° Candidato' },
+    },
+
+    // --- Nombre completo ---
     {
       id: 'fullName',
       accessorFn: (row) => `${row.lastname ?? ''} ${row.firstname ?? ''}`.trim(),
@@ -96,25 +114,7 @@ export function getColumns(requiredDocs: number): ColumnDef<PreEmployeeListItem>
       meta: { title: 'Nombre completo' },
     },
 
-    // --- DNI ---
-    {
-      id: 'pre_file_number',
-      accessorKey: 'pre_file_number',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="N° Candidato" />,
-      cell: ({ row }) => (
-        // Sin color de link: en la tabla de empleados el legajo es texto plano.
-        // Igual navega al detalle; el subrayado en hover lo delata como clickeable.
-        <Link
-          href={`/dashboard/recruitment/detail?action=view&pre_employee_id=${row.original.id}`}
-          className="font-mono tabular-nums text-sm text-muted-foreground hover:underline"
-        >
-          {row.original.pre_file_number}
-        </Link>
-      ),
-      meta: { title: 'N° Candidato' },
-    },
-
-    // --- Nombre completo ---
+    // --- Sector propuesto ---
     {
       id: 'hierarchy',
       accessorFn: (row) => row.hierarchy?.name ?? '',
@@ -142,7 +142,7 @@ export function getColumns(requiredDocs: number): ColumnDef<PreEmployeeListItem>
       meta: { title: 'Puesto propuesto' },
     },
 
-    // --- Telefono (oculta por defecto) ---
+    // --- Estado ---
     {
       id: 'status',
       accessorKey: 'status',
@@ -161,7 +161,7 @@ export function getColumns(requiredDocs: number): ColumnDef<PreEmployeeListItem>
       meta: { title: 'Estado' },
     },
 
-    // --- Sector propuesto ---
+    // --- Documentos obligatorios cargados (X/Y) ---
     {
       id: 'documents',
       accessorFn: (row) => `${row._count.documents_pre_employees}/${requiredDocs}`,
@@ -195,7 +195,7 @@ export function getColumns(requiredDocs: number): ColumnDef<PreEmployeeListItem>
       meta: { title: 'Documentos' },
     },
 
-    // --- Acciones ---
+    // --- DNI ---
     {
       id: 'document_number',
       accessorKey: 'document_number',
@@ -213,7 +213,7 @@ export function getColumns(requiredDocs: number): ColumnDef<PreEmployeeListItem>
       meta: { title: 'CUIL' },
     },
 
-    // --- Estado ---
+    // --- Telefono (oculta por defecto) ---
     {
       id: 'phone',
       accessorKey: 'phone',
@@ -231,13 +231,13 @@ export function getColumns(requiredDocs: number): ColumnDef<PreEmployeeListItem>
       meta: { title: 'Email' },
     },
 
-    // --- Motivo de rechazo (oculta por defecto) ---
+    // --- Creado (oculta por defecto) ---
     {
       id: 'created_at',
       accessorKey: 'created_at',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Creado" />,
       cell: ({ row }) => (
-        <span className="font-mono tabular-nums">{moment(row.original.created_at).format('DD/MM/YYYY')}</span>
+        <span className="font-mono tabular-nums">{formatArgentinaDay(row.original.created_at)}</span>
       ),
       meta: { title: 'Creado' },
     },
@@ -249,13 +249,13 @@ export function getColumns(requiredDocs: number): ColumnDef<PreEmployeeListItem>
       header: ({ column }) => <DataTableColumnHeader column={column} title="Revisado" />,
       cell: ({ row }) => (
         <span className="font-mono tabular-nums">
-          {row.original.reviewed_at ? moment(row.original.reviewed_at).format('DD/MM/YYYY') : '-'}
+          {row.original.reviewed_at ? formatArgentinaDay(row.original.reviewed_at) : '-'}
         </span>
       ),
       meta: { title: 'Revisado' },
     },
 
-    // --- Documentos obligatorios cargados (X/Y) ---
+    // --- Motivo de rechazo (oculta por defecto) ---
     {
       id: 'rejection_reason',
       accessorKey: 'rejection_reason',
@@ -264,7 +264,7 @@ export function getColumns(requiredDocs: number): ColumnDef<PreEmployeeListItem>
       meta: { title: 'Motivo de rechazo' },
     },
 
-    // --- Creado (oculta por defecto) ---
+    // --- Acciones ---
     {
       id: 'actions',
       cell: ({ row }) => (

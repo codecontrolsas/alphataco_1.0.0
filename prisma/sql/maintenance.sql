@@ -289,33 +289,41 @@ END;
 $function$;
 
 -- ============================================================================
--- TRIGGERS (7)
+-- TRIGGERS (9)
 -- ============================================================================
 
--- trigger trigger_log_maintenance_order_activity ON maintenance_orders (origen: supabase/migrations/20260202113926_fixing-maintenance-flow.sql)
-DROP TRIGGER IF EXISTS trigger_log_maintenance_order_activity ON public.maintenance_orders;
-CREATE TRIGGER trigger_log_maintenance_order_activity AFTER INSERT OR UPDATE ON public.maintenance_orders FOR EACH ROW EXECUTE FUNCTION public.log_maintenance_order_activity();
+-- trigger trigger_log_maintenance_order_activity_insert ON maintenance_orders (origen: prisma/migrations/20261019100100_narrow_trigger_guards)
+DROP TRIGGER IF EXISTS trigger_log_maintenance_order_activity_insert ON public.maintenance_orders;
+CREATE TRIGGER trigger_log_maintenance_order_activity_insert AFTER INSERT ON public.maintenance_orders FOR EACH ROW EXECUTE FUNCTION public.log_maintenance_order_activity();
 
--- trigger update_maintenance_orders_updated_at ON maintenance_orders (origen: supabase/migrations/20260117002627_adding-form-config.sql)
+-- trigger trigger_log_maintenance_order_activity_update ON maintenance_orders (origen: prisma/migrations/20261019100100_narrow_trigger_guards)
+DROP TRIGGER IF EXISTS trigger_log_maintenance_order_activity_update ON public.maintenance_orders;
+CREATE TRIGGER trigger_log_maintenance_order_activity_update AFTER UPDATE OF status ON public.maintenance_orders FOR EACH ROW WHEN (OLD.status IS DISTINCT FROM NEW.status) EXECUTE FUNCTION public.log_maintenance_order_activity();
+
+-- trigger update_maintenance_orders_updated_at ON maintenance_orders (origen: prisma/migrations/20261019100100_narrow_trigger_guards)
 DROP TRIGGER IF EXISTS update_maintenance_orders_updated_at ON public.maintenance_orders;
-CREATE TRIGGER update_maintenance_orders_updated_at BEFORE UPDATE ON public.maintenance_orders FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER update_maintenance_orders_updated_at BEFORE UPDATE ON public.maintenance_orders FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
--- trigger update_maintenance_requests_updated_at ON maintenance_requests (origen: supabase/migrations/20260117002627_adding-form-config.sql)
+-- trigger update_maintenance_requests_updated_at ON maintenance_requests (origen: prisma/migrations/20261019100100_narrow_trigger_guards)
 DROP TRIGGER IF EXISTS update_maintenance_requests_updated_at ON public.maintenance_requests;
-CREATE TRIGGER update_maintenance_requests_updated_at BEFORE UPDATE ON public.maintenance_requests FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER update_maintenance_requests_updated_at BEFORE UPDATE ON public.maintenance_requests FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
--- trigger trigger_update_work_order_item_repairs_updated_at ON work_order_item_repairs (origen: supabase/migrations/20260127143252_maintenance-fix-2.sql)
+-- trigger trigger_update_work_order_item_repairs_updated_at ON work_order_item_repairs (origen: prisma/migrations/20261019100100_narrow_trigger_guards)
 DROP TRIGGER IF EXISTS trigger_update_work_order_item_repairs_updated_at ON public.work_order_item_repairs;
-CREATE TRIGGER trigger_update_work_order_item_repairs_updated_at BEFORE UPDATE ON public.work_order_item_repairs FOR EACH ROW EXECUTE FUNCTION public.update_work_order_item_repairs_updated_at();
+CREATE TRIGGER trigger_update_work_order_item_repairs_updated_at BEFORE UPDATE ON public.work_order_item_repairs FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
--- trigger trigger_work_order_items_updated_at ON work_order_items (origen: supabase/migrations/20260123202856_add_maintenance_flow_changes.sql)
+-- trigger trigger_work_order_items_updated_at ON work_order_items (origen: prisma/migrations/20261019100100_narrow_trigger_guards)
 DROP TRIGGER IF EXISTS trigger_work_order_items_updated_at ON public.work_order_items;
-CREATE TRIGGER trigger_work_order_items_updated_at BEFORE UPDATE ON public.work_order_items FOR EACH ROW EXECUTE FUNCTION public.update_work_orders_updated_at();
+CREATE TRIGGER trigger_work_order_items_updated_at BEFORE UPDATE ON public.work_order_items FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
--- trigger trigger_log_work_order_activity ON work_orders (origen: supabase/migrations/20260202113926_fixing-maintenance-flow.sql)
-DROP TRIGGER IF EXISTS trigger_log_work_order_activity ON public.work_orders;
-CREATE TRIGGER trigger_log_work_order_activity AFTER INSERT OR UPDATE ON public.work_orders FOR EACH ROW EXECUTE FUNCTION public.log_work_order_activity();
+-- trigger trigger_log_work_order_activity_insert ON work_orders (origen: prisma/migrations/20261019100100_narrow_trigger_guards)
+DROP TRIGGER IF EXISTS trigger_log_work_order_activity_insert ON public.work_orders;
+CREATE TRIGGER trigger_log_work_order_activity_insert AFTER INSERT ON public.work_orders FOR EACH ROW EXECUTE FUNCTION public.log_work_order_activity();
 
--- trigger trigger_work_orders_updated_at ON work_orders (origen: supabase/migrations/20260123202856_add_maintenance_flow_changes.sql)
+-- trigger trigger_log_work_order_activity_update ON work_orders (origen: prisma/migrations/20261019100100_narrow_trigger_guards)
+DROP TRIGGER IF EXISTS trigger_log_work_order_activity_update ON public.work_orders;
+CREATE TRIGGER trigger_log_work_order_activity_update AFTER UPDATE OF status ON public.work_orders FOR EACH ROW WHEN (OLD.status IS DISTINCT FROM NEW.status) EXECUTE FUNCTION public.log_work_order_activity();
+
+-- trigger trigger_work_orders_updated_at ON work_orders (origen: prisma/migrations/20261019100100_narrow_trigger_guards)
 DROP TRIGGER IF EXISTS trigger_work_orders_updated_at ON public.work_orders;
-CREATE TRIGGER trigger_work_orders_updated_at BEFORE UPDATE ON public.work_orders FOR EACH ROW EXECUTE FUNCTION public.update_work_orders_updated_at();
+CREATE TRIGGER trigger_work_orders_updated_at BEFORE UPDATE ON public.work_orders FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();

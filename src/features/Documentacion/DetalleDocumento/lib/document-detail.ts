@@ -1,4 +1,5 @@
 import type { DocumentResourceKind } from '@/features/Documentacion/shared/lib/document-scope';
+import { formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';
 import moment from 'moment';
 
 /**
@@ -73,23 +74,50 @@ export function isPdfUrl(url: string): boolean {
   return withoutQuery.split('.').pop()?.toLocaleLowerCase() === 'pdf';
 }
 
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function toValidDate(value: Date | string): Date | null {
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * `DD/MM/YYYY` de un instante en hora argentina. Un string `YYYY-MM-DD` (p. ej. `documents_company.validity`, que es
+ * texto) ya es un día calendario y se formatea tal cual, sin pasarlo por la zona horaria.
+ */
+function argentinaDayLabel(value: Date | string | null | undefined): string {
+  if (!value) return '';
+  if (typeof value === 'string' && DATE_ONLY_PATTERN.test(value)) return moment.utc(value).format('DD/MM/YYYY');
+  const date = toValidDate(value);
+  return date ? formatArgentinaDay(date) : '';
+}
+
 /** Vencimiento del documento según el tipo: fecha de validez o "no vence". */
 export function expiryLabel(expires: boolean | null | undefined, validity: Date | string | null | undefined): string {
   if (!expires) return 'No tiene vencimiento';
-  return `Vence el ${moment(validity).format('DD/MM/YYYY')}`;
+  const day = argentinaDayLabel(validity);
+  return day ? `Vence el ${day}` : 'Vence (sin fecha cargada)';
 }
 
-/** "Subido el DD/MM/YYYY a las HH:mm", o cadena vacía si el documento no tiene fecha de alta. */
+/** "Subido el DD/MM/YYYY a las HH:mm" (hora argentina), o cadena vacía si el documento no tiene fecha de alta. */
 export function uploadedAtLabel(createdAt: Date | string | null | undefined): string {
   if (!createdAt) return '';
-  const uploaded = moment(createdAt);
-  return `Subido el ${uploaded.format('DD/MM/YYYY')} a las ${uploaded.format('HH:mm')}`;
+  const date = toValidDate(createdAt);
+  if (!date) return '';
+  const [day, time] = formatArgentinaDateTime(date).split(' ');
+  return `Subido el ${day} a las ${time}`;
 }
 
-/** Fecha corta (DD/MM/YYYY) o cadena vacía si no hay dato. */
+/** Fecha corta (DD/MM/YYYY, día argentino) de un timestamp, o cadena vacía si no hay dato. */
 export function shortDate(value: Date | string | null | undefined): string {
+  return argentinaDayLabel(value);
+}
+
+/** Fecha corta (DD/MM/YYYY) de una columna `@db.Date` (medianoche UTC): se lee en UTC para no correr el día. */
+export function dateOnlyLabel(value: Date | string | null | undefined): string {
   if (!value) return '';
-  return moment(value).format('DD/MM/YYYY');
+  const date = moment.utc(value);
+  return date.isValid() ? date.format('DD/MM/YYYY') : '';
 }
 
 /** Apellido y nombre del empleado, sin espacios sobrantes si falta alguno. */

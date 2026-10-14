@@ -1,242 +1,37 @@
 'use server';
 
+import {
+  requireAnyGomeriaPermission,
+  requireGomeriaPermission,
+} from '@/features/Mantenimiento/Gomeria/shared/access.server';
 import { assertTireTypeInActiveCompany } from '@/features/Mantenimiento/Gomeria/shared/perimeter';
+import { parseInput, uuidSchema } from '@/features/Mantenimiento/Gomeria/shared/validation';
 import { TireTreadType } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
-import {
-  NULL_FILTER_VALUE,
-  buildDateRangeFiltersWhere,
-  buildFiltersWhere,
-  buildSearchWhere,
-  buildTextFiltersWhere,
-  parseSearchParams,
-  stateToPrismaParams,
-} from '@/shared/components/common/DataTable/helpers';
-import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { syncTireMaterials } from '@/features/Warehouses/lib/tire-materials';
 import { prisma } from '@/shared/lib/prisma';
+import { z } from 'zod';
 
 const logger = new Logger('features/Mantenimiento/Gomeria/Tipos');
 
-// ============================================================================
-// CONSTANTS
-// ============================================================================
+const tireTypeSchema = z.object({
+  name: z.string().trim().min(1, 'Indicá el nombre del tipo').max(100, 'El nombre es demasiado largo'),
+  size: z.string().trim().min(1, 'Indicá la medida').max(40, 'La medida es demasiado larga'),
+  tread_type: z.nativeEnum(TireTreadType),
+});
 
-const VALID_SORT_FIELDS = new Set(['name', 'size', 'tread_type', 'is_active', 'created_at']);
-
-const TEXT_FILTER_COLUMNS: string[] = ['name', 'size'];
-
-const DATE_RANGE_COLUMNS = ['created_at'];
-
-// ============================================================================
-// INTERNAL WHERE BUILDER
-// ============================================================================
-
-function buildTireTypesWhereClause(state: ReturnType<typeof parseSearchParams>, companyId?: string) {
-  const searchWhere = buildSearchWhere(state.search, ['name', 'size']);
-
-  const filtersWhere = buildFiltersWhere(
-    state.filters,
-    {},
-    {
-      exclude: [...TEXT_FILTER_COLUMNS, ...DATE_RANGE_COLUMNS.flatMap((c) => [`${c}_from`, `${c}_to`])],
-    }
-  );
-
-  const textFiltersWhere = buildTextFiltersWhere(state.filters, TEXT_FILTER_COLUMNS);
-  const dateFiltersWhere = buildDateRangeFiltersWhere(state.filters, DATE_RANGE_COLUMNS);
-
-  const filtersWhereAndConditions = (filtersWhere.AND as Record<string, unknown>[] | undefined) ?? [];
-  const { AND: _discarded, ...filtersWhereWithoutAnd } = filtersWhere as Record<string, unknown> & { AND?: unknown };
-
-  return {
-    ...(companyId ? { company_id: companyId } : {}),
-    ...searchWhere,
-    ...filtersWhereWithoutAnd,
-    ...textFiltersWhere,
-    ...dateFiltersWhere,
-    ...(filtersWhereAndConditions.length > 0 ? { AND: filtersWhereAndConditions } : {}),
-  };
-}
-
-// ============================================================================
-// PAGINATED QUERY
-// ============================================================================
-
-export async function getTireTypesPaginated(searchParams: DataTableSearchParams) {
-  logger.debug('Fetching tire types paginated');
-
-  try {
-    const companyId = await getActiveCompanyId();
-    const state = parseSearchParams(searchParams);
-    const { skip, take } = stateToPrismaParams(state);
-    const where = buildTireTypesWhereClause(state, companyId);
-
-    const resolvedSorts: Record<string, unknown>[] = [];
-    for (const s of state.sorting) {
-      if (VALID_SORT_FIELDS.has(s.id)) {
-        const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-        resolvedSorts.push({ [s.id]: dir });
-      }
-    }
-    const safeOrderBy = [...resolvedSorts, { name: 'asc' as const }];
-
-    const [data, total] = await Promise.all([
-      prisma.tire_types.findMany({
-        skip,
-        take,
-        orderBy: safeOrderBy,
-        where,
-        select: {
-          id: true,
-          name: true,
-          size: true,
-          tread_type: true,
-          is_active: true,
-          created_at: true,
-          updated_at: true,
-          _count: { select: { tires: true } },
-        },
-      }),
-      prisma.tire_types.count({ where }),
-    ]);
-
-    return { data, total };
-  } catch (error) {
-    logger.error('Error fetching tire types paginated', { data: { error } });
-    throw new Error(
-      `Error al obtener los tipos de cubierta: ${error instanceof Error ? error.message : String(error)}`
-    );
-  }
-}
-
-// ============================================================================
-// EXPORT QUERY
-// ============================================================================
-
-export async function getTireTypesForExport(searchParams: DataTableSearchParams) {
-  logger.debug('Exporting tire types');
-
-  try {
-    const companyId = await getActiveCompanyId();
-    const state = parseSearchParams(searchParams);
-    const where = buildTireTypesWhereClause(state, companyId);
-
-    const data = await prisma.tire_types.findMany({
-      orderBy: [{ name: 'asc' }],
-      where,
-      select: {
-        id: true,
-        name: true,
-        size: true,
-        tread_type: true,
-        is_active: true,
-        created_at: true,
-        updated_at: true,
-        _count: { select: { tires: true } },
-      },
-    });
-
-    return data;
-  } catch (error) {
-    logger.error('Error exporting tire types', { data: { error } });
-    throw new Error('Error al exportar los tipos de cubierta');
-  }
-}
-
-// ============================================================================
-// SINGLE FACET (lazy-load, cross-filtering)
-// ============================================================================
-
-export async function getTireTypeSingleFacet(
-  columnId: string,
-  searchParams?: DataTableSearchParams
-): Promise<{
-  counts: Map<string, number>;
-  resolvedOptions?: Array<{ id: string; name: string | null }>;
-} | null> {
-  let companyId: string;
-  try {
-    companyId = await getActiveCompanyId();
-  } catch {
-    return null;
-  }
-
-  const baseWhere = { company_id: companyId };
-
-  let parsedState: ReturnType<typeof parseSearchParams> | null = null;
-  if (searchParams && Object.keys(searchParams).length > 0) {
-    parsedState = parseSearchParams(searchParams);
-  }
-
-  const hasActiveFilters = parsedState && (Object.keys(parsedState.filters).length > 0 || parsedState.search);
-
-  function crossWhere(excludeColumn: string) {
-    if (!parsedState || !hasActiveFilters) return baseWhere;
-    const modified = { ...parsedState, filters: { ...parsedState.filters } };
-    delete modified.filters[excludeColumn];
-    delete modified.filters[`${excludeColumn}_from`];
-    delete modified.filters[`${excludeColumn}_to`];
-    return buildTireTypesWhereClause(modified, companyId);
-  }
-
-  function toFacetMap(rows: { key: string | null | undefined; count: number }[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const { key, count } of rows) {
-      if (key == null) {
-        map.set(NULL_FILTER_VALUE, (map.get(NULL_FILTER_VALUE) ?? 0) + count);
-      } else {
-        map.set(String(key), count);
-      }
-    }
-    return map;
-  }
-
-  try {
-    const where = crossWhere(columnId);
-
-    // ── Boolean: is_active ─────────────────────────────────────────────────
-    if (columnId === 'is_active') {
-      const rows = await prisma.tire_types.groupBy({
-        by: ['is_active'],
-        where,
-        _count: true,
-      });
-      return {
-        counts: toFacetMap(rows.map((r) => ({ key: String(r.is_active), count: r._count }))),
-      };
-    }
-
-    // ── Enum: tread_type ───────────────────────────────────────────────────
-    if (columnId === 'tread_type') {
-      const rows = await prisma.tire_types.groupBy({
-        by: ['tread_type'],
-        where,
-        _count: true,
-      });
-      return {
-        counts: toFacetMap(rows.map((r) => ({ key: r.tread_type, count: r._count }))),
-      };
-    }
-
-    logger.warn('getTireTypeSingleFacet: unknown columnId', { data: { columnId } });
-    return null;
-  } catch (error) {
-    logger.error('Error getting tire type single facet', { data: { error, columnId } });
-    return null;
-  }
-}
+const updateTireTypeSchema = tireTypeSchema.partial();
 
 // ============================================================================
 // CRUD ACTIONS
 // ============================================================================
 
-/** Alta de tipo de cubierta: la empresa sale de la sesión, no del formulario. */
-export async function createTireType(data: { name: string; size: string; tread_type: TireTreadType }) {
-  logger.debug('Creating tire type', { data: { name: data.name, size: data.size } });
+/** Alta de tipo de cubierta (permiso `create`): la empresa sale de la sesión, no del formulario. */
+export async function createTireType(input: { name: string; size: string; tread_type: TireTreadType }) {
+  logger.debug('Creating tire type');
   try {
-    const companyId = await getActiveCompanyId();
+    const data = parseInput(tireTypeSchema, input);
+    const companyId = await requireGomeriaPermission('tipos_cubiertas', 'create');
     const existing = await prisma.tire_types.findFirst({
       where: {
         size: data.size,
@@ -249,7 +44,9 @@ export async function createTireType(data: { name: string; size: string; tread_t
     }
     // Cada combinacion tipo + marca es un material de Almacenes (etapa 6): se crean juntos.
     return await prisma.$transaction(async (tx) => {
-      const tireType = await tx.tire_types.create({ data: { ...data, company_id: companyId } });
+      const tireType = await tx.tire_types.create({
+        data: { name: data.name, size: data.size, tread_type: data.tread_type, company_id: companyId },
+      });
       await syncTireMaterials(tx, companyId);
       return tireType;
     });
@@ -259,16 +56,24 @@ export async function createTireType(data: { name: string; size: string; tread_t
   }
 }
 
-export async function updateTireType(id: string, data: { name?: string; size?: string; tread_type?: TireTreadType }) {
-  logger.debug('Updating tire type', { data: { id, ...data } });
+/** Edición de tipo de cubierta (permiso `update`). */
+export async function updateTireType(id: string, input: { name?: string; size?: string; tread_type?: TireTreadType }) {
+  logger.debug('Updating tire type', { data: { id } });
   try {
+    parseInput(uuidSchema, id);
+    const data = parseInput(updateTireTypeSchema, input);
+    await requireGomeriaPermission('tipos_cubiertas', 'update');
     await assertTireTypeInActiveCompany(id);
 
     // El nombre y el estado del material de cada combinacion siguen al tipo y a la marca.
     return await prisma.$transaction(async (tx) => {
       const tireType = await tx.tire_types.update({
         where: { id },
-        data,
+        data: {
+          ...(data.name != null ? { name: data.name } : {}),
+          ...(data.size != null ? { size: data.size } : {}),
+          ...(data.tread_type != null ? { tread_type: data.tread_type } : {}),
+        },
       });
       await syncTireMaterials(tx, tireType.company_id);
       return tireType;
@@ -279,16 +84,20 @@ export async function updateTireType(id: string, data: { name?: string; size?: s
   }
 }
 
+/** Activar/desactivar un tipo (permiso `update`). */
 export async function toggleTireTypeActive(id: string, isActive: boolean) {
   logger.debug('Toggling tire type active', { data: { id, isActive } });
   try {
+    parseInput(uuidSchema, id);
+    const active = parseInput(z.boolean(), isActive);
+    await requireGomeriaPermission('tipos_cubiertas', 'update');
     await assertTireTypeInActiveCompany(id);
 
     // El nombre y el estado del material de cada combinacion siguen al tipo y a la marca.
     return await prisma.$transaction(async (tx) => {
       const tireType = await tx.tire_types.update({
         where: { id },
-        data: { is_active: isActive },
+        data: { is_active: active },
       });
       await syncTireMaterials(tx, tireType.company_id);
       return tireType;
@@ -303,11 +112,16 @@ export async function toggleTireTypeActive(id: string, isActive: boolean) {
 // SELECT QUERY (for dropdowns in other forms)
 // ============================================================================
 
-/** Tipos de la empresa activa, para los formularios del dashboard. */
+/** Tipos de la empresa activa, para los formularios del dashboard (catálogo de cubiertas incluido). */
 export async function getTireTypesForSelect() {
   logger.debug('Fetching tire types for select');
   try {
-    const companyId = await getActiveCompanyId();
+    const companyId = await requireAnyGomeriaPermission([
+      ['tipos_cubiertas', 'view'],
+      ['catalogo_cubiertas', 'view'],
+      ['catalogo_cubiertas', 'create'],
+      ['catalogo_cubiertas', 'update'],
+    ]);
     const data = await prisma.tire_types.findMany({
       where: { company_id: companyId, is_active: true },
       select: {
@@ -329,4 +143,4 @@ export async function getTireTypesForSelect() {
 // EXPORTED TYPES
 // ============================================================================
 
-export type TireTypeListItem = Awaited<ReturnType<typeof getTireTypesPaginated>>['data'][number];
+export type { TireTypeListItem } from './type-list.server';

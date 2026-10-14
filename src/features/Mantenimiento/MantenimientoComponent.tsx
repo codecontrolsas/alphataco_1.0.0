@@ -50,7 +50,7 @@ export default async function MantenimientoComponent({ searchParams, permissions
           tabSlug: 'maint_operaciones',
           content: (
             <Suspense fallback={<OperacionesPipelineSkeleton />}>
-              <OperacionesPipelineContent searchParams={searchParams} />
+              <OperacionesPipelineContent searchParams={searchParams} permissions={permissions} />
             </Suspense>
           ),
         },
@@ -88,7 +88,7 @@ export default async function MantenimientoComponent({ searchParams, permissions
           tabSlug: 'maint_taller',
           content: (
             <Suspense fallback={<TallerPipelineSkeleton />}>
-              <TallerPipelineContent searchParams={searchParams} />
+              <TallerPipelineContent searchParams={searchParams} permissions={permissions} />
             </Suspense>
           ),
         },

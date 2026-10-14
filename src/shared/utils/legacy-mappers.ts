@@ -50,7 +50,6 @@ export interface LegacyEmployeeInput {
   reason_for_termination?: string | null;
   termination_date?: string | Date | null;
   status?: string | null;
-  documents_employees?: unknown;
   guild?: Named;
   guild_id?: Ref;
   covenant?: Named;
@@ -108,7 +107,6 @@ export const setEmployeesToShow = (employees: LegacyEmployeeInput[] | null | und
     reason_for_termination: employee.reason_for_termination,
     termination_date: employee.termination_date,
     status: employee.status,
-    documents_employees: employee.documents_employees,
     guild_id: employee.guild?.id || idOf(employee.guild_id),
     covenants_id: employee.covenant?.id || idOf(employee.covenants_id),
     category_id: employee.category?.id || idOf(employee.category_id),

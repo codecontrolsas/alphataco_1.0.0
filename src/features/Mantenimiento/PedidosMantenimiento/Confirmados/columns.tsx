@@ -9,6 +9,7 @@ import { conditionLabels } from '@/shared/utils/mappers';
 import type { ColumnDef } from '@tanstack/react-table';
 import { ClipboardList, Eye, History, LogIn, Shield, Wrench, type LucideIcon } from 'lucide-react';
 import moment from 'moment';
+import { argentinaDate, formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import {
   getResourceCondition,
   getResourceInternNumber,
@@ -112,7 +113,7 @@ export function getConfirmedOrderColumns({
       cell: ({ row }) => {
         const date = row.original.date_approved_at;
         if (!date) return <span className="text-muted-foreground">-</span>;
-        return <span>{moment(date).format('DD/MM/YYYY HH:mm')}</span>;
+        return <span>{formatArgentinaDateTime(date)}</span>;
       },
     },
 
@@ -128,7 +129,8 @@ export function getConfirmedOrderColumns({
 
         // Usar moment.utc para fechas tipo 'date' (YYYY-MM-DD) para evitar desfase de zona horaria
         const scheduledDate = moment.utc(date);
-        const today = moment().startOf('day');
+        // "Hoy" en hora argentina (el servidor corre en UTC y el navegador en cualquier zona).
+        const today = moment.utc(argentinaDate());
         const isToday = scheduledDate.isSame(today, 'day');
         const isPast = scheduledDate.isBefore(today);
         const isTomorrow = scheduledDate.isSame(today.clone().add(1, 'day'), 'day');
@@ -230,7 +232,7 @@ export function getConfirmedOrderColumns({
       cell: ({ row }) => {
         const date = row.original.created_at;
         if (!date) return <span className="text-muted-foreground">-</span>;
-        return <span>{moment(date).format('DD/MM/YYYY HH:mm')}</span>;
+        return <span>{formatArgentinaDateTime(date)}</span>;
       },
     },
 
@@ -272,24 +274,35 @@ export function getConfirmedOrderColumns({
 
         return (
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" onClick={() => onView(order)} title="Ver detalle">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => onView(order)}
+              title="Ver detalle"
+              aria-label="Ver detalle"
+            >
               <Eye className="h-4 w-4" />
             </Button>
             <Button
+              type="button"
               variant="ghost"
               size="icon"
               onClick={() => onViewHistory(order)}
               title="Ver historial"
+              aria-label="Ver historial"
               className="text-purple-600 hover:text-purple-700"
             >
               <History className="h-4 w-4" />
             </Button>
             {permissions.canApproveWorkshopEntry && (
               <Button
+                type="button"
                 variant="ghost"
                 size="icon"
                 onClick={() => onApproveWorkshopEntry(order)}
                 title="Aprobar Entrada a Taller"
+                aria-label="Aprobar Entrada a Taller"
                 className="text-green-600 hover:text-green-700"
               >
                 <LogIn className="h-4 w-4" />

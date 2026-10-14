@@ -8,6 +8,7 @@ import type {
   DataTableSearchParams,
   FacetResult,
 } from '@/shared/components/common/DataTable/types';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { AlertTriangle, Check, CheckCircle2, CircleOff, Stethoscope, X, XCircle } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { OPEN_WORK_ORDER_STATUSES } from '../workshop-view-filters';
@@ -293,7 +294,7 @@ export function _WorkshopSectorTasksDataTable({
         filename: `ot-sector-${sectorId.slice(0, 8)}`,
         sheetName: 'Órdenes de trabajo',
       },
-      fetchAllData: () => getAllWorkshopSectorWorkOrdersForExport(sectorId, currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllWorkshopSectorWorkOrdersForExport(sectorId, currentParams)),
       formatters: exportFormatters,
     }),
     [sectorId, currentParams, exportFormatters]

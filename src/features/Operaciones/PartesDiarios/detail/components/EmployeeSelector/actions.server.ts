@@ -1,5 +1,6 @@
 'use server';
 
+import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
 import { Logger } from '@/lib/logger';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
@@ -283,23 +284,7 @@ export async function getEmployeeSelectorSingleFacet(
 
   function crossWhere(excludeColumn: string) {
     if (!parsedState || !hasActiveFilters) return baseWhere;
-    const modified = { ...parsedState, filters: { ...parsedState.filters } };
-    delete modified.filters[excludeColumn];
-    delete modified.filters[`${excludeColumn}_from`];
-    delete modified.filters[`${excludeColumn}_to`];
-    return buildWhereClause(companyId, modified);
-  }
-
-  function toFacetMap(rows: { key: string | bigint | null | undefined; count: number }[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const { key, count } of rows) {
-      if (key == null) {
-        map.set(NULL_FILTER_VALUE, (map.get(NULL_FILTER_VALUE) ?? 0) + count);
-      } else {
-        map.set(String(key), count);
-      }
-    }
-    return map;
+    return buildWhereClause(companyId, withoutOwnFilter(parsedState, excludeColumn));
   }
 
   try {
@@ -386,7 +371,7 @@ export async function getEmployeeSelectorSingleFacet(
     // ── FK BigInt: province ──
     if (columnId === 'province') {
       const rows = await prisma.employees.groupBy({ by: ['province'], where, _count: true });
-      const counts = toFacetMap(rows.map((r) => ({ key: r.province, count: r._count })));
+      const counts = toFacetMap(rows.map((r) => ({ key: r.province == null ? null : String(r.province), count: r._count })));
       const ids = rows.map((r) => r.province).filter(Boolean) as bigint[];
       const resolvedOptions =
         ids.length > 0

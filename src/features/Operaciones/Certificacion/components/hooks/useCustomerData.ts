@@ -1,14 +1,27 @@
 import type { CustomerForRowForm } from '@/features/Operaciones/PartesDiarios/actions/comercial-rows.server';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
 import type { DailyReportRowFormValues } from '../form-types';
 
+/**
+ * Cliente, servicio y listas dependientes del formulario. Todo se DERIVA de los valores del
+ * form (`customer` / `services`): no hay estado paralelo que sincronizar al abrir en edición.
+ */
 export function useCustomerData(customers: CustomerForRowForm[], form: UseFormReturn<DailyReportRowFormValues>) {
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
-  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
-  const [selectedCustomer, setSelectedCustomer] = useState<CustomerForRowForm | null>(null);
-  const [isSectorDisabled, setIsSectorDisabled] = useState<boolean>(true);
-  const [isAreaDisabled, setIsAreaDisabled] = useState<boolean>(true);
+  const customerId = form.watch('customer');
+  const serviceId = form.watch('services');
+
+  const selectedCustomerId = customerId || null;
+  const selectedServiceId = serviceId || null;
+
+  const selectedCustomer = useMemo(
+    () => (customerId ? (customers.find((customer) => customer.id === customerId) ?? null) : null),
+    [customers, customerId]
+  );
+
+  // Sin sectores / áreas en ningún servicio del cliente, los combos quedan deshabilitados
+  const isSectorDisabled = !selectedCustomer?.customer_services?.some((service) => service.service_sectors.length > 0);
+  const isAreaDisabled = !selectedCustomer?.customer_services?.some((service) => service.service_areas.length > 0);
 
   // Servicios del cliente seleccionado
   const customerServices = useMemo(() => {
@@ -30,54 +43,37 @@ export function useCustomerData(customers: CustomerForRowForm[], form: UseFormRe
 
   // Manejar cambio de cliente
   const handleCustomerChange = useCallback(
-    (customerId: string) => {
-      const customer = customers?.find((c) => c.id === customerId);
-      if (customer) {
-        setSelectedCustomer(customer);
-        setSelectedCustomerId(customerId);
-        form.setValue('customer', customerId);
-        form.setValue('services', '');
-        form.setValue('item', '');
-        form.setValue('sector_service_id', '');
-        form.setValue('areas_service_id', '');
-        setSelectedServiceId(null);
-
-        const hasSectors = customer.customer_services?.some((service) => service.service_sectors.length > 0);
-        const hasAreas = customer.customer_services?.some((service) => service.service_areas.length > 0);
-
-        setIsSectorDisabled(!hasSectors);
-        setIsAreaDisabled(!hasAreas);
-      }
+    (newCustomerId: string) => {
+      if (!customers.some((customer) => customer.id === newCustomerId)) return;
+      form.setValue('customer', newCustomerId);
+      form.setValue('services', '');
+      form.setValue('item', '');
+      form.setValue('sector_service_id', '');
+      form.setValue('areas_service_id', '');
     },
     [customers, form]
   );
 
   // Manejar cambio de servicio
   const handleServiceChange = useCallback(
-    (serviceId: string) => {
-      form.setValue('services', serviceId);
+    (newServiceId: string) => {
+      form.setValue('services', newServiceId);
       form.setValue('item', '');
       form.setValue('sector_service_id', '');
       form.setValue('areas_service_id', '');
-      setSelectedServiceId(serviceId);
     },
     [form]
   );
 
   return {
     selectedCustomerId,
-    setSelectedCustomerId,
     selectedServiceId,
-    setSelectedServiceId,
     selectedCustomer,
-    setSelectedCustomer,
     customerServices,
     serviceItems,
     handleCustomerChange,
     handleServiceChange,
     isSectorDisabled,
-    setIsSectorDisabled,
     isAreaDisabled,
-    setIsAreaDisabled,
   };
 }

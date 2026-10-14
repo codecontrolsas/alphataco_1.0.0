@@ -98,18 +98,18 @@ describe('isPdfUrl', () => {
 
 describe('expiryLabel', () => {
   it('muestra la fecha cuando el tipo de documento vence', () => {
-    expect(expiryLabel(true, new Date(2026, 4, 9))).toBe('Vence el 09/05/2026');
+    expect(expiryLabel(true, new Date('2026-05-09T15:00:00Z'))).toBe('Vence el 09/05/2026');
   });
 
   it('avisa que no vence cuando el tipo no expira', () => {
-    expect(expiryLabel(false, new Date(2026, 4, 9))).toBe('No tiene vencimiento');
+    expect(expiryLabel(false, new Date('2026-05-09T15:00:00Z'))).toBe('No tiene vencimiento');
     expect(expiryLabel(null, null)).toBe('No tiene vencimiento');
   });
 });
 
 describe('uploadedAtLabel', () => {
   it('arma la leyenda de subida con fecha y hora', () => {
-    expect(uploadedAtLabel(new Date(2026, 0, 3, 14, 5))).toBe('Subido el 03/01/2026 a las 14:05');
+    expect(uploadedAtLabel(new Date('2026-01-03T17:05:00Z'))).toBe('Subido el 03/01/2026 a las 14:05');
   });
 
   it('devuelve cadena vacía sin fecha', () => {
@@ -120,7 +120,7 @@ describe('uploadedAtLabel', () => {
 
 describe('shortDate', () => {
   it('formatea en DD/MM/YYYY', () => {
-    expect(shortDate(new Date(2026, 11, 31))).toBe('31/12/2026');
+    expect(shortDate(new Date('2026-12-31T15:00:00Z'))).toBe('31/12/2026');
   });
 
   it('devuelve cadena vacía sin fecha', () => {

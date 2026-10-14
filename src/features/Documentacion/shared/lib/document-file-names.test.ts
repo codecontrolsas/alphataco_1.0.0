@@ -5,9 +5,9 @@ const BASE = 'grupo-horizonte-(30123456789)/persona/juan-perez-(12345678)';
 
 describe('buildReplacedDocumentName', () => {
   it('con fecha en el nombre y nueva validez → reemplaza la fecha y usa la extensión nueva', () => {
-    expect(buildReplacedDocumentName(`${BASE}/licencia-(01-02-2025).pdf`, 'jpg', new Date(2026, 4, 9))).toBe(
-      `${BASE}/licencia-(09-05-2026).jpg`
-    );
+    expect(
+      buildReplacedDocumentName(`${BASE}/licencia-(01-02-2025).pdf`, 'jpg', new Date('2026-05-09T15:00:00Z'))
+    ).toBe(`${BASE}/licencia-(09-05-2026).jpg`);
   });
 
   it('sin fecha en el nombre → conserva el nombre y cambia sólo la extensión', () => {
@@ -27,12 +27,16 @@ describe('buildRenewedDocumentName', () => {
   });
 
   it('fecha DD-MM-YYYY o YYYY-MM-DD → nueva validez en DD-MM-YYYY', () => {
-    expect(buildRenewedDocumentName(`${BASE}/licencia-(01-02-2025).pdf`, 'pdf', { validity: new Date(2027, 0, 15) })).toBe(
-      `${BASE}/licencia-(15-01-2027).pdf`
-    );
-    expect(buildRenewedDocumentName(`${BASE}/licencia-(2025-02-01).pdf`, 'pdf', { validity: new Date(2027, 0, 15) })).toBe(
-      `${BASE}/licencia-(15-01-2027).pdf`
-    );
+    expect(
+      buildRenewedDocumentName(`${BASE}/licencia-(01-02-2025).pdf`, 'pdf', {
+        validity: new Date('2027-01-15T15:00:00Z'),
+      })
+    ).toBe(`${BASE}/licencia-(15-01-2027).pdf`);
+    expect(
+      buildRenewedDocumentName(`${BASE}/licencia-(2025-02-01).pdf`, 'pdf', {
+        validity: new Date('2027-01-15T15:00:00Z'),
+      })
+    ).toBe(`${BASE}/licencia-(15-01-2027).pdf`);
   });
 
   it('período (YYYY-MM) → nuevo período, sin duplicar la extensión', () => {

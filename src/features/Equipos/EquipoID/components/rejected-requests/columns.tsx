@@ -2,18 +2,12 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { EquipmentRejectedRequest } from '@/features/Equipos/EquipoID/lib/actions/vehicle-operations-actions';
-import {
-  DataTableColumnHeader,
-  inMemoryFacetedFilterFn,
-  inMemoryTextFilterFn,
-  type DataTableFacetedFilterConfig,
-  type DataTableFilterOption,
-} from '@/shared/components/common/DataTable';
+import { DataTableColumnHeader, type DataTableFilterOption } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
-import { AlertTriangle, CircleOff, ClipboardList, Shield, Wrench, XCircle, type LucideIcon } from 'lucide-react';
-import moment from 'moment';
+import { AlertTriangle, ClipboardList, Shield, Wrench, XCircle, type LucideIcon } from 'lucide-react';
+import type { EquipmentRejectedRequest } from '../../lib/actions/vehicle-rejected-requests-actions';
 
 // ============================================================================
 // LABELS & ICONS
@@ -48,6 +42,17 @@ export const REJECTION_TYPE_ICONS: Record<RejectionType, LucideIcon> = {
   partial: AlertTriangle,
 };
 
+/** Opciones fijas de los filtros "Tipo de Rechazo" y "Origen" (los valores posibles se conocen en el cliente). */
+export const REJECTION_TYPE_OPTIONS: DataTableFilterOption[] = (
+  Object.keys(REJECTION_TYPE_LABELS) as RejectionType[]
+).map((value) => ({ value, label: REJECTION_TYPE_LABELS[value], icon: REJECTION_TYPE_ICONS[value] }));
+
+export const SOURCE_OPTIONS: DataTableFilterOption[] = Object.keys(SOURCE_LABELS).map((value) => ({
+  value,
+  label: SOURCE_LABELS[value],
+  icon: SOURCE_ICONS[value],
+}));
+
 // Columnas secundarias — se ocultan por defecto (datos de contexto, no lo primero
 // que un usuario quiere ver al abrir la sub-tab).
 export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['description', 'supervisor', 'preventiveType'];
@@ -58,7 +63,7 @@ export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['description', 'supervisor',
 
 type RejectedItem = EquipmentRejectedRequest['maintenance_request_items'][number];
 
-function getRejectionType(row: EquipmentRejectedRequest): RejectionType {
+export function getRejectionType(row: EquipmentRejectedRequest): RejectionType {
   return row.status === 'rejected' ? 'total' : 'partial';
 }
 
@@ -74,6 +79,11 @@ function getPrimaryReason(row: EquipmentRejectedRequest): string {
   return row.maintenance_request_items?.[0]?.rejection_reason ?? '';
 }
 
+/** La fecha de rechazo es `rejected_at` y, si la solicitud no la registró, la de creación. */
+function getRejectionDate(row: EquipmentRejectedRequest): Date | null {
+  return row.rejected_at ?? row.created_at ?? null;
+}
+
 // ============================================================================
 // COLUMNAS
 // ============================================================================
@@ -83,12 +93,12 @@ export function getRejectedRequestsColumns(): ColumnDef<EquipmentRejectedRequest
     // ── Fecha de rechazo ─────────────────────────────────────────────────────
     {
       id: 'rejectedAt',
-      accessorFn: (row) => row.rejected_at ?? row.created_at ?? null,
+      accessorFn: (row) => getRejectionDate(row),
       meta: { title: 'Fecha de Rechazo' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de Rechazo" />,
       cell: ({ row }) => {
-        const value = row.original.rejected_at ?? row.original.created_at;
-        return <span className="text-sm">{value ? moment(value).format('DD/MM/YYYY') : '—'}</span>;
+        const value = getRejectionDate(row.original);
+        return <span className="text-sm">{value ? formatArgentinaDay(value) : '—'}</span>;
       },
     },
 
@@ -108,14 +118,15 @@ export function getRejectedRequestsColumns(): ColumnDef<EquipmentRejectedRequest
           </Badge>
         );
       },
-      filterFn: inMemoryFacetedFilterFn,
+      filterFn: (row, _id, value: string[]) => value.includes(getRejectionType(row.original)),
     },
 
-    // ── Ítems rechazados ─────────────────────────────────────────────────────
+    // ── Ítems rechazados (la lista no tiene un campo ordenable) ──────────────
     {
       id: 'items',
       accessorFn: (row) => (row.maintenance_request_items ?? []).map(getItemLabel).join(', '),
       meta: { title: 'Ítems Rechazados' },
+      enableSorting: false,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Ítems Rechazados" />,
       cell: ({ row }) => {
         const items = row.original.maintenance_request_items ?? [];
@@ -151,14 +162,14 @@ export function getRejectedRequestsColumns(): ColumnDef<EquipmentRejectedRequest
           </Tooltip>
         );
       },
-      filterFn: inMemoryTextFilterFn,
     },
 
-    // ── Motivo ───────────────────────────────────────────────────────────────
+    // ── Motivo (puede venir de la solicitud o de sus ítems: sin campo ordenable) ─
     {
       id: 'rejectionReason',
       accessorFn: (row) => getPrimaryReason(row),
       meta: { title: 'Motivo' },
+      enableSorting: false,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Motivo" />,
       cell: ({ row }) => {
         const value = getPrimaryReason(row.original);
@@ -171,8 +182,6 @@ export function getRejectedRequestsColumns(): ColumnDef<EquipmentRejectedRequest
           </span>
         );
       },
-      filterFn: inMemoryTextFilterFn,
-      enableSorting: false,
     },
 
     // ── Origen ───────────────────────────────────────────────────────────────
@@ -193,10 +202,14 @@ export function getRejectedRequestsColumns(): ColumnDef<EquipmentRejectedRequest
           </Badge>
         );
       },
-      filterFn: inMemoryFacetedFilterFn,
+      filterFn: (row, _id, value: string[]) => {
+        const src = row.original.source;
+        if (!src) return value.includes(NULL_FILTER_VALUE);
+        return value.includes(src);
+      },
     },
 
-    // ── Rechazado por ────────────────────────────────────────────────────────
+    // ── Rechazado por (el filtro compara por id de perfil, no por nombre) ───
     {
       id: 'rejectedBy',
       accessorFn: (row) => row.profile_maintenance_requests_rejected_byToprofile?.fullname ?? '',
@@ -210,10 +223,10 @@ export function getRejectedRequestsColumns(): ColumnDef<EquipmentRejectedRequest
           <span className="text-muted-foreground">Sin asignar</span>
         );
       },
-      filterFn: (row, id, value: string[]) => {
-        const val = row.getValue(id) as string;
-        if (!val) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(val);
+      filterFn: (row, _id, value: string[]) => {
+        const profileId = row.original.profile_maintenance_requests_rejected_byToprofile?.id;
+        if (profileId == null) return value.includes(NULL_FILTER_VALUE);
+        return value.includes(profileId);
       },
     },
 
@@ -222,6 +235,7 @@ export function getRejectedRequestsColumns(): ColumnDef<EquipmentRejectedRequest
       id: 'description',
       accessorFn: (row) => row.description ?? '',
       meta: { title: 'Descripción' },
+      enableSorting: false,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción" />,
       cell: ({ row }) => {
         const value = row.original.description ?? '';
@@ -232,8 +246,6 @@ export function getRejectedRequestsColumns(): ColumnDef<EquipmentRejectedRequest
           </span>
         );
       },
-      filterFn: inMemoryTextFilterFn,
-      enableSorting: false,
     },
 
     // ── Supervisor (oculta por defecto) ─────────────────────────────────────
@@ -246,7 +258,6 @@ export function getRejectedRequestsColumns(): ColumnDef<EquipmentRejectedRequest
         const name = row.original.profile_maintenance_requests_supervisor_idToprofile?.fullname;
         return name ? <span className="text-sm">{name}</span> : <span className="text-muted-foreground">—</span>;
       },
-      filterFn: inMemoryTextFilterFn,
     },
 
     // ── Tipo preventivo (oculta por defecto, solo aplica a source=preventive) ─
@@ -256,65 +267,6 @@ export function getRejectedRequestsColumns(): ColumnDef<EquipmentRejectedRequest
       meta: { title: 'Tipo Preventivo' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo Preventivo" />,
       cell: ({ row }) => <span className="text-sm">{row.original.preventive_type || '—'}</span>,
-      filterFn: inMemoryTextFilterFn,
     },
   ];
-}
-
-/** Opciones fijas del filtro "Tipo de Rechazo" — solo 2 valores posibles. */
-export function buildRejectionTypeFilter(): DataTableFacetedFilterConfig {
-  return {
-    columnId: 'rejectionType',
-    title: 'Tipo de Rechazo',
-    type: 'faceted',
-    options: (Object.keys(REJECTION_TYPE_LABELS) as RejectionType[]).map((value) => ({
-      value,
-      label: REJECTION_TYPE_LABELS[value],
-      icon: REJECTION_TYPE_ICONS[value],
-    })),
-  };
-}
-
-/** Opciones fijas del filtro "Origen" — `source` solo toma estos 3 valores en la práctica. */
-export function buildSourceFilter(): DataTableFacetedFilterConfig {
-  return {
-    columnId: 'source',
-    title: 'Origen',
-    type: 'faceted',
-    options: Object.keys(SOURCE_LABELS).map((value) => ({
-      value,
-      label: SOURCE_LABELS[value],
-      icon: SOURCE_ICONS[value],
-    })),
-  };
-}
-
-/** Opciones del filtro "Rechazado por" — computadas desde el dataset en memoria (data chica por equipo). */
-export function buildRejectedByFilter(data: EquipmentRejectedRequest[]): DataTableFacetedFilterConfig {
-  const names = new Set<string>();
-  let hasUnassigned = false;
-
-  data.forEach((row) => {
-    const name = row.profile_maintenance_requests_rejected_byToprofile?.fullname;
-    if (name) {
-      names.add(name);
-    } else {
-      hasUnassigned = true;
-    }
-  });
-
-  const options: DataTableFilterOption[] = Array.from(names)
-    .sort()
-    .map((name) => ({ value: name, label: name }));
-
-  if (hasUnassigned) {
-    options.push({ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff });
-  }
-
-  return {
-    columnId: 'rejectedBy',
-    title: 'Rechazado por',
-    type: 'faceted',
-    options,
-  };
 }

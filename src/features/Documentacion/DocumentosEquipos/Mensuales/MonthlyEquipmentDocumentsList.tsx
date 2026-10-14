@@ -32,6 +32,8 @@ export async function MonthlyEquipmentDocumentsList({ searchParams, equipmentId 
 
   // Las tarjetas arrancan YA, en paralelo con la tabla (si no, su consulta esperaría a que la tabla resuelva).
   const counts = equipmentId ? undefined : getMonthlyEquipmentDocumentStateCounts();
+  // Si la tabla falla antes de que se lean las tarjetas, el rechazo no queda sin manejar (la sección ya lo atrapa al leerlo).
+  void counts?.catch(() => undefined);
   const [{ data, total }, preferences] = await Promise.all([
     getMonthlyEquipmentDocumentsPaginated(tableParams, equipmentId),
     getTablePreferences(TABLE_ID),

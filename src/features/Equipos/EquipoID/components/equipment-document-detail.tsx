@@ -2,8 +2,7 @@ import { MonthlyEquipmentDocumentsList } from '@/features/Documentacion/Document
 import { MonthlyEquipmentDocumentsSkeleton } from '@/features/Documentacion/DocumentosEquipos/Mensuales/fallback/MonthlyEquipmentDocumentsSkeleton';
 import { EquipmentPermanentDocumentsList } from '@/features/Documentacion/DocumentosEquipos/Permanentes/EquipmentPermanentDocumentsList';
 import { EquipmentPermanentDocumentsSkeleton } from '@/features/Documentacion/DocumentosEquipos/Permanentes/fallback/EquipmentPermanentDocumentsSkeleton';
-import DocumentNav from '@/features/Documentacion/shared/components/DocumentNav';
-import { PermissionGuardServer, getUserPermissionsMapServer } from '@/features/Permissions';
+import { getUserPermissionsMapServer } from '@/features/Permissions';
 import { TabsManagerServer } from '@/features/TabsManager';
 import { Calendar, FileArchive } from 'lucide-react';
 import { Suspense } from 'react';
@@ -44,11 +43,6 @@ export async function EquipmentDocumentDetail({ equipmentId, searchParams }: Equ
           tabSlug: 'docs-equipos-permanentes',
           content: (
             <div>
-              <PermissionGuardServer module="documentacion" tab="documentos-de-equipos" action="create">
-                <div className="flex gap-4 flex-wrap mb-4">
-                  <DocumentNav id_user={equipmentId} onlyEquipment onlyNoMultiresource />
-                </div>
-              </PermissionGuardServer>
               <Suspense fallback={<EquipmentPermanentDocumentsSkeleton />}>
                 <EquipmentPermanentDocumentsList searchParams={searchParams} equipmentId={equipmentId} />
               </Suspense>
@@ -67,11 +61,6 @@ export async function EquipmentDocumentDetail({ equipmentId, searchParams }: Equ
           tabSlug: 'docs-equipos-mensuales',
           content: (
             <div>
-              <PermissionGuardServer module="documentacion" tab="documentos-de-equipos" action="create">
-                <div className="flex gap-4 flex-wrap mb-4">
-                  <DocumentNav id_user={equipmentId} onlyEquipment onlyNoMultiresource />
-                </div>
-              </PermissionGuardServer>
               <Suspense fallback={<MonthlyEquipmentDocumentsSkeleton />}>
                 <MonthlyEquipmentDocumentsList searchParams={searchParams} equipmentId={equipmentId} />
               </Suspense>

@@ -3,6 +3,7 @@
 import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { useInvalidatePreEmployeeLists } from '../hooks/useInvalidatePreEmployeeLists';
 import type { PreEmployeeDetailData } from '../actions/pre-employee-actions.server';
 import { getAvailableTransitions, isEditableStatus } from '../lib/state-machine';
 import { ApprovePreEmployeeSheet } from './ApprovePreEmployeeSheet';
@@ -21,6 +22,7 @@ interface PreEmployeeDetailClientProps {
  */
 export function PreEmployeeDetailClient({ preEmployee, mode: initialMode }: PreEmployeeDetailClientProps) {
   const router = useRouter();
+  const invalidateLists = useInvalidatePreEmployeeLists();
   const { hasPermission } = usePermissions();
   const [mode, setMode] = useState(initialMode);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
@@ -72,7 +74,10 @@ export function PreEmployeeDetailClient({ preEmployee, mode: initialMode }: PreE
             preEmployeeId={preEmployee.id}
             open={showRejectDialog}
             onOpenChange={setShowRejectDialog}
-            onRejected={() => router.refresh()}
+            onRejected={() => {
+              invalidateLists();
+              router.refresh();
+            }}
           />
 
           <ApprovePreEmployeeSheet
@@ -81,7 +86,10 @@ export function PreEmployeeDetailClient({ preEmployee, mode: initialMode }: PreE
             proposedCompanyPosition={preEmployee.proposed_company_position}
             open={showApproveSheet}
             onOpenChange={setShowApproveSheet}
-            onApproved={(employeeId) => router.push(`/dashboard/employee/action?action=view&employee_id=${employeeId}`)}
+            onApproved={(employeeId) => {
+              invalidateLists({ includeEmployees: true });
+              router.push(`/dashboard/employee/action?action=view&employee_id=${employeeId}`);
+            }}
           />
         </>
       )}

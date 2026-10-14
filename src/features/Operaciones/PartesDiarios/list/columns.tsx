@@ -12,17 +12,22 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { StackedCell } from '@/features/Operaciones/shared/components/StackedCell';
+import { SegmentedProgress } from '@/features/Operaciones/shared/components/SegmentedProgress';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
-import { dailyReportStatusBadges, dailyReportStatusLabels } from '@/shared/utils/mappers';
+import { formatCalendarDate, formatWeekday } from '@/shared/utils/calendar-date';
+import { dailyReportStatusLabels, dailyReportStatusTones } from '@/shared/utils/mappers';
 import { useQueryClient } from '@tanstack/react-query';
 import { type ColumnDef } from '@tanstack/react-table';
 import { Eye, Trash2 } from 'lucide-react';
-import moment from 'moment';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { deleteDailyReport } from '../actions/mutations.server';
-import { DAILY_REPORTS_QUERY_KEY } from '../hooks/useDailyReports';
+import { DAILY_REPORTS_QUERY_KEY } from './constants';
+import { buildProgressSegments, summarizeStatusCountMap } from '../lib/status-progress';
 import type { DailyReportListItem } from './actions.server';
 
 // Columnas ocultas por defecto (visibilidad inicial)
@@ -33,17 +38,29 @@ type Permissions = {
   hasPermission: (module: string, tab: string, action: string) => boolean;
 };
 
+// ── Helpers de presentación ───────────────────────────────────────────────────
+
+/** Resumen de líneas por estado y avance de un parte (fórmula compartida con el detalle). */
+function getSummary(row: DailyReportListItem) {
+  return summarizeStatusCountMap(Object.entries(row.statusCounts));
+}
+
 // ── Cell de eliminación con confirmación ──────────────────────────────────────
 function DeleteDailyReportCell({ row }: { row: { original: DailyReportListItem } }) {
   const queryClient = useQueryClient();
-  const hasRows = row.original.dailyreportrows.length > 0;
+  const router = useRouter();
+  const hasRows = getSummary(row.original).total > 0;
+  const dateLabel = formatCalendarDate(row.original.date);
 
   const handleDelete = async () => {
     toast.promise(
       async () => {
         await deleteDailyReport(row.original.id);
+        // El prefijo ['daily-reports'] incluye la tabla (['daily-reports', 'list', …]).
         queryClient.invalidateQueries({ queryKey: [...DAILY_REPORTS_QUERY_KEY] });
-        queryClient.invalidateQueries({ queryKey: ['daily-reports-list-facets'] });
+        queryClient.invalidateQueries({ queryKey: ['datatable-facet'] });
+        // Las tarjetas de arriba son Server Components: se refrescan con la ruta.
+        router.refresh();
       },
       {
         loading: 'Eliminando parte diario...',
@@ -53,28 +70,55 @@ function DeleteDailyReportCell({ row }: { row: { original: DailyReportListItem }
     );
   };
 
+  // Un botón deshabilitado no recibe foco ni hover: el motivo va en un tooltip sobre un `span` enfocable.
+  if (hasRows) {
+    return (
+      <TooltipProvider delayDuration={150}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span tabIndex={0} className="inline-flex">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-danger hover:text-danger"
+                disabled
+                aria-label={`Eliminar el parte del ${dateLabel} (no disponible: tiene líneas)`}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <p className="max-w-xs text-xs">No se puede eliminar un parte con líneas.</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
         <Button
           variant="ghost"
-          className="h-8 w-8 p-0"
-          disabled={hasRows}
-          title={hasRows ? 'No se puede eliminar un parte con registros' : 'Eliminar parte diario'}
+          size="icon"
+          className="text-danger hover:text-danger"
+          aria-label={`Eliminar el parte del ${dateLabel}`}
+          title="Eliminar parte diario"
         >
-          <Trash2 className={hasRows ? 'h-4 w-4 text-gray-400' : 'h-4 w-4 text-red-500'} />
+          <Trash2 className="h-4 w-4" aria-hidden="true" />
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>¿Está seguro de eliminar este parte diario?</AlertDialogTitle>
+          <AlertDialogTitle>¿Eliminar el parte del {dateLabel}?</AlertDialogTitle>
           <AlertDialogDescription>
             Esta acción no se puede deshacer. El parte diario será eliminado permanentemente.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancelar</AlertDialogCancel>
-          <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600">
+          <AlertDialogAction onClick={handleDelete} className={buttonVariants({ variant: 'destructive' })}>
             Eliminar
           </AlertDialogAction>
         </AlertDialogFooter>
@@ -88,13 +132,18 @@ export function getColumns(permissions: Permissions): ColumnDef<DailyReportListI
   const canDelete = permissions.hasPermission('operaciones', 'dailyreportstable', 'delete');
 
   return [
-    // ── Fecha del parte diario ──────────────────────────────────────────────
+    // ── Fecha del parte diario (apilada con el día de la semana) ────────────
     {
       accessorKey: 'date',
       meta: { title: 'Fecha' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha" />,
       cell: ({ row }) => (
-        <span className="font-medium whitespace-nowrap">{moment.utc(row.original.date).format('DD/MM/YYYY')}</span>
+        <StackedCell
+          mono
+          primary={formatCalendarDate(row.original.date)}
+          secondary={formatWeekday(row.original.date)}
+          maxWidthClass="max-w-[160px]"
+        />
       ),
     },
 
@@ -106,7 +155,7 @@ export function getColumns(permissions: Permissions): ColumnDef<DailyReportListI
       cell: ({ row }) => {
         const status = row.original.status;
         const label = dailyReportStatusLabels[status] ?? status.replaceAll('_', ' ');
-        const variant = dailyReportStatusBadges[status] ?? 'default';
+        const variant = dailyReportStatusTones[status] ?? 'default';
         return (
           <Badge variant={variant} className="whitespace-nowrap">
             {label}
@@ -116,74 +165,98 @@ export function getColumns(permissions: Permissions): ColumnDef<DailyReportListI
       filterFn: (row, id, value: string[]) => value.includes(row.getValue(id)),
     },
 
+    // ── Líneas (virtual — total de dailyreportrows) ────────────────────────
+    {
+      id: 'total',
+      meta: { title: 'Líneas', excludeFromExport: true },
+      enableSorting: false,
+      accessorFn: (row) => getSummary(row).total,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Líneas" />,
+      cell: ({ row }) => <span className="font-mono tabular-nums">{getSummary(row.original).total}</span>,
+    },
+
+    // ── Pendientes (virtual — líneas con status pendiente) ─────────────────
+    {
+      id: 'pendientes',
+      meta: { title: 'Pendientes', excludeFromExport: true },
+      enableSorting: false,
+      accessorFn: (row) => getSummary(row).pending,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Pendientes" />,
+      cell: ({ row }) => {
+        const count = getSummary(row.original).pending;
+        return count > 0 ? (
+          <Badge variant="warning" className="font-mono tabular-nums">
+            {count}
+          </Badge>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        );
+      },
+    },
+
+    // ── Sin recursos (virtual — líneas con status sin_recursos_asignados) ──
+    {
+      id: 'sin_recursos',
+      meta: { title: 'Sin recursos', excludeFromExport: true },
+      enableSorting: false,
+      accessorFn: (row) => getSummary(row).withoutResources,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Sin recursos" />,
+      cell: ({ row }) => {
+        const count = getSummary(row.original).withoutResources;
+        return count > 0 ? (
+          <Badge variant="destructive" className="font-mono tabular-nums">
+            {count}
+          </Badge>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        );
+      },
+    },
+
+    // ── Avance (virtual — barra segmentada) ────────────────────────────────
+    {
+      id: 'progress',
+      meta: { title: 'Avance', excludeFromExport: true },
+      enableSorting: false,
+      accessorFn: (row) => getSummary(row).percent,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Avance" />,
+      cell: ({ row }) => {
+        const summary = getSummary(row.original);
+        if (summary.progressTotal <= 0) return <span className="text-muted-foreground">—</span>;
+        return (
+          <div className="flex min-w-[140px] max-w-[200px] flex-col gap-1">
+            <SegmentedProgress
+              label="Avance del parte"
+              total={summary.progressTotal}
+              segments={buildProgressSegments(summary, 'executable')}
+            />
+            <span className="text-muted-foreground text-xs tabular-nums">
+              {summary.progressDone} de {summary.progressTotal} · {summary.percent}%
+            </span>
+          </div>
+        );
+      },
+    },
+
     // ── Fecha de creación (oculta por defecto) ─────────────────────────────
     {
       accessorKey: 'creation_date',
       meta: { title: 'Fecha de creación' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de creación" />,
       cell: ({ row }) => (
-        <span>{row.original.creation_date ? moment.utc(row.original.creation_date).format('DD/MM/YYYY') : '—'}</span>
+        <span className="tabular-nums">
+          {row.original.creation_date ? formatCalendarDate(row.original.creation_date) : '—'}
+        </span>
       ),
     },
 
-    // ── Sin Recursos (virtual — count de rows con status sin_recursos_asignados) ─
-    {
-      id: 'sin_recursos',
-      meta: { title: 'Sin Recursos', excludeFromExport: true },
-      enableSorting: false,
-      accessorFn: (row) => row.dailyreportrows.filter((r) => r.status === 'sin_recursos_asignados').length,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Sin Recursos" />,
-      cell: ({ row }) => {
-        const count = row.original.dailyreportrows.filter((r) => r.status === 'sin_recursos_asignados').length;
-        return (
-          <Badge variant={count > 0 ? 'warning' : 'secondary'} className="min-w-[28px] justify-center">
-            {count}
-          </Badge>
-        );
-      },
-    },
-
-    // ── Pendientes (virtual — count de rows con status pendiente) ──────────
-    {
-      id: 'pendientes',
-      meta: { title: 'Pendientes', excludeFromExport: true },
-      enableSorting: false,
-      accessorFn: (row) => row.dailyreportrows.filter((r) => r.status === 'pendiente').length,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Pendientes" />,
-      cell: ({ row }) => {
-        const count = row.original.dailyreportrows.filter((r) => r.status === 'pendiente').length;
-        return (
-          <Badge variant={count > 0 ? 'default' : 'secondary'} className="min-w-[28px] justify-center">
-            {count}
-          </Badge>
-        );
-      },
-    },
-
-    // ── Total (virtual — count total de dailyreportrows) ───────────────────
-    {
-      id: 'total',
-      meta: { title: 'Total', excludeFromExport: true },
-      enableSorting: false,
-      accessorFn: (row) => row.dailyreportrows.length,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Total" />,
-      cell: ({ row }) => {
-        const count = row.original.dailyreportrows.length;
-        return (
-          <Badge variant="outline" className="min-w-[28px] justify-center">
-            {count}
-          </Badge>
-        );
-      },
-    },
-
-    // ── is_active (oculto por defecto) ─────────────────────────────────────
+    // ── Activo (solo lectura: no hay mutación de is_active) ────────────────
     {
       accessorKey: 'is_active',
       meta: { title: 'Activo' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Activo" />,
       cell: ({ row }) => (
-        <Badge variant={row.original.is_active ? 'default' : 'secondary'}>
+        <Badge variant={row.original.is_active ? 'success' : 'secondary'}>
           {row.original.is_active ? 'Activo' : 'Inactivo'}
         </Badge>
       ),
@@ -194,7 +267,7 @@ export function getColumns(permissions: Permissions): ColumnDef<DailyReportListI
       },
     },
 
-    // ── Acciones (ver + eliminar) ──────────────────────────────────────────
+    // ── Acciones (abrir + eliminar) ────────────────────────────────────────
     {
       id: 'actions',
       meta: { excludeFromExport: true, title: '' },
@@ -203,13 +276,15 @@ export function getColumns(permissions: Permissions): ColumnDef<DailyReportListI
       header: () => null,
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
-          <Link
-            href={`/dashboard/operations/${row.original.id}`}
-            className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors"
-          >
-            <Eye className="h-3.5 w-3.5" />
-            Ver
-          </Link>
+          <Button asChild variant="outline" size="sm">
+            <Link
+              href={`/dashboard/operations/${row.original.id}`}
+              aria-label={`Abrir el parte del ${formatCalendarDate(row.original.date)}`}
+            >
+              <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+              Abrir
+            </Link>
+          </Button>
           {canDelete && <DeleteDailyReportCell row={row} />}
         </div>
       ),

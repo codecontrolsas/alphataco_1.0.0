@@ -17,7 +17,7 @@ interface DocumentStateMetricsProps {
 const STATES: { state: keyof DocumentStateCounts; label: string; hint: string; tone: MetricTone }[] = [
   { state: 'aprobado', label: 'Aprobados', hint: 'Vigentes y validados', tone: 'ok' },
   { state: 'presentado', label: 'Presentados', hint: 'Esperan aprobación', tone: 'brand' },
-  { state: 'pendiente', label: 'Pendientes', hint: 'Sin cargar', tone: 'default' },
+  { state: 'pendiente', label: 'Faltantes', hint: 'Sin cargar', tone: 'default' },
   { state: 'vencido', label: 'Vencidos', hint: 'Hay que renovarlos', tone: 'warn' },
   { state: 'rechazado', label: 'Rechazados', hint: 'Hay que volver a subirlos', tone: 'danger' },
 ];

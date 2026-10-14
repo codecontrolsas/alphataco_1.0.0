@@ -66,7 +66,6 @@ interface ToolbarOptions<TData> {
   initialVisibleFilters: string[]; // Filtros inicialmente visibles
   extraActions?: React.ReactNode | ((table: TableType<TData>) => React.ReactNode);
   bulkAction?: BulkActionProps<TData>;
-  showDocumentDownload?: boolean;
   showExport?: boolean;
 }
 
@@ -255,7 +254,6 @@ export const BaseDataTable = forwardRef<TableType<any>, DataTableProps<any, any>
             <DataTableToolbarBase
               table={table}
               showExport={toolbarOptions.showExport}
-              showDocumentDownload={toolbarOptions.showDocumentDownload}
               filterableColumns={toolbarOptions.filterableColumns}
               searchableColumns={toolbarOptions.searchableColumns}
               initialVisibleFilters={toolbarOptions.initialVisibleFilters}

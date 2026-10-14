@@ -16,6 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Eye, Stethoscope, Wrench, XCircle } from 'lucide-react';
 import moment from 'moment';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import { useState } from 'react';
 // Los textos y colores del estado de cada tarea salen del mapa que ya usan las
 // tarjetas de sector y el detalle de orden — está exportado justamente para que
@@ -155,8 +156,8 @@ export function WorkOrderTasksDialog({ workOrderId, orderNumber, status, taskCou
                   {task.plannedStartDate || task.plannedEndDate ? (
                     <p className="mt-2 pl-6 text-xs text-muted-foreground">
                       Planificada:{' '}
-                      {task.plannedStartDate ? moment(task.plannedStartDate).format('DD/MM/YYYY') : 'sin inicio'} →{' '}
-                      {task.plannedEndDate ? moment(task.plannedEndDate).format('DD/MM/YYYY') : 'sin fin'}
+                      {task.plannedStartDate ? moment.utc(task.plannedStartDate).format('DD/MM/YYYY') : 'sin inicio'} →{' '}
+                      {task.plannedEndDate ? moment.utc(task.plannedEndDate).format('DD/MM/YYYY') : 'sin fin'}
                     </p>
                   ) : null}
 
@@ -185,7 +186,7 @@ export function WorkOrderTasksDialog({ workOrderId, orderNumber, status, taskCou
                             <span className="text-foreground">{repair.name ?? 'Sin tipo'}</span>
                             {repair.completedAt ? (
                               <span className="text-muted-foreground">
-                                · {moment(repair.completedAt).format('DD/MM/YYYY HH:mm')}
+                                · {formatArgentinaDateTime(repair.completedAt)}
                               </span>
                             ) : null}
                             {repair.technicianNotes ? (

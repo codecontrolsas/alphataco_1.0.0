@@ -1,10 +1,11 @@
-import { getVehicleById } from '@/features/Equipos/EquipoID/lib/actions/vehicle-actions';
+import type { getVehicleById } from '@/features/Equipos/EquipoID/lib/actions/vehicle-actions';
+import { getVehicleByIdCached } from '@/features/Equipos/EquipoID/lib/get-vehicle';
 import { VehicleHeaderSkeleton } from '@/features/Equipos/EquipoID/skeletons/vehicle-header-skeleton';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { Suspense } from 'react';
 
 import { getCostCenterOptions } from '@/features/Empresa/General/actions/cost-centers.server';
-import { fetchAllContractorForVehicles } from '@/features/Equipos/EquipoID/actions/vehicle-actions';
+import { fetchAllContractorForVehicles } from '@/features/Equipos/EquipoID/actions/customer-catalog-actions';
 import { EquipmentDocumentDetail } from '@/features/Equipos/EquipoID/components/equipment-document-detail';
 import { VehicleChecklistsTabContent } from '@/features/Equipos/EquipoID/components/vehicle-checklists-tab-content';
 import { VehicleForm } from '@/features/Equipos/EquipoID/components/vehicle-form';
@@ -21,11 +22,8 @@ import {
   getVehicleOwners,
   getVehicleTypes,
 } from '@/features/Equipos/EquipoID/lib/actions/vehicle-catalog-actions';
-import {
-  getMaintenanceOrdersForEquipment,
-  getRejectedRequestsForEquipment,
-} from '@/features/Equipos/EquipoID/lib/actions/vehicle-operations-actions';
 import { getUserPermissionsMapServer } from '@/features/Permissions';
+import { canViewServer } from '@/features/Permissions/actionsServer';
 import { Logger } from '@/lib/logger';
 
 // Componentes de Otros Equipos
@@ -49,19 +47,39 @@ interface VehiclePageProps {
 export type VehicleById = Awaited<ReturnType<typeof getVehicleById>> | null;
 export type OtherEquipmentById = Awaited<ReturnType<typeof getOtherEquipmentById>> | null;
 
+/**
+ * Marca una promesa como "manejada" sin consumirla: si rechaza antes de que el formulario la lea (o
+ * nunca la lee, como en la ficha de lectura) no queda un rechazo sin manejar en el servidor, y
+ * `use()` en el cliente igual recibe el error.
+ */
+function prefetch<T>(promise: Promise<T>): Promise<T> {
+  promise.catch(() => undefined);
+  return promise;
+}
+
 export default async function VehiclePage({ searchParams }: VehiclePageProps) {
   const resolvedSearchParams = await searchParams;
   const id = resolvedSearchParams.id;
   const mode = resolvedSearchParams.action || 'view';
   const isOtherEquipment = resolvedSearchParams.type === 'other';
 
-  // Solo la ficha de vehículo los usa (pestaña de cubiertas): se pide ya y se espera recién ahí.
+  // Mapa de permisos: lo usa la pestaña de cubiertas y el control de acceso a la pantalla según `mode`.
   const permissionsPromise = getUserPermissionsMapServer();
 
   // ─── OTROS EQUIPOS ────────────────────────────────────────────────────────
 
   if (isOtherEquipment) {
     const actualMode = mode === 'new' || !id ? 'new' : mode;
+
+    // Acceso por modo: alta → `others`/create; edición → `detalle-otro-equipo`/update; lectura → view.
+    const otherPermissions = await permissionsPromise;
+    const allowed =
+      actualMode === 'new'
+        ? otherPermissions['equipos:others:create'] === true
+        : actualMode === 'edit'
+          ? otherPermissions['equipos:detalle-otro-equipo:update'] === true
+          : await canViewServer('equipos', 'detalle-otro-equipo');
+    if (!allowed) redirect('/dashboard/equipment');
 
     // Las certificaciones (tab Documentos) solo se muestran en la ficha en lectura, y el id ya está en la URL:
     // se piden junto con el equipo en vez de esperar a tenerlo. Si fallan solas, la ficha sigue existiendo.
@@ -138,29 +156,32 @@ export default async function VehiclePage({ searchParams }: VehiclePageProps) {
 
   // ─── VEHÍCULOS (comportamiento original) ──────────────────────────────────
 
-  const actualMode = id === 'new' ? 'new' : mode;
+  // `?id=new` sin `action` también es un alta; sin id, cualquier otro modo no tiene qué mostrar.
+  const actualMode = mode === 'new' || id === 'new' ? 'new' : mode;
+  if (actualMode !== 'new' && !id) notFound();
 
-  // Todo lo que solo depende del id arranca junto con el vehículo. Las órdenes y rechazos son del historial
-  // de la ficha (lectura); al editar o dar de alta no se usan, así que no se piden.
-  const hierarchicalPositionsPromise = getHierarchicalPositions();
-  const operationsRequest =
-    actualMode === 'view' && id
-      ? Promise.all([getMaintenanceOrdersForEquipment(id), getRejectedRequestsForEquipment(id)])
-      : undefined;
+  // Todo lo que solo depende del id arranca junto con el vehículo. El historial de la ficha (órdenes,
+  // rechazos, checklists) se pide paginado desde el cliente: no se precarga acá.
+  const hierarchicalPositionsPromise = prefetch(getHierarchicalPositions());
+  const vehicleRequest: Promise<VehicleById> =
+    actualMode === 'new'
+      ? Promise.resolve(null)
+      : getVehicleByIdCached(id!).catch((error: unknown) => {
+          logger.error('Error fetching vehicle', { data: { error } });
+          notFound();
+        });
 
-  let vehicle: null | VehicleById = null;
+  const [vehicle, permissions] = await Promise.all([vehicleRequest, permissionsPromise]);
 
-  if (mode !== 'new') {
-    try {
-      vehicle = await getVehicleById(id!);
-    } catch (error) {
-      logger.error('Error fetching vehicle', { data: { error } });
-      notFound();
-    }
-  }
-
-  const [operations, permissions] = await Promise.all([operationsRequest, permissionsPromise]);
-  const [initialOrders, initialRejectedRequests] = operations ?? [[], []];
+  // Acceso por modo: alta → `vehicles`/create; edición → `detalle-equipo`/update. (La lectura ya la
+  // valida `getVehicleById` con `view`.)
+  const allowed =
+    actualMode === 'new'
+      ? permissions['equipos:vehicles:create'] === true
+      : actualMode === 'edit'
+        ? permissions['equipos:detalle-equipo:update'] === true
+        : true;
+  if (!allowed) redirect('/dashboard/equipment');
 
   // `vehicle.sector` guarda el id del sector: se resuelve el nombre una sola vez y la misma promesa
   // (ya resuelta) alimenta el formulario.
@@ -183,29 +204,23 @@ export default async function VehiclePage({ searchParams }: VehiclePageProps) {
       <VehicleForm
         key={vehicle?.id ?? 'new'}
         vehicleId={vehicle?.id}
-        mode={mode}
+        mode={actualMode}
         vehicle={vehicle}
-        contractorsPromise={fetchAllContractorForVehicles()}
-        costCentersPromise={getCostCenterOptions()}
-        brandsPromise={getVehicleBrands()}
-        typesPromise={getVehicleTypes('vehicle')}
-        ownersPromise={getVehicleOwners()}
-        subTypesPromise={getSubTypesByType(vehicle?.type.id!)}
-        modelsPromise={getModelsByBrand(vehicle?.brand_vehicles?.id!)}
-        typesOfVehiclesPromise={getTypesOfVehicles()}
+        contractorsPromise={prefetch(fetchAllContractorForVehicles())}
+        costCentersPromise={prefetch(getCostCenterOptions())}
+        brandsPromise={prefetch(getVehicleBrands())}
+        typesPromise={prefetch(getVehicleTypes('vehicle'))}
+        ownersPromise={prefetch(getVehicleOwners())}
+        subTypesPromise={prefetch(getSubTypesByType(vehicle?.type.id ?? ''))}
+        modelsPromise={prefetch(getModelsByBrand(vehicle?.brand_vehicles?.id ?? 0))}
+        typesOfVehiclesPromise={prefetch(getTypesOfVehicles())}
         hierarchicalPositionsPromise={hierarchicalPositionsPromise}
         documentsComponent={
           <EquipmentDocumentDetail equipmentId={vehicle?.id || ''} searchParams={resolvedSearchParams} />
         }
         qrComponent={<VehicleQr vehicle={vehicle} />}
         checklistsComponent={<VehicleChecklistsTabContent equipmentId={vehicle?.id || ''} />}
-        operationsComponent={
-          <VehicleOperationsHistory
-            equipmentId={vehicle?.id || ''}
-            initialData={initialOrders}
-            initialRejectedRequests={initialRejectedRequests}
-          />
-        }
+        operationsComponent={<VehicleOperationsHistory equipmentId={vehicle?.id || ''} />}
         tiresComponent={
           vehicle?.id ? (
             <VehicleTiresTab vehicleId={vehicle.id} permissionsMap={permissions} searchParams={resolvedSearchParams} />
@@ -222,7 +237,7 @@ export async function generateMetadata({ searchParams }: VehiclePageProps) {
   const mode = resolvedSearchParams.action || 'view';
   const isOtherEquipment = resolvedSearchParams.type === 'other';
 
-  if (mode === 'new') {
+  if (mode === 'new' || (id === 'new' && !isOtherEquipment)) {
     return {
       title: isOtherEquipment ? 'Nuevo Otro Equipo' : 'Nuevo Equipo',
       description: isOtherEquipment ? 'Crear un nuevo equipo (otros)' : 'Crear un nuevo equipo',
@@ -242,7 +257,7 @@ export async function generateMetadata({ searchParams }: VehiclePageProps) {
   }
 
   try {
-    const vehicle = await getVehicleById(id!);
+    const vehicle = await getVehicleByIdCached(id!);
     return {
       title: `Equipo - ${vehicle.domain || vehicle.serie}`,
       description: `Detalles del equipo ${vehicle.brand} ${vehicle.model}`,

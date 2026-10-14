@@ -10,13 +10,13 @@ import {
   tireStatusLabels,
   tireTreadTypeLabels,
 } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
+import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
-import { formatMoney } from '@/features/Warehouses/lib/format';
 import { CircleOff, MapPin, Pencil, Trash2, Warehouse, Wrench } from 'lucide-react';
-import moment from 'moment';
-import type { TireListItem } from '../actions/actions.server';
+import type { TireListItem } from '../actions/tire-list.server';
 
 // ============================================================================
 // TYPES
@@ -241,7 +241,7 @@ export function getColumns(
       },
       filterFn: (row, _id, value: string[]) => {
         const unit = row.original.material_unit;
-        const warehouseId = unit?.status === 'IN_STOCK' ? (unit.warehouse?.id ?? null) : null;
+        const warehouseId = unit?.status === 'IN_STOCK' ? unit.warehouse?.id ?? null : null;
         if (warehouseId == null) return value.includes(NULL_FILTER_VALUE);
         return value.includes(warehouseId);
       },
@@ -272,9 +272,7 @@ export function getColumns(
       id: 'created_at',
       accessorKey: 'created_at',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de alta" />,
-      cell: ({ row }) => (
-        <div>{row.original.created_at ? moment(row.original.created_at).format('DD/MM/YYYY') : '-'}</div>
-      ),
+      cell: ({ row }) => <div>{row.original.created_at ? formatArgentinaDay(row.original.created_at) : '-'}</div>,
       meta: { title: 'Fecha de alta' },
     },
 

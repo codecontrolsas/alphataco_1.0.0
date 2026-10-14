@@ -1,19 +1,22 @@
 'use server';
 
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   buildFiltersWhere,
   buildSearchWhere,
   buildTextFiltersWhere,
-  NULL_FILTER_VALUE,
   parseSearchParams,
-  stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { CACHE_TAGS, CACHE_TTL } from '@/shared/constants/cache';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
+import { sanitizeFilters } from '@/shared/lib/table-filters';
+import { clampedPageParams } from '@/shared/lib/table-pagination';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { cacheLife, cacheTag } from 'next/cache';
 
 const logger = new Logger('EquiposConDesvios/actions.server');
@@ -40,8 +43,14 @@ const VALID_SORT_FIELDS = new Set([
   'last_deviation_date',
 ]);
 
-/** Params de URL de navegación que NO son filtros de la tabla */
-const IGNORED_PARAMS = new Set(['tab', 'subtab']);
+const MODULE_SLUG = 'mantenimiento';
+const TAB_SLUG = 'equipments_with_deviations';
+
+/** Tope de filas de un export: más que esto no se descarga entero (se pide acotar con filtros). */
+const EXPORT_MAX_ROWS = 10_000;
+
+/** Lista blanca de filtros: todo lo demás que venga en la URL se descarta. */
+const ALLOWED_FILTERS = new Set(['type_of_vehicle', 'type', 'sub_type', 'sector', 'domain', 'serie', 'intern_number']);
 
 /** Columnas con filtro de texto libre (contains insensitive) sobre vehicles */
 const TEXT_FILTER_COLUMNS = ['domain', 'serie', 'intern_number'];
@@ -166,19 +175,24 @@ async function getPendingDeviationsAggregateByVehicle(
   return result;
 }
 
-/** WHERE sobre `vehicles` — filtros de texto y facetados aplicados a la tabla */
+/**
+ * WHERE sobre `vehicles` — filtros de texto y facetados aplicados a la tabla.
+ * Todo dentro de un único `AND` junto con la empresa: ni la búsqueda (un `OR`) ni el `AND` que arma
+ * `buildFiltersWhere` al mezclar "Sin asignar" con valores pueden pisar el perímetro.
+ */
 function buildVehicleWhereClause(companyId: string, state: ReturnType<typeof parseSearchParams>) {
+  const filters = sanitizeFilters(state, ALLOWED_FILTERS).filters;
   const searchWhere = buildSearchWhere(state.search, TEXT_FILTER_COLUMNS);
 
-  const filtersWhere = buildFiltersWhere(state.filters, COLUMN_MAP, {
+  const { AND: nestedAnd, ...filtersRest } = buildFiltersWhere(filters, COLUMN_MAP, {
     exclude: [...TEXT_FILTER_COLUMNS, 'type_of_vehicle'],
-  });
+  }) as Record<string, unknown> & { AND?: Record<string, unknown>[] };
 
-  const textFiltersWhere = buildTextFiltersWhere(state.filters, TEXT_FILTER_COLUMNS);
+  const textFiltersWhere = buildTextFiltersWhere(filters, TEXT_FILTER_COLUMNS);
 
   // type_of_vehicle: FK BigInt NOT NULL — conversión manual (buildFiltersWhere no castea a BigInt)
   const typeOfVehicleFilter: Record<string, unknown> = {};
-  const typeOfVehicleValues = state.filters['type_of_vehicle'];
+  const typeOfVehicleValues = filters['type_of_vehicle'];
   if (typeOfVehicleValues?.length) {
     const ids = typeOfVehicleValues
       .map((v) => {
@@ -193,21 +207,11 @@ function buildVehicleWhereClause(companyId: string, state: ReturnType<typeof par
     else if (ids.length > 1) typeOfVehicleFilter.type_of_vehicle = { in: ids };
   }
 
-  return {
-    company_id: companyId,
-    ...searchWhere,
-    ...filtersWhere,
-    ...textFiltersWhere,
-    ...typeOfVehicleFilter,
-  };
-}
-
-function toFacetMap(rows: { key: string | number | bigint | null | undefined; count: number }[]): Map<string, number> {
-  const map = new Map<string, number>();
-  for (const { key, count } of rows) {
-    map.set(key == null ? NULL_FILTER_VALUE : String(key), count);
+  const and: Record<string, unknown>[] = [{ company_id: companyId }];
+  for (const piece of [searchWhere, ...(nestedAnd ?? []), filtersRest, textFiltersWhere, typeOfVehicleFilter]) {
+    if (Object.keys(piece).length > 0) and.push(piece);
   }
-  return map;
+  return { AND: and };
 }
 
 const SORT_ACCESSORS: Record<string, (item: EquipmentWithDeviationsListItem) => string | number> = {
@@ -262,7 +266,7 @@ async function buildDataset(companyId: string, state: ReturnType<typeof parseSea
   const where = buildVehicleWhereClause(companyId, state);
 
   const vehicles = await prisma.vehicles.findMany({
-    where: { ...where, id: { in: [...perVehicle.keys()] } },
+    where: { AND: [where, { id: { in: [...perVehicle.keys()] } }] },
     select: EQUIPMENT_SELECT,
   });
 
@@ -279,13 +283,14 @@ async function buildDataset(companyId: string, state: ReturnType<typeof parseSea
 // ============================================================================
 
 export async function getEquipmentsWithDeviationsPaginated(searchParams: DataTableSearchParams) {
-  const companyId = await getActiveCompanyId();
+  if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) {
+    throw new Error('No tenés permiso para ver los equipos con desvíos');
+  }
 
   try {
+    const companyId = await getActiveCompanyId();
     const state = parseSearchParams(searchParams);
-    for (const key of IGNORED_PARAMS) delete state.filters[key];
-
-    const { skip, take } = stateToPrismaParams(state);
+    const { skip, take } = clampedPageParams(state);
     const dataset = await buildDataset(companyId, state);
 
     return { data: dataset.slice(skip, skip + take), total: dataset.length };
@@ -296,20 +301,32 @@ export async function getEquipmentsWithDeviationsPaginated(searchParams: DataTab
 }
 
 // ============================================================================
-// EXPORT QUERY (sin paginación)
+// EXPORT QUERY (sin paginación, con tope)
 // ============================================================================
 
-export async function getAllEquipmentsWithDeviationsForExport(searchParams: DataTableSearchParams) {
-  const companyId = await getActiveCompanyId();
+export async function getAllEquipmentsWithDeviationsForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<EquipmentWithDeviationsListItem[]>> {
+  if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) {
+    return { ok: false, message: 'No tenés permiso para exportar los equipos con desvíos' };
+  }
 
   try {
+    const companyId = await getActiveCompanyId();
     const state = parseSearchParams(searchParams);
-    for (const key of IGNORED_PARAMS) delete state.filters[key];
+    const dataset = await buildDataset(companyId, state);
 
-    return await buildDataset(companyId, state);
+    if (dataset.length > EXPORT_MAX_ROWS) {
+      return {
+        ok: false,
+        message: `La exportación de equipos con desvíos supera el máximo de ${EXPORT_MAX_ROWS.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`,
+      };
+    }
+
+    return { ok: true, data: dataset };
   } catch (error) {
     logger.error('Error al exportar equipos con desvíos pendientes', { data: { error } });
-    throw new Error('No se pudo exportar el listado. Intente nuevamente.');
+    return { ok: false, message: 'No se pudo exportar el listado. Intente nuevamente.' };
   }
 }
 
@@ -329,36 +346,22 @@ export async function getEquipmentsWithDeviationsSingleFacet(
   counts: Map<string, number>;
   resolvedOptions?: { value: string; label: string }[];
 } | null> {
-  const companyId = await getActiveCompanyId();
+  if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) return null;
 
   try {
+    const companyId = await getActiveCompanyId();
     const perVehicle = await getPendingDeviationsAggregateByVehicle(companyId);
     const vehicleIds = [...perVehicle.keys()];
     if (vehicleIds.length === 0) return { counts: new Map() };
 
-    let parsedState: ReturnType<typeof parseSearchParams> | null = null;
-    if (searchParams && Object.keys(searchParams).length > 0) {
-      parsedState = parseSearchParams(searchParams);
-      for (const key of IGNORED_PARAMS) delete parsedState.filters[key];
-    }
-    const hasActiveFilters = parsedState && (Object.keys(parsedState.filters).length > 0 || parsedState.search);
-
-    function crossWhere() {
-      const base = { company_id: companyId, id: { in: vehicleIds } };
-      if (!parsedState || !hasActiveFilters) return base;
-      const modified = { ...parsedState, filters: { ...parsedState.filters } };
-      delete modified.filters[columnId];
-      delete modified.filters[`${columnId}_from`];
-      delete modified.filters[`${columnId}_to`];
-      return { ...buildVehicleWhereClause(companyId, modified), id: { in: vehicleIds } };
-    }
-
-    const where = crossWhere();
+    // Cross-filter: sin el filtro propio de la columna consultada
+    const state = withoutOwnFilter(parseSearchParams(searchParams || {}), columnId);
+    const where = { AND: [buildVehicleWhereClause(companyId, state), { id: { in: vehicleIds } }] };
 
     switch (columnId) {
       case 'type_of_vehicle': {
-        const rows = await prisma.vehicles.groupBy({ by: ['type_of_vehicle'], where, _count: true });
-        const counts = toFacetMap(rows.map((r) => ({ key: r.type_of_vehicle, count: r._count })));
+        const rows = await prisma.vehicles.groupBy({ by: ['type_of_vehicle'], where, _count: { _all: true } });
+        const counts = toFacetMap(rows.map((r) => ({ key: String(r.type_of_vehicle), count: r._count._all })));
         const ids = rows.map((r) => r.type_of_vehicle).filter((v): v is bigint => v != null);
         const options =
           ids.length > 0
@@ -367,8 +370,8 @@ export async function getEquipmentsWithDeviationsSingleFacet(
         return { counts, resolvedOptions: options.map((o) => ({ value: String(o.id), label: o.name ?? '' })) };
       }
       case 'type': {
-        const rows = await prisma.vehicles.groupBy({ by: ['type'], where, _count: true });
-        const counts = toFacetMap(rows.map((r) => ({ key: r.type, count: r._count })));
+        const rows = await prisma.vehicles.groupBy({ by: ['type'], where, _count: { _all: true } });
+        const counts = toFacetMap(rows.map((r) => ({ key: r.type, count: r._count._all })));
         const ids = rows.map((r) => r.type).filter(Boolean);
         const options =
           ids.length > 0
@@ -377,8 +380,8 @@ export async function getEquipmentsWithDeviationsSingleFacet(
         return { counts, resolvedOptions: options.map((o) => ({ value: o.id, label: o.name ?? '' })) };
       }
       case 'sub_type': {
-        const rows = await prisma.vehicles.groupBy({ by: ['subType'], where, _count: true });
-        const counts = toFacetMap(rows.map((r) => ({ key: r.subType, count: r._count })));
+        const rows = await prisma.vehicles.groupBy({ by: ['subType'], where, _count: { _all: true } });
+        const counts = toFacetMap(rows.map((r) => ({ key: r.subType, count: r._count._all })));
         const ids = rows.map((r) => r.subType).filter((v): v is string => !!v);
         const options =
           ids.length > 0
@@ -387,8 +390,8 @@ export async function getEquipmentsWithDeviationsSingleFacet(
         return { counts, resolvedOptions: options.map((o) => ({ value: o.id, label: o.name ?? '' })) };
       }
       case 'sector': {
-        const rows = await prisma.vehicles.groupBy({ by: ['sector'], where, _count: true });
-        const counts = toFacetMap(rows.map((r) => ({ key: r.sector, count: r._count })));
+        const rows = await prisma.vehicles.groupBy({ by: ['sector'], where, _count: { _all: true } });
+        const counts = toFacetMap(rows.map((r) => ({ key: r.sector, count: r._count._all })));
         const ids = rows.map((r) => r.sector).filter((v): v is string => !!v);
         const options =
           ids.length > 0
@@ -401,6 +404,6 @@ export async function getEquipmentsWithDeviationsSingleFacet(
     }
   } catch (error) {
     logger.error('Error al obtener facet de equipos con desvíos', { data: { error, columnId } });
-    return null;
+    return { counts: new Map() };
   }
 }

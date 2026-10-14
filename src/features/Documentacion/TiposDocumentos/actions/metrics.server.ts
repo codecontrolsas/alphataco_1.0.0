@@ -1,21 +1,14 @@
 import 'server-only';
 
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import type { Prisma } from '@/generated/prisma/client';
 import type { document_applies } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { hasDocTypePermission } from '../lib/document-type-permissions';
 import { documentTypeCompanyScope } from '../lib/document-type-scope';
 
 const logger = new Logger('features/TiposDocumentos/metrics');
-
-/** Mismo mapeo que `buildWhereClause` en `queries.server.ts`: tab que otorga `view_private` por alcance. */
-const PRIVATE_PERMISSION_TAB: Record<string, string> = {
-  Persona: 'tipos-docs-personas',
-  Equipos: 'tipos-docs-equipos',
-  Empresa: 'tipos-docs-empresa',
-};
 
 /**
  * Tarjetas de un listado de tipos de documento. Mismo universo y alcance que la tabla
@@ -27,13 +20,13 @@ export async function getDocTypeMetrics(applies: document_applies) {
   const companyId = await getActiveCompanyId();
 
   try {
-    const tabSlug = PRIVATE_PERMISSION_TAB[applies];
-    const canViewPrivate = tabSlug ? await checkPermissionServer('documentacion', tabSlug, 'view_private') : true;
+    if (!(await hasDocTypePermission(applies, 'view'))) return { active: 0, mandatory: 0, conditional: 0, monthly: 0 };
+    const canViewPrivate = await hasDocTypePermission(applies, 'view_private');
 
     const universe: Prisma.document_typesWhereInput = {
       applies,
       AND: [documentTypeCompanyScope(companyId)],
-      ...(!canViewPrivate && { private: { not: true } }),
+      ...(!canViewPrivate && { OR: [{ private: false }, { private: null }] }),
     };
     const active: Prisma.document_typesWhereInput = { ...universe, is_active: true };
 

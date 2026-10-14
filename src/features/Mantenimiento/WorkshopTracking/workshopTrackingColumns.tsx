@@ -18,6 +18,7 @@ import { type ColumnDef } from '@tanstack/react-table';
 import type { LucideIcon } from 'lucide-react';
 import { AlertCircle, CalendarClock, CheckCircle2, Circle, Clock, Eye, History, Play, XCircle } from 'lucide-react';
 import moment from 'moment';
+import { argentinaDate, formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { calculateRepairProgress } from '../utils/repairProgress';
 import type { WorkshopTrackingListItem } from './actions.server';
 
@@ -82,6 +83,11 @@ function getSectorStatus(sectorItems: MaintenanceOrderItem[]): 'completed' | 'in
   if (completed === repairs.length) return 'completed';
   if (completed > 0 || repairs.some((r) => r.status === 'in_progress')) return 'in_progress';
   return 'pending';
+}
+
+/** Días completos desde un instante hasta hoy, contando por día argentino (no por hora del navegador/servidor). */
+function daysSinceArgentinaDay(value: Date | string): number {
+  return moment.utc(argentinaDate()).diff(moment.utc(argentinaDate(new Date(value))), 'days');
 }
 
 // ============================================================================
@@ -168,8 +174,9 @@ export function getWorkshopTrackingColumns({
         const date = row.original.scheduled_date;
         if (!date) return <span className="text-muted-foreground">-</span>;
 
-        const scheduledDate = moment(date);
-        const today = moment().startOf('day');
+        // `scheduled_date` es @db.Date (medianoche UTC) y "hoy" es el día argentino.
+        const scheduledDate = moment.utc(date);
+        const today = moment.utc(argentinaDate());
         const isToday = scheduledDate.isSame(today, 'day');
         const isPast = scheduledDate.isBefore(today);
         const isTomorrow = scheduledDate.isSame(today.clone().add(1, 'day'), 'day');
@@ -233,7 +240,7 @@ export function getWorkshopTrackingColumns({
       header: ({ column }) => <DataTableColumnHeader column={column} title="Ingreso" />,
       cell: ({ row }) => {
         const date = row.original.workshop_entry_date;
-        return <span>{date ? moment(date).format('DD/MM/YYYY') : '-'}</span>;
+        return <span>{date ? formatArgentinaDay(date) : '-'}</span>;
       },
     },
 
@@ -245,7 +252,7 @@ export function getWorkshopTrackingColumns({
       cell: ({ row }) => {
         const date = row.original.workshop_entry_date;
         if (!date) return <span className="text-muted-foreground">-</span>;
-        const days = moment().diff(moment(date), 'days');
+        const days = daysSinceArgentinaDay(date);
         const variant: 'destructive' | 'warning' | 'secondary' =
           days > 7 ? 'destructive' : days > 3 ? 'warning' : 'secondary';
         return (
@@ -387,7 +394,7 @@ export function getWorkshopTrackingColumns({
       header: ({ column }) => <DataTableColumnHeader column={column} title="Creado" />,
       cell: ({ row }) => {
         const date = row.original.created_at;
-        return <span>{date ? moment(date).format('DD/MM/YYYY') : '-'}</span>;
+        return <span>{date ? formatArgentinaDay(date) : '-'}</span>;
       },
     },
 
@@ -419,15 +426,17 @@ export function getWorkshopTrackingColumns({
       header: '',
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={() => onViewDetail(row.original)} className="gap-1">
+          <Button type="button" variant="ghost" size="sm" onClick={() => onViewDetail(row.original)} className="gap-1">
             <Eye className="h-4 w-4" />
             Ver
           </Button>
           <Button
+            type="button"
             variant="ghost"
             size="icon"
             onClick={() => onViewHistory(row.original)}
             title="Ver historial"
+            aria-label="Ver historial"
             className="text-purple-600 hover:text-purple-700"
           >
             <History className="h-4 w-4" />
@@ -462,18 +471,15 @@ export function getWorkshopTrackingExportFormatters() {
     },
     workshop_entry_date: (val: unknown) => {
       if (!val) return '';
-      return moment(val as string).format('DD/MM/YYYY');
+      return formatArgentinaDay(val as string);
     },
     created_at: (val: unknown) => {
       if (!val) return '';
-      return moment(val as string).format('DD/MM/YYYY');
+      return formatArgentinaDay(val as string);
     },
     vehicle: (_val: unknown, row: WorkshopTrackingListItem) => {
-      const v = row.vehicles;
-      if (!v) return '';
-      const parts = [v.domain || v.serie || ''];
-      if (v.intern_number) parts.push(`(${v.intern_number})`);
-      return parts.join(' ');
+      const internNumber = getResourceInternNumber(row);
+      return internNumber ? `${getResourceLabel(row)} (${internNumber})` : getResourceLabel(row);
     },
     sector_journey: (_val: unknown, row: WorkshopTrackingListItem) => {
       const items = row.maintenance_order_items ?? [];
@@ -497,14 +503,14 @@ export function getWorkshopTrackingExportFormatters() {
     days_in_workshop: (_val: unknown, row: WorkshopTrackingListItem) => {
       const date = row.workshop_entry_date;
       if (!date) return '';
-      const days = moment().diff(moment(date), 'days');
+      const days = daysSinceArgentinaDay(date);
       return `${days} ${days === 1 ? 'día' : 'días'}`;
     },
     description: (_val: unknown, row: WorkshopTrackingListItem) =>
       row.description ?? row.maintenance_requests?.description ?? '',
     scheduled_date: (val: unknown) => {
       if (!val) return '';
-      return moment(val as string).format('DD/MM/YYYY');
+      return moment.utc(val as string).format('DD/MM/YYYY');
     },
     condition: (_val: unknown, row: WorkshopTrackingListItem) => {
       const cond = getResourceCondition(row);

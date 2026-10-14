@@ -5,10 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Pencil, PowerOff } from 'lucide-react';
-import moment from 'moment';
-import type { TireBrandListItem } from '../actions/actions.server';
+import type { TireBrandListItem } from '../actions/brand-list.server';
 
 // ============================================================================
 // TYPES
@@ -99,9 +99,7 @@ export function getColumns(
       accessorKey: 'created_at',
       id: 'created_at',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Creado" />,
-      cell: ({ row }) => (
-        <div>{row.original.created_at ? moment(row.original.created_at).format('DD/MM/YYYY') : '-'}</div>
-      ),
+      cell: ({ row }) => <div>{row.original.created_at ? formatArgentinaDay(row.original.created_at) : '-'}</div>,
       meta: { title: 'Creado' },
     },
 
@@ -115,7 +113,13 @@ export function getColumns(
             {canUpdate && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(row.original)}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => onEdit(row.original)}
+                    aria-label="Editar marca"
+                  >
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
                 </TooltipTrigger>
@@ -125,7 +129,13 @@ export function getColumns(
             {canUpdate && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onToggle(row.original)}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => onToggle(row.original)}
+                    aria-label={row.original.is_active ? 'Desactivar marca' : 'Activar marca'}
+                  >
                     <PowerOff className="h-3.5 w-3.5" />
                   </Button>
                 </TooltipTrigger>

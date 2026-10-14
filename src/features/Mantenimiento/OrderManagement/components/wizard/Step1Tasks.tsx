@@ -78,7 +78,7 @@ export function Step1Tasks({
           </p>
         </div>
         <PermissionGuard module="mantenimiento" tab="gestion_ordenes" action="create">
-          <Button variant="outline" size="sm" onClick={onAddItem}>
+          <Button type="button" variant="outline" size="sm" onClick={onAddItem}>
             <Plus className="h-4 w-4 mr-1" />
             Agregar reparación
           </Button>
@@ -214,7 +214,7 @@ export function Step1Tasks({
                   <div className="flex items-center gap-1.5 ml-3 shrink-0">
                     {!item._isTemp && !hasWorkOrder && (
                       <PermissionGuard module="mantenimiento" tab="gestion_ordenes" action="update">
-                        <Button
+                        <Button type="button"
                           variant="outline"
                           size="sm"
                           className="h-7 text-xs"
@@ -227,7 +227,7 @@ export function Step1Tasks({
                     )}
                     {!canDelete && !hasWorkOrder && !item._rejected && onRejectItem && (
                       <PermissionGuard module="mantenimiento" tab="gestion_ordenes" action="update">
-                        <Button
+                        <Button type="button"
                           variant="ghost"
                           size="sm"
                           className="h-7 text-xs text-destructive/60 hover:text-destructive"
@@ -244,7 +244,7 @@ export function Step1Tasks({
                     )}
                     {canDelete && !hasWorkOrder && (
                       <PermissionGuard module="mantenimiento" tab="gestion_ordenes" action="delete">
-                        <Button
+                        <Button type="button"
                           variant="ghost"
                           size="icon"
                           className="h-6 w-6 text-destructive/60 hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
@@ -271,7 +271,7 @@ export function Step1Tasks({
                           autoFocus
                         />
                         <div className="flex justify-end">
-                          <Button
+                          <Button type="button"
                             variant="ghost"
                             size="sm"
                             className="h-6 text-xs"
@@ -290,7 +290,7 @@ export function Step1Tasks({
                           </span>
                           <p className="mt-0.5 text-sm italic">{item.workshop_chief_comment}</p>
                         </div>
-                        <Button
+                        <Button type="button"
                           variant="ghost"
                           size="icon"
                           className="h-5 w-5 shrink-0 text-emerald-600 hover:text-emerald-800"
@@ -300,7 +300,7 @@ export function Step1Tasks({
                         </Button>
                       </div>
                     ) : (
-                      <Button
+                      <Button type="button"
                         variant="outline"
                         size="sm"
                         className="h-7 text-xs text-muted-foreground hover:text-foreground"
@@ -339,7 +339,7 @@ export function Step1Tasks({
                 )}
               </div>
               {onRestoreItem && (
-                <Button
+                <Button type="button"
                   variant="ghost"
                   size="sm"
                   className="h-7 text-xs ml-3 shrink-0"

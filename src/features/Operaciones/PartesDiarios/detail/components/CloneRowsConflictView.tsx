@@ -2,9 +2,12 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { cn } from '@/lib/utils';
 import { dailyReportTypeServiceLabels } from '@/shared/utils/mappers';
 import { AlertTriangle, ArrowLeft, Calendar as CalendarIcon, Copy } from 'lucide-react';
+import { useState } from 'react';
 import moment from 'moment';
 import 'moment/locale/es';
 import type { CloneConflictRow, CloneConflictsByDate } from '../clone.server';
@@ -17,18 +20,45 @@ interface Props {
   onBack: () => void;
   onSkipAndClone: () => void;
   onCloneAnyway: () => void;
+  /** Líneas a clonar sin excluir nada (filas de origen × fechas destino). Si falta, el botón no muestra conteo. */
+  plannedCount?: number;
 }
 
-export function CloneRowsConflictView({ conflicts, isCloning, onBack, onSkipAndClone, onCloneAnyway }: Props) {
+type ConflictResolution = 'skip' | 'duplicate';
+
+export function CloneRowsConflictView({
+  conflicts,
+  isCloning,
+  onBack,
+  onSkipAndClone,
+  onCloneAnyway,
+  plannedCount,
+}: Props) {
   const sortedDates = Object.keys(conflicts.conflicts).sort();
+  const [resolution, setResolution] = useState<ConflictResolution>('skip');
+
+  // Cantidad real que se va a clonar según la opción elegida
+  const skippedCount = Object.values(conflicts.skipMap).reduce((total, ids) => total + ids.length, 0);
+  const cloneCount =
+    plannedCount == null ? null : resolution === 'skip' ? Math.max(0, plannedCount - skippedCount) : plannedCount;
+  const submitLabel = isCloning
+    ? 'Clonando...'
+    : cloneCount === 0
+      ? 'No hay líneas para clonar'
+      : cloneCount == null
+      ? 'Clonar líneas'
+      : `Clonar ${cloneCount} ${cloneCount === 1 ? 'línea' : 'líneas'}`;
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      <div className="flex min-w-0 items-start gap-3 rounded-md border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900 dark:bg-amber-950/20">
-        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+      <div
+        role="alert"
+        className="bg-danger-subtle text-danger-subtle-foreground border-danger/30 flex min-w-0 items-start gap-3 rounded-md border p-3"
+      >
+        <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
         <div className="min-w-0 space-y-1">
-          <p className="text-sm font-medium text-amber-900 dark:text-amber-200">Ya clonaste estos registros antes</p>
-          <p className="text-xs text-amber-800 dark:text-amber-300">
+          <p className="text-sm font-medium">Ya clonaste estos registros antes</p>
+          <p className="text-xs">
             Encontramos <span className="font-semibold">{conflicts.totalCount}</span>{' '}
             {conflicts.totalCount === 1 ? 'registro ya clonado' : 'registros ya clonados'} desde tu selección a las
             fechas destino. Revisalos antes de continuar.
@@ -44,7 +74,7 @@ export function CloneRowsConflictView({ conflicts, isCloning, onBack, onSkipAndC
             return (
               <section key={dateKey} className="min-w-0 space-y-2">
                 <div className="sticky top-0 z-10 -mx-1 flex items-center gap-2 bg-background/95 px-1 py-1 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-                  <CalendarIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                  <CalendarIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                   <h4 className="truncate text-sm font-medium capitalize">{formattedDate}</h4>
                   <Badge variant="secondary" className="ml-1 shrink-0 px-1.5 py-0 text-[10px] font-medium">
                     {items.length} {items.length === 1 ? 'duplicado' : 'duplicados'}
@@ -61,16 +91,38 @@ export function CloneRowsConflictView({ conflicts, isCloning, onBack, onSkipAndC
         </div>
       </div>
 
+      <RadioGroup
+        value={resolution}
+        onValueChange={(value) => setResolution(value as ConflictResolution)}
+        disabled={isCloning}
+        aria-label="Qué hacer con las líneas que ya existen"
+        className="gap-2"
+      >
+        <div className="flex items-center gap-2">
+          <RadioGroupItem value="skip" id="clone-conflict-skip" />
+          <Label htmlFor="clone-conflict-skip" className="text-sm font-normal">
+            Omitir las que existen
+          </Label>
+        </div>
+        <div className="flex items-center gap-2">
+          <RadioGroupItem value="duplicate" id="clone-conflict-duplicate" />
+          <Label htmlFor="clone-conflict-duplicate" className="text-sm font-normal">
+            Duplicarlas igual
+          </Label>
+        </div>
+      </RadioGroup>
+
       <div className="flex flex-col-reverse flex-wrap gap-2 border-t pt-3 sm:flex-row sm:justify-end">
-        <Button variant="ghost" onClick={onBack} disabled={isCloning}>
-          <ArrowLeft className="mr-1.5 size-3.5" />
+        <Button type="button" variant="ghost" onClick={onBack} disabled={isCloning}>
+          <ArrowLeft className="mr-1.5 size-3.5" aria-hidden="true" />
           Volver a la selección
         </Button>
-        <Button variant="outline" onClick={onSkipAndClone} disabled={isCloning}>
-          Excluir duplicados y clonar el resto
-        </Button>
-        <Button onClick={onCloneAnyway} disabled={isCloning}>
-          {isCloning ? 'Clonando...' : 'Clonar igualmente'}
+        <Button
+          type="button"
+          onClick={resolution === 'skip' ? onSkipAndClone : onCloneAnyway}
+          disabled={isCloning || cloneCount === 0}
+        >
+          {submitLabel}
         </Button>
       </div>
     </div>
@@ -103,7 +155,7 @@ function ConflictCard({ item }: { item: CloneConflictRow }) {
         </div>
         {clonedAtText && (
           <div className="flex shrink-0 items-center gap-1 whitespace-nowrap text-[10px] text-muted-foreground">
-            <Copy className="size-3" />
+            <Copy className="size-3" aria-hidden="true" />
             <span>Clonada {clonedAtText}</span>
           </div>
         )}

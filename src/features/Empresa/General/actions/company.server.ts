@@ -7,8 +7,9 @@ import { prisma } from '@/shared/lib/prisma';
 import { getSessionToken, getSessionUserId } from '@/shared/lib/session';
 import { writeCompanyClaim } from '@/shared/lib/session-claims';
 import { storagePublicUrl, storageUpload } from '@/shared/lib/storage';
-import { assertCompanyAccess, getActiveCompanyId, NoActiveCompanyError } from '@/shared/lib/tenant';
+import { NoActiveCompanyError, assertCompanyAccess, getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
+import { clearOtherDefaultCompanies } from '../lib/company-default';
 import { buildLogoPath, parseCompanyForm, type CompanyFormValues } from '../lib/company-form';
 
 /**
@@ -234,10 +235,17 @@ export async function createCompany(formData: FormData): Promise<CompanyMutation
   try {
     const { credentialId, profileId } = await requireSessionProfile();
     if (await isCuitTaken(parsed.data.company_cuit)) {
-      return { ok: false, error: 'Ya existe una compañía con este CUIT.', fieldErrors: { company_cuit: 'Ya existe una compañía con este CUIT.' } };
+      return {
+        ok: false,
+        error: 'Ya existe una compañía con este CUIT.',
+        fieldErrors: { company_cuit: 'Ya existe una compañía con este CUIT.' },
+      };
     }
 
     const companyId = await withActor(credentialId, async (tx) => {
+      // Reemplaza al trigger update_company_by_defect: una sola default por owner (índice único
+      // parcial), así que se limpian las otras ANTES de guardar esta.
+      if (parsed.data.by_defect) await clearOtherDefaultCompanies(tx, profileId, null);
       const company = await tx.company.create({
         data: { ...toCompanyData(parsed.data), owner_id: profileId, company_logo: '' },
         select: { id: true },
@@ -329,10 +337,16 @@ export async function updateCompany(companyId: string, formData: FormData): Prom
     }
 
     if (await isCuitTaken(parsed.data.company_cuit, companyId)) {
-      return { ok: false, error: 'Ya existe una compañía con este CUIT.', fieldErrors: { company_cuit: 'Ya existe una compañía con este CUIT.' } };
+      return {
+        ok: false,
+        error: 'Ya existe una compañía con este CUIT.',
+        fieldErrors: { company_cuit: 'Ya existe una compañía con este CUIT.' },
+      };
     }
 
     await withActor(credentialId, async (tx) => {
+      // Reemplaza al trigger update_company_by_defect (ver createCompany).
+      if (parsed.data.by_defect) await clearOtherDefaultCompanies(tx, company.owner_id, companyId);
       await tx.company.update({ where: { id: companyId }, data: toCompanyData(parsed.data) });
     });
 

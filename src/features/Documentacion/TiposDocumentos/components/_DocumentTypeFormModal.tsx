@@ -6,7 +6,6 @@ import { Building2, Loader2, Power, Truck, User, Users } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import { z } from 'zod';
 
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -28,7 +27,11 @@ import { useDebounce } from '@/shared/hooks/useDebounce';
 import { createDocumentType, updateDocumentType } from '../actions/mutations.server';
 import { countMatchingResources, getDocumentTypeForEdit, type DocumentTypeListItem } from '../actions/queries.server';
 import { createEmptyConditionsState, type ConditionsState } from '../config/documentConditions';
-import { EQUIPMENT_TYPE_OPTIONS } from '../config/equipmentTypes';
+import { EQUIPMENT_TYPE_OPTIONS, type EquipmentType } from '../config/equipmentTypes';
+import {
+  documentTypeFormSchema as formSchema,
+  type DocumentTypeFormValues as FormValues,
+} from '../schemas/document-type-form.schema';
 import {
   conditionsJsonToSelections,
   hasActiveConditions,
@@ -38,28 +41,6 @@ import {
 import { _ConditionsSection } from './_ConditionsSection';
 import { _ToggleDocTypeDialog } from './_ToggleDocTypeDialog';
 import { _VerifyDocumentsDialog } from './_VerifyDocumentsDialog';
-
-// ============================================
-// SCHEMA
-// ============================================
-
-const formSchema = z.object({
-  name: z.string().min(1, 'El nombre es requerido'),
-  applies: z.nativeEnum(document_applies),
-  equipment_type: z.string().optional().nullable(),
-  mandatory: z.boolean(),
-  explired: z.boolean(),
-  is_it_montlhy: z.boolean(),
-  private: z.boolean(),
-  down_document: z.boolean(),
-  // Ticket 505: habilita el tipo en el checklist de documentos de un candidato
-  available_for_pre_file: z.boolean(),
-  multiresource: z.boolean(),
-  has_policy_number: z.boolean(),
-  description: z.string().optional(),
-});
-
-type FormValues = z.infer<typeof formSchema>;
 
 // ============================================
 // CONSTANTES
@@ -188,8 +169,9 @@ export function _DocumentTypeFormModal({
   );
 
   const { data: matchCount, isLoading: isCountLoading } = useQuery({
-    queryKey: ['condition-match-count', applies, conditionsJson],
-    queryFn: () => countMatchingResources(applies, conditionsJson as Parameters<typeof countMatchingResources>[1]),
+    queryKey: ['condition-match-count', applies, conditionsJson, documentType?.id ?? null],
+    queryFn: () =>
+      countMatchingResources(applies, conditionsJson as Parameters<typeof countMatchingResources>[1], documentType?.id),
     enabled: isSpecial && hasActive && applies !== 'Empresa',
     staleTime: 10_000,
   });
@@ -230,7 +212,7 @@ export function _DocumentTypeFormModal({
     mandatory &&
     !isMonthly &&
     applies !== 'Empresa' &&
-    permissionsMap?.[`documentacion:${applies === 'Persona' ? 'tipos-docs-personas' : 'tipos-docs-equipos'}:update`] ===
+    permissionsMap?.[`configuracion:${applies === 'Persona' ? 'tipos-docs-personas' : 'tipos-docs-equipos'}:update`] ===
       true;
 
   // --- Handlers ---
@@ -348,7 +330,7 @@ export function _DocumentTypeFormModal({
       const payload = {
         name: values.name,
         applies: values.applies,
-        equipment_type: values.applies === 'Equipos' ? values.equipment_type ?? null : null,
+        equipment_type: values.applies === 'Equipos' ? ((values.equipment_type ?? null) as EquipmentType | null) : null,
         mandatory: values.mandatory,
         explired: values.explired,
         special: isSpecial,
@@ -548,9 +530,19 @@ export function _DocumentTypeFormModal({
                           <span>Calculando coincidencias…</span>
                         ) : (
                           <span>
-                            Se le exigirá a <strong>{matchCount ?? 0}</strong>{' '}
+                            Se le exigirá a <strong>{matchCount?.matching ?? 0}</strong>{' '}
                             {applies === 'Persona' ? 'empleado' : 'equipo'}
-                            {(matchCount ?? 0) !== 1 ? 's' : ''} que coinciden con las condiciones configuradas.
+                            {(matchCount?.matching ?? 0) !== 1 ? 's' : ''} que coinciden con las condiciones
+                            configuradas.
+                            {isEditing &&
+                              matchCount &&
+                              (matchCount.startsRequiring > 0 || matchCount.stopsRequiring > 0) && (
+                                <>
+                                  {' '}
+                                  Con este cambio, {matchCount.startsRequiring} empezarán a exigirlo y{' '}
+                                  {matchCount.stopsRequiring} dejarán de exigirlo.
+                                </>
+                              )}
                           </span>
                         )}
                       </div>

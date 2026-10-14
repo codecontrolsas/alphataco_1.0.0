@@ -1,12 +1,13 @@
 import { Skeleton } from '@/components/ui/skeleton';
 import CertificacionesTabContent from '@/features/Comercial/Certificaciones/CertificacionesTabContent';
+import DailyReportWrapper from '@/features/Comercial/Comerce/components/DailyReportWrapper';
+import DataCustomersWrapper from '@/features/Comercial/Comerce/components/DataCustomersWrapper';
+import MensureUnitsWrapper from '@/features/Comercial/Comerce/components/MensureUnitsWrapper';
+import ServiceComponentWrapper from '@/features/Comercial/Comerce/components/ServiceComponentWrapper';
 import FacturacionTabContent from '@/features/Comercial/Facturacion/FacturacionTabContent';
 import { InvoicesTableSkeleton } from '@/features/Comercial/Facturacion/fallback/InvoicesTableSkeleton';
 import ReglasPrecioTabContent from '@/features/Comercial/ReglasPrecio/ReglasPrecioTabContent';
-import DataCustomersWrapper from '@/features/Comercial/Comerce/components/DataCustomersWrapper';
-import DailyReportWrapper from '@/features/Comercial/Comerce/components/DailyReportWrapper';
-import MensureUnitsWrapper from '@/features/Comercial/Comerce/components/MensureUnitsWrapper';
-import ServiceComponentWrapper from '@/features/Comercial/Comerce/components/ServiceComponentWrapper';
+import { CertificationTableSkeleton } from '@/features/Operaciones/Certificacion/list/fallback/CertificationTableSkeleton';
 import { TabsManagerServer } from '@/features/TabsManager';
 import { ClipboardList, FileSpreadsheet, FileText, Receipt, Ruler, TrendingUp, Users } from 'lucide-react';
 import { Suspense } from 'react';
@@ -132,8 +133,8 @@ export default function ComerceTabContent({
           moduleSlug: 'comercial',
           tabSlug: 'daily_reports',
           content: (
-            <Suspense fallback={<Skeleton className="h-[400px] w-full rounded-md" />}>
-              <DailyReportWrapper />
+            <Suspense fallback={<CertificationTableSkeleton />}>
+              <DailyReportWrapper searchParams={searchParams} />
             </Suspense>
           ),
         },

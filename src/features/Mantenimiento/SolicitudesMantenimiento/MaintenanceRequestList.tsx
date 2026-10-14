@@ -1,3 +1,4 @@
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { Card, CardContent } from '@/components/ui/card';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { stripPrefixFromSearchParams, type DataTableSearchParams } from '@/shared/components/common/DataTable';
@@ -8,17 +9,18 @@ export const TABLE_ID = 'maintenance-requests';
 
 interface MaintenanceRequestListProps {
   searchParams: DataTableSearchParams;
-  canApproveReject?: boolean;
 }
 
-export async function MaintenanceRequestList({ searchParams, canApproveReject = false }: MaintenanceRequestListProps) {
+export async function MaintenanceRequestList({ searchParams }: MaintenanceRequestListProps) {
   // Aislar parámetros de URL para esta tabla específica
   const tableSearchParams = stripPrefixFromSearchParams(searchParams, TABLE_ID);
 
   // Facets se cargan lazy (on-demand al abrir cada popover) — no en SSR
-  const [{ data, total }, preferences] = await Promise.all([
+  // Aprobar / rechazar / reasignar = `update` en la tab (mapa de permisos: maintenance_requests).
+  const [{ data, total }, preferences, canApproveReject] = await Promise.all([
     getMaintenanceRequestsPaginated(tableSearchParams),
     getTablePreferences(TABLE_ID),
+    checkPermissionServer('mantenimiento', 'maintenance_requests', 'update'),
   ]);
 
   return (

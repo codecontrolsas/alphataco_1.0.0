@@ -4,7 +4,7 @@ import { isNonPropagatingChecklistItem } from '@/features/Mantenimiento/constant
 import { ACTIVITY_LOG } from '@/features/Mantenimiento/shared/activity-log/action-types';
 import { logActivity } from '@/features/Mantenimiento/shared/activity-log/log-activity';
 import { resourceIdFields, type MaintenanceResourceKind } from '@/features/Mantenimiento/shared/maintenance-resource';
-import { getResourceCompanyId } from '@/features/Mantenimiento/shared/resource-company';
+import { NUEVO_PEDIDO_CREATE, requireResourceAccess } from '@/features/Mantenimiento/shared/resource-access.server';
 import type { PreventiveType } from '@/features/Mantenimiento/shared/preventive-maintenance';
 import { Logger } from '@/lib/logger';
 import { requireServerAuthProfile } from '@/shared/actions/auth.actions';
@@ -65,7 +65,11 @@ export async function createMaintenanceRequestPendingApproval(input: {
   }
 
   const profile = await requireServerAuthProfile();
-  const companyId = await getResourceCompanyId(prisma, input.resourceKind, input.equipmentId);
+  // Perímetro de dos caminos: operario del QR de esa empresa o usuario del dashboard con
+  // `nuevo_pedido:create` en la empresa activa. La empresa sigue saliendo del recurso.
+  const { companyId } = await requireResourceAccess(input.resourceKind, input.equipmentId, {
+    dashboardPermissions: [NUEVO_PEDIDO_CREATE],
+  });
   // El supervisor llega del cliente: tiene que ser de la empresa del recurso.
   await assertSupervisorInCompany(input.supervisorId, companyId);
 
@@ -412,7 +416,11 @@ export async function createManualMaintenanceRequest(input: {
   }
 
   const profile = await requireServerAuthProfile();
-  const companyId = await getResourceCompanyId(prisma, input.resourceKind, input.equipmentId);
+  // Perímetro de dos caminos: operario del QR de esa empresa o usuario del dashboard con
+  // `nuevo_pedido:create` en la empresa activa. La empresa sigue saliendo del recurso.
+  const { companyId } = await requireResourceAccess(input.resourceKind, input.equipmentId, {
+    dashboardPermissions: [NUEVO_PEDIDO_CREATE],
+  });
   // El supervisor llega del cliente: tiene que ser de la empresa del recurso.
   await assertSupervisorInCompany(input.supervisorId, companyId);
 

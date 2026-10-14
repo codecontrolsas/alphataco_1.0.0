@@ -2,7 +2,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { getServiceOrdersPaginated } from './actions/actions.server';
+import { getServiceOrdersPaginated } from './actions/service-order-list.server';
 import _ServiceOrdersDataTable from './components/_ServiceOrdersDataTable';
 
 // ============================================================================

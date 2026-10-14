@@ -6,7 +6,9 @@ import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { getSupervisorFilterInfo } from '../../utils/supervisorFilter';
+import { requireOrderManagementReadAccess } from './access';
 import { serializeOtherEquipment } from './serialize';
+
 
 const logger = new Logger('OrderManagement/queries');
 
@@ -16,6 +18,8 @@ const logger = new Logger('OrderManagement/queries');
  * Incluye items con tipos de reparacion y datos del equipo.
  */
 export async function getMaintenanceOrdersForManagement() {
+  // Permiso de lectura (gestión de órdenes o las tabs que montan este mismo detalle).
+  await requireOrderManagementReadAccess();
   const filterInfo = await getSupervisorFilterInfo();
   // Perímetro: sin RLS, el listado se acota SIEMPRE a la empresa activa.
   const companyId = await getActiveCompanyId();
@@ -187,6 +191,8 @@ export type OrderManagementItem = OrderManagementData[number];
  * Usado desde Órdenes de Mantenimiento al hacer click en "Gestionar".
  */
 export async function getOrderForManagement(orderId: string) {
+  // Permiso de lectura (gestión de órdenes o las tabs que montan este mismo detalle).
+  await requireOrderManagementReadAccess();
   // Perímetro: el pedido tiene que ser de la empresa activa.
   const companyId = await getActiveCompanyId();
 
@@ -346,6 +352,8 @@ export async function getOrderForManagement(orderId: string) {
  * Obtiene todos los sectores activos de todos los talleres
  */
 export async function getActiveWorkshopSectors() {
+  // Permiso de lectura (gestión de órdenes o las tabs que montan este mismo detalle).
+  await requireOrderManagementReadAccess();
   const companyId = await getActiveCompanyId();
 
   try {
@@ -368,6 +376,8 @@ export type WorkshopSector = Awaited<ReturnType<typeof getActiveWorkshopSectors>
  * Obtiene talleres externos activos
  */
 export async function getActiveExternalWorkshops() {
+  // Permiso de lectura (gestión de órdenes o las tabs que montan este mismo detalle).
+  await requireOrderManagementReadAccess();
   const companyId = await getActiveCompanyId();
 
   try {
@@ -394,6 +404,8 @@ export type ExternalWorkshop = Awaited<ReturnType<typeof getActiveExternalWorksh
  * Solo incluye items regulares (no diagnostico) que tienen sector asignado.
  */
 export async function getOrderGenerationPreview(orderId: string) {
+  // Permiso de lectura (gestión de órdenes o las tabs que montan este mismo detalle).
+  await requireOrderManagementReadAccess();
   // Perímetro: el pedido tiene que ser de la empresa activa.
   const companyId = await getActiveCompanyId();
 
@@ -474,11 +486,19 @@ export type OrderGenerationPreview = Awaited<ReturnType<typeof getOrderGeneratio
  * Retorna un map de repairTypeId → sectorIds[]
  */
 export async function getSectorCandidatesForRepairTypes(repairTypeIds: string[]) {
+  // Permiso de lectura (gestión de órdenes o las tabs que montan este mismo detalle).
+  await requireOrderManagementReadAccess();
   if (repairTypeIds.length === 0) return [];
+  // Perímetro: tipos y sectores tienen que ser de la empresa activa (los ids llegan del cliente).
+  const companyId = await getActiveCompanyId();
 
   try {
     const data = await prisma.sector_repair_types.findMany({
-      where: { repair_type_id: { in: repairTypeIds } },
+      where: {
+        repair_type_id: { in: repairTypeIds },
+        types_of_repairs: { company_id: companyId },
+        workshop_sectors: { company_id: companyId },
+      },
       select: {
         workshop_sector_id: true,
         repair_type_id: true,
@@ -506,6 +526,8 @@ export type SectorCandidateData = Awaited<ReturnType<typeof getSectorCandidatesF
  * no quiera cargar antes de confirmar.
  */
 export async function getMaintenanceTaskGroupsWithRepairTypes() {
+  // Permiso de lectura (gestión de órdenes o las tabs que montan este mismo detalle).
+  await requireOrderManagementReadAccess();
   logger.debug('Obteniendo grupos de tareas con repair_types');
 
   try {

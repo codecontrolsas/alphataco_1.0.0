@@ -1,5 +1,6 @@
 'use server';
 
+import { refreshDocumentStatus } from '@/features/Documentacion/shared/compliance/server/document-status.server';
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
@@ -158,18 +159,27 @@ export async function reassignDependencies<T extends DependencyTargetTable>(para
 
   try {
     if (targetTable === 'employees') {
-      const result = await prisma.employees.updateMany({
-        where: withCompany({ [targetColumn]: fromValue } as Prisma.employeesWhereInput, companyId),
-        data: { [targetColumn]: toValue } as Prisma.employeesUpdateManyMutationInput,
+      // Todas las columnas de empleados admitidas son condiciones registradas de los tipos de
+      // documento: se refresca el cache de status de la empresa en la misma transacción.
+      return await prisma.$transaction(async (tx) => {
+        const result = await tx.employees.updateMany({
+          where: withCompany({ [targetColumn]: fromValue } as Prisma.employeesWhereInput, companyId),
+          data: { [targetColumn]: toValue } as Prisma.employeesUpdateManyMutationInput,
+        });
+        if (result.count > 0) await refreshDocumentStatus(tx, 'Persona', { companyId });
+        return result.count;
       });
-      return result.count;
     }
 
-    const result = await prisma.vehicles.updateMany({
-      where: withCompany({ [targetColumn]: fromValue } as Prisma.vehiclesWhereInput, companyId),
-      data: { [targetColumn]: toValue } as Prisma.vehiclesUpdateManyMutationInput,
+    return await prisma.$transaction(async (tx) => {
+      const result = await tx.vehicles.updateMany({
+        where: withCompany({ [targetColumn]: fromValue } as Prisma.vehiclesWhereInput, companyId),
+        data: { [targetColumn]: toValue } as Prisma.vehiclesUpdateManyMutationInput,
+      });
+      // `owner_id` no es una condición registrada de equipos; el resto sí.
+      if (result.count > 0 && targetColumn !== 'owner_id') await refreshDocumentStatus(tx, 'Equipos', { companyId });
+      return result.count;
     });
-    return result.count;
   } catch (error) {
     logger.error('Error al reasignar dependencias', { data: { error, targetTable, targetColumn } });
     throw error;

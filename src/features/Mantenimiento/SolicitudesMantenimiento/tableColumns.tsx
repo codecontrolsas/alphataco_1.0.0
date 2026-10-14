@@ -8,7 +8,7 @@ import { DataTableColumnHeader } from '@/shared/components/common/DataTable/Data
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { ColumnDef } from '@tanstack/react-table';
 import { CheckCircle, Clock, Eye, History, UserRoundCog, XCircle, type LucideIcon } from 'lucide-react';
-import moment from 'moment';
+import { formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { MaintenanceRequestListItem } from './actions/actionsTableServer';
 
 // ============================================================================
@@ -169,8 +169,8 @@ export function getMaintenanceRequestColumns({
         if (!date) return <span className="text-muted-foreground">-</span>;
         return (
           <div className="flex flex-col">
-            <span>{moment(date).format('DD/MM/YYYY')}</span>
-            <span className="text-xs text-muted-foreground">{moment(date).format('HH:mm')}</span>
+            <span>{formatArgentinaDay(date)}</span>
+            <span className="text-xs text-muted-foreground">{formatArgentinaDateTime(date).slice(-5)}</span>
           </div>
         );
       },
@@ -335,35 +335,41 @@ export function getMaintenanceRequestColumns({
 
         return (
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" onClick={() => onView(request)} title="Ver detalle">
+            <Button type="button" variant="ghost" size="icon" onClick={() => onView(request)} title="Ver detalle" aria-label="Ver detalle">
               <Eye className="h-4 w-4" />
             </Button>
             <Button
+              type="button"
               variant="ghost"
               size="icon"
               onClick={() => onViewHistory(request)}
               title="Ver historial"
-              className="text-blue-600 hover:text-blue-700"
+              aria-label="Ver historial"
+              className="text-info-subtle-foreground hover:text-info"
             >
               <History className="h-4 w-4" />
             </Button>
             {isPending && canApproveReject && (
               <>
                 <Button
+                  type="button"
                   variant="ghost"
                   size="icon"
                   onClick={() => onApprove(request)}
                   title="Aprobar"
-                  className="text-green-600 hover:text-green-700"
+                  aria-label="Aprobar"
+                  className="text-ok-subtle-foreground hover:text-ok"
                 >
                   <CheckCircle className="h-4 w-4" />
                 </Button>
                 <Button
+                  type="button"
                   variant="ghost"
                   size="icon"
                   onClick={() => onReject(request)}
                   title="Rechazar"
-                  className="text-red-600 hover:text-red-700"
+                  aria-label="Rechazar"
+                  className="text-danger-subtle-foreground hover:text-danger"
                 >
                   <XCircle className="h-4 w-4" />
                 </Button>
@@ -372,10 +378,12 @@ export function getMaintenanceRequestColumns({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
+                          type="button"
+                          aria-label="Reasignar supervisor"
                           variant="ghost"
                           size="icon"
                           onClick={() => onReassign(request)}
-                          className="text-amber-600 hover:text-amber-700"
+                          className="text-warn-subtle-foreground hover:text-warn"
                         >
                           <UserRoundCog className="h-4 w-4" />
                         </Button>

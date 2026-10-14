@@ -12,6 +12,8 @@ import { useQuery } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
 import { Clock, HourglassIcon, Loader2 } from 'lucide-react';
 import moment from 'moment';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useCallback, useMemo, useState } from 'react';
 
 import { ActivityHistoryModal } from '@/features/Mantenimiento/components/ActivityHistoryModal';
@@ -230,7 +232,7 @@ export function _PendingOrderDataTable({
     () => ({
       // Usa currentParams (estado reactivo del client-side mode), NO searchParams (prop inicial de SSR),
       // para que la exportación respete los filtros activos en el momento del click.
-      fetchAllData: () => getAllPendingOrdersForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllPendingOrdersForExport(currentParams)),
       options: {
         filename: 'pedidos-pendientes',
         title: 'Pedidos Pendientes de Mantenimiento',
@@ -241,8 +243,8 @@ export function _PendingOrderDataTable({
         source: (val) => SOURCE_LABELS[val as string] || String(val ?? ''),
         order_number: (val) => String(val ?? ''),
         description: (val) => String(val ?? ''),
-        created_at: (val) => (val ? moment(val as string).format('DD/MM/YYYY HH:mm') : ''),
-        scheduled_date: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
+        created_at: (val) => (val ? formatArgentinaDateTime(val as string) : ''),
+        scheduled_date: (val) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
         items: (val) => (val != null ? String(val) : ''),
       },
     }),

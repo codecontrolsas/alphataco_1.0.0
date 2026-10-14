@@ -47,6 +47,16 @@ export const documentStateIcons: Record<string, LucideIcon> = {
   pendiente: Clock,
 };
 
+/**
+ * Etiquetas de estado de las listas de documentos. `pendiente` es el valor que conserva la fila SIN
+ * documento (la fila faltante que arma el motor de cumplimiento): se muestra como "Faltante".
+ * (El mapper global `documentStateLabels` no cambia: lo usan otras pantallas.)
+ */
+export const documentListStateLabels: Record<string, string> = {
+  ...documentStateLabels,
+  pendiente: 'Faltante',
+};
+
 /** `YYYY-MM` -> `MM/YYYY`. Cualquier otro formato se muestra tal cual. */
 export function formatDocumentPeriod(period: string | null | undefined): string | null {
   if (!period) return null;
@@ -80,7 +90,7 @@ export function DocumentStatePill({
   return (
     <Badge variant={documentStateBadges[state] ?? 'default'}>
       {Icon && <Icon />}
-      {documentStateLabels[state] ?? state}
+      {documentListStateLabels[state] ?? state}
     </Badge>
   );
 }
@@ -150,11 +160,13 @@ interface DocumentExpiryCellProps {
   validity: Date | string | null | undefined;
   state: string | null | undefined;
   archived?: boolean;
+  /** Fila faltante: todavía no hay documento, así que no hay vencimiento que mostrar. */
+  missing?: boolean;
 }
 
 /** Fecha de vencimiento en monoespaciada y debajo la ayuda ("Vence en 7 días"). */
-export function DocumentExpiryCell({ validity, state, archived = false }: DocumentExpiryCellProps) {
-  if (archived) return <span className="text-muted-foreground">-</span>;
+export function DocumentExpiryCell({ validity, state, archived = false, missing = false }: DocumentExpiryCellProps) {
+  if (archived || missing) return <span className="text-muted-foreground">-</span>;
 
   const info = getExpiryInfo(validity, state);
   if (!info.date) return <span className="text-muted-foreground">Sin vencimiento</span>;

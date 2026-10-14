@@ -1,196 +1,15 @@
 'use server';
 
-import { ACTIVITY_LOG } from '@/features/Mantenimiento/shared/activity-log/action-types';
-import { logActivity } from '@/features/Mantenimiento/shared/activity-log/log-activity';
+import { NUEVO_PEDIDO_CREATE, requireResourceAccess } from '@/features/Mantenimiento/shared/resource-access.server';
 import { getResourceCompanyId, type PrismaLike } from '@/features/Mantenimiento/shared/resource-company';
+import { assertSupervisorInCompany } from '@/features/Mantenimiento/shared/supervisor-perimeter';
 import { Logger } from '@/lib/logger';
 import { requireServerAuthProfile } from '@/shared/actions/auth.actions';
 import { INVALIDATION_MAP } from '@/shared/constants/cache-invalidation-map';
 import { prisma } from '@/shared/lib/prisma';
 import { invalidateCacheTags } from '@/shared/utils/cache-invalidation';
-import { MAINTENANCE_REQUEST_FULL_SELECT, mapRequestWithAliases } from './request-select';
 
 const serverLogger = new Logger('SolicitudesMantenimiento/mutations');
-
-/**
- * Crea una solicitud de mantenimiento desde desvíos de checklist.
- *
- * NUEVO FLUJO (v2):
- * - El chofer NO asigna tipos de reparación, solo comentarios por desvío
- * - El chofer selecciona un supervisor de turno
- * - Los tipos de reparación se asignan después, antes de entrar al taller
- *
- * @param input.supervisorId - ID del supervisor de turno (asignado por el chofer)
- * @param input.deviationItems - Array de objetos con deviationId y driver_comment (sin repairTypeId)
- */
-export async function createMaintenanceRequest(input: {
-  checklistAnswerId: string;
-  equipmentId: string;
-  employeeId?: string;
-  userId?: string;
-  kilometer?: string;
-  /** Supervisor de turno asignado por el chofer */
-  supervisorId?: string;
-  /** @deprecated Use deviationItems instead */
-  deviationIds?: string[];
-  /** Items de desvío con comentario del chofer (sin tipo de reparación) */
-  deviationItems?: Array<{
-    deviationId: string;
-    /** @deprecated El tipo de reparación ya no se asigna en este paso */
-    repairTypeId?: string;
-    /** Comentario del chofer describiendo el desvío */
-    driverComment?: string;
-  }>;
-}) {
-  serverLogger.info('Creando solicitud de mantenimiento', { data: input });
-
-  const profile = await requireServerAuthProfile();
-
-  try {
-    const result = await prisma.$transaction(async (tx) => {
-      const companyId = await getResourceCompanyId(tx, 'vehicle', input.equipmentId);
-
-      // Crear la solicitud
-      const request = await tx.maintenance_requests.create({
-        data: {
-          checklist_answer_id: input.checklistAnswerId,
-          equipment_id: input.equipmentId,
-          company_id: companyId,
-          employee_id: input.employeeId ?? null,
-          user_id: input.userId ?? null,
-          kilometer: input.kilometer ?? null,
-          supervisor_id: input.supervisorId ?? null,
-          status: 'pending_approval',
-        },
-      });
-
-      serverLogger.debug('maintenance_request creada', { data: { requestId: request.id } });
-
-      // Determinar los items a insertar
-      type ItemData = {
-        maintenance_request_id: string;
-        company_id: string;
-        checklist_deviation_id: string;
-        repair_type_id: string | null;
-        driver_comment: string | null;
-        driver_comment_by: string | null;
-        status: string;
-      };
-
-      let items: ItemData[];
-
-      if (input.deviationItems && input.deviationItems.length > 0) {
-        serverLogger.debug('Usando formato NUEVO (deviationItems)');
-        items = input.deviationItems.map((item) => ({
-          maintenance_request_id: request.id,
-          company_id: companyId,
-          checklist_deviation_id: item.deviationId,
-          repair_type_id: item.repairTypeId ?? null,
-          driver_comment: item.driverComment ?? null,
-          driver_comment_by: item.driverComment ? profile.id : null,
-          status: 'pending',
-        }));
-      } else if (input.deviationIds && input.deviationIds.length > 0) {
-        serverLogger.debug('Usando formato ANTIGUO (deviationIds)');
-        items = input.deviationIds.map((deviationId) => ({
-          maintenance_request_id: request.id,
-          company_id: companyId,
-          checklist_deviation_id: deviationId,
-          repair_type_id: null,
-          driver_comment: null,
-          driver_comment_by: null,
-          status: 'pending',
-        }));
-      } else {
-        throw new Error('Debe proporcionar al menos un desvío');
-      }
-
-      serverLogger.debug('Items a insertar', { data: { count: items.length } });
-
-      await tx.maintenance_request_items.createMany({ data: items });
-
-      return request;
-    });
-
-    serverLogger.info('Solicitud de mantenimiento creada exitosamente', { data: { requestId: result.id } });
-
-    await invalidateCacheTags(INVALIDATION_MAP.createMaintenanceRequest);
-
-    return result;
-  } catch (error) {
-    serverLogger.error('Error al crear solicitud de mantenimiento', { data: { error } });
-    throw error;
-  }
-}
-
-/**
- * Asigna tipos de reparación a los items de una solicitud de mantenimiento.
- * Usado por el chofer después de completar el checklist para asignar cada desvío a una reparación.
- */
-export async function assignRepairTypesToDeviations(input: {
-  equipmentId: string;
-  assignments: Array<{
-    deviationId: string;
-    repairTypeId: string;
-    description?: string;
-  }>;
-}): Promise<{ ok: true; success: true } | { ok: false; error: string }> {
-  serverLogger.info('Asignando tipos de reparación a desvíos', {
-    data: { equipmentId: input.equipmentId, assignmentsCount: input.assignments.length },
-  });
-
-  if (!input.equipmentId || !input.assignments || input.assignments.length === 0) {
-    serverLogger.warn('Datos inválidos para asignar tipos de reparación');
-    return { ok: false, error: 'Datos inválidos para asignar tipos de reparación' };
-  }
-
-  try {
-    const deviationIds = input.assignments.map((a) => a.deviationId);
-
-    // Buscar los maintenance_request_items que corresponden a estos desvíos
-    const items = await prisma.maintenance_request_items.findMany({
-      where: { checklist_deviation_id: { in: deviationIds } },
-      select: { id: true, checklist_deviation_id: true, maintenance_request_id: true },
-    });
-
-    if (items.length === 0) {
-      serverLogger.warn('No se encontraron items para los desvíos proporcionados', {
-        data: { deviationIds },
-      });
-      return { ok: false, error: 'No se encontraron items de solicitud para los desvíos' };
-    }
-
-    // Actualizar cada item con su tipo de reparación
-    await Promise.all(
-      input.assignments.map(async (assignment) => {
-        const item = items.find((i) => i.checklist_deviation_id === assignment.deviationId);
-        if (!item) {
-          serverLogger.warn('Item no encontrado para desvío', { data: { deviationId: assignment.deviationId } });
-          return;
-        }
-
-        await prisma.maintenance_request_items.update({
-          where: { id: item.id },
-          data: {
-            repair_type_id: assignment.repairTypeId,
-            description: assignment.description ?? null,
-          },
-        });
-      })
-    );
-
-    serverLogger.info('Tipos de reparación asignados exitosamente', {
-      data: { equipmentId: input.equipmentId, itemsUpdated: items.length },
-    });
-
-    await invalidateCacheTags(INVALIDATION_MAP.approveMaintenanceRequestItems);
-
-    return { ok: true, success: true };
-  } catch (error) {
-    serverLogger.error('Error al asignar tipos de reparación', { data: { error } });
-    return { ok: false, error: 'Error inesperado al asignar tipos de reparación' };
-  }
-}
 
 /** Estados en los que una solicitud todavía admite que se le agreguen desvíos */
 const OPEN_REQUEST_STATUSES = ['pending_approval', 'rejected'] as const;
@@ -269,7 +88,14 @@ export async function createOrUpdateMaintenanceRequest(input: {
       companyIdByEquipment.set(equipmentId, resolved);
       return resolved;
     };
-    const companyId = await resolveCompanyId(prisma, input.equipmentId);
+    // Perímetro de dos caminos (operario del QR de la empresa del equipo, o dashboard con
+    // `nuevo_pedido:create` en la empresa activa). Corre también desde el QR.
+    const { companyId } = await requireResourceAccess('vehicle', input.equipmentId, {
+      dashboardPermissions: [NUEVO_PEDIDO_CREATE],
+    });
+    companyIdByEquipment.set(input.equipmentId, companyId);
+    // El supervisor elegido llega del cliente: tiene que ser un usuario de la empresa del equipo.
+    await assertSupervisorInCompany(input.supervisorId, companyId);
     const deviationIds = input.deviations.map((d) => d.deviationId);
 
     // Comentarios del chofer indexados por desvío
@@ -287,9 +113,15 @@ export async function createOrUpdateMaintenanceRequest(input: {
         checklist_answer_id: true,
         // Ticket 677: cada desvío sabe a qué unidad pertenece; la solicitud se crea sobre esa
         equipment_id: true,
+        company_id: true,
         maintenance_request_items: { select: { maintenance_request_id: true } },
       },
     });
+
+    // Los ids de desvíos llegan del cliente: todos tienen que ser de la empresa del recurso.
+    if (deviations.some((d) => d.company_id !== companyId)) {
+      return { ok: false, error: 'Algún desvío no pertenece a la empresa del equipo' };
+    }
 
     const manualItemLabels = (input.manualItems ?? []).map((m) => m.label.trim()).filter((label) => label.length > 0);
 
@@ -585,99 +417,6 @@ export async function createOrUpdateMaintenanceRequest(input: {
 }
 
 /**
- * Actualiza los comentarios de los desvíos y el supervisor de una solicitud.
- * Usado por el chofer después de completar el checklist.
- * @deprecated Usar createOrUpdateMaintenanceRequest en su lugar
- */
-export async function updateDeviationCommentsAndSupervisor(input: {
-  equipmentId: string;
-  supervisorId: string;
-  comments: Array<{
-    deviationId: string;
-    comment: string;
-  }>;
-}): Promise<{ ok: true } | { ok: false; error: string }> {
-  serverLogger.info('Actualizando comentarios de desvíos y supervisor', {
-    data: {
-      equipmentId: input.equipmentId,
-      supervisorId: input.supervisorId,
-      commentsCount: input.comments.length,
-    },
-  });
-
-  try {
-    const deviationIds = input.comments.map((c) => c.deviationId);
-
-    // 1. Actualizar los comentarios en checklist_deviations
-    await Promise.all(
-      input.comments.map((item) =>
-        prisma.checklist_deviations
-          .update({
-            where: { id: item.deviationId },
-            data: { driver_comment: item.comment },
-          })
-          .catch((err) => {
-            serverLogger.error('Error al actualizar comentario de desvío', {
-              data: { error: err, deviationId: item.deviationId },
-            });
-          })
-      )
-    );
-
-    // 2. Obtener los IDs de las solicitudes de mantenimiento que contienen estos desvíos
-    const requestItems = await prisma.maintenance_request_items.findMany({
-      where: { checklist_deviation_id: { in: deviationIds } },
-      select: { maintenance_request_id: true, checklist_deviation_id: true },
-    });
-
-    // 3. Actualizar el supervisor en las solicitudes únicas
-    const uniqueRequestIds = [...new Set(requestItems.map((item) => item.maintenance_request_id))];
-
-    await Promise.all(
-      uniqueRequestIds.map((requestId) =>
-        prisma.maintenance_requests
-          .update({
-            where: { id: requestId },
-            data: { supervisor_id: input.supervisorId },
-          })
-          .catch((err) => {
-            serverLogger.error('Error al actualizar supervisor de solicitud', {
-              data: { error: err, requestId },
-            });
-          })
-      )
-    );
-
-    // 4. Actualizar los comentarios en maintenance_request_items
-    await Promise.all(
-      input.comments.map((item) =>
-        prisma.maintenance_request_items
-          .updateMany({
-            where: { checklist_deviation_id: item.deviationId },
-            data: { driver_comment: item.comment },
-          })
-          .catch((err) => {
-            serverLogger.error('Error al actualizar comentario de item', {
-              data: { error: err, deviationId: item.deviationId },
-            });
-          })
-      )
-    );
-
-    serverLogger.info('Comentarios y supervisor actualizados exitosamente', {
-      data: { requestsUpdated: uniqueRequestIds.length, commentsUpdated: input.comments.length },
-    });
-
-    await invalidateCacheTags(INVALIDATION_MAP.reassignRequestSupervisor);
-
-    return { ok: true };
-  } catch (error) {
-    serverLogger.error('Error inesperado al actualizar comentarios', { data: { error } });
-    return { ok: false, error: 'Error inesperado al actualizar los comentarios' };
-  }
-}
-
-/**
  * Crea desvíos manuales sobre un checklist ya guardado (sin ítems fallidos automáticos)
  * junto con su solicitud de mantenimiento. Todo en una sola transacción.
  *
@@ -739,7 +478,14 @@ export async function createManualDeviationsFromChecklist(input: {
     }
 
     const userId = input.userId ?? profile.id;
-    const companyId = await getResourceCompanyId(prisma, 'vehicle', input.equipmentId);
+    // Perímetro de dos caminos (operario del QR de la empresa del equipo, o dashboard con
+    // `nuevo_pedido:create` en la empresa activa): la empresa sale del recurso, pero quien llama
+    // tiene que pertenecer a ella.
+    const { companyId } = await requireResourceAccess('vehicle', input.equipmentId, {
+      dashboardPermissions: [NUEVO_PEDIDO_CREATE],
+    });
+    // El supervisor elegido llega del cliente: tiene que ser un usuario de la empresa del equipo.
+    await assertSupervisorInCompany(input.supervisorId, companyId);
 
     const result = await prisma.$transaction(async (tx) => {
       const createdDeviations = await Promise.all(

@@ -1,11 +1,12 @@
 'use strict';
 import { formatDocumentTypeName, formatPathSegment } from '@/shared/utils/legacy-mappers';
+import { toPathExtension, toPathIdentifier } from '@/shared/lib/storage-file-name';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 // Persistencia de documentos (Prisma) y rol del usuario en la empresa: server actions.
 export { getActualRole } from '@/shared/actions/shared-users.server';
-export { getAllDocumentsByIdDocumentTypeCientSide, uploadDocument } from '@/shared/actions/documents.server';
+export { getAllDocumentsByIdDocumentTypeCientSide } from '@/shared/actions/documents.server';
 
 // eslint-disable-next-line react-hooks/rules-of-hooks
 export function cn(...inputs: ClassValue[]) {
@@ -52,10 +53,10 @@ export function calculateNameOFDocument(
   const formatedCompanyName = formatPathSegment(company_name);
   const formatedAppliesName = formatPathSegment(applies);
   const formatedDocumentTypeName = formatDocumentTypeName(document_name);
-  const formatedVersion = version.replace(/\./g, '-');
-  const formatedFileExtension = file_extension.replace(/\./g, '-');
+  const formatedVersion = version.replace(/[^A-Za-z0-9-]/g, '-');
+  const formatedFileExtension = toPathExtension(file_extension);
 
-  return `${formatedCompanyName}-(${company_cuit})/${resource}/${formatedAppliesName}/${formatedDocumentTypeName}-(${formatedVersion}).${formatedFileExtension}`;
+  return `${formatedCompanyName}-(${toPathIdentifier(company_cuit)})/${formatPathSegment(resource)}/${formatedAppliesName}/${formatedDocumentTypeName}-(${formatedVersion}).${formatedFileExtension}`;
 }
 
 /** Shape mínimo de equipo que acepta `mapEquipmentToChecklistFormat` (PostgREST legacy o `fetchAllEquipment`). */

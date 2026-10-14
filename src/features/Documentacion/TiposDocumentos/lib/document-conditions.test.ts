@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  buildConditionsWhereClause,
-  parseDocumentConditions,
-  resourceMatchesConditions,
-  type DocumentCondition,
-} from './document-conditions';
+import { parseDocumentConditions, resourceMatchesConditions, type DocumentCondition } from './document-conditions';
 
 const POSITION_A = '11111111-1111-4111-8111-111111111111';
 const POSITION_B = '22222222-2222-4222-8222-222222222222';
@@ -58,20 +53,34 @@ describe('resourceMatchesConditions', () => {
     const conditions = [byPosition, byAptitud];
     // Cumple el puesto pero no la aptitud → evaluar sólo conditions[0] daría true; debe ser false.
     expect(
-      resourceMatchesConditions({ company_position: POSITION_A, empleado_aptitudes: [{ aptitud_id: APTITUD_Y }] }, conditions)
+      resourceMatchesConditions(
+        { company_position: POSITION_A, empleado_aptitudes: [{ aptitud_id: APTITUD_Y }] },
+        conditions
+      )
     ).toBe(false);
     // Cumple la aptitud pero no el puesto → false.
     expect(
-      resourceMatchesConditions({ company_position: 'otro', empleado_aptitudes: [{ aptitud_id: APTITUD_X }] }, conditions)
+      resourceMatchesConditions(
+        { company_position: 'otro', empleado_aptitudes: [{ aptitud_id: APTITUD_X }] },
+        conditions
+      )
     ).toBe(false);
     // Cumple ambas → true.
     expect(
-      resourceMatchesConditions({ company_position: POSITION_A, empleado_aptitudes: [{ aptitud_id: APTITUD_X }] }, conditions)
+      resourceMatchesConditions(
+        { company_position: POSITION_A, empleado_aptitudes: [{ aptitud_id: APTITUD_X }] },
+        conditions
+      )
     ).toBe(true);
   });
 
   it('columnas bigint (provincia, marca) se comparan como texto', () => {
-    const byProvince: DocumentCondition = { kind: 'direct', propertyKey: 'province', filterColumn: 'province', ids: ['5'] };
+    const byProvince: DocumentCondition = {
+      kind: 'direct',
+      propertyKey: 'province',
+      filterColumn: 'province',
+      ids: ['5'],
+    };
     expect(resourceMatchesConditions({ province: BigInt(5) }, [byProvince])).toBe(true);
     expect(resourceMatchesConditions({ province: 6 }, [byProvince])).toBe(false);
   });
@@ -113,9 +122,14 @@ describe('parseDocumentConditions', () => {
     ]);
   });
 
-  it('descarta ids vacíos (como `id IS NOT NULL AND id <> \'\'` en build_employee_where_alias) y la condición si no queda ninguno', () => {
+  it("descarta ids vacíos (como `id IS NOT NULL AND id <> ''` en build_employee_where_alias) y la condición si no queda ninguno", () => {
     const withEmpty = [
-      { property_key: 'company_position', ids: [POSITION_A, '', null], relation_type: 'direct', filter_column: 'company_position' },
+      {
+        property_key: 'company_position',
+        ids: [POSITION_A, '', null],
+        relation_type: 'direct',
+        filter_column: 'company_position',
+      },
       { property_key: 'guild', ids: ['', ''], relation_type: 'direct', filter_column: 'guild_id' },
     ];
     expect(parseDocumentConditions(withEmpty)).toEqual([
@@ -128,34 +142,5 @@ describe('parseDocumentConditions', () => {
     expect(parseDocumentConditions(null)).toEqual([]);
     expect(parseDocumentConditions('{no json')).toEqual([]);
     expect(parseDocumentConditions({ not: 'array' })).toEqual([]);
-  });
-});
-
-describe('buildConditionsWhereClause', () => {
-  it('direct con un id → igualdad; con varios → in; M:M → some sobre la pivote', () => {
-    expect(buildConditionsWhereClause('Persona', [byPosition, byAptitud])).toEqual({
-      company_position: { in: [POSITION_A, POSITION_B] },
-      empleado_aptitudes: { some: { aptitud_id: { in: [APTITUD_X] } } },
-    });
-    expect(buildConditionsWhereClause('Persona', [{ ...byPosition, ids: [POSITION_A] }])).toEqual({
-      company_position: POSITION_A,
-    });
-  });
-
-  it('columnas bigint se convierten a número (province en empleados, brand en equipos)', () => {
-    expect(
-      buildConditionsWhereClause('Persona', [{ kind: 'direct', propertyKey: 'province', filterColumn: 'province', ids: ['5', 'x'] }])
-    ).toEqual({ province: { in: [5] } });
-    expect(
-      buildConditionsWhereClause('Equipos', [{ kind: 'direct', propertyKey: 'brand', filterColumn: 'brand', ids: ['7'] }])
-    ).toEqual({ brand: { in: [7] } });
-    // En Equipos, province no es bigint → queda como uuid/string
-    expect(
-      buildConditionsWhereClause('Equipos', [{ kind: 'direct', propertyKey: 'province', filterColumn: 'province', ids: ['5'] }])
-    ).toEqual({ province: '5' });
-  });
-
-  it('sin condiciones → {}', () => {
-    expect(buildConditionsWhereClause('Persona', [])).toEqual({});
   });
 });

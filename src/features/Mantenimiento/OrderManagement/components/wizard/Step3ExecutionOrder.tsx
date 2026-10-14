@@ -103,20 +103,22 @@ function SortableSectorCard({ entry, index, totalCount, sectorCounts, onReorder 
 
       {/* Reorder buttons (keyboard/accessibility alternative) */}
       <div className="flex flex-col gap-0.5 shrink-0">
-        <Button
+        <Button type="button"
           variant="ghost"
           size="icon"
           className="h-6 w-6"
           disabled={index === 0}
+          aria-label="Subir sector en el orden de ejecución"
           onClick={() => onReorder(entry.sectorId, 'up')}
         >
           <ArrowUp className="h-3.5 w-3.5" />
         </Button>
-        <Button
+        <Button type="button"
           variant="ghost"
           size="icon"
           className="h-6 w-6"
           disabled={index === totalCount - 1}
+          aria-label="Bajar sector en el orden de ejecución"
           onClick={() => onReorder(entry.sectorId, 'down')}
         >
           <ArrowDown className="h-3.5 w-3.5" />

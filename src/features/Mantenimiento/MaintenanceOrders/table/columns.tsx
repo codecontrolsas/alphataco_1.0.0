@@ -7,7 +7,7 @@ import { DataTableColumnHeader } from '@/shared/components/common/DataTable/Data
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Eye, Settings2, Wrench } from 'lucide-react';
-import moment from 'moment';
+import { formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { getResourceInternNumber, getResourceKindLabel, getResourceLabel } from '../../shared/maintenance-resource';
 // Import directo al modulo del boton (no hay barrel en `pdf/`): el boton carga
 // react-pdf y el layout recien al hacer clic, asi que esta linea no mete el
@@ -171,7 +171,7 @@ export function getMaintenanceOrdersColumns({
       header: ({ column }) => <DataTableColumnHeader column={column} title="Ingreso a Taller" />,
       cell: ({ row }) => {
         const date = row.original.workshop_entry_date;
-        return <span>{date ? moment(date).format('DD/MM/YYYY') : '-'}</span>;
+        return <span>{date ? formatArgentinaDay(date) : '-'}</span>;
       },
     },
 
@@ -264,7 +264,7 @@ export function getMaintenanceOrdersColumns({
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha Creación" />,
       cell: ({ row }) => {
         const date = row.original.created_at;
-        return <span>{date ? moment(date).format('DD/MM/YYYY HH:mm') : '-'}</span>;
+        return <span>{date ? formatArgentinaDateTime(date) : '-'}</span>;
       },
     },
 
@@ -282,16 +282,16 @@ export function getMaintenanceOrdersColumns({
         if (canManage && onManageOrder) {
           return (
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="sm" onClick={() => onManageOrder(order)} title="Gestionar orden">
+              <Button type="button" variant="ghost" size="sm" onClick={() => onManageOrder(order)} title="Gestionar orden">
                 <Settings2 className="h-4 w-4 mr-1" />
                 Gestionar
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => onViewDetail(order)} title="Ver detalle">
+              <Button type="button" variant="ghost" size="sm" onClick={() => onViewDetail(order)} title="Ver detalle">
                 <Eye className="h-4 w-4 mr-1" />
                 Detalle
               </Button>
               {onViewItems && (
-                <Button variant="ghost" size="sm" onClick={() => onViewItems(order)} title="Ver ítems solicitados">
+                <Button type="button" variant="ghost" size="sm" onClick={() => onViewItems(order)} title="Ver ítems solicitados">
                   <Wrench className="h-4 w-4 mr-1" />
                   Ítems
                 </Button>
@@ -303,12 +303,12 @@ export function getMaintenanceOrdersColumns({
 
         return (
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" onClick={() => onViewDetail(order)} title="Ver detalle">
+            <Button type="button" variant="ghost" size="sm" onClick={() => onViewDetail(order)} title="Ver detalle">
               <Eye className="h-4 w-4 mr-1" />
               Ver detalle
             </Button>
             {onViewItems && (
-              <Button variant="ghost" size="sm" onClick={() => onViewItems(order)} title="Ver ítems solicitados">
+              <Button type="button" variant="ghost" size="sm" onClick={() => onViewItems(order)} title="Ver ítems solicitados">
                 <Wrench className="h-4 w-4 mr-1" />
                 Ítems
               </Button>

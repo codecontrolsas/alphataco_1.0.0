@@ -650,6 +650,8 @@ export function NuevoPedidoChecklistForm({
       setPreventiveDescription('');
       setRequestType('checklist');
 
+      // Las tablas de Mantenimiento corren con React Query: sin invalidar quedan con datos viejos
+      queryClient.invalidateQueries();
       router.refresh();
 
       if (onSuccess) {
@@ -969,6 +971,7 @@ export function NuevoPedidoChecklistForm({
         {/* Botones de navegación */}
         <div className="p-4 flex justify-between">
           <Button
+            type="button"
             variant="outline"
             onClick={() => setCurrentStep((prev) => Math.max(0, prev - 1))}
             disabled={currentStep === 0 || isSubmitting}
@@ -978,12 +981,13 @@ export function NuevoPedidoChecklistForm({
           </Button>
 
           {currentStep < steps.length - 1 ? (
-            <Button onClick={handleAdvanceStep} disabled={!canAdvanceStep}>
+            <Button type="button" onClick={handleAdvanceStep} disabled={!canAdvanceStep}>
               Siguiente
               <ChevronRight className="ml-2 h-4 w-4" />
             </Button>
           ) : (
             <Button
+              type="button"
               onClick={handleSubmit}
               disabled={isSubmitting}
               className={isCurrentUserSupervisor ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'}

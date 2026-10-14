@@ -12,14 +12,16 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui/use-toast';
 import { Logger } from '@/lib/logger';
+import { argentinaDate } from '@/shared/lib/argentina-time';
+import { formatCalendarDate } from '@/shared/utils/calendar-date';
 import moment from 'moment';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   bulkReschedulePrepartes,
   confirmMultiplePrepartesToDailyReport,
   updateMultiplePreparteStatus,
 } from '../actions/bulk.server';
-import { PreparteItem } from './PreparteManager';
+import type { PreparteItem } from '../types/entities';
 
 const logger = new Logger('PreparteBulkStatusModal');
 
@@ -37,24 +39,23 @@ export function PreparteBulkStatusModal({ isOpen, onClose, selectedRows, onSucce
   const [reprogramDate, setReprogramDate] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const todayStr = moment().format('YYYY-MM-DD');
-
-  // Reiniciar formulario al abrir/cerrar el modal
-  useEffect(() => {
-    if (!isOpen) {
-      setStatus('');
-      setReason('');
-      setConfirmedBy('');
-      setReprogramDate('');
-    }
-  }, [isOpen]);
+  // Hoy en hora argentina (el servidor corre en UTC)
+  const todayStr = argentinaDate();
 
   // Al cambiar el estado elegido, limpiar la fecha si no aplica
-  useEffect(() => {
-    if (status !== 'reprogramado') {
-      setReprogramDate('');
-    }
-  }, [status]);
+  const handleStatusChange = (value: string) => {
+    setStatus(value);
+    if (value !== 'reprogramado') setReprogramDate('');
+  };
+
+  // Cierra el modal y reinicia el formulario (en el handler, no en un efecto)
+  const handleClose = () => {
+    setStatus('');
+    setReason('');
+    setConfirmedBy('');
+    setReprogramDate('');
+    onClose();
+  };
 
   // Verificar si el formulario es válido
   const isFormValid = () => {
@@ -67,7 +68,7 @@ export function PreparteBulkStatusModal({ isOpen, onClose, selectedRows, onSucce
     if (status === 'reprogramado') {
       if (!reprogramDate) return false;
       const parsed = moment(reprogramDate, 'YYYY-MM-DD', true);
-      if (!parsed.isValid() || parsed.isBefore(moment().startOf('day'))) return false;
+      if (!parsed.isValid() || reprogramDate < todayStr) return false;
     }
     // Si el estado es confirmado, verificar que esté presente el confirmante
     if (status === 'confirmado' && !confirmedBy.trim()) {
@@ -119,13 +120,14 @@ export function PreparteBulkStatusModal({ isOpen, onClose, selectedRows, onSucce
         // Reprogramación masiva atómica: clona cada preparte como `pendiente`
         // con la nueva fecha y marca el original como `reprogramado`.
         const selectedIds = selectedRows.map((row) => row.id);
-        const newDate = new Date(`${reprogramDate}T00:00:00`);
+        // `executionDate` es `@db.Date`: medianoche UTC del día elegido (en hora local correría el día)
+        const newDate = new Date(`${reprogramDate}T00:00:00.000Z`);
 
         const result = await bulkReschedulePrepartes(selectedIds, newDate, reason);
 
         toast({
           title: 'Pedidos reprogramados',
-          description: `Se reprogramaron ${result.succeeded} pedido${result.succeeded > 1 ? 's' : ''} para el ${moment(newDate).format('DD/MM/YYYY')}.`,
+          description: `Se reprogramaron ${result.succeeded} pedido${result.succeeded > 1 ? 's' : ''} para el ${formatCalendarDate(newDate)}.`,
         });
       } else {
         // Para otros estados: usar la actualización masiva existente
@@ -152,7 +154,7 @@ export function PreparteBulkStatusModal({ isOpen, onClose, selectedRows, onSucce
         onSuccess();
       }
 
-      onClose();
+      handleClose();
     } catch (error) {
       logger.error('Error al actualizar estados', { data: { error } });
       toast({
@@ -171,7 +173,7 @@ export function PreparteBulkStatusModal({ isOpen, onClose, selectedRows, onSucce
   const requiresConfirmant = status === 'confirmado';
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Cambiar estado masivamente</DialogTitle>
@@ -202,7 +204,7 @@ export function PreparteBulkStatusModal({ isOpen, onClose, selectedRows, onSucce
           {/* Selector de nuevo estado */}
           <div className="space-y-2 mb-4">
             <Label htmlFor="status">Nuevo estado</Label>
-            <Select value={status} onValueChange={setStatus}>
+            <Select value={status} onValueChange={handleStatusChange}>
               <SelectTrigger id="status">
                 <SelectValue placeholder="Seleccionar nuevo estado" />
               </SelectTrigger>
@@ -276,10 +278,10 @@ export function PreparteBulkStatusModal({ isOpen, onClose, selectedRows, onSucce
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isLoading}>
+          <Button type="button" variant="outline" onClick={handleClose} disabled={isLoading}>
             Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={!isFormValid() || isLoading}>
+          <Button type="button" onClick={handleSave} disabled={!isFormValid() || isLoading}>
             {isLoading ? 'Guardando...' : 'Guardar cambios'}
           </Button>
         </DialogFooter>

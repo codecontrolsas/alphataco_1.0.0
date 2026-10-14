@@ -1,19 +1,23 @@
 'use server';
 
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { Logger } from '@/lib/logger';
 import {
   NULL_FILTER_VALUE,
   buildDateRangeFiltersWhere,
   parseSearchParams,
-  stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { withoutOwnFilter } from '@/shared/lib/table-facets';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
+import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { visibleEquipmentTypeCondition } from '../../shared/maintenance-resource';
 import { getHiddenEquipmentTypeIds } from '../../utils/equipmentTypeVisibility';
-import { OPEN_WORK_ORDERS_ONLY } from '../workshop-view-filters';
+import { OPEN_WORK_ORDERS_ONLY, OPEN_WORK_ORDER_STATUSES } from '../workshop-view-filters';
 
 const logger = new Logger('features/WorkshopView/WorkshopSectorTasksTable');
 
@@ -54,6 +58,27 @@ const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Record<string, unknow
 
 /** Columnas con filtro de rango de fechas (campos directos de work_orders) */
 const DATE_RANGE_COLUMNS = ['planned_start_date', 'planned_end_date', 'started_at', 'created_at'];
+
+/** Lista blanca de filtros: todo lo demás que venga en la URL se descarta. */
+const ALLOWED_FILTERS = new Set([
+  'work_order',
+  'wo_status',
+  'maintenance_order',
+  'mo_status',
+  'vehicle',
+  'repair_type',
+  'is_critical',
+  'is_rejected',
+  'is_diagnostico',
+  ...dateRangeKeys(DATE_RANGE_COLUMNS),
+]);
+
+/** La Vista Taller es la tab `workshop_view` del módulo de mantenimiento. */
+const MODULE_SLUG = 'mantenimiento';
+const TAB_SLUG = 'workshop_view';
+
+/** Tope de filas de un export: más que esto no se descarga entero (se pide acotar con filtros). */
+const EXPORT_MAX_ROWS = 10_000;
 
 /** Select con todo lo que la tabla de OT necesita */
 const SECTOR_WORK_ORDERS_SELECT = {
@@ -135,10 +160,11 @@ function mapWorkOrderRow(row: {
  */
 function buildWhereClause(
   sectorId: string,
-  state: ReturnType<typeof parseSearchParams>,
+  rawState: ReturnType<typeof parseSearchParams>,
   hiddenTypeIds: readonly string[],
   companyId: string
 ) {
+  const state = sanitizeFilters(rawState, ALLOWED_FILTERS);
   const and: Record<string, unknown>[] = [];
 
   // Recorte fijo: la Vista Taller no muestra OT cerradas (ticket 650)
@@ -172,7 +198,9 @@ function buildWhereClause(
   }
 
   // ─── Estado OT (enum, nunca null) ─────────────────────────────────────────
-  const woStatusValues = state.filters['wo_status']?.filter((v) => v !== NULL_FILTER_VALUE);
+  const woStatusValues = state.filters['wo_status']?.filter((v): v is (typeof OPEN_WORK_ORDER_STATUSES)[number] =>
+    (OPEN_WORK_ORDER_STATUSES as string[]).includes(v)
+  );
   if (woStatusValues?.length) {
     and.push({ status: { in: woStatusValues } });
   }
@@ -255,9 +283,13 @@ function buildWhereClause(
 // ============================================================================
 
 export async function getWorkshopSectorWorkOrdersPaginated(sectorId: string, searchParams: DataTableSearchParams) {
+  if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) {
+    throw new Error('No tenés permiso para ver la Vista Taller');
+  }
+
   try {
     const state = parseSearchParams(searchParams);
-    const { skip, take } = stateToPrismaParams(state);
+    const { skip, take } = clampedPageParams(state);
     const [hiddenTypeIds, companyId] = await Promise.all([getHiddenEquipmentTypeIds(), getActiveCompanyId()]);
     const where = buildWhereClause(sectorId, state, hiddenTypeIds, companyId);
 
@@ -277,6 +309,7 @@ export async function getWorkshopSectorWorkOrdersPaginated(sectorId: string, sea
       ...resolvedSorts,
       { status: 'asc' as const },
       { planned_start_date: 'asc' as const },
+      { id: 'asc' as const },
     ];
 
     const [rows, total] = await Promise.all([
@@ -305,22 +338,37 @@ export type WorkshopSectorWorkOrderListItem = Awaited<
 // EXPORT QUERY (sin paginación)
 // ============================================================================
 
-export async function getAllWorkshopSectorWorkOrdersForExport(sectorId: string, searchParams: DataTableSearchParams) {
+export async function getAllWorkshopSectorWorkOrdersForExport(
+  sectorId: string,
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<WorkshopSectorWorkOrderListItem[]>> {
+  if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) {
+    return { ok: false, message: 'No tenés permiso para exportar la Vista Taller' };
+  }
+
   try {
     const state = parseSearchParams(searchParams);
     const [hiddenTypeIds, companyId] = await Promise.all([getHiddenEquipmentTypeIds(), getActiveCompanyId()]);
     const where = buildWhereClause(sectorId, state, hiddenTypeIds, companyId);
 
     const rows = await prisma.work_orders.findMany({
-      orderBy: [{ status: 'asc' as const }, { planned_start_date: 'asc' as const }],
+      orderBy: [{ status: 'asc' as const }, { planned_start_date: 'asc' as const }, { id: 'asc' as const }],
       where,
       select: SECTOR_WORK_ORDERS_SELECT,
+      take: EXPORT_MAX_ROWS + 1,
     });
 
-    return rows.map(mapWorkOrderRow);
+    if (rows.length > EXPORT_MAX_ROWS) {
+      return {
+        ok: false,
+        message: `La exportación supera el máximo de ${EXPORT_MAX_ROWS.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`,
+      };
+    }
+
+    return { ok: true, data: rows.map(mapWorkOrderRow) };
   } catch (error) {
     logger.error('Error al exportar las OT del sector', { data: { error, sectorId } });
-    throw new Error('Error al exportar las órdenes de trabajo del sector');
+    return { ok: false, message: 'Error al exportar las órdenes de trabajo del sector' };
   }
 }
 
@@ -354,6 +402,10 @@ function deriveTaskStatus(repairStatuses: string[]): 'pending' | 'in_progress' |
  * empezó y qué no — con el detalle de cada trabajo de reparación.
  */
 export async function getWorkOrderTasks(workOrderId: string) {
+  if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) {
+    throw new Error('No tenés permiso para ver las tareas de la orden de trabajo');
+  }
+
   try {
     const companyId = await getActiveCompanyId();
     const [workOrder, items] = await Promise.all([
@@ -469,24 +521,14 @@ export async function getWorkshopSectorWorkOrdersSingleFacet(
   counts: Map<string, number>;
   resolvedOptions?: Array<{ id: string; name: string | null }>;
 } | null> {
-  let parsedState: ReturnType<typeof parseSearchParams> | null = null;
-  if (searchParams && Object.keys(searchParams).length > 0) {
-    parsedState = parseSearchParams(searchParams);
-  }
+  if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) return null;
 
-  const hasActiveFilters = parsedState && (Object.keys(parsedState.filters).length > 0 || parsedState.search);
+  const parsedState = parseSearchParams(searchParams || {});
   const [hiddenTypeIds, companyId] = await Promise.all([getHiddenEquipmentTypeIds(), getActiveCompanyId()]);
 
   /** Construye el WHERE excluyendo el filtro de la columna propia (cross-filter). */
   function crossWhere(excludeColumn: string) {
-    if (!parsedState || !hasActiveFilters) {
-      return buildWhereClause(sectorId, parseSearchParams({}), hiddenTypeIds, companyId);
-    }
-    const modified = { ...parsedState, filters: { ...parsedState.filters } };
-    delete modified.filters[excludeColumn];
-    delete modified.filters[`${excludeColumn}_from`];
-    delete modified.filters[`${excludeColumn}_to`];
-    return buildWhereClause(sectorId, modified, hiddenTypeIds, companyId);
+    return buildWhereClause(sectorId, withoutOwnFilter(parsedState, excludeColumn), hiddenTypeIds, companyId);
   }
 
   try {
@@ -629,6 +671,6 @@ export async function getWorkshopSectorWorkOrdersSingleFacet(
     return null;
   } catch (error) {
     logger.error('Error al obtener facet individual de las OT del sector', { data: { error, columnId, sectorId } });
-    return null;
+    return { counts: new Map() };
   }
 }

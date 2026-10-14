@@ -1,14 +1,12 @@
-import type {
-  cost_type_enum,
-  document_type_enum,
-  gender_enum,
-  level_of_education_enum,
-  marital_status_enum,
-  nationality_enum,
-  Prisma,
-} from '@/generated/prisma/client';
-import { callVoid } from '@/shared/lib/sql';
+import { refreshResourceStatus } from '@/features/Documentacion/shared/compliance/server/document-status.server';
+import type { Prisma } from '@/generated/prisma/client';
 import type { EmployeeFormData } from '../schemas/employee-schema';
+import {
+  admissionDateForCreate,
+  assertEmployeeRefsAllowed,
+  buildEmployeeScalars,
+  rethrowEmployeeWriteError,
+} from './employee-write';
 
 /**
  * Crea un empleado con sus relaciones M:M y dispara el recalculo de documentos.
@@ -20,75 +18,65 @@ import type { EmployeeFormData } from '../schemas/employee-schema';
  * La comparten dos flujos: el alta normal de empleado (`createEmployee`) y la conversion
  * de un candidato en legajo (`approvePreEmployee`, ticket 505). Asi ambos caminos crean
  * al empleado exactamente igual.
+ *
+ * NO chequea permisos de rol: cada flujo tiene el suyo (alta de empleado vs. aprobar candidato).
+ * Tampoco confia en `data` aunque venga parseado: arma los datos campo por campo, valida que los
+ * ids de catálogo sean de la empresa y toma `company_id` del argumento, nunca del payload.
  */
 export async function createEmployeeCore(
   tx: Prisma.TransactionClient,
   data: EmployeeFormData,
   companyId: string
 ): Promise<{ id: string }> {
-  const { allocated_to, aptitudes, workshop_sector_ids, province, city, date_of_admission, ...scalarData } = data;
+  const scalars = buildEmployeeScalars(data);
+  const contractorIds = [...new Set(data.allocated_to ?? [])];
+  const aptitudeIds = [...new Set(data.aptitudes ?? [])];
+  const workshopSectorIds = [...new Set(data.workshop_sector_ids ?? [])];
 
-  // Crear el empleado principal
-  const created = await tx.employees.create({
-    data: {
-      ...scalarData,
-      company_id: companyId,
-      province: BigInt(province),
-      city: city != null ? BigInt(city) : null,
-      // date_of_admission es requerido en BD (NOT NULL); el form lo tiene como optional
-      // para el modo edit, pero en create siempre llega. Fallback a fecha actual.
-      date_of_admission: date_of_admission ? new Date(date_of_admission) : new Date(),
-      // Castings de enums: el formulario usa string, Prisma espera los tipos de enum
-      nationality: scalarData.nationality as nationality_enum,
-      document_type: scalarData.document_type as document_type_enum,
-      gender: scalarData.gender as gender_enum,
-      marital_status: scalarData.marital_status as marital_status_enum,
-      level_of_education: scalarData.level_of_education as level_of_education_enum,
-      cost_type: scalarData.cost_type ? (scalarData.cost_type as cost_type_enum) : undefined,
-      // allocated_to es un array denormalizado en BD; se mantiene en sincronía
-      // con la tabla pivot contractor_employee que es la fuente de verdad para M:M
-      allocated_to: allocated_to ?? [],
-    },
-    select: { id: true },
-  });
+  await assertEmployeeRefsAllowed(tx, companyId, { data, contractorIds, aptitudeIds, workshopSectorIds });
 
-  // M:M — afectaciones a contratistas
-  if (allocated_to && allocated_to.length > 0) {
-    await tx.contractor_employee.createMany({
-      data: allocated_to.map((contractorId) => ({
-        employee_id: created.id,
-        contractor_id: contractorId,
-      })),
-      skipDuplicates: true,
+  try {
+    const created = await tx.employees.create({
+      data: {
+        ...scalars,
+        company_id: companyId,
+        // date_of_admission es NOT NULL en BD; sin valor en el formulario se usa hoy (hora argentina).
+        date_of_admission: admissionDateForCreate(data.date_of_admission),
+        // allocated_to es un array denormalizado en BD; se mantiene en sincronía
+        // con la tabla pivot contractor_employee que es la fuente de verdad para M:M
+        allocated_to: contractorIds,
+      },
+      select: { id: true },
     });
+
+    if (contractorIds.length > 0) {
+      await tx.contractor_employee.createMany({
+        data: contractorIds.map((contractorId) => ({ employee_id: created.id, contractor_id: contractorId })),
+        skipDuplicates: true,
+      });
+    }
+
+    if (aptitudeIds.length > 0) {
+      await tx.empleado_aptitudes.createMany({
+        data: aptitudeIds.map((aptitudId) => ({ empleado_id: created.id, aptitud_id: aptitudId })),
+        skipDuplicates: true,
+      });
+    }
+
+    if (workshopSectorIds.length > 0) {
+      await tx.employee_workshop_sectors.createMany({
+        data: workshopSectorIds.map((sectorId) => ({ employee_id: created.id, workshop_sector_id: sectorId })),
+        skipDuplicates: true,
+      });
+    }
+
+    // Cache de status con el estado FINAL: contratistas/aptitudes/sectores se insertan DESPUES del
+    // INSERT escalar. Va ultimo para que su valor sea el que queda en la transaccion.
+    await refreshResourceStatus(tx, 'Persona', companyId, created.id);
+
+    return created;
+  } catch (error) {
+    // Dentro de la transacción: relanzar revierte todo y el usuario ve un mensaje claro.
+    return rethrowEmployeeWriteError(error);
   }
-
-  // M:M — aptitudes técnicas
-  if (aptitudes && aptitudes.length > 0) {
-    await tx.empleado_aptitudes.createMany({
-      data: aptitudes.map((aptitudId) => ({
-        empleado_id: created.id,
-        aptitud_id: aptitudId,
-      })),
-      skipDuplicates: true,
-    });
-  }
-
-  // M:M — sectores de taller asignados
-  if (workshop_sector_ids && workshop_sector_ids.length > 0) {
-    await tx.employee_workshop_sectors.createMany({
-      data: workshop_sector_ids.map((sectorId) => ({
-        employee_id: created.id,
-        workshop_sector_id: sectorId,
-      })),
-      skipDuplicates: true,
-    });
-  }
-
-  // 358 / M:M: generar los documentos requeridos con el estado FINAL. Los contratistas/aptitudes
-  // se insertan DESPUES del INSERT escalar, por lo que el trigger AFTER INSERT los ve vacios.
-  // Este recalculo explicito usa el estado ya completo (función void → callVoid / $executeRaw).
-  await callVoid('controlar_alertas_documentos_single_employee', [{ uuid: created.id }, { uuid: companyId }], tx);
-
-  return created;
 }

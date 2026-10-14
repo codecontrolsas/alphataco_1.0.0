@@ -283,10 +283,10 @@ export function AddItemDialog({ open, onClose, repairTypes, onAdd }: AddItemDial
         </div>
 
         <DialogFooter className="gap-2 shrink-0">
-          <Button variant="outline" onClick={handleClose}>
+          <Button type="button" variant="outline" onClick={handleClose}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={!description.trim()}>
+          <Button type="button" onClick={handleSubmit} disabled={!description.trim()}>
             Agregar
             {selectedCount > 0 && (
               <span className="ml-1.5 text-xs opacity-80">

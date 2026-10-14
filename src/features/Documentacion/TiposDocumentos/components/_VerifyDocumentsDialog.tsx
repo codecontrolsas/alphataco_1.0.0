@@ -1,20 +1,8 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, Minus, Plus, UserMinus, UserPlus } from 'lucide-react';
-import { useCallback, useState } from 'react';
-import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
+import { AlertTriangle, CheckCircle2, FileX, Plus, UserMinus, UserPlus } from 'lucide-react';
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,7 +15,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 
-import { fixDocumentTypeConsistency, verifyDocumentTypeConsistency } from '../actions/consistency.server';
+import { verifyDocumentTypeConsistency } from '../actions/consistency.server';
 import { _VerifyDocumentsSkeleton } from './_VerifyDocumentsSkeleton';
 
 // ============================================================================
@@ -46,7 +34,7 @@ interface VerifyDocumentsDialogProps {
 }
 
 // ============================================================================
-// MAIN COMPONENT
+// MAIN COMPONENT — diagnóstico de sólo lectura
 // ============================================================================
 
 export function _VerifyDocumentsDialog({
@@ -57,10 +45,6 @@ export function _VerifyDocumentsDialog({
   applies,
   isSpecial,
 }: VerifyDocumentsDialogProps) {
-  const queryClient = useQueryClient();
-  const [showConfirm, setShowConfirm] = useState(false);
-
-  // === Query de verificacion ===
   const {
     data: result,
     isLoading,
@@ -74,193 +58,137 @@ export function _VerifyDocumentsDialog({
     retry: false,
   });
 
-  // === Mutacion de correccion ===
-  const fixMutation = useMutation({
-    mutationFn: () => {
-      if (!result) throw new Error('No hay datos de verificacion');
-      return fixDocumentTypeConsistency(documentTypeId, {
-        createAlerts: result.missing.map((r) => r.id),
-        removeAlerts: result.orphan.map((r) => r.alertId),
-      });
-    },
-    onSuccess: (data) => {
-      toast.success(
-        `Se corrigieron ${data.created + data.removed} inconsistencias (${data.created} creadas, ${data.removed} eliminadas)`
-      );
-      queryClient.invalidateQueries({ queryKey: ['doc-types'] });
-      onOpenChange(false);
-    },
-    onError: (err) => {
-      toast.error(err instanceof Error ? err.message : 'Error al corregir inconsistencias');
-    },
-  });
-
-  const handleFix = useCallback(() => {
-    setShowConfirm(false);
-    fixMutation.mutate();
-  }, [fixMutation]);
-
-  const hasInconsistencies = result && (result.stats.totalMissing > 0 || result.stats.totalOrphan > 0);
-
   const resourceLabel = applies === 'Persona' ? 'empleados' : 'equipos';
   const MissingIcon = applies === 'Persona' ? UserPlus : Plus;
-  const OrphanIcon = applies === 'Persona' ? UserMinus : Minus;
+  const NotApplicableIcon = applies === 'Persona' ? UserMinus : FileX;
+
+  const hasFindings = result && (result.stats.missing > 0 || result.stats.notApplicableWithDocument > 0);
 
   return (
-    <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-[700px]">
-          <DialogHeader>
-            <DialogTitle>Verificacion de Documentos</DialogTitle>
-            <DialogDescription>Verificando consistencia para &ldquo;{documentTypeName}&rdquo;</DialogDescription>
-          </DialogHeader>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-[700px]">
+        <DialogHeader>
+          <DialogTitle>Verificación de documentos</DialogTitle>
+          <DialogDescription>Diagnóstico de &ldquo;{documentTypeName}&rdquo; (sólo lectura)</DialogDescription>
+        </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto py-4">
-            {/* Loading */}
-            {isLoading && <_VerifyDocumentsSkeleton />}
+        <div className="flex-1 overflow-y-auto py-4">
+          {isLoading && <_VerifyDocumentsSkeleton />}
 
-            {/* Error */}
-            {error && !isLoading && (
-              <div className="flex flex-col items-center gap-3 py-8">
-                <AlertTriangle className="h-12 w-12 text-destructive" />
-                <h3 className="text-lg font-semibold">Error al verificar</h3>
-                <p className="text-sm text-muted-foreground text-center max-w-sm">
-                  {error instanceof Error ? error.message : 'Error desconocido'}
-                </p>
-                <Button variant="outline" onClick={() => refetch()}>
-                  Reintentar
-                </Button>
-              </div>
-            )}
-
-            {/* Sin inconsistencias */}
-            {result && !hasInconsistencies && !isLoading && (
-              <div className="flex flex-col items-center gap-3 py-8">
-                <CheckCircle2 className="h-12 w-12 text-green-500" />
-                <h3 className="text-lg font-semibold">Todo en orden</h3>
-                <p className="text-sm text-muted-foreground text-center max-w-sm">
-                  {isSpecial
-                    ? `Los ${result.stats.totalResources} ${resourceLabel} que cumplen las condiciones tienen su alerta asignada correctamente.`
-                    : `Los ${result.stats.totalResources} ${resourceLabel} activos tienen su alerta asignada correctamente.`}
-                </p>
-              </div>
-            )}
-
-            {/* Con inconsistencias */}
-            {result && hasInconsistencies && !isLoading && (
-              <div className="space-y-4">
-                {/* Badges de resumen */}
-                <div className="flex flex-wrap gap-2">
-                  {result.stats.totalMissing > 0 && (
-                    <Badge variant="outline" className="border-amber-500 text-amber-700 gap-1">
-                      <MissingIcon className="h-3.5 w-3.5" />
-                      {result.stats.totalMissing} faltantes
-                    </Badge>
-                  )}
-                  {result.stats.totalOrphan > 0 && (
-                    <Badge variant="outline" className="border-red-500 text-red-700 gap-1">
-                      <OrphanIcon className="h-3.5 w-3.5" />
-                      {result.stats.totalOrphan} sobrantes
-                    </Badge>
-                  )}
-                </div>
-
-                {/* Descripcion */}
-                <p className="text-sm text-muted-foreground">
-                  Se encontraron inconsistencias entre las condiciones configuradas y las alertas existentes en la base
-                  de datos.
-                </p>
-
-                {/* Card Faltantes */}
-                {result.stats.totalMissing > 0 && (
-                  <Card className="border-l-4 border-l-amber-500 border-dashed">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base">Alertas faltantes</CardTitle>
-                      <CardDescription>
-                        Estos {resourceLabel} cumplen las condiciones pero no tienen la alerta de documento asignada.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      {applies === 'Persona' && result.applies === 'Persona' && (
-                        <EmployeeTable
-                          data={result.missing}
-                          maxRows={MAX_DISPLAY_ROWS}
-                          total={result.stats.totalMissing}
-                        />
-                      )}
-                      {applies === 'Equipos' && result.applies === 'Equipos' && (
-                        <EquipmentTable
-                          data={result.missing}
-                          maxRows={MAX_DISPLAY_ROWS}
-                          total={result.stats.totalMissing}
-                        />
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Card Sobrantes */}
-                {result.stats.totalOrphan > 0 && (
-                  <Card className="border-l-4 border-l-red-500 border-dashed">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base">Alertas sobrantes</CardTitle>
-                      <CardDescription>
-                        Estos {resourceLabel} ya no cumplen las condiciones y tienen una alerta vacia (sin documento
-                        subido) que puede eliminarse de forma segura.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      {applies === 'Persona' && result.applies === 'Persona' && (
-                        <EmployeeTable
-                          data={result.orphan}
-                          maxRows={MAX_DISPLAY_ROWS}
-                          total={result.stats.totalOrphan}
-                        />
-                      )}
-                      {applies === 'Equipos' && result.applies === 'Equipos' && (
-                        <EquipmentTable
-                          data={result.orphan}
-                          maxRows={MAX_DISPLAY_ROWS}
-                          total={result.stats.totalOrphan}
-                        />
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            )}
-          </div>
-
-          <DialogFooter className="flex-shrink-0 gap-2 sm:justify-between">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cerrar
-            </Button>
-            {hasInconsistencies && (
-              <Button onClick={() => setShowConfirm(true)} disabled={fixMutation.isPending}>
-                {fixMutation.isPending ? 'Corrigiendo...' : 'Corregir inconsistencias'}
+          {error && !isLoading && (
+            <div className="flex flex-col items-center gap-3 py-8">
+              <AlertTriangle className="h-12 w-12 text-destructive" />
+              <h3 className="text-lg font-semibold">Error al verificar</h3>
+              <p className="text-sm text-muted-foreground text-center max-w-sm">
+                {error instanceof Error ? error.message : 'Error desconocido'}
+              </p>
+              <Button variant="outline" onClick={() => refetch()}>
+                Reintentar
               </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </div>
+          )}
 
-      {/* AlertDialog de confirmacion */}
-      <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar correccion</AlertDialogTitle>
-            <AlertDialogDescription>
-              Se crearan {result?.stats.totalMissing ?? 0} alertas nuevas y se eliminaran{' '}
-              {result?.stats.totalOrphan ?? 0} alertas vacias. Esta accion no elimina documentos ya subidos.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleFix}>Confirmar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+          {result && !isLoading && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                {isSpecial
+                  ? `Este tipo se exige sólo a los ${resourceLabel} que cumplen sus condiciones.`
+                  : `Este tipo se exige a todos los ${resourceLabel} que le corresponden.`}{' '}
+                Hoy aplica a <strong>{result.stats.applicable}</strong> de {result.stats.totalResources} {resourceLabel}
+                ; <strong>{result.stats.withDocument}</strong> ya tienen el documento cargado.
+              </p>
+
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline" className="gap-1">
+                  {result.stats.applicable} aplican
+                </Badge>
+                <Badge variant="outline" className="gap-1">
+                  {result.stats.withDocument} con documento
+                </Badge>
+                {result.stats.missing > 0 && (
+                  <Badge variant="outline" className="border-amber-500 text-amber-700 gap-1">
+                    <MissingIcon className="h-3.5 w-3.5" />
+                    {result.stats.missing} faltantes
+                  </Badge>
+                )}
+                {result.stats.notApplicableWithDocument > 0 && (
+                  <Badge variant="outline" className="gap-1">
+                    <NotApplicableIcon className="h-3.5 w-3.5" />
+                    {result.stats.notApplicableWithDocument} documentos que ya no aplican
+                  </Badge>
+                )}
+              </div>
+
+              {!hasFindings && (
+                <div className="flex flex-col items-center gap-3 py-6">
+                  <CheckCircle2 className="h-12 w-12 text-green-500" />
+                  <h3 className="text-lg font-semibold">Todo en orden</h3>
+                  <p className="text-sm text-muted-foreground text-center max-w-sm">
+                    {result.mandatory
+                      ? `Los ${result.stats.applicable} ${resourceLabel} a los que aplica ya tienen el documento cargado.`
+                      : 'Este tipo no es obligatorio: no genera faltantes.'}
+                  </p>
+                </div>
+              )}
+
+              {result.stats.missing > 0 && (
+                <Card className="border-l-4 border-l-amber-500 border-dashed">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Documentos faltantes</CardTitle>
+                    <CardDescription>
+                      Estos {resourceLabel} deben tener el documento y todavía no lo cargaron. Se resuelve subiendo el
+                      documento desde la lista de documentos.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {result.applies === 'Persona' && (
+                      <EmployeeTable data={result.missing} maxRows={MAX_DISPLAY_ROWS} total={result.stats.missing} />
+                    )}
+                    {result.applies === 'Equipos' && (
+                      <EquipmentTable data={result.missing} maxRows={MAX_DISPLAY_ROWS} total={result.stats.missing} />
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {result.stats.notApplicableWithDocument > 0 && (
+                <Card className="border-l-4 border-l-muted-foreground/40 border-dashed">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Documentos que ya no aplican</CardTitle>
+                    <CardDescription>
+                      Estos {resourceLabel} tienen un documento cargado de este tipo pero ya no cumplen sus condiciones.
+                      El documento se conserva como historial y no cuenta para el estado documental.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {result.applies === 'Persona' && (
+                      <EmployeeTable
+                        data={result.notApplicable}
+                        maxRows={MAX_DISPLAY_ROWS}
+                        total={result.stats.notApplicableWithDocument}
+                      />
+                    )}
+                    {result.applies === 'Equipos' && (
+                      <EquipmentTable
+                        data={result.notApplicable}
+                        maxRows={MAX_DISPLAY_ROWS}
+                        total={result.stats.notApplicableWithDocument}
+                      />
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="flex-shrink-0 gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cerrar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

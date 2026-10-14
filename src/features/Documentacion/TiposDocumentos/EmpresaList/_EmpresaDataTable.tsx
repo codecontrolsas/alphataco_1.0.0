@@ -8,6 +8,7 @@ import {
   type DataTableSearchParams,
   type FacetResult,
 } from '@/shared/components/common/DataTable';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Check, X } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { HIDDEN_COLUMNS_BY_DEFAULT, getDocTypeColumns } from '../PersonasList/columns';
@@ -206,7 +207,7 @@ export default function _EmpresaDataTable({
         mobileCards
         emptyMessage="No hay tipos de documentos"
         exportConfig={{
-          fetchAllData: () => getEmpresaDocTypesForExport(currentParams),
+          fetchAllData: async () => unwrapExportResult(await getEmpresaDocTypesForExport(currentParams)),
           options: {
             filename: 'tipos-documentos-empresa',
             sheetName: 'Tipos Documentos Empresa',

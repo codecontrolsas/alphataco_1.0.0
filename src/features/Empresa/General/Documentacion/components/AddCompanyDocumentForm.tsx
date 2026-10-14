@@ -14,7 +14,6 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { useCountriesStore } from '@/shared/store/countries';
-import { useLoggedUserStore } from '@/shared/store/loggedUser';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -54,7 +53,6 @@ function AddCompanyDocumentForm({
         is_it_montlhy: documentTypeMontlhy ?? false,
       }
     : companyDocumentTypes.find((e) => e.id === documentId);
-  const fetchDocuments = useLoggedUserStore((state) => state.documetsFetch);
   const router = useRouter();
   const queryClient = useQueryClient();
   const FormSchema = z.object({
@@ -93,7 +91,6 @@ function AddCompanyDocumentForm({
           const result = await uploadCompanyDocument(formData);
           if (!result.ok) throw new Error(result.error);
 
-          fetchDocuments();
           queryClient.invalidateQueries();
           router.refresh();
         },
@@ -124,7 +121,9 @@ function AddCompanyDocumentForm({
   ) : (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button className="min-w-full">Subir</Button>
+        <Button type="button" className="min-w-full">
+          Subir
+        </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>

@@ -12,8 +12,8 @@ import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Ban, CircleOff, Eye, Lock, Play } from 'lucide-react';
-import moment from 'moment';
-import type { ServiceOrderListItem } from '../actions/actions.server';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import type { ServiceOrderListItem } from '../actions/service-order-list.server';
 
 // ============================================================================
 // TYPES
@@ -35,6 +35,7 @@ export function getColumns(
   onContinue?: (order: ServiceOrderListItem) => void
 ): ColumnDef<ServiceOrderListItem>[] {
   const canUpdate = permissions.hasPermission('mantenimiento', 'ordenes_gomeria', 'update');
+  const canDelete = permissions.hasPermission('mantenimiento', 'ordenes_gomeria', 'delete');
 
   return [
     // --- Select ---
@@ -65,7 +66,7 @@ export function getColumns(
       accessorKey: 'service_date',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha" />,
       cell: ({ row }) => (
-        <div>{row.original.service_date ? moment(row.original.service_date).format('DD/MM/YYYY') : '-'}</div>
+        <div>{row.original.service_date ? formatArgentinaDay(row.original.service_date) : '-'}</div>
       ),
       meta: { title: 'Fecha' },
     },
@@ -196,7 +197,7 @@ export function getColumns(
       accessorKey: 'created_at',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Creado" />,
       cell: ({ row }) => (
-        <div>{row.original.created_at ? moment(row.original.created_at).format('DD/MM/YYYY') : '-'}</div>
+        <div>{row.original.created_at ? formatArgentinaDay(row.original.created_at) : '-'}</div>
       ),
       meta: { title: 'Creado' },
     },
@@ -212,7 +213,13 @@ export function getColumns(
               {onViewDetail && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onViewDetail(row.original)}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => onViewDetail(row.original)}
+                      aria-label="Ver detalle"
+                    >
                       <Eye className="h-3.5 w-3.5" />
                     </Button>
                   </TooltipTrigger>
@@ -229,6 +236,7 @@ export function getColumns(
                           size="icon"
                           className="h-7 w-7 text-green-600 hover:text-green-700"
                           onClick={() => onContinue(row.original)}
+                          aria-label="Continuar intervenciones"
                         >
                           <Play className="h-3.5 w-3.5" />
                         </Button>
@@ -238,26 +246,35 @@ export function getColumns(
                   )}
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onClose(row.original)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => onClose(row.original)}
+                        aria-label="Finalizar orden"
+                      >
                         <Lock className="h-3.5 w-3.5" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Finalizar orden</TooltipContent>
                   </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive hover:text-destructive"
-                        onClick={() => onCancel(row.original)}
-                      >
-                        <Ban className="h-3.5 w-3.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Anular orden</TooltipContent>
-                  </Tooltip>
                 </>
+              )}
+              {isOpen && canDelete && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive hover:text-destructive"
+                      onClick={() => onCancel(row.original)}
+                      aria-label="Anular orden"
+                    >
+                      <Ban className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Anular orden</TooltipContent>
+                </Tooltip>
               )}
             </div>
           </TooltipProvider>

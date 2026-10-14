@@ -1,21 +1,35 @@
 'use server';
 
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { Logger } from '@/lib/logger';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   buildDateRangeFiltersWhere,
-  buildFiltersWhere,
-  buildSearchWhere,
   buildTextFiltersWhere,
-  NULL_FILTER_VALUE,
   parseSearchParams,
-  stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
-import { resourceCompanyCondition, visibleEquipmentTypeCondition } from '../../shared/maintenance-resource';
-import { getHiddenEquipmentTypeIds } from '../../utils/equipmentTypeVisibility';
-import { getSupervisorFilterInfo } from '../../utils/supervisorFilter';
+import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
+import { clampedPageParams } from '@/shared/lib/table-pagination';
+import {
+  ORDER_LIST_EXPORT_MAX_ROWS,
+  assembleOrdersWhere,
+  descriptionTextCondition,
+  effectiveSourceCondition,
+  getResourceConditionFacet,
+  getResourceFacet,
+  orderListExportTooLargeMessage,
+  resolveOrderListScope,
+  resourceConditionCondition,
+  resourceIdsCondition,
+  resourceOrderBy,
+  resourceSearchCondition,
+  resourceTextCondition,
+  scopeConditions,
+} from '../lib/order-list-shared';
 
 const logger = new Logger('PedidosMantenimiento/Confirmados/actions.server');
 
@@ -23,39 +37,38 @@ const logger = new Logger('PedidosMantenimiento/Confirmados/actions.server');
 // CONSTANTS
 // ============================================================================
 
+const MODULE_SLUG = 'mantenimiento';
+const TAB_SLUG = 'pedidos_confirmados';
+
 /** Campos reales de maintenance_orders ordenables server-side */
 const VALID_SORT_FIELDS = new Set([
   'created_at',
   'scheduled_date',
   'date_approved_at',
   'order_number',
-  // FK columns resueltas via FK_SORT_MAP
+  // Columna resuelta via resourceOrderBy (vehículo o equipamiento)
   'vehicle',
 ]);
 
-/** Mapeo de columnId → orderBy de Prisma para columnas FK */
-const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Record<string, unknown>> = {
-  vehicle: (dir) => ({ vehicles: { domain: dir } }),
-};
-
-/** Params de URL que NO son filtros de la tabla (tabs, subtabs, etc.) */
-const IGNORED_PARAMS = new Set(['tab', 'subtab', 'operations_subtab', 'taller_subtab', 'config_subtab']);
-
-/** Columnas con filtro de texto libre en vehicles */
-const VEHICLE_TEXT_FILTER_COLUMNS = ['domain', 'serie', 'intern_number'];
+/** Columnas con filtro de texto libre sobre el recurso (vehículo o equipamiento) */
+const RESOURCE_TEXT_COLUMNS = ['domain', 'serie', 'intern_number'] as const;
 
 /** Columnas con filtro de texto libre en maintenance_orders */
-const TEXT_COLUMNS = ['order_number', 'description'];
+const TEXT_COLUMNS = ['order_number'];
 
 /** Columnas con filtro de rango de fechas */
 const DATE_RANGE_COLUMNS = ['created_at', 'scheduled_date', 'date_approved_at'];
 
-/** Mapping de columnId (URL) → campo real en Prisma */
-const COLUMN_MAP: Record<string, string> = {
-  vehicle: 'equipment_id',
-  condition: 'condition', // condición del recurso (vehicles u other_equipment), manejado manualmente
-  source: 'source', // campo en maintenance_requests, manejado manualmente
-};
+/** Lista blanca de filtros: todo lo demás que venga en la URL se descarta. */
+const ALLOWED_FILTERS = new Set([
+  'vehicle',
+  'condition',
+  'source',
+  'description',
+  ...RESOURCE_TEXT_COLUMNS,
+  ...TEXT_COLUMNS,
+  ...dateRangeKeys(DATE_RANGE_COLUMNS),
+]);
 
 /** Select común con todas las relaciones resueltas */
 const CONFIRMED_ORDERS_SELECT = {
@@ -155,161 +168,30 @@ const CONFIRMED_ORDERS_SELECT = {
 // ============================================================================
 
 /**
- * Construye el WHERE base de mantenimiento confirmado.
- * Solo muestra órdenes con status = 'date_confirmed'.
+ * WHERE de los pedidos confirmados (status = 'date_confirmed'). Compartido por la paginada, el export y las
+ * facetas. Todo va dentro de un único `AND` junto con el perímetro (empresa, tipos ocultos, supervisor).
  */
-async function buildBaseWhere(
-  companyId: string,
-  state: ReturnType<typeof parseSearchParams>,
-  hiddenTypeIds: readonly string[]
-) {
-  const supervisorFilter = await getSupervisorFilterInfo();
+async function buildWhereClause(companyId: string, state: ReturnType<typeof parseSearchParams>) {
+  const scope = await resolveOrderListScope(companyId);
+  const filters = sanitizeFilters(state, ALLOWED_FILTERS).filters;
 
-  const searchWhere = buildSearchWhere(state.search, ['order_number']);
+  const extra: Record<string, unknown>[] = [{ status: 'date_confirmed' }];
 
-  const filtersWhere = buildFiltersWhere(state.filters, COLUMN_MAP, {
-    exclude: [
-      ...VEHICLE_TEXT_FILTER_COLUMNS,
-      ...TEXT_COLUMNS,
-      ...DATE_RANGE_COLUMNS.flatMap((c) => [`${c}_from`, `${c}_to`]),
-      'condition', // manejado manualmente (condición del recurso: vehicles u other_equipment)
-      'vehicle', // manejado manualmente (FK)
-      'source', // manejado manualmente (en maintenance_requests)
-    ],
+  if (state.search) extra.push(resourceSearchCondition(state.search));
+  if (filters.vehicle?.length) extra.push(resourceIdsCondition(filters.vehicle));
+  if (filters.condition?.length) extra.push(resourceConditionCondition(filters.condition));
+  if (filters.source?.length) extra.push(effectiveSourceCondition(filters.source));
+  if (filters.description?.[0]) extra.push(descriptionTextCondition(filters.description[0]));
+  for (const column of RESOURCE_TEXT_COLUMNS) {
+    const term = filters[column]?.[0];
+    if (term) extra.push(resourceTextCondition(column, term));
+  }
+
+  return assembleOrdersWhere({
+    scope: scopeConditions(scope),
+    extra,
+    simple: [buildTextFiltersWhere(filters, TEXT_COLUMNS), buildDateRangeFiltersWhere(filters, DATE_RANGE_COLUMNS)],
   });
-
-  const textFiltersWhere = buildTextFiltersWhere(state.filters, TEXT_COLUMNS);
-
-  const dateFiltersWhere = buildDateRangeFiltersWhere(state.filters, DATE_RANGE_COLUMNS);
-
-  // ─── Filtro vehicle (FK UUID → equipment_id) ─────────────────────────────
-  const vehicleFilter: Record<string, unknown> = {};
-  const vehicleValues = state.filters['vehicle'];
-  if (vehicleValues?.length) {
-    const hasNull = vehicleValues.includes(NULL_FILTER_VALUE);
-    const realValues = vehicleValues.filter((v) => v !== NULL_FILTER_VALUE);
-    if (hasNull && realValues.length > 0) {
-      // caso mixto: se agrega en AND abajo
-    } else if (hasNull) {
-      vehicleFilter.equipment_id = null;
-    } else {
-      vehicleFilter.equipment_id = { in: realValues };
-    }
-  }
-
-  // ─── Filtros de texto en campos de vehicles ────────────────────────────────
-  const vehicleTextConditions: Record<string, unknown>[] = [];
-  const domainValues = state.filters['domain'];
-  const serieValues = state.filters['serie'];
-  const internNumberValues = state.filters['intern_number'];
-
-  if (domainValues?.length && typeof domainValues[0] === 'string') {
-    vehicleTextConditions.push({ vehicles: { domain: { contains: domainValues[0], mode: 'insensitive' } } });
-  }
-  if (serieValues?.length && typeof serieValues[0] === 'string') {
-    vehicleTextConditions.push({ vehicles: { serie: { contains: serieValues[0], mode: 'insensitive' } } });
-  }
-  if (internNumberValues?.length && typeof internNumberValues[0] === 'string') {
-    vehicleTextConditions.push({
-      vehicles: { intern_number: { contains: internNumberValues[0], mode: 'insensitive' } },
-    });
-  }
-
-  // ─── Filtro condition (condición del recurso: vehículo o equipamiento) ────
-  // La lógica completa vive más abajo junto a los demás casos "mixtos": se arma
-  // siempre como OR (vehicles/other_equipment) y se agrega a extraAndConditions,
-  // nunca se spreadea en la raíz del where.
-  const conditionValues = state.filters['condition'];
-
-  // ─── Filtro source (campo en maintenance_requests) ────────────────────────
-  const sourceFilter: Record<string, unknown> = {};
-  const sourceValues = state.filters['source'];
-  if (sourceValues?.length) {
-    const hasNull = sourceValues.includes(NULL_FILTER_VALUE);
-    const realValues = sourceValues.filter((v) => v !== NULL_FILTER_VALUE);
-    if (hasNull && realValues.length > 0) {
-      // caso mixto: se agrega en AND abajo
-    } else if (hasNull) {
-      sourceFilter.maintenance_requests = { source: null };
-    } else {
-      sourceFilter.maintenance_requests = { source: { in: realValues } };
-    }
-  }
-
-  // ─── Condiciones AND para casos mixtos ────────────────────────────────────
-  const extraAndConditions: Record<string, unknown>[] = [...vehicleTextConditions];
-
-  if (vehicleValues?.length) {
-    const hasNull = vehicleValues.includes(NULL_FILTER_VALUE);
-    const realValues = vehicleValues.filter((v) => v !== NULL_FILTER_VALUE);
-    if (hasNull && realValues.length > 0) {
-      extraAndConditions.push({
-        OR: [{ equipment_id: { in: realValues } }, { equipment_id: null }],
-      });
-    }
-  }
-
-  if (conditionValues?.length) {
-    const hasNull = conditionValues.includes(NULL_FILTER_VALUE);
-    const realValues = conditionValues.filter((v) => v !== NULL_FILTER_VALUE);
-
-    // Ticket 596: el pedido es de un vehículo O de un equipamiento (nunca los dos,
-    // lo garantiza el CHECK de la BD) y ambos comparten el enum condition_enum
-    // (ver maintenance-resource.ts). Se arma un OR que cubre los dos recursos para
-    // cada caso (valores reales, "Sin asignar", o ambos combinados).
-    const conditionOrBranches: Record<string, unknown>[] = [];
-    if (realValues.length > 0) {
-      conditionOrBranches.push({ vehicles: { condition: { in: realValues } } });
-      conditionOrBranches.push({ other_equipment: { condition: { in: realValues } } });
-    }
-    if (hasNull) {
-      conditionOrBranches.push({ vehicles: { condition: null } });
-      conditionOrBranches.push({ other_equipment: { condition: null } });
-    }
-    extraAndConditions.push({ OR: conditionOrBranches });
-  }
-
-  if (sourceValues?.length) {
-    const hasNull = sourceValues.includes(NULL_FILTER_VALUE);
-    const realValues = sourceValues.filter((v) => v !== NULL_FILTER_VALUE);
-    if (hasNull && realValues.length > 0) {
-      extraAndConditions.push({
-        OR: [{ maintenance_requests: { source: { in: realValues } } }, { maintenance_requests: { source: null } }],
-      });
-    }
-  }
-
-  // ─── Filtro supervisor ─────────────────────────────────────────────────────
-  const supervisorCondition: Record<string, unknown> = {};
-  if (supervisorFilter?.shouldFilterBySupervisor) {
-    supervisorCondition.maintenance_requests = {
-      supervisor_id: supervisorFilter.userId,
-    };
-  }
-
-  // Tipos de equipamiento ocultos para el usuario actual (ticket 690)
-  const equipmentCondition = visibleEquipmentTypeCondition(hiddenTypeIds);
-
-  // Vehiculo o equipamiento (ticket 596) + casos "mixtos" (vehicle/condition/source),
-  // todo dentro del MISMO array AND — nunca reemplazando la key AND con un spread
-  // posterior, o se pierde el scoping por empresa (resourceCompanyCondition).
-  const andConditions: Record<string, unknown>[] = [
-    resourceCompanyCondition(companyId),
-    ...extraAndConditions,
-    ...(equipmentCondition ? [equipmentCondition] : []),
-  ];
-
-  return {
-    status: 'date_confirmed' as const,
-    AND: andConditions,
-    ...searchWhere,
-    ...filtersWhere,
-    ...textFiltersWhere,
-    ...dateFiltersWhere,
-    ...vehicleFilter,
-    ...sourceFilter,
-    ...supervisorCondition,
-  };
 }
 
 // ============================================================================
@@ -317,29 +199,28 @@ async function buildBaseWhere(
 // ============================================================================
 
 export async function getConfirmedOrdersPaginated(searchParams: DataTableSearchParams) {
-  const [companyId, hiddenTypeIds] = await Promise.all([getActiveCompanyId(), getHiddenEquipmentTypeIds()]);
+  if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) {
+    throw new Error('No tenés permiso para ver los pedidos confirmados');
+  }
 
   try {
+    const companyId = await getActiveCompanyId();
     const state = parseSearchParams(searchParams);
-    for (const key of IGNORED_PARAMS) {
-      delete state.filters[key];
-    }
-
-    const { skip, take } = stateToPrismaParams(state);
-    const where = await buildBaseWhere(companyId, state, hiddenTypeIds);
+    const { skip, take } = clampedPageParams(state);
+    const where = await buildWhereClause(companyId, state);
 
     // Safe multi-sort: solo campos válidos
     const resolvedSorts: Record<string, unknown>[] = [];
     for (const s of state.sorting) {
       if (VALID_SORT_FIELDS.has(s.id)) {
         const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-        const fkMapper = FK_SORT_MAP[s.id];
-        resolvedSorts.push(fkMapper ? fkMapper(dir) : { [s.id]: dir });
+        if (s.id === 'vehicle') resolvedSorts.push(...resourceOrderBy(dir));
+        else resolvedSorts.push({ [s.id]: dir });
       }
     }
 
     // Lo ultimo cargado primero: es lo que el usuario espera ver al entrar a la tabla.
-    const safeOrderBy = [...resolvedSorts, { created_at: 'desc' as const }];
+    const safeOrderBy = [...resolvedSorts, { created_at: 'desc' as const }, { id: 'asc' as const }];
 
     const [data, total] = await Promise.all([
       prisma.maintenance_orders.findMany({
@@ -362,31 +243,37 @@ export async function getConfirmedOrdersPaginated(searchParams: DataTableSearchP
 export type ConfirmedOrderListItem = Awaited<ReturnType<typeof getConfirmedOrdersPaginated>>['data'][number];
 
 // ============================================================================
-// EXPORT QUERY (sin paginación)
+// EXPORT QUERY (sin paginación, con tope)
 // ============================================================================
 
-export async function getAllConfirmedOrdersForExport(searchParams: DataTableSearchParams) {
-  const [companyId, hiddenTypeIds] = await Promise.all([getActiveCompanyId(), getHiddenEquipmentTypeIds()]);
+export async function getAllConfirmedOrdersForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<ConfirmedOrderListItem[]>> {
+  if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) {
+    return { ok: false, message: 'No tenés permiso para exportar los pedidos confirmados' };
+  }
 
   try {
+    const companyId = await getActiveCompanyId();
     const state = parseSearchParams(searchParams);
-    for (const key of IGNORED_PARAMS) {
-      delete state.filters[key];
-    }
-
-    const where = await buildBaseWhere(companyId, state, hiddenTypeIds);
+    const where = await buildWhereClause(companyId, state);
 
     const data = await prisma.maintenance_orders.findMany({
       // Mismo orden que la tabla: lo mas reciente arriba.
-      orderBy: [{ created_at: 'desc' }],
+      orderBy: [{ created_at: 'desc' }, { id: 'asc' }],
       where,
       select: CONFIRMED_ORDERS_SELECT,
+      take: ORDER_LIST_EXPORT_MAX_ROWS + 1,
     });
 
-    return data;
+    if (data.length > ORDER_LIST_EXPORT_MAX_ROWS) {
+      return { ok: false, message: orderListExportTooLargeMessage('pedidos confirmados') };
+    }
+
+    return { ok: true, data };
   } catch (error) {
     logger.error('Error al exportar pedidos confirmados', { data: { error } });
-    throw new Error('Error al exportar los pedidos confirmados');
+    return { ok: false, message: 'Error al exportar los pedidos confirmados' };
   }
 }
 
@@ -395,8 +282,7 @@ export async function getAllConfirmedOrdersForExport(searchParams: DataTableSear
 // ============================================================================
 
 /**
- * Reemplaza al viejo getConfirmedOrdersFacets (bulk): carga counts + opciones
- * de UNA sola columna, bajo demanda (al abrir el popover del filtro correspondiente).
+ * Carga counts + opciones de UNA sola columna, bajo demanda (al abrir el popover del filtro).
  * Cross-filtering: excluye el filtro propio de la columna consultada.
  */
 export async function getConfirmedOrdersSingleFacet(
@@ -406,133 +292,31 @@ export async function getConfirmedOrdersSingleFacet(
   counts: Map<string, number>;
   resolvedOptions?: Array<{ id: string; name: string | null }>;
 } | null> {
-  const [companyId, supervisorFilter, hiddenTypeIds] = await Promise.all([
-    getActiveCompanyId(),
-    getSupervisorFilterInfo(),
-    getHiddenEquipmentTypeIds(),
-  ]);
-
-  const supervisorCondition: Record<string, unknown> = {};
-  if (supervisorFilter?.shouldFilterBySupervisor) {
-    supervisorCondition.maintenance_requests = {
-      supervisor_id: supervisorFilter.userId,
-    };
-  }
-
-  // Tipos de equipamiento ocultos para el usuario actual (ticket 690)
-  const equipmentCondition = visibleEquipmentTypeCondition(hiddenTypeIds);
-
-  const baseWhere = {
-    status: 'date_confirmed' as const,
-    // Vehiculo o equipamiento (ticket 596), dentro de AND para no chocar con el OR de busqueda
-    AND: [resourceCompanyCondition(companyId), ...(equipmentCondition ? [equipmentCondition] : [])],
-    ...supervisorCondition,
-  };
-
-  let parsedState: ReturnType<typeof parseSearchParams> | null = null;
-  if (searchParams && Object.keys(searchParams).length > 0) {
-    parsedState = parseSearchParams(searchParams);
-    for (const key of IGNORED_PARAMS) {
-      delete parsedState.filters[key];
-    }
-  }
-
-  const hasActiveFilters = parsedState && (Object.keys(parsedState.filters).length > 0 || parsedState.search);
-
-  async function crossWhere(excludeColumn: string) {
-    if (!parsedState || !hasActiveFilters) return baseWhere;
-    const modified = { ...parsedState, filters: { ...parsedState.filters } };
-    delete modified.filters[excludeColumn];
-    delete modified.filters[`${excludeColumn}_from`];
-    delete modified.filters[`${excludeColumn}_to`];
-    return buildBaseWhere(companyId, modified, hiddenTypeIds);
-  }
-
-  function toFacetMap(rows: { key: string | null | undefined; count: number }[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const { key, count } of rows) {
-      if (key == null) {
-        map.set(NULL_FILTER_VALUE, (map.get(NULL_FILTER_VALUE) ?? 0) + count);
-      } else {
-        map.set(String(key), count);
-      }
-    }
-    return map;
-  }
+  if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) return null;
 
   try {
+    const companyId = await getActiveCompanyId();
+    const state = parseSearchParams(searchParams || {});
+    const where = await buildWhereClause(companyId, withoutOwnFilter(state, columnId));
+
     switch (columnId) {
-      case 'vehicle': {
-        const where = await crossWhere('vehicle');
-        const vehicleCounts = await prisma.maintenance_orders.groupBy({
-          by: ['equipment_id'],
-          where,
-          _count: true,
-        });
+      case 'vehicle':
+        return await getResourceFacet(where);
 
-        const vehicleIds = vehicleCounts.map((r) => r.equipment_id).filter(Boolean) as string[];
-        const vehicles =
-          vehicleIds.length > 0
-            ? await prisma.vehicles.findMany({
-                where: { id: { in: vehicleIds } },
-                select: { id: true, domain: true, serie: true, intern_number: true },
-              })
-            : [];
-
-        return {
-          counts: toFacetMap(vehicleCounts.map((r) => ({ key: r.equipment_id, count: r._count }))),
-          resolvedOptions: vehicles.map((v) => ({
-            id: v.id,
-            name: v.intern_number
-              ? `${v.domain ?? v.serie ?? 'Sin identificar'} (#${v.intern_number})`
-              : v.domain ?? v.serie ?? 'Sin identificar',
-          })),
-        };
-      }
-
-      case 'condition': {
-        const where = await crossWhere('condition');
-        // Ticket 596: el pedido es de un vehículo O de un equipamiento (nunca los
-        // dos) y la condición sale del recurso que corresponda (mismo enum
-        // condition_enum en ambos, ver maintenance-resource.ts). El filtro
-        // server-side ahora matchea contra ambos recursos (OR), así que el facet
-        // agrupa en memoria (universo chico: órdenes confirmadas) por la condición
-        // del recurso real de cada orden, para que la suma de los counts coincida
-        // con el total de filas cuando no hay otros filtros activos.
-        const orders = await prisma.maintenance_orders.findMany({
-          where,
-          select: {
-            vehicles: { select: { condition: true } },
-            other_equipment: { select: { condition: true } },
-          },
-        });
-
-        // toFacetMap asigna (no suma) por key: se agrupa antes, una entrada por condición
-        const countsByCondition = new Map<string | null, number>();
-        for (const order of orders) {
-          const condition = order.other_equipment ? order.other_equipment.condition : order.vehicles?.condition ?? null;
-          countsByCondition.set(condition, (countsByCondition.get(condition) ?? 0) + 1);
-        }
-
-        return {
-          counts: toFacetMap([...countsByCondition].map(([key, count]) => ({ key, count }))),
-        };
-      }
+      case 'condition':
+        // La condición vive en el recurso (vehículo o equipamiento): se agrupa en memoria.
+        return await getResourceConditionFacet(where);
 
       case 'source': {
-        const where = await crossWhere('source');
-        // source está en maintenance_requests — agrupamos via la relación
-        const sourceCounts = await prisma.maintenance_requests.groupBy({
-          by: ['source'],
-          where: {
-            maintenance_orders: {
-              some: where,
-            },
-          },
-          _count: true,
+        // Origen efectivo (el del pedido o, si no tiene, el de la solicitud): es el que muestra la celda.
+        const orders = await prisma.maintenance_orders.findMany({
+          where,
+          select: { source: true, maintenance_requests: { select: { source: true } } },
         });
-
-        return { counts: toFacetMap(sourceCounts.map((r) => ({ key: r.source as string | null, count: r._count }))) };
+        const counts = toFacetMap(
+          orders.map((order) => ({ key: order.source ?? order.maintenance_requests?.source ?? null, count: 1 }))
+        );
+        return { counts };
       }
 
       default:
@@ -540,6 +324,6 @@ export async function getConfirmedOrdersSingleFacet(
     }
   } catch (error) {
     logger.error('Error al obtener facet individual de pedidos confirmados', { data: { error, columnId } });
-    return null;
+    return { counts: new Map() };
   }
 }

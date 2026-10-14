@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { reopenPreEmployee, submitPreEmployee } from '../actions/pre-employee-actions.server';
+import { useInvalidatePreEmployeeLists } from '../hooks/useInvalidatePreEmployeeLists';
 import type { PreEmployeeTransition, PreEmployeeTransitionAction } from '../lib/state-machine';
 
 const logger = new Logger('PreLegajos/TransitionButtons');
@@ -37,6 +38,7 @@ export function PreEmployeeTransitionButtons({
   onApprove,
 }: PreEmployeeTransitionButtonsProps) {
   const router = useRouter();
+  const invalidateLists = useInvalidatePreEmployeeLists();
   const [pendingAction, setPendingAction] = useState<PreEmployeeTransitionAction | null>(null);
 
   if (transitions.length === 0) return null;
@@ -55,6 +57,7 @@ export function PreEmployeeTransitionButtons({
         await reopenPreEmployee(preEmployeeId);
         toast.success('El candidato volvió a estar en proceso');
       }
+      invalidateLists();
       router.refresh();
     } catch (error) {
       logger.error('Error al cambiar el estado del candidato', { data: { error, action, preEmployeeId } });
@@ -70,6 +73,7 @@ export function PreEmployeeTransitionButtons({
         <Button
           key={transition.action}
           variant={transition.action === 'reject' ? 'outline' : 'default'}
+          type="button"
           onClick={() => runTransition(transition.action)}
           disabled={pendingAction !== null}
           className={transition.action === 'reject' ? 'text-danger-subtle-foreground border-danger/40' : undefined}

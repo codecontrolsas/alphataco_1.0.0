@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { dailyReportRowStatusBadges, dailyReportRowStatusLabels } from '@/shared/utils/mappers';
+import { dailyReportRowStatusLabels, dailyReportRowStatusTones } from '@/shared/utils/mappers';
 import type { ColumnDef } from '@tanstack/react-table';
 import { CheckCircle2, Info } from 'lucide-react';
 import type { DailyReportDetailRow } from '../types';
@@ -70,7 +70,7 @@ export function getStatusColumns(): ColumnDef<DailyReportDetailRow>[] {
       cell: ({ row }) => {
         const val = row.original.status;
         const label = dailyReportRowStatusLabels[val] ?? val;
-        const variant = dailyReportRowStatusBadges[val] ?? 'default';
+        const variant = dailyReportRowStatusTones[val] ?? 'default';
 
         // Ejecutado parcial: jornada 24h, no completamente ejecutado, pero al menos un turno completado
         const is24Hours = row.original.working_day?.toLowerCase() === 'jornada 24 horas';

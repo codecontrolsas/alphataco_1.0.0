@@ -18,31 +18,26 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { StackedCell } from '@/features/Operaciones/shared/components/StackedCell';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { formatCalendarDate } from '@/shared/utils/calendar-date';
+import { preparteStatusBadges, preparteStatusLabels } from '@/shared/utils/mappers';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Check, Eye, Pencil, Trash2 } from 'lucide-react';
-import moment from 'moment';
 import { useState } from 'react';
 import type { PreparteListItem } from './actions.server';
 
-export const PREPARTE_STATUS_LABELS: Record<string, string> = {
-  pendiente: 'Pendiente',
-  confirmado: 'Confirmado',
-  reprogramado: 'Reprogramado',
-  cancelado: 'Cancelado',
-  rechazado: 'Rechazado',
-  vencido: 'Vencido',
-};
+/** Etiquetas de estado: viven en `mappers.ts`; se re-exportan para quien ya las importaba de acá. */
+export const PREPARTE_STATUS_LABELS: Record<string, string> = preparteStatusLabels;
 
 export const HIDDEN_COLUMNS_BY_DEFAULT = [
+  'customer',
+  'service',
+  'serviceItem',
   'sector',
   'area',
   'customerEquipment',
@@ -69,17 +64,14 @@ export interface PreparteTableCallbacks {
   onView: (item: PreparteListItem) => void;
   onEdit: (item: PreparteListItem) => void;
   onDelete: (id: string) => Promise<void> | void;
-  onConfirm: (item: PreparteListItem, confirmation: PreparteConfirmation) => Promise<void> | void;
+  /** Abre el diálogo de confirmación del pedido (lo monta el manager, no cada fila). */
+  onConfirmRequest: (item: PreparteListItem) => void;
   onBulkStatus: (items: PreparteListItem[]) => void;
 }
 
 interface GetColumnsOptions {
   permissionsMap: Record<string, boolean>;
   callbacks: PreparteTableCallbacks;
-}
-
-export function formatPreparteDate(value: string | null | undefined): string {
-  return value ? moment.utc(value).format('DD/MM/YYYY') : '-';
 }
 
 export function formatPreparteType(value: string | null | undefined): string {
@@ -96,15 +88,6 @@ export function getPreparteReason(item: PreparteListItem): string {
   return '-';
 }
 
-function statusBadgeVariant(
-  status: PreparteListItem['status']
-): NonNullable<React.ComponentProps<typeof Badge>['variant']> {
-  if (status === 'confirmado') return 'success';
-  if (status === 'cancelado' || status === 'rechazado' || status === 'vencido') return 'destructive';
-  if (status === 'reprogramado') return 'warning';
-  return 'default';
-}
-
 function ImageCell({ url }: { url: string | null }) {
   const [open, setOpen] = useState(false);
   if (!url) return <span className="text-muted-foreground">-</span>;
@@ -112,16 +95,20 @@ function ImageCell({ url }: { url: string | null }) {
   const isPdf = url.toLowerCase().includes('.pdf');
   return (
     <>
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" onClick={() => setOpen(true)} aria-label="Ver archivo adjunto">
-              <Eye className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Ver {isPdf ? 'documento' : 'imagen'}</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => setOpen(true)}
+            aria-label="Ver archivo adjunto del pedido"
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Ver {isPdf ? 'documento' : 'imagen'}</TooltipContent>
+      </Tooltip>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-[800px]">
@@ -149,9 +136,6 @@ function ActionsCell({ item, callbacks, canUpdate, canDelete }: {
   canUpdate: boolean;
   canDelete: boolean;
 }) {
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [confirmedBy, setConfirmedBy] = useState('');
-  const [executionDate, setExecutionDate] = useState(moment().format('YYYY-MM-DD'));
   const isPending = item.status === 'pendiente';
   const isExpired = item.status === 'vencido';
   const canConfirm =
@@ -159,63 +143,61 @@ function ActionsCell({ item, callbacks, canUpdate, canDelete }: {
     (isPending || isExpired) &&
     Boolean(item.executionDate) &&
     !(item.subject_to_availability && !item.executionDate);
-
-  const submitConfirmation = async () => {
-    if (!confirmedBy.trim()) return;
-    await callbacks.onConfirm(item, {
-      confirmedBy: confirmedBy.trim(),
-      ...(isExpired ? { executionDate } : {}),
-    });
-    setConfirmOpen(false);
-    setConfirmedBy('');
-  };
+  const orderLabel = item.numero_pedido ?? '';
 
   return (
     <div className="flex items-center">
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" onClick={() => callbacks.onView(item)} aria-label="Ver detalle">
-              <Eye className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Ver detalle</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => callbacks.onView(item)}
+            aria-label={`Ver detalle del pedido ${orderLabel}`.trim()}
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Ver detalle</TooltipContent>
+      </Tooltip>
 
       {canUpdate && isPending && (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={() => callbacks.onEdit(item)} aria-label="Editar pedido">
-                <Pencil className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Editar</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => callbacks.onEdit(item)}
+              aria-label={`Editar pedido ${orderLabel}`.trim()}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Editar</TooltipContent>
+        </Tooltip>
       )}
 
       {canDelete && isPending && (
         <AlertDialog>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-destructive hover:text-destructive"
-                    data-testid={`eliminar-button-${item.numero_pedido}`}
-                    aria-label="Eliminar pedido"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </AlertDialogTrigger>
-              </TooltipTrigger>
-              <TooltipContent>Eliminar</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <AlertDialogTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="text-destructive hover:text-destructive"
+                  data-testid={`eliminar-button-${item.numero_pedido}`}
+                  aria-label={`Eliminar pedido ${orderLabel}`.trim()}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </AlertDialogTrigger>
+            </TooltipTrigger>
+            <TooltipContent>Eliminar</TooltipContent>
+          </Tooltip>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>¿Eliminar este pedido?</AlertDialogTitle>
@@ -234,72 +216,24 @@ function ActionsCell({ item, callbacks, canUpdate, canDelete }: {
       )}
 
       {canUpdate && (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                disabled={!canConfirm}
-                className="text-green-600 hover:text-green-700"
-                onClick={() => setConfirmOpen(true)}
-                data-testid={`confirmar-button-${item.numero_pedido}`}
-                aria-label="Confirmar pedido"
-              >
-                <Check className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{item.status === 'confirmado' ? 'Ya confirmado' : 'Confirmar pedido'}</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      )}
-
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{isExpired ? 'Confirmar pedido vencido' : '¿Confirmar pedido?'}</DialogTitle>
-            <DialogDescription>
-              El pedido se enviará al parte diario correspondiente a la fecha de ejecución.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {isExpired && (
-              <div className="space-y-2">
-                <Label htmlFor={`execution-date-${item.id}`}>Fecha de ejecución</Label>
-                <Input
-                  id={`execution-date-${item.id}`}
-                  type="date"
-                  min={moment().format('YYYY-MM-DD')}
-                  value={executionDate}
-                  onChange={(event) => setExecutionDate(event.target.value)}
-                />
-              </div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor={`confirmed-by-${item.id}`}>Confirmado por</Label>
-              <Input
-                id={`confirmed-by-${item.id}`}
-                value={confirmedBy}
-                onChange={(event) => setConfirmedBy(event.target.value)}
-                placeholder="Ingrese el nombre de quien confirma"
-                data-testid="confirmado-por-input"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
-              Cancelar
-            </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
             <Button
-              onClick={submitConfirmation}
-              disabled={!confirmedBy.trim() || (isExpired && !executionDate)}
-              data-testid="confirmar-modal-button"
+              type="button"
+              variant="ghost"
+              size="icon"
+              disabled={!canConfirm}
+              className="text-ok hover:text-ok"
+              onClick={() => callbacks.onConfirmRequest(item)}
+              data-testid={`confirmar-button-${item.numero_pedido}`}
+              aria-label={`Confirmar pedido ${orderLabel}`.trim()}
             >
-              Confirmar
+              <Check className="h-4 w-4" />
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </TooltipTrigger>
+          <TooltipContent>{item.status === 'confirmado' ? 'Ya confirmado' : 'Confirmar pedido'}</TooltipContent>
+        </Tooltip>
+      )}
     </div>
   );
 }
@@ -334,43 +268,100 @@ export function getColumns({ permissionsMap, callbacks }: GetColumnsOptions): Co
 
   columns.push(
     {
+      accessorKey: 'numero_pedido',
+      meta: { title: 'N° pedido' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="N° pedido" />,
+      cell: ({ row }) =>
+        row.original.numero_pedido ? (
+          <button
+            type="button"
+            onClick={() => callbacks.onView(row.original)}
+            aria-label={`Ver detalle del pedido ${row.original.numero_pedido}`}
+            className="focus-visible:ring-ring rounded-sm text-left font-mono text-sm font-semibold tabular-nums hover:underline focus-visible:ring-2 focus-visible:outline-none"
+          >
+            {row.original.numero_pedido}
+          </button>
+        ) : (
+          '-'
+        ),
+    },
+    {
       accessorKey: 'requestDate',
       meta: { title: 'Fecha de solicitud' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de solicitud" />,
-      cell: ({ row }) => formatPreparteDate(row.original.requestDate),
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Solicitud" />,
+      cell: ({ row }) => (
+        <span className="font-mono text-sm tabular-nums">{formatCalendarDate(row.original.requestDate)}</span>
+      ),
     },
     {
       accessorKey: 'executionDate',
       meta: { title: 'Fecha de ejecución' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de ejecución" />,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Ejecución" />,
       cell: ({ row }) =>
         row.original.subject_to_availability && !row.original.executionDate ? (
-          <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
-            Pendiente de fecha
-          </Badge>
+          <Badge variant="outline">A disponibilidad</Badge>
         ) : (
-          formatPreparteDate(row.original.executionDate)
+          <span className="font-mono text-sm tabular-nums">{formatCalendarDate(row.original.executionDate)}</span>
         ),
     },
     {
-      accessorKey: 'numero_pedido',
-      meta: { title: 'N° pedido' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="N° pedido" />,
-      cell: ({ row }) => row.original.numero_pedido || '-',
+      id: 'order_customer',
+      meta: { title: 'Cliente y contrato', excludeFromExport: true },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Cliente" />,
+      cell: ({ row }) => (
+        <StackedCell
+          primary={row.original.customers?.name || 'No encontrado'}
+          secondary={row.original.customer_services?.service_name}
+          maxWidthClass="max-w-[260px]"
+        />
+      ),
+      enableSorting: false,
+    },
+    {
+      id: 'order_item',
+      meta: { title: 'Ítem y cantidad', excludeFromExport: true },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Ítem" />,
+      cell: ({ row }) => {
+        const { quantity, tipo } = row.original;
+        const type = tipo ? formatPreparteType(tipo) : '';
+        const detail = quantity != null ? `${quantity} × ${type || 'unidad'}` : type;
+        return (
+          <StackedCell
+            primary={row.original.service_items?.item_name || 'No encontrado'}
+            secondary={detail}
+            maxWidthClass="max-w-[260px]"
+          />
+        );
+      },
+      enableSorting: false,
+    },
+    {
+      id: 'order_shift',
+      meta: { title: 'Jornada y horario', excludeFromExport: true },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Jornada" />,
+      cell: ({ row }) => {
+        const { jornada, start_time, end_time } = row.original;
+        const schedule = start_time && end_time ? `${start_time}–${end_time}` : start_time || end_time || '';
+        return <StackedCell primary={jornada || '-'} secondary={schedule} maxWidthClass="max-w-[180px]" />;
+      },
+      enableSorting: false,
     },
     {
       accessorKey: 'status',
       meta: { title: 'Estado' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
-      cell: ({ row }) => (
-        <Badge
-          variant={statusBadgeVariant(row.original.status)}
-          className={cn('whitespace-nowrap', row.original.status === 'pendiente' && 'bg-black text-white')}
-          data-testid={`status-badge-${row.original.numero_pedido}`}
-        >
-          {row.original.status ? PREPARTE_STATUS_LABELS[row.original.status] : 'Sin estado'}
-        </Badge>
-      ),
+      cell: ({ row }) => {
+        const status = row.original.status;
+        return (
+          <Badge
+            variant={status ? (preparteStatusBadges[status] ?? 'default') : 'outline'}
+            className="whitespace-nowrap"
+            data-testid={`status-badge-${row.original.numero_pedido}`}
+          >
+            {status ? (preparteStatusLabels[status] ?? status) : 'Sin estado'}
+          </Badge>
+        );
+      },
       filterFn: (row, id, values: string[]) => values.includes(String(row.getValue(id))),
     },
     {
@@ -521,7 +512,7 @@ export function getColumns({ permissionsMap, callbacks }: GetColumnsOptions): Co
     },
     {
       id: 'actions',
-      meta: { excludeFromExport: true },
+      meta: { excludeFromExport: true, title: 'Acciones' },
       header: 'Acciones',
       cell: ({ row }) => (
         <ActionsCell item={row.original} callbacks={callbacks} canUpdate={canUpdate} canDelete={canDelete} />

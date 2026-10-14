@@ -6,6 +6,7 @@ import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers'
 import { type ColumnDef } from '@tanstack/react-table';
 import { ExternalLink, ListChecks, Wrench } from 'lucide-react';
 import moment from 'moment';
+import { formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { getResourceInternNumber, getResourceKindLabel, getResourceLabel } from '../../shared/maintenance-resource';
 import type { WorkshopSectorWorkOrderListItem } from './actions.server';
 import { WorkOrderTasksDialog } from './components/WorkOrderTasksDialog';
@@ -179,7 +180,7 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
       cell: ({ row }) => (
         <span>
           {row.original.planned_start_date ? (
-            moment(row.original.planned_start_date).format('DD/MM/YYYY')
+            moment.utc(row.original.planned_start_date).format('DD/MM/YYYY')
           ) : (
             <span className="text-muted-foreground">—</span>
           )}
@@ -195,7 +196,7 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
       cell: ({ row }) => (
         <span>
           {row.original.planned_end_date ? (
-            moment(row.original.planned_end_date).format('DD/MM/YYYY')
+            moment.utc(row.original.planned_end_date).format('DD/MM/YYYY')
           ) : (
             <span className="text-muted-foreground">—</span>
           )}
@@ -213,7 +214,7 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
       cell: ({ row }) => (
         <span>
           {row.original.started_at ? (
-            moment(row.original.started_at).format('DD/MM/YYYY HH:mm')
+            formatArgentinaDateTime(row.original.started_at)
           ) : (
             <span className="text-muted-foreground">—</span>
           )}
@@ -229,7 +230,7 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
       cell: ({ row }) => (
         <span>
           {row.original.created_at ? (
-            moment(row.original.created_at).format('DD/MM/YYYY')
+            formatArgentinaDay(row.original.created_at)
           ) : (
             <span className="text-muted-foreground">—</span>
           )}
@@ -328,10 +329,10 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
 export function getWorkshopSectorWorkOrdersExportFormatters() {
   return {
     // Fechas
-    planned_start_date: (val: unknown) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
-    planned_end_date: (val: unknown) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
-    started_at: (val: unknown) => (val ? moment(val as string).format('DD/MM/YYYY HH:mm') : ''),
-    created_at: (val: unknown) => (val ? moment(val as string).format('DD/MM/YYYY HH:mm') : ''),
+    planned_start_date: (val: unknown) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
+    planned_end_date: (val: unknown) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
+    started_at: (val: unknown) => (val ? formatArgentinaDateTime(val as string) : ''),
+    created_at: (val: unknown) => (val ? formatArgentinaDateTime(val as string) : ''),
     // El N° OT se exporta crudo; el estado de la OT sale en su propia columna
     work_order: (val: unknown) => String(val ?? ''),
     // Estado OT (accessorFn retorna el enum crudo → traducir)

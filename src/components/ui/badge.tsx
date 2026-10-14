@@ -20,6 +20,9 @@ const badgeVariants = cva(
         warning: 'bg-warn-subtle text-warn-subtle-foreground [a&]:hover:bg-warn-subtle/80',
         red: 'bg-danger-subtle text-danger-subtle-foreground [a&]:hover:bg-danger-subtle/80',
         info: 'bg-info-subtle text-info-subtle-foreground [a&]:hover:bg-info-subtle/80',
+        pending: 'bg-pending-subtle text-pending-subtle-foreground [a&]:hover:bg-pending-subtle/80',
+        cert: 'bg-cert-subtle text-cert-subtle-foreground [a&]:hover:bg-cert-subtle/80',
+        expired: 'bg-expired-subtle text-expired-subtle-foreground [a&]:hover:bg-expired-subtle/80',
       },
     },
     defaultVariants: {

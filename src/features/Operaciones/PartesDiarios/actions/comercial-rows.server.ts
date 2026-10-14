@@ -1,10 +1,12 @@
 'use server';
 
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { withSessionActor } from '@/features/Operaciones/lib/with-session-actor';
 import type { daily_report_status, daily_report_type_enum } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { resolveRowQuantity } from '../lib/row-quantity';
+import { reconcileRowResourceStatus } from '../lib/row-resource-status';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import moment from 'moment';
 
@@ -286,6 +288,9 @@ async function syncRowRelations(
  * Reemplaza la orquestación que el formulario hacía con 6 llamadas desde el navegador.
  */
 export async function createComercialDailyReportRow(input: ComercialRowInput) {
+  if (!(await checkPermissionServer('comercial', 'daily_reports', 'create'))) {
+    throw new Error('No tenés permiso para crear líneas de partes diarios.');
+  }
   if (!input.date) {
     throw new Error('Debe seleccionar una fecha.');
   }
@@ -330,6 +335,7 @@ export async function createComercialDailyReportRow(input: ComercialRowInput) {
         equipment: input.equipment ?? [],
         customer_equipment: input.customer_equipment ?? [],
       });
+      await reconcileRowResourceStatus(tx, [created.id]);
 
       return created;
     });
@@ -361,6 +367,9 @@ export interface ComercialRowUpdate {
  * nuevos también.
  */
 export async function updateComercialDailyReportRow(rowId: string, input: ComercialRowUpdate) {
+  if (!(await checkPermissionServer('comercial', 'daily_reports', 'update'))) {
+    throw new Error('No tenés permiso para editar líneas de partes diarios.');
+  }
   try {
     const companyId = await getActiveCompanyId();
 
@@ -403,6 +412,7 @@ export async function updateComercialDailyReportRow(rowId: string, input: Comerc
       });
 
       await syncRowRelations(tx, rowId, input);
+      await reconcileRowResourceStatus(tx, [rowId]);
     });
 
     return { id: rowId };

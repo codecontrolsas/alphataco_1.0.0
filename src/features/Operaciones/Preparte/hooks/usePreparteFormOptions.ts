@@ -1,12 +1,12 @@
 'use client';
 
 import { getActiveServiceItems } from '@/features/Empresa/Clientes/actions/service-items.server';
-import { fetchContractsByClientId } from '@/features/Equipos/EquipoID/actions/vehicle-actions';
+import { fetchContractsByClientId } from '@/features/Equipos/EquipoID/actions/customer-catalog-actions';
 import {
   fetchAreasByContract,
   fetchEquipmentsByCustomer,
   fetchSectorsByContract,
-} from '@/features/Operaciones/Preparte/actions/actions';
+} from '@/features/Operaciones/Preparte/actions/form-data.server';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 // Tipos de retorno inferidos de las acciones

@@ -2,6 +2,7 @@
 
 import { checkPermissionServer } from '@/features/Permissions';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
+import { ORDER_DETAIL_VIEW_TABS, hasMaintenancePermission } from '@/features/Mantenimiento/shared/permissions.server';
 import { withMaintenanceActor } from '@/features/Mantenimiento/shared/maintenance-actor';
 import { lockMaintenanceOrder } from '@/features/Mantenimiento/shared/order-lock';
 import { toActionError } from '@/features/Warehouses/lib/action-errors';
@@ -48,6 +49,8 @@ async function getOpenWorkOrders(companyId: string, orderId: string) {
  */
 export async function getMaintenanceOrderMaterials(orderId: string) {
   if (!UUID_RE.test(orderId)) return null;
+  // Se ve desde el detalle del pedido: `view` en alguna de las pantallas que lo abren.
+  if (!(await hasMaintenancePermission(ORDER_DETAIL_VIEW_TABS, 'view'))) return null;
   const companyId = await getActiveCompanyId();
   const order = await prisma.maintenance_orders.findFirst({
     where: { id: orderId, company_id: companyId },

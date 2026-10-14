@@ -2,23 +2,19 @@
 
 import { preparte_status } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
+import { callScalar } from '@/shared/lib/sql';
 import { storageList, storageMove, storageRemove } from '@/shared/lib/storage';
 import { buildStorageFileUrl, isSafeStorageKey, parseStorageFileUrl } from '@/shared/lib/storage-url';
-import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { getStatusActorPayload } from '../lib/preparte-actor';
+import { preparteCompanyScope } from '../lib/preparte-scope';
+import { assertPreparteActionAllowed } from '../lib/preparte-permissions';
 import type { Preparte, PreparteChangeLog } from '../types';
+import { z } from 'zod';
 
 const logger = new Logger('features/Operaciones/Preparte/mutations');
-
-/**
- * Alcance de empresa del módulo: los pedidos viejos no tienen `company_id` y se siguen
- * viendo desde cualquier empresa (mismo criterio que antes de la migración).
- */
-function preparteCompanyScope(companyId: string) {
-  return { OR: [{ company_id: companyId }, { company_id: null }] };
-}
 
 /** `''` en una FK uuid es un 400 de Postgres: se normaliza a `null`. */
 function toUuidOrNull(value: string | null | undefined): string | null {
@@ -36,7 +32,8 @@ function toDateOrNull(value: string | null | undefined): Date | null {
 /** Convierte un `HH:mm[:ss]` a la columna `time` de Postgres (Prisma la modela como Date). */
 function toPgTime(value: string | null | undefined): Date | null {
   if (!value) return null;
-  const parsed = new Date(`1970-01-01T${value.length === 5 ? `${value}:00` : value}`);
+  // `Z`: la columna `time` se lee con `moment.utc`, así que se escribe en UTC (sin corrimiento).
+  const parsed = new Date(`1970-01-01T${value.length === 5 ? `${value}:00` : value}Z`);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
@@ -59,12 +56,14 @@ async function assertPreparteReferences(
   refs: {
     customerIds: string[];
     serviceIds: string[];
+    /** Pares cliente/contrato: el contrato tiene que ser del cliente indicado. */
+    servicePairs?: { serviceId: string; customerId: string }[];
     itemIds: string[];
     customerEquipmentIds: string[];
   }
 ): Promise<void> {
   const customerIds = [...new Set(refs.customerIds.filter(Boolean))];
-  const serviceIds = [...new Set(refs.serviceIds.filter(Boolean))];
+  const serviceIds = [...new Set([...refs.serviceIds, ...(refs.servicePairs ?? []).map((p) => p.serviceId)].filter(Boolean))];
   const itemIds = [...new Set(refs.itemIds.filter(Boolean))];
   const customerEquipmentIds = [...new Set(refs.customerEquipmentIds.filter(Boolean))];
 
@@ -75,7 +74,7 @@ async function assertPreparteReferences(
     serviceIds.length
       ? prisma.customer_services.findMany({
           where: { id: { in: serviceIds }, customers: { company_id: companyId } },
-          select: { id: true },
+          select: { id: true, customer_id: true },
         })
       : Promise.resolve([]),
     itemIds.length
@@ -99,6 +98,14 @@ async function assertPreparteReferences(
     equipment.length !== customerEquipmentIds.length
   ) {
     throw new Error('Alguno de los datos del pedido no pertenece a la empresa activa.');
+  }
+
+  // El contrato tiene que ser del cliente del pedido (si no, se mezclan cliente A con contrato de B).
+  const customerByService = new Map(services.map((service) => [service.id, service.customer_id]));
+  for (const pair of refs.servicePairs ?? []) {
+    if (pair.serviceId && pair.customerId && customerByService.get(pair.serviceId) !== pair.customerId) {
+      throw new Error('El contrato seleccionado no pertenece al cliente del pedido.');
+    }
   }
 }
 
@@ -137,9 +144,9 @@ async function buildSectorMap(serviceIds: string[], sectorValues: string[]): Pro
   });
 
   for (const row of rows) {
+    // Claves siempre acotadas al contrato: un sector de otro contrato no se resuelve.
     map.set(`${row.service_id}:${row.sector_id}`, row.id);
-    map.set(row.sector_id, row.id);
-    map.set(row.id, row.id);
+    map.set(`${row.service_id}:${row.id}`, row.id);
   }
   return map;
 }
@@ -156,10 +163,31 @@ async function buildAreaMap(serviceIds: string[], areaValues: string[]): Promise
 
   for (const row of rows) {
     map.set(`${row.service_id}:${row.area_id}`, row.id);
-    map.set(row.area_id, row.id);
-    map.set(row.id, row.id);
+    map.set(`${row.service_id}:${row.id}`, row.id);
   }
   return map;
+}
+
+/** Traduce un único sector/área del formulario al id de la pivote del contrato (`null` si viene vacío). */
+async function resolveSingleRelationId(
+  value: string | null | undefined,
+  serviceId: string,
+  buildMap: (serviceIds: string[], values: string[]) => Promise<Map<string, string>>,
+  label: 'sector' | 'área'
+): Promise<string | null> {
+  const raw = toUuidOrNull(value);
+  if (!raw) return null;
+  const map = await buildMap([serviceId], [raw]);
+  return requireRelationId(map, serviceId, raw, label);
+}
+
+/** Id de la pivote del contrato para `raw`; si no pertenece al contrato, lanza (nunca guarda el uuid crudo). */
+function requireRelationId(map: Map<string, string>, serviceId: string, raw: string, label: 'sector' | 'área'): string {
+  const resolved = map.get(`${serviceId}:${raw}`);
+  if (!resolved) {
+    throw new Error(`El ${label} seleccionado no pertenece al contrato del pedido.`);
+  }
+  return resolved;
 }
 
 // ============================================================================
@@ -184,6 +212,8 @@ export async function createPreparte(
   prepartesData: Omit<Preparte, 'id'> | Omit<Preparte, 'id'>[] | Omit<Preparte, 'id'>[][]
 ) {
   try {
+    await assertPreparteActionAllowed('create');
+
     const dataToInsert = flattenPreparteInput(prepartesData);
     if (dataToInsert.length === 0) {
       throw new Error('No hay datos válidos para insertar');
@@ -194,6 +224,7 @@ export async function createPreparte(
     await assertPreparteReferences(companyId, {
       customerIds: dataToInsert.map((item) => item.cliente_id),
       serviceIds: dataToInsert.map((item) => item.contrato_id),
+      servicePairs: dataToInsert.map((item) => ({ serviceId: item.contrato_id, customerId: item.cliente_id })),
       itemIds: dataToInsert.map((item) => toUuidOrNull(item.item)).filter((id): id is string => id !== null),
       customerEquipmentIds: dataToInsert
         .map((item) => toUuidOrNull(normalizeSingleEquipment(item.equipos_cliente)))
@@ -231,13 +262,9 @@ export async function createPreparte(
         executionDate: toDateOrNull(item.executionDate),
         requestDate: toDateOrNull(item.requestDate),
         quantity: item.quantity ?? null,
-        numero_pedido: item.numero_pedido,
-        sector_service_id: rawSector
-          ? sectorMap.get(`${item.contrato_id}:${rawSector}`) ?? sectorMap.get(rawSector) ?? rawSector
-          : null,
-        areas_service_id: rawArea
-          ? areaMap.get(`${item.contrato_id}:${rawArea}`) ?? areaMap.get(rawArea) ?? rawArea
-          : null,
+        numero_pedido: item.numero_pedido?.trim() ? item.numero_pedido : null,
+        sector_service_id: rawSector ? requireRelationId(sectorMap, item.contrato_id, rawSector, 'sector') : null,
+        areas_service_id: rawArea ? requireRelationId(areaMap, item.contrato_id, rawArea, 'área') : null,
         equipos_cliente: toUuidOrNull(normalizeSingleEquipment(item.equipos_cliente)),
         preparteImage: item.preparteImage ?? null,
         subject_to_availability: item.subject_to_availability ?? false,
@@ -245,11 +272,31 @@ export async function createPreparte(
       };
     });
 
-    return await prisma.preparte.createManyAndReturn({ data: rows });
+    // El N° de pedido se asigna acá, en la misma transacción que el insert y bajo un lock por
+    // empresa: dos altas simultáneas ya no pueden tomar el mismo número. (No hay índice único
+    // sobre `numero_pedido`; el lock es la única defensa.) Todas las líneas sin número comparten uno.
+    return await prisma.$transaction(async (tx) => {
+      let generated: string | null = null;
+      if (rows.some((row) => row.numero_pedido === null)) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`preparte-order-number:${companyId}`}))`;
+        const last = await callScalar('get_max_order_number', [{ uuid: companyId }], z.string().nullable(), tx);
+        generated = nextOrderNumber(last);
+      }
+      return tx.preparte.createManyAndReturn({
+        data: rows.map((row) => ({ ...row, numero_pedido: row.numero_pedido ?? generated })),
+      });
+    });
   } catch (error) {
     logger.error('Error al crear los pedidos', { data: { error } });
     throw new Error('Error al crear los prepartes: ' + (error as Error).message);
   }
+}
+
+/** `PED-0007` → `PED-0008`. Sin número previo arranca en `PED-0001`. */
+function nextOrderNumber(last: string | null): string {
+  const lastNumber = parseInt(last?.split('-')[1] ?? '0', 10);
+  const next = (Number.isNaN(lastNumber) ? 0 : lastNumber) + 1;
+  return `PED-${String(next).padStart(4, '0')}`;
 }
 
 /** El formulario manda el equipo del cliente como array; en la tabla va uno solo. */
@@ -271,14 +318,24 @@ function normalizeSingleEquipment(value: string | string[] | null | undefined): 
  */
 export async function updatePreparte(id: string, preparteData: Partial<Preparte>) {
   try {
+    await assertPreparteActionAllowed('update');
+
     const companyId = await getActiveCompanyId();
     const current = await requirePreparteInCompany(id, companyId);
 
     const contratoId = preparteData.contrato_id ?? current.contrato_id;
+    const clienteId = preparteData.cliente_id ?? current.cliente_id;
+    // Si cambia cliente, contrato, sector o área se revalida que el contrato sea del cliente.
+    const revalidateService =
+      preparteData.cliente_id !== undefined ||
+      preparteData.contrato_id !== undefined ||
+      'sector_service_id' in preparteData ||
+      'areas_service_id' in preparteData;
 
     await assertPreparteReferences(companyId, {
       customerIds: preparteData.cliente_id ? [preparteData.cliente_id] : [],
       serviceIds: preparteData.contrato_id ? [preparteData.contrato_id] : [],
+      servicePairs: revalidateService ? [{ serviceId: contratoId, customerId: clienteId }] : [],
       itemIds: 'item' in preparteData ? [toUuidOrNull(preparteData.item)].filter((v): v is string => v !== null) : [],
       customerEquipmentIds:
         'equipos_cliente' in preparteData
@@ -291,6 +348,8 @@ export async function updatePreparte(id: string, preparteData: Partial<Preparte>
     const status = toPreparteStatus(preparteData.status);
 
     const data: Record<string, unknown> = { updated_at: new Date() };
+    // Pedido viejo sin empresa: al tocarlo lo adopta la empresa activa.
+    if (current.company_id === null) data.company_id = companyId;
 
     if (preparteData.cliente_id !== undefined) data.cliente_id = preparteData.cliente_id;
     if (preparteData.contrato_id !== undefined) data.contrato_id = preparteData.contrato_id;
@@ -321,33 +380,24 @@ export async function updatePreparte(id: string, preparteData: Partial<Preparte>
 
     // Normalizar sector/área al `service_sectors.id` / `service_areas.id` del contrato.
     if ('sector_service_id' in preparteData) {
-      const raw = toUuidOrNull(preparteData.sector_service_id);
-      if (!raw) {
-        data.sector_service_id = null;
-      } else {
-        const map = await buildSectorMap([contratoId], [raw]);
-        data.sector_service_id = map.get(`${contratoId}:${raw}`) ?? map.get(raw) ?? raw;
-      }
+      data.sector_service_id = await resolveSingleRelationId(
+        preparteData.sector_service_id,
+        contratoId,
+        buildSectorMap,
+        'sector'
+      );
     }
     if ('areas_service_id' in preparteData) {
-      const raw = toUuidOrNull(preparteData.areas_service_id);
-      if (!raw) {
-        data.areas_service_id = null;
-      } else {
-        const map = await buildAreaMap([contratoId], [raw]);
-        data.areas_service_id = map.get(`${contratoId}:${raw}`) ?? map.get(raw) ?? raw;
-      }
+      data.areas_service_id = await resolveSingleRelationId(
+        preparteData.areas_service_id,
+        contratoId,
+        buildAreaMap,
+        'área'
+      );
     }
 
     // El actor del cierre lo pone el servidor, nunca el cliente.
-    if (status === preparte_status.rechazado || status === preparte_status.cancelado || status === preparte_status.reprogramado) {
-      const profile = await getServerAuthProfile();
-      if (profile) {
-        if (status === preparte_status.rechazado) data.rejected_by = profile.credentialId;
-        else if (status === preparte_status.cancelado) data.cancelled_by = profile.credentialId;
-        else data.reprogrammed_by = profile.credentialId;
-      }
-    }
+    Object.assign(data, await getStatusActorPayload(status));
 
     const updated = await prisma.preparte.update({ where: { id }, data });
 
@@ -370,6 +420,7 @@ export async function updatePreparte(id: string, preparteData: Partial<Preparte>
 /** Replica la imagen en todas las líneas que comparten `numero_pedido` (empresa activa). */
 export async function updatePreparteImageByOrderNumber(numero_pedido: string, imageUrl: string) {
   try {
+    await assertPreparteActionAllowed('update');
     const companyId = await getActiveCompanyId();
     const result = await prisma.preparte.updateMany({
       where: { numero_pedido, ...preparteCompanyScope(companyId) },
@@ -385,6 +436,7 @@ export async function updatePreparteImageByOrderNumber(numero_pedido: string, im
 /** Elimina una línea de pedido de la empresa activa. */
 export async function deletePreparte(id: string) {
   try {
+    await assertPreparteActionAllowed('delete');
     const companyId = await getActiveCompanyId();
     await requirePreparteInCompany(id, companyId);
     await prisma.preparte.delete({ where: { id } });
@@ -482,6 +534,8 @@ export async function movePreparteFile(
   contratoName: string,
   numeroPedido: string
 ): Promise<string> {
+  // Se usa tanto al crear como al editar un pedido: alcanza con cualquiera de los dos permisos.
+  await assertPreparteActionAllowed('create', 'update');
   const companyId = await getActiveCompanyId();
 
   const source = parseStorageFileUrl(fromUrl);

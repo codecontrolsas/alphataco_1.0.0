@@ -7,15 +7,21 @@ import { logWorkOrderCompletedOnMaintenanceOrder } from '@/features/Mantenimient
 import { Logger } from '@/lib/logger';
 import { requireServerAuthProfile } from '@/shared/actions/auth.actions';
 import { INVALIDATION_MAP } from '@/shared/constants/cache-invalidation-map';
-import { prisma } from '@/shared/lib/prisma';
 import { invalidateCacheTags } from '@/shared/utils/cache-invalidation';
 import { revalidatePath } from 'next/cache';
 import { assertOrderInActiveCompany, assertWorkOrderInActiveCompany } from './order-perimeter';
 import { withMaintenanceActor } from '@/features/Mantenimiento/shared/maintenance-actor';
 import { lockMaintenanceOrder } from '@/features/Mantenimiento/shared/order-lock';
-import { assertOrderTransition } from '@/features/Mantenimiento/shared/order-transition';
+import { transitionMaintenanceOrder } from '@/features/Mantenimiento/shared/order-transition';
+import { requireMaintenancePermission } from '@/features/Mantenimiento/shared/permissions.server';
+import { z } from 'zod';
 
 const logger = new Logger('MaintenanceOrders/mutations');
+
+const sectorOrdersSchema = z
+  .array(z.object({ sectorId: z.string().uuid(), sequenceOrder: z.number().int().min(0).max(1000) }))
+  .min(1)
+  .max(200);
 
 /**
  * Actualiza el orden de ejecucion de los sectores (OTs) dentro de una OM.
@@ -27,6 +33,10 @@ export async function updateSectorExecutionOrder(
   orderId: string,
   sectorOrders: Array<{ sectorId: string; sequenceOrder: number }>
 ) {
+  await requireMaintenancePermission('ordenes_mantenimiento', 'update');
+  const parsedOrders = sectorOrdersSchema.safeParse(sectorOrders);
+  if (!parsedOrders.success) throw new Error('El orden de sectores es inválido');
+
   const profile = await requireServerAuthProfile();
   logger.debug('Actualizando orden de ejecucion de sectores', { data: { orderId, sectorOrders } });
 
@@ -34,22 +44,23 @@ export async function updateSectorExecutionOrder(
   await assertOrderInActiveCompany(orderId);
 
   try {
-    // Validar que la orden esté en in_workshop
-    const order = await prisma.maintenance_orders.findUnique({
-      where: { id: orderId },
-      select: { status: true },
-    });
-
-    if (!order) {
-      throw new Error('No se encontró la orden de mantenimiento');
-    }
-
-    if (order.status !== 'in_workshop') {
-      throw new Error('Solo se puede cambiar el orden cuando la OM está en taller');
-    }
-
     await withMaintenanceActor(profile.id, async (tx) => {
-      for (const { sectorId, sequenceOrder } of sectorOrders) {
+      // El estado se lee con el pedido lockeado: no puede salir de taller entre el chequeo y la escritura.
+      await lockMaintenanceOrder(tx, orderId);
+      const order = await tx.maintenance_orders.findUnique({
+        where: { id: orderId },
+        select: { status: true },
+      });
+
+      if (!order) {
+        throw new Error('No se encontró la orden de mantenimiento');
+      }
+
+      if (order.status !== 'in_workshop') {
+        throw new Error('Solo se puede cambiar el orden cuando la OM está en taller');
+      }
+
+      for (const { sectorId, sequenceOrder } of parsedOrders.data) {
         await tx.maintenance_order_items.updateMany({
           where: {
             maintenance_order_id: orderId,
@@ -63,7 +74,7 @@ export async function updateSectorExecutionOrder(
         maintenanceOrderId: orderId,
         actionType: ACTIVITY_LOG.SECTOR_EXECUTION_ORDER_UPDATED,
         performedBy: profile.id,
-        metadata: { sectorOrders },
+        metadata: { sectorOrders: parsedOrders.data },
       });
     });
 
@@ -80,20 +91,14 @@ export async function updateSectorExecutionOrder(
  * Completa manualmente una OT de taller externo
  */
 export async function completeExternalWorkOrder(workOrderId: string) {
+  await requireMaintenancePermission('ordenes_mantenimiento', 'update');
   // Perímetro: la OT tiene que ser de la empresa activa.
-  await assertWorkOrderInActiveCompany(workOrderId);
+  const companyId = await assertWorkOrderInActiveCompany(workOrderId);
   logger.debug('Completando OT externa', { data: { workOrderId } });
 
-  // Intentar obtener el profile (puede ser nulo si es proceso automático)
-  let profileId: string | null = null;
-  try {
-    const profile = await requireServerAuthProfile();
-    profileId = profile.id;
-  } catch {
-    logger.warn('No se pudo obtener profile para completeExternalWorkOrder, usando null', {
-      data: { workOrderId },
-    });
-  }
+  // Cerrar una OT es una acción de usuario: sin sesión no hay autor del cierre.
+  const profile = await requireServerAuthProfile();
+  const profileId = profile.id;
 
   try {
     const maintenanceOrderId = await withMaintenanceActor(profileId, async (tx) => {
@@ -112,15 +117,20 @@ export async function completeExternalWorkOrder(workOrderId: string) {
 
       if (maintenanceOrderId) await lockMaintenanceOrder(tx, maintenanceOrderId);
 
-      // Completar la OT
-      await tx.work_orders.update({
-        where: { id: workOrderId },
+      // Completar la OT: solo si sigue abierta (con el estado en el `where`, un doble click o un
+      // cierre concurrente no la vuelve a escribir ni duplica el registro de actividad).
+      const closed = await tx.work_orders.updateMany({
+        where: { id: workOrderId, company_id: companyId, status: { notIn: ['completed', 'completed_partial', 'cancelled'] } },
         data: {
           status: 'completed',
           completed_at: new Date(),
           completed_by: profileId,
         },
       });
+
+      if (closed.count !== 1) {
+        throw new Error('La orden de trabajo ya está cerrada o cancelada');
+      }
 
       await logActivity(tx, {
         workOrderId: workOrderId,
@@ -146,11 +156,7 @@ export async function completeExternalWorkOrder(workOrderId: string) {
         const allClosed = areAllWorkOrdersClosed(allWOs.map((wo) => wo.status));
 
         if (allClosed) {
-          await assertOrderTransition(tx, maintenanceOrderId, 'pending_workshop_validation');
-          await tx.maintenance_orders.update({
-            where: { id: maintenanceOrderId },
-            data: { status: 'pending_workshop_validation' },
-          });
+          await transitionMaintenanceOrder(tx, maintenanceOrderId, 'pending_workshop_validation');
 
           logger.info('Maintenance order ready for workshop validation (external WO completed)', {
             data: { maintenanceOrderId, workOrderId },

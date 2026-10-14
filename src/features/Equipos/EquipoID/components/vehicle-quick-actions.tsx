@@ -11,59 +11,63 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { condition_enum } from '@/generated/prisma/enums';
-import { cn } from '@/lib/utils';
+import { Logger } from '@/lib/logger';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
-import { CalendarIcon, MoreHorizontal, Truck } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { MoreHorizontal, Truck } from 'lucide-react';
+import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { toggleVehicleStatus } from '../lib/actions/vehicle-actions';
+import { invalidateVehicleLists } from '../lib/invalidate-vehicle-lists';
+
+const logger = new Logger('VehicleQuickActions');
 
 interface VehicleQuickActionsProps {
   equipmentId: string | undefined;
   isActive: boolean | undefined;
-  condition: condition_enum | null | undefined;
 }
 
 const terminationSchema = z.object({
-  reason_for_termination: z.string({ required_error: 'La razón de baja es requerida.' }).min(1, 'La razón de baja es requerida.'),
+  reason_for_termination: z
+    .string({ required_error: 'La razón de baja es requerida.' })
+    .min(1, 'La razón de baja es requerida.'),
   termination_date: z.date({ required_error: 'La fecha de baja es requerida.' }),
 });
 
 const termination_reason_enum_equipment = ['venta', 'destrucción total', 'devolución', 'otro'];
 
-export function VehicleQuickActions({ equipmentId, isActive, condition }: VehicleQuickActionsProps) {
+export function VehicleQuickActions({ equipmentId, isActive }: VehicleQuickActionsProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
   const [showDeactivateDialog, setShowDeactivateDialog] = useState(false);
   const [showActivateDialog, setShowActivateDialog] = useState(false);
 
-  const handleToggleStatus = (activate: boolean) => {
+  const handleActivate = () => {
     startTransition(async () => {
       try {
-        // Here you would call your server action to toggle employee status
-        await toggleVehicleStatus(equipmentId!, activate, condition ?? condition_enum.operativo);
-        toast.success(`Equipo ${activate ? 'activado' : 'dado de baja'} correctamente`);
-        setShowDeactivateDialog(false);
+        await toggleVehicleStatus(equipmentId!, true);
+        toast.success('Equipo activado correctamente');
         setShowActivateDialog(false);
+        invalidateVehicleLists(queryClient);
         router.refresh();
       } catch (error) {
-        toast.error('Error al cambiar el estado del equipo');
+        logger.error('Error al activar el equipo', { data: { error, equipmentId } });
+        toast.error(error instanceof Error ? error.message : 'Error al cambiar el estado del equipo');
       }
     });
   };
@@ -81,19 +85,21 @@ export function VehicleQuickActions({ equipmentId, isActive, condition }: Vehicl
   async function onSubmit(values: z.infer<typeof terminationSchema>) {
     startTransition(async () => {
       try {
+        // Fecha como 'YYYY-MM-DD': la condición (no operativo) la fija el servidor.
         await toggleVehicleStatus(
           equipmentId!,
           false,
-          condition_enum.no_operativo,
           values.reason_for_termination,
-          values.termination_date
+          moment(values.termination_date).format('YYYY-MM-DD')
         );
         toast.success(`Equipo dado de baja correctamente`);
         setShowDeactivateDialog(false);
         form.reset();
+        invalidateVehicleLists(queryClient);
         router.refresh();
       } catch (error) {
-        toast.error('Error al dar de baja al equipo');
+        logger.error('Error al dar de baja el equipo', { data: { error, equipmentId } });
+        toast.error(error instanceof Error ? error.message : 'Error al dar de baja al equipo');
       }
     });
   }
@@ -102,7 +108,7 @@ export function VehicleQuickActions({ equipmentId, isActive, condition }: Vehicl
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" aria-label="Más acciones del equipo">
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
@@ -113,7 +119,7 @@ export function VehicleQuickActions({ equipmentId, isActive, condition }: Vehicl
               Dar de Baja Equipo
             </DropdownMenuItem>
           ) : (
-            <DropdownMenuItem onClick={() => setShowActivateDialog(true)} className="text-green-600">
+            <DropdownMenuItem onClick={() => setShowActivateDialog(true)} className="text-ok">
               <Truck className="h-4 w-4 mr-2" />
               Activar Equipo
             </DropdownMenuItem>
@@ -127,7 +133,8 @@ export function VehicleQuickActions({ equipmentId, isActive, condition }: Vehicl
           <AlertDialogHeader>
             <AlertDialogTitle>¿Dar de baja equipo?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción dará de baja al equipo. Podrás reactivarlo más tarde si es necesario.
+              Esta acción dará de baja al equipo y dejará de figurar entre los activos. Podrás reactivarlo más tarde si
+              es necesario.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="w-full">
@@ -153,7 +160,7 @@ export function VehicleQuickActions({ equipmentId, isActive, condition }: Vehicl
                           ))}
                         </SelectContent>
                       </Select>
-                      <FormDescription>Elige la razón por la que deseas dar de baja al empleado</FormDescription>
+                      <FormDescription>Elige la razón por la que deseas dar de baja al equipo</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -164,33 +171,17 @@ export function VehicleQuickActions({ equipmentId, isActive, condition }: Vehicl
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
                       <FormLabel>Fecha de Baja</FormLabel>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button variant={'outline'} className={cn(' pl-3 text-left font-normal')}>
-                              {field.value ? (
-                                format(field.value, 'P', {
-                                  locale: es,
-                                })
-                              ) : (
-                                <span>Elegir fecha</span>
-                              )}
-                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
-                            disabled={(date) => date > new Date() || date < new Date('1900-01-01')}
-                            initialFocus
-                            locale={es}
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      <FormDescription>Fecha en la que se dio de baja</FormDescription>
+                      <FormControl>
+                        <EnhancedDatePicker
+                          date={field.value}
+                          setDate={field.onChange}
+                          minDate={new Date('1900-01-01')}
+                          maxDate={moment(argentinaDate(), 'YYYY-MM-DD').toDate()}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Fecha en la que se dio de baja (escribila o elegila en el calendario)
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -204,12 +195,6 @@ export function VehicleQuickActions({ equipmentId, isActive, condition }: Vehicl
               </form>
             </Form>
           </div>
-          {/* <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => handleToggleStatus(false)} disabled={isPending}>
-              {isPending ? 'Dando de baja...' : 'Dar de baja'}
-            </AlertDialogAction>
-          </AlertDialogFooter> */}
         </AlertDialogContent>
       </AlertDialog>
 
@@ -218,11 +203,13 @@ export function VehicleQuickActions({ equipmentId, isActive, condition }: Vehicl
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Activar equipo?</AlertDialogTitle>
-            <AlertDialogDescription>Esta acción activará al equipo y podrá acceder al sistema.</AlertDialogDescription>
+            <AlertDialogDescription>
+              Esta acción reactivará el equipo y volverá a figurar entre los activos.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => handleToggleStatus(true)} disabled={isPending}>
+            <AlertDialogAction onClick={handleActivate} disabled={isPending}>
               {isPending ? 'Activando...' : 'Activar'}
             </AlertDialogAction>
           </AlertDialogFooter>

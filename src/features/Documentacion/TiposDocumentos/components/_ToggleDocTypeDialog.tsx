@@ -34,8 +34,7 @@ interface ToggleDocTypeDialogProps {
   onSuccess: () => void;
 }
 
-type DeactivateOption = 'deactivate_keep' | 'deactivate_delete_empty' | 'hard_delete';
-type ActivateOption = 'activate_recreate' | 'activate_no_alerts';
+type DeactivateOption = 'deactivate_keep' | 'hard_delete';
 
 // ============================================
 // SUBCOMPONENTE: CONTENIDO DE DESACTIVACIÓN
@@ -43,25 +42,15 @@ type ActivateOption = 'activate_recreate' | 'activate_no_alerts';
 
 interface DeactivateContentProps {
   uploadedCount: number;
-  emptyAlertCount: number;
-  mandatory: boolean;
   canHardDelete: boolean;
   selectedOption: DeactivateOption;
   onOptionChange: (value: DeactivateOption) => void;
 }
 
-function DeactivateContent({
-  uploadedCount,
-  emptyAlertCount,
-  mandatory,
-  canHardDelete,
-  selectedOption,
-  onOptionChange,
-}: DeactivateContentProps) {
-  // Case B: docs were uploaded — no hard delete
-  if (uploadedCount > 0) {
-    return (
-      <div className="space-y-4">
+function DeactivateContent({ uploadedCount, canHardDelete, selectedOption, onOptionChange }: DeactivateContentProps) {
+  return (
+    <div className="space-y-4">
+      {uploadedCount > 0 ? (
         <div className="flex items-start gap-2 rounded-md border border-yellow-200 bg-yellow-50 p-3">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-600" />
           <p className="text-sm text-yellow-800">
@@ -70,47 +59,14 @@ function DeactivateContent({
               {uploadedCount}
             </Badge>{' '}
             documento{uploadedCount !== 1 ? 's' : ''} subido{uploadedCount !== 1 ? 's' : ''}. No se puede eliminar
-            permanentemente.
+            permanentemente; al desactivarlo dejará de exigirse y los documentos se conservan.
           </p>
         </div>
-        <RadioGroup value={selectedOption} onValueChange={(v) => onOptionChange(v as DeactivateOption)}>
-          <div className="flex items-start gap-3 rounded-md border p-3">
-            <RadioGroupItem value="deactivate_keep" id="deactivate_keep" className="mt-0.5" />
-            <Label htmlFor="deactivate_keep" className="cursor-pointer font-normal leading-snug">
-              Desactivar y mantener{' '}
-              {emptyAlertCount > 0 ? (
-                <>
-                  las{' '}
-                  <Badge variant="secondary" className="font-semibold">
-                    {emptyAlertCount}
-                  </Badge>{' '}
-                  alerta{emptyAlertCount !== 1 ? 's' : ''} vacía{emptyAlertCount !== 1 ? 's' : ''}
-                </>
-              ) : (
-                'las alertas existentes'
-              )}
-            </Label>
-          </div>
-          {emptyAlertCount > 0 ? (
-            <div className="flex items-start gap-3 rounded-md border p-3">
-              <RadioGroupItem value="deactivate_delete_empty" id="deactivate_delete_empty" className="mt-0.5" />
-              <Label htmlFor="deactivate_delete_empty" className="cursor-pointer font-normal leading-snug">
-                Desactivar y borrar las{' '}
-                <Badge variant="secondary" className="font-semibold">
-                  {emptyAlertCount}
-                </Badge>{' '}
-                alerta{emptyAlertCount !== 1 ? 's' : ''} vacía{emptyAlertCount !== 1 ? 's' : ''}
-              </Label>
-            </div>
-          ) : null}
-        </RadioGroup>
-      </div>
-    );
-  }
-
-  // Case C: Non-mandatory type
-  if (!mandatory) {
-    return (
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Al desactivar el tipo dejará de exigirse a los recursos y se recalculará el estado documental de la empresa.
+        </p>
+      )}
       <RadioGroup value={selectedOption} onValueChange={(v) => onOptionChange(v as DeactivateOption)}>
         <div className="flex items-start gap-3 rounded-md border p-3">
           <RadioGroupItem value="deactivate_keep" id="deactivate_keep" className="mt-0.5" />
@@ -126,86 +82,12 @@ function DeactivateContent({
               className="mt-0.5 border-destructive text-destructive"
             />
             <Label htmlFor="hard_delete" className="cursor-pointer font-normal leading-snug text-destructive">
-              Eliminar permanentemente el tipo y todas sus alertas
+              Eliminar permanentemente el tipo
             </Label>
           </div>
         ) : null}
       </RadioGroup>
-    );
-  }
-
-  // Case A: mandatory, uploadedCount === 0
-  return (
-    <RadioGroup value={selectedOption} onValueChange={(v) => onOptionChange(v as DeactivateOption)}>
-      <div className="flex items-start gap-3 rounded-md border p-3">
-        <RadioGroupItem value="deactivate_keep" id="deactivate_keep" className="mt-0.5" />
-        <Label htmlFor="deactivate_keep" className="cursor-pointer font-normal leading-snug">
-          Desactivar y mantener alertas
-        </Label>
-      </div>
-      {emptyAlertCount > 0 ? (
-        <div className="flex items-start gap-3 rounded-md border p-3">
-          <RadioGroupItem value="deactivate_delete_empty" id="deactivate_delete_empty" className="mt-0.5" />
-          <Label htmlFor="deactivate_delete_empty" className="cursor-pointer font-normal leading-snug">
-            Desactivar y borrar las{' '}
-            <Badge variant="secondary" className="font-semibold">
-              {emptyAlertCount}
-            </Badge>{' '}
-            alerta{emptyAlertCount !== 1 ? 's' : ''} vacía{emptyAlertCount !== 1 ? 's' : ''}
-          </Label>
-        </div>
-      ) : null}
-      {canHardDelete ? (
-        <div className="flex items-start gap-3 rounded-md border border-destructive/30 p-3">
-          <RadioGroupItem value="hard_delete" id="hard_delete" className="mt-0.5 border-destructive text-destructive" />
-          <Label htmlFor="hard_delete" className="cursor-pointer font-normal leading-snug text-destructive">
-            Eliminar permanentemente (tipo + alertas)
-          </Label>
-        </div>
-      ) : null}
-    </RadioGroup>
-  );
-}
-
-// ============================================
-// SUBCOMPONENTE: CONTENIDO DE ACTIVACIÓN
-// ============================================
-
-interface ActivateContentProps {
-  missingAlertCount: number;
-  mandatory: boolean;
-  selectedOption: ActivateOption;
-  onOptionChange: (value: ActivateOption) => void;
-}
-
-function ActivateContent({ missingAlertCount, mandatory, selectedOption, onOptionChange }: ActivateContentProps) {
-  if (missingAlertCount > 0 && mandatory) {
-    return (
-      <RadioGroup value={selectedOption} onValueChange={(v) => onOptionChange(v as ActivateOption)}>
-        <div className="flex items-start gap-3 rounded-md border p-3">
-          <RadioGroupItem value="activate_recreate" id="activate_recreate" className="mt-0.5" />
-          <Label htmlFor="activate_recreate" className="cursor-pointer font-normal leading-snug">
-            Activar y crear{' '}
-            <Badge variant="secondary" className="font-semibold">
-              {missingAlertCount}
-            </Badge>{' '}
-            alerta{missingAlertCount !== 1 ? 's' : ''} pendiente{missingAlertCount !== 1 ? 's' : ''}
-          </Label>
-        </div>
-        <div className="flex items-start gap-3 rounded-md border p-3">
-          <RadioGroupItem value="activate_no_alerts" id="activate_no_alerts" className="mt-0.5" />
-          <Label htmlFor="activate_no_alerts" className="cursor-pointer font-normal leading-snug">
-            Activar sin crear alertas
-          </Label>
-        </div>
-      </RadioGroup>
-    );
-  }
-
-  return (
-    <p className="text-sm text-muted-foreground">
-      Se activará el tipo de documento y se podrán volver a crear documentos de este tipo.
-    </p>
+    </div>
   );
 }
 
@@ -218,7 +100,6 @@ export function _ToggleDocTypeDialog({ open, onOpenChange, documentType, onSucce
   const isDeactivating = documentType.is_active;
 
   const [deactivateOption, setDeactivateOption] = useState<DeactivateOption>('deactivate_keep');
-  const [activateOption, setActivateOption] = useState<ActivateOption>('activate_recreate');
 
   const {
     data: impact,
@@ -242,7 +123,7 @@ export function _ToggleDocTypeDialog({ open, onOpenChange, documentType, onSucce
   }, [queryClient, onSuccess]);
 
   const deactivateMutation = useMutation({
-    mutationFn: (opts: { deleteEmptyAlerts: boolean }) => deactivateDocumentType(documentType.id, opts),
+    mutationFn: () => deactivateDocumentType(documentType.id),
     onSuccess: () => {
       toast.success('Tipo de documento desactivado');
       invalidateAndClose();
@@ -264,7 +145,7 @@ export function _ToggleDocTypeDialog({ open, onOpenChange, documentType, onSucce
   });
 
   const reactivateMutation = useMutation({
-    mutationFn: (opts: { recreateAlerts: boolean }) => reactivateDocumentType(documentType.id, opts),
+    mutationFn: () => reactivateDocumentType(documentType.id),
     onSuccess: () => {
       toast.success('Tipo de documento activado');
       invalidateAndClose();
@@ -282,16 +163,12 @@ export function _ToggleDocTypeDialog({ open, onOpenChange, documentType, onSucce
       if (deactivateOption === 'hard_delete') {
         hardDeleteMutation.mutate();
       } else {
-        deactivateMutation.mutate({
-          deleteEmptyAlerts: deactivateOption === 'deactivate_delete_empty',
-        });
+        deactivateMutation.mutate();
       }
     } else {
-      reactivateMutation.mutate({
-        recreateAlerts: activateOption === 'activate_recreate',
-      });
+      reactivateMutation.mutate();
     }
-  }, [isDeactivating, deactivateOption, activateOption, hardDeleteMutation, deactivateMutation, reactivateMutation]);
+  }, [isDeactivating, deactivateOption, hardDeleteMutation, deactivateMutation, reactivateMutation]);
 
   const isHardDelete = isDeactivating && deactivateOption === 'hard_delete';
   const confirmVariant = isHardDelete ? 'destructive' : isDeactivating ? 'destructive' : 'default';
@@ -330,19 +207,15 @@ export function _ToggleDocTypeDialog({ open, onOpenChange, documentType, onSucce
             isDeactivating ? (
               <DeactivateContent
                 uploadedCount={impact.uploadedCount}
-                emptyAlertCount={impact.emptyAlertCount}
-                mandatory={impact.docType.mandatory}
                 canHardDelete={impact.canHardDelete}
                 selectedOption={deactivateOption}
                 onOptionChange={setDeactivateOption}
               />
             ) : (
-              <ActivateContent
-                missingAlertCount={impact.missingAlertCount}
-                mandatory={impact.docType.mandatory}
-                selectedOption={activateOption}
-                onOptionChange={setActivateOption}
-              />
+              <p className="text-sm text-muted-foreground">
+                Se activará el tipo de documento y volverá a exigirse a los recursos a los que aplique. Los recursos que
+                no lo tengan cargado pasarán a figurar como faltantes.
+              </p>
             )
           ) : null}
         </div>

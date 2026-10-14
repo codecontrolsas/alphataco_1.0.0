@@ -8,16 +8,18 @@ import {
   buildFiltersWhere,
   buildSearchWhere,
   buildTextFiltersWhere,
-  NULL_FILTER_VALUE,
   parseSearchParams,
-  stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
+import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
+import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
+import { clampedPageParams } from '@/shared/lib/table-pagination';
 
 const logger = new Logger('Preparte/list/actions.server');
 
-const IGNORED_PARAMS = new Set(['tab', 'subtab', 'inactive_subtab']);
 const DATE_RANGE_COLUMNS = ['requestDate', 'executionDate', 'created_at'];
 const TEXT_COLUMNS = [
   'numero_pedido',
@@ -47,7 +49,7 @@ const ALLOWED_FILTER_PARAMS = new Set([
   ...Object.keys(COLUMN_MAP),
   ...TEXT_COLUMNS,
   'quantity',
-  ...DATE_RANGE_COLUMNS.flatMap((column) => [`${column}_from`, `${column}_to`]),
+  ...dateRangeKeys(DATE_RANGE_COLUMNS),
 ]);
 
 const PREPARTE_SELECT = {
@@ -106,18 +108,12 @@ export type PreparteListItem = Omit<
   updated_at: string | null;
 };
 
-export interface PreparteFacetOption {
-  id: string;
-  name: string;
-}
-
+/**
+ * Descarta del estado todo filtro que no sea una columna de la tabla (`tab`, `subtab`, `company_id`…): la
+ * paginada, el export y las facetas arman su `where` SIEMPRE desde este estado.
+ */
 function sanitizeState(state: ReturnType<typeof parseSearchParams>) {
-  for (const key of Object.keys(state.filters)) {
-    if (IGNORED_PARAMS.has(key) || !ALLOWED_FILTER_PARAMS.has(key)) {
-      delete state.filters[key];
-    }
-  }
-  return state;
+  return sanitizeFilters(state, ALLOWED_FILTER_PARAMS);
 }
 
 function buildCompanyScope(companyId: string): Prisma.preparteWhereInput {
@@ -239,7 +235,7 @@ export async function getPrepartesPaginated(
 
   try {
     const state = sanitizeState(parseSearchParams(searchParams));
-    const { skip, take } = stateToPrismaParams(state);
+    const { skip, take } = clampedPageParams(state);
     const where = buildWhereClause(companyId, state);
     const orderBy = buildOrderBy(state);
 
@@ -255,241 +251,198 @@ export async function getPrepartesPaginated(
   }
 }
 
-export async function getAllPrepartesForExport(searchParams: DataTableSearchParams): Promise<PreparteListItem[]> {
+export async function getAllPrepartesForExport(searchParams: DataTableSearchParams) {
   const companyId = await getActiveCompanyId();
 
   try {
     const state = sanitizeState(parseSearchParams(searchParams));
-    const rows = await prisma.preparte.findMany({
-      where: buildWhereClause(companyId, state),
-      orderBy: buildOrderBy(state),
-      select: PREPARTE_SELECT,
+    const where = buildWhereClause(companyId, state);
+    const orderBy = [...buildOrderBy(state), { id: 'asc' as const }];
+
+    // Por tandas y con tope (EXPORT_MAX_ROWS): no se materializa la tabla entera de una sola vez.
+    const rows = await fetchExportRowsInBatches({
+      listIds: (take) => prisma.preparte.findMany({ where, orderBy, select: { id: true }, take }),
+      fetchByIds: (ids) => prisma.preparte.findMany({ where: { id: { in: ids } }, select: PREPARTE_SELECT }),
+      tooLargeMessage: (maxRows) =>
+        `Hay más de ${maxRows.toLocaleString('es-AR')} pedidos con los filtros actuales. Acote la exportación con filtros.`,
     });
 
-    return rows.map(serializePreparte);
+    const data: PreparteListItem[] = rows.map(serializePreparte);
+    return { ok: true, data } satisfies ExportResult<PreparteListItem[]>;
   } catch (error) {
     logger.error('Error al exportar pedidos', { data: { error } });
-    throw new Error('No se pudo exportar la lista de pedidos. Intente nuevamente.');
+    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en producción.
+    const message =
+      error instanceof ExportTooLargeError
+        ? error.message
+        : 'No se pudo exportar la lista de pedidos. Intente nuevamente.';
+    return { ok: false, message } satisfies ExportResult<never>;
   }
 }
 
-function toFacetMap(rows: Array<{ key: string | null | undefined; count: number }>): Map<string, number> {
-  const result = new Map<string, number>();
-  for (const row of rows) {
-    const key = row.key ?? NULL_FILTER_VALUE;
-    result.set(key, (result.get(key) ?? 0) + row.count);
-  }
-  return result;
+/** Opción ya resuelta de una faceta (valor del filtro + etiqueta visible). */
+export interface PreparteFacetOption {
+  value: string;
+  label: string;
 }
 
-function withNullFacetOption(
-  options: PreparteFacetOption[],
-  counts: Map<string, number>,
-  nullLabel = 'Sin asignar'
-): PreparteFacetOption[] {
-  return counts.has(NULL_FILTER_VALUE)
-    ? [...options, { id: NULL_FILTER_VALUE, name: nullLabel }]
-    : options;
+/** Resultado de la faceta de UNA columna: conteos por valor y, para FK, las opciones resueltas. */
+export interface PreparteSingleFacet {
+  counts: Map<string, number>;
+  resolvedOptions?: PreparteFacetOption[];
 }
 
-function hasCredentialId(profile: { credential_id: string | null; fullname: string | null }): profile is {
-  credential_id: string;
-  fullname: string | null;
-} {
-  return typeof profile.credential_id === 'string' && profile.credential_id.length > 0;
+/** Nombres de usuarios (perfiles) por `credential_id`, ordenados alfabéticamente. */
+async function resolveActorOptions(credentialIds: string[]): Promise<PreparteFacetOption[]> {
+  if (credentialIds.length === 0) return [];
+  const profiles = await prisma.profile.findMany({
+    where: { credential_id: { in: credentialIds } },
+    select: { credential_id: true, fullname: true },
+    orderBy: { fullname: 'asc' },
+  });
+  return profiles.flatMap((profile) =>
+    profile.credential_id
+      ? [{ value: profile.credential_id, label: profile.fullname || 'Usuario sin nombre' }]
+      : []
+  );
 }
 
-export async function getPreparteFacets(searchParams?: DataTableSearchParams) {
+/** Ids no nulos de una columna agrupada. */
+function nonNull(values: Array<string | null>): string[] {
+  return values.flatMap((value) => (value ? [value] : []));
+}
+
+/**
+ * Faceta de UNA columna (lazy-load: se pide al abrir el filtro). Los conteos excluyen el filtro propio de
+ * la columna (cross-filter). Para columnas FK devuelve además las opciones resueltas (solo los valores
+ * presentes en el conjunto filtrado). Devuelve `null` si la columna no tiene faceta o la consulta falla.
+ */
+export async function getPreparteSingleFacet(
+  columnId: string,
+  searchParams: DataTableSearchParams
+): Promise<PreparteSingleFacet | null> {
   const companyId = await getActiveCompanyId();
 
   try {
-    const parsedState = searchParams ? sanitizeState(parseSearchParams(searchParams)) : null;
-    const baseWhere = buildCompanyScope(companyId);
+    const state = sanitizeState(parseSearchParams(searchParams));
+    const where = buildWhereClause(companyId, withoutOwnFilter(state, columnId));
 
-    const crossWhere = (excludeColumn: string): Prisma.preparteWhereInput => {
-      if (!parsedState) return baseWhere;
-      const modifiedState = {
-        ...parsedState,
-        filters: { ...parsedState.filters },
-      };
-      delete modifiedState.filters[excludeColumn];
-      delete modifiedState.filters[`${excludeColumn}_from`];
-      delete modifiedState.filters[`${excludeColumn}_to`];
-      return buildWhereClause(companyId, modifiedState);
-    };
-
-    const [
-      statusRows,
-      customerRows,
-      serviceRows,
-      sectorRows,
-      areaRows,
-      equipmentRows,
-      itemRows,
-      typeRows,
-      shiftRows,
-      rejectedByRows,
-      cancelledByRows,
-      reprogrammedByRows,
-    ] = await Promise.all([
-      prisma.preparte.groupBy({ by: ['status'], where: crossWhere('status'), _count: true }),
-      prisma.preparte.groupBy({ by: ['cliente_id'], where: crossWhere('customer'), _count: true }),
-      prisma.preparte.groupBy({ by: ['contrato_id'], where: crossWhere('service'), _count: true }),
-      prisma.preparte.groupBy({ by: ['sector_service_id'], where: crossWhere('sector'), _count: true }),
-      prisma.preparte.groupBy({ by: ['areas_service_id'], where: crossWhere('area'), _count: true }),
-      prisma.preparte.groupBy({ by: ['equipos_cliente'], where: crossWhere('customerEquipment'), _count: true }),
-      prisma.preparte.groupBy({ by: ['item'], where: crossWhere('serviceItem'), _count: true }),
-      prisma.preparte.groupBy({ by: ['tipo'], where: crossWhere('tipo'), _count: true }),
-      prisma.preparte.groupBy({ by: ['jornada'], where: crossWhere('jornada'), _count: true }),
-      prisma.preparte.groupBy({ by: ['rejected_by'], where: crossWhere('rejectedBy'), _count: true }),
-      prisma.preparte.groupBy({ by: ['cancelled_by'], where: crossWhere('cancelledBy'), _count: true }),
-      prisma.preparte.groupBy({ by: ['reprogrammed_by'], where: crossWhere('reprogrammedBy'), _count: true }),
-    ]);
-
-    const customerIds = customerRows.map((row) => row.cliente_id);
-    const serviceIds = serviceRows.map((row) => row.contrato_id);
-    const sectorIds = sectorRows.flatMap((row) => (row.sector_service_id ? [row.sector_service_id] : []));
-    const areaIds = areaRows.flatMap((row) => (row.areas_service_id ? [row.areas_service_id] : []));
-    const equipmentIds = equipmentRows.flatMap((row) => (row.equipos_cliente ? [row.equipos_cliente] : []));
-    const itemIds = itemRows.flatMap((row) => (row.item ? [row.item] : []));
-    const rejectedActorIds = rejectedByRows.flatMap((row) => (row.rejected_by ? [row.rejected_by] : []));
-    const cancelledActorIds = cancelledByRows.flatMap((row) => (row.cancelled_by ? [row.cancelled_by] : []));
-    const reprogrammedActorIds = reprogrammedByRows.flatMap((row) =>
-      row.reprogrammed_by ? [row.reprogrammed_by] : []
-    );
-
-    const [
-      customers,
-      services,
-      sectors,
-      areas,
-      equipment,
-      items,
-      rejectedActors,
-      cancelledActors,
-      reprogrammedActors,
-    ] = await Promise.all([
-      prisma.customers.findMany({
-        where: { id: { in: customerIds } },
-        select: { id: true, name: true },
-        orderBy: { name: 'asc' },
-      }),
-      prisma.customer_services.findMany({
-        where: { id: { in: serviceIds } },
-        select: { id: true, service_name: true },
-        orderBy: { service_name: 'asc' },
-      }),
-      prisma.service_sectors.findMany({
-        where: { id: { in: sectorIds } },
-        select: { id: true, sectors: { select: { name: true } } },
-      }),
-      prisma.service_areas.findMany({
-        where: { id: { in: areaIds } },
-        select: { id: true, areas_cliente: { select: { nombre: true } } },
-      }),
-      prisma.equipos_clientes.findMany({
-        where: { id: { in: equipmentIds } },
-        select: { id: true, name: true },
-        orderBy: { name: 'asc' },
-      }),
-      prisma.service_items.findMany({
-        where: { id: { in: itemIds } },
-        select: { id: true, item_name: true },
-        orderBy: { item_name: 'asc' },
-      }),
-      prisma.profile.findMany({
-        where: { credential_id: { in: rejectedActorIds } },
-        select: { credential_id: true, fullname: true },
-        orderBy: { fullname: 'asc' },
-      }),
-      prisma.profile.findMany({
-        where: { credential_id: { in: cancelledActorIds } },
-        select: { credential_id: true, fullname: true },
-        orderBy: { fullname: 'asc' },
-      }),
-      prisma.profile.findMany({
-        where: { credential_id: { in: reprogrammedActorIds } },
-        select: { credential_id: true, fullname: true },
-        orderBy: { fullname: 'asc' },
-      }),
-    ]);
-
-    const status = toFacetMap(statusRows.map((row) => ({ key: row.status, count: row._count })));
-    const customer = toFacetMap(customerRows.map((row) => ({ key: row.cliente_id, count: row._count })));
-    const service = toFacetMap(serviceRows.map((row) => ({ key: row.contrato_id, count: row._count })));
-    const sector = toFacetMap(sectorRows.map((row) => ({ key: row.sector_service_id, count: row._count })));
-    const area = toFacetMap(areaRows.map((row) => ({ key: row.areas_service_id, count: row._count })));
-    const customerEquipment = toFacetMap(
-      equipmentRows.map((row) => ({ key: row.equipos_cliente, count: row._count }))
-    );
-    const serviceItem = toFacetMap(itemRows.map((row) => ({ key: row.item, count: row._count })));
-    const rejectedBy = toFacetMap(rejectedByRows.map((row) => ({ key: row.rejected_by, count: row._count })));
-    const cancelledBy = toFacetMap(cancelledByRows.map((row) => ({ key: row.cancelled_by, count: row._count })));
-    const reprogrammedBy = toFacetMap(
-      reprogrammedByRows.map((row) => ({ key: row.reprogrammed_by, count: row._count }))
-    );
-
-    return {
-      status,
-      customer,
-      customerOptions: customers.map((row) => ({ id: row.id, name: row.name || 'Cliente sin nombre' })),
-      service,
-      serviceOptions: services.map((row) => ({ id: row.id, name: row.service_name || 'Contrato sin nombre' })),
-      sector,
-      sectorOptions: withNullFacetOption(
-        sectors.map((row) => ({ id: row.id, name: row.sectors?.name || 'Sector sin nombre' })),
-        sector,
-        'Sin sector'
-      ),
-      area,
-      areaOptions: withNullFacetOption(
-        areas.map((row) => ({ id: row.id, name: row.areas_cliente?.nombre || 'Área sin nombre' })),
-        area,
-        'Sin área'
-      ),
-      customerEquipment,
-      customerEquipmentOptions: withNullFacetOption(
-        equipment.map((row) => ({ id: row.id, name: row.name || 'Equipo sin nombre' })),
-        customerEquipment,
-        'Sin equipo'
-      ),
-      serviceItem,
-      serviceItemOptions: withNullFacetOption(
-        items.map((row) => ({ id: row.id, name: row.item_name || 'Ítem sin nombre' })),
-        serviceItem,
-        'Sin ítem'
-      ),
-      tipo: toFacetMap(typeRows.map((row) => ({ key: row.tipo, count: row._count }))),
-      jornada: toFacetMap(shiftRows.map((row) => ({ key: row.jornada, count: row._count }))),
-      rejectedBy,
-      rejectedByOptions: withNullFacetOption(
-        rejectedActors.filter(hasCredentialId).map((row) => ({
-          id: row.credential_id,
-          name: row.fullname || 'Usuario sin nombre',
-        })),
-        rejectedBy
-      ),
-      cancelledBy,
-      cancelledByOptions: withNullFacetOption(
-        cancelledActors.filter(hasCredentialId).map((row) => ({
-          id: row.credential_id,
-          name: row.fullname || 'Usuario sin nombre',
-        })),
-        cancelledBy
-      ),
-      reprogrammedBy,
-      reprogrammedByOptions: withNullFacetOption(
-        reprogrammedActors.filter(hasCredentialId).map((row) => ({
-          id: row.credential_id,
-          name: row.fullname || 'Usuario sin nombre',
-        })),
-        reprogrammedBy
-      ),
-    };
+    switch (columnId) {
+      case 'status': {
+        const rows = await prisma.preparte.groupBy({ by: ['status'], where, _count: true });
+        return { counts: toFacetMap(rows.map((row) => ({ key: row.status, count: row._count }))) };
+      }
+      case 'tipo': {
+        const rows = await prisma.preparte.groupBy({ by: ['tipo'], where, _count: true });
+        return { counts: toFacetMap(rows.map((row) => ({ key: row.tipo, count: row._count }))) };
+      }
+      case 'jornada': {
+        const rows = await prisma.preparte.groupBy({ by: ['jornada'], where, _count: true });
+        return { counts: toFacetMap(rows.map((row) => ({ key: row.jornada, count: row._count }))) };
+      }
+      case 'customer': {
+        const rows = await prisma.preparte.groupBy({ by: ['cliente_id'], where, _count: true });
+        const counts = toFacetMap(rows.map((row) => ({ key: row.cliente_id, count: row._count })));
+        const customers = await prisma.customers.findMany({
+          where: { id: { in: nonNull(rows.map((row) => row.cliente_id)) } },
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' },
+        });
+        return {
+          counts,
+          resolvedOptions: customers.map((row) => ({ value: row.id, label: row.name || 'Cliente sin nombre' })),
+        };
+      }
+      case 'service': {
+        const rows = await prisma.preparte.groupBy({ by: ['contrato_id'], where, _count: true });
+        const counts = toFacetMap(rows.map((row) => ({ key: row.contrato_id, count: row._count })));
+        const services = await prisma.customer_services.findMany({
+          where: { id: { in: nonNull(rows.map((row) => row.contrato_id)) } },
+          select: { id: true, service_name: true },
+          orderBy: { service_name: 'asc' },
+        });
+        return {
+          counts,
+          resolvedOptions: services.map((row) => ({ value: row.id, label: row.service_name || 'Contrato sin nombre' })),
+        };
+      }
+      case 'sector': {
+        const rows = await prisma.preparte.groupBy({ by: ['sector_service_id'], where, _count: true });
+        const counts = toFacetMap(rows.map((row) => ({ key: row.sector_service_id, count: row._count })));
+        const sectors = await prisma.service_sectors.findMany({
+          where: { id: { in: nonNull(rows.map((row) => row.sector_service_id)) } },
+          select: { id: true, sectors: { select: { name: true } } },
+        });
+        return {
+          counts,
+          resolvedOptions: sectors.map((row) => ({ value: row.id, label: row.sectors?.name || 'Sector sin nombre' })),
+        };
+      }
+      case 'area': {
+        const rows = await prisma.preparte.groupBy({ by: ['areas_service_id'], where, _count: true });
+        const counts = toFacetMap(rows.map((row) => ({ key: row.areas_service_id, count: row._count })));
+        const areas = await prisma.service_areas.findMany({
+          where: { id: { in: nonNull(rows.map((row) => row.areas_service_id)) } },
+          select: { id: true, areas_cliente: { select: { nombre: true } } },
+        });
+        return {
+          counts,
+          resolvedOptions: areas.map((row) => ({ value: row.id, label: row.areas_cliente?.nombre || 'Área sin nombre' })),
+        };
+      }
+      case 'customerEquipment': {
+        const rows = await prisma.preparte.groupBy({ by: ['equipos_cliente'], where, _count: true });
+        const counts = toFacetMap(rows.map((row) => ({ key: row.equipos_cliente, count: row._count })));
+        const equipment = await prisma.equipos_clientes.findMany({
+          where: { id: { in: nonNull(rows.map((row) => row.equipos_cliente)) } },
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' },
+        });
+        return {
+          counts,
+          resolvedOptions: equipment.map((row) => ({ value: row.id, label: row.name || 'Equipo sin nombre' })),
+        };
+      }
+      case 'serviceItem': {
+        const rows = await prisma.preparte.groupBy({ by: ['item'], where, _count: true });
+        const counts = toFacetMap(rows.map((row) => ({ key: row.item, count: row._count })));
+        const items = await prisma.service_items.findMany({
+          where: { id: { in: nonNull(rows.map((row) => row.item)) } },
+          select: { id: true, item_name: true },
+          orderBy: { item_name: 'asc' },
+        });
+        return {
+          counts,
+          resolvedOptions: items.map((row) => ({ value: row.id, label: row.item_name || 'Ítem sin nombre' })),
+        };
+      }
+      case 'rejectedBy': {
+        const rows = await prisma.preparte.groupBy({ by: ['rejected_by'], where, _count: true });
+        return {
+          counts: toFacetMap(rows.map((row) => ({ key: row.rejected_by, count: row._count }))),
+          resolvedOptions: await resolveActorOptions(nonNull(rows.map((row) => row.rejected_by))),
+        };
+      }
+      case 'cancelledBy': {
+        const rows = await prisma.preparte.groupBy({ by: ['cancelled_by'], where, _count: true });
+        return {
+          counts: toFacetMap(rows.map((row) => ({ key: row.cancelled_by, count: row._count }))),
+          resolvedOptions: await resolveActorOptions(nonNull(rows.map((row) => row.cancelled_by))),
+        };
+      }
+      case 'reprogrammedBy': {
+        const rows = await prisma.preparte.groupBy({ by: ['reprogrammed_by'], where, _count: true });
+        return {
+          counts: toFacetMap(rows.map((row) => ({ key: row.reprogrammed_by, count: row._count }))),
+          resolvedOptions: await resolveActorOptions(nonNull(rows.map((row) => row.reprogrammed_by))),
+        };
+      }
+      default:
+        logger.warn('columnId no soportado en getPreparteSingleFacet', { data: { columnId } });
+        return null;
+    }
   } catch (error) {
-    logger.error('Error al obtener facetas de pedidos', { data: { error } });
+    logger.error('Error al obtener la faceta de pedidos', { data: { error, columnId } });
     return null;
   }
 }
-
-export type PreparteFacets = Awaited<ReturnType<typeof getPreparteFacets>>;

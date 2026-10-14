@@ -13,13 +13,8 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import {
-  createTemplate,
-  getTemplateById,
-  updateTemplate,
-  type AxleInput,
-  type TemplateListItem,
-} from '../actions/actions.server';
+import type { AxleInput, TemplateListItem } from '../actions/actions.server';
+import { createTemplate, getTemplateById, updateTemplate } from '../actions/template-crud.server';
 import { AxleConfigurator } from './AxleConfigurator';
 import { TemplatePreview } from './TemplatePreview';
 

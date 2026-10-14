@@ -1,4 +1,4 @@
-import { Card, CardDescription } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getDocumentDetail } from '@/features/Documentacion/DetalleDocumento/actions/document-detail.server';
 import { CompanyInfoCard } from '@/features/Documentacion/DetalleDocumento/components/CompanyInfoCard';
@@ -9,8 +9,10 @@ import { DocumentTypeCard } from '@/features/Documentacion/DetalleDocumento/comp
 import { EmployeeInfoCard } from '@/features/Documentacion/DetalleDocumento/components/EmployeeInfoCard';
 import { EquipmentInfoCard } from '@/features/Documentacion/DetalleDocumento/components/EquipmentInfoCard';
 import { resourceLabel } from '@/features/Documentacion/DetalleDocumento/lib/document-detail';
+import { MISSING_ROW_PREFIX } from '@/features/Documentacion/shared/compliance/server/document-entries.server';
 import { checkPermissionServer, getUserPermissionsMapServer } from '@/features/Permissions';
 import { TabsManagerServer, type TabDefinition } from '@/features/TabsManager';
+import BackButton from '@/shared/components/common/BackButton';
 import { Archive, Building2, FileText, User, Wrench } from 'lucide-react';
 import { Suspense } from 'react';
 
@@ -28,6 +30,9 @@ function DocumentDetailMessage({ title, description }: { title: string; descript
           <div className="space-y-2">
             <p className="text-muted-foreground font-medium">{title}</p>
             <p className="text-sm text-muted-foreground">{description}</p>
+            <div className="pt-2">
+              <BackButton />
+            </div>
           </div>
         </div>
       </Card>
@@ -56,13 +61,23 @@ export async function DocumentDetailSection({ documentId, searchParams }: Docume
     return <DocumentDetailMessage title="Sin acceso" description="No tienes permisos para ver esta sección." />;
   }
 
+  // Una exigencia faltante no tiene ficha: todavía no hay documento cargado. Se sube desde la lista.
+  if (documentId.startsWith(MISSING_ROW_PREFIX)) {
+    return (
+      <DocumentDetailMessage
+        title="Documento todavía no cargado"
+        description="Este documento aún no fue subido, por eso no tiene detalle. Subilo desde la lista de documentos con el botón «Subir»."
+      />
+    );
+  }
+
   const detail = await getDocumentDetail(documentId, resourceParam);
 
   if (!detail) {
     return (
       <DocumentDetailMessage
         title="Documento no encontrado"
-        description="El documento no existe o no pertenece a la empresa activa."
+        description="El documento no existe (pudo haber sido eliminado), todavía no tiene archivo o no pertenece a la empresa activa."
       />
     );
   }
@@ -71,9 +86,10 @@ export async function DocumentDetailSection({ documentId, searchParams }: Docume
   const documentType = document.document_types;
   const documentPath = document.document_path ?? '';
   const isCompanyDocument = detail.resource === 'company';
-  // 358: documento archivado = ya no aplica al recurso; se muestra como historial, sin estado de
-  // vigencia. `documents_company` no tiene `archived_at`.
-  const isArchived = detail.resource === 'company' ? false : detail.document.archived_at != null;
+  // "Ya no aplica" es derivado: el tipo hoy no le aplica al recurso (cambió su función o condición).
+  // Se muestra como historial, sin estado de vigencia. El estado también es derivado (vencido por fecha).
+  const { derived } = detail;
+  const isArchived = derived.notApplicable;
 
   const tabs: TabDefinition<'documentacion'>[] = [];
 
@@ -172,6 +188,7 @@ export async function DocumentDetailSection({ documentId, searchParams }: Docume
           monthly={documentType?.is_it_montlhy ?? false}
           currentValidity={document.validity ? String(document.validity) : null}
           currentPeriod={document.period}
+          notApplicable={isArchived}
         />
       ),
     });
@@ -194,7 +211,8 @@ export async function DocumentDetailSection({ documentId, searchParams }: Docume
             <DocumentDetailHeader
               documentTypeName={documentType?.name ?? ''}
               documentPath={documentPath}
-              state={document.state ?? null}
+              state={derived.state}
+              expiringSoonDays={derived.expiringSoon ? derived.daysToExpiry : null}
               denyReason={document.deny_reason}
               isArchived={isArchived}
             />

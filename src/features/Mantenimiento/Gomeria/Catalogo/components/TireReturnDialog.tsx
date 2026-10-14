@@ -1,11 +1,18 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { TireReturnWarehouseSelect } from '@/features/Mantenimiento/Gomeria/shared/TireReturnWarehouseSelect';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { getTireWarehousesForSelect } from '../actions/actions.server';
+import { getTireWarehousesForSelect } from '../actions/tire-selects.server';
 
 interface TireReturnDialogProps {
   /** Número de serie de la cubierta que vuelve al stock. */

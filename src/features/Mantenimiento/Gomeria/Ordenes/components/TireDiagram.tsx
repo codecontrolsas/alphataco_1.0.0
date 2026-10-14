@@ -8,7 +8,7 @@ import {
 } from '@/features/Mantenimiento/Gomeria/shared/TireDiagramRenderer';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { ensureVehicleTirePositions, type EnsuredTirePosition } from '../actions/actions.server';
+import { ensureVehicleTirePositions, type EnsuredTirePosition } from '../actions/service-order-queries.server';
 import { TirePositionCard } from './TirePositionCard';
 
 // ─── Props ───────────────────────────────────────────────────────────────────

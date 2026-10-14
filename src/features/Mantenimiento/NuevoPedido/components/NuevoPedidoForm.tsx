@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { TypeOfRepair } from '@/shared/types/legacy';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Check, ChevronsUpDown, Package, Plus, Trash2, Wrench } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -64,6 +65,7 @@ export function NuevoPedidoForm({
   onSuccess,
 }: NuevoPedidoFormProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [equipmentOpen, setEquipmentOpen] = useState(false);
   const [repairTypesOpen, setRepairTypesOpen] = useState(false);
@@ -223,6 +225,7 @@ export function NuevoPedidoForm({
         description: '',
         repair_types: [],
       });
+      queryClient.invalidateQueries();
       router.refresh();
 
       if (onSuccess) {
@@ -473,7 +476,7 @@ export function NuevoPedidoForm({
                       {maintenance_groups.length > 0 && (
                         <Popover open={groupsOpen} onOpenChange={setGroupsOpen}>
                           <PopoverTrigger asChild>
-                            <Button variant="outline" size="icon" title="Agregar grupo">
+                            <Button variant="outline" size="icon" title="Agregar grupo" aria-label="Agregar grupo">
                               <Package className="h-4 w-4" />
                             </Button>
                           </PopoverTrigger>
@@ -533,6 +536,7 @@ export function NuevoPedidoForm({
                           variant="ghost"
                           size="icon"
                           className="h-4 w-4 p-0 hover:bg-destructive hover:text-destructive-foreground rounded-full"
+                          aria-label={`Quitar ${repair!.name}`}
                           onClick={() => handleRemoveRepairType(repair!.id)}
                         >
                           <Trash2 className="h-3 w-3" />

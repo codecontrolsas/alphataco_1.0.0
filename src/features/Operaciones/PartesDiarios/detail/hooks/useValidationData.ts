@@ -1,14 +1,14 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   getDailyReportDeviations,
   type EmployeeDeviation,
   type EquipmentDeviation,
 } from '../../actions/validation.server';
+import { DETAIL_QUERY_PREFIX } from '../constants';
 
-export const VALIDATION_QUERY_KEY = ['daily-report-deviations'] as const;
 
 /**
  * Clave del índice de desvíos. Los dos componentes son UUIDs no nulos (los nulos se descartan
@@ -20,7 +20,8 @@ function deviationKey(resourceId: string, rowId: string): string {
 
 export function useValidationData(dailyReportId: string, reportDate: string) {
   const { data, isLoading } = useQuery({
-    queryKey: [...VALIDATION_QUERY_KEY, dailyReportId, reportDate],
+    // Cuelga del prefijo del detalle: `invalidateDetail` la refresca junto con la tabla.
+    queryKey: [DETAIL_QUERY_PREFIX, dailyReportId, 'deviations', reportDate],
     queryFn: () => getDailyReportDeviations(dailyReportId, reportDate),
     enabled: !!dailyReportId && !!reportDate,
     staleTime: 30 * 1000,
@@ -55,17 +56,43 @@ export function useValidationData(dailyReportId: string, reportDate: string) {
     return map;
   }, [data?.rows_with_deviations]);
 
-  const getEmployeeDeviation = (employeeId: string, rowId: string): EmployeeDeviation | null => {
-    return employeeDeviationMap.get(deviationKey(employeeId, rowId)) ?? null;
-  };
+  // Getters estables (useCallback): el `useMemo` de columnas depende de ellos y no debe recalcularse
+  // en cada render.
+  const getEmployeeDeviation = useCallback(
+    (employeeId: string, rowId: string): EmployeeDeviation | null =>
+      employeeDeviationMap.get(deviationKey(employeeId, rowId)) ?? null,
+    [employeeDeviationMap]
+  );
 
-  const getEquipmentDeviation = (equipmentId: string, rowId: string): EquipmentDeviation | null => {
-    return equipmentDeviationMap.get(deviationKey(equipmentId, rowId)) ?? null;
-  };
+  const getEquipmentDeviation = useCallback(
+    (equipmentId: string, rowId: string): EquipmentDeviation | null =>
+      equipmentDeviationMap.get(deviationKey(equipmentId, rowId)) ?? null,
+    [equipmentDeviationMap]
+  );
+
+  // Cantidad de desvíos (personal + equipos) por línea; solo entran las líneas con al menos uno.
+  const deviationCountByRow = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!data?.rows_with_deviations) return map;
+    for (const row of data.rows_with_deviations) {
+      const count = row.employee_deviations.length + row.equipment_deviations.length;
+      if (count > 0) map.set(row.row_id, count);
+    }
+    return map;
+  }, [data?.rows_with_deviations]);
+
+  const rowsWithDeviationsCount = deviationCountByRow.size;
+
+  const getRowDeviationCount = useCallback(
+    (rowId: string): number => deviationCountByRow.get(rowId) ?? 0,
+    [deviationCountByRow]
+  );
 
   return {
     isLoading,
     getEmployeeDeviation,
     getEquipmentDeviation,
+    rowsWithDeviationsCount,
+    getRowDeviationCount,
   };
 }

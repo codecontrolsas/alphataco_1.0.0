@@ -3,7 +3,7 @@
 -- Revisado a mano en la Task 4 (P1): sin auth/storage, actor por app.user_id, filtro por empresa.
 
 -- ============================================================================
--- FUNCTIONS (17)
+-- FUNCTIONS (18)
 -- ============================================================================
 
 -- function app_current_user_id (nuevo en Task 4: reemplaza el uid del JWT de Supabase)
@@ -1018,34 +1018,29 @@ BEGIN
 END;
 $function$;
 
+-- function set_updated_at (origen: prisma/migrations/20261019100100_narrow_trigger_guards)
+CREATE OR REPLACE FUNCTION public.set_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$function$;
+
 -- ============================================================================
--- TRIGGERS (7)
+-- TRIGGERS (2)
 -- ============================================================================
+-- T3b (20261019100200_move_cascades_to_code): se eliminaron update_company_by_defect_trigger,
+-- after_service_update (customer_services), after_employee_insert y add_contractor_equipment_after_insert.
+-- Sus cascadas viven en el código; las funciones siguen acá hasta T6. La regla "una empresa por
+-- defecto por owner" es el índice único parcial company_one_default_per_owner (schema.prisma).
 
--- trigger update_company_by_defect_trigger ON company (origen: supabase/migrations/20251103211302_initial_structure.sql)
-DROP TRIGGER IF EXISTS update_company_by_defect_trigger ON public.company;
-CREATE TRIGGER update_company_by_defect_trigger AFTER INSERT OR UPDATE OF by_defect ON public.company FOR EACH ROW EXECUTE FUNCTION public.update_company_by_defect();
-
--- trigger after_service_update ON customer_services (origen: supabase/migrations/20251103211302_initial_structure.sql)
-DROP TRIGGER IF EXISTS after_service_update ON public.customer_services;
-CREATE TRIGGER after_service_update AFTER UPDATE OF is_active ON public.customer_services FOR EACH ROW WHEN ((old.is_active IS DISTINCT FROM new.is_active)) EXECUTE FUNCTION public.deactivate_service_items();
-
--- trigger update_empleado_aptitudes_updated_at ON empleado_aptitudes (origen: supabase/migrations/20251103211302_initial_structure.sql)
+-- trigger update_empleado_aptitudes_updated_at ON empleado_aptitudes (origen: prisma/migrations/20261019100100_narrow_trigger_guards)
 DROP TRIGGER IF EXISTS update_empleado_aptitudes_updated_at ON public.empleado_aptitudes;
-CREATE TRIGGER update_empleado_aptitudes_updated_at BEFORE UPDATE ON public.empleado_aptitudes FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER update_empleado_aptitudes_updated_at BEFORE UPDATE ON public.empleado_aptitudes FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
--- trigger after_employee_insert ON employees (origen: supabase/migrations/20251103211302_initial_structure.sql)
-DROP TRIGGER IF EXISTS after_employee_insert ON public.employees;
-CREATE TRIGGER after_employee_insert AFTER INSERT ON public.employees FOR EACH ROW EXECUTE FUNCTION public.add_to_companies_employees();
-
--- trigger format_employee_names_trigger ON employees (origen: supabase/migrations/20251103211302_initial_structure.sql)
+-- trigger format_employee_names_trigger ON employees (origen: prisma/migrations/20261019100100_narrow_trigger_guards)
 DROP TRIGGER IF EXISTS format_employee_names_trigger ON public.employees;
-CREATE TRIGGER format_employee_names_trigger BEFORE INSERT OR UPDATE ON public.employees FOR EACH ROW EXECUTE FUNCTION public.format_employee_names();
-
--- trigger after_service_update ON service_items (origen: supabase/migrations/20251103211302_initial_structure.sql)
-DROP TRIGGER IF EXISTS after_service_update ON public.service_items;
-CREATE TRIGGER after_service_update AFTER UPDATE OF is_active ON public.service_items FOR EACH ROW WHEN ((old.is_active IS DISTINCT FROM new.is_active)) EXECUTE FUNCTION public.deactivate_service_items();
-
--- trigger add_contractor_equipment_after_insert ON vehicles (origen: supabase/migrations/20251103211302_initial_structure.sql)
-DROP TRIGGER IF EXISTS add_contractor_equipment_after_insert ON public.vehicles;
-CREATE TRIGGER add_contractor_equipment_after_insert AFTER INSERT ON public.vehicles FOR EACH ROW EXECUTE FUNCTION public.equipment_allocated_to();
+CREATE TRIGGER format_employee_names_trigger BEFORE INSERT OR UPDATE OF firstname, lastname ON public.employees FOR EACH ROW EXECUTE FUNCTION public.format_employee_names();

@@ -1,7 +1,11 @@
 import { fetchActiveCustomersForChecklist, fetchActiveEmployeesForChecklist } from '@/features/Checklists';
+import {
+  fetchChecklistTemplateById,
+  fetchFilteredEquipmentForChecklist,
+} from '@/features/Checklists/actions/checklist-queries';
 import { NormalizedChecklistForm } from '@/features/Checklists/components/NormalizedChecklistForm';
-import { fetchChecklistTemplateById, fetchFilteredEquipmentForChecklist } from '@/features/Checklists/actions/checklist-queries';
 import { fetchCustomFormById, getCurrentProfile } from '@/features/Formularios/actions/form-actions';
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { mapEquipmentToChecklistFormat } from '@/lib/utils';
 import BackButton from '@/shared/components/common/BackButton';
 
@@ -9,7 +13,10 @@ async function page({ params }: { params: Promise<{ id: string }> }) {
   // En Next.js 15+, params es una Promise, necesitamos hacer await
   const resolvedParams = await params;
 
-  const currentUserProfile = await getCurrentProfile();
+  const [currentUserProfile, canSubmit] = await Promise.all([
+    getCurrentProfile(),
+    checkPermissionServer('formularios', 'formularios', 'create'),
+  ]);
   const currentUser = currentUserProfile && currentUserProfile.length > 0 ? currentUserProfile[0] : null;
 
   // Intentar obtener el checklist desde la nueva estructura normalizada
@@ -53,6 +60,7 @@ async function page({ params }: { params: Promise<{ id: string }> }) {
           customers={customers}
           employees={employees}
           currentUser={currentUser}
+          canSubmit={canSubmit}
         />
       </div>
     );

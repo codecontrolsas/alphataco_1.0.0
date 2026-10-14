@@ -1,28 +1,23 @@
-import { toDocumentStateCounts } from '@/features/Documentacion/shared/lib/state-counts';
+import 'server-only';
+
 import { Logger } from '@/lib/logger';
-import { prisma } from '@/shared/lib/prisma';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { buildBaseWhereClause } from './lib/where';
+import { stateCountsOf } from '../../lists-shared/document-list-server';
+import { loadEquipmentDocumentRows } from '../lib/equipment-document-rows.server';
 
 const logger = new Logger('DocumentosEquiposPermanentes/metrics.server');
 
 /**
- * Tarjetas por estado de los documentos permanentes de equipos. Usa el mismo WHERE base que la
- * tabla (`buildBaseWhereClause`: equipos activos de la empresa, tipos permanentes activos, sin
- * archivados, permiso de tipos privados) y no aplica los filtros del usuario.
+ * Tarjetas por estado de los documentos permanentes de equipos. Salen de las MISMAS filas que la tabla (motor de cumplimiento, respetando
+ * el permiso de tipos privados), sin los filtros del usuario, y exigen el mismo permiso `view`.
+ * `pendiente` son las filas faltantes.
  */
 export async function getEquipmentPermanentDocumentStateCounts() {
-  const companyId = await getActiveCompanyId();
-
   try {
-    const rows = await prisma.documents_equipment.groupBy({
-      by: ['state'],
-      where: await buildBaseWhereClause(companyId),
-      _count: { _all: true },
-    });
-    return toDocumentStateCounts(rows);
+    return await stateCountsOf('docs-equipos-permanentes', ({ companyId, canViewPrivate }) =>
+      loadEquipmentDocumentRows(companyId, false, canViewPrivate, '')
+    );
   } catch (error) {
-    logger.error('Error al obtener las métricas de documentos permanentes de equipos', { data: { error } });
+    logger.error('Error al obtener las métricas de los documentos permanentes de equipos', { data: { error } });
     throw error;
   }
 }

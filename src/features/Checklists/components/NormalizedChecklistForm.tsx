@@ -5,13 +5,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
+import { Form } from '@/components/ui/form';
 import { CreateChecklistAnswer } from '@/features/Checklists';
 import { fetchSupervisorsForEquipment } from '@/features/Checklists/actions/actionsServer';
 import { getCompatibleEquipmentForHitch, getEquipmentTypeInfo } from '@/features/Checklists/actions/checklist-queries';
@@ -30,10 +24,8 @@ import {
   ITEM_OBSERVATIONS_KEY,
   TEMPLATES_WITH_ITEM_OBSERVATIONS,
   TEMPLATE_PARTS_DIAGRAMS,
-  cleanLabel,
   generateChecklistSchema,
   generateDefaultValues,
-  type ChecklistTemplateSection,
   type Equipment,
   type NormalizedChecklistFormProps,
 } from '@/features/Checklists/lib/checklist-form-schema';
@@ -44,13 +36,10 @@ import { AllGoodDeviationPromptDialog } from '@/features/Mantenimiento/shared/co
 import type { PickableSection } from '@/features/Mantenimiento/shared/components/ChecklistItemPicker';
 import { CriticalDeviationsRepairModal } from '@/features/Mantenimiento/shared/components/critical-deviations-repair-modal';
 import { logger } from '@/lib/logger';
-import { cn } from '@/lib/utils';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AlertCircle, AlertTriangle, Check, ChevronsUpDown, HelpCircle, Link as LinkIcon, X } from 'lucide-react';
-import moment from 'moment';
-import Image from 'next/image';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { AlertCircle, AlertTriangle, HelpCircle } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm, type Control, type FieldErrors, type FieldValues } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -70,6 +59,7 @@ export function NormalizedChecklistForm({
   defaultEquipmentId,
   defaultAnswers,
   readOnly = false,
+  canSubmit = true,
   defaultEmployeeId,
   defaultEmployeeName,
   defaultKilometer,
@@ -78,6 +68,7 @@ export function NormalizedChecklistForm({
   defaultHorometro,
 }: NormalizedChecklistFormProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const pathname = usePathname();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [criticalItemsFailed, setCriticalItemsFailed] = useState<string[]>([]);
@@ -198,10 +189,7 @@ export function NormalizedChecklistForm({
    * salvo cuando la plantilla tiene sección de enganche y no se declaró la unidad.
    */
   const visibleSections = useMemo(
-    () =>
-      sortedSections.filter(
-        (section) => !hiddenSectionCodes.has(getSectionCode(section))
-      ),
+    () => sortedSections.filter((section) => !hiddenSectionCodes.has(getSectionCode(section))),
     [sortedSections, hiddenSectionCodes]
   );
 
@@ -340,7 +328,7 @@ export function NormalizedChecklistForm({
     staleTime: 5 * 60 * 1000,
   });
 
-  const selectedEquipmentType = selectedEquipmentId ? (equipmentTypeInfo ?? null) : null;
+  const selectedEquipmentType = selectedEquipmentId ? equipmentTypeInfo ?? null : null;
 
   /**
    * Al cambiar de equipo se descarta el enganche elegido y sus equipos compatibles: son del
@@ -455,12 +443,14 @@ export function NormalizedChecklistForm({
       } else {
         router.push(`/maintenance/equipment/${equipmentId}/checklists`);
       }
+      queryClient.invalidateQueries();
       router.refresh();
     },
-    [pathname, router, resetFormAfterSubmit]
+    [pathname, router, queryClient, resetFormAfterSubmit]
   );
 
   const onSubmit = async (data: z.infer<typeof schema>) => {
+    if (!canSubmit) return;
     setIsSubmitting(true);
     setCriticalItemsFailed([]);
     setKilometerError(null);
@@ -522,7 +512,6 @@ export function NormalizedChecklistForm({
 
       // Estructurar las respuestas por sección
       const answersBySection = buildAnswersBySection(data, visibleSections);
-
 
       // Guardar en checklist_answers
       // NOTA: El kilometraje ya NO se actualiza directamente aquí.
@@ -671,6 +660,7 @@ export function NormalizedChecklistForm({
             } else {
               router.push(`/maintenance/equipment/${data.equipment_id}/checklists`);
             }
+            queryClient.invalidateQueries();
             router.refresh();
           }, 1500);
         }
@@ -835,7 +825,16 @@ export function NormalizedChecklistForm({
         />
 
         {/* Botones de acción */}
-        {!readOnly && (
+        {!readOnly && !canSubmit && (
+          <Alert role="status">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              No tenés permiso para enviar formularios. Podés ver su contenido, pero para responderlo necesitás el
+              permiso de creación en Formularios.
+            </AlertDescription>
+          </Alert>
+        )}
+        {!readOnly && canSubmit && (
           <div className="flex justify-end gap-4">
             <Button type="button" variant="outline" onClick={() => form.reset()}>
               Limpiar
@@ -876,6 +875,7 @@ export function NormalizedChecklistForm({
               } else {
                 router.push(`/maintenance/equipment/${currentEquipmentId}/checklists`);
               }
+              queryClient.invalidateQueries();
               router.refresh();
             }, 300);
           }}
