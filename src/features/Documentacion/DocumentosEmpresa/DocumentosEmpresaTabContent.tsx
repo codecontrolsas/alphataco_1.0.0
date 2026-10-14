@@ -14,45 +14,48 @@ export default async function DocumentosEmpresaTabContent({
   permissions: Record<string, boolean>;
 }) {
   return (
-    <TabsManagerServer
-      paramName="subtab"
-      searchParams={searchParams}
-      defaultTab="empresa-permanentes"
-      permissions={permissions}
-      tabs={[
-        {
-          value: 'empresa-permanentes',
-          label: (
-            <span className="flex items-center gap-2">
-              <FileArchive className="h-4 w-4" />
-              Documentos Permanentes
-            </span>
-          ),
-          moduleSlug: 'documentacion',
-          tabSlug: 'docs-empresa-permanentes',
-          content: (
-            <Suspense fallback={<CompanyDocsTableSkeleton />}>
-              <CompanyDocsPermanentesList searchParams={searchParams} />
-            </Suspense>
-          ),
-        },
-        {
-          value: 'empresa-mensuales',
-          label: (
-            <span className="flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              Documentos Mensuales
-            </span>
-          ),
-          moduleSlug: 'documentacion',
-          tabSlug: 'docs-empresa-mensuales',
-          content: (
-            <Suspense fallback={<CompanyDocsTableSkeleton />}>
-              <CompanyDocsMensualesList searchParams={searchParams} />
-            </Suspense>
-          ),
-        },
-      ]}
-    />
+    <div>
+      <p className="text-muted-foreground mb-4">Documentación propia de la empresa, con su estado y vencimiento.</p>
+      <TabsManagerServer
+        paramName="subtab"
+        searchParams={searchParams}
+        defaultTab="empresa-permanentes"
+        permissions={permissions}
+        tabs={[
+          {
+            value: 'empresa-permanentes',
+            label: (
+              <span className="flex items-center gap-2">
+                <FileArchive className="h-4 w-4" />
+                Permanentes
+              </span>
+            ),
+            moduleSlug: 'documentacion',
+            tabSlug: 'docs-empresa-permanentes',
+            content: (
+              <Suspense fallback={<CompanyDocsTableSkeleton />}>
+                <CompanyDocsPermanentesList searchParams={searchParams} />
+              </Suspense>
+            ),
+          },
+          {
+            value: 'empresa-mensuales',
+            label: (
+              <span className="flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                Mensuales
+              </span>
+            ),
+            moduleSlug: 'documentacion',
+            tabSlug: 'docs-empresa-mensuales',
+            content: (
+              <Suspense fallback={<CompanyDocsTableSkeleton />}>
+                <CompanyDocsMensualesList searchParams={searchParams} />
+              </Suspense>
+            ),
+          },
+        ]}
+      />
+    </div>
   );
 }

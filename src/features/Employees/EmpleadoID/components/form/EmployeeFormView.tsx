@@ -11,6 +11,7 @@ import { useRefreshAndWait } from '@/shared/hooks/useRefreshAndWait';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { ContactDataFields } from '../../../shared/forms/ContactDataFields';
@@ -41,6 +42,8 @@ export function EmployeeFormView({ employee, mode, onClose }: EmployeeFormViewPr
   // Mismo criterio que la lectura: sin permiso sobre contacto, esa sección no se ofrece.
   const showContact = canView('empleados', 'datos-contacto');
   const { refreshAndWait, isRefreshing } = useRefreshAndWait();
+  // Tras crear, la navegación a la ficha tarda: el botón sigue bloqueado para no crear el mismo legajo dos veces.
+  const [isCreated, setIsCreated] = useState(false);
 
   const form = useForm<EmployeeFormData>({
     resolver: zodResolver(employeeFormSchema),
@@ -50,6 +53,7 @@ export function EmployeeFormView({ employee, mode, onClose }: EmployeeFormViewPr
   const onSubmit = async (data: EmployeeFormData) => {
     if (mode === 'new') {
       const creating = createEmployee(data).then((created) => {
+        setIsCreated(true);
         router.replace(`/dashboard/employee/action?action=view&employee_id=${created.id}`);
       });
       toast.promise(creating, {
@@ -76,7 +80,7 @@ export function EmployeeFormView({ employee, mode, onClose }: EmployeeFormViewPr
     }
   };
 
-  const isSaving = form.formState.isSubmitting || isRefreshing;
+  const isSaving = form.formState.isSubmitting || isRefreshing || isCreated;
   const isNew = mode === 'new';
 
   return (

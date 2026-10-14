@@ -35,6 +35,7 @@ export function AppSidebar() {
       <SidebarHeader className="gap-2 border-b p-3">
         <Link
           href="/dashboard"
+          aria-label={`${BRAND_NAME}: ir al inicio`}
           className="flex items-center gap-2.5 px-1 text-lg font-bold lowercase group-data-[collapsible=icon]:justify-center"
         >
           <BrandMark size={28} />

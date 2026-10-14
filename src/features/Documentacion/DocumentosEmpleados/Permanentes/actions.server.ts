@@ -2,7 +2,6 @@
 
 import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   buildDateRangeFiltersWhere,
   buildFiltersWhere,
@@ -12,6 +11,7 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 
 const logger = new Logger('DocumentosEmpleadosPermanentes/actions.server');
 
@@ -162,13 +162,15 @@ async function buildWhereClause(
     documentTypesConditions.multiresource = { in: boolValues };
   }
 
-  // Búsqueda global: busca en nombre de empleado via relación
+  // Búsqueda global: legajo (coincidencia exacta), nombre del empleado o nombre del documento
   const searchConditions: Record<string, unknown>[] = [];
   if (state.search) {
     searchConditions.push({
       OR: [
+        { employees: { file: { equals: state.search } } },
         { employees: { lastname: { contains: state.search, mode: 'insensitive' } } },
         { employees: { firstname: { contains: state.search, mode: 'insensitive' } } },
+        { document_types: { name: { contains: state.search, mode: 'insensitive' } } },
       ],
     });
   }

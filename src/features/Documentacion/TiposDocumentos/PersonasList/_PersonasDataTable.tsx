@@ -1,5 +1,6 @@
 'use client';
 
+import { formatArgentinaDay } from '@/features/Treasury/lib/today';
 import { document_applies } from '@/generated/prisma/enums';
 import {
   DataTable,
@@ -8,7 +9,6 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { Check, X } from 'lucide-react';
-import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
 import {
   getDocTypeSingleFacet,
@@ -203,7 +203,9 @@ export default function _PersonasDataTable({
         queryFn={tableQueryFn}
         queryKey={['doc-types', 'personas']}
         onStateChange={handleStateChange}
-        searchPlaceholder="Buscar por nombre..."
+        searchPlaceholder="Nombre"
+        showSearch
+        mobileCards
         emptyMessage="No hay tipos de documentos"
         exportConfig={{
           fetchAllData: () => getPersonasDocTypesForExport(currentParams),
@@ -218,10 +220,10 @@ export default function _PersonasDataTable({
             explired: (value) => (value ? 'Sí' : 'No'),
             special: (value) => (value ? 'Sí' : 'No'),
             multiresource: (value) => (value ? 'Sí' : 'No'),
-            is_it_montlhy: (value) => (value ? 'Sí' : 'No'),
+            is_it_montlhy: (value) => (value ? 'Mensual' : 'Permanente'),
             private: (value) => (value ? 'Sí' : 'No'),
             down_document: (value) => (value ? 'Sí' : 'No'),
-            created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
+            created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
           },
         }}
       />

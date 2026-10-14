@@ -1,5 +1,6 @@
 'use client';
 
+import { formatArgentinaDay } from '@/features/Treasury/lib/today';
 import { document_applies } from '@/generated/prisma/enums';
 import {
   DataTable,
@@ -8,7 +9,6 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { Check, X } from 'lucide-react';
-import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
 import { HIDDEN_COLUMNS_BY_DEFAULT, getDocTypeColumns } from '../PersonasList/columns';
 import {
@@ -229,7 +229,9 @@ export default function _EquiposDataTable({
         queryFn={tableQueryFn}
         queryKey={['doc-types', 'equipos']}
         onStateChange={handleStateChange}
-        searchPlaceholder="Buscar por nombre..."
+        searchPlaceholder="Nombre"
+        showSearch
+        mobileCards
         emptyMessage="No hay tipos de documentos"
         exportConfig={{
           fetchAllData: () => getEquiposDocTypesForExport(currentParams),
@@ -245,11 +247,11 @@ export default function _EquiposDataTable({
             special: (value) => (value ? 'Sí' : 'No'),
             multiresource: (value) => (value ? 'Sí' : 'No'),
             has_policy_number: (value) => (value ? 'Sí' : 'No'),
-            is_it_montlhy: (value) => (value ? 'Sí' : 'No'),
+            is_it_montlhy: (value) => (value ? 'Mensual' : 'Permanente'),
             private: (value) => (value ? 'Sí' : 'No'),
             down_document: (value) => (value ? 'Sí' : 'No'),
             equipment_type: (value) => getEquipmentTypeLabel(value as string | null),
-            created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
+            created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
           },
         }}
       />

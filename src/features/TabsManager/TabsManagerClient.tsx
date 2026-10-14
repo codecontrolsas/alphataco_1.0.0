@@ -103,7 +103,7 @@ export function TabsManagerClient<M extends ModuleSlug = ModuleSlug>({
   return (
     <div className="flex flex-col gap-4 h-full">
       <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <div className={actions ? 'flex items-center justify-between gap-4' : undefined}>
+        <div className={actions ? 'flex flex-wrap items-center justify-between gap-4' : undefined}>
           <TabsList variant={isLine ? 'line' : 'default'} className={listClassName ?? defaultListClass}>
             {tabs.map((tab) => (
               <TabsTrigger

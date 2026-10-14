@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription } from '@/components/ui/card';
 import { getDocumentDownloadUrls } from '@/features/Documentacion/shared/actions/document-files.server';
+import { formatArgentinaDay } from '@/features/Treasury/lib/today';
 import {
   DataTable,
   type DataTableFacetedFilterConfig,
@@ -26,7 +27,6 @@ import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
 import type { LucideIcon } from 'lucide-react';
 import { Check, CheckCircle2, CircleOff, Download, X } from 'lucide-react';
-import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -101,7 +101,6 @@ function buildFkFacetResult(
 // ============================================================================
 
 function MonthlyDocumentsDownloadButton({ tableRows }: { tableRows: MonthlyEmployeeDocumentListItem[] }) {
-
   const downloadableRows = tableRows.filter(
     (row) => row.state !== 'pendiente' && row.document_path && row.archived_at == null
   );
@@ -421,7 +420,9 @@ export function _MonthlyEmployeeDocumentsDataTable({
       queryFn={tableQueryFn}
       queryKey={['monthly-employee-documents', employeeId ?? '']}
       onStateChange={handleStateChange}
-      searchPlaceholder="Buscar por empleado..."
+      searchPlaceholder="Legajo, empleado o documento"
+      showSearch
+      mobileCards
       facetedFilters={facetedFilters}
       initialColumnVisibility={mergedColumnVisibility}
       initialFilterVisibility={mergedFilterVisibility}
@@ -449,7 +450,7 @@ export function _MonthlyEmployeeDocumentsDataTable({
           multiresource: (val) =>
             val === true || val === 'true' ? 'Sí' : val === false || val === 'false' ? 'No' : '',
           period: (val) => String(val ?? '-'),
-          created_at: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
+          created_at: (val) => (val ? formatArgentinaDay(val as string) : ''),
           deny_reason: (val) => String(val ?? '-'),
         },
       }}

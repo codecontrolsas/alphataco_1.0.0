@@ -219,8 +219,9 @@ export default function _CompanyDocsPermanentesDataTable({
       isFetchingFacets={isFetchingFacets}
       exportConfig={exportConfig}
       showFilterToggle
-      searchPlaceholder="Buscar por nombre de documento..."
+      searchPlaceholder="Documento"
       showSearch
+      mobileCards
       emptyMessage="No se encontraron documentos permanentes"
       data-testid="company-docs-permanentes-table"
     />

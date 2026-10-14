@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription } from '@/components/ui/card';
 import { getDocumentDownloadUrls } from '@/features/Documentacion/shared/actions/document-files.server';
+import { formatArgentinaDay } from '@/features/Treasury/lib/today';
 import {
   DataTable,
   type DataTableFacetedFilterConfig,
@@ -22,20 +23,19 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { contractTypeVehiclesLabels } from '@/shared/utils/mappers';
 import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
 import { Check, CheckCircle2, CircleOff, Download, X } from 'lucide-react';
-import { contractTypeVehiclesLabels } from '@/shared/utils/mappers';
-import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { HIDDEN_COLUMNS_BY_DEFAULT, columns, stateIcons, stateLabels } from '../columns';
 import { getEquipmentPermanentDocumentsSingleFacet } from '../facets.server';
 import {
   getAllEquipmentPermanentDocumentsForExport,
   getEquipmentPermanentDocumentsPaginated,
   type EquipmentPermanentDocumentListItem,
 } from '../queries.server';
-import { HIDDEN_COLUMNS_BY_DEFAULT, columns, stateIcons, stateLabels } from '../columns';
 
 // ============================================================================
 // TYPES
@@ -55,7 +55,7 @@ interface Props {
 // DEFAULT VISIBLE FILTERS
 // ============================================================================
 
-const DEFAULT_VISIBLE_FILTER_IDS = ['state', 'vehicle', 'document_type'];
+const DEFAULT_VISIBLE_FILTER_IDS = ['state', 'vehicle', 'document_type', 'contractor'];
 
 // ============================================================================
 // HELPERS — builders para reducir boilerplate en fetchFacet
@@ -102,7 +102,6 @@ function buildFkFacetResult(
 // ============================================================================
 
 function EquipmentDocumentsDownloadButton({ tableRows }: { tableRows: EquipmentPermanentDocumentListItem[] }) {
-
   const downloadableRows = tableRows.filter(
     (row) => row.state !== 'pendiente' && row.document_path && row.archived_at == null
   );
@@ -515,7 +514,9 @@ export function _EquipmentPermanentDocumentsDataTable({
       data={data}
       totalRows={totalRows}
       searchParams={searchParams}
-      searchPlaceholder="Buscar por dominio, serie o número interno..."
+      searchPlaceholder="Dominio o documento"
+      showSearch
+      mobileCards
       facetedFilters={facetedFilters}
       initialColumnVisibility={mergedColumnVisibility}
       initialFilterVisibility={mergedFilterVisibility}
@@ -545,8 +546,8 @@ export function _EquipmentPermanentDocumentsDataTable({
           mandatory: (val) => (val === true || val === 'true' ? 'Sí' : val === false || val === 'false' ? 'No' : ''),
           multiresource: (val) =>
             val === true || val === 'true' ? 'Sí' : val === false || val === 'false' ? 'No' : '',
-          validity: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
-          created_at: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
+          validity: (val) => (val ? formatArgentinaDay(val as string) : ''),
+          created_at: (val) => (val ? formatArgentinaDay(val as string) : ''),
           deny_reason: (val) => String(val ?? '-'),
           policy_number: (val) => String(val ?? ''),
           // Nuevas columnas del equipo
@@ -558,9 +559,8 @@ export function _EquipmentPermanentDocumentsDataTable({
           vehicle_sector: (val) => String(val ?? ''),
           vehicle_chassis: (val) => String(val ?? ''),
           vehicle_engine: (val) => String(val ?? ''),
-          vehicle_contract_type: (val) =>
-            val ? (contractTypeVehiclesLabels[val as string] ?? String(val)) : '',
-          vehicle_contract_expiration: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
+          vehicle_contract_type: (val) => (val ? contractTypeVehiclesLabels[val as string] ?? String(val) : ''),
+          vehicle_contract_expiration: (val) => (val ? formatArgentinaDay(val as string) : ''),
         },
       }}
     />

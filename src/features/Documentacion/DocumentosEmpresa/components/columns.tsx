@@ -1,34 +1,68 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
+import {
+  DocumentExpiryCell,
+  DocumentNameCell,
+  DocumentRowActions,
+  DocumentStatePill,
+  parseCompanyValidity,
+  documentStateIcons as sharedDocumentStateIcons,
+} from '@/features/Documentacion/shared/components/DocumentCells';
 import AddCompanyDocumentForm from '@/features/Empresa/General/Documentacion/components/AddCompanyDocumentForm';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { documentStateBadges, documentStateLabels } from '@/shared/utils/mappers';
 import type { ColumnDef } from '@tanstack/react-table';
-import type { LucideIcon } from 'lucide-react';
-import { AlertCircle, CheckCircle2, Clock, ExternalLink, XCircle } from 'lucide-react';
 import moment from 'moment';
-import Link from 'next/link';
 import type { CompanyDocListItem } from '../actions.server';
 
 // ============================================================================
 // HIDDEN COLUMNS BY DEFAULT
 // ============================================================================
 
-export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = [];
+/** Su dato ya se ve en la columna Documento (obligatoriedad y período). */
+export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['mandatory', 'period'];
 
 // ============================================================================
-// STATE ICONS (exported for use in filters)
+// STATE ICONS (exported for use in filters; los mismos de la pill de la tabla)
 // ============================================================================
 
-export const documentStateIcons: Record<string, LucideIcon> = {
-  presentado: ExternalLink,
-  rechazado: XCircle,
-  aprobado: CheckCircle2,
-  vencido: AlertCircle,
-  pendiente: Clock,
-};
+export const documentStateIcons = sharedDocumentStateIcons;
+
+// ============================================================================
+// ACTIONS CELL
+// ============================================================================
+
+function ActionsCell({ doc, isMonthly }: { doc: CompanyDocListItem; isMonthly: boolean }) {
+  const isUploaded = doc.state !== 'pendiente' || !!doc.document_path;
+
+  if (!isUploaded) {
+    return (
+      <div className="flex justify-end">
+        <div className="w-fit">
+          <AddCompanyDocumentForm
+            documentId={doc.id_document_types ?? ''}
+            redirectId={doc.id}
+            documentIsUploaded={false}
+            documentTypeName={doc.document_types?.name}
+            documentTypeExplired={doc.document_types?.explired}
+            documentTypeMontlhy={doc.document_types?.is_it_montlhy ?? undefined}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <DocumentRowActions
+      documentId={doc.id}
+      documentName={doc.document_types?.name}
+      state={doc.state}
+      resource="Empresa"
+      viewTab={isMonthly ? 'docs-empresa-mensuales' : 'docs-empresa-permanentes'}
+    />
+  );
+}
 
 // ============================================================================
 // COLUMN DEFINITIONS
@@ -49,13 +83,19 @@ export function getCompanyDocsColumns(isMonthly: boolean): ColumnDef<CompanyDocL
   };
 
   return [
-    // ── Nombre del documento (FK → document_types.name) ───────────────────
+    // ── Documento (FK → document_types.name + obligatorio/opcional + período) ─
     {
       id: 'documentType',
       accessorFn: (row) => row.document_types?.name ?? '',
-      meta: { title: 'Nombre del documento' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre del documento" />,
-      cell: ({ row }) => <span className="font-medium">{row.original.document_types?.name ?? '-'}</span>,
+      meta: { title: 'Documento' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Documento" />,
+      cell: ({ row }) => (
+        <DocumentNameCell
+          name={row.original.document_types?.name}
+          mandatory={row.original.document_types?.mandatory}
+          period={isMonthly ? row.original.period : null}
+        />
+      ),
       enableSorting: true,
       filterFn: (row, _id, value: string[]) => {
         const id = row.original.document_types?.id;
@@ -70,18 +110,7 @@ export function getCompanyDocsColumns(isMonthly: boolean): ColumnDef<CompanyDocL
       accessorKey: 'state',
       meta: { title: 'Estado' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
-      cell: ({ row }) => {
-        const stateValue = row.original.state as string;
-        const label = documentStateLabels[stateValue] ?? stateValue;
-        const variant = documentStateBadges[stateValue] ?? 'default';
-        const Icon = documentStateIcons[stateValue];
-        return (
-          <Badge variant={variant} className="flex items-center gap-1 w-fit">
-            {Icon && <Icon className="h-3 w-3" />}
-            {label}
-          </Badge>
-        );
-      },
+      cell: ({ row }) => <DocumentStatePill state={row.original.state} />,
       enableSorting: true,
       filterFn: (row, id, value: string[]) => {
         const val = row.getValue(id) as string | null;
@@ -90,21 +119,19 @@ export function getCompanyDocsColumns(isMonthly: boolean): ColumnDef<CompanyDocL
       },
     },
 
-    // ── Mandatorio (document_types.mandatory) ─────────────────────────────
+    // ── Vencimiento (validity / document_types.explired) ──────────────────
     {
-      id: 'mandatory',
-      accessorFn: (row) => row.document_types?.mandatory,
-      meta: { title: 'Mandatorio' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Mandatorio" />,
-      cell: ({ row }) => {
-        const mandatory = row.original.document_types?.mandatory;
-        return <Badge variant={mandatory ? 'destructive' : 'secondary'}>{mandatory ? 'Sí' : 'No'}</Badge>;
-      },
-      enableSorting: false,
-      filterFn: (row, _id, value: string[]) => {
-        const mandatory = row.original.document_types?.mandatory;
-        return value.includes(String(mandatory ?? false));
-      },
+      id: 'validity',
+      accessorKey: 'validity',
+      meta: { title: 'Vencimiento' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Vencimiento" />,
+      cell: ({ row }) => (
+        <DocumentExpiryCell
+          validity={row.original.document_types?.explired ? parseCompanyValidity(row.original.validity) : null}
+          state={row.original.state}
+        />
+      ),
+      enableSorting: true,
     },
 
     // ── Subido por (FK → profile.fullname, via user_id) ──────────────────
@@ -133,33 +160,29 @@ export function getCompanyDocsColumns(isMonthly: boolean): ColumnDef<CompanyDocL
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de carga" />,
       cell: ({ row }) => {
         const date = row.original.created_at;
-        return <span className="text-sm tabular-nums">{date ? moment(date).format('DD/MM/YYYY') : '-'}</span>;
+        return <span className="font-mono tabular-nums">{date ? moment(date).format('DD/MM/YYYY') : '-'}</span>;
       },
       enableSorting: true,
     },
 
-    // ── Vencimiento (validity / document_types.explired) ──────────────────
+    // ── Mandatorio (document_types.mandatory) ─────────────────────────────
     {
-      id: 'validity',
-      accessorKey: 'validity',
-      meta: { title: 'Vencimiento' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Vencimiento" />,
+      id: 'mandatory',
+      accessorFn: (row) => row.document_types?.mandatory,
+      meta: { title: 'Mandatorio' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Mandatorio" />,
       cell: ({ row }) => {
-        const validity = row.original.validity;
-        const explired = row.original.document_types?.explired;
-
-        if (validity) {
-          return <span className="text-sm tabular-nums">{validity}</span>;
-        }
-        if (!explired) {
-          return <span className="text-muted-foreground text-sm">No vence</span>;
-        }
-        return <span className="text-muted-foreground text-sm">Pendiente</span>;
+        const mandatory = row.original.document_types?.mandatory;
+        return <Badge variant={mandatory ? 'destructive' : 'secondary'}>{mandatory ? 'Sí' : 'No'}</Badge>;
       },
-      enableSorting: true,
+      enableSorting: false,
+      filterFn: (row, _id, value: string[]) => {
+        const mandatory = row.original.document_types?.mandatory;
+        return value.includes(String(mandatory ?? false));
+      },
     },
 
-    // ── Período (SOLO para Mensuales) ─────────────────────────────────────
+    // ── Período (SOLO para Mensuales; oculta: ya se ve en la columna Documento) ─
     ...(isMonthly ? [periodColumn] : []),
 
     // ── Acciones ───────────────────────────────────────────────────────────
@@ -169,33 +192,7 @@ export function getCompanyDocsColumns(isMonthly: boolean): ColumnDef<CompanyDocL
       header: () => null,
       enableSorting: false,
       enableHiding: false,
-      cell: ({ row }) => {
-        const doc = row.original;
-        const isUploaded = doc.state !== 'pendiente' || !!doc.document_path;
-
-        if (isUploaded) {
-          return (
-            <Link
-              href={`/dashboard/document/${doc.id}?resource=Empresa`}
-              className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              Ver
-            </Link>
-          );
-        }
-
-        return (
-          <AddCompanyDocumentForm
-            documentId={doc.id_document_types ?? ''}
-            redirectId={doc.id}
-            documentIsUploaded={false}
-            documentTypeName={doc.document_types?.name}
-            documentTypeExplired={doc.document_types?.explired}
-            documentTypeMontlhy={doc.document_types?.is_it_montlhy ?? undefined}
-          />
-        );
-      },
+      cell: ({ row }) => <ActionsCell doc={row.original} isMonthly={isMonthly} />,
     },
   ];
 }

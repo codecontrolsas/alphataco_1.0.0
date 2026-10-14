@@ -80,7 +80,11 @@ export function _DataTableExportButton<TData extends Record<string, unknown>, TV
       <Tooltip>
         <TooltipTrigger asChild>
           <Button variant="outline" size="sm" onClick={handleExport} disabled={isExporting} className="h-9 gap-1.5">
-            {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            {isExporting ? (
+              <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
             <span className="hidden sm:inline">Excel</span>
           </Button>
         </TooltipTrigger>

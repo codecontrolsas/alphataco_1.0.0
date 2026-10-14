@@ -376,6 +376,9 @@ export function getColumns(permissions: Permissions, isActive: boolean): ColumnD
       meta: { excludeFromExport: true },
     },
 
+    // --- Legajo: SIEMPRE antes del nombre (así identifican los usuarios a las personas) ---
+    textColumn('file', 'Legajo', 'font-mono font-semibold tabular-nums'),
+
     // --- Full Name: avatar + nombre (link) + email debajo ---
     {
       id: 'fullName',
@@ -432,9 +435,6 @@ export function getColumns(permissions: Permissions, isActive: boolean): ColumnD
 
     // --- Email (oculta por defecto: se ve bajo el nombre) ---
     textColumn('email', 'Email'),
-
-    // --- Legajo (siempre visible y filtrable) ---
-    textColumn('file', 'Legajo', 'font-mono tabular-nums text-muted-foreground'),
 
     // --- Status ---
     {

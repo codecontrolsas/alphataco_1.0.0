@@ -7,6 +7,7 @@ import { getPreEmployeesPaginated, getRequiredPreEmployeeDocumentsCount } from '
 import { PreEmployeeMetricsSection } from './components/PreEmployeeMetricsSection';
 import { _PreEmployeeDataTable } from './components/_PreEmployeeDataTable';
 import { PreEmployeeMetricsSkeleton } from './fallback/PreEmployeeMetricsSkeleton';
+import { getPreEmployeeStatusMetrics } from './metrics.server';
 
 // ============================================================================
 // TYPES
@@ -27,6 +28,8 @@ export async function PreEmployeeList({ searchParams }: PreEmployeeListProps) {
   const tableParams = stripPrefixFromSearchParams(searchParams, PRE_EMPLOYEES_TABLE_ID);
 
   // Los facets se cargan lazy (on-demand al abrir cada popover) — no en SSR
+  // Las tarjetas arrancan YA, en paralelo con la tabla (si no, su consulta esperaría a que la tabla resuelva).
+  const metrics = getPreEmployeeStatusMetrics();
   const [{ data, total }, preferences, requiredDocs] = await Promise.all([
     getPreEmployeesPaginated(tableParams),
     getTablePreferences(PRE_EMPLOYEES_TABLE_ID),
@@ -37,7 +40,7 @@ export async function PreEmployeeList({ searchParams }: PreEmployeeListProps) {
     <div className="space-y-6">
       {/* Las tarjetas resumen llegan por su propio Suspense: no frenan la tabla. */}
       <Suspense fallback={<PreEmployeeMetricsSkeleton />}>
-        <PreEmployeeMetricsSection tableId={PRE_EMPLOYEES_TABLE_ID} />
+        <PreEmployeeMetricsSection tableId={PRE_EMPLOYEES_TABLE_ID} metrics={metrics} />
       </Suspense>
 
       <Card>

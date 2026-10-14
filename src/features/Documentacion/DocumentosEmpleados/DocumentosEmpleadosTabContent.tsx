@@ -17,12 +17,15 @@ export default async function DocumentosEmpleadosTabContent({
 }) {
   return (
     <div>
-      {/* Botón crear está en la tab principal, no en subtabs */}
-      <PermissionGuardServer module="documentacion" tab="documentos-de-empleados" action="create">
-        <div className="flex gap-4 flex-wrap mb-4">
+      {/* Subtítulo y botón de carga; el botón se apila debajo en pantallas chicas */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-muted-foreground">
+          Documentación de cada persona de la empresa, con su estado y vencimiento.
+        </p>
+        <PermissionGuardServer module="documentacion" tab="documentos-de-empleados" action="create">
           <DocumentNav onlyEmployees />
-        </div>
-      </PermissionGuardServer>
+        </PermissionGuardServer>
+      </div>
       <TabsManagerServer
         paramName="subtab"
         searchParams={searchParams}
@@ -34,7 +37,7 @@ export default async function DocumentosEmpleadosTabContent({
             label: (
               <span className="flex items-center gap-2">
                 <FileArchive className="h-4 w-4" />
-                Documentos Permanentes
+                Permanentes
               </span>
             ),
             moduleSlug: 'documentacion',
@@ -50,7 +53,7 @@ export default async function DocumentosEmpleadosTabContent({
             label: (
               <span className="flex items-center gap-2">
                 <Calendar className="h-4 w-4" />
-                Documentos Mensuales
+                Mensuales
               </span>
             ),
             moduleSlug: 'documentacion',

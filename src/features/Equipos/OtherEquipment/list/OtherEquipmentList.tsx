@@ -7,6 +7,7 @@ import { getOtherEquipmentPaginated } from './actions.server';
 import { OtherEquipmentMetricsSection } from './components/OtherEquipmentMetricsSection';
 import { _OtherEquipmentDataTable } from './components/_OtherEquipmentDataTable';
 import { OtherEquipmentMetricsSkeleton } from './fallback/OtherEquipmentMetricsSkeleton';
+import { getOtherEquipmentConditionMetrics } from './metrics.server';
 
 // ============================================================================
 // TYPES
@@ -27,6 +28,8 @@ export async function OtherEquipmentList({ searchParams, permissions }: OtherEqu
   // Extraer solo los params de esta tabla (quitar prefijo)
   const urlParams = stripPrefixFromSearchParams(searchParams as DataTableSearchParams, tableId);
 
+  // Las tarjetas arrancan YA, en paralelo con la tabla (si no, su consulta esperaría a que la tabla resuelva).
+  const metrics = getOtherEquipmentConditionMetrics();
   // Las preferencias se leen ANTES del fetch: completan los params que la URL no trae
   // (filas por página y orden guardados), para que el SSR muestre lo mismo que el cliente.
   const preferences = await getTablePreferences(tableId);
@@ -38,7 +41,7 @@ export async function OtherEquipmentList({ searchParams, permissions }: OtherEqu
     <div className="space-y-6">
       {/* Las tarjetas resumen llegan por su propio Suspense: no frenan la tabla. */}
       <Suspense fallback={<OtherEquipmentMetricsSkeleton />}>
-        <OtherEquipmentMetricsSection tableId={tableId} />
+        <OtherEquipmentMetricsSection tableId={tableId} metrics={metrics} />
       </Suspense>
 
       <Card>

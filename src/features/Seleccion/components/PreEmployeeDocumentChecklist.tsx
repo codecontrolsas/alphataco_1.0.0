@@ -1,5 +1,16 @@
 'use client';
 
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,10 +25,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { formatArgentinaDay } from '@/features/Treasury/lib/today';
 import { Logger } from '@/lib/logger';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Circle, Download, RefreshCw, Trash2, Upload } from 'lucide-react';
-import moment from 'moment';
+import { CheckCircle2, Circle, CircleAlert, Download, RefreshCw, Trash2, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -44,8 +55,15 @@ interface PreEmployeeDocumentChecklistProps {
 export function PreEmployeeDocumentChecklist({ preEmployeeId, readOnly = false }: PreEmployeeDocumentChecklistProps) {
   const queryClient = useQueryClient();
   const [uploadTarget, setUploadTarget] = useState<PreEmployeeChecklistItem | null>(null);
+  // Eliminar borra la fila y el archivo del storage: se confirma antes.
+  const [deleteTarget, setDeleteTarget] = useState<PreEmployeeChecklistItem | null>(null);
 
-  const { data: checklist = [], isLoading } = useQuery({
+  const {
+    data: checklist = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ['pre-employee-documents', preEmployeeId],
     queryFn: () => getPreEmployeeDocumentChecklist(preEmployeeId),
   });
@@ -82,6 +100,22 @@ export function PreEmployeeDocumentChecklist({ preEmployeeId, readOnly = false }
           <Skeleton key={index} className="h-14 w-full" />
         ))}
       </div>
+    );
+  }
+
+  // Sin esto, una consulta fallida se leería como "no hay tipos habilitados".
+  if (isError) {
+    return (
+      <Alert variant="destructive">
+        <CircleAlert />
+        <AlertTitle>No se pudo cargar el checklist de documentos</AlertTitle>
+        <AlertDescription>
+          <p>Revisá tu conexión e intentá de nuevo.</p>
+          <Button type="button" variant="outline" size="sm" onClick={() => refetch()}>
+            Reintentar
+          </Button>
+        </AlertDescription>
+      </Alert>
     );
   }
 
@@ -129,8 +163,8 @@ export function PreEmployeeDocumentChecklist({ preEmployeeId, readOnly = false }
                 </div>
                 {item.document ? (
                   <p className="text-sm text-muted-foreground">
-                    Cargado el {moment(item.document.uploaded_at).format('DD/MM/YYYY')}
-                    {item.document.validity ? ` · Vence el ${moment(item.document.validity).format('DD/MM/YYYY')}` : ''}
+                    Cargado el {formatArgentinaDay(item.document.uploaded_at)}
+                    {item.document.validity ? ` · Vence el ${formatArgentinaDay(item.document.validity)}` : ''}
                   </p>
                 ) : (
                   <p className="text-sm text-muted-foreground">Pendiente de carga</p>
@@ -172,7 +206,7 @@ export function PreEmployeeDocumentChecklist({ preEmployeeId, readOnly = false }
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => deleteMutation.mutate(item.document!.id)}
+                      onClick={() => setDeleteTarget(item)}
                       disabled={deleteMutation.isPending}
                       aria-label={`Eliminar ${item.documentType.name}`}
                     >
@@ -185,6 +219,29 @@ export function PreEmployeeDocumentChecklist({ preEmployeeId, readOnly = false }
           </div>
         ))}
       </div>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar {deleteTarget?.documentType.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se borra el archivo cargado y no se puede deshacer. Después se puede volver a subir.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                if (deleteTarget?.document) deleteMutation.mutate(deleteTarget.document.id);
+                setDeleteTarget(null);
+              }}
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {uploadTarget && (
         <UploadDocumentDialog

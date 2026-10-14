@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription } from '@/components/ui/card';
 import { getDocumentDownloadUrls } from '@/features/Documentacion/shared/actions/document-files.server';
+import { formatArgentinaDay } from '@/features/Treasury/lib/today';
 import {
   DataTable,
   type DataTableFacetedFilterConfig,
@@ -26,7 +27,6 @@ import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
 import type { LucideIcon } from 'lucide-react';
 import { Check, CheckCircle2, CircleOff, Download, X } from 'lucide-react';
-import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -102,7 +102,6 @@ function buildFkFacetResult(
 // ============================================================================
 
 function PermanentDocumentsDownloadButton({ tableRows }: { tableRows: EmployeePermanentDocumentListItem[] }) {
-
   const downloadableRows = tableRows.filter(
     (row) => row.state !== 'pendiente' && row.document_path && row.archived_at == null
   );
@@ -174,18 +173,43 @@ function PermanentDocumentsDownloadButton({ tableRows }: { tableRows: EmployeePe
           <AlertDialogTitle>
             Descargar {downloadableRows.length} {downloadableRows.length === 1 ? 'documento' : 'documentos'}
           </AlertDialogTitle>
-          <AlertDialogDescription className="max-h-[65vh] overflow-y-auto">
-            {pendingRows.length > 0 && (
-              <Accordion type="single" collapsible className="mb-2">
-                <AccordionItem value="pending">
-                  <AccordionTrigger className="text-destructive">
-                    {pendingRows.length} {pendingRows.length === 1 ? 'documento pendiente' : 'documentos pendientes'}{' '}
-                    (no se descargarán)
+          <AlertDialogDescription asChild>
+            <div className="max-h-[65vh] overflow-y-auto">
+              {pendingRows.length > 0 && (
+                <Accordion type="single" collapsible className="mb-2">
+                  <AccordionItem value="pending">
+                    <AccordionTrigger className="text-destructive">
+                      {pendingRows.length} {pendingRows.length === 1 ? 'documento pendiente' : 'documentos pendientes'}{' '}
+                      (no se descargarán)
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="flex flex-col gap-2">
+                        {pendingRows.map((row) => (
+                          <Card className="p-2 border-destructive/30" key={row.id}>
+                            <CardDescription>
+                              {row.employees ? `${row.employees.lastname} ${row.employees.firstname}` : 'Empleado'} (
+                              {row.document_types?.name ?? 'Documento'})
+                            </CardDescription>
+                          </Card>
+                        ))}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              )}
+              <Accordion type="single" collapsible>
+                <AccordionItem value="downloadable">
+                  <AccordionTrigger className="text-green-600">
+                    <span className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4" />
+                      {downloadableRows.length}{' '}
+                      {downloadableRows.length === 1 ? 'documento listo' : 'documentos listos'} para descargar
+                    </span>
                   </AccordionTrigger>
                   <AccordionContent>
-                    <div className="flex flex-col gap-2">
-                      {pendingRows.map((row) => (
-                        <Card className="p-2 border-destructive/30" key={row.id}>
+                    <div className="flex flex-col gap-2 mt-2">
+                      {downloadableRows.map((row) => (
+                        <Card className="p-2 border-green-600/30" key={row.id}>
                           <CardDescription>
                             {row.employees ? `${row.employees.lastname} ${row.employees.firstname}` : 'Empleado'} (
                             {row.document_types?.name ?? 'Documento'})
@@ -196,30 +220,7 @@ function PermanentDocumentsDownloadButton({ tableRows }: { tableRows: EmployeePe
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>
-            )}
-            <Accordion type="single" collapsible>
-              <AccordionItem value="downloadable">
-                <AccordionTrigger className="text-green-600">
-                  <span className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4" />
-                    {downloadableRows.length} {downloadableRows.length === 1 ? 'documento listo' : 'documentos listos'}{' '}
-                    para descargar
-                  </span>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div className="flex flex-col gap-2 mt-2">
-                    {downloadableRows.map((row) => (
-                      <Card className="p-2 border-green-600/30" key={row.id}>
-                        <CardDescription>
-                          {row.employees ? `${row.employees.lastname} ${row.employees.firstname}` : 'Empleado'} (
-                          {row.document_types?.name ?? 'Documento'})
-                        </CardDescription>
-                      </Card>
-                    ))}
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
+            </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -416,7 +417,9 @@ export function _EmployeePermanentDocumentsDataTable({
       queryFn={tableQueryFn}
       queryKey={['employee-permanent-docs', employeeId ?? '']}
       onStateChange={handleStateChange}
-      searchPlaceholder="Buscar por empleado..."
+      searchPlaceholder="Legajo, empleado o documento"
+      showSearch
+      mobileCards
       facetedFilters={facetedFilters}
       initialColumnVisibility={mergedColumnVisibility}
       initialFilterVisibility={mergedFilterVisibility}
@@ -442,8 +445,8 @@ export function _EmployeePermanentDocumentsDataTable({
           mandatory: (val) => (val === true || val === 'true' ? 'Sí' : val === false || val === 'false' ? 'No' : ''),
           multiresource: (val) =>
             val === true || val === 'true' ? 'Sí' : val === false || val === 'false' ? 'No' : '',
-          validity: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
-          created_at: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
+          validity: (val) => (val ? formatArgentinaDay(val as string) : ''),
+          created_at: (val) => (val ? formatArgentinaDay(val as string) : ''),
           deny_reason: (val) => String(val ?? '-'),
         },
       }}

@@ -2,10 +2,16 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { formatArgentinaDay } from '@/features/Treasury/lib/today';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Check, Pencil, X } from 'lucide-react';
-import moment from 'moment';
+import { Check, MoreHorizontal, Pencil, X } from 'lucide-react';
 import type { DocumentTypeListItem } from '../actions/queries.server';
 import { getEquipmentTypeLabel } from '../config/equipmentTypes';
 
@@ -13,7 +19,7 @@ import { getEquipmentTypeLabel } from '../config/equipmentTypes';
 // HELPERS
 // ============================================================================
 
-/** Celda booleana con Badge Sí/No */
+/** Celda booleana con Badge Sí/No (columnas secundarias, ocultas por defecto). */
 function BoolBadge({ value }: { value: boolean | null | undefined }) {
   const v = value ?? false;
   return (
@@ -31,6 +37,11 @@ function BoolBadge({ value }: { value: boolean | null | undefined }) {
   );
 }
 
+/** "Sí" como pill ok y "No" atenuado: así lo que se exige salta a la vista. */
+function YesNo({ value }: { value: boolean | null | undefined }) {
+  return value ? <Badge variant="success">Sí</Badge> : <span className="text-muted-foreground">No</span>;
+}
+
 // ============================================================================
 // COLUMN DEFINITIONS
 // ============================================================================
@@ -45,15 +56,22 @@ export function getDocTypeColumns(
   onEdit: (row: DocumentTypeListItem) => void
 ): ColumnDef<DocumentTypeListItem>[] {
   const cols: ColumnDef<DocumentTypeListItem>[] = [
-    // ── Nombre ──────────────────────────────────────────────────────────────
+    // ── Nombre (negrita) + descripción debajo ───────────────────────────────
     {
       accessorKey: 'name',
       id: 'name',
       meta: { title: 'Nombre' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
       cell: ({ row }) => (
-        <div className={`font-medium ${!row.original.is_active ? 'text-muted-foreground line-through' : ''}`}>
-          {row.original.name}
+        <div className="min-w-0">
+          <div
+            className={`font-semibold ${row.original.is_active ? 'text-foreground' : 'text-muted-foreground line-through'}`}
+          >
+            {row.original.name}
+          </div>
+          {row.original.description && (
+            <div className="line-clamp-2 text-sm text-muted-foreground">{row.original.description}</div>
+          )}
         </div>
       ),
     },
@@ -64,87 +82,61 @@ export function getDocTypeColumns(
       id: 'mandatory',
       meta: { title: 'Obligatorio' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Obligatorio" />,
-      cell: ({ row }) => <BoolBadge value={row.original.mandatory} />,
+      cell: ({ row }) => <YesNo value={row.original.mandatory} />,
       filterFn: (row, id, value: string[]) => {
         const val = row.getValue(id);
         return value.includes(String(val));
       },
     },
 
-    // ── Con vencimiento ─────────────────────────────────────────────────────
+    // ── Vencimiento (con / sin) ─────────────────────────────────────────────
     {
       accessorKey: 'explired',
       id: 'explired',
-      meta: { title: 'Con vencimiento' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Con vencimiento" />,
-      cell: ({ row }) => <BoolBadge value={row.original.explired} />,
+      meta: { title: 'Vencimiento' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Vencimiento" />,
+      cell: ({ row }) =>
+        row.original.explired ? (
+          <Badge variant="info">Con vencimiento</Badge>
+        ) : (
+          <span className="text-muted-foreground">Sin vencimiento</span>
+        ),
       filterFn: (row, id, value: string[]) => {
         const val = row.getValue(id);
         return value.includes(String(val));
       },
     },
 
-    // ── Condicional ─────────────────────────────────────────────────────────
-    {
-      accessorKey: 'special',
-      id: 'special',
-      meta: { title: 'Condicional' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Condicional" />,
-      cell: ({ row }) => <BoolBadge value={row.original.special} />,
-      filterFn: (row, id, value: string[]) => {
-        const val = row.getValue(id);
-        return value.includes(String(val));
-      },
-    },
-
-    // ── Multirrecurso ────────────────────────────────────────────────────────
-    {
-      accessorKey: 'multiresource',
-      id: 'multiresource',
-      meta: { title: 'Multirrecurso' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Multirrecurso" />,
-      cell: ({ row }) => <BoolBadge value={row.original.multiresource} />,
-      filterFn: (row, id, value: string[]) => {
-        const val = row.getValue(id);
-        return value.includes(String(val));
-      },
-    },
-
-    // ── Mensual ─────────────────────────────────────────────────────────────
+    // ── Periodicidad (Mensual / Permanente) ─────────────────────────────────
     {
       accessorKey: 'is_it_montlhy',
       id: 'is_it_montlhy',
-      meta: { title: 'Mensual' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Mensual" />,
-      cell: ({ row }) => <BoolBadge value={row.original.is_it_montlhy} />,
+      meta: { title: 'Periodicidad' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Periodicidad" />,
+      cell: ({ row }) => <span>{row.original.is_it_montlhy ? 'Mensual' : 'Permanente'}</span>,
       filterFn: (row, id, value: string[]) => {
         const val = (row.getValue(id) as boolean | null) ?? false;
         return value.includes(String(val));
       },
     },
 
-    // ── Privado ─────────────────────────────────────────────────────────────
+    // ── Se exige a (Todos / La empresa / N condiciones) ─────────────────────
     {
-      accessorKey: 'private',
-      id: 'private',
-      meta: { title: 'Privado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Privado" />,
-      cell: ({ row }) => <BoolBadge value={row.original.private} />,
-      filterFn: (row, id, value: string[]) => {
-        const val = (row.getValue(id) as boolean | null) ?? false;
-        return value.includes(String(val));
+      accessorKey: 'special',
+      id: 'special',
+      meta: { title: 'Se exige a' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Se exige a" />,
+      cell: ({ row }) => {
+        if (!row.original.special) {
+          return (
+            <span className="text-muted-foreground">{row.original.applies === 'Empresa' ? 'La empresa' : 'Todos'}</span>
+          );
+        }
+        const count = row.original.conditions_count;
+        return <Badge variant="secondary">{count === 1 ? '1 condición' : `${count} condiciones`}</Badge>;
       },
-    },
-
-    // ── Doc. de baja ─────────────────────────────────────────────────────────
-    {
-      accessorKey: 'down_document',
-      id: 'down_document',
-      meta: { title: 'Doc. de baja' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Doc. de baja" />,
-      cell: ({ row }) => <BoolBadge value={row.original.down_document} />,
       filterFn: (row, id, value: string[]) => {
-        const val = (row.getValue(id) as boolean | null) ?? false;
+        const val = row.getValue(id);
         return value.includes(String(val));
       },
     },
@@ -164,20 +156,20 @@ export function getDocTypeColumns(
         return value.includes(val);
       },
     });
-
-    // ── N° de Póliza (SOLO tabla Equipos, multirecurso) ──────────────────────
-    cols.push({
-      accessorKey: 'has_policy_number',
-      id: 'has_policy_number',
-      meta: { title: 'N° de Póliza' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="N° de Póliza" />,
-      cell: ({ row }) => <BoolBadge value={row.original.has_policy_number} />,
-      filterFn: (row, id, value: string[]) => {
-        const val = (row.getValue(id) as boolean | null) ?? false;
-        return value.includes(String(val));
-      },
-    });
   }
+
+  // ── Multirrecurso ────────────────────────────────────────────────────────
+  cols.push({
+    accessorKey: 'multiresource',
+    id: 'multiresource',
+    meta: { title: 'Multirrecurso' },
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Multirrecurso" />,
+    cell: ({ row }) => <YesNo value={row.original.multiresource} />,
+    filterFn: (row, id, value: string[]) => {
+      const val = row.getValue(id);
+      return value.includes(String(val));
+    },
+  });
 
   // ── Estado (Activo/Inactivo) ────────────────────────────────────────────
   cols.push({
@@ -196,7 +188,48 @@ export function getDocTypeColumns(
     },
   });
 
-  // ── Descripción (oculta por defecto, solo en export) ─────────────────────
+  // ── Privado (oculta por defecto) ─────────────────────────────────────────
+  cols.push({
+    accessorKey: 'private',
+    id: 'private',
+    meta: { title: 'Privado' },
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Privado" />,
+    cell: ({ row }) => <BoolBadge value={row.original.private} />,
+    filterFn: (row, id, value: string[]) => {
+      const val = (row.getValue(id) as boolean | null) ?? false;
+      return value.includes(String(val));
+    },
+  });
+
+  // ── Doc. de baja (oculta por defecto) ────────────────────────────────────
+  cols.push({
+    accessorKey: 'down_document',
+    id: 'down_document',
+    meta: { title: 'Doc. de baja' },
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Doc. de baja" />,
+    cell: ({ row }) => <BoolBadge value={row.original.down_document} />,
+    filterFn: (row, id, value: string[]) => {
+      const val = (row.getValue(id) as boolean | null) ?? false;
+      return value.includes(String(val));
+    },
+  });
+
+  // ── N° de Póliza (SOLO tabla Equipos, multirecurso; oculta por defecto) ──
+  if (includeEquipmentType) {
+    cols.push({
+      accessorKey: 'has_policy_number',
+      id: 'has_policy_number',
+      meta: { title: 'N° de Póliza' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="N° de Póliza" />,
+      cell: ({ row }) => <BoolBadge value={row.original.has_policy_number} />,
+      filterFn: (row, id, value: string[]) => {
+        const val = (row.getValue(id) as boolean | null) ?? false;
+        return value.includes(String(val));
+      },
+    });
+  }
+
+  // ── Descripción (oculta por defecto: ya se ve bajo el nombre; sirve para el export) ──
   cols.push({
     accessorKey: 'description',
     id: 'description',
@@ -208,28 +241,42 @@ export function getDocTypeColumns(
     ),
   });
 
-  // ── Fecha de creación ────────────────────────────────────────────────────
+  // ── Fecha de creación (oculta por defecto) ───────────────────────────────
   cols.push({
     accessorKey: 'created_at',
     id: 'created_at',
     meta: { title: 'Fecha de creación' },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de creación" />,
     cell: ({ row }) =>
-      row.original.created_at ? <div>{moment(row.original.created_at).format('DD/MM/YYYY')}</div> : <div>-</div>,
+      row.original.created_at ? (
+        <div className="font-mono tabular-nums">{formatArgentinaDay(row.original.created_at)}</div>
+      ) : (
+        <div>-</div>
+      ),
   });
 
   // ── Acciones ─────────────────────────────────────────────────────────────
+  // La activación/desactivación vive dentro del modal de edición.
   cols.push({
     id: 'actions',
     meta: { title: '', excludeFromExport: true },
     enableSorting: false,
     enableHiding: false,
     cell: ({ row }) => (
-      <div className="flex items-center gap-1">
-        <Button variant="ghost" size="sm" onClick={() => onEdit(row.original)} title="Editar">
-          <Pencil className="h-3.5 w-3.5" />
-          <span className="sr-only">Editar</span>
-        </Button>
+      <div className="flex items-center justify-end">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="ghost" size="icon-sm" aria-label={`Más acciones para ${row.original.name}`}>
+              <MoreHorizontal className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => onEdit(row.original)}>
+              <Pencil className="size-4" />
+              Editar o activar/desactivar
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     ),
   });
@@ -241,11 +288,4 @@ export function getDocTypeColumns(
 // HIDDEN COLUMNS BY DEFAULT
 // ============================================================================
 
-export const HIDDEN_COLUMNS_BY_DEFAULT = [
-  'multiresource',
-  'has_policy_number',
-  'is_it_montlhy',
-  'private',
-  'down_document',
-  'description',
-];
+export const HIDDEN_COLUMNS_BY_DEFAULT = ['has_policy_number', 'private', 'down_document', 'description', 'created_at'];

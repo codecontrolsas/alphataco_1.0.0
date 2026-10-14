@@ -90,6 +90,10 @@ export function DataTableToolbar<TData>({
           {/* Input de busqueda */}
           {showSearch && (
             <Input
+              type="search"
+              name="search"
+              autoComplete="off"
+              aria-label={searchPlaceholder}
               placeholder={searchPlaceholder}
               value={searchValue}
               onChange={(event) => handleSearchChange(event.target.value)}

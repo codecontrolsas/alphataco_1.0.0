@@ -2,7 +2,6 @@
 
 import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   buildDateRangeFiltersWhere,
   buildFiltersWhere,
@@ -13,6 +12,7 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 
 const logger = new Logger('MonthlyEquipmentDocs/actions.server');
 
@@ -68,6 +68,10 @@ const MONTHLY_EQUIPMENT_DOCS_SELECT = {
       domain: true,
       serie: true,
       intern_number: true,
+      // Marca, modelo y tipo (celda "Equipo")
+      brand_vehicles: { select: { id: true, name: true } },
+      model_vehicles: { select: { id: true, name: true } },
+      type_vehicles_typeTotype: { select: { id: true, name: true } },
       // Afectaciones del equipo (M:M → customers)
       contractor_equipment: {
         select: {
@@ -247,6 +251,7 @@ async function buildWhereClause(
         { vehicles: { domain: { contains: state.search, mode: 'insensitive' as const } } },
         { vehicles: { serie: { contains: state.search, mode: 'insensitive' as const } } },
         { vehicles: { intern_number: { contains: state.search, mode: 'insensitive' as const } } },
+        { document_types: { name: { contains: state.search, mode: 'insensitive' as const } } },
       ],
     });
   }

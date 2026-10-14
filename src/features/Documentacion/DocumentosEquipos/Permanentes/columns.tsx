@@ -1,31 +1,37 @@
 'use client';
 
-import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  DocumentEquipmentCell,
+  DocumentExpiryCell,
+  DocumentNameCell,
+  DocumentRowActions,
+  DocumentStatePill,
+  documentStateIcons,
+} from '@/features/Documentacion/shared/components/DocumentCells';
 import SimpleDocument from '@/features/Documentacion/shared/components/SimpleDocument';
-import { PermissionGuard } from '@/features/Permissions';
+import { formatArgentinaDay } from '@/features/Treasury/lib/today';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { contractTypeVehiclesLabels } from '@/shared/utils/mappers';
+import { contractTypeVehiclesLabels, documentStateLabels } from '@/shared/utils/mappers';
 import type { ColumnDef } from '@tanstack/react-table';
-import { AlertCircle, Archive, CheckCircle2, Clock, FileText, XCircle } from 'lucide-react';
-import moment from 'moment';
 import Link from 'next/link';
-import { useState } from 'react';
 import type { EquipmentPermanentDocumentListItem } from './queries.server';
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
 
-/** Columnas ocultas por defecto (visibles al hacer toggle) */
+/** Columnas ocultas por defecto: su dato ya se ve en las columnas principales (Equipo, Documento) o es secundario. */
 export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = [
-  'deny_reason',
-  'multiresource',
   'serie',
-  // Nuevas columnas de datos del equipo (ocultas por defecto)
+  'policy_number',
+  'contractor',
+  'mandatory',
+  'multiresource',
+  'deny_reason',
+  // Datos del equipo (ocultos por defecto)
   'vehicle_type',
   'vehicle_subtype',
   'vehicle_brand',
@@ -38,43 +44,9 @@ export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = [
   'vehicle_contract_expiration',
 ];
 
-// ============================================================================
-// ICONS — Estado
-// ============================================================================
-
-export const stateIcons: Record<string, React.ComponentType<{ className?: string }>> = {
-  presentado: FileText,
-  aprobado: CheckCircle2,
-  rechazado: XCircle,
-  vencido: AlertCircle,
-  pendiente: Clock,
-};
-
-// ============================================================================
-// BADGE VARIANTS — Estado
-// ============================================================================
-
-type BadgeVariant = NonNullable<React.ComponentProps<typeof Badge>['variant']>;
-
-const stateBadgeVariants: Record<string, BadgeVariant> = {
-  presentado: 'default',
-  aprobado: 'success',
-  rechazado: 'destructive',
-  vencido: 'yellow',
-  pendiente: 'destructive',
-};
-
-// ============================================================================
-// STATE LABELS
-// ============================================================================
-
-export const stateLabels: Record<string, string> = {
-  presentado: 'Presentado',
-  rechazado: 'Rechazado',
-  aprobado: 'Aprobado',
-  vencido: 'Vencido',
-  pendiente: 'Pendiente',
-};
+/** Íconos y labels de estado: los mismos que usa la pill de la tabla (los consume el filtro de Estado). */
+export const stateIcons = documentStateIcons;
+export const stateLabels = documentStateLabels;
 
 // ============================================================================
 // HELPERS
@@ -92,50 +64,34 @@ function getOwnerDisplayName(vehicle: EquipmentPermanentDocumentListItem['vehicl
 }
 
 // ============================================================================
-// ACTIONS CELL — separate component (uses hooks)
+// ACTIONS CELL
 // ============================================================================
 
 function ActionsCell({ row }: { row: EquipmentPermanentDocumentListItem }) {
-  const [open, setOpen] = useState(false);
-  const isPending = row.state === 'pendiente';
   const isPrivateDocType = row.document_types?.private === true;
 
-  if (isPending) {
-    // Para tipos privados, verificar permiso upload_private en la tab padre
-    const guardTab = isPrivateDocType ? 'documentos-de-equipos' : 'docs-equipos-permanentes';
-    const guardAction = isPrivateDocType ? 'upload_private' : 'update';
-
-    return (
-      <PermissionGuard module="documentacion" tab={guardTab} action={guardAction}>
-        <AlertDialog open={open} onOpenChange={setOpen}>
-          <AlertDialogTrigger asChild>
-            <Button variant="outline" size="sm">
-              Subir documento
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <div className="max-h-[90vh] overflow-y-auto">
-                <SimpleDocument
-                  resource="equipo"
-                  handleOpen={() => setOpen(false)}
-                  defaultDocumentId={row.id_document_types ?? undefined}
-                  numberDocument={row.vehicles?.id ?? undefined}
-                />
-              </div>
-            </AlertDialogHeader>
-          </AlertDialogContent>
-        </AlertDialog>
-      </PermissionGuard>
-    );
-  }
-
   return (
-    <PermissionGuard module="documentacion" tab="docs-equipos-permanentes" action="view">
-      <Link href={`/dashboard/document/${row.id}?resource=Equipos`}>
-        <Button size="sm">Ver documento</Button>
-      </Link>
-    </PermissionGuard>
+    <DocumentRowActions
+      documentId={row.id}
+      documentName={row.document_types?.name}
+      state={row.state}
+      archived={row.archived_at != null}
+      resource="Equipos"
+      viewTab="docs-equipos-permanentes"
+      upload={{
+        // Para tipos privados, verificar permiso upload_private en la tab padre
+        tab: isPrivateDocType ? 'documentos-de-equipos' : 'docs-equipos-permanentes',
+        action: isPrivateDocType ? 'upload_private' : 'update',
+        render: (close) => (
+          <SimpleDocument
+            resource="equipo"
+            handleOpen={close}
+            defaultDocumentId={row.id_document_types ?? undefined}
+            numberDocument={row.vehicles?.id ?? undefined}
+          />
+        ),
+      }}
+    />
   );
 }
 
@@ -144,12 +100,12 @@ function ActionsCell({ row }: { row: EquipmentPermanentDocumentListItem }) {
 // ============================================================================
 
 export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
-  // ─── Equipo (Dominio) ─────────────────────────────────────────────────────
+  // ─── Dominio (identidad: mono) ────────────────────────────────────────────
   {
     id: 'vehicle',
     accessorFn: (row) => row.vehicles?.domain ?? row.vehicles?.serie ?? '',
-    meta: { title: 'Equipo' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Equipo" />,
+    meta: { title: 'Dominio' },
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Dominio" />,
     cell: ({ row }) => {
       const v = row.original.vehicles;
       if (!v) return <span className="text-muted-foreground">-</span>;
@@ -157,12 +113,107 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
       return (
         <Link
           href={`/dashboard/equipment/action?action=view&id=${v.id}`}
-          className="hover:underline font-medium"
+          className="font-mono font-semibold tabular-nums text-foreground hover:text-brand-ink hover:underline"
           target="_blank"
         >
           {label}
         </Link>
       );
+    },
+    enableSorting: true,
+  },
+
+  // ─── Equipo (identidad compuesta: Marca Modelo / tipo · afectado a) ───────
+  {
+    id: 'equipment',
+    accessorFn: (row) =>
+      [row.vehicles?.brand_vehicles?.name, row.vehicles?.model_vehicles?.name].filter(Boolean).join(' '),
+    meta: { title: 'Equipo', excludeFromExport: true },
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Equipo" />,
+    cell: ({ row }) => (
+      <DocumentEquipmentCell
+        brand={row.original.vehicles?.brand_vehicles?.name}
+        model={row.original.vehicles?.model_vehicles?.name}
+        type={row.original.vehicles?.type_vehicles_typeTotype?.name}
+        contractors={
+          row.original.vehicles?.contractor_equipment?.map((ce) => ce.customers?.name ?? '').filter(Boolean) ?? []
+        }
+      />
+    ),
+    // 'equipment' no es un campo ordenable en lib/where.ts (VALID_SORT_FIELDS)
+    enableSorting: false,
+  },
+
+  // ─── Documento (nombre + obligatorio/opcional + motivo de rechazo) ────────
+  {
+    id: 'document_type',
+    accessorFn: (row) => row.document_types?.name ?? '',
+    meta: { title: 'Documento' },
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Documento" />,
+    cell: ({ row }) => (
+      <DocumentNameCell
+        name={row.original.document_types?.name}
+        mandatory={row.original.document_types?.mandatory}
+        denyReason={row.original.deny_reason}
+        state={row.original.state}
+      />
+    ),
+    filterFn: (row, _id, value: string[]) => {
+      const id = row.original.id_document_types;
+      if (id == null) return value.includes(NULL_FILTER_VALUE);
+      return value.includes(id);
+    },
+    enableSorting: true,
+  },
+
+  // ─── Estado ───────────────────────────────────────────────────────────────
+  {
+    id: 'state',
+    accessorKey: 'state',
+    meta: { title: 'Estado' },
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+    cell: ({ row }) => (
+      // Documento archivado: historial / no vigente (solo visible en el detalle del equipo)
+      <DocumentStatePill state={row.original.state} archived={row.original.archived_at != null} />
+    ),
+    filterFn: (row, id, value: string[]) => {
+      const val = row.getValue(id) as string | null;
+      if (val == null) return value.includes(NULL_FILTER_VALUE);
+      return value.includes(val);
+    },
+    enableSorting: true,
+  },
+
+  // ─── Vencimiento ──────────────────────────────────────────────────────────
+  {
+    id: 'validity',
+    accessorKey: 'validity',
+    meta: { title: 'Vencimiento' },
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Vencimiento" />,
+    cell: ({ row }) => (
+      <DocumentExpiryCell
+        validity={row.original.document_types?.explired ? row.original.validity : null}
+        state={row.original.state}
+        archived={row.original.archived_at != null}
+      />
+    ),
+    enableSorting: true,
+  },
+
+  // ─── Subido el ────────────────────────────────────────────────────────────
+  {
+    id: 'created_at',
+    accessorKey: 'created_at',
+    meta: { title: 'Subido el' },
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Subido el" />,
+    cell: ({ row }) => {
+      if (row.original.state === 'pendiente') {
+        return <span className="text-muted-foreground">No disponible</span>;
+      }
+      // Usar la fecha del log más reciente si existe, sino created_at
+      const latestLog = row.original.documents_equipment_logs?.[0];
+      const date = latestLog?.updated_at ?? row.original.created_at;
+      return <span className="font-mono tabular-nums">{formatArgentinaDay(date)}</span>;
     },
     enableSorting: true,
   },
@@ -190,25 +241,6 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
     cell: ({ row }) => (
       <span className="text-sm">{row.original.policy_number ?? <span className="text-muted-foreground">-</span>}</span>
     ),
-    enableSorting: true,
-  },
-
-  // ─── Tipo de documento ────────────────────────────────────────────────────
-  {
-    id: 'document_type',
-    accessorFn: (row) => row.document_types?.name ?? '',
-    meta: { title: 'Documento' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Documento" />,
-    cell: ({ row }) => (
-      <span className="font-medium">
-        {row.original.document_types?.name ?? <span className="text-muted-foreground">-</span>}
-      </span>
-    ),
-    filterFn: (row, _id, value: string[]) => {
-      const id = row.original.id_document_types;
-      if (id == null) return value.includes(NULL_FILTER_VALUE);
-      return value.includes(id);
-    },
     enableSorting: true,
   },
 
@@ -257,45 +289,6 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
     enableSorting: false,
   },
 
-  // ─── Estado ───────────────────────────────────────────────────────────────
-  {
-    id: 'state',
-    accessorKey: 'state',
-    meta: { title: 'Estado' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
-    cell: ({ row }) => {
-      // Documento archivado: historial / no vigente (solo visible en el detalle del equipo)
-      if (row.original.archived_at != null) {
-        return (
-          <Badge variant="secondary" className="flex items-center gap-1 w-fit">
-            <Archive className="h-3 w-3" />
-            Ya no aplica
-          </Badge>
-        );
-      }
-
-      const state = row.original.state as string | null;
-      if (!state) return <Badge variant="outline">Sin estado</Badge>;
-
-      const Icon = stateIcons[state];
-      const variant = stateBadgeVariants[state] ?? 'default';
-      const label = stateLabels[state] ?? state;
-
-      return (
-        <Badge variant={variant} className="capitalize flex items-center gap-1 w-fit">
-          {Icon && <Icon className="h-3 w-3" />}
-          {label}
-        </Badge>
-      );
-    },
-    filterFn: (row, id, value: string[]) => {
-      const val = row.getValue(id) as string | null;
-      if (val == null) return value.includes(NULL_FILTER_VALUE);
-      return value.includes(val);
-    },
-    enableSorting: true,
-  },
-
   // ─── Mandatorio ───────────────────────────────────────────────────────────
   {
     id: 'mandatory',
@@ -332,54 +325,6 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
       return value.includes(String(val));
     },
     enableSorting: false,
-  },
-
-  // ─── Vencimiento ──────────────────────────────────────────────────────────
-  {
-    id: 'validity',
-    accessorKey: 'validity',
-    meta: { title: 'Vencimiento' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Vencimiento" />,
-    cell: ({ row }) => {
-      // Documento archivado: no aplica estado de vigencia/vencimiento
-      if (row.original.archived_at != null) {
-        return <span className="text-muted-foreground">-</span>;
-      }
-
-      const hasExpiration = row.original.document_types?.explired;
-      if (!hasExpiration) {
-        return <Badge variant="outline">No vence</Badge>;
-      }
-
-      if (row.original.state === 'pendiente') {
-        return <Badge variant="destructive">Pendiente</Badge>;
-      }
-
-      if (row.original.validity) {
-        return <span>{moment(row.original.validity).format('DD/MM/YYYY')}</span>;
-      }
-
-      return <Badge variant="outline">No vence</Badge>;
-    },
-    enableSorting: true,
-  },
-
-  // ─── Subido el ────────────────────────────────────────────────────────────
-  {
-    id: 'created_at',
-    accessorKey: 'created_at',
-    meta: { title: 'Subido el' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Subido el" />,
-    cell: ({ row }) => {
-      if (row.original.state === 'pendiente') {
-        return <span className="text-muted-foreground">No disponible</span>;
-      }
-      // Usar la fecha del log más reciente si existe, sino created_at
-      const latestLog = row.original.documents_equipment_logs?.[0];
-      const date = latestLog?.updated_at ?? row.original.created_at;
-      return <span>{moment(date).format('DD/MM/YYYY')}</span>;
-    },
-    enableSorting: true,
   },
 
   // ─── Motivo de rechazo ────────────────────────────────────────────────────
@@ -558,7 +503,7 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
     cell: ({ row }) => {
       const date = row.original.vehicles?.contract_expiration_date;
       if (!date) return <span className="text-muted-foreground">-</span>;
-      return <span className="text-sm">{moment(date).format('DD/MM/YYYY')}</span>;
+      return <span className="text-sm">{formatArgentinaDay(date)}</span>;
     },
     enableSorting: true,
   },

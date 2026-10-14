@@ -167,9 +167,9 @@ export const navigationLinks: NavigationLink[] = [
     icon: MODULE_ICONS.documentacion,
     position: 6,
     items: [
-      { name: 'Doc. de Empleados', tabSlug: 'documentos-de-empleados' },
-      { name: 'Doc. de Equipos', tabSlug: 'documentos-de-equipos' },
-      { name: 'Doc. de Empresa', tabSlug: 'documentos-de-empresa' },
+      { name: 'Empleados', tabSlug: 'documentos-de-empleados' },
+      { name: 'Equipos', tabSlug: 'documentos-de-equipos' },
+      { name: 'Empresa', tabSlug: 'documentos-de-empresa' },
     ],
   },
   {
