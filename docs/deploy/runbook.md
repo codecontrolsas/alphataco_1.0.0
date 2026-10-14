@@ -3,7 +3,7 @@
 ## Arquitectura
 
 ```
-push a main ──► changes (filtro de paths: docs, *.md, cypress, .claude… no disparan)
+push a main ──► changes (filtro de paths: docs, *.md, .claude… no disparan)
                  ├─► verify: npm ci + check-types + vitest        (en paralelo)
                  └─► build:  imagen :sha-<commit> con GIT_SHA adentro → registry
                         │
@@ -32,14 +32,14 @@ push a main ──► changes (filtro de paths: docs, *.md, cypress, .claude… 
 
 ### Archivos
 
-| Archivo | Qué hace |
-| --- | --- |
-| `.github/workflows/deploy.yml` | Orquesta: filtro de paths, `verify`, `build`, `deploy`. También `workflow_dispatch` (solo sobre `main`). |
-| `.github/workflows/_build-image.yml` | Build + push de `:sha-<commit>`, cache en registry, soporte Blacksmith. |
-| `.github/workflows/_deploy.yml` | Retag a `:main`, webhook, readiness por commit. |
-| `Dockerfile` | `deps` → `tools` (CLI de Prisma + deps del seed) → `build` → `runner` (standalone). |
-| `docker/entrypoint.sh` | `migrate deploy`, seed opcional (`RUN_SEED=true`), `exec node server.js`. |
-| `src/app/api/health/route.ts` | `{"status":"ok","sha":GIT_SHA}` + `SELECT 1`. Sin auth (el proxy solo cubre `/dashboard/*`). |
+| Archivo                              | Qué hace                                                                                                 |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `.github/workflows/deploy.yml`       | Orquesta: filtro de paths, `verify`, `build`, `deploy`. También `workflow_dispatch` (solo sobre `main`). |
+| `.github/workflows/_build-image.yml` | Build + push de `:sha-<commit>`, cache en registry, soporte Blacksmith.                                  |
+| `.github/workflows/_deploy.yml`      | Retag a `:main`, webhook, readiness por commit.                                                          |
+| `Dockerfile`                         | `deps` → `tools` (CLI de Prisma + deps del seed) → `build` → `runner` (standalone).                      |
+| `docker/entrypoint.sh`               | `migrate deploy`, seed opcional (`RUN_SEED=true`), `exec node server.js`.                                |
+| `src/app/api/health/route.ts`        | `{"status":"ok","sha":GIT_SHA}` + `SELECT 1`. Sin auth (el proxy solo cubre `/dashboard/*`).             |
 
 ## GitHub: variables y secrets
 
@@ -47,23 +47,23 @@ push a main ──► changes (filtro de paths: docs, *.md, cypress, .claude… 
 
 Secrets:
 
-| Secret | Valor |
-| --- | --- |
-| `REGISTRY_PASSWORD` | Password del usuario CI del registry. |
+| Secret                   | Valor                                                                               |
+| ------------------------ | ----------------------------------------------------------------------------------- |
+| `REGISTRY_PASSWORD`      | Password del usuario CI del registry.                                               |
 | `DOKPLOY_DEPLOY_WEBHOOK` | URL del webhook de deploy de la app en Dokploy (pestaña Deployments → Webhook URL). |
 
 Variables:
 
-| Variable | Valor |
-| --- | --- |
-| `REGISTRY_USERNAME` | Usuario CI del registry. Es **variable, no secret**: como secret GitHub enmascara sus substrings en todos los logs. |
-| `DOKPLOY_HEALTH_URL` | `https://alphataco.31.97.42.82.sslip.io/api/health` (URL completa, terminada en `/api/health`; el deploy valida el formato). |
-| `NEXT_PUBLIC_BASE_URL` | `https://alphataco.31.97.42.82.sslip.io` — **obligatoria**: si falta, el build se corta (no se hornea `localhost`). |
-| `NEXT_PUBLIC_PROJECT_URL` | `https://alphataco.31.97.42.82.sslip.io` — obligatoria. |
-| `NEXT_PUBLIC_POSTHOG_KEY` | Project key de PostHog (pública por diseño). Vacía = sin analítica. |
-| `NEXT_PUBLIC_POSTHOG_HOST` | `https://us.i.posthog.com` |
-| `NEXT_PUBLIC_SHOW_LOGS` | `false` en producción (default si no se carga). |
-| `CI_RUNNER` | Opcional. Vacía = `ubuntu-latest`. Con un label `blacksmith-*` el build usa el builder persistente de Blacksmith (requiere la app instalada en la organización). El deploy siempre corre en GitHub. |
+| Variable                   | Valor                                                                                                                                                                                               |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `REGISTRY_USERNAME`        | Usuario CI del registry. Es **variable, no secret**: como secret GitHub enmascara sus substrings en todos los logs.                                                                                 |
+| `DOKPLOY_HEALTH_URL`       | `https://alphataco.31.97.42.82.sslip.io/api/health` (URL completa, terminada en `/api/health`; el deploy valida el formato).                                                                        |
+| `NEXT_PUBLIC_BASE_URL`     | `https://alphataco.31.97.42.82.sslip.io` — **obligatoria**: si falta, el build se corta (no se hornea `localhost`).                                                                                 |
+| `NEXT_PUBLIC_PROJECT_URL`  | `https://alphataco.31.97.42.82.sslip.io` — obligatoria.                                                                                                                                             |
+| `NEXT_PUBLIC_POSTHOG_KEY`  | Project key de PostHog (pública por diseño). Vacía = sin analítica.                                                                                                                                 |
+| `NEXT_PUBLIC_POSTHOG_HOST` | `https://us.i.posthog.com`                                                                                                                                                                          |
+| `NEXT_PUBLIC_SHOW_LOGS`    | `false` en producción (default si no se carga).                                                                                                                                                     |
+| `CI_RUNNER`                | Opcional. Vacía = `ubuntu-latest`. Con un label `blacksmith-*` el build usa el builder persistente de Blacksmith (requiere la app instalada en la organización). El deploy siempre corre en GitHub. |
 
 Las `NEXT_PUBLIC_*` **se hornean en el bundle durante el build**: cargarlas en Dokploy no sirve, y
 cambiarlas exige una imagen nueva (ver "Operación").
@@ -81,21 +81,21 @@ Proyecto **Demos**, app `alphataco`:
 
 ### Env runtime de la app
 
-| Variable | Valor / nota |
-| --- | --- |
-| `DATABASE_URL` | `postgresql://<user>:<pass>@<servicio-postgres>:5432/<db>` — nombre del servicio en `dokploy-network`, no la IP pública. |
-| `DIRECT_URL` | Igual que `DATABASE_URL` (no hay pooler). `prisma.config.ts` usa `DATABASE_URL` primero. |
-| `BETTER_AUTH_SECRET` | `openssl rand -base64 32`. Cambiarla cierra todas las sesiones. |
-| `S3_ENDPOINT` | `http://alphataco-minio:9000` |
-| `S3_ACCESS_KEY` / `S3_SECRET_KEY` | Credenciales de MinIO. |
-| `S3_REGION` | `us-east-1` |
-| `S3_FORCE_PATH_STYLE` | `true` |
-| `JOBS_TOKEN` | `openssl rand -hex 32`. Vacío = `/api/jobs/*` responde 401 (ver "Pendientes"). |
+| Variable                                                                                          | Valor / nota                                                                                                                               |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`                                                                                    | `postgresql://<user>:<pass>@<servicio-postgres>:5432/<db>` — nombre del servicio en `dokploy-network`, no la IP pública.                   |
+| `DIRECT_URL`                                                                                      | Igual que `DATABASE_URL` (no hay pooler). `prisma.config.ts` usa `DATABASE_URL` primero.                                                   |
+| `BETTER_AUTH_SECRET`                                                                              | `openssl rand -base64 32`. Cambiarla cierra todas las sesiones.                                                                            |
+| `S3_ENDPOINT`                                                                                     | `http://alphataco-minio:9000`                                                                                                              |
+| `S3_ACCESS_KEY` / `S3_SECRET_KEY`                                                                 | Credenciales de MinIO.                                                                                                                     |
+| `S3_REGION`                                                                                       | `us-east-1`                                                                                                                                |
+| `S3_FORCE_PATH_STYLE`                                                                             | `true`                                                                                                                                     |
+| `JOBS_TOKEN`                                                                                      | `openssl rand -hex 32`. Vacío = `/api/jobs/*` responde 401 (ver "Pendientes").                                                             |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE`, `SMTP_FROM`, `EMAIL_FROM_NAME` | Invitaciones y recuperación de contraseña. Vacías = los mails no salen y el enlace queda en el log (solo si `NEXT_PUBLIC_SHOW_LOGS=true`). |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Opcionales. Vacías = sin botón de Google. |
-| `TASKAPP_BASE_URL` / `TASKAPP_PROJECT_API_KEY` | Centro de Ayuda (opcional). |
-| `RUN_SEED` | `true` solo en el primer deploy (ver abajo). |
-| `SEED_COMPANY_NAME` | Nombre de la empresa del seed. Default `AlphaTaco`. |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`                                                       | Opcionales. Vacías = sin botón de Google.                                                                                                  |
+| `TASKAPP_BASE_URL` / `TASKAPP_PROJECT_API_KEY`                                                    | Centro de Ayuda (opcional).                                                                                                                |
+| `RUN_SEED`                                                                                        | `true` solo en el primer deploy (ver abajo).                                                                                               |
+| `SEED_COMPANY_NAME`                                                                               | Nombre de la empresa del seed. Default `AlphaTaco`.                                                                                        |
 
 `GIT_SHA`, `NODE_ENV`, `PORT` y `HOSTNAME` los fija la imagen: no cargarlos.
 
@@ -165,6 +165,7 @@ No usar `scripts/seed-auth-fixtures.ts`: son datos de prueba (contraseña fija c
 
    Tiene que devolver un `token` y `empresas = 1`. Con `empresas = 0` el nombre no coincide:
    `ROLLBACK;` y corregirlo. Si está bien, `COMMIT;`.
+
 3. Abrir `https://alphataco.31.97.42.82.sslip.io/api/auth/reset-password/<token>?callbackURL=%2Freset_password%2Fupdate-user`,
    definir la contraseña y entrar. El token vence en 24 h.
 4. Ya como admin: **Configuración → General** para reemplazar los placeholders del seed (CUIT,

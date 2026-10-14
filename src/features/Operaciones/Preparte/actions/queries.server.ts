@@ -5,6 +5,7 @@ import { callScalar } from '@/shared/lib/sql';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { z } from 'zod';
+import { preparteCompanyScope } from '../lib/preparte-scope';
 
 const logger = new Logger('features/Operaciones/Preparte/queries');
 
@@ -73,7 +74,7 @@ export async function getPreparteChangeLogs(preparteId: string) {
     const data = await prisma.preparte_change_logs.findMany({
       where: {
         preparte_id: preparteId,
-        preparte: { OR: [{ company_id: companyId }, { company_id: null }] },
+        preparte: preparteCompanyScope(companyId),
       },
       include: CHANGE_LOG_INCLUDE,
       orderBy: { changed_at: 'desc' },
@@ -99,7 +100,7 @@ export async function getPreparteChangeLogsByOrderNumber(numeroPedido: string) {
       where: {
         preparte: {
           numero_pedido: numeroPedido,
-          OR: [{ company_id: companyId }, { company_id: null }],
+          ...preparteCompanyScope(companyId),
         },
       },
       include: CHANGE_LOG_INCLUDE,

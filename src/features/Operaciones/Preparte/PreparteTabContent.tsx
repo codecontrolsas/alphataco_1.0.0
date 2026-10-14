@@ -7,5 +7,9 @@ interface Props {
 }
 
 export default function PreparteTabContent({ searchParams, permissionsMap }: Props) {
-  return <PreparteList searchParams={searchParams} permissionsMap={permissionsMap} />;
+  return (
+    <div className="space-y-6">
+      <PreparteList searchParams={searchParams} permissionsMap={permissionsMap} />
+    </div>
+  );
 }

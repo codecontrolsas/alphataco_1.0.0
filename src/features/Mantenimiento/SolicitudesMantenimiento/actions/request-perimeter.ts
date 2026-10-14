@@ -59,3 +59,28 @@ export async function assertRequestTransition(
 
   return current;
 }
+
+/**
+ * Resuelve (aprueba o rechaza) una solicitud de forma ATÓMICA: el `where` lleva el estado
+ * `pending_approval`, así que dos aprobaciones simultáneas (o un doble click) no pueden
+ * escribir las dos ni crear dos pedidos para la misma solicitud. Verifica `count`.
+ *
+ * Reemplaza a `assertRequestTransition` + `update` (que leía y luego escribía sin el estado en
+ * el `where`, y dejaba pasar la reescritura del mismo estado).
+ */
+export async function resolveRequestFromPending(
+  tx: Prisma.TransactionClient,
+  requestId: string,
+  companyId: string,
+  nextStatus: 'approved' | 'rejected',
+  data: Omit<Prisma.maintenance_requestsUncheckedUpdateManyInput, 'status'> = {}
+): Promise<void> {
+  const result = await tx.maintenance_requests.updateMany({
+    where: { id: requestId, company_id: companyId, status: 'pending_approval' },
+    data: { ...data, status: nextStatus },
+  });
+
+  if (result.count !== 1) {
+    throw new Error('La solicitud ya fue resuelta o no está pendiente de aprobación. Recargá la lista.');
+  }
+}

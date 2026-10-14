@@ -27,8 +27,21 @@ export function sanitizeFileName(name: string): string {
  */
 export const ALLOWED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'] as const;
 
+/** Extensiones admitidas: el MIME lo declara el cliente, así que también se mira el nombre. */
+export const ALLOWED_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'] as const;
+
+/** Tope de fotos por subida (la Server Action recibe cualquier cantidad de archivos). */
+export const MAX_REPAIR_IMAGES_PER_UPLOAD = 10;
+
 /** Lanza si el archivo no es una imagen admitida o excede el tamaño máximo. */
 export function assertValidImageFile(file: File, maxSize: number): void {
+  if (!(file instanceof File)) {
+    throw new Error('Archivo inválido');
+  }
+  const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
+  if (!(ALLOWED_IMAGE_EXTENSIONS as readonly string[]).includes(extension)) {
+    throw new Error(`El archivo "${file.name}" no es una imagen admitida (JPG, PNG, WEBP o HEIC)`);
+  }
   if (!(ALLOWED_IMAGE_MIME_TYPES as readonly string[]).includes(file.type)) {
     throw new Error(`El archivo "${file.name}" no es una imagen admitida (JPG, PNG, WEBP o HEIC)`);
   }

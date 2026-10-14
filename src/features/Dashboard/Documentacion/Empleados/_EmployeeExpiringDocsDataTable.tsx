@@ -1,5 +1,6 @@
 'use client';
 
+import { formatArgentinaDay } from '@/features/Treasury/lib/today';
 import {
   DataTable,
   type DataTableFacetedFilterConfig,
@@ -8,8 +9,7 @@ import {
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type { LucideIcon } from 'lucide-react';
-import { AlertTriangle, CheckCircle2, CircleOff, Clock, XCircle } from 'lucide-react';
-import moment from 'moment';
+import { AlertTriangle, CheckCircle2, CircleOff, XCircle } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import {
   getAllEmployeeExpiringDocsForExport,
@@ -43,7 +43,6 @@ const stateIcons: Record<string, LucideIcon | undefined> = {
   aprobado: CheckCircle2,
   rechazado: XCircle,
   vencido: AlertTriangle,
-  pendiente: Clock,
 };
 
 // ============================================================================
@@ -205,8 +204,8 @@ export function _EmployeeExpiringDocsDataTable({
         // employee: accessorFn retorna texto, no necesita formatter
         // document_type: accessorFn retorna texto, no necesita formatter
         state: (val: unknown) => stateLabels[val as string] ?? String(val ?? ''),
-        validity: (val: unknown) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
-        created_at: (val: unknown) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
+        validity: (val: unknown) => (val ? formatArgentinaDay(val as string) : ''),
+        created_at: (val: unknown) => (val ? formatArgentinaDay(val as string) : ''),
       },
     }),
     [currentParams]

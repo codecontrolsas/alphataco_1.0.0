@@ -1,5 +1,7 @@
 'use server';
 
+import { toPathExtension, toPathIdentifier } from '@/shared/lib/storage-file-name';
+import { formatPathSegment } from '@/shared/utils/legacy-mappers';
 import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { Logger } from '@/lib/logger';
 import { requireServerAuthProfile } from '@/shared/actions/auth.actions';
@@ -7,6 +9,7 @@ import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { DOCUMENT_FILES_BUCKET, storageFileUrls, storageRemove, storageUpload } from '@/shared/lib/storage';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { validateDocumentFile } from '@/features/Documentacion/shared/lib/document-file-rules';
 import { revalidatePath } from 'next/cache';
 
 const logger = new Logger('features/PreLegajos/documents');
@@ -22,6 +25,9 @@ type UploadResult = { ok: true; documentPath: string } | { ok: false; error: str
  */
 export async function getPreEmployeeDocumentChecklist(preEmployeeId: string) {
   logger.debug('Obteniendo checklist de documentos', { data: { preEmployeeId } });
+  if (!(await checkPermissionServer('seleccion', 'candidatos', 'view'))) {
+    throw new Error('No tenés permiso para ver los documentos de candidatos');
+  }
   const companyId = await getActiveCompanyId();
 
   try {
@@ -73,11 +79,11 @@ function buildStoragePath(params: {
   documentTypeName: string;
   fileExtension: string;
 }) {
-  const slug = (value: string) => value.toLowerCase().trim().replace(/\s+/g, '-');
+  const slug = formatPathSegment;
 
-  return `${slug(params.companyName)}-(${params.companyCuit})/pre-legajo/${params.preFileNumber}-${slug(
+  return `${slug(params.companyName)}-(${toPathIdentifier(params.companyCuit)})/pre-legajo/${params.preFileNumber}-${slug(
     params.fullName
-  )}/${slug(params.documentTypeName)}.${params.fileExtension}`;
+  )}/${slug(params.documentTypeName)}.${toPathExtension(params.fileExtension)}`;
 }
 
 /**
@@ -96,6 +102,16 @@ export async function uploadPreEmployeeDocument(formData: FormData): Promise<Upl
 
   const hasPermission = await checkPermissionServer('seleccion', 'candidatos', 'update');
   if (!hasPermission) return { ok: false, error: 'No tenés permiso para cargar documentos del candidato' };
+
+  // Tamaño y extensión validados en el servidor (el `accept` del input no frena una llamada directa)
+  const fileError = validateDocumentFile(file);
+  if (fileError) return { ok: false, error: fileError };
+
+  let validity: Date | null = null;
+  if (validityRaw) {
+    validity = new Date(validityRaw);
+    if (Number.isNaN(validity.getTime())) return { ok: false, error: 'La fecha de vencimiento no es válida' };
+  }
 
   const [profile, companyId] = await Promise.all([requireServerAuthProfile(), getActiveCompanyId()]);
 
@@ -138,6 +154,11 @@ export async function uploadPreEmployeeDocument(formData: FormData): Promise<Upl
     fileExtension,
   });
 
+  const previous = await prisma.documents_pre_employees.findUnique({
+    where: { pre_employee_id_document_type_id: { pre_employee_id: preEmployeeId, document_type_id: documentTypeId } },
+    select: { document_path: true },
+  });
+
   const uploaded = await storageUpload(DOCUMENT_FILES_BUCKET, documentPath, file, { cacheControl: '0', upsert: true });
   if (!uploaded.ok) {
     logger.error('Error al subir el documento del candidato al storage', { data: { error: uploaded.error, documentPath } });
@@ -153,18 +174,22 @@ export async function uploadPreEmployeeDocument(formData: FormData): Promise<Upl
         pre_employee_id: preEmployeeId,
         document_type_id: documentTypeId,
         document_path: documentPath,
-        validity: validityRaw ? new Date(validityRaw) : null,
+        validity,
         user_id: profile.id,
         company_id: companyId,
       },
       update: {
         document_path: documentPath,
-        validity: validityRaw ? new Date(validityRaw) : null,
+        validity,
         user_id: profile.id,
         uploaded_at: new Date(),
       },
     });
 
+    // La ruta se saneó distinto antes (tildes, espacios): si cambió, el archivo viejo quedaría huérfano.
+    if (previous?.document_path && previous.document_path !== documentPath) {
+      await storageRemove(DOCUMENT_FILES_BUCKET, [previous.document_path]);
+    }
     logger.info('Documento de candidato cargado', { data: { preEmployeeId, documentTypeId } });
     revalidatePath('/dashboard/recruitment/detail');
     return { ok: true, documentPath };
@@ -192,11 +217,29 @@ export async function deletePreEmployeeDocument(documentId: string) {
   if (document.pre_employees.status === 'legajo') {
     throw new Error('El candidato ya fue convertido: no se pueden borrar sus documentos');
   }
+  // Mismo criterio que la subida: un candidato rechazado no se modifica hasta reabrirlo
+  if (document.pre_employees.status === 'rechazado') {
+    throw new Error('El candidato está rechazado: hay que reabrirlo para modificar sus documentos');
+  }
 
   try {
     await prisma.documents_pre_employees.delete({ where: { id: documentId, company_id: companyId } });
 
-    await storageRemove(DOCUMENT_FILES_BUCKET, [document.document_path]);
+    // El archivo se borra DESPUÉS de la BD y solo si nadie más referencia el path (un legajo aprobado
+    // comparte el mismo `document_path`). Si el borrado del storage falla, queda un archivo huérfano:
+    // se loguea, pero la operación del usuario ya está hecha.
+    const [stillInPreEmployees, stillInEmployees] = await Promise.all([
+      prisma.documents_pre_employees.count({ where: { document_path: document.document_path } }),
+      prisma.documents_employees.count({ where: { document_path: document.document_path } }),
+    ]);
+    if (stillInPreEmployees + stillInEmployees === 0) {
+      const removed = await storageRemove(DOCUMENT_FILES_BUCKET, [document.document_path]);
+      if (!removed.ok) {
+        logger.error('No se pudo borrar el archivo del storage; queda huérfano', {
+          data: { error: removed.error, documentPath: document.document_path },
+        });
+      }
+    }
 
     revalidatePath('/dashboard/recruitment/detail');
   } catch (error) {
@@ -213,6 +256,9 @@ export async function deletePreEmployeeDocument(documentId: string) {
  * ruta que sirve el archivo lo vuelve a verificar.
  */
 export async function getPreEmployeeDocumentUrl(documentPath: string) {
+  if (!(await checkPermissionServer('seleccion', 'candidatos', 'view'))) {
+    throw new Error('No tenés permiso para ver los documentos de candidatos');
+  }
   const companyId = await getActiveCompanyId();
   const owned = await prisma.documents_pre_employees.findFirst({
     where: withCompany({ document_path: documentPath }, companyId),

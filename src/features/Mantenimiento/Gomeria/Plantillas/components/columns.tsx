@@ -9,7 +9,7 @@ import { calculatePositions } from '@/features/Mantenimiento/Gomeria/shared/tire
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import type { ColumnDef } from '@tanstack/react-table';
 import { CarFront, Pencil, Trash2 } from 'lucide-react';
-import moment from 'moment';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ReactNode } from 'react';
 import type { TemplateListItem } from '../actions/actions.server';
 
@@ -25,7 +25,7 @@ type Permissions = {
 // HELPERS
 // ============================================================================
 
-function computePositionCount(item: TemplateListItem): number {
+export function computePositionCount(item: TemplateListItem): number {
   if (!item.axles || item.axles.length === 0) return 0;
 
   const diagramAxles: DiagramAxle[] = item.axles.map((axle) => ({
@@ -44,6 +44,14 @@ function computePositionCount(item: TemplateListItem): number {
 // COLUMNS
 // ============================================================================
 
+/** Estado de las medidas de los ejes (celda y export comparten las etiquetas). */
+export const templateSizesStatusLabels: Record<string, string> = {
+  empty: 'Sin ejes',
+  none: 'Por vehículo',
+  partial: 'Parciales',
+  all: 'Todas',
+};
+
 export function getColumns(
   permissions: Permissions,
   onEdit: (template: TemplateListItem) => void,
@@ -52,6 +60,7 @@ export function getColumns(
 ): ColumnDef<TemplateListItem>[] {
   const canUpdate = permissions.hasPermission('mantenimiento', 'plantillas_cubiertas', 'update');
   const canCreate = permissions.hasPermission('mantenimiento', 'plantillas_cubiertas', 'create');
+  const canDelete = permissions.hasPermission('mantenimiento', 'plantillas_cubiertas', 'delete');
 
   return [
     // --- Select ---
@@ -177,13 +186,13 @@ export function getColumns(
       accessorKey: 'created_at',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Creado" />,
       cell: ({ row }) => (
-        <div>{row.original.created_at ? moment(row.original.created_at).format('DD/MM/YYYY') : '-'}</div>
+        <div>{row.original.created_at ? formatArgentinaDay(row.original.created_at) : '-'}</div>
       ),
       meta: { title: 'Creado' },
     },
 
     // --- Actions ---
-    ...(canUpdate || canCreate
+    ...(canUpdate || canCreate || canDelete
       ? [
           {
             id: 'actions',
@@ -193,7 +202,13 @@ export function getColumns(
                   {canCreate && (
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onAssign(row.original)}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => onAssign(row.original)}
+                          aria-label="Asignar a subtipo"
+                        >
                           <CarFront className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -203,14 +218,20 @@ export function getColumns(
                   {canUpdate && (
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(row.original)}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => onEdit(row.original)}
+                          aria-label="Editar plantilla"
+                        >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>Editar</TooltipContent>
                     </Tooltip>
                   )}
-                  {canUpdate && (
+                  {canDelete && (
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
@@ -218,6 +239,7 @@ export function getColumns(
                           size="icon"
                           className="h-7 w-7 text-destructive hover:text-destructive"
                           onClick={() => onDelete(row.original)}
+                          aria-label="Eliminar plantilla"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>

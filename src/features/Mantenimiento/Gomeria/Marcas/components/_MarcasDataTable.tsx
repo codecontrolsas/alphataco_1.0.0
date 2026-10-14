@@ -18,18 +18,19 @@ import {
   type DataTableSearchParams,
   type FacetResult,
 } from '@/shared/components/common/DataTable';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
-import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { toggleTireBrandActive } from '../actions/actions.server';
 import {
   getTireBrandSingleFacet,
   getTireBrandsForExport,
   getTireBrandsPaginated,
-  toggleTireBrandActive,
   type TireBrandListItem,
-} from '../actions/actions.server';
+} from '../actions/brand-list.server';
 import { MarcaForm } from './MarcaForm';
 import { getColumns } from './columns';
 
@@ -172,6 +173,7 @@ export default function _MarcasDataTable({
       await toggleTireBrandActive(toggleTarget.id, !toggleTarget.is_active);
       toast.success(toggleTarget.is_active ? 'Marca desactivada correctamente' : 'Marca activada correctamente');
       await queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ['datatable-facet'] });
       setToggleTarget(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Error al cambiar el estado');
@@ -201,7 +203,7 @@ export default function _MarcasDataTable({
         emptyMessage="No hay marcas registradas"
         searchPlaceholder="Buscar por nombre..."
         exportConfig={{
-          fetchAllData: () => getTireBrandsForExport(currentParams),
+          fetchAllData: async () => unwrapExportResult(await getTireBrandsForExport(currentParams)),
           options: {
             filename: 'marcas-cubiertas',
             sheetName: 'Marcas',
@@ -209,7 +211,7 @@ export default function _MarcasDataTable({
           },
           formatters: {
             is_active: (value) => (value ? 'Activa' : 'Inactiva'),
-            created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
+            created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
             tire_count: (_value, row) => String((row._count as { tires: number })?.tires ?? 0),
           },
         }}

@@ -122,11 +122,7 @@ export function VehicleHeader({ vehicle, sectorName }: { vehicle: VehicleById; s
                 <Pencil />
                 Editar
               </Button>
-              <VehicleQuickActions
-                condition={vehicle.condition}
-                equipmentId={vehicle.id}
-                isActive={vehicle.is_active ?? undefined}
-              />
+              <VehicleQuickActions equipmentId={vehicle.id} isActive={vehicle.is_active ?? undefined} />
             </PermissionGuard>
           </>
         }

@@ -12,23 +12,23 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   createOtherEquipmentCertification,
   deleteOtherEquipmentCertification,
   getOtherEquipmentCertifications,
   type OtherEquipmentCertification,
 } from '@/features/Equipos/OtherEquipment/actions/actionsServer';
+import { PermissionGuard } from '@/features/Permissions';
 import { Logger } from '@/lib/logger';
-import { cn } from '@/lib/utils';
+import { argentinaDate, formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarIcon, FileUp, Plus, Trash2 } from 'lucide-react';
+import { FileUp, Plus, Trash2 } from 'lucide-react';
 import moment from 'moment';
 import 'moment/locale/es';
 import { useRef, useState } from 'react';
@@ -98,7 +98,7 @@ export function OtherEquipmentCertifications({ equipmentId, initialData }: Other
     },
     onError: (error: unknown) => {
       logger.error('Error al crear documento', { data: { error } });
-      toast.error('Error al crear el documento');
+      toast.error(error instanceof Error ? error.message : 'Error al crear el documento');
     },
   });
 
@@ -111,7 +111,7 @@ export function OtherEquipmentCertifications({ equipmentId, initialData }: Other
     },
     onError: (error) => {
       logger.error('Error al eliminar documento', { data: { error } });
-      toast.error('Error al eliminar el documento');
+      toast.error(error instanceof Error ? error.message : 'Error al eliminar el documento');
     },
   });
 
@@ -141,118 +141,99 @@ export function OtherEquipmentCertifications({ equipmentId, initialData }: Other
     setOpenCreate(open);
   };
 
+  // Vencimientos contra el "hoy" argentino (el navegador puede estar en otra zona)
   const isExpiringSoon = (date: string | null): boolean => {
     if (!date) return false;
-    return moment(date).diff(moment(), 'days') <= 30;
+    return moment(date, 'YYYY-MM-DD').diff(moment(argentinaDate(), 'YYYY-MM-DD'), 'days') <= 30;
   };
 
   const isExpired = (date: string | null): boolean => {
     if (!date) return false;
-    return moment(date).isBefore(moment(), 'day');
+    return moment(date, 'YYYY-MM-DD').isBefore(moment(argentinaDate(), 'YYYY-MM-DD'), 'day');
   };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">Documentos</h3>
-        <Dialog open={openCreate} onOpenChange={handleDialogClose}>
-          <DialogTrigger asChild>
-            <Button size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              Agregar documento
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Nuevo Documento</DialogTitle>
-            </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nombre *</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="Nombre del documento" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormItem>
-                  <FormLabel>Archivo</FormLabel>
-                  <FormControl>
-                    <div className="flex flex-col gap-2">
-                      <Input
-                        ref={fileInputRef}
-                        type="file"
-                        accept={ACCEPTED_FILE_TYPES}
-                        onChange={handleFileChange}
-                        className="cursor-pointer"
-                      />
-                      {selectedFile && (
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <FileUp className="h-4 w-4" />
-                          <span className="truncate">{selectedFile.name}</span>
-                          <span className="text-xs">({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)</span>
-                        </div>
-                      )}
-                    </div>
-                  </FormControl>
-                  <FormDescription>PDF, DOC, JPG, PNG (máx. 10MB)</FormDescription>
-                </FormItem>
-                <FormField
-                  control={form.control}
-                  name="expiration_date"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel>Fecha de vencimiento</FormLabel>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant="outline"
-                              className={cn('pl-3 text-left font-normal', !field.value && 'text-muted-foreground')}
-                            >
-                              {field.value ? (
-                                moment(field.value).locale('es').format('LL')
-                              ) : (
-                                <span>Seleccionar fecha</span>
-                              )}
-                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={field.value ?? undefined}
-                            onSelect={field.onChange}
-                            captionLayout="dropdown"
-                            fromYear={new Date().getFullYear() - 1}
-                            toYear={new Date().getFullYear() + 20}
-                            initialFocus
+        <PermissionGuard module="equipos" tab="detalle-otro-equipo" action="update">
+          <Dialog open={openCreate} onOpenChange={handleDialogClose}>
+            <DialogTrigger asChild>
+              <Button size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                Agregar documento
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Nuevo Documento</DialogTitle>
+              </DialogHeader>
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nombre *</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Nombre del documento" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormItem>
+                    <FormLabel>Archivo</FormLabel>
+                    <FormControl>
+                      <div className="flex flex-col gap-2">
+                        <Input
+                          ref={fileInputRef}
+                          type="file"
+                          accept={ACCEPTED_FILE_TYPES}
+                          onChange={handleFileChange}
+                          className="cursor-pointer"
+                        />
+                        {selectedFile && (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <FileUp className="h-4 w-4" />
+                            <span className="truncate">{selectedFile.name}</span>
+                            <span className="text-xs">({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)</span>
+                          </div>
+                        )}
+                      </div>
+                    </FormControl>
+                    <FormDescription>PDF, DOC, JPG, PNG (máx. 10MB)</FormDescription>
+                  </FormItem>
+                  <FormField
+                    control={form.control}
+                    name="expiration_date"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel>Fecha de vencimiento</FormLabel>
+                        <FormControl>
+                          <EnhancedDatePicker
+                            date={field.value ?? undefined}
+                            setDate={(date) => field.onChange(date ?? null)}
                           />
-                        </PopoverContent>
-                      </Popover>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => handleDialogClose(false)}>
-                    Cancelar
-                  </Button>
-                  <Button type="submit" disabled={createMutation.isPending}>
-                    {createMutation.isPending ? 'Subiendo...' : 'Crear documento'}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => handleDialogClose(false)}>
+                      Cancelar
+                    </Button>
+                    <Button type="submit" disabled={createMutation.isPending}>
+                      {createMutation.isPending ? 'Subiendo...' : 'Crear documento'}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
+        </PermissionGuard>
       </div>
 
       {certifications.length === 0 ? (
@@ -268,14 +249,18 @@ export function OtherEquipmentCertifications({ equipmentId, initialData }: Other
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm font-medium">{cert.name}</CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCertToDelete(cert)}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <PermissionGuard module="equipos" tab="detalle-otro-equipo" action="update">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setCertToDelete(cert)}
+                      className="text-destructive hover:text-destructive"
+                      aria-label={`Eliminar el documento ${cert.name}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </PermissionGuard>
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
@@ -306,9 +291,7 @@ export function OtherEquipmentCertifications({ equipmentId, initialData }: Other
                     Ver archivo
                   </a>
                 )}
-                <p className="text-xs text-muted-foreground">
-                  Creado: {moment(cert.created_at).locale('es').format('LL')}
-                </p>
+                <p className="text-xs text-muted-foreground">Creado: {formatArgentinaDay(cert.created_at)}</p>
               </CardContent>
             </Card>
           ))}

@@ -324,7 +324,7 @@ export function _MaintenanceOrderDataTable({
         toolbarActions={<_ExportTasksButton searchParams={currentParams} />}
         initialColumnVisibility={mergedColumnVisibility}
         initialFilterVisibility={mergedFilterVisibility}
-        searchPlaceholder="Buscar por N° orden, dominio..."
+        searchPlaceholder="Buscar por N° orden..."
         emptyMessage="No hay órdenes de mantenimiento"
         showFilterToggle={true}
         // Client-side navigation: fetch instantáneo vía React Query, sin router.push

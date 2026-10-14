@@ -3,6 +3,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { LucideIcon } from 'lucide-react';
 import { CheckCircle2, Clock, Play, Wrench, XCircle } from 'lucide-react';
@@ -140,7 +141,7 @@ export function getOtherEquipmentMaintenanceColumns(): ColumnDef<OtherEquipmentM
       cell: ({ row }) => {
         const date = row.original.scheduled_date;
         // Sin fecha asignada todavía: no es lo mismo que "no tiene"
-        return <span className="tabular-nums">{date ? moment(date).format('DD/MM/YYYY') : 'Sin asignar'}</span>;
+        return <span className="tabular-nums">{date ? moment.utc(date).format('DD/MM/YYYY') : 'Sin asignar'}</span>;
       },
     },
 
@@ -151,7 +152,7 @@ export function getOtherEquipmentMaintenanceColumns(): ColumnDef<OtherEquipmentM
       header: ({ column }) => <DataTableColumnHeader column={column} title="Ingreso a Taller" />,
       cell: ({ row }) => {
         const date = row.original.workshop_entry_date;
-        return <span className="tabular-nums">{date ? moment(date).format('DD/MM/YYYY') : '—'}</span>;
+        return <span className="tabular-nums">{date ? formatArgentinaDay(date) : '—'}</span>;
       },
     },
 
@@ -162,7 +163,7 @@ export function getOtherEquipmentMaintenanceColumns(): ColumnDef<OtherEquipmentM
       header: ({ column }) => <DataTableColumnHeader column={column} title="Creada" />,
       cell: ({ row }) => {
         const date = row.original.created_at;
-        return <span className="tabular-nums">{date ? moment(date).format('DD/MM/YYYY') : '—'}</span>;
+        return <span className="tabular-nums">{date ? formatArgentinaDay(date) : '—'}</span>;
       },
     },
 

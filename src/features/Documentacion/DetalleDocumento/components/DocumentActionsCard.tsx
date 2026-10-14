@@ -14,6 +14,8 @@ interface DocumentActionsCardProps {
   /** Del documento cargado: vencimiento y período actuales. */
   currentValidity: string | null;
   currentPeriod: string | null;
+  /** El tipo ya no aplica al recurso: el documento es historial, solo se puede eliminar. */
+  notApplicable?: boolean;
 }
 
 /** Tab "Actualizar" del detalle: renovar, reemplazar o eliminar el archivo del documento. */
@@ -25,30 +27,36 @@ export function DocumentActionsCard({
   monthly,
   currentValidity,
   currentPeriod,
+  notApplicable = false,
 }: DocumentActionsCardProps) {
   return (
     <Card>
       <div className="p-3 text-center space-y-3">
         <CardDescription>
-          Si el documento es rechazado, vencido o necesita ser actualizado puedes hacerlo desde aquí, una vez aprobado
-          el documento no podrá ser modificado
+          {notApplicable
+            ? 'Este documento ya no aplica al recurso: se conserva como historial y solo puede eliminarse.'
+            : 'Si el documento es rechazado, vencido o necesita ser actualizado puedes hacerlo desde aquí, una vez aprobado el documento no podrá ser modificado'}
         </CardDescription>
         <div className="w-full flex justify-evenly flex-wrap">
-          <UpdateDocuments
-            id={documentId}
-            resource={resource}
-            documentName={documentName}
-            expires={expires}
-            montly={monthly}
-          />
-          <ReplaceDocument
-            id={documentId}
-            resource={resource}
-            documentName={documentName}
-            expires={currentValidity}
-            montly={currentPeriod}
-            appliesId={documentId}
-          />
+          {!notApplicable && (
+            <>
+              <UpdateDocuments
+                id={documentId}
+                resource={resource}
+                documentName={documentName}
+                expires={expires}
+                montly={monthly}
+              />
+              <ReplaceDocument
+                id={documentId}
+                resource={resource}
+                documentName={documentName}
+                expires={currentValidity}
+                montly={currentPeriod}
+                appliesId={documentId}
+              />
+            </>
+          )}
           <DeleteDocument id={documentId} resource={resource} documentName={documentName} expires={expires} />
         </div>
       </div>

@@ -1,16 +1,12 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
+import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { cn } from '@/lib/utils';
-import { CalendarIcon } from 'lucide-react';
 import moment from 'moment';
 import { UseFormReturn } from 'react-hook-form';
 import type { DailyReportRowFormValues } from './schema';
@@ -41,7 +37,10 @@ export function ScheduleSection({
   const isEjecutadoDisabled = reportDate != null && moment.utc(reportDate).isSameOrAfter(moment().add(1, 'day'), 'day');
 
   return (
-    <div className="space-y-4">
+    <section aria-labelledby="row-form-schedule" className="space-y-4 rounded-lg border bg-card p-4">
+      <h3 id="row-form-schedule" className="text-sm font-semibold text-foreground">
+        {isEditMode ? 'Estado y descripción' : 'Descripción'}
+      </h3>
       {/* Bloque bloqueable: en modo "solo recursos" (disabled) todos estos
           controles quedan deshabilitados. El motivo de reasignación queda fuera
           del fieldset porque debe poder completarse al reasignar recursos. */}
@@ -115,28 +114,14 @@ export function ScheduleSection({
                     render={({ field: f }) => (
                       <FormItem className="flex flex-col">
                         <FormLabel className="mt-2">Fecha de reprogramación</FormLabel>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant="outline"
-                                className={cn('pl-3 text-left font-normal', !f.value && 'text-muted-foreground')}
-                              >
-                                {f.value ? moment(f.value).format('DD/MM/YYYY') : 'Seleccionar fecha'}
-                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={f.value}
-                              onSelect={f.onChange}
-                              disabled={(date) => moment(date).isBefore(moment(), 'day')}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
+                        <FormControl>
+                          <EnhancedDatePicker
+                            date={f.value ?? undefined}
+                            setDate={f.onChange}
+                            minDate={moment().startOf('day').toDate()}
+                            placeholder="DD/MM/AAAA"
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -180,7 +165,7 @@ export function ScheduleSection({
 
       {/* Horario (condicional: por horario) */}
       {isPorHorario && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-4">
           <FormField
             control={form.control}
             name="start_time"
@@ -278,6 +263,6 @@ export function ScheduleSection({
           )}
         />
       )}
-    </div>
+    </section>
   );
 }

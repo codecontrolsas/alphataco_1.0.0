@@ -6,13 +6,13 @@ import {
   DocumentNameCell,
   DocumentRowActions,
   DocumentStatePill,
+  documentListStateLabels,
   documentStateIcons,
 } from '@/features/Documentacion/shared/components/DocumentCells';
-import SimpleDocument from '@/features/Documentacion/shared/components/SimpleDocument';
-import { formatArgentinaDay } from '@/features/Treasury/lib/today';
+import { RequirementUpload } from '@/features/Documentacion/shared/components/RequirementUpload';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { documentStateLabels } from '@/shared/utils/mappers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import { HelpCircle } from 'lucide-react';
 import Link from 'next/link';
@@ -27,7 +27,7 @@ export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['mandatory', 'multiresource'
 
 /** Íconos y labels de estado: los mismos que usa la pill de la tabla (los consume el filtro de Estado). */
 export const stateIcons = documentStateIcons;
-export const stateLabels = documentStateLabels;
+export const stateLabels = documentListStateLabels;
 
 // ============================================================================
 // ACTIONS CELL
@@ -42,20 +42,21 @@ function ActionsCell({ row }: { row: { original: EmployeePermanentDocumentListIt
       documentId={doc.id}
       documentName={doc.document_types?.name}
       state={doc.state}
-      archived={doc.archived_at != null}
+      archived={doc.notApplicable}
       resource="Persona"
       viewTab="docs-empleados-permanentes"
       upload={{
         // Para tipos privados, verificar permiso upload_private en la tab padre
         tab: isPrivateDocType ? 'documentos-de-empleados' : 'docs-empleados-permanentes',
         action: isPrivateDocType ? 'upload_private' : 'update',
+        // Fila faltante: el recurso y el tipo vienen fijos (no hay un documento que actualizar)
         render: (close) => (
           <div className="space-y-3">
-            <SimpleDocument
-              resource="empleado"
-              handleOpen={close}
-              defaultDocumentId={doc.id_document_types!}
-              numberDocument={doc.employees?.document_number}
+            <RequirementUpload
+              kind="employee"
+              resourceId={doc.applies}
+              documentTypeId={doc.id_document_types}
+              close={close}
             />
           </div>
         ),
@@ -148,8 +149,8 @@ export const columns: ColumnDef<EmployeePermanentDocumentListItem>[] = [
     meta: { title: 'Estado' },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
     cell: ({ row }) => (
-      // Documento archivado: historial / no vigente (solo visible en el detalle del empleado)
-      <DocumentStatePill state={row.original.state} archived={row.original.archived_at != null} />
+      // "Ya no aplica": el tipo dejó de aplicarle al empleado (solo visible en su ficha)
+      <DocumentStatePill state={row.original.state} archived={row.original.notApplicable} />
     ),
     filterFn: (row, id, value: string[]) => {
       const val = row.getValue(id) as string | null;
@@ -169,7 +170,8 @@ export const columns: ColumnDef<EmployeePermanentDocumentListItem>[] = [
       <DocumentExpiryCell
         validity={row.original.document_types?.explired ? row.original.validity : null}
         state={row.original.state}
-        archived={row.original.archived_at != null}
+        archived={row.original.notApplicable}
+        missing={row.original.isMissing}
       />
     ),
     enableSorting: true,
@@ -182,10 +184,11 @@ export const columns: ColumnDef<EmployeePermanentDocumentListItem>[] = [
     meta: { title: 'Subido el' },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Subido el" />,
     cell: ({ row }) => {
-      if (row.original.state === 'pendiente') {
+      const uploadedAt = row.original.created_at;
+      if (row.original.isMissing || !uploadedAt) {
         return <span className="text-muted-foreground">No disponible</span>;
       }
-      return <span className="font-mono tabular-nums">{formatArgentinaDay(row.original.created_at)}</span>;
+      return <span className="font-mono tabular-nums">{formatArgentinaDay(uploadedAt)}</span>;
     },
     enableSorting: true,
   },

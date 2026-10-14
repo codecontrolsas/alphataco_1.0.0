@@ -1,49 +1,47 @@
+'use client';
+
 import {
   AlertDialog,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogFooter,
+  AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { fetchAllDocumentTypes } from '@/features/Documentacion/shared/actions/document-actions';
 import { cn } from '@/lib/utils';
-import { fetchCurrentCompany } from '@/shared/actions/company.actions';
-import { fetchSimpleDataEmployee } from '@/shared/actions/employees.actions';
-import { fetchSimpleDataEquipment } from '@/shared/actions/equipment.actions';
 import InfoComponent from '@/shared/components/common/InfoComponent';
+import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { getMultiDocumentUploadData } from '../actions/multi-upload-data.server';
 import UploadDocumentMultiEmployee from './UploadDocumentMultiEmployee';
 import UploadDocumentMultiEquipment from './UploadDocumentMultiEquipment';
-async function NewDocumentMulti({
-  onlyEmployees,
-  onlyEquipment,
-}: {
-  onlyEmployees?: boolean;
-  onlyEquipment?: boolean;
-}) {
-  // const cookiesStore = await cookies();
-  const employees = (await fetchSimpleDataEmployee()).map((employee) => ({
-    label: `${employee.firstname} ${employee.lastname}`,
-    value: employee.id,
-    cuit: employee.cuil,
-  }));
 
-  const equipments = (await fetchSimpleDataEquipment()).map((equipment) => ({
-    label: equipment.domain
-      ? `${equipment.domain} - ${equipment.intern_number || equipment.serie}`
-      : `${equipment.serie} - ${equipment.intern_number || equipment.serie}`,
-    value: equipment.id,
-  }));
+/**
+ * Diálogo de carga multirrecurso. Sus datos (empleados o equipos, tipos, empresa) se piden al abrirlo y
+ * se vuelven a pedir cada vez (sin caché): nunca ofrece un recurso o un tipo desactualizado, y la lista
+ * de documentos no paga esa carga si nadie abre el diálogo.
+ */
+function NewDocumentMulti({ onlyEmployees, onlyEquipment }: { onlyEmployees?: boolean; onlyEquipment?: boolean }) {
+  const [open, setOpen] = useState(false);
 
-  const allDocumentTypes = await fetchAllDocumentTypes();
-  const currentCompany = await fetchCurrentCompany();
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['multi-document-upload-data', Boolean(onlyEmployees), Boolean(onlyEquipment)],
+    queryFn: () => getMultiDocumentUploadData({ onlyEmployees, onlyEquipment }),
+    enabled: open,
+    staleTime: 0,
+    gcTime: 0,
+  });
+
   return (
-    <AlertDialog>
+    <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger asChild>
         <Button variant="brand">Documento Multirecurso</Button>
       </AlertDialogTrigger>
       <AlertDialogContent className="w-full">
+        <AlertDialogTitle className="sr-only">Documento multirrecurso</AlertDialogTitle>
         <InfoComponent
           iconSize="lg"
           size="sm"
@@ -51,32 +49,45 @@ async function NewDocumentMulti({
             'Desde aqui solo podras subir documentos faltantes, si deseas reemplazar o eliminar un documento, dirigete al documento en cuestion y realiza la accion deseada.'
           }
         />
-        <Tabs defaultValue={onlyEmployees ? 'employees' : onlyEquipment ? 'equipment' : 'employees'}>
-          <TabsList
-            className={cn('w-full grid grid-cols-2', onlyEmployees && onlyEquipment ? 'grid-cols-2' : 'grid-cols-1')}
-          >
-            {onlyEmployees && <TabsTrigger value="employees">Empleados</TabsTrigger>}
-            {onlyEquipment && <TabsTrigger value="equipment">Equipos</TabsTrigger>}
-          </TabsList>
-          <TabsContent value="employees">
-            <UploadDocumentMultiEmployee
-              employees={employees}
-              allDocumentTypes={allDocumentTypes?.filter(
-                (document) => document.applies === 'Persona' && document.multiresource
-              )}
-              currentCompany={currentCompany}
-            />
-          </TabsContent>
-          <TabsContent value="equipment">
-            <UploadDocumentMultiEquipment
-              currentCompany={currentCompany}
-              allDocumentTypes={allDocumentTypes?.filter(
-                (document) => document.applies === 'Equipos' && document.multiresource
-              )}
-              equipments={equipments}
-            />
-          </TabsContent>
-        </Tabs>
+        {isLoading && (
+          <div className="space-y-3" role="status" aria-label="Cargando datos del formulario">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        )}
+        {isError && (
+          <div className="space-y-2 text-sm" role="alert">
+            <p>No se pudieron cargar los datos del formulario.</p>
+            <Button type="button" variant="outline" onClick={() => refetch()}>
+              Reintentar
+            </Button>
+          </div>
+        )}
+        {data && (
+          <Tabs defaultValue={onlyEmployees ? 'employees' : onlyEquipment ? 'equipment' : 'employees'}>
+            <TabsList
+              className={cn('w-full grid grid-cols-2', onlyEmployees && onlyEquipment ? 'grid-cols-2' : 'grid-cols-1')}
+            >
+              {onlyEmployees && <TabsTrigger value="employees">Empleados</TabsTrigger>}
+              {onlyEquipment && <TabsTrigger value="equipment">Equipos</TabsTrigger>}
+            </TabsList>
+            <TabsContent value="employees">
+              <UploadDocumentMultiEmployee
+                employees={data.employees}
+                allDocumentTypes={data.employeeDocumentTypes}
+                currentCompany={data.currentCompany}
+              />
+            </TabsContent>
+            <TabsContent value="equipment">
+              <UploadDocumentMultiEquipment
+                currentCompany={data.currentCompany}
+                allDocumentTypes={data.equipmentDocumentTypes}
+                equipments={data.equipments}
+              />
+            </TabsContent>
+          </Tabs>
+        )}
         <AlertDialogFooter className="hidden">
           <AlertDialogCancel id="close-create-document-modal">Cerrar</AlertDialogCancel>
         </AlertDialogFooter>

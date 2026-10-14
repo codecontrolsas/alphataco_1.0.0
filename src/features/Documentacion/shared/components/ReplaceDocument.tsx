@@ -3,6 +3,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { toArgentinaValidityIso } from '../lib/document-dates';
 
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -12,12 +13,15 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { replaceDocumentFile } from '@/features/Documentacion/shared/actions/document-files.server';
 import { cn } from '@/lib/utils';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { CalendarIcon, InfoCircledIcon } from '@radix-ui/react-icons';
-import { es } from 'date-fns/locale';
+import { useQueryClient } from '@tanstack/react-query';
 import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { DOCUMENT_FILE_ACCEPT, validateDocumentFile } from '../lib/document-file-rules';
+import { invalidateDocumentLists } from '../lib/document-query-keys';
 
 export default function ReplaceDocument({
   documentName,
@@ -52,9 +56,12 @@ export default function ReplaceDocument({
     },
   });
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
-  const today = new Date();
-  const nextMonth = moment().add(1, 'month').toDate();
+  // "Hoy" siempre en hora argentina (el navegador puede estar en otra zona).
+  const todayAr = argentinaDate();
+  const today = new Date(`${todayAr}T00:00:00`);
+  const nextMonth = moment(todayAr).add(1, 'month').toDate();
   const [calendarMonth, setCalendarMonth] = useState<Date>(nextMonth);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [dateInputValue, setDateInputValue] = useState('');
@@ -68,7 +75,15 @@ export default function ReplaceDocument({
       });
       return;
     }
-    if (!documentName || !appliesId) return;
+    if (!documentName || !appliesId) {
+      toast.error('El documento no tiene archivo cargado');
+      return;
+    }
+    const fileError = validateDocumentFile(file);
+    if (fileError) {
+      form.setError('reeplace_document', { type: 'manual', message: fileError });
+      return;
+    }
 
     await toast
       .promise(
@@ -78,12 +93,13 @@ export default function ReplaceDocument({
           fd.append('id', appliesId);
           fd.append('resource', resource ?? '');
           fd.append('file', file);
-          if (values.validity instanceof Date) fd.append('validity', values.validity.toISOString());
+          if (values.validity instanceof Date) fd.append('validity', toArgentinaValidityIso(values.validity));
           if (values.period) fd.append('period', values.period);
 
           const result = await replaceDocumentFile(fd);
           if (!result.ok) throw new Error(result.error);
 
+          await invalidateDocumentLists(queryClient);
           router.refresh();
           setIsOpen(false);
         },
@@ -128,6 +144,7 @@ export default function ReplaceDocument({
                             field.onChange(e);
                           }}
                           type="file"
+                          accept={DOCUMENT_FILE_ACCEPT}
                         />
                       </FormControl>
                       <FormDescription>Sube el nuevo documento</FormDescription>
@@ -158,11 +175,11 @@ export default function ReplaceDocument({
                                 }
 
                                 const parsed = moment(raw, 'DD/MM/YYYY', true);
-                                if (parsed.isValid() && parsed.isSameOrAfter(moment(), 'day')) {
+                                if (parsed.isValid() && parsed.isSameOrAfter(todayAr, 'day')) {
                                   setDateInputError('');
                                   field.onChange(parsed.toDate());
                                   setCalendarMonth(parsed.toDate());
-                                } else if (parsed.isValid() && parsed.isBefore(moment(), 'day')) {
+                                } else if (parsed.isValid() && parsed.isBefore(todayAr, 'day')) {
                                   setDateInputError('La fecha debe ser igual o posterior a hoy');
                                   field.onChange(undefined);
                                 } else {
@@ -190,7 +207,6 @@ export default function ReplaceDocument({
                                 month={calendarMonth}
                                 onMonthChange={setCalendarMonth}
                                 fromDate={today}
-                                locale={es}
                                 mode="single"
                                 selected={field.value instanceof Date ? field.value : undefined}
                                 onSelect={(selected) => {
@@ -222,7 +238,6 @@ export default function ReplaceDocument({
                         <Input
                           placeholder="Seleccionar periodo"
                           type="month"
-                          min={new Date().toISOString().split('T')[0]}
                           onChange={(e) => {
                             form.setValue('period', e.target.value);
                           }}

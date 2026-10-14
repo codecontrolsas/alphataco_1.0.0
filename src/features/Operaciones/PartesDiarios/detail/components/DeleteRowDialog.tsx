@@ -10,10 +10,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { useDailyReportDetailInvalidation } from '../hooks/useDailyReportDetail';
 import { deleteDailyReportRowPrisma } from '../mutations.server';
 import type { DailyReportDetailRow } from '../types';
+import { useRestoreFocus } from './hooks/useRestoreFocus';
 
 // ============================================================================
 // PROPS
@@ -31,13 +33,14 @@ interface Props {
 // COMPONENT
 // ============================================================================
 
-export function DeleteRowDialog({ open, onOpenChange, row, dailyReportId, onSuccess }: Props) {
-  const queryClient = useQueryClient();
+export function DeleteRowDialog({ open, onOpenChange, row, onSuccess }: Props) {
+  const { invalidateDetail } = useDailyReportDetailInvalidation();
+  const { onOpenAutoFocus, onCloseAutoFocus } = useRestoreFocus();
 
   const mutation = useMutation({
     mutationFn: (rowId: string) => deleteDailyReportRowPrisma(rowId),
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ['daily-report-detail', dailyReportId] });
+      invalidateDetail();
       onOpenChange(false);
       onSuccess();
 
@@ -57,14 +60,23 @@ export function DeleteRowDialog({ open, onOpenChange, row, dailyReportId, onSucc
   const customerName = row?.customers?.name ?? '—';
   const serviceName = row?.customer_services?.service_name ?? '—';
 
-  const handleConfirm = () => {
-    if (!row) return;
+  // El diálogo se cierra recién cuando el servidor confirma: `AlertDialogAction` lo cerraría al instante.
+  const handleConfirm = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    if (!row || mutation.isPending) return;
     mutation.mutate(row.id);
   };
 
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
+    <AlertDialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        // Con la eliminación en curso no se puede cerrar (Escape incluido).
+        if (mutation.isPending) return;
+        onOpenChange(nextOpen);
+      }}
+    >
+      <AlertDialogContent onOpenAutoFocus={onOpenAutoFocus} onCloseAutoFocus={onCloseAutoFocus}>
         <AlertDialogHeader>
           <AlertDialogTitle>Eliminar registro</AlertDialogTitle>
           <AlertDialogDescription asChild>

@@ -18,7 +18,8 @@ import {
 } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
 import { useQuery } from '@tanstack/react-query';
 import moment from 'moment';
-import { getServiceOrderById, getVehicleTirePositions } from '../actions/actions.server';
+import { getServiceOrderById } from '../actions/actions.server';
+import { getVehicleTirePositions } from '../actions/service-order-queries.server';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 

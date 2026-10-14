@@ -384,6 +384,7 @@ export function DiagramMassiveResults({ results, onStartOver }: Props) {
       {/* Botones de acción */}
       <div className="flex flex-col sm:flex-row gap-4">
         <Button
+          type="button"
           onClick={downloadReport}
           disabled={downloading}
           className="flex-1 flex items-center justify-center space-x-2"
@@ -393,7 +394,7 @@ export function DiagramMassiveResults({ results, onStartOver }: Props) {
           <span>{downloading ? 'Descargando...' : 'Descargar Reporte TXT'}</span>
         </Button>
 
-        <Button onClick={onStartOver} className="flex-1 flex items-center justify-center space-x-2">
+        <Button type="button" onClick={onStartOver} className="flex-1 flex items-center justify-center space-x-2">
           <RotateCcw className="w-4 h-4" />
           <span>Nueva Carga Masiva</span>
         </Button>

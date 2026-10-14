@@ -4,6 +4,7 @@ import { withSessionActor } from '@/features/Operaciones/lib/with-session-actor'
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { resolveRowQuantity } from '../lib/row-quantity';
+import { reconcileRowResourceStatus } from '../lib/row-resource-status';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   assertDailyReportInCompany,
@@ -12,6 +13,7 @@ import {
   filterRowsInCompany,
   type PrismaTransactionClient,
 } from './lib/row-query';
+import { buildResourceCheck, buildRowScalarData, resolveRowResources } from './lib/row-write-helpers';
 
 const logger = new Logger('features/Operaciones/PartesDiarios/detail/mutations');
 
@@ -86,9 +88,10 @@ export interface BulkRowUpdateData {
 // ── Helpers internos ─────────────────────────────────────────────────────────
 
 /**
- * Determina el status automático de una fila según si tiene recursos asignados.
- * Si el status enviado es uno de los terminales (ejecutado, cancelado, reprogramado,
- * en_certificacion) lo respeta; si no, calcula pendiente / sin_recursos_asignados.
+ * Estado INICIAL de una línea al escribirla. Si el status enviado es terminal (ejecutado, cancelado,
+ * reprogramado, en_certificacion) se respeta; si no, se parte de un estado provisional según haya o no
+ * recursos. El estado definitivo de las líneas pendientes / sin recursos lo fija siempre
+ * `reconcileRowResourceStatus` (fórmula única en SQL, con los flags del ítem) tras escribir las relaciones.
  *
  * NO se exporta: en un archivo `'use server'` todo lo exportado es una Server Action y tiene
  * que ser `async`, así que exportarla rompía `next build` ("Server Actions must be async
@@ -175,56 +178,30 @@ export async function createRowRelations(
 export async function createDailyReportRowPrisma(data: DailyReportRowInput & { daily_report_id: string }) {
   logger.debug('Creando fila del parte diario', { data: { daily_report_id: data.daily_report_id } });
 
-  const employees = data.employees ?? [];
-  const equipment = data.equipment ?? [];
-  const otherEquipment = data.other_equipment ?? [];
-  const customerEquipment = data.customer_equipment ?? [];
-  const hasResources = employees.length > 0 || equipment.length > 0 || otherEquipment.length > 0;
+  const resources = resolveRowResources(data);
+  const { employees, equipment, otherEquipment, customerEquipment, hasResources } = resources;
   const resolvedStatus = resolveRowStatus(data.status, hasResources);
 
   try {
     // Perímetro: el parte y todos los recursos tienen que ser de la empresa activa.
     const companyId = await getActiveCompanyId();
     await assertDailyReportInCompany(data.daily_report_id, companyId);
-    await assertRowResourcesInCompany(companyId, {
-      customerId: data.customer_id,
-      serviceId: data.service_id,
-      itemId: data.item_id,
-      sectorServiceId: data.sector_service_id,
-      areasServiceId: data.areas_service_id,
-      employeeIds: employees.map((employee) => employee.id),
-      equipmentIds: equipment,
-      otherEquipmentIds: otherEquipment,
-      customerEquipmentIds: customerEquipment,
-    });
+    await assertRowResourcesInCompany(companyId, buildResourceCheck(data, resources));
 
     const row = await withSessionActor(async (tx) => {
       const newRow = await tx.dailyreportrows.create({
         data: {
           id: crypto.randomUUID(),
           daily_report_id: data.daily_report_id,
-          customer_id: data.customer_id,
-          service_id: data.service_id,
-          item_id: data.item_id,
+          ...buildRowScalarData(data),
           quantity: resolveRowQuantity(data.quantity),
           status: resolvedStatus,
-          working_day: data.working_day,
-          shift_12h: data.shift_12h ?? null,
           type_service: data.type_service ?? null,
-          start_time: data.start_time ? new Date(`1970-01-01T${data.start_time}`) : null,
-          end_time: data.end_time ? new Date(`1970-01-01T${data.end_time}`) : null,
-          description: data.description ?? null,
-          sector_service_id: data.sector_service_id ?? null,
-          areas_service_id: data.areas_service_id ?? null,
-          remit_number: data.remit_number ?? null,
-          cancel_reason: data.cancel_reason ?? null,
-          completed_day: data.completed_day ?? null,
-          completed_night: data.completed_night ?? null,
-          preparte_id: data.preparte_id ?? null,
         },
       });
 
       await createRowRelations(tx, newRow.id, employees, equipment, otherEquipment, customerEquipment);
+      await reconcileRowResourceStatus(tx, [newRow.id]);
 
       return newRow;
     });
@@ -249,53 +226,26 @@ export type CreateDailyReportRowResult = Awaited<ReturnType<typeof createDailyRe
 export async function updateDailyReportRowPrisma(rowId: string, data: DailyReportRowInput) {
   logger.debug('Actualizando fila del parte diario', { data: { rowId } });
 
-  const employees = data.employees ?? [];
-  const equipment = data.equipment ?? [];
-  const otherEquipment = data.other_equipment ?? [];
-  const customerEquipment = data.customer_equipment ?? [];
-  const hasResources = employees.length > 0 || equipment.length > 0 || otherEquipment.length > 0;
+  const resources = resolveRowResources(data);
+  const { employees, equipment, otherEquipment, customerEquipment, hasResources } = resources;
   const resolvedStatus = resolveRowStatus(data.status, hasResources);
 
   try {
     // Perímetro: la línea y los recursos nuevos tienen que ser de la empresa activa.
     const companyId = await getActiveCompanyId();
     await assertRowInCompany(rowId, companyId);
-    await assertRowResourcesInCompany(companyId, {
-      customerId: data.customer_id,
-      serviceId: data.service_id,
-      itemId: data.item_id,
-      sectorServiceId: data.sector_service_id,
-      areasServiceId: data.areas_service_id,
-      employeeIds: employees.map((employee) => employee.id),
-      equipmentIds: equipment,
-      otherEquipmentIds: otherEquipment,
-      customerEquipmentIds: customerEquipment,
-    });
+    await assertRowResourcesInCompany(companyId, buildResourceCheck(data, resources));
 
     const row = await withSessionActor(async (tx) => {
       // 1. Actualizar la fila principal
       const updatedRow = await tx.dailyreportrows.update({
         where: { id: rowId },
         data: {
-          customer_id: data.customer_id,
-          service_id: data.service_id,
-          item_id: data.item_id,
+          ...buildRowScalarData(data),
           status: resolvedStatus,
-          working_day: data.working_day,
-          shift_12h: data.shift_12h ?? null,
           // No sobreescribir el tipo de servicio a null si el input no lo trae:
           // así una edición parcial (ej. asignar recursos) nunca borra un tipo ya guardado.
           ...(data.type_service != null ? { type_service: data.type_service } : {}),
-          start_time: data.start_time ? new Date(`1970-01-01T${data.start_time}`) : null,
-          end_time: data.end_time ? new Date(`1970-01-01T${data.end_time}`) : null,
-          description: data.description ?? null,
-          sector_service_id: data.sector_service_id ?? null,
-          areas_service_id: data.areas_service_id ?? null,
-          remit_number: data.remit_number ?? null,
-          cancel_reason: data.cancel_reason ?? null,
-          completed_day: data.completed_day ?? null,
-          completed_night: data.completed_night ?? null,
-          preparte_id: data.preparte_id ?? null,
         },
       });
 
@@ -314,6 +264,7 @@ export async function updateDailyReportRowPrisma(rowId: string, data: DailyRepor
 
       // 3. Re-crear relaciones desde los nuevos datos
       await createRowRelations(tx, rowId, employees, equipment, otherEquipment, customerEquipment);
+      await reconcileRowResourceStatus(tx, [rowId]);
 
       return updatedRow;
     });
@@ -471,12 +422,17 @@ export async function bulkUpdateRowStatus(rowIds: string[], data: BulkRowUpdateD
     if (data.description !== undefined) updatePayload.description = data.description;
     if (data.cancel_reason !== undefined) updatePayload.cancel_reason = data.cancel_reason;
 
-    const result = await withSessionActor(async (tx) =>
-      tx.dailyreportrows.updateMany({
+    const result = await withSessionActor(async (tx) => {
+      const updated = await tx.dailyreportrows.updateMany({
         where: { id: { in: rowIds } },
         data: updatePayload,
-      })
-    );
+      });
+      // Pasar a 'pendiente' a mano no puede dejar una línea sin recursos como pendiente.
+      if (data.status === 'pendiente' || data.status === 'sin_recursos_asignados') {
+        await reconcileRowResourceStatus(tx, rowIds);
+      }
+      return updated;
+    });
 
     return { count: result.count };
   } catch (error) {

@@ -23,17 +23,18 @@ import {
 } from '@/shared/components/common/DataTable';
 import type { LucideIcon } from 'lucide-react';
 import { Plus } from 'lucide-react';
-import moment from 'moment';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { cancelServiceOrder, closeServiceOrder } from '../actions/service-order-lifecycle.server';
 import {
-  cancelServiceOrder,
-  closeServiceOrder,
   getServiceOrderSingleFacet,
   getServiceOrdersForExport,
   getServiceOrdersPaginated,
   type ServiceOrderListItem,
-} from '../actions/actions.server';
+} from '../actions/service-order-list.server';
 import { ServiceOrderDetailView } from './ServiceOrderDetailView';
 import { ServiceOrderWizard } from './ServiceOrderWizard';
 import { getColumns } from './columns';
@@ -92,6 +93,12 @@ export default function _ServiceOrdersDataTable({
   );
 
   const canCreate = permissions.hasPermission('mantenimiento', 'ordenes_gomeria', 'create');
+
+  const queryClient = useQueryClient();
+  const refreshTable = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['tire-service-orders'] });
+    queryClient.invalidateQueries({ queryKey: ['datatable-facet'] });
+  }, [queryClient]);
 
   // ─── Dialog state ─────────────────────────────────────────────────────────
   const [closingOrder, setClosingOrder] = useState<ServiceOrderListItem | null>(null);
@@ -218,6 +225,7 @@ export default function _ServiceOrdersDataTable({
     try {
       await closeServiceOrder(closingOrder.id);
       toast.success('Orden finalizada correctamente');
+      refreshTable();
       setClosingOrder(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Error al finalizar la orden');
@@ -237,6 +245,7 @@ export default function _ServiceOrdersDataTable({
         return;
       }
       toast.success('Orden anulada, cubiertas revertidas y movimientos de stock anulados');
+      refreshTable();
       setCancellingOrder(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Error al anular la orden');
@@ -266,7 +275,7 @@ export default function _ServiceOrdersDataTable({
         emptyMessage="No hay órdenes de gomería"
         searchPlaceholder="Buscar por kilómetros..."
         exportConfig={{
-          fetchAllData: () => getServiceOrdersForExport(currentParams),
+          fetchAllData: async () => unwrapExportResult(await getServiceOrdersForExport(currentParams)),
           options: {
             filename: 'ordenes-gomeria',
             sheetName: 'Órdenes',
@@ -274,8 +283,8 @@ export default function _ServiceOrdersDataTable({
           },
           formatters: {
             status: (value) => tireServiceOrderStatusLabels[value as string] ?? String(value),
-            service_date: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
-            created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
+            service_date: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
+            created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
             vehicle_id: (_value, row) => row.vehicle?.domain ?? '-',
             trailer_vehicle_id: (_value, row) => row.trailer?.domain ?? 'Sin asignar',
             created_by: (_value, row) => row.creator?.fullname ?? '-',

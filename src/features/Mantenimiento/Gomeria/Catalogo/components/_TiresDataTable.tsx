@@ -17,6 +17,8 @@ import {
   tireStatusLabels,
   tireTreadTypeLabels,
 } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
+import { formatMoney } from '@/features/Warehouses/lib/format';
+import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { TireRetreadLevel, TireStatus, TireTreadType } from '@/generated/prisma/enums';
 import {
   DataTable,
@@ -24,22 +26,20 @@ import {
   type DataTableSearchParams,
   type FacetResult,
 } from '@/shared/components/common/DataTable';
-import { formatMoney } from '@/features/Warehouses/lib/format';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
 import { Layers, Plus } from 'lucide-react';
-import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
-  deleteTire,
   getTireSingleFacet,
   getTiresForExport,
   getTiresPaginated,
-  updateTireStatus,
   type TireListItem,
-} from '../actions/actions.server';
+} from '../actions/tire-list.server';
+import { deleteTire, updateTireStatus } from '../actions/tire-mutations.server';
 import { TireBulkForm } from './TireBulkForm';
 import { TireForm } from './TireForm';
 import { TireReturnDialog } from './TireReturnDialog';
@@ -133,6 +133,7 @@ export default function _TiresDataTable({
     onSuccess: (tire) => {
       toast.success(`Cubierta ${tire.serial_number} marcada como disponible`);
       queryClient.invalidateQueries({ queryKey: ['tires-catalog'] });
+      queryClient.invalidateQueries({ queryKey: ['datatable-facet'] });
       setReturningTire(null);
     },
     onError: (error) => {
@@ -294,6 +295,7 @@ export default function _TiresDataTable({
       unwrapAction(await deleteTire(deletingTire.id));
       toast.success('Cubierta eliminada correctamente');
       queryClient.invalidateQueries({ queryKey: ['tires-catalog'] });
+      queryClient.invalidateQueries({ queryKey: ['datatable-facet'] });
       setDeletingTire(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Error al eliminar la cubierta');
@@ -323,7 +325,7 @@ export default function _TiresDataTable({
         emptyMessage="No hay cubiertas registradas"
         searchPlaceholder="Buscar por número o medida..."
         exportConfig={{
-          fetchAllData: () => getTiresForExport(currentParams),
+          fetchAllData: async () => unwrapExportResult(await getTiresForExport(currentParams)),
           options: {
             filename: 'catalogo-cubiertas',
             sheetName: 'Cubiertas',
@@ -339,7 +341,7 @@ export default function _TiresDataTable({
             size: (_value, row) => row.tire_type?.size ?? '-',
             is_new: (value) => (value ? 'Nueva' : 'Usada'),
             tread_depth: (value) => (value != null ? `${value} mm` : '-'),
-            created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
+            created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
             warehouse: (_value, row) => getTireWarehouseLabel(row.material_unit),
             cost: (value) => (value != null ? formatMoney(value as string) : 'Sin costo'),
             vehicle: (_value, row) => {

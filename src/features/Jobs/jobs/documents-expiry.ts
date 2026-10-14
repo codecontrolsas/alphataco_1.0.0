@@ -1,13 +1,12 @@
 import 'server-only';
 
-import { prisma } from '@/shared/lib/prisma';
 import { sendMail, type SendMail } from '@/shared/lib/mail';
-import { callScalar } from '@/shared/lib/sql';
+import { prisma } from '@/shared/lib/prisma';
 import { argentinaDate } from '../lib/dates';
+import { buildDocumentsExpirySummary } from '../lib/documents-expiry-summary.server';
 import { runForEachCompany, runJobWithBitacora } from '../lib/per-company';
 import { getCompanyRecipients } from '../lib/recipients';
 import type { JobSummary } from '../lib/types';
-import { expirySummarySchema } from '../schemas/documents-expiry';
 import { renderDocumentsExpiryEmail } from '../templates/documents-expiry';
 
 /**
@@ -16,14 +15,14 @@ import { renderDocumentsExpiryEmail } from '../templates/documents-expiry';
  * Reemplaza a la edge function `send-documents-expiry-email` y al `cron.schedule` de Supabase
  * (`weekly-documents-expiry-email`, `0 11 * * 1` UTC = el mismo momento).
  *
- * **Qué hace.** Por cada empresa pide
- * `get_documents_expiry_summary(days_ahead, detail_limit, company_id)` y manda el resumen a
- * los destinatarios de esa empresa. Se manda SIEMPRE, incluso sin novedades: la plantilla
+ * **Qué hace.** Por cada empresa calcula el resumen con el motor de cumplimiento
+ * (`buildDocumentsExpirySummary`: vencidos, por vencer y faltantes sobre los requisitos que le
+ * aplican a cada recurso) y lo manda a los destinatarios de esa empresa. Se manda SIEMPRE, incluso sin novedades: la plantilla
  * tiene un estado «Todo al día» explícito, y era el comportamiento de la edge function.
  *
  * **Parámetros de negocio.** `days_ahead = 7` y `detail_limit = 20`, los mismos con los que
- * el `cron.schedule` de Supabase llamaba a la función. `detail_limit` sigue en la firma por
- * compatibilidad pero la función ya no lo aplica (devuelve el detalle completo).
+ * el `cron.schedule` de Supabase llamaba a la función. `detail_limit` acota las filas del
+ * detalle por grupo (los totales siempre son completos).
  *
  * **Idempotencia.** Clave `<company_id>:<fecha AR>` en `jobs_runs`, reclamada antes de
  * consultar. Correr el endpoint dos veces el mismo lunes manda un solo correo por empresa.
@@ -31,10 +30,8 @@ import { renderDocumentsExpiryEmail } from '../templates/documents-expiry';
  * correo — es deliberado, un disparo manual fuera del horario del cron es una decisión
  * humana, no un reintento.
  *
- * **Multi-empresa.** `get_documents_expiry_summary` recibe `p_company_id` (parámetro que la
- * Task 4 de P1 agregó justamente para este job) y filtra `employees.company_id`,
- * `vehicles.company_id` y `documents_company.applies`. Con `NULL` volvería a mezclar todas
- * las empresas: por eso el job NUNCA lo llama sin empresa. Los destinatarios se piden con el
+ * **Multi-empresa.** El resumen se arma siempre para UNA empresa (recursos, tipos y documentos
+ * filtrados por `company_id`). Los destinatarios se piden con el
  * mismo `company_id` y se manda un `sendMail` por empresa.
  */
 export interface DocumentsExpiryJobDeps {
@@ -77,11 +74,11 @@ export async function runDocumentsExpiryJob(deps: DocumentsExpiryJobDeps = {}): 
           return { skipped: true, reason: 'la empresa no tiene destinatarios configurados' };
         }
 
-        const summary = await callScalar(
-          'get_documents_expiry_summary',
-          [daysAhead, detailLimit, { uuid: company.id }],
-          expirySummarySchema
-        );
+        const summary = await buildDocumentsExpirySummary(prisma, {
+          companyId: company.id,
+          daysAhead,
+          detailLimit,
+        });
 
         const email = renderDocumentsExpiryEmail({ companyName: company.company_name, data: summary });
 
@@ -97,10 +94,8 @@ export async function runDocumentsExpiryJob(deps: DocumentsExpiryJobDeps = {}): 
             summary.expiring_soon.employees.total +
             summary.expiring_soon.equipment.total +
             summary.expiring_soon.company.total,
-          expired:
-            summary.expired_counts.employees + summary.expired_counts.equipment + summary.expired_counts.company,
-          pending:
-            summary.pending_counts.employees + summary.pending_counts.equipment + summary.pending_counts.company,
+          expired: summary.expired_counts.employees + summary.expired_counts.equipment + summary.expired_counts.company,
+          pending: summary.pending_counts.employees + summary.pending_counts.equipment + summary.pending_counts.company,
         };
 
         return {

@@ -13,6 +13,8 @@
  * diagrama cargado), no uno solo elegido por prioridad.
  */
 
+import { normalizeEquipmentCondition } from './equipment-condition';
+
 export interface EmployeeDeviationFlags {
   is_duplicated: boolean;
   is_unassigned_to_client: boolean;
@@ -46,6 +48,19 @@ export interface DeviationEntry<K extends string> {
 }
 
 /**
+ * Desvíos de DIAGRAMA de un empleado a partir de sus entradas de diagrama del día
+ * (`employees_diagram`) y el `work_active` del tipo de diagrama. Misma regla que el SQL:
+ * sin entrada = sin diagrama; con entrada y `work_active === false` = día no laboral.
+ */
+export function classifyEmployeeDiagram(
+  diagramEntriesCount: number,
+  workActive: boolean | null | undefined
+): { has_no_diagram: boolean; is_non_work_day: boolean } {
+  const hasNoDiagram = diagramEntriesCount === 0;
+  return { has_no_diagram: hasNoDiagram, is_non_work_day: !hasNoDiagram && workActive === false };
+}
+
+/**
  * Todos los desvíos que aplican a un empleado (0, 1 o varios, simultáneos). El orden
  * coincide con el que arma hoy el tooltip de `EmployeeBadgeCell`.
  */
@@ -66,35 +81,30 @@ export function employeeDeviations(flags: EmployeeDeviationFlags): DeviationEntr
   return entries;
 }
 
-const NOT_OPERATIVE_CONDITIONS = new Set(['no operativo']);
-const UNDER_REPAIR_CONDITIONS = new Set(['en reparacion', 'en_reparacion']);
-const CONDITIONED_CONDITIONS = new Set(['operativo condicionado']);
-const IN_PREPARATION_CONDITIONS = new Set(['en preparacion', 'en_preparacion']);
-
 /**
  * Todos los desvíos que aplican a un equipo (0, 1 o varios, simultáneos). El orden coincide
  * con el que arma hoy el tooltip de `EquipmentBadgeCell`.
  */
 export function equipmentDeviations(flags: EquipmentDeviationFlags): DeviationEntry<EquipmentDeviationKind>[] {
-  const condition = flags.condition?.toLowerCase() ?? '';
+  const condition = normalizeEquipmentCondition(flags.condition);
   const entries: DeviationEntry<EquipmentDeviationKind>[] = [];
 
   if (flags.is_duplicated) {
     entries.push({ kind: 'duplicated', label: 'Asignado en múltiples filas del parte diario' });
   }
-  if (NOT_OPERATIVE_CONDITIONS.has(condition)) {
+  if (condition === 'no operativo') {
     entries.push({ kind: 'not_operative', label: 'Condición: No operativo' });
   }
-  if (UNDER_REPAIR_CONDITIONS.has(condition)) {
+  if (condition === 'en reparacion') {
     entries.push({ kind: 'under_repair', label: 'Condición: En reparación' });
   }
   if (flags.is_unassigned_to_client) {
     entries.push({ kind: 'unassigned_to_client', label: 'No asignado al cliente de esta fila' });
   }
-  if (CONDITIONED_CONDITIONS.has(condition)) {
+  if (condition === 'operativo condicionado') {
     entries.push({ kind: 'conditioned', label: 'Condición: Condicionado' });
   }
-  if (IN_PREPARATION_CONDITIONS.has(condition)) {
+  if (condition === 'en preparacion') {
     entries.push({ kind: 'in_preparation', label: 'Condición: En preparación' });
   }
   return entries;

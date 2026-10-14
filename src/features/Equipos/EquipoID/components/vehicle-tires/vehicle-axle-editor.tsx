@@ -6,11 +6,11 @@ import type { AxleInput as PlantillasAxleInput } from '@/features/Mantenimiento/
 import { AxleConfigurator } from '@/features/Mantenimiento/Gomeria/Plantillas/components/AxleConfigurator';
 import { TireDiagramRenderer } from '@/features/Mantenimiento/Gomeria/shared/TireDiagramRenderer';
 import { calculatePositions, type DiagramAxle } from '@/features/Mantenimiento/Gomeria/shared/tire-diagram-utils';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { DisplacedTiresDialog, type DisplacedTireInfo } from './DisplacedTiresDialog';
-import type { AxleInput, DisplacedTireAction } from './actions.server';
-import { createVehicleCustomTemplate, updateVehicleCustomAxles } from './actions.server';
+import { createVehicleCustomTemplate, updateVehicleCustomAxles } from './actions/template.server';
+import { axlesSchema, type AxleInput, type DisplacedTireAction } from './schemas/axles';
 
 // ============================================================================
 // TYPES
@@ -81,16 +81,8 @@ export function VehicleAxleEditor({
   const [displacedTires, setDisplacedTires] = useState<DisplacedTireInfo[]>([]);
   const [showDisplacedDialog, setShowDisplacedDialog] = useState(false);
 
-  // Sync axles state when the sheet opens (Radix doesn't call onOpenChange for programmatic open)
-  useEffect(() => {
-    if (open) {
-      setAxles(
-        currentAxles.length > 0
-          ? currentAxles.map(toPlantillasAxle)
-          : [{ axle_number: 1, tires_per_side: 1, tire_size: null, is_drive_axle: false, is_spare: false }]
-      );
-    }
-  }, [open, currentAxles]);
+  // El estado inicial sale de `currentAxles` al montar: el padre remonta el editor (con `key`) cada vez
+  // que lo abre, así no hace falta un efecto que lo pise ni depender de que el padre memoice los ejes.
 
   function handleOpenChange(nextOpen: boolean) {
     onOpenChange(nextOpen);
@@ -99,7 +91,8 @@ export function VehicleAxleEditor({
   // ── Validation ────────────────────────────────────────────────────────────
 
   function validate(): string | null {
-    if (axles.length === 0) return 'Debe configurar al menos un eje.';
+    const parsed = axlesSchema.safeParse(axles.map(fromPlantillasAxle));
+    if (!parsed.success) return parsed.error.issues[0]?.message ?? 'La configuración de ejes es inválida.';
     return null;
   }
 
@@ -160,7 +153,7 @@ export function VehicleAxleEditor({
 
       onSave();
       onOpenChange(false);
-    } catch (err) {
+    } catch {
       toast.error(isNewConfig ? 'Error al crear la configuración' : 'Error al actualizar la configuración');
     } finally {
       setIsSaving(false);
@@ -219,10 +212,10 @@ export function VehicleAxleEditor({
           </div>
 
           <SheetFooter className="pt-4 border-t mt-4">
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
               Cancelar
             </Button>
-            <Button onClick={handleSaveClick} disabled={isSaving}>
+            <Button type="button" onClick={handleSaveClick} disabled={isSaving}>
               {isSaving ? 'Guardando...' : isNewConfig ? 'Crear configuración' : 'Guardar cambios'}
             </Button>
           </SheetFooter>

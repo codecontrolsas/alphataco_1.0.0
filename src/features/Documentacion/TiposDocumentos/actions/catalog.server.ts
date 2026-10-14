@@ -3,6 +3,7 @@
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { hasDocTypePermission } from '../lib/document-type-permissions';
 
 const logger = new Logger('features/TiposDocumentos/catalog');
 
@@ -293,6 +294,16 @@ export async function searchCatalogForConditions(
   logger.debug('Buscando en catálogo', { data: { catalogKey, query } });
 
   try {
+    // Solo quien edita condiciones de tipos de personas o equipos necesita estos catálogos.
+    const [canViewPersonas, canViewEquipos] = await Promise.all([
+      hasDocTypePermission('Persona', 'view'),
+      hasDocTypePermission('Equipos', 'view'),
+    ]);
+    if (!canViewPersonas && !canViewEquipos) {
+      logger.warn('Búsqueda de catálogo sin permiso', { data: { catalogKey } });
+      return [];
+    }
+
     const entry = CATALOG_MAP[catalogKey];
     if (!entry) {
       logger.warn('Catálogo no encontrado', { data: { catalogKey } });
@@ -305,4 +316,3 @@ export async function searchCatalogForConditions(
     return [];
   }
 }
-

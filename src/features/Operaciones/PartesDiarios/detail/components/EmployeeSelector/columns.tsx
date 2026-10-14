@@ -14,6 +14,7 @@ import {
 } from '@/shared/utils/mappers';
 import type { ColumnDef } from '@tanstack/react-table';
 import { User } from 'lucide-react';
+import { classifyEmployeeDiagram } from '../../../lib/resource-deviations';
 import type { EmployeeSelectorItem } from './actions.server';
 
 // ============================================================================
@@ -93,10 +94,12 @@ export function getColumns(options: GetColumnsOptions): ColumnDef<EmployeeSelect
 
         // Diagram deviations
         const diagramEntries = row.original.employees_diagram ?? [];
-        const hasNoDiagram = diagramEntries.length === 0;
         const diagramEntry = diagramEntries[0];
         const diagramType = diagramEntry?.diagram_type_employees_diagram_diagram_typeTodiagram_type;
-        const hasNonWorkDay = !hasNoDiagram && diagramType?.work_active === false;
+        const { has_no_diagram: hasNoDiagram, is_non_work_day: hasNonWorkDay } = classifyEmployeeDiagram(
+          diagramEntries.length,
+          diagramType?.work_active
+        );
 
         return (
           <div className="flex items-center gap-2 min-w-[200px]">

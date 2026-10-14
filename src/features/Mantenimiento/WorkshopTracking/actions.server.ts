@@ -1,21 +1,34 @@
 'use server';
 
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { Logger } from '@/lib/logger';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   buildDateRangeFiltersWhere,
-  buildFiltersWhere,
-  buildSearchWhere,
   buildTextFiltersWhere,
-  NULL_FILTER_VALUE,
   parseSearchParams,
-  stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
-import { resourceCompanyCondition, visibleEquipmentTypeCondition } from '../shared/maintenance-resource';
-import { getHiddenEquipmentTypeIds } from '../utils/equipmentTypeVisibility';
-import { getSupervisorFilterInfo } from '../utils/supervisorFilter';
+import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
+import { clampedPageParams } from '@/shared/lib/table-pagination';
+import {
+  ORDER_LIST_EXPORT_MAX_ROWS,
+  assembleOrdersWhere,
+  descriptionTextCondition,
+  getResourceConditionFacet,
+  getResourceFacet,
+  orderListExportTooLargeMessage,
+  resolveOrderListScope,
+  resourceConditionCondition,
+  resourceIdsCondition,
+  resourceOrderBy,
+  resourceSearchCondition,
+  resourceTextCondition,
+  scopeConditions,
+} from '../PedidosMantenimiento/lib/order-list-shared';
 import { DEFAULT_TRACKING_STATUSES, WORKSHOP_TRACKING_STATUSES } from './statuses';
 
 const logger = new Logger('WorkshopTracking/actions.server');
@@ -24,6 +37,10 @@ const logger = new Logger('WorkshopTracking/actions.server');
 // CONSTANTS
 // ============================================================================
 
+const MODULE_SLUG = 'mantenimiento';
+/** Tab "Seguimiento en Taller" (paso 2 del pipeline de Operaciones). */
+const TAB_SLUG = 'seguimiento_taller';
+
 /** Campos reales de maintenance_orders ordenables server-side */
 const VALID_SORT_FIELDS = new Set([
   'order_number',
@@ -31,32 +48,29 @@ const VALID_SORT_FIELDS = new Set([
   'workshop_entry_date',
   'scheduled_date',
   'status',
-  // FK columns via FK_SORT_MAP
+  // Columna resuelta via resourceOrderBy (vehículo o equipamiento)
   'vehicle',
 ]);
-
-/** Mapeo de columnId → orderBy de Prisma para columnas FK */
-const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Record<string, unknown>> = {
-  vehicle: (dir) => ({ vehicles: { domain: dir } }),
-};
-
-/** Params de URL que NO son filtros de la tabla */
-const IGNORED_PARAMS = new Set(['tab', 'subtab', 'operations_subtab', 'taller_subtab', 'config_subtab']);
 
 /** Columnas de texto libre de maintenance_orders (filtradas con buildTextFiltersWhere) */
 const TEXT_COLUMNS = ['order_number'];
 
-/** Columnas con filtro de texto libre en vehicles */
-const VEHICLE_TEXT_FILTER_COLUMNS = ['domain', 'serie', 'intern_number', 'kilometer'];
+/** Columnas de texto libre sobre el recurso (vehículo o equipamiento) */
+const RESOURCE_TEXT_COLUMNS = ['domain', 'serie', 'intern_number', 'kilometer'] as const;
 
 /** Columnas con filtro de rango de fechas */
 const DATE_RANGE_COLUMNS = ['workshop_entry_date', 'created_at', 'scheduled_date'];
 
-/** Mapping de columnId (URL) → campo real en Prisma */
-const COLUMN_MAP: Record<string, string> = {
-  vehicle: 'equipment_id',
-  status: 'status',
-};
+/** Lista blanca de filtros: todo lo demás que venga en la URL se descarta. */
+const ALLOWED_FILTERS = new Set([
+  'status',
+  'vehicle',
+  'condition',
+  'description',
+  ...TEXT_COLUMNS,
+  ...RESOURCE_TEXT_COLUMNS,
+  ...dateRangeKeys(DATE_RANGE_COLUMNS),
+]);
 
 /**
  * Select común con todas las relaciones resueltas para el tracking.
@@ -142,153 +156,44 @@ const WORKSHOP_TRACKING_SELECT = {
 
 /**
  * Construye el WHERE compartido por el paginado, el export y las facets de
- * workshop tracking. Aplica filtro de supervisor: si el usuario no tiene
- * view_all_requests, solo ve órdenes donde él es supervisor de la solicitud.
+ * workshop tracking. Todo va dentro de un único `AND` con el perímetro: empresa,
+ * tipos de equipamiento ocultos y filtro de supervisor (si el usuario no tiene
+ * view_all_requests, solo ve órdenes donde él es supervisor de la solicitud).
  *
  * @param includeCompleted incluye las órdenes completadas en el universo base.
  *   Solo se usa al calcular la faceta de la columna "Estado", para que
  *   "Completada" aparezca con su count y el usuario pueda tildarla.
- *   Si el usuario filtra por estado, `filtersWhere` sobrescribe este default.
+ *   Si el usuario filtra por estado, su selección reemplaza este default.
  */
 async function buildWhereClause(
   companyId: string,
   state: ReturnType<typeof parseSearchParams>,
   includeCompleted = false
 ) {
-  const [supervisorFilter, hiddenTypeIds] = await Promise.all([getSupervisorFilterInfo(), getHiddenEquipmentTypeIds()]);
-  const searchWhere = buildSearchWhere(state.search, ['order_number']);
+  const scope = await resolveOrderListScope(companyId);
+  const filters = sanitizeFilters(state, ALLOWED_FILTERS).filters;
 
-  const filtersWhere = buildFiltersWhere(state.filters, COLUMN_MAP, {
-    exclude: [
-      ...TEXT_COLUMNS,
-      ...VEHICLE_TEXT_FILTER_COLUMNS,
-      ...DATE_RANGE_COLUMNS.flatMap((c) => [`${c}_from`, `${c}_to`]),
-      'vehicle', // manejado manualmente (FK)
-      'description', // manejado manualmente (OR order/solicitud)
-      'condition', // manejado manualmente (enum en vehicles, relacion anidada)
-    ],
-  });
-
-  const textFiltersWhere = buildTextFiltersWhere(state.filters, TEXT_COLUMNS);
-
-  const dateFiltersWhere = buildDateRangeFiltersWhere(state.filters, DATE_RANGE_COLUMNS);
-
-  // ─── Filtro vehicle (FK UUID → equipment_id) ────────────────────────────
-  const vehicleFilter: Record<string, unknown> = {};
-  const vehicleValues = state.filters['vehicle'];
-  if (vehicleValues?.length) {
-    const hasNull = vehicleValues.includes(NULL_FILTER_VALUE);
-    const realValues = vehicleValues.filter((v) => v !== NULL_FILTER_VALUE);
-    if (hasNull && realValues.length > 0) {
-      // caso mixto: se agrega en AND abajo
-    } else if (hasNull) {
-      vehicleFilter.equipment_id = null;
-    } else {
-      vehicleFilter.equipment_id = { in: realValues };
-    }
-  }
-
-  // ─── Filtros de texto en campos de vehicles ──────────────────────────────
-  const vehicleTextConditions: Record<string, unknown>[] = [];
-  const domainValues = state.filters['domain'];
-  const serieValues = state.filters['serie'];
-  const internNumberValues = state.filters['intern_number'];
-  const kilometerValues = state.filters['kilometer'];
-
-  if (domainValues?.length && typeof domainValues[0] === 'string') {
-    vehicleTextConditions.push({ vehicles: { domain: { contains: domainValues[0], mode: 'insensitive' } } });
-  }
-  if (serieValues?.length && typeof serieValues[0] === 'string') {
-    vehicleTextConditions.push({ vehicles: { serie: { contains: serieValues[0], mode: 'insensitive' } } });
-  }
-  if (internNumberValues?.length && typeof internNumberValues[0] === 'string') {
-    vehicleTextConditions.push({
-      vehicles: { intern_number: { contains: internNumberValues[0], mode: 'insensitive' } },
-    });
-  }
-  if (kilometerValues?.length && typeof kilometerValues[0] === 'string') {
-    vehicleTextConditions.push({ vehicles: { kilometer: { contains: kilometerValues[0], mode: 'insensitive' } } });
-  }
-
-  // ─── Filtro condition (enum de vehicles, relacion anidada) ───────────────
-  const conditionValues = state.filters['condition'];
-  if (conditionValues?.length) {
-    const hasNull = conditionValues.includes(NULL_FILTER_VALUE);
-    const realValues = conditionValues.filter((v) => v !== NULL_FILTER_VALUE);
-    if (hasNull && realValues.length > 0) {
-      vehicleTextConditions.push({
-        OR: [{ vehicles: { condition: { in: realValues } } }, { vehicles: { condition: null } }],
-      });
-    } else if (hasNull) {
-      vehicleTextConditions.push({ vehicles: { condition: null } });
-    } else {
-      vehicleTextConditions.push({ vehicles: { condition: { in: realValues } } });
-    }
-  }
-
-  // ─── Filtro de texto de descripción del pedido (order o solicitud) ───────
-  const descriptionValues = state.filters['description'];
-  if (descriptionValues?.length && typeof descriptionValues[0] === 'string') {
-    const term = descriptionValues[0];
-    vehicleTextConditions.push({
-      OR: [
-        { description: { contains: term, mode: 'insensitive' } },
-        { maintenance_requests: { description: { contains: term, mode: 'insensitive' } } },
-      ],
-    });
-  }
-
-  // ─── Condiciones AND para casos mixtos ───────────────────────────────────
-  const extraAndConditions: Record<string, unknown>[] = [...vehicleTextConditions];
-
-  if (vehicleValues?.length) {
-    const hasNull = vehicleValues.includes(NULL_FILTER_VALUE);
-    const realValues = vehicleValues.filter((v) => v !== NULL_FILTER_VALUE);
-    if (hasNull && realValues.length > 0) {
-      extraAndConditions.push({
-        OR: [{ equipment_id: { in: realValues } }, { equipment_id: null }],
-      });
-    }
-  }
-
-  // ─── Filtro supervisor: si no tiene view_all_requests, solo ve las suyas ──
-  const supervisorCondition: Record<string, unknown> = {};
-  if (supervisorFilter?.shouldFilterBySupervisor) {
-    supervisorCondition.maintenance_requests = {
-      supervisor_id: supervisorFilter.userId,
-    };
-  }
-
-  // Tipos de equipamiento ocultos para el usuario actual (ticket 690)
-  const equipmentCondition = visibleEquipmentTypeCondition(hiddenTypeIds);
-
-  return {
-    status: { in: includeCompleted ? WORKSHOP_TRACKING_STATUSES : DEFAULT_TRACKING_STATUSES },
-
-    ...searchWhere,
-    // Si el usuario filtra por estado, su seleccion sobrescribe el default de arriba
-    ...filtersWhere,
-    ...textFiltersWhere,
-    ...dateFiltersWhere,
-    ...vehicleFilter,
-    ...supervisorCondition,
-    // El filtro de empresa (vehiculo o equipamiento, ticket 596) va dentro del AND:
-    // produce un OR y al nivel raiz chocaria con el OR de la busqueda global.
-    AND: [
-      resourceCompanyCondition(companyId),
-      ...extraAndConditions,
-      ...(equipmentCondition ? [equipmentCondition] : []),
-    ],
+  // Estado: la selección del usuario acotada a los estados del seguimiento, o el default.
+  const statusValues = (filters.status ?? []).filter((v) => WORKSHOP_TRACKING_STATUSES.includes(v));
+  const statusCondition = {
+    status: { in: statusValues.length ? statusValues : includeCompleted ? WORKSHOP_TRACKING_STATUSES : DEFAULT_TRACKING_STATUSES },
   };
-}
 
-/** Suma con el estado parseado de un searchParams, descartando los params que no son filtros de la tabla */
-function parseTableState(searchParams?: DataTableSearchParams) {
-  const state = parseSearchParams(searchParams || {});
-  for (const key of IGNORED_PARAMS) {
-    delete state.filters[key];
+  const extra: Record<string, unknown>[] = [statusCondition];
+  if (state.search) extra.push(resourceSearchCondition(state.search));
+  if (filters.vehicle?.length) extra.push(resourceIdsCondition(filters.vehicle));
+  if (filters.condition?.length) extra.push(resourceConditionCondition(filters.condition));
+  if (filters.description?.[0]) extra.push(descriptionTextCondition(filters.description[0]));
+  for (const column of RESOURCE_TEXT_COLUMNS) {
+    const term = filters[column]?.[0];
+    if (term) extra.push(resourceTextCondition(column, term));
   }
-  return state;
+
+  return assembleOrdersWhere({
+    scope: scopeConditions(scope),
+    extra,
+    simple: [buildTextFiltersWhere(filters, TEXT_COLUMNS), buildDateRangeFiltersWhere(filters, DATE_RANGE_COLUMNS)],
+  });
 }
 
 // ============================================================================
@@ -296,11 +201,14 @@ function parseTableState(searchParams?: DataTableSearchParams) {
 // ============================================================================
 
 export async function getWorkshopTrackingPaginated(searchParams: DataTableSearchParams) {
-  const companyId = await getActiveCompanyId();
+  if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) {
+    throw new Error('No tenés permiso para ver el seguimiento de taller');
+  }
 
   try {
-    const state = parseTableState(searchParams);
-    const { skip, take } = stateToPrismaParams(state);
+    const companyId = await getActiveCompanyId();
+    const state = parseSearchParams(searchParams);
+    const { skip, take } = clampedPageParams(state);
     const where = await buildWhereClause(companyId, state);
 
     // Safe multi-sort: solo campos válidos
@@ -308,13 +216,13 @@ export async function getWorkshopTrackingPaginated(searchParams: DataTableSearch
     for (const s of state.sorting) {
       if (VALID_SORT_FIELDS.has(s.id)) {
         const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-        const fkMapper = FK_SORT_MAP[s.id];
-        resolvedSorts.push(fkMapper ? fkMapper(dir) : { [s.id]: dir });
+        if (s.id === 'vehicle') resolvedSorts.push(...resourceOrderBy(dir));
+        else resolvedSorts.push({ [s.id]: dir });
       }
     }
 
     // Más reciente primero por defecto
-    const safeOrderBy = [...resolvedSorts, { created_at: 'desc' as const }];
+    const safeOrderBy = [...resolvedSorts, { created_at: 'desc' as const }, { id: 'asc' as const }];
 
     const [data, total] = await Promise.all([
       prisma.maintenance_orders.findMany({
@@ -337,26 +245,36 @@ export async function getWorkshopTrackingPaginated(searchParams: DataTableSearch
 export type WorkshopTrackingListItem = Awaited<ReturnType<typeof getWorkshopTrackingPaginated>>['data'][number];
 
 // ============================================================================
-// EXPORT QUERY (sin paginación)
+// EXPORT QUERY (sin paginación, con tope)
 // ============================================================================
 
-export async function getAllWorkshopTrackingForExport(searchParams: DataTableSearchParams) {
-  const companyId = await getActiveCompanyId();
+export async function getAllWorkshopTrackingForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<WorkshopTrackingListItem[]>> {
+  if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) {
+    return { ok: false, message: 'No tenés permiso para exportar el seguimiento de taller' };
+  }
 
   try {
-    const state = parseTableState(searchParams);
+    const companyId = await getActiveCompanyId();
+    const state = parseSearchParams(searchParams);
     const where = await buildWhereClause(companyId, state);
 
     const data = await prisma.maintenance_orders.findMany({
-      orderBy: [{ created_at: 'desc' }],
+      orderBy: [{ created_at: 'desc' }, { id: 'asc' }],
       where,
       select: WORKSHOP_TRACKING_SELECT,
+      take: ORDER_LIST_EXPORT_MAX_ROWS + 1,
     });
 
-    return data;
+    if (data.length > ORDER_LIST_EXPORT_MAX_ROWS) {
+      return { ok: false, message: orderListExportTooLargeMessage('órdenes en seguimiento') };
+    }
+
+    return { ok: true, data };
   } catch (error) {
     logger.error('Error al exportar seguimiento de taller', { data: { error } });
-    throw new Error('Error al exportar el seguimiento de taller');
+    return { ok: false, message: 'Error al exportar el seguimiento de taller' };
   }
 }
 
@@ -366,12 +284,8 @@ export async function getAllWorkshopTrackingForExport(searchParams: DataTableSea
 
 /**
  * Obtiene el facet (opciones + counts) de UNA sola columna, bajo demanda
- * (lazy-load). Cada filtro facetado de la tabla llama esto al abrir su
- * popover, en vez de cargar las 3 facetas juntas en un `useQuery` bulk.
- *
- * Implementa cross-filtering: excluye el filtro propio de la columna
- * consultada (reutilizando `buildWhereClause` con ese filtro borrado del
- * estado), igual que hacía el `crossWhere` del patrón bulk anterior.
+ * (lazy-load). Implementa cross-filtering: excluye el filtro propio de la
+ * columna consultada (reutilizando `buildWhereClause`).
  */
 export async function getWorkshopTrackingSingleFacet(
   columnId: string,
@@ -380,89 +294,33 @@ export async function getWorkshopTrackingSingleFacet(
   counts: Map<string, number>;
   resolvedOptions?: Array<{ id: string; name: string | null }>;
 } | null> {
-  const companyId = await getActiveCompanyId();
+  if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) return null;
 
   try {
-    const state = parseTableState(searchParams);
+    const companyId = await getActiveCompanyId();
+    const state = parseSearchParams(searchParams || {});
 
-    function toFacetMap(rows: { key: string | null | undefined; count: number }[]): Map<string, number> {
-      const map = new Map<string, number>();
-      for (const { key, count } of rows) {
-        const mapKey = key ?? NULL_FILTER_VALUE;
-        map.set(mapKey, (map.get(mapKey) ?? 0) + count);
-      }
-      return map;
-    }
-
-    async function crossWhere(excludeColumn: string, includeCompleted = false) {
-      const filteredFilters = { ...state.filters };
-      delete filteredFilters[excludeColumn];
-      delete filteredFilters[`${excludeColumn}_from`];
-      delete filteredFilters[`${excludeColumn}_to`];
-      const crossState = { ...state, filters: filteredFilters };
-      return buildWhereClause(companyId, crossState, includeCompleted);
-    }
+    // La faceta de "Estado" necesita ver también las completadas para poder ofrecerlas
+    const where = await buildWhereClause(companyId, withoutOwnFilter(state, columnId), columnId === 'status');
 
     switch (columnId) {
       case 'status': {
-        // La faceta de "Estado" necesita ver también las completadas para poder ofrecerlas
-        const where = await crossWhere('status', true);
-        const rows = await prisma.maintenance_orders.groupBy({
-          by: ['status'],
-          where,
-          _count: { _all: true },
-        });
+        const rows = await prisma.maintenance_orders.groupBy({ by: ['status'], where, _count: { _all: true } });
         return { counts: toFacetMap(rows.map((r) => ({ key: r.status, count: r._count._all }))) };
       }
 
-      case 'vehicle': {
-        const where = await crossWhere('vehicle');
-        const rows = await prisma.maintenance_orders.groupBy({
-          by: ['equipment_id'],
-          where,
-          _count: { _all: true },
-        });
-        const counts = toFacetMap(rows.map((r) => ({ key: r.equipment_id, count: r._count._all })));
+      case 'vehicle':
+        return await getResourceFacet(where);
 
-        // Resolver nombres de vehículos para el filtro
-        const ids = rows.map((r) => r.equipment_id).filter((id): id is string => Boolean(id));
-        const vehicles =
-          ids.length > 0
-            ? await prisma.vehicles.findMany({
-                where: { id: { in: ids } },
-                select: { id: true, domain: true, serie: true, intern_number: true },
-                orderBy: { domain: 'asc' },
-              })
-            : [];
-        const resolvedOptions = vehicles.map((v) => ({
-          id: v.id,
-          name: [v.domain || v.serie || 'Sin dominio', v.intern_number ? `(${v.intern_number})` : '']
-            .filter(Boolean)
-            .join(' '),
-        }));
-        return { counts, resolvedOptions };
-      }
-
-      case 'condition': {
-        const where = await crossWhere('condition');
-        // condition vive en vehicles (relación anidada) — groupBy no soporta campos anidados
-        const rows = await prisma.maintenance_orders.findMany({
-          where,
-          select: { vehicles: { select: { condition: true } } },
-        });
-        const counts = new Map<string, number>();
-        for (const row of rows) {
-          const key = row.vehicles?.condition ?? NULL_FILTER_VALUE;
-          counts.set(key, (counts.get(key) ?? 0) + 1);
-        }
-        return { counts };
-      }
+      case 'condition':
+        // La condición vive en el recurso (vehículo o equipamiento): se agrupa en memoria.
+        return await getResourceConditionFacet(where);
 
       default:
         return null;
     }
   } catch (error) {
     logger.error('Error al obtener facet individual de seguimiento de taller', { data: { error, columnId } });
-    throw error;
+    return { counts: new Map() };
   }
 }

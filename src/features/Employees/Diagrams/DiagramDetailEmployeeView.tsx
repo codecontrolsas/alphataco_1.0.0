@@ -6,15 +6,18 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { TabsManagerClientSide } from '@/features/TabsManager';
 import { cn } from '@/lib/utils';
 import InfoComponent from '@/shared/components/common/InfoComponent';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { CalendarIcon } from '@radix-ui/react-icons';
-import { addDays, format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { FolderOpen, Plus } from 'lucide-react';
+import moment from 'moment';
 import { useState } from 'react';
 import { DateRange } from 'react-day-picker';
 import DiagramFormUpdated from './DiagramFormUpdated';
 import { DiagramDetailTable, type DiagramHistoryRow } from './table/DiagramDetailTable';
 import { DetailDiagramColums } from './table/diagram-detail-colums';
+/** Hoy en hora argentina como fecha local a medianoche (lo que espera el calendario). */
+const argentinaToday = () => moment(argentinaDate(), 'YYYY-MM-DD');
+
 type diagram = {
   id: string;
   created_at: string;
@@ -50,8 +53,8 @@ export function DiagramDetailEmployeeView({
   searchParams?: { [key: string]: string | string[] | undefined };
 }) {
   const [date, setDate] = useState<DateRange | undefined>({
-    from: new Date(),
-    to: addDays(new Date(), 30),
+    from: argentinaToday().toDate(),
+    to: argentinaToday().add(30, 'days').toDate(),
   });
   const [diagramType, setDiagramType] = useState<{ id: string; name: string } | undefined>(undefined);
 
@@ -62,7 +65,7 @@ export function DiagramDetailEmployeeView({
 
     return diagrams.filter((diagram) => {
       const diagramDate = new Date(diagram.year, diagram.month - 1, diagram.day);
-      return diagramDate >= (date.from ?? new Date(0)) && diagramDate <= (date.to ?? new Date());
+      return diagramDate >= (date.from ?? new Date(0)) && diagramDate <= (date.to ?? argentinaToday().toDate());
     });
   }
 
@@ -94,6 +97,7 @@ export function DiagramDetailEmployeeView({
             <Popover>
               <PopoverTrigger asChild>
                 <Button
+                  type="button"
                   id="date"
                   variant={'outline'}
                   className={cn('w-[300px] justify-start text-left font-normal', !date && 'text-muted-foreground')}
@@ -102,11 +106,10 @@ export function DiagramDetailEmployeeView({
                   {date?.from ? (
                     date.to ? (
                       <>
-                        {format(date.from, 'dd/MM/yyyy', { locale: es })} -{' '}
-                        {format(date.to, 'dd/MM/yyyy', { locale: es })}
+                        {moment(date.from).format('DD/MM/YYYY')} - {moment(date.to).format('DD/MM/YYYY')}
                       </>
                     ) : (
-                      format(date.from, 'dd/MM/yyyy', { locale: es })
+                      moment(date.from).format('DD/MM/YYYY')
                     )
                   ) : (
                     <span>Seleccionar fecha</span>

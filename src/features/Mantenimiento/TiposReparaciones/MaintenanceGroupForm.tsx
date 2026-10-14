@@ -1,144 +1,115 @@
+'use client';
+
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
+import { invalidateAllMaintenanceQueries } from '@/features/Mantenimiento/utils/queryInvalidation';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import { z } from 'zod';
 import {
   createMaintenanceGroupAction,
+  fetchMaintenanceGroupByIdAction,
   fetchMaintenanceGroupsActionType,
   fetchTypesOfRepairActionType,
   updateMaintenanceGroupAction,
 } from './actions/maintenanceGroupActions';
+import { maintenanceGroupFormSchema, type MaintenanceGroupFormValues } from './schemas/repair-types';
 
-const MaintenanceGroupSchema = z.object({
-  name: z.string().min(1, { message: 'El nombre es requerido' }),
-  description: z.string().optional(),
-  is_active: z.boolean(),
-  type_ids: z.array(z.string()).optional(),
-});
-
-interface MaintenanceGroupFormValues extends z.infer<typeof MaintenanceGroupSchema> {
-  type_ids: string[];
-}
+type Group = fetchMaintenanceGroupsActionType['groups'][number];
 
 interface MaintenanceGroupFormProps {
-  group: fetchMaintenanceGroupsActionType['groups'][number] | null;
-  mode: 'create' | 'edit';
-  setMode: (mode: 'create' | 'edit') => void;
+  group: Group | null;
+  onDone: () => void;
   types: fetchTypesOfRepairActionType['types'];
 }
 
-function MaintenanceGroupForm({ group, types, mode, setMode }: MaintenanceGroupFormProps) {
-  const isEditing = mode === 'edit';
+const EMPTY_VALUES: MaintenanceGroupFormValues = { name: '', description: '', is_active: true, type_ids: [] };
+
+/** Altas y bajas respecto del baseline que se leyó de la base al abrir el grupo. */
+function diffIds(baseline: string[], current: string[]) {
+  return {
+    add: current.filter((id) => !baseline.includes(id)),
+    remove: baseline.filter((id) => !current.includes(id)),
+  };
+}
+
+interface FormBodyProps {
+  group: { id: string; name: string; description: string | null; is_active: boolean } | null;
+  /** Tipos del grupo según la base al abrirlo; `[]` si se crea uno nuevo. */
+  baselineTypeIds: string[];
+  types: fetchTypesOfRepairActionType['types'];
+  onDone: () => void;
+}
+
+function MaintenanceGroupFormBody({ group, baselineTypeIds, types, onDone }: FormBodyProps) {
+  const isEditing = !!group;
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [isSaving, setIsSaving] = useState(false);
+
   const form = useForm<MaintenanceGroupFormValues>({
-    defaultValues: {
-      name: group?.name || '',
-      description: group?.description || '',
-      is_active: group?.is_active ?? true,
-      type_ids: group?.maintenance_group_type_of_repairs?.map((rel) => rel.type_id) || [],
-    },
+    resolver: zodResolver(maintenanceGroupFormSchema),
+    defaultValues: group
+      ? {
+          name: group.name,
+          description: group.description ?? '',
+          is_active: group.is_active,
+          type_ids: baselineTypeIds,
+        }
+      : EMPTY_VALUES,
   });
 
-  const { reset } = form;
-  const router = useRouter();
+  const typeNames = new Map(types.map((type) => [type.id, type.name]));
+  const selectedTypeIds = form.watch('type_ids');
+  const delta = diffIds(baselineTypeIds, selectedTypeIds);
+  const removedNames = delta.remove.map((id) => typeNames.get(id) ?? 'Tipo').join(', ');
 
-  useEffect(() => {
-    if (group) {
-      form.reset({
-        name: group.name || '',
-        description: group.description || '',
-        is_active: group.is_active ?? true,
-        type_ids: group.maintenance_group_type_of_repairs?.map((rel) => rel.type_id) || [],
-      });
-      setMode('edit');
-    } else {
-      form.reset({
-        name: '',
-        description: '',
-        is_active: true,
-        type_ids: [],
-      });
-      setMode('create');
-    }
-  }, [group, form, setMode]);
+  const afterMutation = () => {
+    invalidateAllMaintenanceQueries(queryClient);
+    queryClient.invalidateQueries({ queryKey: ['maintenance-group'] });
+    queryClient.invalidateQueries({ queryKey: ['datatable-facet'] });
+    router.refresh();
+    onDone();
+  };
 
   const handleSubmit = async (values: MaintenanceGroupFormValues) => {
-    const resetForm = () => {
-      reset();
-      setMode('create');
-      form.reset({
-        name: '',
-        description: '',
-        is_active: true,
-        type_ids: [],
-      });
-    };
-    if (!group) {
-      await toast.promise(
-        createMaintenanceGroupAction(
-          {
-            name: values.name,
-            description: values.description,
-            is_active: values.is_active,
-          },
-          values.type_ids
-        ),
-        {
-          loading: 'Creando grupo...',
-          success: 'Grupo de reparación creado con éxito',
-          error: 'Error al crear el grupo',
-        }
-      );
-      router.refresh();
-      resetForm();
-    } else {
-      await toast.promise(
-        updateMaintenanceGroupAction(
-          group.id,
-          {
-            name: values.name,
-            description: values.description,
-            is_active: values.is_active,
-          },
-          values.type_ids
-        ),
-        {
-          loading: 'Actualizando grupo...',
-          success: 'Grupo de reparación actualizado con éxito',
-          error: 'Error al actualizar el grupo',
-        }
-      );
-      router.refresh();
-      resetForm();
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      const groupData = { name: values.name, description: values.description, is_active: values.is_active };
+      if (!group) {
+        const result = await createMaintenanceGroupAction(groupData, values.type_ids);
+        if (result.error) throw new Error(result.error);
+        toast.success('Grupo de reparación creado con éxito');
+      } else {
+        const result = await updateMaintenanceGroupAction(group.id, groupData, delta);
+        if (result.error) throw new Error(result.error);
+        toast.success(
+          `Grupo de reparación actualizado con éxito (${result.added} tipos agregados, ${result.removed} quitados)`
+        );
+      }
+      afterMutation();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al guardar el grupo');
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleCancel = () => {
-    reset();
-    setMode('create');
-    form.reset({
-      name: '',
-      is_active: true,
-      type_ids: [],
-    });
-  };
-
-  const repairTypesOptions = types.map((type) => ({
-    value: type.id,
-    label: type.name,
-  }));
+  const repairTypesOptions = types.map((type) => ({ value: type.id, label: type.name }));
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 w-[300px]">
-        <h2 className="text-xl font-bold mb-4">
-          {mode === 'edit' ? 'Editar Grupo de Reparación' : 'Crear Grupo de Reparación'}
-        </h2>
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 w-[300px] max-w-full">
+        <h2 className="text-xl font-bold mb-4">{isEditing ? 'Editar Grupo de Reparación' : 'Crear Grupo de Reparación'}</h2>
 
         <FormField
           control={form.control}
@@ -161,11 +132,7 @@ function MaintenanceGroupForm({ group, types, mode, setMode }: MaintenanceGroupF
             <FormItem>
               <FormLabel>Descripción</FormLabel>
               <FormControl>
-                <textarea
-                  {...field}
-                  placeholder="Descripción del grupo"
-                  className="border rounded-md p-2 w-full min-h-[60px] resize-y"
-                />
+                <Textarea {...field} value={field.value ?? ''} placeholder="Descripción del grupo" className="min-h-[60px] resize-y" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -188,6 +155,16 @@ function MaintenanceGroupForm({ group, types, mode, setMode }: MaintenanceGroupF
                 />
               </FormControl>
               <FormMessage />
+              {isEditing && (delta.add.length > 0 || delta.remove.length > 0) && (
+                <div className="space-y-0.5 text-xs" aria-live="polite">
+                  {delta.add.length > 0 && <p className="text-muted-foreground">Se agregan {delta.add.length}</p>}
+                  {delta.remove.length > 0 && (
+                    <p className="font-medium text-destructive">
+                      Se quitan {delta.remove.length}: {removedNames}
+                    </p>
+                  )}
+                </div>
+              )}
             </FormItem>
           )}
         />
@@ -202,7 +179,7 @@ function MaintenanceGroupForm({ group, types, mode, setMode }: MaintenanceGroupF
                 <RadioGroup
                   onValueChange={(value) => field.onChange(value === 'true')}
                   value={field.value ? 'true' : 'false'}
-                  className="flex  space-x-1"
+                  className="flex space-x-1"
                 >
                   <FormItem className="flex items-center space-x-3 space-y-0">
                     <FormControl>
@@ -224,21 +201,72 @@ function MaintenanceGroupForm({ group, types, mode, setMode }: MaintenanceGroupF
         />
 
         <div className="flex gap-2 mt-6">
-          <Button variant="brand" type="submit" disabled={form.formState.isSubmitting}>
-            {mode === 'edit' ? 'Editar' : 'Crear'}
+          <Button variant="brand" type="submit" disabled={isSaving}>
+            {isSaving ? 'Guardando...' : isEditing ? 'Editar' : 'Crear'}
           </Button>
-          {mode === 'edit' ? (
-            <Button type="button" onClick={handleCancel} variant="outline">
-              Cancelar
-            </Button>
-          ) : (
-            <Button type="button" onClick={handleCancel} variant="outline">
-              Limpiar
-            </Button>
-          )}
+          <Button type="button" onClick={isEditing ? onDone : () => form.reset(EMPTY_VALUES)} variant="outline" disabled={isSaving}>
+            {isEditing ? 'Cancelar' : 'Limpiar'}
+          </Button>
         </div>
       </form>
     </Form>
+  );
+}
+
+/**
+ * Al editar, los tipos actuales del grupo se leen de la base (no de la lista de la pantalla)
+ * y el formulario recién se arma cuando llegaron: las bajas se calculan contra ese dato.
+ */
+function MaintenanceGroupForm({ group, types, onDone }: MaintenanceGroupFormProps) {
+  const baselineQuery = useQuery({
+    queryKey: ['maintenance-group', group?.id],
+    queryFn: () => fetchMaintenanceGroupByIdAction(group!.id),
+    enabled: !!group,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
+  });
+
+  if (!group) {
+    return <MaintenanceGroupFormBody key="new" group={null} baselineTypeIds={[]} types={types} onDone={onDone} />;
+  }
+
+  if (baselineQuery.isPending) {
+    return (
+      <div className="w-[300px] max-w-full space-y-3" aria-busy="true">
+        <Skeleton className="h-6 w-48" />
+        <Skeleton className="h-9 w-full" />
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-9 w-full" />
+      </div>
+    );
+  }
+
+  const fresh = baselineQuery.data?.group ?? null;
+  if (baselineQuery.isError || baselineQuery.data?.error || !fresh) {
+    return (
+      <div role="alert" className="w-[300px] max-w-full space-y-2 text-sm">
+        <p className="text-destructive">No se pudieron cargar los datos actuales del grupo.</p>
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => baselineQuery.refetch()}>
+            Reintentar
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={onDone}>
+            Cancelar
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <MaintenanceGroupFormBody
+      key={`${fresh.id}-${baselineQuery.dataUpdatedAt}`}
+      group={fresh}
+      baselineTypeIds={fresh.maintenance_group_type_of_repairs.map((rel) => rel.type_id)}
+      types={types}
+      onDone={onDone}
+    />
   );
 }
 

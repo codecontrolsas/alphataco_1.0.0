@@ -11,9 +11,10 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useQueryClient } from '@tanstack/react-query';
 import { CircleOff } from 'lucide-react';
-import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
 import {
   getAllEquipmentsWithDeviationsForExport,
@@ -215,14 +216,14 @@ export function _EquiposConDesviosDataTable({
         emptyMessage="No hay equipos con desvíos pendientes."
         data-testid="equipments-with-deviations-table"
         exportConfig={{
-          fetchAllData: () => getAllEquipmentsWithDeviationsForExport(currentParams),
+          fetchAllData: async () => unwrapExportResult(await getAllEquipmentsWithDeviationsForExport(currentParams)),
           options: {
             filename: 'equipos-con-desvios',
             title: 'Equipos con Desvíos Pendientes',
             sheetName: 'Equipos con Desvíos',
           },
           formatters: {
-            last_deviation_date: (val) => (val ? moment(val as string).format('DD/MM/YYYY HH:mm') : ''),
+            last_deviation_date: (val) => (val ? formatArgentinaDateTime(val as string) : ''),
           },
         }}
       />

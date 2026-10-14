@@ -19,32 +19,70 @@ import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
 import { cache } from 'react';
 import { z } from 'zod';
-import { assertTransition, type PreEmployeeStatus, type PreEmployeeTransitionAction } from '../lib/state-machine';
-import { rejectPreEmployeeSchema, type PreEmployeeFormData } from '../schemas/pre-employee-schema';
+import { assertWorkCatalogsOwned } from '../lib/catalog-ownership.server';
+import { DUPLICATE_IDENTITY_MESSAGE, employeeIdentityExists } from '../lib/pre-employee-identity.server';
+import { assertTransition, type PreEmployeeTransitionAction } from '../lib/state-machine';
+import {
+  preEmployeeFormSchema,
+  rejectPreEmployeeSchema,
+  type PreEmployeeFormData,
+} from '../schemas/pre-employee-schema';
 
 const logger = new Logger('features/PreLegajos');
 
-const PRE_LEGAJOS_ROUTE = '/dashboard/employee';
+// La lista de candidatos vive en /dashboard/recruitment (la ruta vieja de empleados no la renderiza)
+const PRE_LEGAJOS_ROUTE = '/dashboard/recruitment';
 const PRE_LEGAJO_DETAIL_ROUTE = '/dashboard/recruitment/detail';
 
-/** Convierte el payload del formulario al shape que espera Prisma. */
-function toPrismaData(data: PreEmployeeFormData) {
-  const { province, city, ...rest } = data;
+/**
+ * Valida el payload en el SERVIDOR (la action se puede invocar directamente con cualquier objeto) y devuelve
+ * solo los campos del formulario. Un cliente manipulado no puede colar `company_id`, `status`, `employee_id`,
+ * `reviewed_by`, etc.: el schema los descarta y `toPrismaData` arma el `data` campo por campo.
+ */
+function parsePreEmployeeInput(input: unknown): PreEmployeeFormData {
+  const parsed = preEmployeeFormSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? 'Los datos del candidato no son válidos');
+  }
+  return parsed.data;
+}
 
+/** Convierte el payload ya validado al shape que espera Prisma, con campos EXPLÍCITOS (nunca un spread). */
+function toPrismaData(data: PreEmployeeFormData) {
   return {
-    ...rest,
-    province: BigInt(province),
-    city: city != null ? BigInt(city) : null,
+    firstname: data.firstname,
+    lastname: data.lastname,
+    cuil: data.cuil,
+    document_number: data.document_number,
+    born_date: data.born_date,
+    birthplace: data.birthplace,
+    // `undefined` = no tocar la foto guardada; `''` = quitarla.
+    picture: data.picture === '' ? null : data.picture,
+    street: data.street,
+    street_number: data.street_number,
+    postal_code: data.postal_code,
+    phone: data.phone,
+    email: data.email,
+    province: BigInt(data.province),
+    city: data.city != null ? BigInt(data.city) : null,
     // El formulario maneja los enums como string
-    nationality: rest.nationality as nationality_enum,
-    document_type: rest.document_type as document_type_enum,
-    gender: rest.gender as gender_enum,
-    marital_status: rest.marital_status as marital_status_enum,
-    level_of_education: rest.level_of_education as level_of_education_enum,
+    nationality: data.nationality as nationality_enum,
+    document_type: data.document_type as document_type_enum,
+    gender: data.gender as gender_enum,
+    marital_status: data.marital_status as marital_status_enum,
+    level_of_education: data.level_of_education as level_of_education_enum,
     // Las FK opcionales nunca viajan como string vacío a una columna uuid
-    proposed_hierarchical_position: rest.proposed_hierarchical_position || null,
-    proposed_company_position: rest.proposed_company_position || null,
+    proposed_hierarchical_position: data.proposed_hierarchical_position || null,
+    proposed_company_position: data.proposed_company_position || null,
   };
+}
+
+/** Sector y puesto propuestos deben ser de la empresa activa. */
+async function assertProposedCatalogsOwned(data: PreEmployeeFormData, companyId: string) {
+  await assertWorkCatalogsOwned(prisma, companyId, {
+    hierarchical_position: data.proposed_hierarchical_position,
+    company_position: data.proposed_company_position,
+  });
 }
 
 // ─── Lecturas ─────────────────────────────────────────────────────────────────
@@ -55,6 +93,9 @@ function toPrismaData(data: PreEmployeeFormData) {
  */
 export const getPreEmployeeByIdCached = cache(async (preEmployeeId: string) => {
   logger.debug('Obteniendo candidato por ID', { data: { preEmployeeId } });
+
+  // Sin permiso devuelve null (no lanza): `generateMetadata` de la page lo lee antes del gate de la page.
+  if (!(await checkPermissionServer('seleccion', 'candidatos', 'view'))) return null;
 
   const companyId = await getActiveCompanyId();
 
@@ -109,59 +150,24 @@ export const getPreEmployeeByIdCached = cache(async (preEmployeeId: string) => {
 
 export type PreEmployeeDetailData = NonNullable<Awaited<ReturnType<typeof getPreEmployeeByIdCached>>>;
 
-/**
- * Verifica el DNI/CUIL antes de guardar.
- * - Contra `employees`: BLOQUEA (esas columnas son unique; al aprobar fallaría igual).
- * - Contra otros candidatos: solo AVISA.
- */
-export async function checkPreEmployeeIdentity(documentNumber: string, cuil: string, excludeId?: string) {
-  logger.debug('Verificando identidad del candidato', { data: { documentNumber, cuil, excludeId } });
-
-  try {
-    const [employee, preEmployee] = await Promise.all([
-      prisma.employees.findFirst({
-        where: { OR: [{ document_number: documentNumber }, { cuil }] },
-        select: { id: true, file: true, firstname: true, lastname: true, is_active: true },
-      }),
-      prisma.pre_employees.findFirst({
-        where: {
-          OR: [{ document_number: documentNumber }, { cuil }],
-          ...(excludeId ? { id: { not: excludeId } } : {}),
-        },
-        select: { id: true, pre_file_number: true, firstname: true, lastname: true, status: true },
-      }),
-    ]);
-
-    return {
-      blockingEmployee: employee,
-      warningPreEmployee: preEmployee,
-    };
-  } catch (error) {
-    logger.error('Error al verificar la identidad', { data: { error, documentNumber, cuil } });
-    throw error;
-  }
-}
-
-export type PreEmployeeIdentityCheck = Awaited<ReturnType<typeof checkPreEmployeeIdentity>>;
-
 // ─── Mutaciones ───────────────────────────────────────────────────────────────
 
 /** Crea un candidato. Los datos personales y de contacto llegan completos (ticket 505). */
-export async function createPreEmployee(data: PreEmployeeFormData) {
-  logger.debug('Creando candidato', { data: { document_number: data.document_number } });
+export async function createPreEmployee(input: PreEmployeeFormData) {
+  logger.debug('Creando candidato');
 
   // La UI oculta el botón, pero la barrera es esta: la action se puede invocar directamente.
   if (!(await checkPermissionServer('seleccion', 'candidatos', 'create'))) {
     throw new Error('No tenés permiso para crear candidatos');
   }
 
+  const data = parsePreEmployeeInput(input);
   const [companyId, profile] = await Promise.all([getActiveCompanyId(), requireServerAuthProfile()]);
 
-  const { blockingEmployee } = await checkPreEmployeeIdentity(data.document_number, data.cuil);
-  if (blockingEmployee) {
-    throw new Error(
-      `Ya existe un empleado con ese DNI o CUIL: ${blockingEmployee.lastname} ${blockingEmployee.firstname} (legajo ${blockingEmployee.file})`
-    );
+  await assertProposedCatalogsOwned(data, companyId);
+
+  if (await employeeIdentityExists(data.document_number, data.cuil)) {
+    throw new Error(DUPLICATE_IDENTITY_MESSAGE);
   }
 
   try {
@@ -195,12 +201,13 @@ export async function createPreEmployee(data: PreEmployeeFormData) {
 }
 
 /** Actualiza los datos de un candidato. Solo mientras es editable (en proceso / pre ingreso). */
-export async function updatePreEmployee(preEmployeeId: string, data: PreEmployeeFormData) {
+export async function updatePreEmployee(preEmployeeId: string, input: PreEmployeeFormData) {
   logger.debug('Actualizando candidato', { data: { preEmployeeId } });
 
   if (!(await checkPermissionServer('seleccion', 'candidatos', 'update'))) {
     throw new Error('No tenés permiso para editar candidatos');
   }
+  const data = parsePreEmployeeInput(input);
   const companyId = await getActiveCompanyId();
 
   const current = await prisma.pre_employees.findFirstOrThrow({
@@ -216,19 +223,23 @@ export async function updatePreEmployee(preEmployeeId: string, data: PreEmployee
     throw new Error('El candidato está rechazado: hay que reabrirlo antes de poder editarlo');
   }
 
-  const { blockingEmployee } = await checkPreEmployeeIdentity(data.document_number, data.cuil);
-  if (blockingEmployee) {
-    throw new Error(
-      `Ya existe un empleado con ese DNI o CUIL: ${blockingEmployee.lastname} ${blockingEmployee.firstname} (legajo ${blockingEmployee.file})`
-    );
+  await assertProposedCatalogsOwned(data, companyId);
+
+  if (await employeeIdentityExists(data.document_number, data.cuil)) {
+    throw new Error(DUPLICATE_IDENTITY_MESSAGE);
   }
 
   try {
-    const updated = await prisma.pre_employees.update({
-      where: { id: preEmployeeId, company_id: companyId },
+    // El estado leído va en el `where`: si otro usuario lo cambió (rechazo, aprobación) entre la lectura y
+    // este update, no afecta filas en vez de pisar un candidato que ya no es editable.
+    const result = await prisma.pre_employees.updateMany({
+      where: { id: preEmployeeId, company_id: companyId, status: current.status },
       data: toPrismaData(data),
-      select: { id: true },
     });
+    if (result.count === 0) {
+      throw new Error('El candidato cambió de estado mientras se editaba. Recargá la página e intentá de nuevo');
+    }
+    const updated = { id: preEmployeeId };
 
     logger.info('Candidato actualizado', { data: { preEmployeeId } });
     revalidatePath(PRE_LEGAJOS_ROUTE);
@@ -270,8 +281,9 @@ async function applyTransition(
     rejectionReason = rejectPreEmployeeSchema.parse({ rejection_reason: reason }).rejection_reason;
   }
 
-  const updated = await prisma.pre_employees.update({
-    where: { id: preEmployeeId, company_id: companyId },
+  // El estado leído va en el `where` (lock optimista): si cambió en el medio, no se aplica la transición.
+  const result = await prisma.pre_employees.updateMany({
+    where: { id: preEmployeeId, company_id: companyId, status: current.status },
     data: {
       status: transition.to,
       // El motivo se limpia al reabrir: solo se conserva el del rechazo vigente
@@ -279,8 +291,11 @@ async function applyTransition(
       reviewed_by: transition.requiredPermissionAction === 'approve' ? profile.id : undefined,
       reviewed_at: transition.requiredPermissionAction === 'approve' ? new Date() : undefined,
     },
-    select: { id: true, status: true },
   });
+  if (result.count === 0) {
+    throw new Error('El candidato ya fue modificado por otro usuario. Recargá la página e intentá de nuevo');
+  }
+  const updated = { id: preEmployeeId, status: transition.to };
 
   logger.info('Transición aplicada al candidato', {
     data: { preEmployeeId, from: current.status, to: transition.to },
@@ -304,9 +319,4 @@ export async function rejectPreEmployee(preEmployeeId: string, reason: string) {
 /** rechazado -> en proceso (para poder reingresar al postulante). */
 export async function reopenPreEmployee(preEmployeeId: string) {
   return applyTransition(preEmployeeId, 'reopen');
-}
-
-/** Estados disponibles para la UI (labels de los filtros de la bandeja). */
-export async function getPreEmployeeStatuses(): Promise<PreEmployeeStatus[]> {
-  return ['en_proceso', 'pre_ingreso', 'rechazado', 'legajo'];
 }

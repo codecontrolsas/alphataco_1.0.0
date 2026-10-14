@@ -13,6 +13,7 @@ import {
   getSectionCode,
   isSideValidationItem,
 } from '@/features/Checklists/lib/checklist-evaluation';
+import { ARGENTINA_TIME_ZONE, argentinaDate } from '@/shared/lib/argentina-time';
 import moment from 'moment';
 import { z } from 'zod';
 
@@ -140,6 +141,8 @@ export type NormalizedChecklistFormProps = {
   defaultEquipmentId?: string;
   defaultAnswers?: DefaultAnswers;
   readOnly?: boolean; // Modo solo lectura
+  /** `false` si el usuario del dashboard no tiene `formularios:formularios:create`: se muestra el formulario sin poder enviarlo. El QR/operario no lo pasa (default `true`). */
+  canSubmit?: boolean;
   defaultEmployeeId?: string;
   defaultEmployeeName?: string;
   defaultKilometer?: string;
@@ -297,12 +300,20 @@ export const generateDefaultValues = (
   defaultCustomerId?: string | null,
   defaultHorometro?: string
 ) => {
+  const argentinaTimeOfDay = () =>
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: ARGENTINA_TIME_ZONE,
+      hourCycle: 'h23',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date());
   const defaults: Record<string, string> = {
     equipment_id: defaultEquipmentId || '',
     customer_id: defaultCustomerId || '',
     chofer: defaultEmployeeName || '',
-    fecha: moment().format('YYYY-MM-DD'),
-    hora: moment().format('HH:mm'),
+    // Hora argentina (el navegador/contenedor puede estar en otra zona)
+    fecha: argentinaDate(),
+    hora: argentinaTimeOfDay(),
     kilometraje: defaultKilometer || '',
     horometro: defaultHorometro || '',
     observaciones: '',

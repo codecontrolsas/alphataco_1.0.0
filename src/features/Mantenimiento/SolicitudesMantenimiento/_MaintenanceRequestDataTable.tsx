@@ -8,10 +8,12 @@ import type {
 } from '@/shared/components/common/DataTable';
 import { DataTable } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { useQuery } from '@tanstack/react-query';
+import { unwrapExportResult } from '@/shared/lib/export-result';
+import { formatArgentinaDateTime, argentinaDate } from '@/shared/lib/argentina-time';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
 import { CircleOff } from 'lucide-react';
-import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
 import { getMaintenanceRequestById } from './actions/queries.server';
 import {
@@ -96,6 +98,8 @@ export function MaintenanceRequestDataTable({
   canApproveReject = false,
   fetchAllForExport,
 }: MaintenanceRequestDataTableProps) {
+  const queryClient = useQueryClient();
+  const router = useRouter();
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [dialogType, setDialogType] = useState<'view' | 'approve' | 'reject' | null>(null);
   const [historyRequestId, setHistoryRequestId] = useState<string | null>(null);
@@ -143,9 +147,19 @@ export function MaintenanceRequestDataTable({
     setDialogType('reject');
   };
 
+  // Tras aprobar / rechazar / reasignar la tabla sale de React Query (client-side mode): hay que
+  // invalidar el detalle, la lista y las facetas además de refrescar los Server Components.
+  const refreshAfterChange = () => {
+    queryClient.invalidateQueries({ queryKey: ['maintenance-request-detail'] });
+    queryClient.invalidateQueries({ queryKey: ['maintenance-requests-paginated'] });
+    queryClient.invalidateQueries({ queryKey: ['datatable-facet'] });
+    router.refresh();
+  };
+
   const handleCloseDialog = () => {
     setSelectedRequestId(null);
     setDialogType(null);
+    refreshAfterChange();
   };
 
   const handleViewHistory = (request: MaintenanceRequestListItem) => {
@@ -276,14 +290,14 @@ export function MaintenanceRequestDataTable({
   const exportConfig = useMemo(
     () => ({
       options: {
-        filename: `solicitudes-mantenimiento-${moment().format('YYYY-MM-DD')}`,
+        filename: `solicitudes-mantenimiento-${argentinaDate()}`,
         sheetName: 'Solicitudes',
       },
       // Usa currentParams (estado reactivo del client-side mode), NO searchParams (prop inicial de SSR),
       // para que la exportación respete los filtros activos en el momento del click.
-      fetchAllData: () => fetchAllForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await fetchAllForExport(currentParams)),
       formatters: {
-        created_at: (val: unknown) => (val ? moment(val as string).format('DD/MM/YYYY HH:mm') : '-'),
+        created_at: (val: unknown) => (val ? formatArgentinaDateTime(val as string) : '-'),
         status: (val: unknown) => {
           const s = val as string;
           return REQUEST_STATUS_LABELS[s] ?? ORDER_STATUS_LABELS[s] ?? s ?? '-';
@@ -342,7 +356,10 @@ export function MaintenanceRequestDataTable({
           open={showReassignDialog}
           onOpenChange={(open) => {
             setShowReassignDialog(open);
-            if (!open) setReassignRequestId(null);
+            if (!open) {
+              setReassignRequestId(null);
+              refreshAfterChange();
+            }
           }}
         />
       )}

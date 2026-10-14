@@ -11,19 +11,20 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toggleOtherEquipmentStatus } from '@/features/Equipos/OtherEquipment/actions/actionsServer';
-import { cn } from '@/lib/utils';
+import { Logger } from '@/lib/logger';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQueryClient } from '@tanstack/react-query';
 import { MoreHorizontal, Package } from 'lucide-react';
 import moment from 'moment';
 import { useRouter } from 'next/navigation';
@@ -32,13 +33,17 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
+const logger = new Logger('OtherEquipmentQuickActions');
+
 interface OtherEquipmentQuickActionsProps {
   equipmentId: string;
   isActive: boolean;
 }
 
 const terminationSchema = z.object({
-  reason_for_termination: z.string({ required_error: 'La razón de baja es requerida.' }).min(1, 'La razón de baja es requerida.'),
+  reason_for_termination: z
+    .string({ required_error: 'La razón de baja es requerida.' })
+    .min(1, 'La razón de baja es requerida.'),
   termination_date: z.date({ required_error: 'La fecha de baja es requerida.' }),
 });
 
@@ -46,6 +51,7 @@ const TERMINATION_REASONS = ['venta', 'destrucción total', 'devolución', 'otro
 
 export function OtherEquipmentQuickActions({ equipmentId, isActive }: OtherEquipmentQuickActionsProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
   const [showDeactivateDialog, setShowDeactivateDialog] = useState(false);
   const [showActivateDialog, setShowActivateDialog] = useState(false);
@@ -58,15 +64,27 @@ export function OtherEquipmentQuickActions({ equipmentId, isActive }: OtherEquip
     },
   });
 
+  // Hoy en hora argentina: el navegador puede estar en otra zona
+  const today = moment(argentinaDate(), 'YYYY-MM-DD').toDate();
+
+  // El equipo pasa entre el listado de activos y el de dados de baja (tablas de React Query)
+  const refreshAfterChange = () => {
+    queryClient.invalidateQueries({ queryKey: ['other-equipment-paginated'] });
+    queryClient.invalidateQueries({ queryKey: ['inactive-other-equipment-list'] });
+    queryClient.invalidateQueries({ queryKey: ['datatable-facet'] });
+    router.refresh();
+  };
+
   const handleActivate = () => {
     startTransition(async () => {
       try {
         await toggleOtherEquipmentStatus(equipmentId, true);
         toast.success('Equipo activado correctamente');
         setShowActivateDialog(false);
-        router.refresh();
-      } catch {
-        toast.error('Error al activar el equipo');
+        refreshAfterChange();
+      } catch (error) {
+        logger.error('Error al activar el equipo', { data: { error, equipmentId } });
+        toast.error(error instanceof Error ? error.message : 'Error al activar el equipo');
       }
     });
   };
@@ -77,15 +95,17 @@ export function OtherEquipmentQuickActions({ equipmentId, isActive }: OtherEquip
         await toggleOtherEquipmentStatus(
           equipmentId,
           false,
-          values.reason_for_termination as Parameters<typeof toggleOtherEquipmentStatus>[2],
-          values.termination_date
+          values.reason_for_termination,
+          // Día calendario (YYYY-MM-DD): un Date serializado correría el día según la zona del navegador
+          moment(values.termination_date).format('YYYY-MM-DD')
         );
         toast.success('Equipo dado de baja correctamente');
         setShowDeactivateDialog(false);
         form.reset();
-        router.refresh();
-      } catch {
-        toast.error('Error al dar de baja al equipo');
+        refreshAfterChange();
+      } catch (error) {
+        logger.error('Error al dar de baja al equipo', { data: { error, equipmentId } });
+        toast.error(error instanceof Error ? error.message : 'Error al dar de baja al equipo');
       }
     });
   };
@@ -156,27 +176,14 @@ export function OtherEquipmentQuickActions({ equipmentId, isActive }: OtherEquip
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
                       <FormLabel>Fecha de Baja</FormLabel>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant="outline"
-                              className={cn('pl-3 text-left font-normal', !field.value && 'text-muted-foreground')}
-                            >
-                              {field.value ? moment(field.value).locale('es').format('LL') : <span>Elegir fecha</span>}
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
-                            disabled={(date) => date > new Date() || date < new Date('1900-01-01')}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
+                      <FormControl>
+                        <EnhancedDatePicker
+                          date={field.value}
+                          setDate={(date) => field.onChange(date)}
+                          minDate={new Date('1900-01-01')}
+                          maxDate={today}
+                        />
+                      </FormControl>
                       <FormDescription>Fecha en la que se dio de baja</FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -199,7 +206,9 @@ export function OtherEquipmentQuickActions({ equipmentId, isActive }: OtherEquip
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Activar equipo?</AlertDialogTitle>
-            <AlertDialogDescription>Esta acción activará al equipo y podrá acceder al sistema.</AlertDialogDescription>
+            <AlertDialogDescription>
+              Esta acción reactivará el equipo y volverá a figurar en el listado de equipamiento activo.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>

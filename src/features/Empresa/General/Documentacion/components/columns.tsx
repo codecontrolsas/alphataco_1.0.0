@@ -2,19 +2,23 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  documentListStateLabels,
+  formatDocumentPeriod,
+} from '@/features/Documentacion/shared/components/DocumentCells';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { documentStateBadges, documentStateLabels } from '@/shared/utils/mappers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { documentStateBadges } from '@/shared/utils/mappers';
 import type { ColumnDef } from '@tanstack/react-table';
-import { AlertCircle, CheckCircle2, Clock, FileWarning, XCircle } from 'lucide-react';
-import moment from 'moment';
+import { AlertCircle, CheckCircle2, Clock, FileWarning, XCircle, type LucideIcon } from 'lucide-react';
 import type { CompanyDocListItem } from '../actions.server';
 
 // ============================================================================
 // ICONS
 // ============================================================================
 
-export const documentStateIcons: Record<string, React.ComponentType<{ className?: string }>> = {
+export const documentStateIcons: Record<string, LucideIcon> = {
   presentado: Clock,
   aprobado: CheckCircle2,
   rechazado: XCircle,
@@ -78,7 +82,7 @@ export function getColumns(): ColumnDef<CompanyDocListItem>[] {
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
       cell: ({ row }) => {
         const stateValue = row.original.state as string;
-        const label = documentStateLabels[stateValue] ?? stateValue;
+        const label = documentListStateLabels[stateValue] ?? stateValue;
         const variant = documentStateBadges[stateValue] ?? 'default';
         const Icon = documentStateIcons[stateValue];
         return (
@@ -141,7 +145,7 @@ export function getColumns(): ColumnDef<CompanyDocListItem>[] {
       cell: ({ row }) => {
         const fullname = row.original.profile?.fullname;
         if (!fullname) {
-          return <span className="text-muted-foreground italic">Pendiente</span>;
+          return <span className="text-muted-foreground italic">{row.original.isMissing ? 'Sin cargar' : '-'}</span>;
         }
         return <span>{fullname}</span>;
       },
@@ -161,7 +165,7 @@ export function getColumns(): ColumnDef<CompanyDocListItem>[] {
       cell: ({ row }) => {
         const date = row.original.created_at;
         if (!date) return <span className="text-muted-foreground">-</span>;
-        return <span>{moment(date).format('DD/MM/YYYY')}</span>;
+        return <span>{formatArgentinaDay(date)}</span>;
       },
     },
 
@@ -174,9 +178,11 @@ export function getColumns(): ColumnDef<CompanyDocListItem>[] {
       cell: ({ row }) => {
         const validity = row.original.validity;
         const explired = row.original.document_types?.explired;
+        // Fila faltante: todavía no hay documento, así que no hay vencimiento que mostrar.
+        if (row.original.isMissing) return <span className="text-muted-foreground">-</span>;
         if (validity) return <span>{validity}</span>;
         if (!explired) return <span className="text-muted-foreground">No vence</span>;
-        return <span className="text-muted-foreground italic">Pendiente</span>;
+        return <span className="text-muted-foreground">Sin vencimiento</span>;
       },
       enableSorting: true,
     },
@@ -188,8 +194,7 @@ export function getColumns(): ColumnDef<CompanyDocListItem>[] {
       meta: { title: 'Período' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Período" />,
       cell: ({ row }) => {
-        const period = row.original.period;
-        return <span>{period ?? '-'}</span>;
+        return <span>{formatDocumentPeriod(row.original.period) ?? '-'}</span>;
       },
     },
 
@@ -200,9 +205,8 @@ export function getColumns(): ColumnDef<CompanyDocListItem>[] {
       enableSorting: false,
       enableHiding: false,
       cell: ({ row }) => {
-        // Determine if document is uploaded:
-        // state !== 'pendiente' OR document_path exists
-        const isUploaded = row.original.state !== 'pendiente' || Boolean(row.original.document_path);
+        // La fila existe solo si hay archivo; una exigencia sin documento es una fila faltante.
+        const isUploaded = !row.original.isMissing;
         const docId = row.original.document_types?.id ?? '';
         const redirectId = row.original.id;
         return (

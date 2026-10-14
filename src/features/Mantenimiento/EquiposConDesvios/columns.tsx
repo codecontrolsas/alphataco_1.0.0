@@ -4,9 +4,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Wrench } from 'lucide-react';
-import moment from 'moment';
 import Link from 'next/link';
 import type { EquipmentWithDeviationsListItem } from './actions.server';
 
@@ -155,10 +155,11 @@ export function getColumns(
       cell: ({ row }) => {
         const date = row.original.last_deviation_date;
         if (!date) return <span className="text-muted-foreground">-</span>;
+        const [day, time] = formatArgentinaDateTime(date).split(' ');
         return (
           <div className="flex flex-col">
-            <span>{moment(date).format('DD/MM/YYYY')}</span>
-            <span className="text-xs text-muted-foreground">{moment(date).format('HH:mm')}</span>
+            <span>{day}</span>
+            <span className="text-xs text-muted-foreground">{time}</span>
           </div>
         );
       },

@@ -7,7 +7,6 @@ import { AlertTriangle } from 'lucide-react';
 import { employeeDeviations, equipmentDeviations } from '../../lib/resource-deviations';
 import { ResourceCell } from '../components/ResourceCell';
 import type { DailyReportDetailRow } from '../types';
-import { DEVIATION_BADGE_CLASSES, type DeviationTone } from './deviation-styles';
 import { buildEmployeeLabel, buildRowDescription } from './helpers';
 import type { DeviationGetters } from './types';
 
@@ -27,7 +26,7 @@ export function renderEmployeeBadge(
       <Badge
         key={key}
         variant="secondary"
-        className="text-muted-foreground cursor-default text-xs font-normal"
+        className="text-xs font-normal bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400 cursor-default"
       >
         {label}
       </Badge>
@@ -46,7 +45,7 @@ export function renderEmployeeBadge(
               {label}
             </Badge>
           </TooltipTrigger>
-          <TooltipContent>
+          <TooltipContent className="bg-black text-white rounded-lg p-2">
             <p className="text-xs">Empleado asignado correctamente</p>
           </TooltipContent>
         </Tooltip>
@@ -61,18 +60,17 @@ export function renderEmployeeBadge(
   const kinds = new Set(devEntries.map((entry) => entry.kind));
 
   // Determinar color según prioridad
-  const tone: DeviationTone | null = kinds.has('duplicated')
-    ? 'orange'
+  const badgeClass = kinds.has('duplicated')
+    ? 'border-orange-500 bg-orange-50 dark:bg-orange-950 dark:border-orange-400'
     : kinds.has('unassigned_to_client') && kinds.has('no_diagram')
-      ? 'purple'
+      ? 'border-purple-500 bg-purple-50 dark:bg-purple-950 dark:border-purple-400'
       : kinds.has('unassigned_to_client')
-        ? 'blue'
+        ? 'border-blue-500 bg-blue-50 dark:bg-blue-950 dark:border-blue-400'
         : kinds.has('no_diagram')
-          ? 'red'
+          ? 'border-red-500 bg-red-50 dark:bg-red-950 dark:border-red-400'
           : kinds.has('non_work_day')
-            ? 'yellow'
-            : null;
-  const badgeClass = tone ? DEVIATION_BADGE_CLASSES[tone] : '';
+            ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-950 dark:border-yellow-400'
+            : 'dark:text-black';
 
   return (
     <TooltipProvider key={key} delayDuration={100}>
@@ -82,7 +80,7 @@ export function renderEmployeeBadge(
             {label}
           </Badge>
         </TooltipTrigger>
-        <TooltipContent className="max-w-xs">
+        <TooltipContent className="bg-black text-white rounded-lg p-2 max-w-xs">
           {messages.map((msg, i) => (
             <p key={i} className="text-xs">
               {msg}
@@ -98,7 +96,7 @@ export function EmployeeBadgeCell({ row, deviations }: { row: DailyReportDetailR
   const relations = row.dailyreportemployeerelations;
 
   if (!relations || relations.length === 0) {
-    return <span className="text-muted-foreground">-</span>;
+    return <span className="text-muted-foreground text-xs">—</span>;
   }
 
   const items = relations
@@ -138,7 +136,7 @@ export function renderEquipmentBadge(
       <Badge
         key={key}
         variant="secondary"
-        className="text-muted-foreground cursor-default text-xs font-normal"
+        className="text-xs font-normal bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400 cursor-default"
       >
         {label}
       </Badge>
@@ -157,7 +155,7 @@ export function renderEquipmentBadge(
               {label}
             </Badge>
           </TooltipTrigger>
-          <TooltipContent>
+          <TooltipContent className="bg-black text-white rounded-lg p-2">
             <p className="text-xs">Equipo asignado correctamente</p>
           </TooltipContent>
         </Tooltip>
@@ -172,25 +170,24 @@ export function renderEquipmentBadge(
   const kinds = new Set(devEntries.map((entry) => entry.kind));
 
   // Determinar color según prioridad y condición
-  const tone: DeviationTone | null = kinds.has('duplicated')
-    ? 'orange'
+  const badgeClass = kinds.has('duplicated')
+    ? 'border-orange-500 bg-orange-50 dark:bg-orange-950 dark:border-orange-400'
     : kinds.has('not_operative')
-      ? 'red'
+      ? 'border-red-500 bg-red-50 dark:bg-red-950 dark:border-red-400'
       : kinds.has('under_repair')
-        ? 'yellow'
+        ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-950 dark:border-yellow-400'
         : kinds.has('unassigned_to_client')
-          ? 'blue'
+          ? 'border-blue-500 bg-blue-50 dark:bg-blue-950 dark:border-blue-400'
           : kinds.has('conditioned')
-            ? 'sky'
+            ? 'border-sky-500 bg-sky-50 dark:bg-sky-950 dark:border-sky-400'
             : kinds.has('in_preparation')
-              ? 'gray'
-              : null;
-  const badgeClass = tone ? DEVIATION_BADGE_CLASSES[tone] : '';
+              ? 'border-gray-400 bg-transparent'
+              : 'dark:text-black';
 
   if (tooltipMessages.length === 0) {
     return (
-      <Badge key={key} variant="outline" className={cn('text-xs font-normal', badgeClass)}>
-        <AlertTriangle aria-hidden="true" />
+      <Badge key={key} variant="outline" className={cn('text-xs font-normal dark:text-black', badgeClass)}>
+        <AlertTriangle className="h-3 w-3 mr-1" />
         {label}
       </Badge>
     );
@@ -201,11 +198,11 @@ export function renderEquipmentBadge(
       <Tooltip>
         <TooltipTrigger asChild>
           <Badge variant="outline" className={cn('text-xs font-normal cursor-default', badgeClass)}>
-            <AlertTriangle aria-hidden="true" />
+            <AlertTriangle className="h-3 w-3 mr-1" />
             {label}
           </Badge>
         </TooltipTrigger>
-        <TooltipContent className="max-w-xs">
+        <TooltipContent className="bg-black text-white rounded-lg p-2 max-w-xs">
           {tooltipMessages.map((msg, i) => (
             <p key={i} className="text-xs">
               {msg}
@@ -221,7 +218,7 @@ export function EquipmentBadgeCell({ row, deviations }: { row: DailyReportDetail
   const relations = row.dailyreportequipmentrelations;
 
   if (!relations || relations.length === 0) {
-    return <span className="text-muted-foreground">-</span>;
+    return <span className="text-muted-foreground text-xs">—</span>;
   }
 
   const items = relations
@@ -256,7 +253,7 @@ export function CustomerEquipmentBadgeCell({ row }: { row: DailyReportDetailRow 
   const relations = row.dailyreport_customer_equipment_relations;
 
   if (!relations || relations.length === 0) {
-    return <span className="text-muted-foreground">-</span>;
+    return <span className="text-muted-foreground text-xs">—</span>;
   }
 
   const items = relations.map((rel) => (

@@ -1,4 +1,4 @@
-import moment from 'moment';
+import { formatValidityDay } from '@/shared/lib/storage-file-name';
 
 /**
  * Reglas de nombre de archivo de los documentos en el storage (módulo puro).
@@ -22,14 +22,15 @@ function splitExtension(path: string): { base: string; ext: string } {
   return { base: path.slice(0, dot), ext: path.slice(dot + 1) };
 }
 
-function formatValidity(validity: Date): string {
-  return moment(validity).format('DD-MM-YYYY');
-}
-
 /** Nombre del archivo al REEMPLAZAR: misma marca salvo que haya nueva validez; extensión del archivo nuevo. */
-export function buildReplacedDocumentName(currentPath: string, newExtension: string, validity: Date | undefined): string {
+export function buildReplacedDocumentName(
+  currentPath: string,
+  newExtension: string,
+  validity: Date | undefined
+): string {
   const { base } = splitExtension(currentPath);
-  const renamed = validity && REPLACE_DATE_RE.test(base) ? base.replace(REPLACE_DATE_RE, `(${formatValidity(validity)})`) : base;
+  const renamed =
+    validity && REPLACE_DATE_RE.test(base) ? base.replace(REPLACE_DATE_RE, `(${formatValidityDay(validity)})`) : base;
   return `${renamed}.${newExtension}`;
 }
 
@@ -45,11 +46,21 @@ export function buildRenewedDocumentName(
   if (versionMatch) {
     renamed = base.replace(VERSION_RE, `(v${Number(versionMatch[1]) + 1})`);
   } else if (RENEW_DATE_RE.test(base) && next.validity) {
-    renamed = base.replace(RENEW_DATE_RE, `(${formatValidity(next.validity)})`);
+    renamed = base.replace(RENEW_DATE_RE, `(${formatValidityDay(next.validity)})`);
   } else if (PERIOD_RE.test(base) && next.period) {
     renamed = base.replace(PERIOD_RE, `(${next.period})`);
   }
   return `${renamed}.${newExtension}`;
+}
+
+/**
+ * Inserta un segmento único (uuid) como carpeta justo antes del nombre del archivo, para que dos
+ * subidas del mismo tipo/versión no se pisen. Conserva la marca `(...)` del final del nombre, que
+ * leen `buildReplacedDocumentName` y `buildRenewedDocumentName`.
+ */
+export function withUniqueFolder(path: string, uniqueId: string = crypto.randomUUID()): string {
+  const slash = path.lastIndexOf('/');
+  return slash < 0 ? `${uniqueId}/${path}` : `${path.slice(0, slash)}/${uniqueId}/${path.slice(slash + 1)}`;
 }
 
 /**

@@ -273,7 +273,7 @@ export interface DataTableProps<TData, TValue = unknown> {
   initialFilterVisibility?: Record<string, boolean>;
   /** Mostrar input de búsqueda en el toolbar (default: false) */
   showSearch?: boolean;
-  /** ID del test para cypress */
+  /** ID para pruebas (data-testid) */
   'data-testid'?: string;
   /** Indica que los facets se están re-fetcheando (muestra skeletons en los filtros activos) */
   isFetchingFacets?: boolean;
@@ -292,6 +292,14 @@ export interface DataTableProps<TData, TValue = unknown> {
 
   /** Key base para React Query (solo con queryFn). Se le agrega el state como último elemento. */
   queryKey?: readonly unknown[];
+
+  /**
+   * Tiempo (ms) que una página cacheada de esta tabla se considera fresca (solo con queryFn). Por
+   * defecto 30 s. Las tablas cuyo contenido depende de datos que se editan en otras pantallas (p. ej. las
+   * listas de documentos, que derivan de puesto, cliente o aptitudes del recurso) lo bajan para que al
+   * volver a ellas se vea siempre el dato actual.
+   */
+  queryStaleTimeMs?: number;
 
   /**
    * Callback que se dispara cada vez que el estado de la tabla cambia (filtros, sort, paginación).

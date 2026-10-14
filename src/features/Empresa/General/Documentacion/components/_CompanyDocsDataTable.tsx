@@ -1,25 +1,42 @@
 'use client';
 
 import {
+  buildBooleanFacetResult,
+  buildEnumFacetResult,
+  buildFkFacetResult,
+} from '@/features/Documentacion/DocumentosEmpresa/lib/facet-results';
+import {
+  documentListStateLabels,
+  formatDocumentPeriod,
+} from '@/features/Documentacion/shared/components/DocumentCells';
+import {
   DataTable,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
+  type FacetResult,
 } from '@/shared/components/common/DataTable';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { documentStateLabels, getEnumLabel } from '@/shared/utils/mappers';
-import { useQuery } from '@tanstack/react-query';
-import { CheckCircle2, CircleOff, XCircle } from 'lucide-react';
-import moment from 'moment';
-import { useSearchParams } from 'next/navigation';
-import { useMemo } from 'react';
-import { getAllCompanyDocsForExport, getCompanyDocsFacets, type CompanyDocListItem } from '../actions.server';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
+import { useCallback, useMemo, useState } from 'react';
+import {
+  getAllCompanyDocsForExport,
+  getCompanyDocsPaginated,
+  getCompanyDocsSingleFacet,
+  type CompanyDocListItem,
+} from '../actions.server';
 import { HIDDEN_COLUMNS_BY_DEFAULT, documentStateIcons, getColumns } from './columns';
 
 // ============================================================================
-// STATE ENUM VALUES (enum `state`)
+// CONSTANTS
 // ============================================================================
 
-const STATE_VALUES = ['presentado', 'rechazado', 'aprobado', 'vencido', 'pendiente'] as const;
+/** Valores del enum `state` (orden en que se ofrecen en el filtro). */
+const STATE_VALUES = ['pendiente', 'rechazado', 'vencido', 'presentado', 'aprobado'] as const;
+
+/** Filtros visibles por defecto (3). */
+const DEFAULT_VISIBLE_FILTERS: readonly string[] = ['state', 'documentType', 'uploadedBy'];
+
+const ALL_FILTER_IDS = ['state', 'documentType', 'docType', 'mandatory', 'uploadedBy', 'created_at', 'period'];
 
 // ============================================================================
 // TYPES
@@ -46,144 +63,70 @@ export default function _CompanyDocsDataTable({
   initialColumnVisibility,
   initialFilterVisibility,
 }: CompanyDocsDataTableProps) {
-  // Read current URL params for facets cross-filtering
-  const urlSearchParams = useSearchParams();
-
-  // Facet params: read from URL (namespaced) and strip prefix
-  const facetParams = useMemo(() => {
-    const prefix = `${tableId}__`;
-    const params: DataTableSearchParams = {};
-    urlSearchParams.forEach((value, key) => {
-      if (key.startsWith(prefix)) {
-        params[key.slice(prefix.length)] = value;
-      }
-    });
-    // Remove pagination/sort keys — only filter params are relevant for facets
-    const { page, pageSize, sort, sortBy, sortOrder, ...filterOnly } = params;
-    return filterOnly;
-  }, [urlSearchParams, tableId]);
-
-  // ── Facets query (cross-filtering) ────────────────────────────────────────
-  const { data: facets, isFetching: isFetchingFacets } = useQuery({
-    queryKey: ['company-docs-facets', facetParams],
-    queryFn: () => getCompanyDocsFacets(facetParams),
-    staleTime: 5 * 60 * 1000,
-  });
+  // ── Client-side navigation: params actuales de la tabla (para exportar con los filtros activos) ──
+  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
+  const handleStateChange = useCallback((params: DataTableSearchParams) => setCurrentParams(params), []);
+  const tableQueryFn = useCallback((params: DataTableSearchParams) => getCompanyDocsPaginated(params), []);
 
   // ── Columns ───────────────────────────────────────────────────────────────
   const columns = useMemo(() => getColumns(), []);
 
   // ── Column visibility ─────────────────────────────────────────────────────
   const mergedColumnVisibility = useMemo(() => {
-    const defaults: Record<string, boolean> = {};
-    for (const col of HIDDEN_COLUMNS_BY_DEFAULT) {
-      defaults[col] = false;
-    }
-    return { ...defaults, ...(initialColumnVisibility ?? {}) };
+    const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((col) => [col, false]));
+    return { ...defaults, ...initialColumnVisibility };
   }, [initialColumnVisibility]);
 
-  // ── Filter visibility: 3 visible by default ───────────────────────────────
-  const DEFAULT_VISIBLE_FILTERS = ['state', 'documentType', 'uploadedBy'];
+  // ── Filter visibility: preferencias guardadas, o los 3 por defecto ────────
   const mergedFilterVisibility = useMemo(() => {
     if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
       return initialFilterVisibility;
     }
-    const allFilterIds = ['state', 'documentType', 'docType', 'mandatory', 'uploadedBy', 'created_at', 'period'];
-    return Object.fromEntries(allFilterIds.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
+    return Object.fromEntries(ALL_FILTER_IDS.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
   }, [initialFilterVisibility]);
 
-  // ── Export: read current URL params for active filters ────────────────────
-  const currentExportParams = useMemo(() => {
-    const prefix = `${tableId}__`;
-    const params: DataTableSearchParams = {};
-    urlSearchParams.forEach((value, key) => {
-      if (key.startsWith(prefix)) {
-        params[key.slice(prefix.length)] = value;
-      }
-    });
-    return params;
-  }, [urlSearchParams, tableId]);
+  // ── fetchFacet factories (lazy-load al abrir cada filtro) ─────────────────
+  const makeEnumFetchFacet = useCallback(
+    (columnId: string) =>
+      async (params: DataTableSearchParams): Promise<FacetResult> => {
+        const result = await getCompanyDocsSingleFacet(columnId, params);
+        return buildEnumFacetResult(STATE_VALUES, documentListStateLabels, documentStateIcons, result.counts);
+      },
+    []
+  );
 
-  // ── Faceted filters config ─────────────────────────────────────────────────
+  const makeFkFetchFacet = useCallback(
+    (columnId: string, options?: Parameters<typeof buildFkFacetResult>[2]) =>
+      async (params: DataTableSearchParams): Promise<FacetResult> => {
+        const result = await getCompanyDocsSingleFacet(columnId, params);
+        return buildFkFacetResult(result.resolvedOptions, result.counts, options);
+      },
+    []
+  );
+
+  const makeBooleanFetchFacet = useCallback(
+    (columnId: string) =>
+      async (params: DataTableSearchParams): Promise<FacetResult> => {
+        const result = await getCompanyDocsSingleFacet(columnId, params);
+        return buildBooleanFacetResult(result.counts);
+      },
+    []
+  );
+
+  // ── Faceted filters config ────────────────────────────────────────────────
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
     () => [
-      // ── state (enum) ─────────────────────────────────────────────────────
-      {
-        columnId: 'state',
-        title: 'Estado',
-        options: [
-          ...STATE_VALUES.map((value) => ({
-            value,
-            label: documentStateLabels[value] ?? value,
-            icon: documentStateIcons[value],
-          })),
-          ...(facets?.state?.has(NULL_FILTER_VALUE)
-            ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-            : []),
-        ],
-        externalCounts: facets?.state,
-      },
-
-      // ── documentType (FK document_types) ─────────────────────────────────
-      {
-        columnId: 'documentType',
-        title: 'Documento',
-        options: [
-          ...(facets?.docTypeOptions?.map((d) => ({ value: d.id, label: d.name ?? '' })) ?? []),
-          ...(facets?.documentType?.has(NULL_FILTER_VALUE)
-            ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-            : []),
-        ],
-        externalCounts: facets?.documentType,
-      },
-
-      // ── docType (Mensual / Permanente — filter by FK, display by is_it_montlhy) ─
-      {
-        columnId: 'docType',
-        title: 'Tipo',
-        options: facets?.docTypeOptions
-          ? [
-              ...facets.docTypeOptions
-                .filter((d) => d.is_it_montlhy)
-                .map((d) => ({ value: d.id, label: `Mensual: ${d.name}` })),
-              ...facets.docTypeOptions
-                .filter((d) => !d.is_it_montlhy)
-                .map((d) => ({ value: d.id, label: `Permanente: ${d.name}` })),
-            ]
-          : [],
-        externalCounts: facets?.documentType,
-      },
-
-      // ── mandatory (boolean from document_types.mandatory) ─────────────────
-      {
-        columnId: 'mandatory',
-        title: 'Mandatorio',
-        options: [
-          { value: 'true', label: 'Sí', icon: CheckCircle2 },
-          { value: 'false', label: 'No', icon: XCircle },
-        ],
-      },
-
-      // ── uploadedBy (FK profile) ───────────────────────────────────────────
+      { columnId: 'state', title: 'Estado', fetchFacet: makeEnumFetchFacet('state') },
+      { columnId: 'documentType', title: 'Documento', fetchFacet: makeFkFetchFacet('documentType') },
+      // Mensual / Permanente: se filtra por el id del tipo, la etiqueta trae la periodicidad.
+      { columnId: 'docType', title: 'Tipo', fetchFacet: makeFkFetchFacet('docType') },
+      { columnId: 'mandatory', title: 'Mandatorio', fetchFacet: makeBooleanFetchFacet('mandatory') },
       {
         columnId: 'uploadedBy',
         title: 'Subido por',
-        options: [
-          ...(facets?.profileOptions?.map((p) => ({
-            value: p.id,
-            label: p.fullname ?? 'Sin nombre',
-          })) ?? []),
-          ...(facets?.uploadedBy?.has(NULL_FILTER_VALUE)
-            ? [{ value: NULL_FILTER_VALUE, label: 'Pendiente', icon: CircleOff }]
-            : []),
-        ],
-        externalCounts: facets?.uploadedBy,
+        fetchFacet: makeFkFetchFacet('uploadedBy', { nullLabel: 'Sin cargar' }),
       },
-
-      // ── Date range ────────────────────────────────────────────────────────
       { columnId: 'created_at', title: 'Fecha de carga', type: 'dateRange' as const },
-
-      // ── Text filter ───────────────────────────────────────────────────────
       {
         columnId: 'period',
         title: 'Período',
@@ -191,7 +134,7 @@ export default function _CompanyDocsDataTable({
         placeholder: 'Buscar por período...',
       },
     ],
-    [facets]
+    [makeEnumFetchFacet, makeFkFetchFacet, makeBooleanFetchFacet]
   );
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -201,10 +144,13 @@ export default function _CompanyDocsDataTable({
       data={data}
       totalRows={totalRows}
       searchParams={searchParams}
+      queryFn={tableQueryFn}
+      queryKey={['company-docs-general']}
+      queryStaleTimeMs={5_000}
+      onStateChange={handleStateChange}
       tableId={tableId}
       paramNamespace={tableId}
       facetedFilters={facetedFilters}
-      isFetchingFacets={isFetchingFacets}
       initialColumnVisibility={mergedColumnVisibility}
       initialFilterVisibility={mergedFilterVisibility}
       showFilterToggle
@@ -213,26 +159,26 @@ export default function _CompanyDocsDataTable({
       enableRowSelection
       showRowSelection
       exportConfig={{
-        fetchAllData: () => getAllCompanyDocsForExport(currentExportParams),
+        fetchAllData: async () => unwrapExportResult(await getAllCompanyDocsForExport(currentParams)),
         options: {
           filename: 'documentos-empresa',
           sheetName: 'Documentos',
           title: 'Documentos de Empresa',
         },
         formatters: {
-          state: (value) => getEnumLabel(value as string, documentStateLabels),
-          created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
+          state: (value) => documentListStateLabels[value as string] ?? String(value ?? ''),
+          created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
           documentType: (_value, row) => (row as CompanyDocListItem).document_types?.name ?? '-',
           docType: (_value, row) =>
             (row as CompanyDocListItem).document_types?.is_it_montlhy ? 'Mensual' : 'Permanente',
           mandatory: (_value, row) => ((row as CompanyDocListItem).document_types?.mandatory ? 'Sí' : 'No'),
-          uploadedBy: (_value, row) => (row as CompanyDocListItem).profile?.fullname ?? 'Pendiente',
+          uploadedBy: (_value, row) => (row as CompanyDocListItem).profile?.fullname ?? '-',
           validity: (value, row) => {
+            if ((row as CompanyDocListItem).isMissing) return '-';
             if (value) return String(value);
-            if (!(row as CompanyDocListItem).document_types?.explired) return 'No vence';
-            return 'Pendiente';
+            return (row as CompanyDocListItem).document_types?.explired ? 'Sin vencimiento' : 'No vence';
           },
-          period: (value) => String(value ?? '-'),
+          period: (value) => formatDocumentPeriod(value as string | null) ?? '-',
         },
       }}
     />

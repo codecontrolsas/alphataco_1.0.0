@@ -8,11 +8,8 @@ import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
 import { errorMessage, fail, ok, type ActionResult } from '../lib/action-result';
 import { diffAssignments } from '../lib/assignment-diff';
-import {
-  buildContractDocumentPath,
-  classifyDocumentType,
-  CONTRACT_DOCUMENTS_BUCKET,
-} from '../lib/contract-documents';
+import { CONTRACT_DOCUMENTS_BUCKET, buildContractDocumentPath, classifyDocumentType } from '../lib/contract-documents';
+import { cascadeServiceItemsActive } from '../lib/service-items-cascade';
 import { serviceFormSchema, type ServiceFormValues } from '../schemas/service';
 
 const logger = new Logger('features/Empresa/Clientes/services');
@@ -81,7 +78,7 @@ export type ActiveContract = Awaited<ReturnType<typeof getActiveContractsByCusto
 async function findOwnedService(serviceId: string, companyId: string) {
   return prisma.customer_services.findFirst({
     where: { id: serviceId, ...ownedServiceWhere(companyId) },
-    select: { id: true, customer_id: true, service_name: true, customers: { select: { name: true } } },
+    select: { id: true, customer_id: true, service_name: true, is_active: true, customers: { select: { name: true } } },
   });
 }
 
@@ -93,9 +90,7 @@ async function assertAreasAndSectorsBelongToCustomer(
 ): Promise<void> {
   const [areas, sectors] = await Promise.all([
     areaIds.length ? prisma.areas_cliente.count({ where: { id: { in: areaIds }, customer_id: customerId } }) : 0,
-    sectorIds.length
-      ? prisma.sectors.count({ where: { id: { in: sectorIds }, customer_id: customerId } })
-      : 0,
+    sectorIds.length ? prisma.sectors.count({ where: { id: { in: sectorIds }, customer_id: customerId } }) : 0,
   ]);
   if (areas !== areaIds.length) throw new Error('Una o más áreas no pertenecen al cliente');
   if (sectors !== sectorIds.length) throw new Error('Uno o más sectores no pertenecen al cliente');
@@ -194,6 +189,7 @@ export async function updateCustomerService(
       values.sector_id
     );
 
+    let cascaded = 0;
     await prisma.$transaction(async (tx) => {
       await tx.customer_services.update({
         where: { id: serviceId },
@@ -206,6 +202,10 @@ export async function updateCustomerService(
           is_active: values.is_active,
         },
       });
+      // Reemplaza al trigger de customer_services: el estado del contrato se propaga a sus ítems.
+      if (service.is_active !== values.is_active) {
+        cascaded = await cascadeServiceItemsActive(tx, serviceId, companyId, values.is_active);
+      }
       if (areas.toRemove.length > 0) {
         await tx.service_areas.deleteMany({ where: { service_id: serviceId, area_id: { in: areas.toRemove } } });
       }
@@ -227,7 +227,11 @@ export async function updateCustomerService(
     });
 
     logger.info('Contrato actualizado', {
-      data: { serviceId, areas: { added: areas.toAdd.length, removed: areas.toRemove.length } },
+      data: {
+        serviceId,
+        itemsCascaded: cascaded,
+        areas: { added: areas.toAdd.length, removed: areas.toRemove.length },
+      },
     });
     revalidatePath(COMERCIAL_PATH);
     return ok({ id: serviceId });

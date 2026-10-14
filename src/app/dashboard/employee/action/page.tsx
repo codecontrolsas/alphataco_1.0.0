@@ -6,6 +6,7 @@ import { EmployeeDiagramsSection } from '@/features/Employees/EmpleadoID/compone
 import { EmployeeHeaderContent } from '@/features/Employees/EmpleadoID/components/EmployeeHeaderContent';
 import { EmployeeDocumentDetail } from '@/features/Employees/EmpleadoID/components/employee-document-detail';
 import { EmployeeDiagramsSkeleton } from '@/features/Employees/EmpleadoID/components/skeletons/employee-diagrams-skeleton';
+import { canViewServer, checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { Logger } from '@/lib/logger';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { notFound } from 'next/navigation';
@@ -25,6 +26,16 @@ export default async function EmployeePage({ searchParams }: EmployeePageProps) 
   const resolvedSearchParams = await searchParams;
   const mode = (resolvedSearchParams.action as 'view' | 'edit' | 'new') || 'view';
   const employeeId = resolvedSearchParams.employee_id ?? '';
+
+  // Gate por modo (permisos de `empleados:employees`): alta → create, edición → update, lectura → view.
+  // Un `?action=edit` o `?action=new` armado a mano no abre el formulario sin el permiso correspondiente.
+  const allowed =
+    mode === 'new'
+      ? await checkPermissionServer('empleados', 'employees', 'create')
+      : mode === 'edit'
+        ? await checkPermissionServer('empleados', 'employees', 'update')
+        : await canViewServer('empleados', 'employees');
+  if (!allowed) notFound();
 
   // Empresa activa del request: el claim crudo dejaba `companyId: ''` en toda sesión que la
   // resuelve por cookie (panel de ropa, QR), sin que se notara.

@@ -483,7 +483,7 @@ export default async function Page({ searchParams }: Props) {
 | `showFilterToggle`        | `boolean`                            | `false`                           | Mostrar botón para ocultar/mostrar filtros                              |
 | `initialFilterVisibility` | `Record<string, boolean>`            | `{}`                              | Visibilidad inicial de filtros (desde BD)                               |
 | `paramNamespace`          | `string`                             | `undefined`                       | Namespace para aislar params de URL entre DataTables en la misma página |
-| `data-testid`             | `string`                             | `'data-table'`                    | ID para testing con Cypress                                             |
+| `data-testid`             | `string`                             | `'data-table'`                    | ID para pruebas (testing)                                             |
 | `isFetchingFacets`        | `boolean`                            | `undefined`                       | Loading state de facets — evita flash vacío en opciones de filtro       |
 | `queryFn`                 | `(params) => Promise<{data, total}>` | `undefined`                       | Activa client-side mode: datos via React Query en vez de SSR            |
 | `queryKey`                | `readonly unknown[]`                 | `undefined`                       | Query key base para React Query (client-side mode)                      |
@@ -1322,6 +1322,19 @@ Filtro click
 - **exportConfig.fetchAllData**: usar `currentParams` (no `searchParams` original) para que la exportación respete los filtros actuales
 - **gcTime global**: configurado a 5 minutos en `TanstackQueryInicializador.tsx` — datos se mantienen en cache al cambiar de tab y volver
 - **El efecto deshabilitado (opacity-50)**: usa `isPlaceholderData` — solo se aplica cuando se muestran datos stale de un query key anterior mientras carga nuevos. Si los datos vienen del cache, no se aplica
+
+### Error de carga con reintento
+
+Si el `queryFn` falla (tras los reintentos de React Query), el DataTable muestra un `Alert` destructive
+(`role="alert"`, componente `DataTableError.tsx`) con "No se pudieron cargar los datos" y un botón
+"Reintentar" (`refetch`; mientras reintenta queda deshabilitado con spinner). Toolbar y filtros se
+conservan para poder cambiar el filtro (la key nueva dispara otro fetch y el aviso desaparece).
+
+- Sin datos nuevos: se oculta el cuerpo y la paginación cuenta 0; **no** se cae a `data` (el SSR inicial),
+  que serían datos de otro estado presentados como actuales.
+- Con datos previos (un refetch falló): se mantienen, atenuados (`opacity-60`, `data-stale="true"` en el
+  `TableBody`) y el aviso indica que pueden estar desactualizados.
+- Aplica solo con `queryFn`; modo SSR e in-memory no cambian. No requiere props nuevas.
 
 ### No re-fetchea al montar (evita la cola serial de Server Actions)
 

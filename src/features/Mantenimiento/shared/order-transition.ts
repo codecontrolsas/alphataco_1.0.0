@@ -9,6 +9,7 @@ import {
 } from '@/features/Mantenimiento/lib/order-status';
 import { findOpenMaterialRequests, openRequestsMessage } from '@/features/Mantenimiento/MaintenanceOrders/lib/order-materials';
 import { prisma } from '@/shared/lib/prisma';
+import { lockMaintenanceOrder } from './order-lock';
 
 type PrismaLike = Prisma.TransactionClient | typeof prisma;
 
@@ -81,4 +82,38 @@ export async function assertOrderTransition(
   }
 
   return current;
+}
+
+type OrderUpdateData = Omit<Prisma.maintenance_ordersUncheckedUpdateManyInput, 'status'>;
+
+/**
+ * Transición ATÓMICA de estado de un pedido: lockea la fila, valida la transición con la
+ * máquina de estados y escribe con el estado leído en el `where`, verificando `count`.
+ *
+ * `assertOrderTransition` sola lee y después el `update` no llevaba `status` en el `where`: dos
+ * transacciones sin lock podían pisarse. Acá el lock (idempotente si el caller ya lo tomó, mismo
+ * orden pedido → OT) y el `where` con el estado esperado cierran la carrera.
+ *
+ * Devuelve el estado previo (para el log de actividad). Lanza `OrderTransitionError` si el
+ * pedido cambió de estado mientras tanto.
+ */
+export async function transitionMaintenanceOrder(
+  tx: Prisma.TransactionClient,
+  orderId: string,
+  nextStatus: MaintenanceOrderStatus,
+  data: OrderUpdateData = {}
+): Promise<string | null> {
+  await lockMaintenanceOrder(tx, orderId);
+  const previous = await assertOrderTransition(tx, orderId, nextStatus);
+
+  const result = await tx.maintenance_orders.updateMany({
+    where: { id: orderId, ...(previous ? { status: previous } : {}) },
+    data: { ...data, status: nextStatus },
+  });
+
+  if (result.count !== 1) {
+    throw new OrderTransitionError('El pedido cambió de estado mientras se procesaba. Recargá e intentá de nuevo.');
+  }
+
+  return previous;
 }

@@ -7,8 +7,10 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
-import { tireRetreadLabels, tireTreadTypeLabels } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
 import { getTireTypesForSelect } from '@/features/Mantenimiento/Gomeria/Tipos/actions/actions.server';
+import { tireRetreadLabels, tireTreadTypeLabels } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
+import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
+import { DECIMAL_RE } from '@/features/Warehouses/schemas/stock-movement';
 import { TireRetreadLevel } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -16,15 +18,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
-import { DECIMAL_RE } from '@/features/Warehouses/schemas/stock-movement';
-import {
-  createTire,
-  getTireBrandsForSelect,
-  getTireWarehousesForSelect,
-  updateTire,
-  type TireListItem,
-} from '../actions/actions.server';
+import type { TireListItem } from '../actions/tire-list.server';
+import { createTire, updateTire } from '../actions/tire-mutations.server';
+import { getTireBrandsForSelect, getTireWarehousesForSelect } from '../actions/tire-selects.server';
 
 const logger = new Logger('TireForm');
 

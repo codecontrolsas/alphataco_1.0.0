@@ -1,263 +1,43 @@
 'use client';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { Check, ChevronsUpDown, Users, X } from 'lucide-react';
-import { useState } from 'react';
+import { ChevronsUpDown } from 'lucide-react';
 import { UseFormReturn } from 'react-hook-form';
+import type { EmployeeDeviation } from '../../../actions/validation.server';
 import type { EmployeeForForm } from '../../form-data.server';
+import { getSavedDeviationLabels, type DeviationContext } from './employee/deviation';
+import { EmployeeCommandList } from './employee/EmployeeCommandList';
+import { EmployeeRoleMultiSelect, EmployeeRoleSelect } from './employee/EmployeeRoleSelects';
+import { SelectedEmployeeItem } from './employee/SelectedEmployeeItem';
+import { isAssignedToCustomer } from './employee/useEmployeeOptions';
 import type { DailyReportRowFormValues } from './schema';
 
 interface EmployeeSectionProps {
   form: UseFormReturn<DailyReportRowFormValues>;
   employees: EmployeeForForm[];
   selectedCustomerId: string | null;
-  onOpenEmployeeSelector: () => void;
   disabled?: boolean;
-}
-
-interface EmployeeCommandListProps {
-  employees: EmployeeForForm[];
-  selectedCustomerId: string | null;
-  disabledEmployeeIds: string[];
-  emptyMessage?: string;
-  isSelected: (employeeId: string) => boolean;
-  onToggle: (employeeId: string) => void;
-}
-
-/** Lista de empleados agrupada por puesto, compartida por todos los selectores de la sección */
-function EmployeeCommandList({
-  employees,
-  selectedCustomerId,
-  disabledEmployeeIds,
-  emptyMessage = 'No se encontraron empleados.',
-  isSelected,
-  onToggle,
-}: EmployeeCommandListProps) {
-  return (
-    <Command>
-      <CommandInput placeholder="Buscar por legajo o nombre..." className="h-9" />
-      <CommandList>
-        <CommandEmpty>{emptyMessage}</CommandEmpty>
-        {selectedCustomerId && (
-          <div className="px-3 py-1.5 text-xs text-muted-foreground">
-            Los empleados en naranja no están asignados al cliente seleccionado.
-          </div>
-        )}
-        {(() => {
-          const positionsMap: Record<string, EmployeeForForm[]> = {};
-          employees.forEach((employee) => {
-            const position = employee.company_positions?.name ?? 'Sin posición';
-            if (!positionsMap[position]) positionsMap[position] = [];
-            positionsMap[position].push(employee);
-          });
-
-          return Object.keys(positionsMap)
-            .sort()
-            .map((position) => (
-              <CommandGroup key={position} heading={position.charAt(0).toUpperCase() + position.slice(1)}>
-                {positionsMap[position].map((employee) => {
-                  const isDisabled = disabledEmployeeIds.includes(employee.id);
-                  const isAssigned = employee.contractor_employee?.some(
-                    (ce) => ce.customers?.id === selectedCustomerId
-                  );
-                  return (
-                    <CommandItem
-                      value={`${employee.file} ${employee.lastname} ${employee.firstname}`}
-                      key={employee.id}
-                      disabled={isDisabled}
-                      onSelect={() => {
-                        if (isDisabled) return;
-                        onToggle(employee.id);
-                      }}
-                      className={cn(
-                        isDisabled && 'opacity-50 cursor-not-allowed',
-                        !isAssigned && 'text-orange-700 bg-orange-50 hover:bg-orange-100'
-                      )}
-                    >
-                      <div className="flex items-center justify-between w-full">
-                        <div className="flex items-center">
-                          <Check
-                            className={cn(
-                              'mr-2 h-4 w-4',
-                              !isAssigned && 'text-orange-600',
-                              isSelected(employee.id) ? 'opacity-100' : 'opacity-0'
-                            )}
-                          />
-                          [{employee.file}] {employee.lastname} {employee.firstname}
-                        </div>
-                        {!isAssigned && (
-                          <Badge variant="outline" className="ml-2 bg-orange-100 text-orange-800 border-orange-300">
-                            No asignado
-                          </Badge>
-                        )}
-                      </div>
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
-            ));
-        })()}
-      </CommandList>
-    </Command>
-  );
-}
-
-interface EmployeeRoleSelectProps {
-  employees: EmployeeForForm[];
-  value: string | undefined;
-  onChange: (value: string) => void;
-  label: string;
-  placeholder: string;
-  disabledEmployeeIds?: string[];
-  selectedCustomerId: string | null;
-}
-
-function EmployeeRoleSelect({
-  employees,
-  value,
-  onChange,
-  label,
-  placeholder,
-  disabledEmployeeIds = [],
-  selectedCustomerId,
-}: EmployeeRoleSelectProps) {
-  const [open, setOpen] = useState(false);
-
-  const selected = employees.find((e) => e.id === value);
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-sm font-medium">{label}</span>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            role="combobox"
-            className={cn('w-full justify-between', !value && 'text-muted-foreground')}
-          >
-            {selected ? `[${selected.file}] ${selected.lastname} ${selected.firstname}` : placeholder}
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-full p-0">
-          <EmployeeCommandList
-            employees={employees}
-            selectedCustomerId={selectedCustomerId}
-            disabledEmployeeIds={disabledEmployeeIds}
-            isSelected={(id) => id === value}
-            onToggle={(id) => {
-              onChange(id);
-              setOpen(false);
-            }}
-          />
-        </PopoverContent>
-      </Popover>
-    </div>
-  );
-}
-
-interface EmployeeRoleMultiSelectProps {
-  employees: EmployeeForForm[];
-  value: string[];
-  onChange: (value: string[]) => void;
-  label: string;
-  placeholder: string;
-  disabledEmployeeIds?: string[];
-  selectedCustomerId: string | null;
-}
-
-/** Selector múltiple para roles que admiten varios empleados (ayudantes/ATG) */
-function EmployeeRoleMultiSelect({
-  employees,
-  value,
-  onChange,
-  label,
-  placeholder,
-  disabledEmployeeIds = [],
-  selectedCustomerId,
-}: EmployeeRoleMultiSelectProps) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-sm font-medium">{label}</span>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            role="combobox"
-            className={cn('w-full justify-between', value.length === 0 && 'text-muted-foreground')}
-          >
-            {value.length > 0 ? `${value.length} ayudante${value.length > 1 ? 's' : ''} seleccionado${value.length > 1 ? 's' : ''}` : placeholder}
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-full p-0">
-          <EmployeeCommandList
-            employees={employees}
-            selectedCustomerId={selectedCustomerId}
-            disabledEmployeeIds={disabledEmployeeIds}
-            isSelected={(id) => value.includes(id)}
-            onToggle={(id) => {
-              onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id]);
-            }}
-          />
-        </PopoverContent>
-      </Popover>
-
-      {/* Badges de empleados seleccionados */}
-      {value.length > 0 && (
-        <div className="flex flex-wrap gap-2 mt-1">
-          {value.map((employeeId) => {
-            const employee = employees.find((e) => e.id === employeeId);
-            if (!employee) return null;
-            const isAssigned = employee.contractor_employee?.some((ce) => ce.customers?.id === selectedCustomerId);
-            return (
-              <div
-                key={employeeId}
-                className={cn(
-                  'text-xs px-2 py-1 rounded-md flex items-center gap-1',
-                  isAssigned ? 'bg-primary/10 text-primary' : 'bg-orange-100 text-orange-800 border border-orange-300'
-                )}
-              >
-                [{employee.file}] {employee.lastname} {employee.firstname}
-                {!isAssigned && (
-                  <Badge
-                    variant="outline"
-                    className="ml-1 bg-orange-200 text-orange-900 border-orange-400 text-[10px] px-1 py-0"
-                  >
-                    No asignado
-                  </Badge>
-                )}
-                <button
-                  type="button"
-                  onClick={() => onChange(value.filter((id) => id !== employeeId))}
-                  className="ml-1 hover:opacity-80"
-                >
-                  <X className="h-3 w-3 text-danger-subtle-foreground" />
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
+  /** Fila que se edita. Sin ella (alta) no hay avisos de desvío. */
+  rowId?: string | null;
+  /** Empleados ya guardados en la fila: solo de ellos se muestran avisos de desvío. */
+  savedEmployeeIds?: string[];
+  getEmployeeDeviation?: (employeeId: string, rowId: string) => EmployeeDeviation | null;
 }
 
 export function EmployeeSection({
   form,
   employees,
   selectedCustomerId,
-  onOpenEmployeeSelector,
   disabled = false,
+  rowId = null,
+  savedEmployeeIds = [],
+  getEmployeeDeviation,
 }: EmployeeSectionProps) {
+  const deviation: DeviationContext = { rowId, savedEmployeeIds, getEmployeeDeviation };
   // El turno (Día/Noche) de la jornada 12h se persiste como campo propio del form
   // (`shift_12h`), por lo que se recuerda aunque la fila no tenga personal asignado.
   // El valor lo carga el form al editar (ver index.tsx); acá solo lo leemos/escribimos.
@@ -278,10 +58,13 @@ export function EmployeeSection({
 
   if (hasRoleFields) {
     return (
-      <div className="space-y-4">
-        <div className="text-sm font-medium text-muted-foreground mb-2">
-          {is12Hours ? 'Asignación de Personal — Jornada 12 Horas' : 'Asignación de Personal — Jornada 24 Horas'}
-        </div>
+      <section aria-labelledby="row-form-personnel" className="space-y-4 rounded-lg border bg-card p-4">
+        <h3 id="row-form-personnel" className="text-sm font-semibold text-foreground">
+          Personal
+          <span className="text-muted-foreground font-normal">
+            {is12Hours ? ' · Jornada 12 horas' : ' · Jornada 24 horas'}
+          </span>
+        </h3>
 
         {/* Selector Día/Noche para Jornada 12h */}
         {is12Hours && (
@@ -333,6 +116,7 @@ export function EmployeeSection({
                       [choferNocheId, ...ayudanteDiaIds, ...ayudanteNocheIds].filter(Boolean) as string[]
                     }
                     selectedCustomerId={selectedCustomerId}
+                    deviation={deviation}
                   />
                   <FormMessage />
                 </FormItem>
@@ -349,10 +133,12 @@ export function EmployeeSection({
                     onChange={field.onChange}
                     label="Ayudantes de Día (opcional)"
                     placeholder="Seleccionar ayudantes de día"
+                    itemRoleLabel="Ayudante de día"
                     disabledEmployeeIds={
                       [choferDiaId, choferNocheId, ...ayudanteNocheIds].filter(Boolean) as string[]
                     }
                     selectedCustomerId={selectedCustomerId}
+                    deviation={deviation}
                   />
                   <FormMessage />
                 </FormItem>
@@ -379,6 +165,7 @@ export function EmployeeSection({
                       [choferDiaId, ...ayudanteDiaIds, ...ayudanteNocheIds].filter(Boolean) as string[]
                     }
                     selectedCustomerId={selectedCustomerId}
+                    deviation={deviation}
                   />
                   <FormMessage />
                 </FormItem>
@@ -395,10 +182,12 @@ export function EmployeeSection({
                     onChange={field.onChange}
                     label="Ayudantes de Noche (opcional)"
                     placeholder="Seleccionar ayudantes de noche"
+                    itemRoleLabel="Ayudante de noche"
                     disabledEmployeeIds={
                       [choferDiaId, choferNocheId, ...ayudanteDiaIds].filter(Boolean) as string[]
                     }
                     selectedCustomerId={selectedCustomerId}
+                    deviation={deviation}
                   />
                   <FormMessage />
                 </FormItem>
@@ -407,16 +196,16 @@ export function EmployeeSection({
           </>
         )}
 
-        <Button type="button" variant="outline" size="sm" className="gap-2" onClick={onOpenEmployeeSelector}>
-          <Users className="h-4 w-4" />
-          Seleccionar por característica
-        </Button>
-      </div>
+      </section>
     );
   }
 
   // Standard multi-select for other shift types
   return (
+    <section aria-labelledby="row-form-personnel" className="space-y-4 rounded-lg border bg-card p-4">
+      <h3 id="row-form-personnel" className="text-sm font-semibold text-foreground">
+        Personal
+      </h3>
     <FormField
       control={form.control}
       name="employees"
@@ -442,7 +231,7 @@ export function EmployeeSection({
                       : selectedCustomerId
                         ? 'Seleccionar empleados'
                         : 'Seleccione un cliente primero'}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" aria-hidden="true" />
                   </Button>
                 </FormControl>
               </PopoverTrigger>
@@ -469,64 +258,32 @@ export function EmployeeSection({
                 />
               </PopoverContent>
             </Popover>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-1 shrink-0"
-              onClick={onOpenEmployeeSelector}
-              disabled={!selectedCustomerId}
-              title="Seleccionar por característica"
-            >
-              <Users className="h-4 w-4" />
-            </Button>
           </div>
 
-          {/* Selected employees badges */}
+          {/* Personas elegidas */}
           {selectedEmployeeIds.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-2">
+            <ul className="mt-2 space-y-2">
               {selectedEmployeeIds.map((employeeId) => {
                 const employee = employees.find((e) => e.id === employeeId);
                 if (!employee) return null;
-                const isAssigned = employee.contractor_employee?.some((ce) => ce.customers?.id === selectedCustomerId);
                 return (
-                  <div
+                  <SelectedEmployeeItem
                     key={employeeId}
-                    className={cn(
-                      'text-xs px-2 py-1 rounded-md flex items-center gap-1',
-                      isAssigned
-                        ? 'bg-primary/10 text-primary'
-                        : 'bg-orange-100 text-orange-800 border border-orange-300'
-                    )}
-                  >
-                    [{employee.file}] {employee.lastname} {employee.firstname}
-                    {!isAssigned && (
-                      <Badge
-                        variant="outline"
-                        className="ml-1 bg-orange-200 text-orange-900 border-orange-400 text-[10px] px-1 py-0"
-                      >
-                        No asignado
-                      </Badge>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const newValues = (field.value ?? []).filter((id) => id !== employeeId);
-                        field.onChange(newValues);
-                      }}
-                      className="ml-1 hover:opacity-80"
-                    >
-                      <X className="h-3 w-3 text-danger-subtle-foreground" />
-                    </button>
-                  </div>
+                    employee={employee}
+                    roleLabel={employee.company_positions?.name ?? 'Sin posición'}
+                    isAssigned={isAssignedToCustomer(employee, selectedCustomerId)}
+                    deviationLabels={getSavedDeviationLabels(employeeId, deviation)}
+                    onRemove={() => field.onChange((field.value ?? []).filter((id) => id !== employeeId))}
+                  />
                 );
               })}
-            </div>
+            </ul>
           )}
 
           <FormMessage />
         </FormItem>
       )}
     />
+    </section>
   );
 }

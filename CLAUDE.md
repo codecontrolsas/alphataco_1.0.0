@@ -46,8 +46,6 @@ npx prisma generate      # Regenerate Prisma client
 # Testing
 npm test                 # Unit tests (vitest)
 npm run test:auth        # Integracion de auth (claims, credenciales, invitacion) vs. el compose
-npm run test:e2e         # Run Cypress E2E tests headless
-npm run test:e2e:open    # Open Cypress test runner
 ```
 
 ## Slash Commands
@@ -605,6 +603,14 @@ Complementos aprendidos en la misma tanda:
 - Tras crear un registro y navegar, el botón de guardar queda bloqueado (estado `isCreated`): `isSubmitting` vuelve a `false` antes de que termine la navegación y permite crear dos veces.
 - Toda pantalla nueva se verifica también a 390 px midiendo desborde horizontal (`documentElement.scrollWidth > clientWidth`); en móvil las pestañas con acciones necesitan `flex-wrap`.
 - Fechas de timestamps en tablas: `formatArgentinaDay`, nunca `moment(value)` (corre el día en hora argentina).
+
+### Tests: ni escribirlos ni correrlos hasta que el usuario lo diga — también los agentes delegados
+
+Aunque el usuario haya pedido antes "testeos para certificar", cuando dice _"los tests los dejamos de último… NO LOS HAGAS aún hasta que te diga"_ rige eso: **ningún agente escribe ni corre tests** (ni vitest, ni pgTAP, ni de equivalencia) y el prompt de cada agente delegado lo dice explícito. "Testear el funcionamiento" significa **probarlo** (navegador, consultas a `alphataco_test`, scripts descartables), no dejar archivos `*.test.ts`. Los tests que ya existían o que se escribieron antes del aviso se dejan tal cual, salvo lo que exija el compilador.
+
+### Un archivo de acciones importado desde un `'use client'` DEBE llevar `'use server'`
+
+Al reescribir `multi-upload-data.server.ts` se perdió la directiva `'use server'`. `tsc` no se entera, pero `next build` falla con 34 errores _"You're importing a component that needs server-only"_ porque el componente cliente (`NewDocumentMulti`) arrastra al bundle del navegador todo lo que importa el archivo (auth, mail, Prisma). Regla: toda server action consumida por un componente cliente vive en un archivo con `'use server'` en la primera línea; los helpers `server-only` (permisos, scopes) solo los importan archivos de servidor. Tras tocar o mover acciones, correr `npx next build` y no confiar solo en `tsc`.
 
 ---
 

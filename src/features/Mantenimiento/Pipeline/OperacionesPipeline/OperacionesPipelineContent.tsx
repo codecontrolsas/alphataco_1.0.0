@@ -26,6 +26,7 @@ const OPERACIONES_STEPS: PipelineStep[] = [
     label: 'Validar Solicitud',
     description: 'Solicitudes nuevas pendientes de tu aprobación',
     iconName: 'ClipboardCheck',
+    permissionTab: 'maintenance_requests',
   },
   {
     id: 'in_workshop',
@@ -33,23 +34,43 @@ const OPERACIONES_STEPS: PipelineStep[] = [
     label: 'Seguimiento',
     description: 'Equipos pendientes de ingreso y actualmente en taller',
     iconName: 'Eye',
+    permissionTab: 'seguimiento_taller',
   },
 ];
 
 interface OperacionesPipelineContentProps {
   searchParams: Record<string, string | string[] | undefined>;
+  /** Mapa `modulo:tab:accion -> boolean` del usuario; cada paso exige el `view` de SU tab. */
+  permissions: Record<string, boolean>;
 }
 
-export async function OperacionesPipelineContent({ searchParams }: OperacionesPipelineContentProps) {
+export async function OperacionesPipelineContent({ searchParams, permissions }: OperacionesPipelineContentProps) {
+  const visibleSteps = OPERACIONES_STEPS.filter(
+    (step) => step.permissionTab && permissions[`mantenimiento:${step.permissionTab}:view`] === true
+  );
+
+  if (visibleSteps.length === 0) {
+    return (
+      <div className="flex items-center justify-center p-8 text-center">
+        <div className="space-y-2">
+          <p className="text-muted-foreground font-medium">Sin acceso</p>
+          <p className="text-muted-foreground text-sm">No tenés permisos para ver ningún paso de Operaciones.</p>
+        </div>
+      </div>
+    );
+  }
+
   const counts = await getOperacionesPipelineCounts();
 
   // Determinar paso inicial desde la URL o usar el default
   const rawStep = searchParams[PARAM_NAME];
   const initialStep =
-    typeof rawStep === 'string' && OPERACIONES_STEPS.some((s) => s.id === rawStep) ? rawStep : DEFAULT_STEP;
+    typeof rawStep === 'string' && visibleSteps.some((s) => s.id === rawStep)
+      ? rawStep
+      : (visibleSteps.find((s) => s.id === DEFAULT_STEP) ?? visibleSteps[0]).id;
 
   // Todos los pasos se renderizan simultáneamente (show/hide con CSS)
-  const stepContents: PipelineStepEntry[] = [
+  const allStepContents: PipelineStepEntry[] = [
     {
       id: 'validate',
       content: (
@@ -68,9 +89,12 @@ export async function OperacionesPipelineContent({ searchParams }: OperacionesPi
     },
   ];
 
+  const visibleIds = new Set(visibleSteps.map((step) => step.id));
+  const stepContents = allStepContents.filter((entry) => visibleIds.has(entry.id));
+
   return (
     <PipelineLayout
-      steps={OPERACIONES_STEPS}
+      steps={visibleSteps}
       counts={counts}
       initialStep={initialStep}
       paramName={PARAM_NAME}

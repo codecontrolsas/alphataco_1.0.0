@@ -2,35 +2,35 @@
 
 ## Variables de entorno
 
-| Variable                       | Pública / Servidor | Para qué                                                                 |
-| ------------------------------- | ------------------- | ------------------------------------------------------------------------- |
-| `BETTER_AUTH_SECRET`            | Servidor             | Firma las cookies de sesión de Better Auth (`openssl rand -base64 32`). Cambiarla invalida todas las sesiones abiertas. |
-| `GOOGLE_CLIENT_ID`              | Servidor             | OAuth de Google (opcional). Vacía = el botón de Google no se muestra.     |
-| `GOOGLE_CLIENT_SECRET`          | Servidor             | OAuth de Google (opcional).                                               |
-| `DATABASE_URL`                  | Servidor             | Connection string de Prisma (pooler).                                     |
-| `DIRECT_URL`                    | Servidor             | Connection string directa de Prisma (migraciones).                        |
-| `NEXT_PUBLIC_PROJECT_URL`       | Pública              | URL pública del proyecto/app.                                             |
-| `NEXT_PUBLIC_BASE_URL`          | Pública              | Base URL usada en links/redirects del front.                              |
-| `NEXT_PUBLIC_PREPARTE_BUCKET`   | Pública              | Nombre del bucket de Storage para preparte.                               |
-| `NEXT_PUBLIC_SHOW_LOGS`         | Pública              | `'true'`/`'false'` — activa el logger custom (`src/lib/logger.ts`).       |
-| `NEXT_PUBLIC_POSTHOG_KEY`       | Pública              | Project API key de PostHog (pública por diseño).                          |
-| `NEXT_PUBLIC_POSTHOG_HOST`      | Pública              | Host de PostHog.                                                          |
-| `JOBS_TOKEN`                    | Servidor             | Token `Bearer` con el que el contenedor `cron` autentica contra `/api/jobs/*`. Generar con `openssl rand -hex 32`. **Vacío = los tres endpoints rechazan todo con 401** y los jobs no corren. |
-| `SMTP_HOST`                     | Servidor             | Servidor SMTP. Único emisor: `src/shared/lib/mail/transport.ts`. Vacío = los mails no se envían y el contenido se loguea (el cron sigue corriendo y anota «no enviado» en `jobs_runs`). |
-| `SMTP_PORT`                     | Servidor             | Puerto SMTP.                                                              |
-| `SMTP_USER`                     | Servidor             | Usuario SMTP.                                                             |
-| `SMTP_PASS`                     | Servidor             | Password SMTP.                                                            |
-| `SMTP_SECURE`                   | Servidor             | `'true'`/`'false'` — TLS en la conexión SMTP.                             |
-| `SMTP_FROM`                     | Servidor             | Dirección del remitente. Sin ella se usa `SMTP_USER`.                     |
-| `EMAIL_FROM_NAME`               | Servidor             | Nombre del remitente (`fromAddress()` en `src/shared/lib/mail/transport.ts`). |
-| `MAILPIT_SMTP_PORT`             | Servidor             | Puerto SMTP del servicio `mailpit` del compose (perfil `mail`, solo desarrollo). |
-| `MAILPIT_WEB_PORT`              | Servidor             | Puerto de la web/API de `mailpit`.                                        |
-| `TASKAPP_BASE_URL`              | Servidor             | Base URL del backend de tickets (Centro de Ayuda).                        |
-| `TASKAPP_PROJECT_API_KEY`       | Servidor             | API key del proyecto en TaskApp.                                          |
-| `FISCAL_SECRETS_KEY`            | Servidor             | Clave maestra AES-256-GCM (32 bytes base64, `openssl rand -base64 32`) que cifra la clave privada del certificado de ARCA y los tickets de WSAA. Solo en el entorno, nunca en la base. Rotación: la vigente lleva `FISCAL_SECRETS_KEY_VERSION` y las anteriores se dejan como `FISCAL_SECRETS_KEY_V<n>`. Si se pierde, hay que generar un certificado nuevo (las facturas no se pierden). |
-| `ARCA_MODE`                     | Servidor             | `mock` = ARCA simulado: demos y desarrollo sin certificado. CAE ficticio, comprobantes marcados "simulado" y PDF con marca de agua. Vacío = ARCA real. **La instancia demo debe tenerlo en `mock`.** |
-| `ARCA_MOCK_SCENARIO`            | Servidor             | Solo con `ARCA_MODE=mock`: `reject` fuerza un rechazo y `timeout` un corte de comunicación (para mostrar/probar los estados rechazada y pendiente). |
-| `ARCA_ALLOW_PRODUCTION`         | Servidor             | `true` SOLO en el despliegue de producción. Sin esto ninguna instancia (dev, demo) puede emitir comprobantes con validez fiscal, aunque la empresa tenga el ambiente en producción. |
+| Variable                      | Pública / Servidor | Para qué                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`          | Servidor           | Firma las cookies de sesión de Better Auth (`openssl rand -base64 32`). Cambiarla invalida todas las sesiones abiertas.                                                                                                                                                                                                                                                                   |
+| `GOOGLE_CLIENT_ID`            | Servidor           | OAuth de Google (opcional). Vacía = el botón de Google no se muestra.                                                                                                                                                                                                                                                                                                                     |
+| `GOOGLE_CLIENT_SECRET`        | Servidor           | OAuth de Google (opcional).                                                                                                                                                                                                                                                                                                                                                               |
+| `DATABASE_URL`                | Servidor           | Connection string de Prisma (pooler).                                                                                                                                                                                                                                                                                                                                                     |
+| `DIRECT_URL`                  | Servidor           | Connection string directa de Prisma (migraciones).                                                                                                                                                                                                                                                                                                                                        |
+| `NEXT_PUBLIC_PROJECT_URL`     | Pública            | URL pública del proyecto/app.                                                                                                                                                                                                                                                                                                                                                             |
+| `NEXT_PUBLIC_BASE_URL`        | Pública            | Base URL usada en links/redirects del front.                                                                                                                                                                                                                                                                                                                                              |
+| `NEXT_PUBLIC_PREPARTE_BUCKET` | Pública            | Nombre del bucket de Storage para preparte.                                                                                                                                                                                                                                                                                                                                               |
+| `NEXT_PUBLIC_SHOW_LOGS`       | Pública            | `'true'`/`'false'` — activa el logger custom (`src/lib/logger.ts`).                                                                                                                                                                                                                                                                                                                       |
+| `NEXT_PUBLIC_POSTHOG_KEY`     | Pública            | Project API key de PostHog (pública por diseño).                                                                                                                                                                                                                                                                                                                                          |
+| `NEXT_PUBLIC_POSTHOG_HOST`    | Pública            | Host de PostHog.                                                                                                                                                                                                                                                                                                                                                                          |
+| `JOBS_TOKEN`                  | Servidor           | Token `Bearer` con el que el contenedor `cron` autentica contra `/api/jobs/*`. Generar con `openssl rand -hex 32`. **Vacío = los tres endpoints rechazan todo con 401** y los jobs no corren.                                                                                                                                                                                             |
+| `SMTP_HOST`                   | Servidor           | Servidor SMTP. Único emisor: `src/shared/lib/mail/transport.ts`. Vacío = los mails no se envían y el contenido se loguea (el cron sigue corriendo y anota «no enviado» en `jobs_runs`).                                                                                                                                                                                                   |
+| `SMTP_PORT`                   | Servidor           | Puerto SMTP.                                                                                                                                                                                                                                                                                                                                                                              |
+| `SMTP_USER`                   | Servidor           | Usuario SMTP.                                                                                                                                                                                                                                                                                                                                                                             |
+| `SMTP_PASS`                   | Servidor           | Password SMTP.                                                                                                                                                                                                                                                                                                                                                                            |
+| `SMTP_SECURE`                 | Servidor           | `'true'`/`'false'` — TLS en la conexión SMTP.                                                                                                                                                                                                                                                                                                                                             |
+| `SMTP_FROM`                   | Servidor           | Dirección del remitente. Sin ella se usa `SMTP_USER`.                                                                                                                                                                                                                                                                                                                                     |
+| `EMAIL_FROM_NAME`             | Servidor           | Nombre del remitente (`fromAddress()` en `src/shared/lib/mail/transport.ts`).                                                                                                                                                                                                                                                                                                             |
+| `MAILPIT_SMTP_PORT`           | Servidor           | Puerto SMTP del servicio `mailpit` del compose (perfil `mail`, solo desarrollo).                                                                                                                                                                                                                                                                                                          |
+| `MAILPIT_WEB_PORT`            | Servidor           | Puerto de la web/API de `mailpit`.                                                                                                                                                                                                                                                                                                                                                        |
+| `TASKAPP_BASE_URL`            | Servidor           | Base URL del backend de tickets (Centro de Ayuda).                                                                                                                                                                                                                                                                                                                                        |
+| `TASKAPP_PROJECT_API_KEY`     | Servidor           | API key del proyecto en TaskApp.                                                                                                                                                                                                                                                                                                                                                          |
+| `FISCAL_SECRETS_KEY`          | Servidor           | Clave maestra AES-256-GCM (32 bytes base64, `openssl rand -base64 32`) que cifra la clave privada del certificado de ARCA y los tickets de WSAA. Solo en el entorno, nunca en la base. Rotación: la vigente lleva `FISCAL_SECRETS_KEY_VERSION` y las anteriores se dejan como `FISCAL_SECRETS_KEY_V<n>`. Si se pierde, hay que generar un certificado nuevo (las facturas no se pierden). |
+| `ARCA_MODE`                   | Servidor           | `mock` = ARCA simulado: demos y desarrollo sin certificado. CAE ficticio, comprobantes marcados "simulado" y PDF con marca de agua. Vacío = ARCA real. **La instancia demo debe tenerlo en `mock`.**                                                                                                                                                                                      |
+| `ARCA_MOCK_SCENARIO`          | Servidor           | Solo con `ARCA_MODE=mock`: `reject` fuerza un rechazo y `timeout` un corte de comunicación (para mostrar/probar los estados rechazada y pendiente).                                                                                                                                                                                                                                       |
+| `ARCA_ALLOW_PRODUCTION`       | Servidor           | `true` SOLO en el despliegue de producción. Sin esto ninguna instancia (dev, demo) puede emitir comprobantes con validez fiscal, aunque la empresa tenga el ambiente en producción.                                                                                                                                                                                                       |
 
 Ninguna variable `NEXT_PUBLIC_*` contiene un secreto: la key de PostHog es pública por diseño (es una clave de proyecto, no una credencial privilegiada). Los secretos de auth (`BETTER_AUTH_SECRET`, `GOOGLE_CLIENT_SECRET`) son de servidor y nunca se prefijan con `NEXT_PUBLIC_`.
 
@@ -40,19 +40,20 @@ Los cuatro jobs corren dentro de la app, disparados por el servicio `cron` del c
 `crond` + `curl`, `TZ=America/Argentina/Buenos_Aires`). No hay `pg_cron`, `net.http_post` ni
 edge functions: P5 los reemplazó a todos.
 
-| Cuándo (hora AR) | Endpoint | Qué hace |
-| ----------------- | --------- | --------- |
-| lunes 08:00        | `GET /api/jobs/documents-expiry`        | Resumen semanal de vencimientos de documentos. Un correo **por empresa**. |
-| lunes 08:05        | `GET /api/jobs/warehouse-batch-expiry`  | Lotes de Almacenes vencidos y por vencer (30 días), con saldo. Un correo **por empresa**, solo si hay algo que avisar (destinatarios: `stock_batch_expiry`). |
-| todos los días 07:00 | `GET /api/jobs/daily-report-deviations` | Desvíos del parte diario del día. Un correo **por empresa**, solo si hay desvíos. |
-| todos los días 00:30 | `GET /api/jobs/daily-indicators`        | Cierra partes diarios, marca prepartes vencidos y persiste los 11 indicadores del día por empresa en `daily_indicators`. No manda correos. |
+| Cuándo (hora AR)     | Endpoint                                | Qué hace                                                                                                                                                                                                     |
+| -------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| lunes 08:00          | `GET /api/jobs/documents-expiry`        | Resumen semanal de vencimientos de documentos. Un correo **por empresa**.                                                                                                                                    |
+| lunes 08:05          | `GET /api/jobs/warehouse-batch-expiry`  | Lotes de Almacenes vencidos y por vencer (30 días), con saldo. Un correo **por empresa**, solo si hay algo que avisar (destinatarios: `stock_batch_expiry`).                                                 |
+| todos los días 07:00 | `GET /api/jobs/daily-report-deviations` | Desvíos del parte diario del día. Un correo **por empresa**, solo si hay desvíos.                                                                                                                            |
+| todos los días 00:30 | `GET /api/jobs/daily-indicators`        | Cierra partes diarios, marca prepartes vencidos y persiste los 11 indicadores del día por empresa en `daily_indicators`. No manda correos.                                                                   |
+| todos los días 00:10 | `GET /api/jobs/documents-status`        | Recalcula el cache de status documental (`employees.status` / `vehicles.status`) de cada empresa con el motor de cumplimiento y escribe solo lo que cambió. Informa `changed` por empresa. No manda correos. |
 
 El crontab (`docker/cron/crontab`) llama con
 `curl --fail-with-body -sS -H "Authorization: Bearer $JOBS_TOKEN"`. Son `GET` porque `curl`
 sin `-X` manda `GET`; los mismos handlers están expuestos como `POST` para dispararlos a mano.
 
 `--fail-with-body` y no `-f`: los dos fallan con exit != 0 ante HTTP ≥ 400, pero `-f` es
-*fail silently* y **descarta la respuesta**, así que en el log de `crond` sólo quedaría
+_fail silently_ y **descarta la respuesta**, así que en el log de `crond` sólo quedaría
 `curl: (22)`. Con `--fail-with-body` aparece además el JSON con el detalle por empresa:
 
 ```bash
@@ -102,22 +103,22 @@ manda "por las dudas".
 Cada corrida deja filas en `jobs_runs` (`job`, `run_key`, `company_id`, `status`, `attempts`,
 `started_at`, `finished_at`, `error`, `metadata`):
 
-| `run_key` | Qué es |
-| ---------- | ------- |
-| `corrida:<fecha AR>` | Bitácora de la corrida completa. Se abre ANTES de consultar nada, así que un fallo previo al bucle (base caída, pool agotado) también queda registrado. **No es candado**: no bloquea un segundo disparo. |
-| `<company_id>:<fecha AR>` | Una por empresa. **Es el candado de idempotencia.** |
-| `mantenimiento:<fecha AR>` | El paso global del job diario (cierre de partes y prepartes). |
+| `run_key`                  | Qué es                                                                                                                                                                                                    |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `corrida:<fecha AR>`       | Bitácora de la corrida completa. Se abre ANTES de consultar nada, así que un fallo previo al bucle (base caída, pool agotado) también queda registrado. **No es candado**: no bloquea un segundo disparo. |
+| `<company_id>:<fecha AR>`  | Una por empresa. **Es el candado de idempotencia.**                                                                                                                                                       |
+| `mantenimiento:<fecha AR>` | El paso global del job diario (cierre de partes y prepartes).                                                                                                                                             |
 
 La clave por empresa se reclama con `INSERT ... ON CONFLICT` **antes** de trabajar: por eso
 correr un job dos veces el mismo día no manda el correo dos veces. Qué se puede volver a
 reclamar:
 
-| `status` | ¿Reclamable? | Por qué |
-| --------- | ------------- | -------- |
-| `ok`      | **No**        | El trabajo se hizo. Es lo que impide reenviar un correo ya enviado. |
-| `error`   | Sí            | Falló; el siguiente disparo reintenta **sólo** esa empresa. |
-| `skipped` | Sí            | No hubo trabajo (sin parte diario, sin destinatarios). Si cargás los destinatarios a media mañana y redisparás, la empresa se reintenta en vez de esperar a mañana. |
-| `running` | Sólo pasada 1 h | Evita que dos disparos simultáneos dupliquen, y que un proceso muerto deje la clave trabada para siempre. |
+| `status`  | ¿Reclamable?    | Por qué                                                                                                                                                             |
+| --------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ok`      | **No**          | El trabajo se hizo. Es lo que impide reenviar un correo ya enviado.                                                                                                 |
+| `error`   | Sí              | Falló; el siguiente disparo reintenta **sólo** esa empresa.                                                                                                         |
+| `skipped` | Sí              | No hubo trabajo (sin parte diario, sin destinatarios). Si cargás los destinatarios a media mañana y redisparás, la empresa se reintenta en vez de esperar a mañana. |
+| `running` | Sólo pasada 1 h | Evita que dos disparos simultáneos dupliquen, y que un proceso muerto deje la clave trabada para siempre.                                                           |
 
 Es el único rastro confiable: el `Logger` del repo sólo emite con `NEXT_PUBLIC_SHOW_LOGS=true`.
 
@@ -176,12 +177,12 @@ bash scripts/dev-up.sh   # levanta postgres, minio y minio-init (crea los bucket
 La autenticación corre dentro de la app (P4): no hay servicio externo. Las tablas (`auth_user`,
 `auth_session`, `auth_account`, `auth_verification`) viven en el mismo Postgres del compose.
 
-| Variable               | Para qué sirve                                                                                     |
-| ---------------------- | ---------------------------------------------------------------------------------------------------- |
-| `BETTER_AUTH_SECRET`   | Firma las cookies de sesión. Obligatoria. Generar con `openssl rand -base64 32`; cambiarla cierra todas las sesiones abiertas. |
-| `NEXT_PUBLIC_BASE_URL` | URL base de la app. De ahí salen el callback de OAuth y los enlaces de invitación/recuperación.     |
-| `GOOGLE_CLIENT_ID`     | Opcional. Sin ella el botón "Iniciar sesión con Google" no se muestra.                              |
-| `GOOGLE_CLIENT_SECRET` | Opcional, par de la anterior. Redirect URI a registrar en Google Cloud: `<NEXT_PUBLIC_BASE_URL>/api/auth/callback/google`. |
+| Variable               | Para qué sirve                                                                                                                         |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`   | Firma las cookies de sesión. Obligatoria. Generar con `openssl rand -base64 32`; cambiarla cierra todas las sesiones abiertas.         |
+| `NEXT_PUBLIC_BASE_URL` | URL base de la app. De ahí salen el callback de OAuth y los enlaces de invitación/recuperación.                                        |
+| `GOOGLE_CLIENT_ID`     | Opcional. Sin ella el botón "Iniciar sesión con Google" no se muestra.                                                                 |
+| `GOOGLE_CLIENT_SECRET` | Opcional, par de la anterior. Redirect URI a registrar en Google Cloud: `<NEXT_PUBLIC_BASE_URL>/api/auth/callback/google`.             |
 | `SMTP_*`               | Invitación de usuario y recuperación de contraseña (`src/shared/lib/mail/`). Vacías = el mail no se envía y el enlace queda en el log. |
 
 No hay registro abierto: los usuarios se dan de alta por invitación desde Empresa → Usuarios.
@@ -198,18 +199,18 @@ moverlo a la base.
 no la sube al nivel raíz por su cuenta. No se usa en `src/`, pero sacarla rompe el build con
 `Cannot find package 'jose'`.
 
-Para probar los cinco flujos de auth contra el compose: `npm run test:auth` (integración) y el spec
-`cypress/e2e/auth/p4-auth-flows.cy.ts` con los datos de `node scripts/seed-auth-fixtures.ts`.
+Para probar los cinco flujos de auth contra el compose: `npm run test:auth` (integración), con los datos de
+`node scripts/seed-auth-fixtures.ts`.
 
 ### Storage (MinIO): variables
 
-| Variable               | Para qué sirve                                                                                                              |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `S3_ACCESS_KEY`        | Usuario de MinIO. Es también el `MINIO_ROOT_USER` del servicio `minio` y lo usa `minio-init` para crear los buckets.        |
-| `S3_SECRET_KEY`        | Contraseña de MinIO (`MINIO_ROOT_PASSWORD`). Mínimo 8 caracteres.                                                            |
-| `S3_REGION`            | Región que firma el SDK. MinIO la ignora, pero el SDK la exige. Default `us-east-1`.                                         |
-| `S3_FORCE_PATH_STYLE`  | `true` (default): el bucket va en el path. MinIO no resuelve buckets por subdominio.                                         |
-| `S3_ENDPOINT`          | Dónde está MinIO. **Sólo lo usa el servidor.** El servicio `app` lo fija a `http://minio:9000`; para `npm run dev` fuera de Docker, apuntarlo al puerto publicado (`MINIO_PORT`). |
+| Variable              | Para qué sirve                                                                                                                                                                    |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `S3_ACCESS_KEY`       | Usuario de MinIO. Es también el `MINIO_ROOT_USER` del servicio `minio` y lo usa `minio-init` para crear los buckets.                                                              |
+| `S3_SECRET_KEY`       | Contraseña de MinIO (`MINIO_ROOT_PASSWORD`). Mínimo 8 caracteres.                                                                                                                 |
+| `S3_REGION`           | Región que firma el SDK. MinIO la ignora, pero el SDK la exige. Default `us-east-1`.                                                                                              |
+| `S3_FORCE_PATH_STYLE` | `true` (default): el bucket va en el path. MinIO no resuelve buckets por subdominio.                                                                                              |
+| `S3_ENDPOINT`         | Dónde está MinIO. **Sólo lo usa el servidor.** El servicio `app` lo fija a `http://minio:9000`; para `npm run dev` fuera de Docker, apuntarlo al puerto publicado (`MINIO_PORT`). |
 
 **MinIO no se publica en internet ni se proxea por caddy**: el navegador nunca le habla. Todos
 los archivos —imágenes embebidas y descargas— salen por `GET /api/files/<bucket>/<key>` de la
@@ -256,11 +257,11 @@ El compose mapea los puertos de host vía variables de entorno con default (`POS
 `.env.docker.example` trae los puertos default (`POSTGRES_PORT=5432`, `MINIO_PORT=9000`, `MINIO_CONSOLE_PORT=9001`, `APP_PORT=3000`, `CADDY_HTTP_PORT=80`, `CADDY_HTTPS_PORT=443`). Ejemplo de remapeo en un host donde 5432, 9000/9001 y 80 ya están tomados por otros proyectos:
 
 | Servicio        | Puerto por default | Ejemplo de remapeo en `.env.docker` |
-| ---------------- | ------------------- | ------------------------------------ |
-| postgres          | 5432                 | `POSTGRES_PORT=55432`                |
-| minio (API)       | 9000                 | `MINIO_PORT=29000`                   |
-| minio (consola)   | 9001                 | `MINIO_CONSOLE_PORT=29001`           |
-| caddy (HTTP)      | 80                   | `CADDY_HTTP_PORT=8080`               |
+| --------------- | ------------------ | ----------------------------------- |
+| postgres        | 5432               | `POSTGRES_PORT=55432`               |
+| minio (API)     | 9000               | `MINIO_PORT=29000`                  |
+| minio (consola) | 9001               | `MINIO_CONSOLE_PORT=29001`          |
+| caddy (HTTP)    | 80                 | `CADDY_HTTP_PORT=8080`              |
 
 Todo lo que se conecta desde el host (`npm run db:deploy`, `npm run test:db`, `psql`, la consola de MinIO) lee el puerto de `.env.docker`; nunca asumir 5432/9000 hardcodeado.
 

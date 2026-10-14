@@ -9,6 +9,7 @@ import type {
   DataTableSearchParams,
   FacetResult,
 } from '@/shared/components/common/DataTable/types';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { conditionLabels } from '@/shared/utils/mappers';
 import { CircleOff } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
@@ -221,7 +222,7 @@ export function _WorkshopTrackingDataTable({
       },
       // Usa currentParams (estado reactivo del client-side mode), NO la prop searchParams
       // (solo el valor inicial de SSR), para que la exportación respete los filtros activos.
-      fetchAllData: () => getAllWorkshopTrackingForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllWorkshopTrackingForExport(currentParams)),
       formatters: exportFormatters,
     }),
     [currentParams, exportFormatters]
@@ -237,7 +238,7 @@ export function _WorkshopTrackingDataTable({
         searchParams={searchParams}
         tableId={TABLE_ID}
         paramNamespace={TABLE_ID}
-        searchPlaceholder="Buscar por N° de orden..."
+        searchPlaceholder="Buscar por equipo (dominio, serie, N° interno) o N° de orden..."
         emptyMessage="No hay órdenes de mantenimiento en taller"
         showFilterToggle={true}
         facetedFilters={facetedFilters}

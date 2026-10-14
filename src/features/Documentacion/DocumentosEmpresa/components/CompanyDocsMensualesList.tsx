@@ -5,7 +5,7 @@ import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTabl
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { getCompanyDocsPaginated } from '../actions.server';
 import { getCompanyDocumentStateCounts } from '../metrics.server';
-import _CompanyDocsMensualesDataTable from './_CompanyDocsMensualesDataTable';
+import _CompanyDocsDataTable from './_CompanyDocsDataTable';
 
 // ============================================================================
 // CONSTANTS
@@ -38,10 +38,11 @@ export default async function CompanyDocsMensualesList({ searchParams }: Props) 
 
       <Card>
         <CardContent className="pt-6">
-          <_CompanyDocsMensualesDataTable
+          <_CompanyDocsDataTable
             data={data}
             totalRows={total}
             searchParams={tableParams}
+            isMonthly={true}
             tableId={MENSUALES_TABLE_ID}
             initialColumnVisibility={preferences.columnVisibility ?? {}}
             initialFilterVisibility={preferences.filterVisibility ?? {}}

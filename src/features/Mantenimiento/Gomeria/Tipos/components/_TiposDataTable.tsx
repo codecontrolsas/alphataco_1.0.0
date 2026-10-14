@@ -22,16 +22,17 @@ import {
 } from '@/shared/components/common/DataTable';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
-import moment from 'moment';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { toggleTireTypeActive } from '../actions/actions.server';
 import {
   getTireTypeSingleFacet,
   getTireTypesForExport,
   getTireTypesPaginated,
-  toggleTireTypeActive,
   type TireTypeListItem,
-} from '../actions/actions.server';
+} from '../actions/type-list.server';
 import { TipoForm } from './TipoForm';
 import { getColumns } from './columns';
 
@@ -193,6 +194,7 @@ export default function _TiposDataTable({
           : 'Tipo de cubierta activado correctamente'
       );
       await queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ['datatable-facet'] });
       setToggleTarget(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Error al cambiar el estado');
@@ -222,7 +224,7 @@ export default function _TiposDataTable({
         emptyMessage="No hay tipos registrados"
         searchPlaceholder="Buscar por nombre o medida..."
         exportConfig={{
-          fetchAllData: () => getTireTypesForExport(currentParams),
+          fetchAllData: async () => unwrapExportResult(await getTireTypesForExport(currentParams)),
           options: {
             filename: 'tipos-cubiertas',
             sheetName: 'Tipos',
@@ -231,7 +233,7 @@ export default function _TiposDataTable({
           formatters: {
             tread_type: (value) => tireTreadTypeLabels[value as string] ?? String(value),
             is_active: (value) => (value ? 'Activo' : 'Inactivo'),
-            created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
+            created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
             tire_count: (_value, row) => String((row._count as { tires: number })?.tires ?? 0),
           },
         }}

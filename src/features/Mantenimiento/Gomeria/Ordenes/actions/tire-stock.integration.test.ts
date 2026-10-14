@@ -184,7 +184,7 @@ describe.skipIf(!RUN)('cubiertas en el stock (integracion)', () => {
   });
 
   it('el alta masiva del catálogo entra al stock con su costo', async () => {
-    const { createTiresBulk } = await import('../../Catalogo/actions/actions.server');
+    const { createTiresBulk } = await import('../../Catalogo/actions/tire-mutations.server');
     const result = await createTiresBulk({
       prefix: 'S',
       rangeFrom: 1,
@@ -202,7 +202,8 @@ describe.skipIf(!RUN)('cubiertas en el stock (integracion)', () => {
   });
 
   it('montar descuenta del depósito; desmontar a disponible devuelve al depósito elegido', async () => {
-    const { performReplace, closeServiceOrder } = await import('./actions.server');
+    const { closeServiceOrder } = await import('./service-order-lifecycle.server');
+    const { performReplace } = await import('./service-order-operations.server');
     const s1 = await tireBySerial('S1');
     const s2 = await tireBySerial('S2');
 
@@ -250,7 +251,8 @@ describe.skipIf(!RUN)('cubiertas en el stock (integracion)', () => {
   });
 
   it('cancelar la orden anula sus movimientos, también si monta y desmonta la misma cubierta', async () => {
-    const { performReplace, cancelServiceOrder } = await import('./actions.server');
+    const { cancelServiceOrder } = await import('./service-order-lifecycle.server');
+    const { performReplace } = await import('./service-order-operations.server');
     const prisma = await db();
     const second = await prisma.tire_service_orders.findFirstOrThrow({
       where: { company_id: COMPANY, status: 'OPEN' },
@@ -293,8 +295,9 @@ describe.skipIf(!RUN)('cubiertas en el stock (integracion)', () => {
   });
 
   it('una cubierta extraviada con stock no se monta hasta que se encuentra', async () => {
-    const { performMissingReport, performReplace, closeServiceOrder } = await import('./actions.server');
-    const { updateTireStatus } = await import('../../Catalogo/actions/actions.server');
+    const { closeServiceOrder } = await import('./service-order-lifecycle.server');
+    const { performMissingReport, performReplace } = await import('./service-order-operations.server');
+    const { updateTireStatus } = await import('../../Catalogo/actions/tire-mutations.server');
     const s1 = await tireBySerial('S1');
 
     const order = await openOrder();
@@ -321,7 +324,7 @@ describe.skipIf(!RUN)('cubiertas en el stock (integracion)', () => {
   });
 
   it('descartar da de baja la unidad; eliminar o cambiar la serie con stock se rechaza', async () => {
-    const { updateTireStatus, deleteTire, updateTire } = await import('../../Catalogo/actions/actions.server');
+    const { updateTireStatus, deleteTire, updateTire } = await import('../../Catalogo/actions/tire-mutations.server');
     const s4 = await tireBySerial('S4');
 
     expect(await deleteTire(s4.id)).toEqual({ ok: false, error: 'Dala de baja con un descarte; tiene stock' });
@@ -393,7 +396,8 @@ describe.skipIf(!RUN)('cubiertas en el stock (integracion)', () => {
 
     // S1 se montó en la primera orden (esa salida sigue vigente, aunque S1 ya volvió): se
     // intenta devolver como préstamo una cubierta montada.
-    const { performReplace, closeServiceOrder } = await import('./actions.server');
+    const { closeServiceOrder } = await import('./service-order-lifecycle.server');
+    const { performReplace } = await import('./service-order-operations.server');
     const order = await openOrder();
     expectOk(
       await performReplace({
@@ -473,8 +477,9 @@ describe.skipIf(!RUN)('cubiertas en el stock (integracion)', () => {
     expect(await getTiresWithoutStockAction()).toHaveLength(0);
   });
   it('no se anula una orden si la cubierta reparada ya volvió al depósito', async () => {
-    const { performRepair, cancelServiceOrder } = await import('./actions.server');
-    const { updateTireStatus } = await import('../../Catalogo/actions/actions.server');
+    const { cancelServiceOrder } = await import('./service-order-lifecycle.server');
+    const { performRepair } = await import('./service-order-operations.server');
+    const { updateTireStatus } = await import('../../Catalogo/actions/tire-mutations.server');
     const lIn = await tireBySerial('L-IN');
     const s2 = await tireBySerial('S2');
     const order = await openOrder();
@@ -493,7 +498,7 @@ describe.skipIf(!RUN)('cubiertas en el stock (integracion)', () => {
   });
 
   it('desde el catálogo no se monta una cubierta cambiándole el estado', async () => {
-    const { updateTireStatus } = await import('../../Catalogo/actions/actions.server');
+    const { updateTireStatus } = await import('../../Catalogo/actions/tire-mutations.server');
     const s3 = await tireBySerial('S3');
     expect(await updateTireStatus(s3.id, 'INSTALLED')).toEqual({
       ok: false,

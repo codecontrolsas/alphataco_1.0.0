@@ -9,3 +9,4 @@
 - [Tablas in-memory (dataset por prop)](in-memory-tables.md) — limitacion de dateRange, iconos LucideIcon, NULL_FILTER_VALUE
 - [Columnas virtuales derivadas de relacion 1:N](virtual-relation-columns.md) — conteo + ultimo registro sin tocar schema (ticket 685, Equipos/Vehicles)
 - [Rediseño Documentacion](documentacion-redesign.md) — celdas/acciones/tarjetas compartidas de las listas de documentos y tipos
+- [Tipos de Reparación / Grupos (inMemory, deltas M:M)](tipos-reparaciones-inmemory.md) — DataTable inMemory, baseline desde la base, sin `delete` en el mapa

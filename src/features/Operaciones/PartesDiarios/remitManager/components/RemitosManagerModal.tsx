@@ -24,11 +24,8 @@ export function RemitosManagerModal({ dailyReportRowId, customerName, isOpen, on
 
   const stats = useRemitosStats(dailyReportRowId);
 
-  React.useEffect(() => {
-    if (remitos.length > 0 && !activeTabId) {
-      setActiveTabId(remitos[0].id);
-    }
-  }, [remitos, activeTabId]);
+  // Pestaña activa derivada: si el usuario no eligió ninguna, la primera.
+  const currentTabId = activeTabId ?? remitos[0]?.id ?? null;
 
   const handleRemitoCreated = (newRemitoId: string) => {
     setActiveTabId(newRemitoId);
@@ -125,7 +122,7 @@ export function RemitosManagerModal({ dailyReportRowId, customerName, isOpen, on
                 </div>
 
                 <Tabs
-                  value={activeTabId || remitos[0]?.id}
+                  value={currentTabId ?? undefined}
                   onValueChange={setActiveTabId}
                   className="flex-1 flex flex-col overflow-hidden"
                 >
@@ -162,7 +159,7 @@ export function RemitosManagerModal({ dailyReportRowId, customerName, isOpen, on
                       <TabsContent key={remito.id} value={remito.id} className="h-full m-0">
                         <RemitTab
                           remito={remito}
-                          isActive={activeTabId === remito.id}
+                          isActive={currentTabId === remito.id}
                           onActivate={() => setActiveTabId(remito.id)}
                           customerName={customerName}
                           dailyReportRowId={dailyReportRowId}

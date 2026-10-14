@@ -259,7 +259,7 @@ function heroAllClear(): string {
                 <div style="font-size:56px;line-height:1;color:#15803d;margin-bottom:8px;">&#10003;</div>
                 <p style="margin:0;font-size:18px;font-weight:700;color:#15803d;">Todo al d&iacute;a</p>
                 <p style="margin:8px 0 0;font-size:13px;color:#166534;line-height:1.5;">
-                  No hay documentos vencidos, por vencer ni pendientes esta semana.<br>
+                  No hay documentos vencidos, por vencer ni faltantes esta semana.<br>
                   Buen trabajo del equipo de control documental.
                 </p>
               </td>
@@ -342,9 +342,9 @@ export function renderDocumentsExpiryEmail(params: DocumentsExpiryEmailParams): 
     bodyInner += `
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;">
         <tr>
-          ${summaryCardDistributed({ value: totalExpiringSoon, label: 'Por vencer en 7 días', color: '#ea580c', ctas: expiringCtas, fallbackText: 'Sin documentos' })}
+          ${summaryCardDistributed({ value: totalExpiringSoon, label: `Por vencer en ${data.days_ahead} días`, color: '#ea580c', ctas: expiringCtas, fallbackText: 'Sin documentos' })}
           ${summaryCardDistributed({ value: totalExpired, label: 'Vencidos', color: '#b91c1c', ctas: expiredCtas, fallbackText: 'Sin documentos' })}
-          ${summaryCardDistributed({ value: totalPending, label: 'Pendientes de carga', color: '#a16207', ctas: pendingCtas, fallbackText: 'Sin documentos' })}
+          ${summaryCardDistributed({ value: totalPending, label: 'Faltantes (sin cargar)', color: '#a16207', ctas: pendingCtas, fallbackText: 'Sin documentos' })}
         </tr>
       </table>`;
 
@@ -376,7 +376,7 @@ export function renderDocumentsExpiryEmail(params: DocumentsExpiryEmailParams): 
       `Resumen semanal de documentos de ${companyName} — ${formatDateAr(data.today)}`,
       `Por vencer en ${data.days_ahead} días: ${totalExpiringSoon}`,
       `Vencidos: ${totalExpired}`,
-      `Pendientes de carga: ${totalPending}`,
+      `Faltantes (sin cargar): ${totalPending}`,
       `Ver el tablero: ${urlDashboardRoot()}`,
     ].join('\n'),
   };

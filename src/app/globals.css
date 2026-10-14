@@ -73,6 +73,12 @@
   --color-info: var(--status-info);
   --color-info-subtle: var(--status-info-subtle);
   --color-info-subtle-foreground: var(--status-info-subtle-foreground);
+  --color-cert: var(--status-cert);
+  --color-cert-subtle: var(--status-cert-subtle);
+  --color-cert-subtle-foreground: var(--status-cert-subtle-foreground);
+  --color-expired: var(--status-expired);
+  --color-expired-subtle: var(--status-expired-subtle);
+  --color-expired-subtle-foreground: var(--status-expired-subtle-foreground);
 
   --color-sidebar-active: var(--sidebar-active);
   --color-sidebar-active-foreground: var(--sidebar-active-foreground);
@@ -132,6 +138,12 @@
   --status-info: #1b9cb5;
   --status-info-subtle: #def3f8;
   --status-info-subtle-foreground: #145a6b;
+  --status-cert: #7b6bd6;
+  --status-cert-subtle: #ece9fb;
+  --status-cert-subtle-foreground: #4b3f9a;
+  --status-expired: #d9822b;
+  --status-expired-subtle: #fdebdc;
+  --status-expired-subtle-foreground: #9a4c10;
 
   /* Graficos: escala de la marca. */
   --chart-1: #9fd0e8;
@@ -194,6 +206,12 @@
   --status-info: #3bb5cc;
   --status-info-subtle: #12333b;
   --status-info-subtle-foreground: #7fd3e6;
+  --status-cert: #9d8ff0;
+  --status-cert-subtle: #251f45;
+  --status-cert-subtle-foreground: #c9c0ff;
+  --status-expired: #e8954a;
+  --status-expired-subtle: #3a2414;
+  --status-expired-subtle-foreground: #f5b98a;
 
   --chart-1: #9fd0e8;
   --chart-2: #6bb7da;

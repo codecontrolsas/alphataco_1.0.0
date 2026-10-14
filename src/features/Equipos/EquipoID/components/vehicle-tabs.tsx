@@ -6,38 +6,6 @@ import type { TabDefinition } from '@/features/TabsManager/types';
 import { Suspense } from 'react';
 import { VehicleAssignmentView, VehicleBasicDataView } from './view/VehicleDataView';
 
-// Tipo para los datos del formulario de vehículo
-export type VehicleFormData = {
-  type_of_vehicle: string;
-  brand: string;
-  owner_id: string | null;
-  model: string | null;
-  year: string;
-  engine?: string;
-  type?: string | null;
-  subType?: string | null;
-  chassis?: string;
-  serie?: string;
-  domain?: string;
-  kilometer?: string;
-  engine_hours?: string;
-  intern_number?: string;
-  picture?: string | null;
-  allocated_to?: string[];
-  cost_center_id?: string | null;
-  cost_type: 'Directo' | 'Indirecto';
-  sector: string;
-  type_of_contract?: string | null;
-  contract_expiration_date?: Date | null;
-  contract_start_date?: Date | null;
-  contract_number?: string;
-  has_certification: boolean;
-  certification_expiration_date?: Date | null;
-  certification_number?: string | null;
-  price?: number;
-  currency?: 'USD' | 'EUR' | 'GBP' | 'ARS';
-};
-
 interface VehicleTabsProps {
   vehicle: NonNullable<VehicleById>;
   costCentersPromise: ReturnType<typeof getCostCenterOptions>;

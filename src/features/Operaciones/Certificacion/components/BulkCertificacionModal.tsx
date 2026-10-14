@@ -10,20 +10,18 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/use-toast';
-import { transformDailyReports } from '../lib/transform';
 import { bulkCertifyRows } from '../actions/mutations.server';
+import type { CertificationRow } from '../actions/queries.server';
 import { Logger } from '@/lib/logger';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, Loader2 } from 'lucide-react';
 import { useState } from 'react';
-
-type TableRow = ReturnType<typeof transformDailyReports>[number];
 
 const logger = new Logger('BulkCertificacionModal');
 
 interface BulkCertificacionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  selectedRows: TableRow[];
+  selectedRows: CertificationRow[];
   onSuccess?: () => void;
 }
 
@@ -44,7 +42,7 @@ export function BulkCertificacionModal({ isOpen, onClose, selectedRows, onSucces
       setIsUpdating(true);
 
       // Una sola server action: pasa a 'en_certificacion' las filas elegibles.
-      const result = await bulkCertifyRows(selectedRows.map((row: TableRow) => row.id));
+      const result = await bulkCertifyRows(selectedRows.map((row: CertificationRow) => row.id));
 
       toast({
         title: 'Éxito',
@@ -73,7 +71,7 @@ export function BulkCertificacionModal({ isOpen, onClose, selectedRows, onSucces
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Actualización masiva a En certificación</DialogTitle>
@@ -85,7 +83,7 @@ export function BulkCertificacionModal({ isOpen, onClose, selectedRows, onSucces
         <div className="py-4">
           <div className="max-h-[300px] overflow-y-auto mb-4 border rounded-md p-2">
             <ul className="text-sm space-y-1">
-              {selectedRows.map((row: TableRow) => (
+              {selectedRows.map((row: CertificationRow) => (
                 <li key={row.id} className="p-2 bg-muted rounded-md flex justify-between items-center">
                   <span className="font-medium">{row.customer}</span>
                   <span className="text-muted-foreground text-xs">
@@ -98,25 +96,13 @@ export function BulkCertificacionModal({ isOpen, onClose, selectedRows, onSucces
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isUpdating}>
+          <Button type="button" variant="outline" onClick={onClose} disabled={isUpdating}>
             Cancelar
           </Button>
-          <Button onClick={handleUpdate} disabled={isUpdating}>
+          <Button type="button" onClick={handleUpdate} disabled={isUpdating}>
             {isUpdating ? (
               <>
-                <svg
-                  className="animate-spin -ml-1 mr-2 h-4 w-4"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
                 Actualizando...
               </>
             ) : (

@@ -36,7 +36,9 @@ export function buildEmployeeDefaultValues(employee: EmployeeDetailData | null):
     gender: employee.gender || undefined,
     marital_status: employee.marital_status || undefined,
     level_of_education: employee.level_of_education || undefined,
-    picture: employee.picture || undefined,
+    // La foto guardada NO entra al form: `undefined` = no tocar. Solo viaja si el usuario sube una nueva, o '' si la quita.
+    // Así una foto vieja (otro formato o más pesada que el tope actual) no bloquea guardar otros cambios.
+    picture: undefined,
     street: employee.street || undefined,
     street_number: employee.street_number || undefined,
     province: employee.province ? Number(employee.province) : undefined,

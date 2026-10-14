@@ -1,6 +1,6 @@
 'use client';
 
-import { getTireReturnWarehousesForVehicle } from '@/features/Mantenimiento/Gomeria/Ordenes/actions/actions.server';
+import { getTireReturnWarehousesForVehicle } from '@/features/Mantenimiento/Gomeria/Ordenes/actions/service-order-queries.server';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 

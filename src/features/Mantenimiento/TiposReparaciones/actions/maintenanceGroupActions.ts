@@ -1,21 +1,27 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
+import { z } from 'zod';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { failureMessage, requireConfigPermission } from '../lib/access';
+import {
+  idDeltaSchema,
+  maintenanceGroupInputSchema,
+  uuidListSchema,
+  uuidSchema,
+  type IdDelta,
+  type MaintenanceGroupInput,
+} from '../schemas/repair-types';
 
 const logger = new Logger('Mantenimiento/TiposReparaciones/grupos');
 
-/** Datos del grupo de reparaciones que manda el formulario. */
-export interface MaintenanceGroupInput {
-  name: string;
-  description?: string | null;
-  is_active?: boolean;
-}
-
+/** Mensaje para el cliente: solo se exponen los rechazos esperados, no el detalle interno. */
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Error inesperado';
+  if (error instanceof z.ZodError) return error.issues[0]?.message ?? 'Los datos enviados son inválidos';
+  const isPerimeter = error instanceof Error && error.message.includes('no pertenece');
+  return failureMessage(error, isPerimeter ? (error as Error).message : 'Error inesperado');
 }
 
 /**
@@ -63,8 +69,11 @@ async function getGroupTypeIds(groupId: string): Promise<string[]> {
 }
 
 /** Crea un grupo de reparaciones y sus relaciones con los tipos elegidos. */
-export const createMaintenanceGroupAction = async (groupData: MaintenanceGroupInput, typeIds: string[]) => {
+export const createMaintenanceGroupAction = async (rawGroupData: MaintenanceGroupInput, rawTypeIds: string[]) => {
   try {
+    await requireConfigPermission('maintenance_groups', 'create');
+    const groupData = maintenanceGroupInputSchema.parse(rawGroupData);
+    const typeIds = uuidListSchema.parse(rawTypeIds);
     const companyId = await getActiveCompanyId();
     const validTypeIds = await assertRepairTypesInActiveCompany(typeIds, companyId);
 
@@ -99,22 +108,26 @@ export type createMaintenanceGroupActionType = Awaited<ReturnType<typeof createM
 /**
  * Actualiza un grupo y sus relaciones.
  *
- * Las altas y bajas de la pivote se calculan como diferencia explícita contra lo que hay
- * en la base (no se borra todo y se reinserta): es un formulario de UNA entidad, cargado
- * con su estado real, y sólo se tocan los ids que cambiaron.
+ * Los tipos viajan como ALTAS y BAJAS explícitas respecto de lo que el formulario cargó al
+ * abrir el grupo: el DELETE se acota a `grupo = X AND tipo IN (remove)` y el INSERT solo a
+ * `add`. Un tipo que no figura en ninguna lista no se toca. Devuelve `{ added, removed }`.
  */
 export const updateMaintenanceGroupAction = async (
   groupId: string,
-  groupData: MaintenanceGroupInput,
-  newTypeIds: string[]
+  rawGroupData: MaintenanceGroupInput,
+  rawDelta: IdDelta
 ) => {
   try {
+    await requireConfigPermission('maintenance_groups', 'update');
+    uuidSchema.parse(groupId);
+    const groupData = maintenanceGroupInputSchema.parse(rawGroupData);
+    const delta = idDeltaSchema.parse(rawDelta);
     const companyId = await getActiveCompanyId();
     await assertGroupInActiveCompany(groupId, companyId);
-    const validTypeIds = await assertRepairTypesInActiveCompany(newTypeIds, companyId);
-    const currentTypeIds = await getGroupTypeIds(groupId);
+    const toAdd = await assertRepairTypesInActiveCompany(delta.add, companyId);
+    const toRemove = delta.remove.filter((id) => !toAdd.includes(id));
 
-    const updatedGroup = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const updated = await tx.maintenance_request_groups.update({
         where: { id: groupId, company_id: companyId },
         data: {
@@ -124,56 +137,33 @@ export const updateMaintenanceGroupAction = async (
         },
       });
 
-      const toAdd = validTypeIds.filter((id) => !currentTypeIds.includes(id));
-      const toRemove = currentTypeIds.filter((id) => !validTypeIds.includes(id));
-
+      let added = 0;
       if (toAdd.length > 0) {
-        await tx.maintenance_group_type_of_repairs.createMany({
+        const res = await tx.maintenance_group_type_of_repairs.createMany({
           data: toAdd.map((type_id) => ({ group_id: groupId, type_id })),
           skipDuplicates: true,
         });
+        added = res.count;
       }
 
+      let removed = 0;
       if (toRemove.length > 0) {
-        await tx.maintenance_group_type_of_repairs.deleteMany({
+        const res = await tx.maintenance_group_type_of_repairs.deleteMany({
           where: { group_id: groupId, type_id: { in: toRemove } },
         });
+        removed = res.count;
       }
 
-      return updated;
+      return { updated, added, removed };
     });
 
-    return { updatedGroup, error: null };
+    return { updatedGroup: result.updated, added: result.added, removed: result.removed, error: null };
   } catch (error) {
     logger.error('Error al actualizar el grupo de reparaciones', { data: { error, groupId } });
-    return { updatedGroup: null, error: errorMessage(error) };
+    return { updatedGroup: null, added: 0, removed: 0, error: errorMessage(error) };
   }
 };
 export type updateMaintenanceGroupActionType = Awaited<ReturnType<typeof updateMaintenanceGroupAction>>;
-
-/** Baja lógica del grupo (queda inactivo) y limpieza de sus relaciones. */
-export const deleteMaintenanceGroupAction = async (groupId: string) => {
-  try {
-    const companyId = await getActiveCompanyId();
-    await assertGroupInActiveCompany(groupId, companyId);
-
-    const deletedGroup = await prisma.$transaction(async (tx) => {
-      await tx.maintenance_group_type_of_repairs.deleteMany({ where: { group_id: groupId } });
-
-      return await tx.maintenance_request_groups.update({
-        where: { id: groupId, company_id: companyId },
-        data: { is_active: false },
-      });
-    });
-
-    return { deletedGroup, error: null };
-  } catch (error) {
-    logger.error('Error al eliminar el grupo de reparaciones', { data: { error, groupId } });
-    return { deletedGroup: null, error: errorMessage(error) };
-  }
-};
-export type deleteMaintenanceGroupActionType = Awaited<ReturnType<typeof deleteMaintenanceGroupAction>>;
-
 /** Grupos activos de la empresa activa, con los ids de sus tipos de reparación. */
 export const fetchMaintenanceGroupsAction = async () => {
   try {
@@ -222,6 +212,7 @@ export type fetchTypesOfRepairActionType = Awaited<ReturnType<typeof fetchTypesO
 /** Grupo puntual de la empresa activa, con los ids de sus tipos de reparación. */
 export const fetchMaintenanceGroupByIdAction = async (groupId: string) => {
   try {
+    uuidSchema.parse(groupId);
     const companyId = await getActiveCompanyId();
     await assertGroupInActiveCompany(groupId, companyId);
 

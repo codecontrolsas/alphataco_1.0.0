@@ -643,6 +643,7 @@ model company {
   withholding_regimes          withholding_regimes[]
   purchase_expense_categories  purchase_expense_categories[]
 
+  @@unique([owner_id], map: "company_one_default_per_owner", where: raw("(by_defect IS TRUE)"))
   @@schema("public")
 }
 
@@ -1138,6 +1139,8 @@ model documents_employees {
   profile                  profile?                   @relation(fields: [user_id], references: [id], onDelete: Cascade)
   documents_employees_logs documents_employees_logs[]
 
+  @@index([applies, id_document_types], map: "idx_documents_employees_applies_type")
+  @@index([id_document_types], map: "idx_documents_employees_type")
   @@schema("public")
 }
 
@@ -1171,6 +1174,8 @@ model documents_equipment {
   profile                  profile?                   @relation(fields: [user_id], references: [id], onDelete: Cascade)
   documents_equipment_logs documents_equipment_logs[]
 
+  @@index([applies, id_document_types], map: "idx_documents_equipment_applies_type")
+  @@index([id_document_types], map: "idx_documents_equipment_type")
   @@schema("public")
 }
 

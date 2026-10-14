@@ -1,5 +1,6 @@
 'use server';
 
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
@@ -11,6 +12,7 @@ const logger = new Logger('Equipos/VehicleList/metrics.server');
  * Mismo universo que la tabla (empresa activa, activos, tipo "vehículo") en una sola consulta agrupada.
  */
 export async function getVehicleConditionMetrics() {
+  if (!(await checkPermissionServer('equipos', 'vehicles', 'view'))) return {};
   const companyId = await getActiveCompanyId();
 
   try {

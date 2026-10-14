@@ -1,17 +1,18 @@
 'use server';
 
-import { Logger } from '@/lib/logger';
 import {
-  buildDateRangeFiltersWhere,
-  buildFiltersWhere,
-  buildSearchWhere,
-  buildTextFiltersWhere,
-  NULL_FILTER_VALUE,
-  parseSearchParams,
-  stateToPrismaParams,
-} from '@/shared/components/common/DataTable/helpers';
+  VEHICLE_EXPORT_MAX_ROWS,
+  createVehicleListQuery,
+  resolveVehicleOrderBy,
+  vehicleExportTooLargeMessage,
+  withNumericPrice,
+} from '@/features/Equipos/lib/vehicle-list-shared';
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { Logger } from '@/lib/logger';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 
 const logger = new Logger('InactiveVehicles/actions.server');
@@ -20,11 +21,15 @@ const logger = new Logger('InactiveVehicles/actions.server');
 // CONSTANTS
 // ============================================================================
 
+/** Permiso de la pestaña "Dados de baja" (módulo `equipos`, mismo slug que usa `EquiposComponent`). */
+const MODULE_SLUG = 'equipos';
+const TAB_SLUG = 'inactive';
+
 /**
  * Campos directos de vehicles que se pueden ordenar server-side.
- * Solo los campos directos + IDs de FK que tenemos en FK_SORT_MAP.
+ * Solo los campos directos + IDs de FK que tenemos en VEHICLE_FK_SORT_MAP.
  */
-const VALID_SORT_FIELDS = new Set([
+const VALID_SORT_FIELDS: ReadonlySet<string> = new Set([
   'domain',
   'intern_number',
   'chassis',
@@ -38,6 +43,7 @@ const VALID_SORT_FIELDS = new Set([
   'cost_type',
   'currency',
   'type_of_contract',
+  'contract_number',
   'reason_for_termination',
   'termination_date',
   'contract_expiration_date',
@@ -54,55 +60,29 @@ const VALID_SORT_FIELDS = new Set([
   'cost_center',
 ]);
 
-/**
- * Mapeo de columnId → orderBy de Prisma para columnas FK.
- * Las columnas directas usan { field: dir } directamente,
- * pero las FK necesitan { relation: { campo: dir } }.
- */
-const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Record<string, unknown>> = {
-  type: (dir) => ({ type_vehicles_typeTotype: { name: dir } }),
-  sub_type: (dir) => ({ sub_type: { name: dir } }),
-  brand: (dir) => ({ brand_vehicles: { name: dir } }),
-  model: (dir) => ({ model_vehicles: { name: dir } }),
-  owner: (dir) => ({ equipment_owners: { name: dir } }),
-  sector: (dir) => ({ hierarchy: { name: dir } }),
-  cost_center: (dir) => ({ cost_center: { name: dir } }),
-};
-
-/** Params de URL de navegación que NO son filtros de la tabla */
-const IGNORED_PARAMS = new Set(['tab', 'subtab', 'inactive_subtab']);
-
-/** Columnas con filtro de texto libre (contains insensitive) */
-const TEXT_FILTER_COLUMNS = [
-  'domain',
-  'intern_number',
-  'chassis',
-  'engine',
-  'serie',
-  'contract_number',
-  'year',
-  'kilometer',
-  'engine_hours',
-  'price',
-];
-
-/** Columnas con filtro de rango de fechas */
-const DATE_RANGE_COLUMNS = ['termination_date', 'contract_expiration_date', 'contract_start_date', 'created_at'];
+/** Consulta del listado de DADOS DE BAJA (`is_active = false`). */
+const inactiveVehicleQuery = createVehicleListQuery({
+  isActive: false,
+  searchColumns: ['domain', 'intern_number', 'chassis', 'engine', 'serie'],
+  enumColumns: ['condition', 'status', 'cost_type', 'currency', 'type_of_contract', 'reason_for_termination'],
+  textColumns: [
+    'domain',
+    'intern_number',
+    'chassis',
+    'engine',
+    'serie',
+    'contract_number',
+    'year',
+    'kilometer',
+    'engine_hours',
+    'price',
+  ],
+  dateColumns: ['termination_date', 'contract_expiration_date', 'contract_start_date', 'created_at'],
+  withFleetExtras: false,
+});
 
 /**
- * Mapping de columnId (URL) → campo real en Prisma.
- * Solo para columnas cuyo ID en la URL difiere del campo en la BD.
- */
-const COLUMN_MAP: Record<string, string> = {
-  type: 'type',
-  sub_type: 'subType',
-  owner: 'owner_id',
-  sector: 'sector',
-  cost_center: 'cost_center_id',
-};
-
-/**
- * Select común con todas las relaciones resueltas.
+ * Select común con todas las relaciones resueltas (sin `picture`: ninguna columna lo usa).
  * brand y model son Int (number), se pueden serializar directamente en RSC.
  */
 const INACTIVE_VEHICLE_SELECT = {
@@ -147,126 +127,29 @@ const INACTIVE_VEHICLE_SELECT = {
 } as const;
 
 // ============================================================================
-// HELPERS INTERNOS
-// ============================================================================
-
-function buildWhereClause(companyId: string, state: ReturnType<typeof parseSearchParams>) {
-  const searchWhere = buildSearchWhere(state.search, ['domain', 'intern_number', 'chassis', 'engine', 'serie']);
-
-  // Columnas manejadas manualmente (BigInt FK, M:M)
-  const MANUALLY_HANDLED = ['brand', 'model', 'contractor_equipment'];
-
-  const filtersWhere = buildFiltersWhere(state.filters, COLUMN_MAP, {
-    exclude: [
-      ...TEXT_FILTER_COLUMNS,
-      ...MANUALLY_HANDLED,
-      ...DATE_RANGE_COLUMNS.flatMap((c) => [`${c}_from`, `${c}_to`]),
-    ],
-  });
-
-  const textFiltersWhere = buildTextFiltersWhere(state.filters, TEXT_FILTER_COLUMNS);
-
-  const dateFiltersWhere = buildDateRangeFiltersWhere(state.filters, DATE_RANGE_COLUMNS);
-
-  // Int FK filters: brand y model
-  const bigintFilters: Record<string, unknown> = {};
-  const extraAndConditions: Record<string, unknown>[] = [];
-
-  for (const [columnId, field] of [
-    ['brand', 'brand'],
-    ['model', 'model'],
-  ] as const) {
-    const values = state.filters[columnId];
-    if (!values?.length) continue;
-    const hasNull = values.includes(NULL_FILTER_VALUE);
-    const realValues = values.filter((v) => v !== NULL_FILTER_VALUE);
-    const realIds = realValues.map(Number).filter((n) => !isNaN(n));
-
-    if (hasNull && realIds.length > 0) {
-      extraAndConditions.push({
-        OR: [{ [field]: { in: realIds } }, { [field]: null }],
-      });
-    } else if (hasNull) {
-      bigintFilters[field] = null;
-    } else {
-      bigintFilters[field] = { in: realIds };
-    }
-  }
-
-  // M:M filter: contractor_equipment
-  const m2mFilters: Record<string, unknown> = {};
-  const contractorValues = state.filters['contractor_equipment'];
-  if (contractorValues?.length) {
-    const hasNull = contractorValues.includes(NULL_FILTER_VALUE);
-    const realValues = contractorValues.filter((v) => v !== NULL_FILTER_VALUE);
-
-    if (hasNull && realValues.length > 0) {
-      extraAndConditions.push({
-        OR: [
-          { contractor_equipment: { some: { contractor_id: { in: realValues } } } },
-          { contractor_equipment: { none: {} } },
-        ],
-      });
-    } else if (hasNull) {
-      m2mFilters.contractor_equipment = { none: {} };
-    } else {
-      m2mFilters.contractor_equipment = {
-        some: { contractor_id: { in: realValues } },
-      };
-    }
-  }
-
-  return {
-    company_id: companyId,
-    is_active: false,
-    type_of_vehicle: 1,
-    ...searchWhere,
-    ...filtersWhere,
-    ...textFiltersWhere,
-    ...dateFiltersWhere,
-    ...bigintFilters,
-    ...m2mFilters,
-    ...(extraAndConditions.length > 0 ? { AND: extraAndConditions } : {}),
-  };
-}
-
-// ============================================================================
 // PAGINATED QUERY
 // ============================================================================
 
 export async function getInactiveVehiclesPaginated(searchParams: DataTableSearchParams) {
+  if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) {
+    throw new Error('No tenés permiso para ver los vehículos dados de baja');
+  }
+
   const companyId = await getActiveCompanyId();
 
   try {
-    const state = parseSearchParams(searchParams);
-    for (const key of IGNORED_PARAMS) {
-      delete state.filters[key];
-    }
+    const state = inactiveVehicleQuery.parseState(searchParams);
+    const { skip, take } = clampedPageParams(state);
+    const where = await inactiveVehicleQuery.buildWhere(companyId, state);
 
-    const { skip, take } = stateToPrismaParams(state);
-
-    const where = buildWhereClause(companyId, state);
-
-    // Safe orderBy: multi-sort, solo campos válidos
-    const resolvedSorts: Record<string, unknown>[] = [];
-    for (const s of state.sorting) {
-      if (VALID_SORT_FIELDS.has(s.id)) {
-        const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-        const fkMapper = FK_SORT_MAP[s.id];
-        resolvedSorts.push(fkMapper ? fkMapper(dir) : { [s.id]: dir });
-      }
-    }
-
-    const safeOrderBy = [...resolvedSorts, { termination_date: 'desc' as const }, { created_at: 'desc' as const }];
+    // Multi-sort, solo campos válidos; las bajas más recientes primero
+    const orderBy = resolveVehicleOrderBy(state.sorting, VALID_SORT_FIELDS, [
+      { termination_date: 'desc' },
+      { created_at: 'desc' },
+    ]);
 
     const [rawData, total] = await Promise.all([
-      prisma.vehicles.findMany({
-        skip,
-        take,
-        orderBy: safeOrderBy,
-        where,
-        select: INACTIVE_VEHICLE_SELECT,
-      }),
+      prisma.vehicles.findMany({ skip, take, orderBy, where, select: INACTIVE_VEHICLE_SELECT }),
       prisma.vehicles.count({ where }),
     ]);
 
@@ -277,38 +160,44 @@ export async function getInactiveVehiclesPaginated(searchParams: DataTableSearch
   }
 }
 
-/** `price` es Decimal: no se puede pasar a un Client Component. Se entrega como número. */
-function withNumericPrice<T extends { price: { toString(): string } | null }>(vehicle: T) {
-  return { ...vehicle, price: vehicle.price === null ? null : Number(vehicle.price) };
-}
-
 export type InactiveVehicleListItem = Awaited<ReturnType<typeof getInactiveVehiclesPaginated>>['data'][number];
 
 // ============================================================================
-// EXPORT QUERY (sin paginación)
+// EXPORT QUERY (sin paginación, con tope)
 // ============================================================================
 
-export async function getAllInactiveVehiclesForExport(searchParams: DataTableSearchParams) {
+/**
+ * Filas del export con los mismos filtros de la tabla. Tope de `VEHICLE_EXPORT_MAX_ROWS`: si se supera, devuelve
+ * `{ ok: false, message }` (Next enmascara el mensaje de un error lanzado). El cliente lo abre con `unwrapExportResult`.
+ */
+export async function getAllInactiveVehiclesForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<InactiveVehicleListItem[]>> {
+  if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) {
+    return { ok: false, message: 'No tenés permiso para exportar los vehículos dados de baja' };
+  }
+
   const companyId = await getActiveCompanyId();
 
   try {
-    const state = parseSearchParams(searchParams);
-    for (const key of IGNORED_PARAMS) {
-      delete state.filters[key];
-    }
-
-    const where = buildWhereClause(companyId, state);
+    const state = inactiveVehicleQuery.parseState(searchParams);
+    const where = await inactiveVehicleQuery.buildWhere(companyId, state);
 
     const rawData = await prisma.vehicles.findMany({
-      orderBy: [{ termination_date: 'desc' }, { created_at: 'desc' }],
+      orderBy: [{ termination_date: 'desc' }, { created_at: 'desc' }, { id: 'asc' }],
       where,
       select: INACTIVE_VEHICLE_SELECT,
+      take: VEHICLE_EXPORT_MAX_ROWS + 1,
     });
 
-    return rawData.map(withNumericPrice);
+    if (rawData.length > VEHICLE_EXPORT_MAX_ROWS) {
+      return { ok: false, message: vehicleExportTooLargeMessage('vehículos dados de baja') };
+    }
+
+    return { ok: true, data: rawData.map(withNumericPrice) };
   } catch (error) {
     logger.error('Error al exportar vehículos dados de baja', { data: { error } });
-    throw new Error('Error al exportar los vehículos dados de baja');
+    return { ok: false, message: 'Error al exportar los vehículos dados de baja' };
   }
 }
 
@@ -328,195 +217,12 @@ export async function getInactiveVehicleSingleFacet(
   counts: Map<string, number>;
   resolvedOptions?: { value: string; label: string }[];
 } | null> {
+  if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) return null;
+
   const companyId = await getActiveCompanyId();
-  const baseWhere = {
-    company_id: companyId,
-    is_active: false as const,
-    type_of_vehicle: 1,
-  };
-
-  // Parsear filtros activos (si los hay)
-  let parsedState: ReturnType<typeof parseSearchParams> | null = null;
-  if (searchParams && Object.keys(searchParams).length > 0) {
-    parsedState = parseSearchParams(searchParams);
-    for (const key of IGNORED_PARAMS) {
-      delete parsedState.filters[key];
-    }
-  }
-
-  const hasActiveFilters = parsedState && (Object.keys(parsedState.filters).length > 0 || parsedState.search);
-
-  // WHERE con todos los filtros EXCEPTO el de la columna solicitada (cross-filter)
-  function crossWhere() {
-    if (!parsedState || !hasActiveFilters) return baseWhere;
-    const modified = { ...parsedState, filters: { ...parsedState.filters } };
-    delete modified.filters[columnId];
-    delete modified.filters[`${columnId}_from`];
-    delete modified.filters[`${columnId}_to`];
-    return buildWhereClause(companyId, modified);
-  }
-
-  function toFacetMap(rows: { key: string | number | null | undefined; count: number }[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const { key, count } of rows) {
-      if (key == null) {
-        map.set(NULL_FILTER_VALUE, (map.get(NULL_FILTER_VALUE) ?? 0) + count);
-      } else {
-        map.set(String(key), count);
-      }
-    }
-    return map;
-  }
 
   try {
-    const where = crossWhere();
-
-    switch (columnId) {
-      // ── Enum columns ────────────────────────────────────────────────────────
-      case 'condition': {
-        const rows = await prisma.vehicles.groupBy({ by: ['condition'], where, _count: true });
-        return { counts: toFacetMap(rows.map((r) => ({ key: r.condition, count: r._count }))) };
-      }
-      case 'status': {
-        const rows = await prisma.vehicles.groupBy({ by: ['status'], where, _count: true });
-        return { counts: toFacetMap(rows.map((r) => ({ key: r.status, count: r._count }))) };
-      }
-      case 'cost_type': {
-        const rows = await prisma.vehicles.groupBy({ by: ['cost_type'], where, _count: true });
-        return { counts: toFacetMap(rows.map((r) => ({ key: r.cost_type, count: r._count }))) };
-      }
-      case 'currency': {
-        const rows = await prisma.vehicles.groupBy({ by: ['currency'], where, _count: true });
-        return { counts: toFacetMap(rows.map((r) => ({ key: r.currency, count: r._count }))) };
-      }
-      case 'reason_for_termination': {
-        const rows = await prisma.vehicles.groupBy({ by: ['reason_for_termination'], where, _count: true });
-        return { counts: toFacetMap(rows.map((r) => ({ key: r.reason_for_termination, count: r._count }))) };
-      }
-      case 'type_of_contract': {
-        const rows = await prisma.vehicles.groupBy({ by: ['type_of_contract'], where, _count: true });
-        return { counts: toFacetMap(rows.map((r) => ({ key: r.type_of_contract, count: r._count }))) };
-      }
-
-      // ── FK UUID columns ─────────────────────────────────────────────────────
-      case 'type': {
-        const rows = await prisma.vehicles.groupBy({ by: ['type'], where, _count: true });
-        const counts = toFacetMap(rows.map((r) => ({ key: r.type, count: r._count })));
-        const ids = rows.map((r) => r.type).filter(Boolean) as string[];
-        const options =
-          ids.length > 0
-            ? await prisma.type.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
-            : [];
-        return { counts, resolvedOptions: options.map((o) => ({ value: o.id, label: o.name ?? '' })) };
-      }
-      case 'sub_type': {
-        const rows = await prisma.vehicles.groupBy({ by: ['subType'], where, _count: true });
-        const counts = toFacetMap(rows.map((r) => ({ key: r.subType, count: r._count })));
-        const ids = rows.map((r) => r.subType).filter(Boolean) as string[];
-        const options =
-          ids.length > 0
-            ? await prisma.sub_type.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
-            : [];
-        return { counts, resolvedOptions: options.map((o) => ({ value: o.id, label: o.name ?? '' })) };
-      }
-      case 'owner': {
-        const rows = await prisma.vehicles.groupBy({ by: ['owner_id'], where, _count: true });
-        const counts = toFacetMap(rows.map((r) => ({ key: r.owner_id, count: r._count })));
-        const ids = rows.map((r) => r.owner_id).filter(Boolean) as string[];
-        const options =
-          ids.length > 0
-            ? await prisma.equipment_owners.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
-            : [];
-        return { counts, resolvedOptions: options.map((o) => ({ value: o.id, label: o.name ?? '' })) };
-      }
-      case 'sector': {
-        const rows = await prisma.vehicles.groupBy({ by: ['sector'], where, _count: true });
-        const counts = toFacetMap(rows.map((r) => ({ key: r.sector, count: r._count })));
-        const ids = rows.map((r) => r.sector).filter(Boolean) as string[];
-        const options =
-          ids.length > 0
-            ? await prisma.hierarchy.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
-            : [];
-        return { counts, resolvedOptions: options.map((o) => ({ value: o.id, label: o.name ?? '' })) };
-      }
-      case 'cost_center': {
-        const rows = await prisma.vehicles.groupBy({ by: ['cost_center_id'], where, _count: true });
-        const counts = toFacetMap(rows.map((r) => ({ key: r.cost_center_id, count: r._count })));
-        const ids = rows.map((r) => r.cost_center_id).filter(Boolean) as string[];
-        const options =
-          ids.length > 0
-            ? await prisma.cost_center.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
-            : [];
-        return { counts, resolvedOptions: options.map((o) => ({ value: o.id, label: o.name ?? '' })) };
-      }
-
-      // ── FK Int columns ───────────────────────────────────────────────────────
-      case 'brand': {
-        const rows = await prisma.vehicles.groupBy({ by: ['brand'], where, _count: true });
-        const counts = toFacetMap(rows.map((r) => ({ key: r.brand, count: r._count })));
-        const ids = rows.map((r) => r.brand).filter(Boolean) as number[];
-        const options =
-          ids.length > 0
-            ? await prisma.brand_vehicles
-                .findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
-                .then((rows) => rows.map((r) => ({ value: String(r.id), label: r.name ?? '' })))
-            : [];
-        return { counts, resolvedOptions: options };
-      }
-      case 'model': {
-        const rows = await prisma.vehicles.groupBy({ by: ['model'], where, _count: true });
-        const counts = toFacetMap(rows.map((r) => ({ key: r.model, count: r._count })));
-        const ids = rows.map((r) => r.model).filter(Boolean) as number[];
-        const options =
-          ids.length > 0
-            ? await prisma.model_vehicles
-                .findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
-                .then((rows) => rows.map((r) => ({ value: String(r.id), label: r.name ?? '' })))
-            : [];
-        return { counts, resolvedOptions: options };
-      }
-
-      // ── M:M column ──────────────────────────────────────────────────────────
-      case 'contractor_equipment': {
-        const countMap = new Map<string, number>();
-
-        const allRels = await prisma.contractor_equipment.findMany({
-          where: { vehicles: where },
-          select: { contractor_id: true },
-        });
-        for (const rel of allRels) {
-          if (rel.contractor_id) {
-            countMap.set(rel.contractor_id, (countMap.get(rel.contractor_id) ?? 0) + 1);
-          }
-        }
-
-        const totalInCross = await prisma.vehicles.count({ where });
-        const withContractor = await prisma.vehicles.count({
-          where: { ...where, contractor_equipment: { some: {} } },
-        });
-        const unassignedCount = totalInCross - withContractor;
-        if (unassignedCount > 0) {
-          countMap.set(NULL_FILTER_VALUE, unassignedCount);
-        }
-
-        const contractorIds = [...countMap.keys()].filter((k) => k !== NULL_FILTER_VALUE);
-        const contractors =
-          contractorIds.length > 0
-            ? await prisma.customers.findMany({
-                where: { id: { in: contractorIds } },
-                select: { id: true, name: true },
-              })
-            : [];
-
-        return {
-          counts: countMap,
-          resolvedOptions: contractors.map((c) => ({ value: c.id, label: c.name ?? '' })),
-        };
-      }
-
-      default:
-        return null;
-    }
+    return await inactiveVehicleQuery.getFacet(companyId, columnId, searchParams);
   } catch (error) {
     logger.error('Error al obtener facet de vehículo dado de baja', { data: { error, columnId } });
     return null;

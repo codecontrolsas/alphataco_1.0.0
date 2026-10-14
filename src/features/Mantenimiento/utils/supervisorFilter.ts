@@ -1,4 +1,4 @@
-'use server';
+import 'server-only';
 
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';

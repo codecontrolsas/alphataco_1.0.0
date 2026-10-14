@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardDescription, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import type { DocumentCompanyInfo } from '@/features/Documentacion/DetalleDocumento/actions/document-detail.server';
-import { formatCuit, shortDate } from '@/features/Documentacion/DetalleDocumento/lib/document-detail';
+import { dateOnlyLabel, formatCuit } from '@/features/Documentacion/DetalleDocumento/lib/document-detail';
 
 interface CompanyInfoCardProps {
   company: DocumentCompanyInfo | null;
@@ -21,7 +21,7 @@ export function CompanyInfoCard({
   dateOfAdmission,
   showDescription = false,
 }: CompanyInfoCardProps) {
-  const admissionDate = shortDate(dateOfAdmission);
+  const admissionDate = dateOnlyLabel(dateOfAdmission);
 
   return (
     <Card>

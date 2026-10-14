@@ -3,10 +3,17 @@ import { checkPermissionServer } from '@/features/Permissions';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { getDailyReportDetailPaginated, getDailyReportHeader } from './queries.server';
+import { DailyReportStatusFilterBar } from './components/DailyReportStatusFilterBar';
 import { _DailyReportDetailDataTable } from './components/_DailyReportDetailDataTable';
+import { DETAIL_PARAM_NAMESPACE, DETAIL_PREFS_ID } from './constants';
+import { getCachedDailyReportHeader } from './lib/header-cache';
+import { toReportDateString } from './lib/report-date';
+import { getDailyReportDetailPaginated } from './queries.server';
 
-const TABLE_ID = 'daily-report-detail';
+/** Primer valor de un param de URL (puede venir como string o array). */
+function firstParam(value: string | string[] | undefined): string | null {
+  return (Array.isArray(value) ? value[0] : value) ?? null;
+}
 
 interface Props {
   uuid: string;
@@ -14,36 +21,35 @@ interface Props {
 }
 
 export async function DailyReportDetailTable({ uuid, searchParams }: Props) {
-  const tableParams = stripPrefixFromSearchParams(searchParams, TABLE_ID);
+  const tableParams = stripPrefixFromSearchParams(searchParams, DETAIL_PARAM_NAMESPACE);
 
-  const header = await getDailyReportHeader(uuid);
-  const rawDate = header?.date ?? new Date();
-  // Extraer YYYY-MM-DD sin timezone para evitar desfase de fecha (UTC midnight → día anterior en hora local)
-  const reportDate =
-    rawDate instanceof Date
-      ? `${rawDate.getUTCFullYear()}-${String(rawDate.getUTCMonth() + 1).padStart(2, '0')}-${String(rawDate.getUTCDate()).padStart(2, '0')}`
-      : String(rawDate).slice(0, 10);
-  const dailyReportStatus = header?.status ?? 'abierto';
+  // La cabecera (cacheada por request) arranca YA, en paralelo con permisos y preferencias:
+  // solo la paginada necesita su fecha.
+  const headerPromise = getCachedDailyReportHeader(uuid);
 
-  const [{ data, total }, preferences, canUpdate, canDelete, canAssignResources] = await Promise.all([
-    getDailyReportDetailPaginated(uuid, tableParams, reportDate),
-    getTablePreferences(TABLE_ID),
+  const [preferences, canUpdate, canDelete, canAssignResources] = await Promise.all([
+    getTablePreferences(DETAIL_PREFS_ID),
     checkPermissionServer('operaciones', 'detalle-parte-diario', 'update'),
     checkPermissionServer('operaciones', 'detalle-parte-diario', 'delete'),
     checkPermissionServer('operaciones', 'detalle-parte-diario', 'assign_resources'),
   ]);
 
+  const header = await headerPromise;
+  // YYYY-MM-DD sin timezone para evitar desfase de fecha (UTC midnight → día anterior en hora local)
+  const reportDate = toReportDateString(header?.date ?? new Date());
+
+  const { data, total } = await getDailyReportDetailPaginated(uuid, tableParams, reportDate);
+
   return (
     <Card>
-      <CardContent className="pt-6">
+      <CardContent className="space-y-4 pt-6">
+        <DailyReportStatusFilterBar dailyReportId={uuid} serverStatus={firstParam(tableParams.status)} />
         <_DailyReportDetailDataTable
           data={data}
           totalRows={total}
           searchParams={tableParams}
-          tableId={TABLE_ID}
           dailyReportId={uuid}
           reportDate={reportDate}
-          dailyReportStatus={dailyReportStatus}
           canUpdate={canUpdate}
           canDelete={canDelete}
           canAssignResources={canAssignResources}

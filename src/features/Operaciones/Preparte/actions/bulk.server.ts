@@ -6,16 +6,16 @@ import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { prisma } from '@/shared/lib/prisma';
 import { resolveRowQuantity } from '@/features/Operaciones/PartesDiarios/lib/row-quantity';
+import { reconcileRowResourceStatus } from '@/features/Operaciones/PartesDiarios/lib/row-resource-status';
+import { argentinaDate, formatDateAr } from '@/shared/lib/argentina-time';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import moment from 'moment';
-import { BULK_EDITABLE_STATUSES } from '../lib/preparte-status';
+import { getStatusActorPayload } from '../lib/preparte-actor';
+import { preparteCompanyScope } from '../lib/preparte-scope';
+import { assertPreparteActionAllowed } from '../lib/preparte-permissions';
+import { BULK_EDITABLE_STATUSES, canTransition } from '../lib/preparte-status';
 
 const logger = new Logger('features/Operaciones/Preparte/bulk');
-
-/** Los pedidos viejos sin `company_id` siguen siendo operables (igual que antes de migrar). */
-function preparteCompanyScope(companyId: string) {
-  return { OR: [{ company_id: companyId }, { company_id: null }] };
-}
 
 /**
  * Filas elegibles para una acción masiva: de la empresa activa y en un estado que la
@@ -53,6 +53,7 @@ export async function updateMultiplePreparteStatus(
     confirmed_by?: string;
   }
 ) {
+  await assertPreparteActionAllowed('update');
   const companyId = await getActiveCompanyId();
   const eligibleIds = await findBulkEligibleIds(ids, companyId);
 
@@ -60,15 +61,7 @@ export async function updateMultiplePreparteStatus(
     throw new Error('Solo se pueden modificar masivamente pedidos pendientes o reprogramados.');
   }
 
-  const actorPayload: Record<string, string> = {};
-  if (updateData.status === 'rechazado' || updateData.status === 'cancelado' || updateData.status === 'reprogramado') {
-    const profile = await getServerAuthProfile();
-    if (profile) {
-      if (updateData.status === 'rechazado') actorPayload.rejected_by = profile.credentialId;
-      else if (updateData.status === 'cancelado') actorPayload.cancelled_by = profile.credentialId;
-      else actorPayload.reprogrammed_by = profile.credentialId;
-    }
-  }
+  const actorPayload = await getStatusActorPayload(updateData.status);
 
   try {
     const result = await prisma.preparte.updateMany({
@@ -80,6 +73,8 @@ export async function updateMultiplePreparteStatus(
         ...(updateData.reprogram_reason !== undefined ? { reprogram_reason: updateData.reprogram_reason } : {}),
         ...(updateData.confirmed_by !== undefined ? { confirmed_by: updateData.confirmed_by } : {}),
         ...actorPayload,
+        // Pedido viejo sin empresa: al tocarlo lo adopta la empresa activa.
+        company_id: companyId,
         updated_at: new Date(),
       },
     });
@@ -125,12 +120,20 @@ async function confirmSinglePreparte(
     throw new Error('El pedido no existe o no pertenece a la empresa activa.');
   }
 
+  // Estado confirmable (pendiente, reprogramado o vencido): no se confirma uno ya cerrado.
+  // Un pedido ya migrado al parte diario queda afuera de esta regla (sólo se actualiza `confirmed_by`).
+  if (!preparte.dailyreportrows && (!preparte.status || !canTransition(preparte.status, preparte_status.confirmado))) {
+    throw new Error(
+      `${preparte.numero_pedido || preparteId}: el pedido está ${preparte.status ?? 'sin estado'} y no puede confirmarse.`
+    );
+  }
+
   // Ya migrado: sólo actualizar quién confirmó.
   if (preparte.dailyreportrows) {
     if (confirmedBy) {
       await prisma.preparte.update({
         where: { id: preparteId },
-        data: { confirmed_by: confirmedBy, updated_at: new Date() },
+        data: { confirmed_by: confirmedBy, company_id: companyId, updated_at: new Date() },
       });
     }
     return { success: true, dailyReportRowId: preparte.dailyreportrows.id, alreadyExisted: true };
@@ -173,8 +176,8 @@ async function confirmSinglePreparte(
         // La cantidad del pedido se perdía en la conversión: `dailyreportrows` no tenía la
         // columna. Sin esto no hay importe posible aunque el precio exista.
         quantity: resolveRowQuantity(preparte.quantity),
-        start_time: preparte.start_time ? new Date(`1970-01-01T${preparte.start_time}`) : null,
-        end_time: preparte.end_time ? new Date(`1970-01-01T${preparte.end_time}`) : null,
+        start_time: preparte.start_time ? new Date(`1970-01-01T${preparte.start_time}Z`) : null,
+        end_time: preparte.end_time ? new Date(`1970-01-01T${preparte.end_time}Z`) : null,
         working_day: preparte.jornada,
         description: preparte.observaciones || '',
         sector_service_id: preparte.sector_service_id,
@@ -192,11 +195,15 @@ async function confirmSinglePreparte(
       });
     }
 
+    // Un ítem que no exige personal ni equipo no necesita esperar recursos.
+    await reconcileRowResourceStatus(tx, [row.id]);
+
     await tx.preparte.update({
       where: { id: preparteId },
       data: {
         status: preparte.status === preparte_status.vencido ? preparte_status.vencido : preparte_status.confirmado,
         ...(confirmedBy ? { confirmed_by: confirmedBy } : {}),
+        company_id: companyId,
         updated_at: new Date(),
       },
     });
@@ -216,6 +223,7 @@ export async function confirmPreparteToDailyReport(
   overrideExecutionDate?: string,
   confirmedBy?: string
 ): Promise<ConfirmPreparteResult> {
+  await assertPreparteActionAllowed('update');
   const companyId = await getActiveCompanyId();
   return confirmSinglePreparte(preparteId, companyId, overrideExecutionDate, confirmedBy);
 }
@@ -225,6 +233,7 @@ export async function confirmPreparteToDailyReport(
  * Los pedidos que no están en un estado elegible se informan como error, sin cortar el lote.
  */
 export async function confirmMultiplePrepartesToDailyReport(preparteIds: string[], confirmedBy: string) {
+  await assertPreparteActionAllowed('update');
   const companyId = await getActiveCompanyId();
   const eligibleIds = await findBulkEligibleIds(preparteIds, companyId);
 
@@ -275,6 +284,7 @@ export async function bulkReschedulePrepartes(ids: string[], newDate: Date, reas
     throw new Error('El motivo de reprogramación es obligatorio.');
   }
 
+  await assertPreparteActionAllowed('update');
   const profile = await getServerAuthProfile();
   const companyId = await getActiveCompanyId();
   const reprogrammedBy = profile?.credentialId ?? null;
@@ -294,8 +304,9 @@ export async function bulkReschedulePrepartes(ids: string[], newDate: Date, reas
       throw new Error(`${missingIds.length} pedido(s) no existen o ya no están pendientes/reprogramados.`);
     }
 
-    const fechaHoy = moment().format('DD/MM/YYYY');
-    const fechaNueva = moment(newDate).format('DD/MM/YYYY');
+    // Fechas de negocio: hoy en hora argentina; `newDate` es medianoche UTC de un día (`@db.Date`).
+    const fechaHoy = formatDateAr(argentinaDate());
+    const fechaNueva = moment.utc(newDate).format('DD/MM/YYYY');
 
     const operations = originals.flatMap((original) => [
       prisma.preparte.create({
@@ -329,6 +340,7 @@ export async function bulkReschedulePrepartes(ids: string[], newDate: Date, reas
           status: preparte_status.reprogramado,
           reprogram_reason: reason,
           reprogrammed_by: reprogrammedBy,
+          company_id: original.company_id ?? companyId,
           observaciones: `[${fechaHoy}] Se reprogramó para ${fechaNueva}. ${original.observaciones ?? ''}`.trim(),
           updated_at: new Date(),
         },

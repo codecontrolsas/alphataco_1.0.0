@@ -2,12 +2,13 @@
 import { VehicleById } from '@/app/dashboard/equipment/action/page';
 import { Form } from '@/components/ui/form';
 import { getCostCenterOptions } from '@/features/Empresa/General/actions/cost-centers.server';
-import { fetchAllContractorForVehicles } from '@/features/Equipos/EquipoID/actions/vehicle-actions';
+import { fetchAllContractorForVehicles } from '@/features/Equipos/EquipoID/actions/customer-catalog-actions';
 import { Logger } from '@/lib/logger';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQueryClient } from '@tanstack/react-query';
 import moment from 'moment';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { createVehicle, isVehicleDomainTaken, updateVehicle } from '../lib/actions/vehicle-actions';
@@ -19,11 +20,12 @@ import {
   getVehicleOwnersType,
   getVehicleTypes,
 } from '../lib/actions/vehicle-catalog-actions';
-import { useVehicleFormReset } from '../lib/store/vehicleFormReset';
+import { diffAllocations } from '../lib/allocation-diff';
+import { invalidateVehicleLists } from '../lib/invalidate-vehicle-lists';
 import { VEHICLE_TYPE_OF_VEHICLE_ID } from '../lib/utils/vehicle-utils';
-import { vehicleFormSchema } from '../schemas/vehicle';
+import { vehicleFormSchema, type VehicleFormValues } from '../schemas/vehicle';
 import { VehicleEditLayout } from './form/VehicleEditLayout';
-import { VehicleFormData, VehicleTabs } from './vehicle-tabs';
+import { VehicleTabs } from './vehicle-tabs';
 
 const logger = new Logger('VehicleForm');
 
@@ -49,22 +51,23 @@ interface VehicleFormProps {
 
 /**
  * Schema del formulario: la base vive en `schemas/vehicle.ts` (compartida con el servidor);
- * acá sólo se agrega el chequeo async de dominio repetido, que consulta una server action
- * y sólo aplica al alta (`action=new`).
+ * acá sólo se agrega el chequeo async de dominio repetido, que consulta una server action.
+ * En la edición se excluye al propio equipo.
  */
-const vehicleSchema = vehicleFormSchema.refine(
-  async (data) => {
-    if (
-      data.type_of_vehicle === '1' &&
-      data.domain &&
-      window.location.href.includes('/dashboard/equipment/action?action=new')
-    ) {
-      return !(await isVehicleDomainTaken(data.domain));
-    }
-    return true;
-  },
-  { message: 'El dominio ya existe', path: ['domain'] }
-);
+function buildVehicleSchema(excludeId: string | undefined) {
+  return vehicleFormSchema.refine(
+    async (data) => {
+      if (data.type_of_vehicle === '1' && data.domain) {
+        return !(await isVehicleDomainTaken(data.domain, excludeId));
+      }
+      return true;
+    },
+    { message: 'El dominio ya está registrado', path: ['domain'] }
+  );
+}
+
+/** Día sin hora: se manda como `YYYY-MM-DD` para que la zona del navegador no corra la fecha. */
+const toDateString = (value: Date | null | undefined) => (value ? moment(value).format('YYYY-MM-DD') : null);
 
 export function VehicleForm({ vehicle, mode, vehicleId, ...otherProps }: VehicleFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -74,39 +77,52 @@ export function VehicleForm({ vehicle, mode, vehicleId, ...otherProps }: Vehicle
   const submitLockRef = useRef(false);
   const readOnly = mode === 'view';
   const router = useRouter();
+  const queryClient = useQueryClient();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { resetTrigger, triggerReset } = useVehicleFormReset();
+  const vehicleSchema = useMemo(() => buildVehicleSchema(mode === 'edit' ? vehicleId : undefined), [mode, vehicleId]);
+  // Baseline de afectaciones: lo que la ficha trajo del servidor al abrir. El delta se arma contra esto.
+  const baselineAllocations = vehicle?.allocated_to ?? [];
 
-  const onSubmit = async (data: VehicleFormData) => {
+  const onSubmit = async (data: VehicleFormValues) => {
     if (submitLockRef.current) {
       logger.warn('Submit descartado: ya hay un guardado en curso');
       return;
     }
     submitLockRef.current = true;
     setIsSubmitting(true);
-    let createdVehicleId;
-    // La fecha de certificacion viaja como 'YYYY-MM-DD' (formateada en la zona del navegador),
-    // igual que en equipamientos. Si viajara como Date, un navegador al este de UTC la
-    // serializa como el dia anterior (medianoche local del 15 = 14 a las 23:00 UTC) y la
-    // columna DATE guarda un dia menos.
+    let createdVehicleId: string | undefined;
+    // Las fechas viajan como 'YYYY-MM-DD' (formateadas en la zona del navegador). Si viajaran como
+    // Date, un navegador al este de UTC la serializa como el dia anterior (medianoche local del 15
+    // = 14 a las 23:00 UTC) y la columna DATE guarda un dia menos.
+    const { allocated_to: finalAllocations, ...rest } = data;
     const payload = {
-      ...data,
-      certification_expiration_date:
-        data.has_certification && data.certification_expiration_date
-          ? moment(data.certification_expiration_date).format('YYYY-MM-DD')
-          : null,
+      ...rest,
+      contract_start_date: toDateString(data.contract_start_date),
+      contract_expiration_date: toDateString(data.contract_expiration_date),
+      certification_expiration_date: data.has_certification ? toDateString(data.certification_expiration_date) : null,
     };
     try {
       if (mode === 'new') {
-        const result = await createVehicle(payload);
+        // Alta: no hay baseline, todas las afectaciones son altas.
+        const result = await createVehicle({ ...payload, allocated_to: finalAllocations ?? [] });
         if (result?.id) {
           createdVehicleId = result.id;
         }
         toast.success('Equipo creado correctamente');
       } else {
-        await updateVehicle(vehicleId!, payload);
-        toast.success('Equipo actualizado correctamente');
+        const allocationChanges = diffAllocations(baselineAllocations, finalAllocations ?? []);
+        const result = await updateVehicle(vehicleId!, { ...payload, allocation_changes: allocationChanges });
+        const allocationSummary = [
+          result.added > 0 ? `${result.added} afectación(es) agregada(s)` : null,
+          result.removed > 0 ? `${result.removed} afectación(es) quitada(s)` : null,
+        ]
+          .filter(Boolean)
+          .join(', ');
+        toast.success(
+          'Equipo actualizado correctamente',
+          allocationSummary ? { description: allocationSummary } : undefined
+        );
       }
       // El boton queda deshabilitado a proposito: la navegacion a la vista de detalle
       // sigue en curso y liberarlo aca permitiria crear el mismo equipo otra vez.
@@ -120,13 +136,13 @@ export function VehicleForm({ vehicle, mode, vehicleId, ...otherProps }: Vehicle
     }
   };
 
-  const form = useForm<VehicleFormData>({
+  const form = useForm<VehicleFormValues>({
     resolver: zodResolver(vehicleSchema),
     defaultValues: {
       // Unico valor posible en este form: los otros equipos se cargan desde su propia pantalla
       type_of_vehicle: vehicle?.types_of_vehicles?.id?.toString() || VEHICLE_TYPE_OF_VEHICLE_ID,
       brand: vehicle?.brand_vehicles?.id?.toString() || '',
-      model: vehicle?.model_vehicles?.id?.toString() || null,
+      model: vehicle?.model_vehicles?.id?.toString() || '',
       year: vehicle?.year || '',
       engine: vehicle?.engine || '',
       type: vehicle?.type.id || null,
@@ -159,25 +175,13 @@ export function VehicleForm({ vehicle, mode, vehicleId, ...otherProps }: Vehicle
     },
   });
 
-  useEffect(() => {
-    if (resetTrigger > 0) {
-      form.reset();
-    }
-  }, [resetTrigger]);
-
-  const refresh = (createdVehicleId?: string | undefined) => {
-    if (!createdVehicleId) {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set('action', 'view');
-      router.refresh();
-      router.push(`${pathname}?${params.toString()}`);
-    } else {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set('action', 'view');
-      params.set('id', createdVehicleId.toString());
-      router.refresh();
-      router.push(`${pathname}?${params.toString()}`);
-    }
+  /** Tras guardar: a la ficha en lectura (la del equipo nuevo si fue un alta). `revalidatePath` ya refrescó los datos. */
+  const refresh = (createdVehicleId?: string) => {
+    invalidateVehicleLists(queryClient);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('action', 'view');
+    if (createdVehicleId) params.set('id', createdVehicleId);
+    router.push(`${pathname}?${params.toString()}`);
   };
 
   // Al editar, el form NO se remonta despues de guardar (la key del padre es el id del
@@ -202,7 +206,7 @@ export function VehicleForm({ vehicle, mode, vehicleId, ...otherProps }: Vehicle
     const params = new URLSearchParams(searchParams.toString());
     params.set('action', 'view');
     router.push(`${pathname}?${params.toString()}`);
-    triggerReset();
+    form.reset();
   };
 
   // Lectura: ficha con pestañas. Edición y alta: formulario completo en una página.
@@ -239,6 +243,7 @@ export function VehicleForm({ vehicle, mode, vehicleId, ...otherProps }: Vehicle
           typesOfVehiclesPromise: otherProps.typesOfVehiclesPromise,
         }}
         assignmentProps={{
+          baselineAllocations,
           contractorsPromise: otherProps.contractorsPromise,
           costCentersPromise: otherProps.costCentersPromise,
           hierarchicalPositionsPromise: otherProps.hierarchicalPositionsPromise,

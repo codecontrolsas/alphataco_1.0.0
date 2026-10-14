@@ -2,7 +2,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { getTireBrandsPaginated } from '../actions/actions.server';
+import { getTireBrandsPaginated } from '../actions/brand-list.server';
 import _MarcasDataTable from './_MarcasDataTable';
 
 // ============================================================================

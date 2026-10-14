@@ -3,9 +3,10 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Settings } from 'lucide-react';
 import type { UseFormReturn } from 'react-hook-form';
+import type { DailyReportRowFormValues } from '../form-types';
 
 type StatusSectionProps = {
-  form: UseFormReturn<any>;
+  form: UseFormReturn<DailyReportRowFormValues>;
   isCreating: boolean;
   currentStatus?: string;
   disabled?: boolean;
@@ -37,7 +38,7 @@ export function StatusSection({ form, isCreating, currentStatus, disabled }: Sta
           {/* Estado fijo en creación */}
           <div className="space-y-2">
             <label className="text-sm font-medium">Estado</label>
-            <div className="px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border rounded-md text-sm">
+            <div className="px-3 py-2 bg-cert-subtle text-cert-subtle-foreground border rounded-md text-sm">
               En certificación (Estado inicial)
             </div>
           </div>

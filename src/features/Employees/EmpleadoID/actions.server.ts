@@ -1,24 +1,17 @@
 'use server';
 
-import type {
-  cost_type_enum,
-  document_type_enum,
-  gender_enum,
-  level_of_education_enum,
-  marital_status_enum,
-  nationality_enum,
-} from '@/generated/prisma/client';
+import { canViewServer } from '@/features/Permissions/actionsServer';
 import { Logger } from '@/lib/logger';
-import { withActor } from '@/shared/lib/actor';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
-import { getSessionUserId } from '@/shared/lib/session';
-import { callVoid } from '@/shared/lib/sql';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { revalidatePath } from 'next/cache';
 import { cache } from 'react';
-import { createEmployeeCore } from './lib/create-employee-core';
-import type { EmployeeFormData } from './schemas/employee-schema';
+import {
+  getEmployeeDiagramHistory as readEmployeeDiagramHistory,
+  getEmployeeDiagrams as readEmployeeDiagrams,
+} from './lib/employee-diagram-queries';
+import { createEmployeeMutation, updateEmployeeMutation } from './lib/employee-mutations';
+import type { EmployeeFormData, EmployeeUpdateData } from './schemas/employee-schema';
 
 const logger = new Logger('features/EmpleadoID');
 
@@ -28,6 +21,8 @@ const logger = new Logger('features/EmpleadoID');
  */
 export const getEmployeeByIdCached = cache(async (employeeId: string) => {
   logger.debug('Obteniendo empleado por ID', { data: { employeeId } });
+  // Sin `view` sobre Empleados el legajo no se entrega (la página responde 404).
+  if (!(await canViewServer('empleados', 'employees'))) return null;
   const companyId = await getActiveCompanyId();
 
   try {
@@ -380,80 +375,11 @@ export async function getAllWorkshopSectorOptions() {
 }
 export type WorkshopSectorOption = Awaited<ReturnType<typeof getAllWorkshopSectorOptions>>[number];
 
-// ─── Funciones de diagramas ───────────────────────────────────────────────────
-
-/**
- * Obtiene el historial de cambios de diagramas de un empleado.
- * Incluye el perfil del usuario que realizó la modificación.
- */
-export async function getEmployeeDiagramHistory(employeeId: string) {
-  logger.debug('Obteniendo historial de diagramas del empleado', { data: { employeeId } });
-  try {
-    return await prisma.diagrams_logs.findMany({
-      where: { employee_id: employeeId, employees: { company_id: await getActiveCompanyId() } },
-      select: {
-        id: true,
-        created_at: true,
-        prev_date: true,
-        description: true,
-        state: true,
-        prev_state: true,
-        profile: {
-          select: { fullname: true },
-        },
-      },
-      orderBy: { created_at: 'desc' },
-    });
-  } catch (error) {
-    logger.error('Error al obtener historial de diagramas del empleado', { data: { error, employeeId } });
-    return [];
-  }
-}
-export type EmployeeDiagramHistoryData = Awaited<ReturnType<typeof getEmployeeDiagramHistory>>;
-export type EmployeeDiagramHistoryEntry = EmployeeDiagramHistoryData[number];
-
-/**
- * Obtiene los diagramas asignados a un empleado con el tipo de diagrama incluido.
- */
-export async function getEmployeeDiagrams(employeeId: string) {
-  logger.debug('Obteniendo diagramas del empleado', { data: { employeeId } });
-  try {
-    return await prisma.employees_diagram.findMany({
-      where: { employee_id: employeeId, employees: { company_id: await getActiveCompanyId() } },
-      select: {
-        id: true,
-        created_at: true,
-        employee_id: true,
-        day: true,
-        month: true,
-        year: true,
-        is_active: true,
-        comments: true,
-        diagram_type_employees_diagram_diagram_typeTodiagram_type: {
-          select: {
-            id: true,
-            name: true,
-            color: true,
-            company_id: true,
-            created_at: true,
-            short_description: true,
-          },
-        },
-      },
-    });
-  } catch (error) {
-    logger.error('Error al obtener diagramas del empleado', { data: { error, employeeId } });
-    return [];
-  }
-}
-export type EmployeeDiagramsData = Awaited<ReturnType<typeof getEmployeeDiagrams>>;
-export type EmployeeDiagramEntry = EmployeeDiagramsData[number];
-
 /**
  * Obtiene todos los tipos de diagrama de la compañía del usuario actual.
  */
-export async function getDiagramTypes(_companyId?: string) {
-  // El parámetro se conserva por compatibilidad: la empresa SIEMPRE sale de la sesión.
+export async function getDiagramTypes() {
+  // La empresa SIEMPRE sale de la sesión.
   const companyId = await getActiveCompanyId();
   logger.debug('Obteniendo tipos de diagrama', { data: { companyId } });
   try {
@@ -469,141 +395,38 @@ export async function getDiagramTypes(_companyId?: string) {
 }
 export type DiagramTypeOption = Awaited<ReturnType<typeof getDiagramTypes>>[number];
 
-// ─── Funciones de mutación ────────────────────────────────────────────────────
+// ─── Diagramas del empleado ───────────────────────────────────────────────────
+// La lógica vive en `lib/employee-diagram-queries.ts` (sin `'use server'`); estas son las
+// server actions expuestas, con el mismo nombre que siempre.
 
-/**
- * Crea un nuevo empleado junto con sus relaciones M:M (afectaciones y aptitudes).
- * Obtiene el company_id de la sesión activa del usuario.
- * Usa prisma.$transaction para garantizar atomicidad.
- */
-export async function createEmployee(data: EmployeeFormData) {
-  logger.debug('Creando empleado', { data: { firstname: data.firstname, lastname: data.lastname } });
-
-  const [company_id, actor] = await Promise.all([getActiveCompanyId(), getSessionUserId()]);
-  if (!actor) throw new Error('Sesión requerida');
-
-  try {
-    // La creacion vive en createEmployeeCore para que la comparta la conversion de un
-    // candidato en legajo (ticket 505) y ambos flujos creen al empleado igual.
-    // withActor: los triggers de documentos/alertas leen app.user_id.
-    const employee = await withActor(actor, (tx) => createEmployeeCore(tx, data, company_id));
-
-    logger.info('Empleado creado exitosamente', { data: { employeeId: employee.id } });
-    revalidatePath('/dashboard/employee/action');
-    revalidatePath('/dashboard/employee');
-    return employee;
-  } catch (error) {
-    logger.error('Error al crear empleado', { data: { error } });
-    throw error;
-  }
+/** Historial de cambios de diagramas de un empleado (requiere `empleados:employees:view`). */
+export async function getEmployeeDiagramHistory(employeeId: string) {
+  return readEmployeeDiagramHistory(employeeId);
 }
+export type EmployeeDiagramHistoryData = Awaited<ReturnType<typeof getEmployeeDiagramHistory>>;
+export type EmployeeDiagramHistoryEntry = EmployeeDiagramHistoryData[number];
 
+/** Diagramas asignados a un empleado, con el tipo incluido (requiere `empleados:employees:view`). */
+export async function getEmployeeDiagrams(employeeId: string) {
+  return readEmployeeDiagrams(employeeId);
+}
+export type EmployeeDiagramsData = Awaited<ReturnType<typeof getEmployeeDiagrams>>;
+export type EmployeeDiagramEntry = EmployeeDiagramsData[number];
+
+// ─── Funciones de mutación ────────────────────────────────────────────────────
+// La lógica vive en `lib/employee-mutations.ts`. Ver ahí el contrato de edición por deltas.
+
+/** Crea un empleado (requiere `empleados:employees:create`). La empresa sale de la sesión. */
+export async function createEmployee(data: EmployeeFormData) {
+  return createEmployeeMutation(data);
+}
 export type CreateEmployeeResult = Awaited<ReturnType<typeof createEmployee>>;
 
 /**
- * Actualiza un empleado existente junto con sus relaciones M:M (afectaciones y aptitudes).
- * Para M:M utiliza deleteMany + createMany (reemplaza relaciones completas).
- * Usa prisma.$transaction para garantizar atomicidad.
+ * Actualiza un empleado (requiere `empleados:employees:update`). Las M:M se aplican con los
+ * deltas `allocation_changes` / `aptitude_changes` / `workshop_sector_changes` (`{ add, remove }`).
  */
-export async function updateEmployee(employeeId: string, data: EmployeeFormData) {
-  logger.debug('Actualizando empleado', { data: { employeeId } });
-
-  const [company_id, actor] = await Promise.all([getActiveCompanyId(), getSessionUserId()]);
-  if (!actor) throw new Error('Sesión requerida');
-
-  const { allocated_to, aptitudes, workshop_sector_ids, province, city, date_of_admission, ...scalarData } = data;
-
-  try {
-    const employee = await withActor(actor, async (tx) => {
-      // Actualizar campos escalares del empleado (sólo si es de la empresa activa)
-      const updated = await tx.employees.update({
-        where: { id: employeeId, company_id },
-        data: {
-          ...scalarData,
-          province: BigInt(province),
-          city: city != null ? BigInt(city) : null,
-          date_of_admission: date_of_admission ? new Date(date_of_admission) : undefined,
-          // Castings de enums: el formulario usa string, Prisma espera los tipos de enum
-          nationality: scalarData.nationality as nationality_enum,
-          document_type: scalarData.document_type as document_type_enum,
-          gender: scalarData.gender as gender_enum,
-          marital_status: scalarData.marital_status as marital_status_enum,
-          level_of_education: scalarData.level_of_education as level_of_education_enum,
-          cost_type: scalarData.cost_type ? (scalarData.cost_type as cost_type_enum) : undefined,
-          allocated_to: allocated_to ?? [],
-        },
-        select: { id: true },
-      });
-
-      // M:M — afectaciones a contratistas: reemplazar completamente
-      if (allocated_to !== undefined) {
-        await tx.contractor_employee.deleteMany({
-          where: { employee_id: employeeId },
-        });
-
-        if (allocated_to.length > 0) {
-          await tx.contractor_employee.createMany({
-            data: allocated_to.map((contractorId) => ({
-              employee_id: employeeId,
-              contractor_id: contractorId,
-            })),
-            skipDuplicates: true,
-          });
-        }
-      }
-
-      // M:M — aptitudes técnicas: reemplazar completamente
-      if (aptitudes !== undefined) {
-        await tx.empleado_aptitudes.deleteMany({
-          where: { empleado_id: employeeId },
-        });
-
-        if (aptitudes.length > 0) {
-          await tx.empleado_aptitudes.createMany({
-            data: aptitudes.map((aptitudId) => ({
-              empleado_id: employeeId,
-              aptitud_id: aptitudId,
-            })),
-            skipDuplicates: true,
-          });
-        }
-      }
-
-      // M:M — sectores de taller asignados: reemplazar completamente
-      if (workshop_sector_ids !== undefined) {
-        await tx.employee_workshop_sectors.deleteMany({
-          where: { employee_id: employeeId },
-        });
-
-        if (workshop_sector_ids.length > 0) {
-          await tx.employee_workshop_sectors.createMany({
-            data: workshop_sector_ids.map((sectorId) => ({
-              employee_id: employeeId,
-              workshop_sector_id: sectorId,
-            })),
-            skipDuplicates: true,
-          });
-        }
-      }
-
-      // 358 / M:M: re-evaluar los documentos requeridos con el estado FINAL del empleado.
-      // Las condiciones many-to-many (contratistas/aptitudes) se reemplazan despues del update
-      // escalar, por lo que el trigger automatico (que corre en el update escalar) las ve viejas.
-      // Este recalculo explicito usa el estado ya actualizado. Es 1 solo recurso (barato) y su
-      // UPDATE de status no dispara cascada (status no esta en la guarda de controlar_alertas).
-      await callVoid('controlar_alertas_documentos_single_employee', [{ uuid: employeeId }, { uuid: company_id }], tx);
-
-      return updated;
-    });
-
-    logger.info('Empleado actualizado exitosamente', { data: { employeeId: employee.id } });
-    revalidatePath('/dashboard/employee/action');
-    revalidatePath('/dashboard/employee');
-    return employee;
-  } catch (error) {
-    logger.error('Error al actualizar empleado', { data: { error, employeeId } });
-    throw error;
-  }
+export async function updateEmployee(employeeId: string, data: EmployeeUpdateData) {
+  return updateEmployeeMutation(employeeId, data);
 }
-
 export type UpdateEmployeeResult = Awaited<ReturnType<typeof updateEmployee>>;

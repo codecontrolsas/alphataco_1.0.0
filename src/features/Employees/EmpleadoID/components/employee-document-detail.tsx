@@ -2,8 +2,7 @@ import { MonthlyEmployeeDocumentsList } from '@/features/Documentacion/Documento
 import { MonthlyEmployeeDocumentsSkeleton } from '@/features/Documentacion/DocumentosEmpleados/Mensuales/fallback/MonthlyEmployeeDocumentsSkeleton';
 import { EmployeePermanentDocumentsList } from '@/features/Documentacion/DocumentosEmpleados/Permanentes/EmployeePermanentDocumentsList';
 import { EmployeePermanentDocumentsSkeleton } from '@/features/Documentacion/DocumentosEmpleados/Permanentes/fallback/EmployeePermanentDocumentsSkeleton';
-import DocumentNav from '@/features/Documentacion/shared/components/DocumentNav';
-import { PermissionGuardServer, getUserPermissionsMapServer } from '@/features/Permissions';
+import { getUserPermissionsMapServer } from '@/features/Permissions';
 import { TabsManagerServer } from '@/features/TabsManager';
 import { Calendar, FileArchive } from 'lucide-react';
 import { Suspense } from 'react';
@@ -44,11 +43,6 @@ export async function EmployeeDocumentDetail({ employeeId, searchParams }: Emplo
           tabSlug: 'docs-empleados-permanentes',
           content: (
             <div>
-              <PermissionGuardServer module="documentacion" tab="documentos-de-empleados" action="create">
-                <div className="flex gap-4 flex-wrap mb-4">
-                  <DocumentNav id_user={employeeId} onlyEmployees onlyNoMultiresource />
-                </div>
-              </PermissionGuardServer>
               <Suspense fallback={<EmployeePermanentDocumentsSkeleton />}>
                 <EmployeePermanentDocumentsList searchParams={searchParams} employeeId={employeeId} />
               </Suspense>
@@ -67,11 +61,6 @@ export async function EmployeeDocumentDetail({ employeeId, searchParams }: Emplo
           tabSlug: 'docs-empleados-mensuales',
           content: (
             <div>
-              <PermissionGuardServer module="documentacion" tab="documentos-de-empleados" action="create">
-                <div className="flex gap-4 flex-wrap mb-4">
-                  <DocumentNav id_user={employeeId} onlyEmployees onlyNoMultiresource />
-                </div>
-              </PermissionGuardServer>
               <Suspense fallback={<MonthlyEmployeeDocumentsSkeleton />}>
                 <MonthlyEmployeeDocumentsList searchParams={searchParams} employeeId={employeeId} />
               </Suspense>

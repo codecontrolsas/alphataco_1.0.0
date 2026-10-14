@@ -1,16 +1,42 @@
 'use server';
 
+import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
-import {
-  NULL_FILTER_VALUE,
-  parseSearchParams,
-  stateToPrismaParams,
-} from '@/shared/components/common/DataTable/helpers';
+import { NULL_FILTER_VALUE, parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { employeeLabel } from '@/shared/lib/resource-labels';
+import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
+import { clampedPageParams } from '@/shared/lib/table-pagination';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
+
+import { assertDiagramAccess } from '../lib/diagram-access';
+import { uuidLike } from '../lib/diagram-ids';
 
 const logger = new Logger('Employees/Diagrams/Reports/actions.server');
+
+/** Tope de filas del export: más que esto no se descarga entero (se pide acotar con filtros). */
+const EXPORT_MAX_ROWS = 10_000;
+
+/** Tamaño máximo de página. */
+const MAX_PAGE_SIZE = 200;
+
+/** Columnas con filtro de texto sobre campos del empleado o de la novedad. */
+const TEXT_FILTER_KEYS = ['lastname', 'firstname', 'cuil', 'fileNumber', 'comments'] as const;
+/** Columnas numéricas (day/month/year) con filtro de texto exacto. */
+const NUMBER_FILTER_KEYS = ['day', 'month', 'year'] as const;
+
+/** Lista blanca de filtros de la tabla: cualquier otra clave de la URL se descarta. */
+const ALLOWED_FILTER_KEYS = new Set<string>([
+  'employee',
+  'diagramType',
+  'companyPosition',
+  ...TEXT_FILTER_KEYS,
+  ...NUMBER_FILTER_KEYS,
+  ...dateRangeKeys(['created_at']),
+]);
 
 // ============================================================================
 // CONSTANTS
@@ -27,6 +53,8 @@ const VALID_SORT_FIELDS = new Set([
   'employee',
   'diagramType',
   'companyPosition',
+  'fileNumber',
+  'cuil',
 ]);
 
 /**
@@ -36,6 +64,8 @@ const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Record<string, unknow
   employee: (dir) => ({ employees: { lastname: dir } }),
   diagramType: (dir) => ({ diagram_type_employees_diagram_diagram_typeTodiagram_type: { name: dir } }),
   companyPosition: (dir) => ({ employees: { company_positions: { name: dir } } }),
+  fileNumber: (dir) => ({ employees: { file: dir } }),
+  cuil: (dir) => ({ employees: { cuil: dir } }),
 };
 
 /** Select común con todas las relaciones resueltas */
@@ -76,27 +106,46 @@ const DIAGRAM_REPORT_SELECT = {
 // HELPERS INTERNOS
 // ============================================================================
 
-/**
- * Construye el WHERE clause compartido entre paginated, export y facets.
- * Maneja todos los filtros manualmente ya que los campos son en relaciones anidadas.
- */
-function buildWhereClause(companyId: string, state: ReturnType<typeof parseSearchParams>) {
-  const andConditions: Record<string, unknown>[] = [];
+type ReportState = ReturnType<typeof parseSearchParams>;
 
-  // ── Siempre: empleados activos + diagrama de la empresa ─────────────────
-  const baseWhere = {
-    employees: { is_active: true },
-    diagram_type_employees_diagram_diagram_typeTodiagram_type: { company_id: companyId },
-  };
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}/;
+
+/**
+ * Límites del día argentino (UTC-3, sin horario de verano) de un filtro `YYYY-MM-DD`. El fin cubre
+ * todo el día (23:59:59.999), no la medianoche, para incluir los registros de ese día.
+ */
+function argentinaDayBound(value: string, bound: 'start' | 'end'): Date | null {
+  if (!ISO_DAY.test(value)) return null;
+  const day = value.slice(0, 10);
+  const date = new Date(bound === 'start' ? `${day}T00:00:00.000-03:00` : `${day}T23:59:59.999-03:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** Ids válidos de un filtro faceteado (descarta el centinela de nulo y texto que no es UUID). */
+function validIds(values: string[]): string[] {
+  return values.filter((value) => value !== NULL_FILTER_VALUE && uuidLike.safeParse(value).success);
+}
+
+/**
+ * Construye el WHERE compartido entre paginated, export y facets. El perímetro (empleados activos de la
+ * empresa) y todos los filtros van en un único `AND`. Los campos están en relaciones anidadas, por eso
+ * los filtros se arman a mano en vez de pasar por `buildFiltersWhere`.
+ */
+function buildWhereClause(companyId: string, rawState: ReportState): Prisma.employees_diagramWhereInput {
+  const state = sanitizeFilters(rawState, ALLOWED_FILTER_KEYS);
+  const and: Prisma.employees_diagramWhereInput[] = [
+    // ── Perímetro: empleados activos de la empresa ───────────────────────────
+    { employees: { company_id: companyId, is_active: true } },
+  ];
 
   // ── Búsqueda global (OR entre múltiples campos de empleado) ─────────────
   if (state.search) {
-    andConditions.push({
+    and.push({
       OR: [
-        { employees: { lastname: { contains: state.search, mode: 'insensitive' as const } } },
-        { employees: { firstname: { contains: state.search, mode: 'insensitive' as const } } },
-        { employees: { cuil: { contains: state.search, mode: 'insensitive' as const } } },
-        { employees: { file: { contains: state.search, mode: 'insensitive' as const } } },
+        { employees: { lastname: { contains: state.search, mode: 'insensitive' } } },
+        { employees: { firstname: { contains: state.search, mode: 'insensitive' } } },
+        { employees: { cuil: { contains: state.search, mode: 'insensitive' } } },
+        { employees: { file: { contains: state.search, mode: 'insensitive' } } },
       ],
     });
   }
@@ -104,108 +153,83 @@ function buildWhereClause(companyId: string, state: ReturnType<typeof parseSearc
   // ── Filtro por empleado (FK: employee_id) ────────────────────────────────
   const employeeFilter = state.filters['employee'];
   if (employeeFilter?.length) {
-    andConditions.push({ employee_id: { in: employeeFilter } });
+    and.push({ employee_id: { in: validIds(employeeFilter) } });
   }
 
   // ── Filtro por tipo de novedad (FK: diagram_type) ────────────────────────
   const diagramTypeFilter = state.filters['diagramType'];
   if (diagramTypeFilter?.length) {
-    andConditions.push({ diagram_type: { in: diagramTypeFilter } });
+    and.push({ diagram_type: { in: validIds(diagramTypeFilter) } });
   }
 
   // ── Filtro por puesto (FK: company_position vía employees) ───────────────
   const companyPositionFilter = state.filters['companyPosition'];
   if (companyPositionFilter?.length) {
     const hasNull = companyPositionFilter.includes(NULL_FILTER_VALUE);
-    const realValues = companyPositionFilter.filter((v) => v !== NULL_FILTER_VALUE);
+    const realValues = validIds(companyPositionFilter);
     if (hasNull && realValues.length > 0) {
-      andConditions.push({
+      and.push({
         OR: [{ employees: { company_position: { in: realValues } } }, { employees: { company_position: null } }],
       });
     } else if (hasNull) {
-      andConditions.push({ employees: { company_position: null } });
+      and.push({ employees: { company_position: null } });
     } else {
-      andConditions.push({ employees: { company_position: { in: realValues } } });
+      and.push({ employees: { company_position: { in: realValues } } });
     }
   }
 
   // ── Filtros de texto en campos del empleado (cada uno por separado) ──────
   const lastnameFilter = state.filters['lastname']?.[0];
   if (lastnameFilter) {
-    andConditions.push({
-      employees: { lastname: { contains: lastnameFilter, mode: 'insensitive' as const } },
-    });
+    and.push({ employees: { lastname: { contains: lastnameFilter, mode: 'insensitive' } } });
   }
 
   const firstnameFilter = state.filters['firstname']?.[0];
   if (firstnameFilter) {
-    andConditions.push({
-      employees: { firstname: { contains: firstnameFilter, mode: 'insensitive' as const } },
-    });
+    and.push({ employees: { firstname: { contains: firstnameFilter, mode: 'insensitive' } } });
   }
 
   const cuilFilter = state.filters['cuil']?.[0];
   if (cuilFilter) {
-    andConditions.push({
-      employees: { cuil: { contains: cuilFilter, mode: 'insensitive' as const } },
-    });
+    and.push({ employees: { cuil: { contains: cuilFilter, mode: 'insensitive' } } });
   }
 
-  // Legajo: exact match (not contains) — legajos are short numbers
+  // Legajo: coincidencia exacta (no contains) — los legajos son números cortos
   const fileNumberFilter = state.filters['fileNumber']?.[0];
   if (fileNumberFilter) {
-    andConditions.push({
-      employees: { file: { equals: fileNumberFilter, mode: 'insensitive' as const } },
-    });
+    and.push({ employees: { file: { equals: fileNumberFilter, mode: 'insensitive' } } });
   }
 
   // ── Filtro de texto en comentario (campo directo) ────────────────────────
   const commentsFilter = state.filters['comments']?.[0];
   if (commentsFilter) {
-    andConditions.push({
-      comments: { contains: commentsFilter, mode: 'insensitive' as const },
-    });
+    and.push({ comments: { contains: commentsFilter, mode: 'insensitive' } });
   }
 
-  // ── Filtros numéricos en day/month/year (Decimal) ────────────────────────
-  const dayFilter = state.filters['day']?.[0];
-  if (dayFilter) {
-    const dayNum = Number(dayFilter);
-    if (!isNaN(dayNum)) {
-      andConditions.push({ day: { equals: dayNum } });
+  // ── Filtros numéricos en day/month/year (Decimal): solo enteros ─────────
+  for (const key of NUMBER_FILTER_KEYS) {
+    const raw = state.filters[key]?.[0]?.trim();
+    if (!raw) continue;
+    // Un valor que no es entero no puede coincidir con ninguna fila: se excluye todo en vez de ignorar el filtro.
+    if (!/^\d{1,4}$/.test(raw)) {
+      and.push({ id: { in: [] } });
+      continue;
     }
+    const equals = Number(raw);
+    and.push(key === 'day' ? { day: { equals } } : key === 'month' ? { month: { equals } } : { year: { equals } });
   }
 
-  const monthFilter = state.filters['month']?.[0];
-  if (monthFilter) {
-    const monthNum = Number(monthFilter);
-    if (!isNaN(monthNum)) {
-      andConditions.push({ month: { equals: monthNum } });
-    }
-  }
-
-  const yearFilter = state.filters['year']?.[0];
-  if (yearFilter) {
-    const yearNum = Number(yearFilter);
-    if (!isNaN(yearNum)) {
-      andConditions.push({ year: { equals: yearNum } });
-    }
-  }
-
-  // ── Filtros de fecha (dateRange: created_at) ──────────────────────────────
+  // ── Fecha de registro (dateRange: created_at), en hora argentina ─────────
   const createdAtFrom = state.filters['created_at_from']?.[0];
   const createdAtTo = state.filters['created_at_to']?.[0];
-  if (createdAtFrom || createdAtTo) {
-    const dateFilter: Record<string, unknown> = {};
-    if (createdAtFrom) dateFilter['gte'] = new Date(createdAtFrom);
-    if (createdAtTo) dateFilter['lte'] = new Date(createdAtTo);
-    andConditions.push({ created_at: dateFilter });
-  }
+  const createdAt: Prisma.DateTimeFilter = {};
+  const fromDate = createdAtFrom ? argentinaDayBound(createdAtFrom, 'start') : null;
+  const toDate = createdAtTo ? argentinaDayBound(createdAtTo, 'end') : null;
+  if (fromDate) createdAt.gte = fromDate;
+  if (toDate) createdAt.lte = toDate;
+  if (fromDate || toDate) and.push({ created_at: createdAt });
 
-  return {
-    ...baseWhere,
-    ...(andConditions.length > 0 ? { AND: andConditions } : {}),
-  };
+  return { AND: and };
 }
 
 // ============================================================================
@@ -213,11 +237,12 @@ function buildWhereClause(companyId: string, state: ReturnType<typeof parseSearc
 // ============================================================================
 
 export async function getDiagramReportsPaginated(searchParams: DataTableSearchParams) {
+  await assertDiagramAccess('reports');
   const companyId = await getActiveCompanyId();
 
   try {
     const state = parseSearchParams(searchParams);
-    const { skip, take } = stateToPrismaParams(state);
+    const { skip, take } = clampedPageParams(state, { max: MAX_PAGE_SIZE });
     const where = buildWhereClause(companyId, state);
 
     // Safe orderBy: multi-sort, only valid fields, with FK_SORT_MAP
@@ -229,13 +254,14 @@ export async function getDiagramReportsPaginated(searchParams: DataTableSearchPa
         resolvedSorts.push(fkMapper ? fkMapper(dir) : { [s.id]: dir });
       }
     }
-    // Default sort: employee lastname ASC, then year/month/day DESC
+    // Default sort: employee lastname ASC, then year/month/day DESC; `id` desempata para paginar estable
     const safeOrderBy = [
       ...resolvedSorts,
       { employees: { lastname: 'asc' as const } },
       { year: 'desc' as const },
       { month: 'desc' as const },
       { day: 'desc' as const },
+      { id: 'asc' as const },
     ];
 
     const [data, total] = await Promise.all([
@@ -260,7 +286,18 @@ export async function getDiagramReportsPaginated(searchParams: DataTableSearchPa
 // EXPORT QUERY (all data, no pagination)
 // ============================================================================
 
-export async function getDiagramReportsForExport(searchParams: DataTableSearchParams) {
+/**
+ * Filas del export con los mismos filtros de la tabla. Tope de `EXPORT_MAX_ROWS`: si se supera devuelve
+ * `{ ok: false, message }` (Next enmascara el mensaje de un error lanzado). El cliente lo abre con `unwrapExportResult`.
+ */
+export async function getDiagramReportsForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<DiagramReportListItem[]>> {
+  try {
+    await assertDiagramAccess('reports');
+  } catch {
+    return { ok: false, message: 'No tenés permiso para exportar los reportes de novedades' };
+  }
   const companyId = await getActiveCompanyId();
 
   try {
@@ -268,15 +305,29 @@ export async function getDiagramReportsForExport(searchParams: DataTableSearchPa
     const where = buildWhereClause(companyId, state);
 
     const data = await prisma.employees_diagram.findMany({
-      orderBy: [{ employees: { lastname: 'asc' } }, { year: 'desc' }, { month: 'desc' }, { day: 'desc' }],
+      orderBy: [
+        { employees: { lastname: 'asc' } },
+        { year: 'desc' },
+        { month: 'desc' },
+        { day: 'desc' },
+        { id: 'asc' },
+      ],
       where,
       select: DIAGRAM_REPORT_SELECT,
+      take: EXPORT_MAX_ROWS + 1,
     });
 
-    return data;
+    if (data.length > EXPORT_MAX_ROWS) {
+      return {
+        ok: false,
+        message: `La exportación supera el máximo de ${EXPORT_MAX_ROWS.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`,
+      };
+    }
+
+    return { ok: true, data };
   } catch (error) {
     logger.error('Error al exportar reportes de diagramas', { data: { error } });
-    throw new Error('Error al exportar los reportes de diagramas');
+    return { ok: false, message: 'Error al exportar los reportes de diagramas' };
   }
 }
 
@@ -286,7 +337,8 @@ export async function getDiagramReportsForExport(searchParams: DataTableSearchPa
 
 /**
  * Obtiene opciones y counts para UN SOLO filtro facetado, con cross-filtering.
- * Diseñado para lazy-load: cada filtro llama a esta función al abrirse.
+ * Diseñado para lazy-load: cada filtro llama a esta función al abrirse. Si la consulta falla se loguea y
+ * devuelve counts vacíos (el filtro queda sin opciones en vez de romper la tabla).
  */
 export async function getDiagramReportSingleFacet(
   columnId: string,
@@ -295,48 +347,13 @@ export async function getDiagramReportSingleFacet(
   counts: Map<string, number>;
   resolvedOptions?: Array<{ id: string; name: string | null }>;
 } | null> {
+  await assertDiagramAccess('reports');
   const companyId = await getActiveCompanyId();
 
-  let parsedState: ReturnType<typeof parseSearchParams> | null = null;
-  if (searchParams && Object.keys(searchParams).length > 0) {
-    parsedState = parseSearchParams(searchParams);
-  }
-
-  const hasActiveFilters = parsedState && (Object.keys(parsedState.filters).length > 0 || parsedState.search);
-
-  /** Returns the WHERE clause excluding the given column's filter (for cross-filtering). */
-  function crossWhere(excludeColumn: string) {
-    const emptyState: ReturnType<typeof parseSearchParams> = {
-      filters: {},
-      search: '',
-      sorting: [],
-      page: 0,
-      pageSize: 10,
-    };
-    if (!parsedState || !hasActiveFilters) {
-      return buildWhereClause(companyId, emptyState);
-    }
-    const modified = { ...parsedState, filters: { ...parsedState.filters } };
-    delete modified.filters[excludeColumn];
-    delete modified.filters[`${excludeColumn}_from`];
-    delete modified.filters[`${excludeColumn}_to`];
-    return buildWhereClause(companyId, modified);
-  }
-
-  function toFacetMap(rows: { key: string | null | undefined; count: number }[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const { key, count } of rows) {
-      if (key == null) {
-        map.set(NULL_FILTER_VALUE, (map.get(NULL_FILTER_VALUE) ?? 0) + count);
-      } else {
-        map.set(String(key), count);
-      }
-    }
-    return map;
-  }
-
   try {
-    const where = crossWhere(columnId);
+    const state = parseSearchParams(searchParams ?? {});
+    // Cross-filter: los counts de una faceta no se condicionan por su propia selección.
+    const where = buildWhereClause(companyId, withoutOwnFilter(state, columnId));
 
     // ── employee FK (group by employee_id, resolve names) ──────────────────
     if (columnId === 'employee') {
@@ -346,19 +363,16 @@ export async function getDiagramReportSingleFacet(
         _count: true,
       });
       const counts = toFacetMap(rows.map((r) => ({ key: r.employee_id, count: r._count })));
-      const ids = rows.map((r) => r.employee_id).filter(Boolean) as string[];
+      const ids = rows.map((r) => r.employee_id);
       const resolvedOptions =
         ids.length > 0
           ? (
               await prisma.employees.findMany({
-                where: { id: { in: ids } },
+                where: { id: { in: ids }, company_id: companyId },
                 select: { id: true, lastname: true, firstname: true, file: true },
                 orderBy: { lastname: 'asc' },
               })
-            ).map((e) => ({
-              id: e.id,
-              name: `[${e.file ?? '-'}] ${e.lastname ?? ''} ${e.firstname ?? ''}`.trim(),
-            }))
+            ).map((e) => ({ id: e.id, name: employeeLabel(e) }))
           : [];
       return { counts, resolvedOptions };
     }
@@ -371,11 +385,11 @@ export async function getDiagramReportSingleFacet(
         _count: true,
       });
       const counts = toFacetMap(rows.map((r) => ({ key: r.diagram_type, count: r._count })));
-      const ids = rows.map((r) => r.diagram_type).filter(Boolean) as string[];
+      const ids = rows.map((r) => r.diagram_type);
       const resolvedOptions =
         ids.length > 0
           ? await prisma.diagram_type.findMany({
-              where: { id: { in: ids } },
+              where: { id: { in: ids }, company_id: companyId },
               select: { id: true, name: true },
               orderBy: { name: 'asc' },
             })
@@ -383,43 +397,48 @@ export async function getDiagramReportSingleFacet(
       return { counts, resolvedOptions };
     }
 
-    // ── companyPosition FK (group by employees.company_position) ───────────
+    // ── companyPosition FK (puesto del empleado) ────────────────────────────
     if (columnId === 'companyPosition') {
-      // groupBy on employees_diagram cannot group by nested relation field,
-      // so we fetch all diagram records and aggregate company_position manually
-      const records = await prisma.employees_diagram.findMany({
+      // No se puede agrupar por un campo de la relación: se agrupa por empleado (una fila por empleado,
+      // no por novedad) y el puesto se resuelve con una sola consulta sobre esos empleados.
+      const perEmployee = await prisma.employees_diagram.groupBy({
+        by: ['employee_id'],
         where,
-        select: { employees: { select: { company_position: true } } },
+        _count: true,
       });
-
-      const countsMap = new Map<string, number>();
-      for (const r of records) {
-        const posId = r.employees.company_position;
-        if (posId != null) {
-          countsMap.set(posId, (countsMap.get(posId) ?? 0) + 1);
-        } else {
-          countsMap.set(NULL_FILTER_VALUE, (countsMap.get(NULL_FILTER_VALUE) ?? 0) + 1);
-        }
+      const employeeIds = perEmployee.map((r) => r.employee_id);
+      const employees = employeeIds.length
+        ? await prisma.employees.findMany({
+            where: { id: { in: employeeIds }, company_id: companyId },
+            select: { id: true, company_position: true },
+          })
+        : [];
+      const positionByEmployee = new Map(employees.map((e) => [e.id, e.company_position]));
+      const rowsByPosition = new Map<string | null, number>();
+      for (const row of perEmployee) {
+        const position = positionByEmployee.get(row.employee_id) ?? null;
+        rowsByPosition.set(position, (rowsByPosition.get(position) ?? 0) + row._count);
       }
+      const counts = toFacetMap([...rowsByPosition].map(([key, count]) => ({ key, count })));
 
-      const ids = [...countsMap.keys()].filter((id) => id !== NULL_FILTER_VALUE);
+      const ids = [...rowsByPosition.keys()].filter((id): id is string => id != null);
       const resolvedOptions =
         ids.length > 0
           ? await prisma.company_positions.findMany({
-              where: { id: { in: ids } },
+              where: { id: { in: ids }, company_id: companyId },
               select: { id: true, name: true },
               orderBy: { name: 'asc' },
             })
           : [];
 
-      return { counts: countsMap, resolvedOptions };
+      return { counts, resolvedOptions };
     }
 
     logger.warn('Facet column not recognized', { data: { columnId } });
     return null;
   } catch (error) {
     logger.error('Error al obtener facet individual de diagrama', { data: { error, columnId } });
-    return null;
+    return { counts: new Map() };
   }
 }
 

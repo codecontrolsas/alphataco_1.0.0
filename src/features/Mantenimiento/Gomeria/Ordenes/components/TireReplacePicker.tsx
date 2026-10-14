@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2 } from 'lucide-react';
 import { useState } from 'react';
-import { getAvailableTiresForVehicle, type AvailableTire } from '../actions/actions.server';
+import { getAvailableTiresForVehicle, type AvailableTire } from '../actions/service-order-queries.server';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 

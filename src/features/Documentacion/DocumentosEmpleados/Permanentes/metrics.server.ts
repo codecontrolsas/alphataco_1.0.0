@@ -1,33 +1,23 @@
-import { toDocumentStateCounts } from '@/features/Documentacion/shared/lib/state-counts';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import 'server-only';
+
 import { Logger } from '@/lib/logger';
-import { prisma } from '@/shared/lib/prisma';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { stateCountsOf } from '../../lists-shared/document-list-server';
+import { loadEmployeeDocumentRows } from '../lib/employee-document-rows.server';
 
 const logger = new Logger('DocumentosEmpleadosPermanentes/metrics.server');
 
 /**
- * Tarjetas por estado de los documentos permanentes de empleados. Mismo universo que la tabla
- * (`buildWhereClause` en `actions.server.ts`): empleados activos de la empresa, tipos permanentes,
- * sin archivados y respetando el permiso de tipos privados. Sin los filtros del usuario.
+ * Tarjetas por estado de los documentos permanentes de empleados. Salen de las MISMAS filas que la tabla (motor de cumplimiento, respetando
+ * el permiso de tipos privados), sin los filtros del usuario, y exigen el mismo permiso `view`.
+ * `pendiente` son las filas faltantes.
  */
 export async function getEmployeePermanentDocumentStateCounts() {
-  const companyId = await getActiveCompanyId();
-
   try {
-    const canViewPrivate = await checkPermissionServer('documentacion', 'documentos-de-empleados', 'view_private');
-    const rows = await prisma.documents_employees.groupBy({
-      by: ['state'],
-      where: {
-        archived_at: null,
-        employees: { company_id: companyId, is_active: true },
-        document_types: { is_it_montlhy: false, ...(!canViewPrivate && { private: { not: true } }) },
-      },
-      _count: { _all: true },
-    });
-    return toDocumentStateCounts(rows);
+    return await stateCountsOf('docs-empleados-permanentes', ({ companyId, canViewPrivate }) =>
+      loadEmployeeDocumentRows(companyId, false, canViewPrivate, '')
+    );
   } catch (error) {
-    logger.error('Error al obtener las métricas de documentos permanentes de empleados', { data: { error } });
+    logger.error('Error al obtener las métricas de los documentos permanentes de empleados', { data: { error } });
     throw error;
   }
 }

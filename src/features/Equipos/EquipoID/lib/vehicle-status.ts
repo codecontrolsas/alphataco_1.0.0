@@ -78,3 +78,24 @@ export function canChangeConditionFromHeader(from: condition_enum | null | undef
   if (!from) return false;
   return HEADER_CONDITION_TRANSITIONS.some((t) => t.from === from && t.to === to);
 }
+
+/** Condiciones de origen desde las que la ficha puede pasar un equipo a `to` (vacío si no hay transición permitida). */
+export function allowedSourceConditions(to: condition_enum): condition_enum[] {
+  return HEADER_CONDITION_TRANSITIONS.filter((t) => t.to === to).map((t) => t.from);
+}
+
+/**
+ * Reactivación: un equipo `no_operativo` (p. ej. recién reintegrado de una baja) puede pasar a cualquier otra
+ * condición, siempre que no tenga mantenimiento pendiente (lo verifica la server action). Se permite
+ * aunque el equipo esté activo o inactivo.
+ */
+export function canReactivateCondition(from: condition_enum | null | undefined, to: condition_enum): boolean {
+  return from === condition_enum.no_operativo && to !== condition_enum.no_operativo;
+}
+
+/** Condiciones que la UI ofrece al reactivar (`en_reparacion` la fija el circuito del taller). */
+export const REACTIVATION_TARGET_CONDITIONS: readonly condition_enum[] = [
+  condition_enum.operativo,
+  condition_enum.operativo_condicionado,
+  condition_enum.en_preparacion,
+];

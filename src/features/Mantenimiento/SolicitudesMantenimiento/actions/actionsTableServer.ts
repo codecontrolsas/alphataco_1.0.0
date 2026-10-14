@@ -1,22 +1,39 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import {
   buildDateRangeFiltersWhere,
   buildFiltersWhere,
   buildTextFiltersWhere,
   parseSearchParams,
-  stateToPrismaParams,
   type DataTableSearchParams,
 } from '@/shared/components/common/DataTable';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { sanitizeFilters, dateRangeKeys } from '@/shared/lib/table-filters';
+import { clampedPageParams } from '@/shared/lib/table-pagination';
+import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { cache } from 'react';
 import { visibleEquipmentTypeCondition } from '../../shared/maintenance-resource';
 import { getHiddenEquipmentTypeIds } from '../../utils/equipmentTypeVisibility';
 import { getSupervisorFilterInfo } from '../../utils/supervisorFilter';
 
 const logger = new Logger('SolicitudesMantenimiento/actionsTableServer');
+
+// Permiso de lectura de la tab "Solicitudes de Mantenimiento" (mapa de permisos: mantenimiento > maintenance_requests).
+const MODULE_SLUG = 'mantenimiento';
+const TAB_SLUG = 'maintenance_requests';
+
+/** Tope de filas de un export: más que esto no se descarga entero (se pide acotar con filtros). */
+const EXPORT_MAX_ROWS = 10_000;
+
+async function assertCanViewRequests() {
+  if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) {
+    throw new Error('No tenés permiso para ver las solicitudes de mantenimiento');
+  }
+}
 
 /**
  * Memoiza getSupervisorFilterInfo dentro del mismo request del servidor.
@@ -41,6 +58,14 @@ const COLUMN_MAP: Record<string, string> = {
   source: 'source',
   supervisor: 'supervisor_id', // columnId 'supervisor' → campo DB 'supervisor_id'
 };
+
+// Claves de filtro aceptadas desde la URL (lista blanca): el resto se descarta antes de armar el where.
+const ALLOWED_FILTER_KEYS = new Set<string>([
+  ...Object.keys(COLUMN_MAP),
+  ...TEXT_COLUMNS,
+  ...dateRangeKeys(DATE_COLUMNS),
+  'fileNumber',
+]);
 
 // Campos válidos para ordenamiento (deben existir en el modelo Prisma)
 const VALID_SORT_FIELDS = new Set(['created_at', 'status', 'source', 'updated_at', 'kilometer', 'engine_hours']);
@@ -75,14 +100,18 @@ const OTHER_EQUIPMENT_SELECT = {
 } as const;
 
 /**
- * Construye el where base para consultas, aplicando filtros de supervisor si corresponde.
+ * Construye el where base. Todo va dentro de un único AND con la empresa y el estado fijos primero:
+ * ningún filtro de la URL puede pisar la empresa ni el estado.
  * Recibe filterInfo pre-cargado para evitar múltiples llamadas a getSupervisorFilterInfo.
  */
-function buildWhereClauseSync(
-  state: ReturnType<typeof parseSearchParams>,
+function buildWhereClause(
+  companyId: string,
+  rawState: ReturnType<typeof parseSearchParams>,
   filterInfo: Awaited<ReturnType<typeof getSupervisorFilterInfo>>,
   hiddenTypeIds: readonly string[]
 ) {
+  const state = sanitizeFilters(rawState, ALLOWED_FILTER_KEYS);
+
   // Filtros facetados
   const filtersWhere = buildFiltersWhere(state.filters, COLUMN_MAP, {
     exclude: [...TEXT_COLUMNS, ...DATE_COLUMNS, 'fileNumber'],
@@ -96,6 +125,22 @@ function buildWhereClauseSync(
     created_at: 'created_at',
   });
 
+  // Búsqueda global: dominio / interno del equipo, nombre y legajo del chofer
+  const search = state.search?.trim();
+  const searchCondition = search
+    ? {
+        OR: [
+          { vehicles: { domain: { contains: search, mode: 'insensitive' as const } } },
+          { vehicles: { intern_number: { contains: search, mode: 'insensitive' as const } } },
+          { driver_employee: { lastname: { contains: search, mode: 'insensitive' as const } } },
+          { driver_employee: { firstname: { contains: search, mode: 'insensitive' as const } } },
+          { driver_employee: { file: { contains: search, mode: 'insensitive' as const } } },
+          { employees: { lastname: { contains: search, mode: 'insensitive' as const } } },
+          { employees: { firstname: { contains: search, mode: 'insensitive' as const } } },
+        ],
+      }
+    : null;
+
   // Legajo del chofer — coincidencia EXACTA (no "contains"), busca en las dos fuentes de FK
   // posibles (driver_employee nuevo, employees viejo). El chofer legacy vía JSON no tiene
   // legajo asociado y no es filtrable por este campo.
@@ -104,34 +149,28 @@ function buildWhereClauseSync(
     ? { OR: [{ driver_employee: { file: fileNumberValue } }, { employees: { file: fileNumberValue } }] }
     : null;
 
-  // Tipos de equipamiento ocultos para el usuario actual (ticket 690). Igual que
-  // fileNumberCondition, produce un OR: va dentro del AND, nunca spreadeado en la raíz.
+  // Tipos de equipamiento ocultos para el usuario actual (ticket 690).
   const equipmentCondition = visibleEquipmentTypeCondition(hiddenTypeIds);
 
-  const andConditions: Record<string, unknown>[] = [];
-  if (fileNumberCondition) andConditions.push(fileNumberCondition);
-  if (equipmentCondition) andConditions.push(equipmentCondition);
-
-  const baseWhere: Record<string, unknown> = {
+  const conditions: Record<string, unknown>[] = [
+    { company_id: companyId },
     // Solo solicitudes pendientes de aprobación (paso "Validar Solicitud").
     // Las rechazadas se limpian de este listado: quedan como registro histórico
     // en el legajo del equipo, tab "Historial de Mantenimiento".
-    status: 'pending_approval',
-    ...filtersWhere,
-    ...textFiltersWhere,
-    ...dateFiltersWhere,
-    ...(andConditions.length > 0 ? { AND: andConditions } : {}),
-  };
+    { status: 'pending_approval' },
+    filtersWhere,
+    textFiltersWhere,
+    dateFiltersWhere,
+  ];
+  if (searchCondition) conditions.push(searchCondition);
+  if (fileNumberCondition) conditions.push(fileNumberCondition);
+  if (equipmentCondition) conditions.push(equipmentCondition);
 
-  // Aplicar filtro de supervisor si corresponde
-  if (filterInfo?.shouldFilterBySupervisor) {
-    return {
-      ...baseWhere,
-      supervisor_id: filterInfo.userId,
-    };
-  }
+  // Sin perfil resuelto no se puede saber si ve todo: no ve nada (antes quedaba sin restricción).
+  if (!filterInfo) conditions.push({ id: { in: [] } });
+  else if (filterInfo.shouldFilterBySupervisor) conditions.push({ supervisor_id: filterInfo.userId });
 
-  return baseWhere;
+  return { AND: conditions };
 }
 
 /**
@@ -141,15 +180,18 @@ function buildWhereClauseSync(
 export async function getMaintenanceRequestsPaginated(searchParams: DataTableSearchParams) {
   logger.debug('Obteniendo solicitudes de mantenimiento paginadas', { data: { searchParams } });
 
+  await assertCanViewRequests();
+  const companyId = await getActiveCompanyId();
+
   try {
     const state = parseSearchParams(searchParams);
-    const { skip, take } = stateToPrismaParams(state);
+    const { skip, take } = clampedPageParams(state);
 
     const [filterInfo, hiddenTypeIds] = await Promise.all([
       getCachedSupervisorFilterInfo(),
       getHiddenEquipmentTypeIds(),
     ]);
-    const where = buildWhereClauseSync(state, filterInfo, hiddenTypeIds);
+    const where = buildWhereClause(companyId, state, filterInfo, hiddenTypeIds);
 
     // Resolver ordenamiento con validación y soporte de FK/relaciones derivadas
     const resolvedSorts: Record<string, unknown>[] = [];
@@ -233,7 +275,7 @@ export async function getMaintenanceRequestsPaginated(searchParams: DataTableSea
     return { data, total };
   } catch (error) {
     logger.error('Error al obtener solicitudes de mantenimiento paginadas', { data: { error } });
-    throw error;
+    throw new Error('Error al obtener las solicitudes de mantenimiento');
   }
 }
 
@@ -243,8 +285,13 @@ export type MaintenanceRequestListItem = MaintenanceRequestListData[number];
 /**
  * Obtiene todas las solicitudes de mantenimiento para exportar a Excel (sin paginación).
  */
-export async function getAllMaintenanceRequestsForExport(searchParams: DataTableSearchParams) {
+export async function getAllMaintenanceRequestsForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<MaintenanceRequestListData>> {
   logger.debug('Exportando solicitudes de mantenimiento');
+
+  await assertCanViewRequests();
+  const companyId = await getActiveCompanyId();
 
   try {
     const state = parseSearchParams(searchParams);
@@ -252,11 +299,12 @@ export async function getAllMaintenanceRequestsForExport(searchParams: DataTable
       getCachedSupervisorFilterInfo(),
       getHiddenEquipmentTypeIds(),
     ]);
-    const where = buildWhereClauseSync(state, filterInfo, hiddenTypeIds);
+    const where = buildWhereClause(companyId, state, filterInfo, hiddenTypeIds);
 
     const data = await prisma.maintenance_requests.findMany({
       where,
       orderBy: { created_at: 'desc' },
+      take: EXPORT_MAX_ROWS + 1,
       select: {
         id: true,
         status: true,
@@ -315,10 +363,17 @@ export async function getAllMaintenanceRequestsForExport(searchParams: DataTable
       },
     });
 
-    return data;
+    if (data.length > EXPORT_MAX_ROWS) {
+      return {
+        ok: false,
+        message: `La exportación supera el máximo de ${EXPORT_MAX_ROWS.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`,
+      };
+    }
+
+    return { ok: true, data };
   } catch (error) {
     logger.error('Error al exportar solicitudes de mantenimiento', { data: { error } });
-    throw error;
+    return { ok: false, message: 'No se pudo exportar las solicitudes de mantenimiento' };
   }
 }
 
@@ -335,6 +390,9 @@ export async function getMaintenanceRequestSingleFacet(
 } | null> {
   logger.debug('Obteniendo facet individual de solicitudes de mantenimiento', { data: { columnId } });
 
+  await assertCanViewRequests();
+  const companyId = await getActiveCompanyId();
+
   try {
     const state = parseSearchParams(searchParams || {});
     const [filterInfo, hiddenTypeIds] = await Promise.all([
@@ -343,19 +401,7 @@ export async function getMaintenanceRequestSingleFacet(
     ]);
 
     function crossWhere(excludeColumn: string) {
-      const filteredFilters = { ...state.filters };
-      delete filteredFilters[excludeColumn];
-      const crossState = { ...state, filters: filteredFilters };
-      return buildWhereClauseSync(crossState, filterInfo, hiddenTypeIds);
-    }
-
-    function toFacetMap(rows: { key: string | null | undefined; count: number }[]): Map<string, number> {
-      const map = new Map<string, number>();
-      for (const { key, count } of rows) {
-        const mapKey = key ?? NULL_FILTER_VALUE;
-        map.set(mapKey, (map.get(mapKey) ?? 0) + count);
-      }
-      return map;
+      return buildWhereClause(companyId, withoutOwnFilter(state, excludeColumn), filterInfo, hiddenTypeIds);
     }
 
     const where = crossWhere(columnId);
@@ -390,7 +436,7 @@ export async function getMaintenanceRequestSingleFacet(
         const vehicles =
           ids.length > 0
             ? await prisma.vehicles.findMany({
-                where: { id: { in: ids } },
+                where: { id: { in: ids }, company_id: companyId },
                 select: VEHICLE_SELECT,
               })
             : [];
@@ -428,6 +474,6 @@ export async function getMaintenanceRequestSingleFacet(
     logger.error('Error al obtener facet individual de solicitudes de mantenimiento', {
       data: { error, columnId },
     });
-    throw error;
+    return { counts: new Map<string, number>() };
   }
 }

@@ -1,5 +1,8 @@
 'use server';
 
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import type { Prisma } from '@/generated/prisma/client';
+import { pre_employee_status_enum } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
 import {
   buildDateRangeFiltersWhere,
@@ -8,10 +11,13 @@ import {
   buildTextFiltersWhere,
   NULL_FILTER_VALUE,
   parseSearchParams,
-  stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
+import { clampedPageParams } from '@/shared/lib/table-pagination';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 
 const logger = new Logger('Employees/PreLegajos/PreEmployeeList/actions.server');
@@ -60,6 +66,25 @@ const COLUMN_MAP: Record<string, string> = {
   company_positions: 'proposed_company_position',
 };
 
+/**
+ * Lista blanca de filtros de la URL: `parseSearchParams` convierte CUALQUIER clave en un filtro y
+ * `buildFiltersWhere` la usa como campo de Prisma. Solo pasan las columnas reales de la tabla de candidatos.
+ */
+const ALLOWED_FILTER_KEYS = new Set<string>([
+  'status',
+  'hierarchy',
+  'company_positions',
+  'fullName',
+  ...TEXT_FILTER_COLUMNS,
+  ...dateRangeKeys(DATE_RANGE_COLUMNS),
+]);
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const VALID_STATUSES = new Set<string>(Object.values(pre_employee_status_enum));
+
+/** Tope de filas de un export: más que esto no se descarga entero (se pide acotar con filtros). */
+const EXPORT_MAX_ROWS = 10_000;
+
 /** Select comun con todas las relaciones resueltas */
 const PRE_EMPLOYEE_SELECT = {
   id: true,
@@ -94,8 +119,34 @@ const PRE_EMPLOYEE_SELECT = {
 // HELPERS INTERNOS
 // ============================================================================
 
-/** Construye el WHERE clause compartido entre paginated, export y facets. */
-function buildWhereClause(companyId: string, state: ReturnType<typeof parseSearchParams>) {
+/** Descarta filtros ajenos a la tabla y valores que no son del tipo de la columna (enum / uuid). */
+function sanitizeState(state: ReturnType<typeof parseSearchParams>) {
+  const sanitized = sanitizeFilters(state, ALLOWED_FILTER_KEYS);
+  const isValid = (key: string, value: string) => {
+    if (key === 'status') return VALID_STATUSES.has(value);
+    if (key === 'hierarchy' || key === 'company_positions') return value === NULL_FILTER_VALUE || UUID_PATTERN.test(value);
+    return true;
+  };
+
+  const filters: Record<string, string[]> = {};
+  for (const [key, values] of Object.entries(sanitized.filters)) {
+    const kept = values.filter((value) => isValid(key, value));
+    if (kept.length > 0) filters[key] = kept;
+  }
+  return { ...sanitized, filters };
+}
+
+/**
+ * Construye el WHERE clause compartido entre paginated, export y facets.
+ * Todo va dentro de un único `AND`: el perímetro de empresa no se puede pisar ni se pierde el `AND` que
+ * devuelve `buildFiltersWhere` cuando mezcla "Sin asignar" con valores.
+ */
+function buildWhereClause(
+  companyId: string,
+  rawState: ReturnType<typeof parseSearchParams>
+): Prisma.pre_employeesWhereInput {
+  const state = sanitizeState(rawState);
+
   const searchWhere = buildSearchWhere(state.search, [
     'pre_file_number',
     'lastname',
@@ -105,41 +156,46 @@ function buildWhereClause(companyId: string, state: ReturnType<typeof parseSearc
   ]);
 
   const filtersWhere = buildFiltersWhere(state.filters, COLUMN_MAP, {
-    exclude: [...TEXT_FILTER_COLUMNS, 'fullName', ...DATE_RANGE_COLUMNS.flatMap((c) => [`${c}_from`, `${c}_to`])],
+    exclude: [...TEXT_FILTER_COLUMNS, 'fullName', ...dateRangeKeys(DATE_RANGE_COLUMNS)],
   });
+  const { AND: filtersAnd, ...filtersRest } = filtersWhere as Prisma.pre_employeesWhereInput & {
+    AND?: Prisma.pre_employeesWhereInput[];
+  };
 
-  const textFiltersWhere = buildTextFiltersWhere(state.filters, TEXT_FILTER_COLUMNS);
+  const textFiltersWhere = buildTextFiltersWhere(state.filters, TEXT_FILTER_COLUMNS) as Prisma.pre_employeesWhereInput;
+  const dateFiltersWhere = buildDateRangeFiltersWhere(
+    state.filters,
+    DATE_RANGE_COLUMNS
+  ) as Prisma.pre_employeesWhereInput;
 
-  // fullName necesita busqueda en multiples campos (lastname + firstname combinados).
-  // Se agrega como condicion AND para no sobrescribir el OR de searchWhere.
+  // fullName necesita busqueda en multiples campos (lastname + firstname combinados)
   const fullNameFilter = state.filters['fullName']?.[0];
-  const fullNameAndCondition: Record<string, unknown>[] = [];
-  if (fullNameFilter) {
-    fullNameAndCondition.push({
-      OR: [
-        { lastname: { contains: fullNameFilter, mode: 'insensitive' as const } },
-        { firstname: { contains: fullNameFilter, mode: 'insensitive' as const } },
-      ],
-    });
-  }
-
-  const dateFiltersWhere = buildDateRangeFiltersWhere(state.filters, DATE_RANGE_COLUMNS);
-
-  // Consolidar TODAS las condiciones AND para evitar que los spreads se sobrescriban entre si.
-  // buildFiltersWhere puede generar AND (para mixed null+real values de hierarchy/company_positions),
-  // fullNameAndCondition puede generar AND (para el filtro de nombre).
-  const filtersWhereAndConditions = (filtersWhere.AND as Record<string, unknown>[] | undefined) ?? [];
-  const allAndConditions = [...filtersWhereAndConditions, ...fullNameAndCondition];
-  const { AND: _discarded, ...filtersWhereWithoutAnd } = filtersWhere as Record<string, unknown> & { AND?: unknown };
+  const fullNameCondition = fullNameFilter
+    ? [
+        {
+          OR: [
+            { lastname: { contains: fullNameFilter, mode: 'insensitive' as const } },
+            { firstname: { contains: fullNameFilter, mode: 'insensitive' as const } },
+          ],
+        },
+      ]
+    : [];
 
   return {
-    company_id: companyId,
-    ...searchWhere,
-    ...filtersWhereWithoutAnd,
-    ...textFiltersWhere,
-    ...dateFiltersWhere,
-    ...(allAndConditions.length > 0 ? { AND: allAndConditions } : {}),
+    AND: [
+      { company_id: companyId },
+      searchWhere as Prisma.pre_employeesWhereInput,
+      filtersRest,
+      ...(filtersAnd ?? []),
+      textFiltersWhere,
+      dateFiltersWhere,
+      ...fullNameCondition,
+    ],
   };
+}
+
+async function hasViewPermission() {
+  return checkPermissionServer('seleccion', 'candidatos', 'view');
 }
 
 // ============================================================================
@@ -147,11 +203,12 @@ function buildWhereClause(companyId: string, state: ReturnType<typeof parseSearc
 // ============================================================================
 
 export async function getPreEmployeesPaginated(searchParams: DataTableSearchParams) {
+  if (!(await hasViewPermission())) throw new Error('No tenés permiso para ver candidatos');
   const companyId = await getActiveCompanyId();
 
   try {
     const state = parseSearchParams(searchParams);
-    const { skip, take } = stateToPrismaParams(state);
+    const { skip, take } = clampedPageParams(state);
     const where = buildWhereClause(companyId, state);
 
     // Safe orderBy: multi-sort, solo campos validos, con FK_SORT_MAP
@@ -163,7 +220,7 @@ export async function getPreEmployeesPaginated(searchParams: DataTableSearchPara
         resolvedSorts.push(fkMapper ? fkMapper(dir) : { [s.id]: dir });
       }
     }
-    const safeOrderBy = [...resolvedSorts, { created_at: 'desc' as const }];
+    const safeOrderBy = [...resolvedSorts, { created_at: 'desc' as const }, { id: 'asc' as const }];
 
     const [data, total] = await Promise.all([
       prisma.pre_employees.findMany({
@@ -192,6 +249,7 @@ export async function getPreEmployeesPaginated(searchParams: DataTableSearchPara
  * Misma regla que `getPreEmployeeDocumentChecklist`: tipos globales o de la empresa activa.
  */
 export async function getRequiredPreEmployeeDocumentsCount() {
+  if (!(await hasViewPermission())) throw new Error('No tenés permiso para ver candidatos');
   const companyId = await getActiveCompanyId();
 
   try {
@@ -214,23 +272,35 @@ export async function getRequiredPreEmployeeDocumentsCount() {
 // EXPORT QUERY (all data, no pagination)
 // ============================================================================
 
-export async function getAllPreEmployeesForExport(searchParams: DataTableSearchParams) {
+export async function getAllPreEmployeesForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<PreEmployeeListItem[]>> {
+  if (!(await hasViewPermission())) return { ok: false, message: 'No tenés permiso para exportar candidatos' };
   const companyId = await getActiveCompanyId();
 
   try {
     const state = parseSearchParams(searchParams);
     const where = buildWhereClause(companyId, state);
 
+    // Pide una fila de más para detectar que se pasó del tope sin traer la tabla entera
     const data = await prisma.pre_employees.findMany({
-      orderBy: [{ created_at: 'desc' }],
+      orderBy: [{ created_at: 'desc' }, { id: 'asc' }],
       where,
       select: PRE_EMPLOYEE_SELECT,
+      take: EXPORT_MAX_ROWS + 1,
     });
 
-    return data;
+    if (data.length > EXPORT_MAX_ROWS) {
+      return {
+        ok: false,
+        message: `La exportación supera el máximo de ${EXPORT_MAX_ROWS.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`,
+      };
+    }
+
+    return { ok: true, data };
   } catch (error) {
     logger.error('Error al exportar candidatos', { data: { error } });
-    throw new Error('Error al exportar los candidatos');
+    return { ok: false, message: 'Error al exportar los candidatos' };
   }
 }
 
@@ -249,6 +319,7 @@ export async function getPreEmployeeSingleFacet(
   counts: Map<string, number>;
   resolvedOptions?: Array<{ id: string; name: string | null }>;
 } | null> {
+  if (!(await hasViewPermission())) throw new Error('No tenés permiso para ver candidatos');
   const companyId = await getActiveCompanyId();
   const baseWhere = { company_id: companyId };
 
@@ -261,23 +332,7 @@ export async function getPreEmployeeSingleFacet(
 
   function crossWhere(excludeColumn: string) {
     if (!parsedState || !hasActiveFilters) return baseWhere;
-    const modified = { ...parsedState, filters: { ...parsedState.filters } };
-    delete modified.filters[excludeColumn];
-    delete modified.filters[`${excludeColumn}_from`];
-    delete modified.filters[`${excludeColumn}_to`];
-    return buildWhereClause(companyId, modified);
-  }
-
-  function toFacetMap(rows: { key: string | null | undefined; count: number }[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const { key, count } of rows) {
-      if (key == null) {
-        map.set(NULL_FILTER_VALUE, (map.get(NULL_FILTER_VALUE) ?? 0) + count);
-      } else {
-        map.set(String(key), count);
-      }
-    }
-    return map;
+    return buildWhereClause(companyId, withoutOwnFilter(parsedState, excludeColumn));
   }
 
   try {
@@ -301,12 +356,16 @@ export async function getPreEmployeeSingleFacet(
     > = {
       hierarchy: {
         prismaField: 'proposed_hierarchical_position',
-        resolver: (ids) => prisma.hierarchy.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
+        resolver: (ids) =>
+          prisma.hierarchy.findMany({ where: { id: { in: ids }, company_id: companyId }, select: { id: true, name: true } }),
       },
       company_positions: {
         prismaField: 'proposed_company_position',
         resolver: (ids) =>
-          prisma.company_positions.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
+          prisma.company_positions.findMany({
+            where: { id: { in: ids }, company_id: companyId },
+            select: { id: true, name: true },
+          }),
       },
     };
 
@@ -332,7 +391,7 @@ export async function getPreEmployeeSingleFacet(
     return null;
   } catch (error) {
     logger.error('Error al obtener facet individual', { data: { error, columnId } });
-    return null;
+    return { counts: new Map<string, number>() };
   }
 }
 

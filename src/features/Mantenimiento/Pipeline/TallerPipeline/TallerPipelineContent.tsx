@@ -20,6 +20,7 @@ const TALLER_STEPS: PipelineStep[] = [
     label: 'Por Programar',
     description: 'Pedidos aprobados sin fecha. Asigná fecha y reparaciones',
     iconName: 'Clock',
+    permissionTab: 'pedidos_pendientes',
   },
   {
     id: 'confirmed',
@@ -29,6 +30,7 @@ const TALLER_STEPS: PipelineStep[] = [
     // Calendar (no CheckCircle): el paso está pendiente, y lo que lo define es
     // que ya tiene fecha. El tilde daba a entender que el trabajo estaba hecho.
     iconName: 'Calendar',
+    permissionTab: 'pedidos_confirmados',
   },
   {
     id: 'in_workshop',
@@ -36,6 +38,7 @@ const TALLER_STEPS: PipelineStep[] = [
     label: 'En Taller',
     description: 'Equipos activos en taller. Gestioná sectores y OTs',
     iconName: 'Warehouse',
+    permissionTab: 'ordenes_mantenimiento',
   },
   {
     id: 'approvals',
@@ -43,22 +46,42 @@ const TALLER_STEPS: PipelineStep[] = [
     label: 'Aprobaciones',
     description: 'Trabajos que requieren tu autorización',
     iconName: 'Inbox',
+    permissionTab: 'bandeja_aprobaciones',
   },
 ];
 
 interface TallerPipelineContentProps {
   searchParams: Record<string, string | string[] | undefined>;
+  /** Mapa `modulo:tab:accion -> boolean` del usuario; cada paso exige el `view` de SU tab. */
+  permissions: Record<string, boolean>;
 }
 
-export async function TallerPipelineContent({ searchParams }: TallerPipelineContentProps) {
+export async function TallerPipelineContent({ searchParams, permissions }: TallerPipelineContentProps) {
+  const visibleSteps = TALLER_STEPS.filter(
+    (step) => step.permissionTab && permissions[`mantenimiento:${step.permissionTab}:view`] === true
+  );
+
+  if (visibleSteps.length === 0) {
+    return (
+      <div className="flex items-center justify-center p-8 text-center">
+        <div className="space-y-2">
+          <p className="text-muted-foreground font-medium">Sin acceso</p>
+          <p className="text-muted-foreground text-sm">No tenés permisos para ver ningún paso de Taller.</p>
+        </div>
+      </div>
+    );
+  }
+
   const counts = await getTallerPipelineCounts();
 
   const rawStep = searchParams[PARAM_NAME];
   const initialStep =
-    typeof rawStep === 'string' && TALLER_STEPS.some((s) => s.id === rawStep) ? rawStep : DEFAULT_STEP;
+    typeof rawStep === 'string' && visibleSteps.some((s) => s.id === rawStep)
+      ? rawStep
+      : (visibleSteps.find((s) => s.id === DEFAULT_STEP) ?? visibleSteps[0]).id;
 
   // Todos los pasos se renderizan simultáneamente (show/hide con CSS)
-  const stepContents: PipelineStepEntry[] = [
+  const allStepContents: PipelineStepEntry[] = [
     {
       id: 'schedule',
       content: (
@@ -93,9 +116,12 @@ export async function TallerPipelineContent({ searchParams }: TallerPipelineCont
     },
   ];
 
+  const visibleIds = new Set(visibleSteps.map((step) => step.id));
+  const stepContents = allStepContents.filter((entry) => visibleIds.has(entry.id));
+
   return (
     <PipelineLayout
-      steps={TALLER_STEPS}
+      steps={visibleSteps}
       counts={counts}
       initialStep={initialStep}
       paramName={PARAM_NAME}

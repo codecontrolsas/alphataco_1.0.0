@@ -1,17 +1,13 @@
 'use server';
 
+import { refreshDocumentStatus } from '@/features/Documentacion/shared/compliance/server/document-status.server';
 import { Logger } from '@/lib/logger';
 import { withActor } from '@/shared/lib/actor';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';
-import { callVoid } from '@/shared/lib/sql';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { syncAllocatedTo } from '../lib/allocated-to';
-import {
-  resolveAssignmentChanges,
-  type AssignmentChanges,
-  type AssignmentUpdateResult,
-} from '../lib/assignment-diff';
+import { resolveAssignmentChanges, type AssignmentChanges, type AssignmentUpdateResult } from '../lib/assignment-diff';
 
 const logger = new Logger('features/Empresa/Clientes/assignments');
 
@@ -28,8 +24,8 @@ const logger = new Logger('features/Empresa/Clientes/assignments');
  * Oil (149 afectaciones borradas por una preselección vacía).
  *
  * Además de la pivote se sincroniza `employees.allocated_to` / `vehicles.allocated_to`
- * (regla del repo: la columna espejo se mantiene igual a la pivote) y se reconcilian los
- * documentos del recurso (`controlar_alertas_documentos_single_*`), porque los tipos de
+ * (regla del repo: la columna espejo se mantiene igual a la pivote) y se recalcula el
+ * status documental cacheado del recurso (`refreshDocumentStatus`), porque los tipos de
  * documento pueden condicionarse a la afectación a un cliente.
  */
 
@@ -132,10 +128,9 @@ export async function updateCustomerEmployeeAssignments(
 
         await syncAllocatedTo(tx, 'employees', customerId, toAdd, toRemove);
 
-        // 358 / M:M: re-verificar los documentos de los empleados afectados (altas Y bajas).
-        for (const employeeId of involvedIds) {
-          await callVoid('controlar_alertas_documentos_single_employee', [{ uuid: employeeId }, { uuid: companyId }], tx);
-        }
+        // Cache de status de los empleados afectados (altas Y bajas): un tipo puede condicionarse
+        // a la afectacion a un cliente. Una sola sentencia para todos.
+        await refreshDocumentStatus(tx, 'Persona', { ids: involvedIds, companyId });
 
         return { added: addedCount, removed: removedCount };
       },
@@ -203,9 +198,8 @@ export async function updateCustomerEquipmentAssignments(
 
         await syncAllocatedTo(tx, 'vehicles', customerId, toAdd, toRemove);
 
-        for (const equipmentId of involvedIds) {
-          await callVoid('controlar_alertas_documentos_single_vehicle', [{ uuid: equipmentId }, { uuid: companyId }], tx);
-        }
+        // Cache de status de los equipos afectados (altas Y bajas), en una sola sentencia.
+        await refreshDocumentStatus(tx, 'Equipos', { ids: involvedIds, companyId });
 
         return { added: addedCount, removed: removedCount };
       },

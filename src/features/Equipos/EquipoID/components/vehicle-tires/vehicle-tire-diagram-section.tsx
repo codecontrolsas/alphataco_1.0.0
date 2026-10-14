@@ -16,19 +16,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { DiagramAxle, DiagramPosition } from '@/features/Mantenimiento/Gomeria/shared/TireDiagramRenderer';
 import { TireDiagramRenderer } from '@/features/Mantenimiento/Gomeria/shared/TireDiagramRenderer';
-import { useTireReturnWarehouse } from '@/features/Mantenimiento/Gomeria/shared/hooks/useTireReturnWarehouse';
 import { TireReturnWarehouseSelect } from '@/features/Mantenimiento/Gomeria/shared/TireReturnWarehouseSelect';
+import { useTireReturnWarehouse } from '@/features/Mantenimiento/Gomeria/shared/hooks/useTireReturnWarehouse';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ExternalLink, Pencil, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import type { AxleInput } from './actions.server';
-import {
-  getVehicleTemplateInfo,
-  getVehicleTirePositionsWithDetails,
-  resetVehicleToSubTypeTemplate,
-} from './actions.server';
+import { getVehicleTemplateInfo, getVehicleTirePositionsWithDetails } from './actions/positions.server';
+import { resetVehicleToSubTypeTemplate } from './actions/template.server';
+import type { AxleInput } from './schemas/axles';
 import { VehicleAxleEditor, type TirePositionSummary } from './vehicle-axle-editor';
 import { VehicleAxleSizesForm } from './vehicle-axle-sizes-form';
 
@@ -70,6 +67,8 @@ export function VehicleTireDiagramSection({ vehicleId, canUpdate }: VehicleTireD
   const queryClient = useQueryClient();
 
   const [editorOpen, setEditorOpen] = useState(false);
+  // Cada apertura monta un editor nuevo (key) con los ejes vigentes en ese momento.
+  const [editorSession, setEditorSession] = useState(0);
   const [inheritanceWarningOpen, setInheritanceWarningOpen] = useState(false);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -85,7 +84,6 @@ export function VehicleTireDiagramSection({ vehicleId, canUpdate }: VehicleTireD
   const { data: positions, isLoading: isLoadingPositions } = useQuery({
     queryKey: ['vehicle-tire-positions-details', vehicleId],
     queryFn: () => getVehicleTirePositionsWithDetails(vehicleId),
-    enabled: !!templateInfo?.templateId,
     staleTime: 30 * 1000,
   });
 
@@ -149,13 +147,18 @@ export function VehicleTireDiagramSection({ vehicleId, canUpdate }: VehicleTireD
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 
+  function openEditor() {
+    setEditorSession((session) => session + 1);
+    setEditorOpen(true);
+  }
+
   function handleEditClick() {
     if (!templateInfo) return;
     // If currently inheriting from sub-type (not a vehicle override), show warning
     if (templateInfo.sourceType === 'sub_type') {
       setInheritanceWarningOpen(true);
     } else {
-      setEditorOpen(true);
+      openEditor();
     }
   }
 
@@ -170,7 +173,7 @@ export function VehicleTireDiagramSection({ vehicleId, canUpdate }: VehicleTireD
       await queryClient.invalidateQueries({ queryKey: ['vehicle-template-info', vehicleId] });
       await queryClient.invalidateQueries({ queryKey: ['vehicle-tire-positions-details', vehicleId] });
       toast.success('Configuración restablecida al sub-tipo');
-    } catch (err) {
+    } catch {
       toast.error('Error al restablecer la configuración');
     } finally {
       setIsResetting(false);
@@ -202,7 +205,7 @@ export function VehicleTireDiagramSection({ vehicleId, canUpdate }: VehicleTireD
             <p className="text-sm text-muted-foreground">Este equipo no tiene configuración de cubiertas.</p>
             <div className="flex items-center gap-2 flex-wrap justify-center">
               {canUpdate && (
-                <Button variant="default" size="sm" onClick={() => setEditorOpen(true)}>
+                <Button type="button" variant="default" size="sm" onClick={openEditor}>
                   <Pencil className="h-4 w-4 mr-2" />
                   Crear configuración personalizada
                 </Button>
@@ -219,6 +222,7 @@ export function VehicleTireDiagramSection({ vehicleId, canUpdate }: VehicleTireD
 
         {/* Editor for creating new config */}
         <VehicleAxleEditor
+          key={editorSession}
           vehicleId={vehicleId}
           currentAxles={[]}
           currentPositions={[]}
@@ -256,6 +260,7 @@ export function VehicleTireDiagramSection({ vehicleId, canUpdate }: VehicleTireD
               {/* Reset to sub-type — only if it's an override and sub-type has a template */}
               {templateInfo.hasOverride && templateInfo.subTypeHasTemplate && (
                 <Button
+                  type="button"
                   variant="ghost"
                   size="sm"
                   onClick={() => setResetConfirmOpen(true)}
@@ -266,7 +271,7 @@ export function VehicleTireDiagramSection({ vehicleId, canUpdate }: VehicleTireD
                 </Button>
               )}
 
-              <Button variant="outline" size="sm" onClick={handleEditClick}>
+              <Button type="button" variant="outline" size="sm" onClick={handleEditClick}>
                 <Pencil className="h-4 w-4 mr-1" />
                 Editar
               </Button>
@@ -302,6 +307,7 @@ export function VehicleTireDiagramSection({ vehicleId, canUpdate }: VehicleTireD
 
       {/* Axle Editor */}
       <VehicleAxleEditor
+        key={editorSession}
         vehicleId={vehicleId}
         currentAxles={currentAxles}
         currentPositions={currentPositionsForEditor}
@@ -330,7 +336,7 @@ export function VehicleTireDiagramSection({ vehicleId, canUpdate }: VehicleTireD
             <AlertDialogAction
               onClick={() => {
                 setInheritanceWarningOpen(false);
-                setEditorOpen(true);
+                openEditor();
               }}
             >
               Crear configuración propia

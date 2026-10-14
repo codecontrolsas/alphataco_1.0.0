@@ -2,17 +2,33 @@
 
 import { ACTIVITY_LOG } from '@/features/Mantenimiento/shared/activity-log/action-types';
 import { logActivity } from '@/features/Mantenimiento/shared/activity-log/log-activity';
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { Logger } from '@/lib/logger';
 import { requireServerAuthProfile } from '@/shared/actions/auth.actions';
 import { CACHE_TAGS, CACHE_TTL } from '@/shared/constants/cache';
 import { INVALIDATION_MAP } from '@/shared/constants/cache-invalidation-map';
 import { prisma } from '@/shared/lib/prisma';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { invalidateCacheTags } from '@/shared/utils/cache-invalidation';
 import { cacheLife, cacheTag } from 'next/cache';
+import { assertSectorInCompany } from '../../OrderManagement/actions/perimeter';
 import { visibleEquipmentTypeCondition } from '../../shared/maintenance-resource';
 import { getHiddenEquipmentTypeIds } from '../../utils/equipmentTypeVisibility';
 
 const logger = new Logger('ApprovalInbox/actions');
+
+const APPROVALS_MODULE = 'mantenimiento';
+const APPROVALS_TAB = 'bandeja_aprobaciones';
+
+/** Exige el permiso de la Bandeja de Aprobaciones y devuelve la empresa activa. */
+async function requireApprovalsAccess(action: 'view' | 'update'): Promise<string> {
+  const [companyId, allowed] = await Promise.all([
+    getActiveCompanyId(),
+    checkPermissionServer(APPROVALS_MODULE, APPROVALS_TAB, action),
+  ]);
+  if (!allowed) throw new Error('No tenés permiso para esta acción en la Bandeja de Aprobaciones');
+  return companyId;
+}
 
 // =============================================================================
 // QUERIES
@@ -26,7 +42,7 @@ const logger = new Logger('ApprovalInbox/actions');
  * `hiddenTypeIds` ya resuelto (ticket 690) — entra en la key del cache, así un
  * usuario nunca ve el cache de otro con distintos tipos ocultos.
  */
-async function getPendingApprovalTasksCached(hiddenTypeIds: readonly string[]) {
+async function getPendingApprovalTasksCached(companyId: string, hiddenTypeIds: readonly string[]) {
   'use cache';
   cacheTag(CACHE_TAGS.TAB_APPROVALS, CACHE_TAGS.WORK_ORDER_REPAIRS);
   cacheLife({ expire: CACHE_TTL.PAGINATED_LIST, revalidate: CACHE_TTL.PAGINATED_LIST, stale: 30 });
@@ -36,7 +52,7 @@ async function getPendingApprovalTasksCached(hiddenTypeIds: readonly string[]) {
   try {
     // Tipos de equipamiento ocultos para el usuario actual (ticket 690)
     const equipmentCondition = visibleEquipmentTypeCondition(hiddenTypeIds);
-    const where: Record<string, unknown> = { status: 'pending_approval' };
+    const where: Record<string, unknown> = { status: 'pending_approval', company_id: companyId };
     if (equipmentCondition) {
       where.work_order_items = { maintenance_order_items: { maintenance_orders: equipmentCondition } };
     }
@@ -114,8 +130,10 @@ async function getPendingApprovalTasksCached(hiddenTypeIds: readonly string[]) {
 }
 
 export async function getPendingApprovalTasks() {
+  // Las funciones cacheadas no leen sesión: la empresa entra como argumento (y en la clave del cache).
+  const companyId = await requireApprovalsAccess('view');
   const hiddenTypeIds = await getHiddenEquipmentTypeIds();
-  return getPendingApprovalTasksCached(hiddenTypeIds);
+  return getPendingApprovalTasksCached(companyId, hiddenTypeIds);
 }
 
 export type PendingTasksData = Awaited<ReturnType<typeof getPendingApprovalTasks>>;
@@ -127,7 +145,7 @@ export type PendingTaskData = PendingTasksData[number];
  * Cacheada con `'use cache'`: recibe `hiddenTypeIds` ya resuelto (ticket 690),
  * igual que `getPendingApprovalTasksCached`.
  */
-async function getReturnedTasksCached(hiddenTypeIds: readonly string[]) {
+async function getReturnedTasksCached(companyId: string, hiddenTypeIds: readonly string[]) {
   'use cache';
   cacheTag(CACHE_TAGS.TAB_APPROVALS, CACHE_TAGS.WORK_ORDER_REPAIRS);
   cacheLife({ expire: CACHE_TTL.PAGINATED_LIST, revalidate: CACHE_TTL.PAGINATED_LIST, stale: 30 });
@@ -137,7 +155,7 @@ async function getReturnedTasksCached(hiddenTypeIds: readonly string[]) {
   try {
     // Tipos de equipamiento ocultos para el usuario actual (ticket 690)
     const equipmentCondition = visibleEquipmentTypeCondition(hiddenTypeIds);
-    const where: Record<string, unknown> = { status: 'reassignment_requested' };
+    const where: Record<string, unknown> = { status: 'reassignment_requested', company_id: companyId };
     if (equipmentCondition) {
       where.work_order_items = { maintenance_order_items: { maintenance_orders: equipmentCondition } };
     }
@@ -216,8 +234,10 @@ async function getReturnedTasksCached(hiddenTypeIds: readonly string[]) {
 }
 
 export async function getReturnedTasks() {
+  // Las funciones cacheadas no leen sesión: la empresa entra como argumento (y en la clave del cache).
+  const companyId = await requireApprovalsAccess('view');
   const hiddenTypeIds = await getHiddenEquipmentTypeIds();
-  return getReturnedTasksCached(hiddenTypeIds);
+  return getReturnedTasksCached(companyId, hiddenTypeIds);
 }
 
 export type ReturnedTasksData = Awaited<ReturnType<typeof getReturnedTasks>>;
@@ -230,7 +250,7 @@ export type ReturnedTaskData = ReturnedTasksData[number];
  * Cacheada con `'use cache'`: recibe `hiddenTypeIds` ya resuelto (ticket 690),
  * igual que `getPendingApprovalTasksCached`.
  */
-async function getOrdersPendingValidationCached(hiddenTypeIds: readonly string[]) {
+async function getOrdersPendingValidationCached(companyId: string, hiddenTypeIds: readonly string[]) {
   'use cache';
   cacheTag(CACHE_TAGS.TAB_APPROVALS, CACHE_TAGS.MAINTENANCE_ORDERS);
   cacheLife({ expire: CACHE_TTL.PAGINATED_LIST, revalidate: CACHE_TTL.PAGINATED_LIST, stale: 30 });
@@ -243,6 +263,7 @@ async function getOrdersPendingValidationCached(hiddenTypeIds: readonly string[]
     const equipmentCondition = visibleEquipmentTypeCondition(hiddenTypeIds);
     const where: Record<string, unknown> = {
       status: 'pending_workshop_validation',
+      company_id: companyId,
       ...(equipmentCondition ? { AND: [equipmentCondition] } : {}),
     };
 
@@ -313,8 +334,10 @@ async function getOrdersPendingValidationCached(hiddenTypeIds: readonly string[]
 }
 
 export async function getOrdersPendingValidation() {
+  // Las funciones cacheadas no leen sesión: la empresa entra como argumento (y en la clave del cache).
+  const companyId = await requireApprovalsAccess('view');
   const hiddenTypeIds = await getHiddenEquipmentTypeIds();
-  return getOrdersPendingValidationCached(hiddenTypeIds);
+  return getOrdersPendingValidationCached(companyId, hiddenTypeIds);
 }
 
 export type ValidationOrdersData = Awaited<ReturnType<typeof getOrdersPendingValidation>>;
@@ -328,22 +351,24 @@ export type ValidationOrderItem = ValidationOrdersData[number];
  * Aprueba una tarea pendiente de autorizacion
  */
 export async function approveTask(taskId: string) {
+  const companyId = await requireApprovalsAccess('update');
   const profile = await requireServerAuthProfile();
 
   logger.debug('Aprobando tarea', { data: { taskId, approvedBy: profile.id } });
 
   try {
-    const ctx = await resolveRepairContext(taskId);
+    const ctx = await resolveRepairContext(taskId, companyId);
 
     await prisma.$transaction(async (tx) => {
-      await tx.work_order_item_repairs.update({
-        where: { id: taskId },
+      const { count } = await tx.work_order_item_repairs.updateMany({
+        where: { id: taskId, company_id: companyId, status: 'pending_approval' },
         data: {
           status: 'pending',
           approved_by: profile.id,
           approved_at: new Date(),
         },
       });
+      if (count === 0) throw new Error('La tarea ya no está pendiente de aprobación');
 
       if (ctx.workOrderId) {
         await logActivity(tx, {
@@ -374,16 +399,17 @@ export async function approveTask(taskId: string) {
  * Rechaza una tarea pendiente de autorizacion
  */
 export async function rejectTask(taskId: string, reason: string) {
+  const companyId = await requireApprovalsAccess('update');
   const profile = await requireServerAuthProfile();
 
   logger.debug('Rechazando tarea', { data: { taskId, rejectedBy: profile.id } });
 
   try {
-    const ctx = await resolveRepairContext(taskId);
+    const ctx = await resolveRepairContext(taskId, companyId);
 
     await prisma.$transaction(async (tx) => {
-      await tx.work_order_item_repairs.update({
-        where: { id: taskId },
+      const { count } = await tx.work_order_item_repairs.updateMany({
+        where: { id: taskId, company_id: companyId, status: 'pending_approval' },
         data: {
           status: 'rejected',
           rejection_reason: reason,
@@ -391,6 +417,7 @@ export async function rejectTask(taskId: string, reason: string) {
           approved_at: new Date(),
         },
       });
+      if (count === 0) throw new Error('La tarea ya no está pendiente de aprobación');
 
       if (ctx.workOrderId) {
         await logActivity(tx, {
@@ -423,13 +450,17 @@ export async function rejectTask(taskId: string, reason: string) {
  * Reasigna una tarea devuelta a un nuevo sector
  */
 export async function reassignTaskToSector(taskId: string, newSectorId: string) {
+  const companyId = await requireApprovalsAccess('update');
   const profile = await requireServerAuthProfile();
 
   logger.debug('Reasignando tarea a nuevo sector', { data: { taskId, newSectorId } });
 
   try {
-    const repair = await prisma.work_order_item_repairs.findUnique({
-      where: { id: taskId },
+    // El sector llega del cliente: tiene que ser de la empresa activa.
+    await assertSectorInCompany(newSectorId, companyId);
+
+    const repair = await prisma.work_order_item_repairs.findFirst({
+      where: { id: taskId, company_id: companyId },
       select: {
         work_order_items: {
           select: { maintenance_order_item_id: true },
@@ -441,22 +472,23 @@ export async function reassignTaskToSector(taskId: string, newSectorId: string) 
       throw new Error('Tarea no encontrada');
     }
 
-    const ctx = await resolveRepairContext(taskId);
-    const newSector = await prisma.workshop_sectors.findUnique({
-      where: { id: newSectorId },
+    const ctx = await resolveRepairContext(taskId, companyId);
+    const newSector = await prisma.workshop_sectors.findFirst({
+      where: { id: newSectorId, company_id: companyId },
       select: { name: true },
     });
 
     await prisma.$transaction(async (tx) => {
-      await tx.work_order_item_repairs.update({
-        where: { id: taskId },
+      const { count } = await tx.work_order_item_repairs.updateMany({
+        where: { id: taskId, company_id: companyId, status: 'reassignment_requested' },
         data: { status: 'pending' },
       });
+      if (count === 0) throw new Error('La tarea ya no está pendiente de reasignación');
 
       const moItemId = repair.work_order_items?.maintenance_order_item_id;
       if (moItemId) {
-        await tx.maintenance_order_items.update({
-          where: { id: moItemId },
+        await tx.maintenance_order_items.updateMany({
+          where: { id: moItemId, company_id: companyId },
           data: { assigned_sector_id: newSectorId },
         });
       }
@@ -491,9 +523,9 @@ export async function reassignTaskToSector(taskId: string, newSectorId: string) 
  * Resuelve el work_order_id, repair_type_name y sector_name desde un repair.
  * Usado para enriquecer metadata de los logs de ApprovalInbox.
  */
-async function resolveRepairContext(repairId: string) {
-  const repair = await prisma.work_order_item_repairs.findUnique({
-    where: { id: repairId },
+async function resolveRepairContext(repairId: string, companyId: string) {
+  const repair = await prisma.work_order_item_repairs.findFirst({
+    where: { id: repairId, company_id: companyId },
     select: {
       types_of_repairs: { select: { name: true } },
       workshop_sectors: { select: { name: true } },

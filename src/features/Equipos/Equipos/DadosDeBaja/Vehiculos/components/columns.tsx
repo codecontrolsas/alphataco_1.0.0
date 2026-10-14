@@ -8,7 +8,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import {
@@ -21,9 +20,17 @@ import {
 } from '@/shared/utils/mappers';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Eye, MoreHorizontal } from 'lucide-react';
-import moment from 'moment';
 import Link from 'next/link';
-import { conditionIcons, conditionVariants } from '../../../VehicleList/columns';
+import {
+  ContractorsCell,
+  DateCell,
+  EmptyCell,
+  EquipmentCell,
+  TimestampCell,
+  contractorNames,
+  equipmentTitle,
+} from '../../../VehicleList/components/cells';
+import { conditionIcons, conditionVariants } from '../../../VehicleList/lib/condition-config';
 import type { InactiveVehicleListItem } from '../actions/actions.server';
 
 // ============================================================================
@@ -31,16 +38,6 @@ import type { InactiveVehicleListItem } from '../actions/actions.server';
 // ============================================================================
 
 const getEquipmentHref = (id: string) => `/dashboard/equipment/action?action=view&id=${id}`;
-
-function EmptyCell() {
-  return <span className="text-muted-foreground">-</span>;
-}
-
-/** Fecha @db.Date: llega como medianoche UTC, se lee en UTC para no correrla un día. */
-function DateCell({ value }: { value: Date | string | null | undefined }) {
-  if (!value) return <EmptyCell />;
-  return <span className="font-mono tabular-nums">{moment.utc(value).format('DD/MM/YYYY')}</span>;
-}
 
 // ============================================================================
 // HIDDEN COLUMNS BY DEFAULT
@@ -98,27 +95,10 @@ export const columns: ColumnDef<InactiveVehicleListItem>[] = [
   // ─── Equipo (identidad compuesta: Marca Modelo / Tipo · Año · N° interno) ─
   {
     id: 'equipment',
-    accessorFn: (row) => [row.brand_vehicles?.name, row.model_vehicles?.name].filter(Boolean).join(' '),
+    accessorFn: (row) => equipmentTitle(row),
     meta: { title: 'Equipo', excludeFromExport: true },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Equipo" />,
-    cell: ({ row }) => {
-      const v = row.original;
-      const title = [v.brand_vehicles?.name, v.model_vehicles?.name].filter(Boolean).join(' ');
-      const details = [
-        v.type_vehicles_typeTotype?.name,
-        v.year != null ? String(v.year) : null,
-        v.intern_number ? `N° ${v.intern_number}` : null,
-      ]
-        .filter(Boolean)
-        .join(' · ');
-      if (!title && !details) return <EmptyCell />;
-      return (
-        <div className="min-w-0">
-          <div className="font-semibold text-foreground">{title || '-'}</div>
-          {details && <div className="truncate text-sm text-muted-foreground">{details}</div>}
-        </div>
-      );
-    },
+    cell: ({ row }) => <EquipmentCell vehicle={row.original} />,
     // 'equipment' no es un campo ordenable en actions.server.ts (VALID_SORT_FIELDS)
     enableSorting: false,
   },
@@ -311,45 +291,10 @@ export const columns: ColumnDef<InactiveVehicleListItem>[] = [
   // ─── Afectaciones (M:M → customers) ──────────────────────────────────────
   {
     id: 'contractor_equipment',
-    accessorFn: (row) =>
-      (row.contractor_equipment ?? [])
-        .map((c) => c.customers?.name ?? '')
-        .filter(Boolean)
-        .join(', '),
+    accessorFn: (row) => contractorNames(row.contractor_equipment).join(', '),
     meta: { title: 'Afectaciones' },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Afectaciones" />,
-    cell: ({ row }) => {
-      const contractors = (row.original.contractor_equipment ?? []).map((c) => c.customers?.name ?? '').filter(Boolean);
-
-      if (contractors.length === 0) return <span className="text-muted-foreground">-</span>;
-
-      const [first, ...rest] = contractors;
-
-      if (rest.length === 0) {
-        return <Badge variant="default">{first}</Badge>;
-      }
-
-      return (
-        <TooltipProvider delayDuration={100}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="inline-flex">
-                <Badge variant="default" className="cursor-pointer select-none">
-                  {first} +{rest.length}
-                </Badge>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent className="bg-black text-white rounded-lg p-2">
-              <div className="flex flex-col gap-1">
-                {rest.map((name) => (
-                  <span key={name}>{name}</span>
-                ))}
-              </div>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      );
-    },
+    cell: ({ row }) => <ContractorsCell names={contractorNames(row.original.contractor_equipment)} />,
     filterFn: (row, _id, filterValue) => {
       if (!filterValue || !Array.isArray(filterValue) || filterValue.length === 0) return true;
       const contractors = row.original.contractor_equipment ?? [];
@@ -465,12 +410,7 @@ export const columns: ColumnDef<InactiveVehicleListItem>[] = [
     accessorKey: 'contract_start_date',
     meta: { title: 'Inicio de contrato' },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Inicio de contrato" />,
-    cell: ({ row }) =>
-      row.original.contract_start_date ? (
-        <span>{moment.utc(row.original.contract_start_date).format('DD/MM/YYYY')}</span>
-      ) : (
-        <span className="text-muted-foreground">-</span>
-      ),
+    cell: ({ row }) => <DateCell value={row.original.contract_start_date} />,
   },
 
   // ─── Vencimiento de contrato — OCULTA POR DEFAULT ────────────────────────
@@ -478,12 +418,7 @@ export const columns: ColumnDef<InactiveVehicleListItem>[] = [
     accessorKey: 'contract_expiration_date',
     meta: { title: 'Vencimiento de contrato' },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Vencimiento de contrato" />,
-    cell: ({ row }) =>
-      row.original.contract_expiration_date ? (
-        <span>{moment.utc(row.original.contract_expiration_date).format('DD/MM/YYYY')}</span>
-      ) : (
-        <span className="text-muted-foreground">-</span>
-      ),
+    cell: ({ row }) => <DateCell value={row.original.contract_expiration_date} />,
   },
 
   // ─── Centro de costo (FK UUID) — OCULTA POR DEFAULT ──────────────────────
@@ -542,12 +477,7 @@ export const columns: ColumnDef<InactiveVehicleListItem>[] = [
     accessorKey: 'created_at',
     meta: { title: 'Creado' },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Creado" />,
-    cell: ({ row }) =>
-      row.original.created_at ? (
-        <span>{moment(row.original.created_at).format('DD/MM/YYYY')}</span>
-      ) : (
-        <span className="text-muted-foreground">-</span>
-      ),
+    cell: ({ row }) => <TimestampCell value={row.original.created_at} />,
   },
 
   // ─── Acciones ─────────────────────────────────────────────────────────────
