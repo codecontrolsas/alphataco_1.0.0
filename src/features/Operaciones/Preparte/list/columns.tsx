@@ -22,27 +22,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Check, Eye, Pencil, Trash2 } from 'lucide-react';
+import { CalendarClock, Check, Eye, Paperclip, Pencil, Trash2 } from 'lucide-react';
 import moment from 'moment';
 import { useState } from 'react';
+import { PREPARTE_STATUS_LABELS, PREPARTE_STATUS_UI } from '../lib/preparte-status-ui';
 import type { PreparteListItem } from './actions.server';
 
-export const PREPARTE_STATUS_LABELS: Record<string, string> = {
-  pendiente: 'Pendiente',
-  confirmado: 'Confirmado',
-  reprogramado: 'Reprogramado',
-  cancelado: 'Cancelado',
-  rechazado: 'Rechazado',
-  vencido: 'Vencido',
-};
+export { PREPARTE_STATUS_LABELS };
 
 export const HIDDEN_COLUMNS_BY_DEFAULT = [
+  // Su dato ya se ve en la columna compuesta 'order'
+  'customer',
+  'service',
+  'serviceItem',
   'sector',
   'area',
   'customerEquipment',
@@ -96,18 +94,50 @@ export function getPreparteReason(item: PreparteListItem): string {
   return '-';
 }
 
-function statusBadgeVariant(
-  status: PreparteListItem['status']
-): NonNullable<React.ComponentProps<typeof Badge>['variant']> {
-  if (status === 'confirmado') return 'success';
-  if (status === 'cancelado' || status === 'rechazado' || status === 'vencido') return 'destructive';
-  if (status === 'reprogramado') return 'warning';
-  return 'default';
+function EmptyCell() {
+  return <span className="text-muted-foreground">-</span>;
+}
+
+/** Texto plano o `-` atenuado si no hay valor. */
+function TextCell({ value }: { value: string | number | null | undefined }) {
+  if (value == null || value === '') return <EmptyCell />;
+  return <>{value}</>;
+}
+
+/** Fecha de una columna `@db.Date` (medianoche UTC) en monoespaciada. */
+function DateCell({ value }: { value: string | null | undefined }) {
+  if (!value) return <EmptyCell />;
+  return <span className="font-mono tabular-nums">{formatPreparteDate(value)}</span>;
+}
+
+/** Hora (HH:mm) en monoespaciada. */
+function TimeCell({ value }: { value: string | null | undefined }) {
+  if (!value) return <EmptyCell />;
+  return <span className="font-mono tabular-nums">{value}</span>;
+}
+
+/** Badge del estado del pedido: label, ícono y color salen de `PREPARTE_STATUS_UI`. */
+export function PreparteStatusBadge({
+  status,
+  'data-testid': testId,
+}: {
+  status: PreparteListItem['status'];
+  'data-testid'?: string;
+}) {
+  if (!status) return <Badge variant="outline">Sin estado</Badge>;
+  const ui = PREPARTE_STATUS_UI[status];
+  const Icon = ui.icon;
+  return (
+    <Badge variant={ui.variant} data-testid={testId}>
+      <Icon aria-hidden="true" />
+      {ui.label}
+    </Badge>
+  );
 }
 
 function ImageCell({ url }: { url: string | null }) {
   const [open, setOpen] = useState(false);
-  if (!url) return <span className="text-muted-foreground">-</span>;
+  if (!url) return <EmptyCell />;
 
   const isPdf = url.toLowerCase().includes('.pdf');
   return (
@@ -115,8 +145,8 @@ function ImageCell({ url }: { url: string | null }) {
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" onClick={() => setOpen(true)} aria-label="Ver archivo adjunto">
-              <Eye className="h-4 w-4" />
+            <Button variant="ghost" size="icon-sm" onClick={() => setOpen(true)} aria-label="Ver archivo adjunto">
+              <Paperclip className="size-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Ver {isPdf ? 'documento' : 'imagen'}</TooltipContent>
@@ -151,7 +181,7 @@ function ActionsCell({ item, callbacks, canUpdate, canDelete }: {
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmedBy, setConfirmedBy] = useState('');
-  const [executionDate, setExecutionDate] = useState(moment().format('YYYY-MM-DD'));
+  const [executionDate, setExecutionDate] = useState<Date | undefined>(() => moment().startOf('day').toDate());
   const isPending = item.status === 'pendiente';
   const isExpired = item.status === 'vencido';
   const canConfirm =
@@ -164,19 +194,19 @@ function ActionsCell({ item, callbacks, canUpdate, canDelete }: {
     if (!confirmedBy.trim()) return;
     await callbacks.onConfirm(item, {
       confirmedBy: confirmedBy.trim(),
-      ...(isExpired ? { executionDate } : {}),
+      ...(isExpired && executionDate ? { executionDate: moment(executionDate).format('YYYY-MM-DD') } : {}),
     });
     setConfirmOpen(false);
     setConfirmedBy('');
   };
 
   return (
-    <div className="flex items-center">
+    <div className="flex items-center justify-end gap-0.5">
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" onClick={() => callbacks.onView(item)} aria-label="Ver detalle">
-              <Eye className="h-4 w-4" />
+            <Button variant="ghost" size="icon-sm" onClick={() => callbacks.onView(item)} aria-label="Ver detalle">
+              <Eye className="size-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Ver detalle</TooltipContent>
@@ -187,8 +217,8 @@ function ActionsCell({ item, callbacks, canUpdate, canDelete }: {
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={() => callbacks.onEdit(item)} aria-label="Editar pedido">
-                <Pencil className="h-4 w-4" />
+              <Button variant="ghost" size="icon-sm" onClick={() => callbacks.onEdit(item)} aria-label="Editar pedido">
+                <Pencil className="size-4" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>Editar</TooltipContent>
@@ -204,12 +234,12 @@ function ActionsCell({ item, callbacks, canUpdate, canDelete }: {
                 <AlertDialogTrigger asChild>
                   <Button
                     variant="ghost"
-                    size="icon"
-                    className="text-destructive hover:text-destructive"
+                    size="icon-sm"
+                    className="text-danger-subtle-foreground hover:text-danger-subtle-foreground"
                     data-testid={`eliminar-button-${item.numero_pedido}`}
                     aria-label="Eliminar pedido"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="size-4" />
                   </Button>
                 </AlertDialogTrigger>
               </TooltipTrigger>
@@ -225,7 +255,10 @@ function ActionsCell({ item, callbacks, canUpdate, canDelete }: {
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={() => callbacks.onDelete(item.id)} className="bg-destructive">
+              <AlertDialogAction
+                onClick={() => callbacks.onDelete(item.id)}
+                className="bg-destructive text-white hover:bg-destructive/90"
+              >
                 Eliminar
               </AlertDialogAction>
             </AlertDialogFooter>
@@ -239,14 +272,14 @@ function ActionsCell({ item, callbacks, canUpdate, canDelete }: {
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon"
+                size="icon-sm"
                 disabled={!canConfirm}
-                className="text-green-600 hover:text-green-700"
+                className="text-ok-subtle-foreground hover:text-ok-subtle-foreground"
                 onClick={() => setConfirmOpen(true)}
                 data-testid={`confirmar-button-${item.numero_pedido}`}
                 aria-label="Confirmar pedido"
               >
-                <Check className="h-4 w-4" />
+                <Check className="size-4" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>{item.status === 'confirmado' ? 'Ya confirmado' : 'Confirmar pedido'}</TooltipContent>
@@ -266,12 +299,11 @@ function ActionsCell({ item, callbacks, canUpdate, canDelete }: {
             {isExpired && (
               <div className="space-y-2">
                 <Label htmlFor={`execution-date-${item.id}`}>Fecha de ejecución</Label>
-                <Input
+                <EnhancedDatePicker
                   id={`execution-date-${item.id}`}
-                  type="date"
-                  min={moment().format('YYYY-MM-DD')}
-                  value={executionDate}
-                  onChange={(event) => setExecutionDate(event.target.value)}
+                  date={executionDate}
+                  setDate={setExecutionDate}
+                  minDate={moment().startOf('day').toDate()}
                 />
               </div>
             )}
@@ -287,7 +319,7 @@ function ActionsCell({ item, callbacks, canUpdate, canDelete }: {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => setConfirmOpen(false)}>
               Cancelar
             </Button>
             <Button
@@ -334,10 +366,49 @@ export function getColumns({ permissionsMap, callbacks }: GetColumnsOptions): Co
 
   columns.push(
     {
-      accessorKey: 'requestDate',
-      meta: { title: 'Fecha de solicitud' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de solicitud" />,
-      cell: ({ row }) => formatPreparteDate(row.original.requestDate),
+      accessorKey: 'numero_pedido',
+      meta: { title: 'N° pedido' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="N° pedido" />,
+      cell: ({ row }) => (
+        <button
+          type="button"
+          onClick={() => callbacks.onView(row.original)}
+          className="text-foreground hover:text-brand-ink font-mono font-semibold tabular-nums hover:underline"
+        >
+          {row.original.numero_pedido || 'Sin número'}
+        </button>
+      ),
+    },
+    {
+      // Identidad compuesta: cliente arriba; contrato e ítem debajo
+      id: 'order',
+      accessorFn: (row) => row.customers?.name ?? '',
+      meta: { title: 'Pedido', excludeFromExport: true },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Pedido" />,
+      cell: ({ row }) => {
+        const item = row.original;
+        const details = [item.customer_services?.service_name, item.service_items?.item_name]
+          .filter(Boolean)
+          .join(' · ');
+        return (
+          <div className="max-w-[360px] min-w-0">
+            <div className="text-foreground truncate font-semibold">{item.customers?.name || 'Cliente no encontrado'}</div>
+            {details && <div className="text-muted-foreground truncate text-sm">{details}</div>}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'status',
+      meta: { title: 'Estado' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      cell: ({ row }) => (
+        <PreparteStatusBadge
+          status={row.original.status}
+          data-testid={`status-badge-${row.original.numero_pedido}`}
+        />
+      ),
+      filterFn: (row, id, values: string[]) => values.includes(String(row.getValue(id))),
     },
     {
       accessorKey: 'executionDate',
@@ -345,40 +416,26 @@ export function getColumns({ permissionsMap, callbacks }: GetColumnsOptions): Co
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de ejecución" />,
       cell: ({ row }) =>
         row.original.subject_to_availability && !row.original.executionDate ? (
-          <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
+          <Badge variant="warning">
+            <CalendarClock aria-hidden="true" />
             Pendiente de fecha
           </Badge>
         ) : (
-          formatPreparteDate(row.original.executionDate)
+          <DateCell value={row.original.executionDate} />
         ),
     },
     {
-      accessorKey: 'numero_pedido',
-      meta: { title: 'N° pedido' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="N° pedido" />,
-      cell: ({ row }) => row.original.numero_pedido || '-',
-    },
-    {
-      accessorKey: 'status',
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
-      cell: ({ row }) => (
-        <Badge
-          variant={statusBadgeVariant(row.original.status)}
-          className={cn('whitespace-nowrap', row.original.status === 'pendiente' && 'bg-black text-white')}
-          data-testid={`status-badge-${row.original.numero_pedido}`}
-        >
-          {row.original.status ? PREPARTE_STATUS_LABELS[row.original.status] : 'Sin estado'}
-        </Badge>
-      ),
-      filterFn: (row, id, values: string[]) => values.includes(String(row.getValue(id))),
+      accessorKey: 'requestDate',
+      meta: { title: 'Fecha de solicitud' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de solicitud" />,
+      cell: ({ row }) => <DateCell value={row.original.requestDate} />,
     },
     {
       id: 'customer',
       accessorFn: (row) => row.customers?.name ?? '-',
       meta: { title: 'Cliente' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Cliente" />,
-      cell: ({ row }) => row.original.customers?.name || 'No encontrado',
+      cell: ({ row }) => <TextCell value={row.original.customers?.name} />,
       filterFn: (row, _id, values: string[]) => values.includes(row.original.cliente_id),
     },
     {
@@ -386,15 +443,23 @@ export function getColumns({ permissionsMap, callbacks }: GetColumnsOptions): Co
       accessorFn: (row) => row.customer_services?.service_name ?? '-',
       meta: { title: 'Contrato' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Contrato" />,
-      cell: ({ row }) => row.original.customer_services?.service_name || 'No encontrado',
+      cell: ({ row }) => <TextCell value={row.original.customer_services?.service_name} />,
       filterFn: (row, _id, values: string[]) => values.includes(row.original.contrato_id),
+    },
+    {
+      id: 'serviceItem',
+      accessorFn: (row) => row.service_items?.item_name ?? '-',
+      meta: { title: 'Ítem' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Ítem" />,
+      cell: ({ row }) => <TextCell value={row.original.service_items?.item_name} />,
+      filterFn: (row, _id, values: string[]) => values.includes(row.original.item ?? '__null__'),
     },
     {
       id: 'sector',
       accessorFn: (row) => row.service_sectors?.sectors?.name ?? '-',
       meta: { title: 'Sector (cliente)' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Sector (cliente)" />,
-      cell: ({ row }) => row.original.service_sectors?.sectors?.name || '-',
+      cell: ({ row }) => <TextCell value={row.original.service_sectors?.sectors?.name} />,
       filterFn: (row, _id, values: string[]) => values.includes(row.original.sector_service_id ?? '__null__'),
     },
     {
@@ -402,7 +467,7 @@ export function getColumns({ permissionsMap, callbacks }: GetColumnsOptions): Co
       accessorFn: (row) => row.service_areas?.areas_cliente?.nombre ?? '-',
       meta: { title: 'Área (cliente)' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Área (cliente)" />,
-      cell: ({ row }) => row.original.service_areas?.areas_cliente?.nombre || '-',
+      cell: ({ row }) => <TextCell value={row.original.service_areas?.areas_cliente?.nombre} />,
       filterFn: (row, _id, values: string[]) => values.includes(row.original.areas_service_id ?? '__null__'),
     },
     {
@@ -410,54 +475,46 @@ export function getColumns({ permissionsMap, callbacks }: GetColumnsOptions): Co
       accessorFn: (row) => row.equipos_clientes?.name ?? '-',
       meta: { title: 'Equipo cliente' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Equipo cliente" />,
-      cell: ({ row }) => row.original.equipos_clientes?.name || '-',
+      cell: ({ row }) => <TextCell value={row.original.equipos_clientes?.name} />,
       filterFn: (row, _id, values: string[]) => values.includes(row.original.equipos_cliente ?? '__null__'),
-    },
-    {
-      id: 'serviceItem',
-      accessorFn: (row) => row.service_items?.item_name ?? '-',
-      meta: { title: 'Ítem' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Ítem" />,
-      cell: ({ row }) => row.original.service_items?.item_name || 'No encontrado',
-      filterFn: (row, _id, values: string[]) => values.includes(row.original.item ?? '__null__'),
     },
     {
       accessorKey: 'quantity',
       meta: { title: 'Cantidad' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Cantidad" />,
-      cell: ({ row }) => row.original.quantity ?? '-',
+      cell: ({ row }) => <span className="font-mono tabular-nums">{row.original.quantity ?? '-'}</span>,
     },
     {
       accessorKey: 'tipo',
       meta: { title: 'Tipo' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo" />,
-      cell: ({ row }) => formatPreparteType(row.original.tipo),
+      cell: ({ row }) => <TextCell value={row.original.tipo ? formatPreparteType(row.original.tipo) : null} />,
       filterFn: (row, id, values: string[]) => values.includes(String(row.getValue(id))),
     },
     {
       accessorKey: 'jornada',
       meta: { title: 'Jornada' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Jornada" />,
-      cell: ({ row }) => row.original.jornada || '-',
+      cell: ({ row }) => <TextCell value={row.original.jornada} />,
       filterFn: (row, id, values: string[]) => values.includes(String(row.getValue(id))),
     },
     {
       accessorKey: 'start_time',
       meta: { title: 'Hora de inicio' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Hora de inicio" />,
-      cell: ({ row }) => row.original.start_time || '-',
+      cell: ({ row }) => <TimeCell value={row.original.start_time} />,
     },
     {
       accessorKey: 'end_time',
       meta: { title: 'Hora de fin' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Hora de fin" />,
-      cell: ({ row }) => row.original.end_time || '-',
+      cell: ({ row }) => <TimeCell value={row.original.end_time} />,
     },
     {
       accessorKey: 'solicitante',
       meta: { title: 'Solicitante' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Solicitante" />,
-      cell: ({ row }) => row.original.solicitante || '-',
+      cell: ({ row }) => <TextCell value={row.original.solicitante} />,
     },
     {
       id: 'reason',
@@ -466,7 +523,12 @@ export function getColumns({ permissionsMap, callbacks }: GetColumnsOptions): Co
       header: ({ column }) => <DataTableColumnHeader column={column} title="Motivo" />,
       cell: ({ row }) => {
         const reason = getPreparteReason(row.original);
-        return <div className="max-w-[320px] truncate" title={reason}>{reason}</div>;
+        if (reason === '-') return <EmptyCell />;
+        return (
+          <div className="max-w-[320px] truncate" title={reason}>
+            {reason}
+          </div>
+        );
       },
       enableSorting: false,
     },
@@ -474,14 +536,14 @@ export function getColumns({ permissionsMap, callbacks }: GetColumnsOptions): Co
       accessorKey: 'confirmed_by',
       meta: { title: 'Confirmado por' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Confirmado por" />,
-      cell: ({ row }) => row.original.confirmed_by || '-',
+      cell: ({ row }) => <TextCell value={row.original.confirmed_by} />,
     },
     {
       id: 'rejectedBy',
       accessorFn: (row) => row.rejected_by_profile?.fullname ?? '-',
       meta: { title: 'Rechazado por' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Rechazado por" />,
-      cell: ({ row }) => row.original.rejected_by_profile?.fullname || '-',
+      cell: ({ row }) => <TextCell value={row.original.rejected_by_profile?.fullname} />,
       filterFn: (row, _id, values: string[]) => values.includes(row.original.rejected_by ?? '__null__'),
       enableSorting: false,
     },
@@ -490,7 +552,7 @@ export function getColumns({ permissionsMap, callbacks }: GetColumnsOptions): Co
       accessorFn: (row) => row.cancelled_by_profile?.fullname ?? '-',
       meta: { title: 'Cancelado por' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Cancelado por" />,
-      cell: ({ row }) => row.original.cancelled_by_profile?.fullname || '-',
+      cell: ({ row }) => <TextCell value={row.original.cancelled_by_profile?.fullname} />,
       filterFn: (row, _id, values: string[]) => values.includes(row.original.cancelled_by ?? '__null__'),
       enableSorting: false,
     },
@@ -499,7 +561,7 @@ export function getColumns({ permissionsMap, callbacks }: GetColumnsOptions): Co
       accessorFn: (row) => row.reprogrammed_by_profile?.fullname ?? '-',
       meta: { title: 'Reprogramado por' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Reprogramado por" />,
-      cell: ({ row }) => row.original.reprogrammed_by_profile?.fullname || '-',
+      cell: ({ row }) => <TextCell value={row.original.reprogrammed_by_profile?.fullname} />,
       filterFn: (row, _id, values: string[]) => values.includes(row.original.reprogrammed_by ?? '__null__'),
       enableSorting: false,
     },
@@ -508,8 +570,13 @@ export function getColumns({ permissionsMap, callbacks }: GetColumnsOptions): Co
       meta: { title: 'Observaciones' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Observaciones" />,
       cell: ({ row }) => {
-        const observations = row.original.observaciones || '-';
-        return <div className="max-w-[360px] truncate" title={observations}>{observations}</div>;
+        const observations = row.original.observaciones;
+        if (!observations) return <EmptyCell />;
+        return (
+          <div className="max-w-[360px] truncate" title={observations}>
+            {observations}
+          </div>
+        );
       },
     },
     {
@@ -521,8 +588,8 @@ export function getColumns({ permissionsMap, callbacks }: GetColumnsOptions): Co
     },
     {
       id: 'actions',
-      meta: { excludeFromExport: true },
-      header: 'Acciones',
+      meta: { excludeFromExport: true, title: '' },
+      header: () => <span className="sr-only">Acciones</span>,
       cell: ({ row }) => (
         <ActionsCell item={row.original} callbacks={callbacks} canUpdate={canUpdate} canDelete={canDelete} />
       ),

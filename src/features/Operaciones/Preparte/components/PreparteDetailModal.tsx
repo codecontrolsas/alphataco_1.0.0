@@ -1,16 +1,26 @@
 'use client';
 
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Building2, Calendar, Clock, EyeIcon, FileText, History, User, Wrench } from 'lucide-react';
+import { formatArgentinaDateTime } from '@/features/Treasury/lib/today';
+import { Field, FieldGrid } from '@/shared/components/common/FieldGrid';
+import { ArrowRight, Check, EyeIcon, FileText, History, User } from 'lucide-react';
 import moment from 'moment';
-import 'moment/locale/es';
 import Link from 'next/link';
 import { useState } from 'react';
 import { usePreparteChangeLogs } from '../hooks';
+import { PreparteStatusBadge, formatPreparteType } from '../list/columns';
 import { Cliente, Contrato, PreparteItem } from './PreparteManager';
 
 interface PreparteDetailModalProps {
@@ -39,27 +49,8 @@ export function PreparteDetailModal({
 
   if (!preparteData) return null;
 
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'pendiente':
-        return 'bg-black text-white border-gray-700';
-      case 'confirmado':
-        return 'bg-green-100 text-green-800 border-green-200';
-      case 'reprogramado':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'cancelado':
-      case 'rechazado':
-      case 'vencido':
-        return 'bg-red-100 text-red-800 border-red-200';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  const formatDate = (dateString: string | Date) => {
-    if (!dateString) return 'No disponible';
-    return moment.utc(dateString).locale('es').format('D [de] MMMM [de] YYYY');
-  };
+  const formatDate = (dateString: string | Date | null | undefined) =>
+    dateString ? moment.utc(dateString).format('DD/MM/YYYY') : null;
 
   // Buscar cliente por ID
   const cliente = Customers.find((c) => c.id === preparteData.cliente_id);
@@ -132,7 +123,7 @@ export function PreparteDetailModal({
     } else if (status === 'vencido') {
       return {
         title: 'Vencimiento',
-        content: 'Este preparte ha vencido sin ser confirmado a tiempo.',
+        content: 'Este pedido venció sin ser confirmado a tiempo.',
         actorLabel: null,
         actor: null,
       };
@@ -142,309 +133,179 @@ export function PreparteDetailModal({
   };
 
   const reason = getReason();
+  const equipos = getEquiposCliente();
+  const executionLabel =
+    preparteData.subject_to_availability && !preparteData.executionDate
+      ? 'Pendiente de fecha'
+      : formatDate(preparteData.executionDate);
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       {showTrigger && (
         <DialogTrigger asChild>
-          <Button variant="ghost" className="h-8 w-8 p-0">
-            <EyeIcon className="h-4 w-4" />
+          <Button variant="ghost" size="icon-sm" aria-label="Ver detalle del pedido">
+            <EyeIcon className="size-4" />
           </Button>
         </DialogTrigger>
       )}
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-xl">
-            <FileText className="h-5 w-5" />
-            Detalle del Preparte
-          </DialogTitle>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader className="gap-3">
+          <div className="space-y-1">
+            <DialogTitle className="text-xl">
+              Pedido{' '}
+              <span className="font-mono tabular-nums">{preparteData.numero_pedido || 'sin número'}</span>
+            </DialogTitle>
+            <DialogDescription>{cliente?.name || 'Cliente no especificado'}</DialogDescription>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <PreparteStatusBadge status={preparteData.status} />
+            {preparteData.tipo && <Badge variant="secondary">{formatPreparteType(preparteData.tipo)}</Badge>}
+            {preparteData.confirmed_by && (
+              <Badge variant="success">
+                <Check aria-hidden="true" />
+                Confirmado por {preparteData.confirmed_by}
+              </Badge>
+            )}
+          </div>
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Header Info */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Calendar className="h-4 w-4" />
-                <span>Solicitud: {preparteData.requestDate ? formatDate(preparteData.requestDate) : '-'}</span>
-              </div>
-              {preparteData.executionDate && (
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Calendar className="h-4 w-4" />
-                  <span>Ejecución: {formatDate(preparteData.executionDate)}</span>
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className={getStatusColor(preparteData.status || 'pendiente')}>
-                  {preparteData.status
-                    ? preparteData.status.charAt(0).toUpperCase() + preparteData.status.slice(1)
-                    : 'Pendiente'}
-                </Badge>
-                {preparteData.tipo && <Badge variant="secondary">{preparteData.tipo}</Badge>}
-              </div>
-              {preparteData.confirmed_by && (
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                    <span className="flex items-center gap-1">
-                      <span className="text-green-600">✓</span>
-                      Confirmado por: {preparteData.confirmed_by}
-                    </span>
-                  </Badge>
-                </div>
-              )}
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Building2 className="h-4 w-4" />
-                <span className="font-medium">{cliente?.name || 'Cliente no especificado'}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Clock className="h-4 w-4" />
-                <span>{preparteData.jornada || 'Jornada no especificada'}</span>
-              </div>
-              {preparteData.numero_pedido && (
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <FileText className="h-4 w-4" />
-                  <span>Pedido: {preparteData.numero_pedido}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Reason Info - Solo se muestra si existe */}
           {reason && (
-            <>
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <FileText className="h-5 w-5 text-amber-600" />
-                  <h3 className="font-semibold text-amber-900">{reason.title}</h3>
-                </div>
-                <div className="text-amber-700 text-sm">{reason.content}</div>
+            <Alert variant={preparteData.status === 'vencido' ? 'destructive' : 'warning'}>
+              <FileText />
+              <AlertTitle>{reason.title}</AlertTitle>
+              <AlertDescription>
+                <p>{reason.content}</p>
                 {reason.actor && reason.actorLabel && (
-                  <div className="mt-3 pt-3 border-t border-amber-200 text-amber-800 text-sm flex items-center gap-1.5">
+                  <p className="mt-1 flex items-center gap-1.5">
                     <span className="font-medium">{reason.actorLabel}:</span>
                     <Link
                       href={`/dashboard/configuration?subtab=users&company-users__search=${encodeURIComponent(
                         reason.actor
                       )}`}
-                      className="inline-flex items-center gap-1 text-amber-900 hover:text-amber-700 hover:underline"
+                      className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
                       title="Ver usuario en la tabla de usuarios"
                     >
-                      <User className="h-3.5 w-3.5" />
-                      <span>{reason.actor}</span>
+                      <User className="size-3.5" aria-hidden="true" />
+                      {reason.actor}
                     </Link>
-                  </div>
+                  </p>
                 )}
-              </div>
-              <Separator />
-            </>
+              </AlertDescription>
+            </Alert>
           )}
 
-          {/* Equipos Cliente Section */}
-          {getEquiposCliente().length > 0 && (
-            <>
-              <div className="space-y-3">
-                <h3 className="font-semibold text-lg flex items-center gap-2">
-                  <Wrench className="h-5 w-5 text-blue-600" />
-                  Equipos del Cliente ({getEquiposCliente().length})
-                </h3>
-                <div className="grid gap-4">
-                  {getEquiposCliente().map((equipo, index) => (
-                    <div
-                      key={index}
-                      className="bg-blue-50 border border-blue-200 rounded-lg p-4 hover:bg-blue-100 transition-colors"
-                    >
-                      <div className="font-semibold text-blue-900 text-lg mb-3">
-                        {equipo.name || 'Equipo sin nombre'}
-                      </div>
-                      <div className="text-sm text-blue-700">
-                        <span className="font-medium">Tipo: </span>
-                        <span>{equipo.type}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <Separator />
-            </>
-          )}
-
-          {/* Service Details */}
-          <div className="space-y-3">
-            <h3 className="font-semibold text-lg">Detalles del Servicio</h3>
-            <div className="grid gap-3">
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="font-medium text-gray-900 mb-1">Contrato</div>
-                <div className="text-gray-700">{contrato?.service_name || 'No especificado'}</div>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="font-medium text-gray-900 mb-1">Item</div>
-                <div className="text-gray-700">{getItemName()}</div>
-              </div>
-              {preparteData.quantity && (
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <div className="font-medium text-gray-900 mb-1">Cantidad</div>
-                  <div className="text-gray-700">{preparteData.quantity}</div>
-                </div>
-              )}
-              {preparteData.observaciones && (
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <div className="font-medium text-gray-900 mb-1">Observaciones</div>
-                  <div className="text-gray-700">{preparteData.observaciones}</div>
-                </div>
-              )}
-            </div>
-          </div>
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold">Fechas y jornada</h3>
+            <FieldGrid>
+              <Field label="Fecha de solicitud" value={formatDate(preparteData.requestDate)} mono />
+              <Field label="Fecha de ejecución" value={executionLabel} mono={Boolean(preparteData.executionDate)} />
+              <Field label="Jornada" value={preparteData.jornada} />
+              <Field label="Hora de inicio" value={preparteData.start_time} mono />
+              <Field label="Hora de fin" value={preparteData.end_time} mono />
+            </FieldGrid>
+          </section>
 
           <Separator />
 
-          {/* Location Info */}
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                <div className="font-medium text-purple-900 mb-1">Sector</div>
-                <div className="text-purple-700">{getSectorName()}</div>
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold">Servicio</h3>
+            <FieldGrid>
+              <Field label="Contrato" value={contrato?.service_name} />
+              <Field label="Ítem" value={getItemName()} />
+              <Field label="Cantidad" value={preparteData.quantity != null ? String(preparteData.quantity) : null} mono />
+              <Field label="Sector" value={getSectorName()} />
+              <Field label="Área" value={getAreaName()} />
+              <Field label="Equipo del cliente" value={equipos.map((equipo) => equipo.name).join(', ') || null} />
+              <Field label="Solicitante" value={preparteData.solicitante} />
+            </FieldGrid>
+            {preparteData.observaciones && (
+              <div className="space-y-1">
+                <p className="text-muted-foreground text-sm">Observaciones</p>
+                <p className="text-sm whitespace-pre-line">{preparteData.observaciones}</p>
               </div>
-              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                <div className="font-medium text-purple-900 mb-1">Área</div>
-                <div className="text-purple-700">{getAreaName()}</div>
-              </div>
-            </div>
-          </div>
+            )}
+          </section>
 
-          {/* Time Info */}
-          {(preparteData.start_time || preparteData.end_time) && (
-            <>
-              <Separator />
-              <div className="space-y-3">
-                <h3 className="font-semibold text-lg">Horarios</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {preparteData.start_time && (
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <div className="font-medium text-gray-900 mb-1">Hora de Inicio</div>
-                      <div className="text-gray-700">{preparteData.start_time}</div>
-                    </div>
-                  )}
-                  {preparteData.end_time && (
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <div className="font-medium text-gray-900 mb-1">Hora de Fin</div>
-                      <div className="text-gray-700">{preparteData.end_time}</div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Solicitante Info */}
-          {preparteData.solicitante && (
-            <>
-              <Separator />
-              <div className="space-y-3">
-                <h3 className="font-semibold text-lg">Información del Solicitante</h3>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <div className="font-medium text-gray-900 mb-1">Nombre</div>
-                  <div className="text-gray-700">{preparteData.solicitante}</div>
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Image Preview */}
           {preparteData.preparteImage && (
             <>
               <Separator />
-              <div className="space-y-3">
-                <h3 className="font-semibold text-lg">Imagen/Documento Adjunto</h3>
-                <div className="bg-gray-50 rounded-lg p-3 flex justify-center">
+              <section className="space-y-3">
+                <h3 className="text-sm font-semibold">Adjunto</h3>
+                <div className="bg-muted/40 flex justify-center rounded-lg border p-3">
                   {preparteData.preparteImage.toLowerCase().includes('.pdf') ? (
                     <iframe
                       src={preparteData.preparteImage}
                       title="Documento adjunto del pedido"
-                      className="w-full h-[300px]"
+                      className="h-[300px] w-full"
                     />
                   ) : (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={preparteData.preparteImage}
-                      alt="preparte"
-                      className="max-w-full max-h-[300px] object-contain"
+                      alt="Adjunto del pedido"
+                      className="max-h-[300px] max-w-full object-contain"
                     />
                   )}
                 </div>
-              </div>
+              </section>
             </>
           )}
 
-          {/* Historial de Cambios */}
           {(isLoadingChangeLogs || changeLogs.length > 0) && (
             <>
               <Separator />
-              <div className="space-y-3">
-                <h3 className="font-semibold text-lg flex items-center gap-2">
-                  <History className="h-5 w-5 text-gray-600" />
-                  Historial de Cambios
+              <section className="space-y-3">
+                <h3 className="flex items-center gap-2 text-sm font-semibold">
+                  <History className="text-muted-foreground size-4" aria-hidden="true" />
+                  Historial de cambios
                 </h3>
-                <div className="space-y-2">
-                  {isLoadingChangeLogs ? (
-                    <div className="space-y-3">
-                      {Array.from({ length: 2 }).map((_, i) => (
-                        <div key={i} className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <Skeleton className="h-5 w-32" />
-                            <Skeleton className="h-4 w-24" />
-                          </div>
-                          <Skeleton className="h-4 w-48" />
-                          <Skeleton className="h-4 w-40" />
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    changeLogs.map((log, index) => {
+                {isLoadingChangeLogs ? (
+                  <div className="space-y-4 border-l pl-4">
+                    {Array.from({ length: 2 }).map((_, i) => (
+                      <div key={i} className="space-y-2">
+                        <Skeleton className="h-4 w-40" />
+                        <Skeleton className="h-4 w-56" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <ol className="space-y-4 border-l pl-4">
+                    {changeLogs.map((log, index) => {
                       const metadata = log.metadata as Record<string, string | number | boolean | null> | null;
                       const oldItemName = metadata?.old_item_name || log.old_value;
                       const newItemName = metadata?.new_item_name || log.new_value;
-                      const changedAt = log.changed_at
-                        ? moment(log.changed_at).locale('es').format('D MMM YYYY, HH:mm')
-                        : 'Fecha no disponible';
+                      const changedAt = log.changed_at ? formatArgentinaDateTime(log.changed_at) : 'Fecha no disponible';
 
                       return (
-                        <div
-                          key={log.id || index}
-                          className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm"
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300">
-                              Cambio de {log.field_name}
-                            </Badge>
-                            <div className="flex flex-col items-end gap-0.5">
-                              <span className="text-xs text-gray-500">{changedAt}</span>
-                              {log.changed_by_name && (
-                                <span className="text-xs text-gray-400">por {log.changed_by_name}</span>
-                              )}
-                            </div>
+                        <li key={log.id || index} className="relative space-y-1 text-sm">
+                          <span
+                            aria-hidden="true"
+                            className="bg-brand ring-background absolute top-1.5 -left-[21px] size-2 rounded-full ring-4"
+                          />
+                          <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                            <span className="font-medium">Cambio de {log.field_name}</span>
+                            <span className="text-muted-foreground font-mono text-xs tabular-nums">
+                              {changedAt}
+                              {log.changed_by_name && <span className="font-sans"> · {log.changed_by_name}</span>}
+                            </span>
                           </div>
-                          <div className="space-y-1 text-gray-700">
-                            <div>
-                              <span className="font-medium">De:</span>{' '}
-                              <span className="text-red-600 line-through">{String(oldItemName)}</span>
-                            </div>
-                            <div>
-                              <span className="font-medium">A:</span>{' '}
-                              <span className="text-green-600">{String(newItemName)}</span>
-                            </div>
-                            {log.reason && (
-                              <div className="mt-2 pt-2 border-t border-amber-200">
-                                <span className="font-medium">Motivo:</span> {log.reason}
-                              </div>
-                            )}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-danger-subtle-foreground line-through">{String(oldItemName)}</span>
+                            <ArrowRight className="text-muted-foreground size-3.5" aria-label="pasó a" />
+                            <span className="text-ok-subtle-foreground font-medium">{String(newItemName)}</span>
                           </div>
-                        </div>
+                          {log.reason && (
+                            <p className="text-muted-foreground">
+                              <span className="text-foreground font-medium">Motivo:</span> {log.reason}
+                            </p>
+                          )}
+                        </li>
                       );
-                    })
-                  )}
-                </div>
-              </div>
+                    })}
+                  </ol>
+                )}
+              </section>
             </>
           )}
         </div>

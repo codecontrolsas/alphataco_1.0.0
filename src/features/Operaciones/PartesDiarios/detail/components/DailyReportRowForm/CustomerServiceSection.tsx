@@ -118,9 +118,8 @@ export function CustomerServiceSection({
   const isAreaDisabled = customerAreas.length === 0;
 
   return (
-    <div className="space-y-4 rounded-lg dark:bg-slate-900 bg-slate-50 p-4 w-full">
-      <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2">Datos del Cliente</h4>
-      <div className="grid grid-cols-1 gap-4 w-full">
+    <div className="w-full space-y-4">
+      <div className="grid w-full grid-cols-1 gap-4">
         {/* Cliente */}
         <FormField
           control={form.control}

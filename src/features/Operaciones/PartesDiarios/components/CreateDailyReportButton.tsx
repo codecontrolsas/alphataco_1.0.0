@@ -1,7 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CalendarIcon } from 'lucide-react';
+import { Loader2, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -10,14 +10,11 @@ import { createDailyReport } from '../actions/mutations.server';
 import { checkDailyReportExists } from '../actions/queries.server';
 
 import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
-import { CardTitle } from '@/components/ui/card';
+import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
 import moment from 'moment';
-import 'moment/locale/es';
 import { useState } from 'react';
 import { DAILY_REPORTS_QUERY_KEY } from '../hooks/useDailyReports';
 
@@ -27,9 +24,14 @@ const FormSchema = z.object({
   }),
 });
 
-export default function DailyReportForm() {
+/**
+ * Alta de parte diario desde la barra de la tabla: un popover con la fecha. Valida que no exista
+ * otro parte para el día, lo crea y lleva a su detalle.
+ */
+export function CreateDailyReportButton() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<z.infer<typeof FormSchema>>({
@@ -74,52 +76,51 @@ export default function DailyReportForm() {
   };
 
   return (
-    <div>
-      <CardTitle className="text-2xl mb-4">Crear parte diario</CardTitle>
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          <FormField
-            control={form.control}
-            name="date"
-            render={({ field }) => (
-              <FormItem className="flex flex-col">
-                <FormLabel>Fecha</FormLabel>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <FormControl>
-                      <Button
-                        variant={'outline'}
-                        className={cn('w-[240px] pl-3 text-left font-normal', !field.value && 'text-muted-foreground')}
-                      >
-                        {field.value ? (
-                          moment(field.value).locale('es').format('LL')
-                        ) : (
-                          <span>Seleccione una fecha</span>
-                        )}
-                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                      </Button>
-                    </FormControl>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      disabled={(date) => moment(date).isBefore(moment().subtract(1, 'days'))}
-                      mode="single"
-                      selected={field.value}
-                      onSelect={field.onChange}
-                      initialFocus
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="brand" size="sm">
+          <Plus className="mr-2 size-4" />
+          Nuevo parte diario
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80">
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <div className="space-y-1">
+              <h2 className="text-sm font-semibold">Crear parte diario</h2>
+              <p className="text-muted-foreground text-sm">Al crearlo vas directo a cargar sus registros.</p>
+            </div>
+            <FormField
+              control={form.control}
+              name="date"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Fecha</FormLabel>
+                  <FormControl>
+                    <EnhancedDatePicker
+                      id="daily-report-date"
+                      date={field.value}
+                      setDate={field.onChange}
+                      minDate={moment().startOf('day').toDate()}
                     />
-                  </PopoverContent>
-                </Popover>
-                <FormDescription>Seleccione la fecha para el parte diario.</FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Creando...' : 'Crear parte diario'}
-          </Button>
-        </form>
-      </Form>
-    </div>
+                  </FormControl>
+                  <FormDescription>Desde hoy en adelante.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" variant="brand" size="sm" disabled={isSubmitting} aria-busy={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
+                {isSubmitting ? 'Creando...' : 'Crear parte diario'}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </PopoverContent>
+    </Popover>
   );
 }

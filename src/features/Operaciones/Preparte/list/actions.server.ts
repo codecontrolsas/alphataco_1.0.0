@@ -189,6 +189,7 @@ function buildOrderBy(state: ReturnType<typeof parseSearchParams>): Prisma.prepa
         orderBy.push({ [sort.id]: direction });
         break;
       case 'customer':
+      case 'order':
         orderBy.push({ customers: { name: direction } });
         break;
       case 'service':

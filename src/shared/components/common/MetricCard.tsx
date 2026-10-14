@@ -21,6 +21,7 @@ interface MetricCardProps {
   onSelect?: () => void;
   pressed?: boolean;
   className?: string;
+  'data-testid'?: string;
 }
 
 /**
@@ -28,7 +29,16 @@ interface MetricCardProps {
  * y una línea de apoyo. La reserva siempre, así los números de una misma fila quedan a la misma
  * altura aunque no todas las tarjetas tengan texto de apoyo.
  */
-export function MetricCard({ label, value, hint, tone = 'default', onSelect, pressed, className }: MetricCardProps) {
+export function MetricCard({
+  label,
+  value,
+  hint,
+  tone = 'default',
+  onSelect,
+  pressed,
+  className,
+  'data-testid': testId,
+}: MetricCardProps) {
   const body = (
     <>
       <span className="text-muted-foreground text-sm font-medium tracking-wide uppercase">{label}</span>
@@ -46,13 +56,19 @@ export function MetricCard({ label, value, hint, tone = 'default', onSelect, pre
     className
   );
 
-  if (!onSelect) return <div className={base}>{body}</div>;
+  if (!onSelect)
+    return (
+      <div className={base} data-testid={testId}>
+        {body}
+      </div>
+    );
 
   return (
     <button
       type="button"
       onClick={onSelect}
       aria-pressed={pressed}
+      data-testid={testId}
       className={cn(
         base,
         'hover:border-brand/50 focus-visible:ring-ring/50 outline-none focus-visible:ring-[3px]',

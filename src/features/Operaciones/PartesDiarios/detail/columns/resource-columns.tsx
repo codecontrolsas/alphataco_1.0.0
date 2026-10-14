@@ -54,7 +54,7 @@ export function getResourceColumns(): ColumnDef<DailyReportDetailRow>[] {
       accessorFn: (row) => row.customers?.name ?? '',
       meta: { title: 'Cliente' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Cliente" />,
-      cell: ({ row }) => <span className="font-medium">{row.original.customers?.name ?? '—'}</span>,
+      cell: ({ row }) => <span className="font-semibold">{row.original.customers?.name ?? 'Sin cliente'}</span>,
       filterFn: (row, _id, value: string[]) => {
         const id = row.original.customer_id;
         if (id == null) return value.includes(NULL_FILTER_VALUE);
@@ -68,7 +68,7 @@ export function getResourceColumns(): ColumnDef<DailyReportDetailRow>[] {
       accessorFn: (row) => row.customer_services?.service_name ?? '',
       meta: { title: 'Servicio' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Servicio" />,
-      cell: ({ row }) => <span>{row.original.customer_services?.service_name ?? '—'}</span>,
+      cell: ({ row }) => row.original.customer_services?.service_name ?? <span className="text-muted-foreground">-</span>,
       filterFn: (row, _id, value: string[]) => {
         const id = row.original.service_id;
         if (id == null) return value.includes(NULL_FILTER_VALUE);
@@ -82,7 +82,7 @@ export function getResourceColumns(): ColumnDef<DailyReportDetailRow>[] {
       accessorFn: (row) => row.service_items?.item_name ?? '',
       meta: { title: 'Ítem' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Ítem" />,
-      cell: ({ row }) => <span>{row.original.service_items?.item_name ?? '—'}</span>,
+      cell: ({ row }) => row.original.service_items?.item_name ?? <span className="text-muted-foreground">-</span>,
       filterFn: (row, _id, value: string[]) => {
         const id = row.original.item_id;
         if (id == null) return value.includes(NULL_FILTER_VALUE);
@@ -98,7 +98,7 @@ export function getResourceColumns(): ColumnDef<DailyReportDetailRow>[] {
       header: ({ column }) => <DataTableColumnHeader column={column} title="Sector" />,
       cell: ({ row }) => {
         const name = row.original.service_sectors?.sectors?.name;
-        if (!name) return <span className="text-muted-foreground text-xs">—</span>;
+        if (!name) return <span className="text-muted-foreground">-</span>;
         return (
           <Badge variant="outline" className="font-medium">
             {name}
@@ -120,7 +120,7 @@ export function getResourceColumns(): ColumnDef<DailyReportDetailRow>[] {
       header: ({ column }) => <DataTableColumnHeader column={column} title="Área" />,
       cell: ({ row }) => {
         const name = row.original.service_areas?.areas_cliente?.descripcion_corta;
-        if (!name) return <span className="text-muted-foreground text-xs">—</span>;
+        if (!name) return <span className="text-muted-foreground">-</span>;
         return (
           <Badge variant="outline" className="font-medium">
             {name}
@@ -141,7 +141,7 @@ export function getResourceColumns(): ColumnDef<DailyReportDetailRow>[] {
       header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo Servicio" />,
       cell: ({ row }) => {
         const val = row.original.type_service;
-        if (!val) return <span className="text-muted-foreground text-xs">—</span>;
+        if (!val) return <span className="text-muted-foreground">-</span>;
         return <Badge className="font-medium capitalize">{dailyReportTypeServiceLabels[val] ?? val}</Badge>;
       },
       filterFn: (row, id, value: string[]) => {

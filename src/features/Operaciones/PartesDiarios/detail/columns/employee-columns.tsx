@@ -37,7 +37,7 @@ export function getEmployeeColumns(deviations: DeviationGetters): ColumnDef<Dail
       cell: ({ row }) => {
         const wday = row.original.working_day?.toLowerCase();
         if (wday !== 'jornada 12 horas' && wday !== 'jornada 24 horas') {
-          return <span className="text-muted-foreground text-xs">—</span>;
+          return <span className="text-muted-foreground">-</span>;
         }
         const rel = row.original.dailyreportemployeerelations.find((r) => r.role === 'chofer_dia');
         if (!rel?.employees) {
@@ -77,7 +77,7 @@ export function getEmployeeColumns(deviations: DeviationGetters): ColumnDef<Dail
       cell: ({ row }) => {
         const wday = row.original.working_day?.toLowerCase();
         if (wday !== 'jornada 12 horas' && wday !== 'jornada 24 horas') {
-          return <span className="text-muted-foreground text-xs">—</span>;
+          return <span className="text-muted-foreground">-</span>;
         }
         const rels = row.original.dailyreportemployeerelations.filter((r) => r.role === 'ayudante_dia' && r.employees);
         if (rels.length === 0) {
@@ -124,7 +124,7 @@ export function getEmployeeColumns(deviations: DeviationGetters): ColumnDef<Dail
       cell: ({ row }) => {
         const wday = row.original.working_day?.toLowerCase();
         if (wday !== 'jornada 24 horas') {
-          return <span className="text-muted-foreground text-xs">—</span>;
+          return <span className="text-muted-foreground">-</span>;
         }
         const rel = row.original.dailyreportemployeerelations.find((r) => r.role === 'chofer_noche');
         if (!rel?.employees) {
@@ -164,7 +164,7 @@ export function getEmployeeColumns(deviations: DeviationGetters): ColumnDef<Dail
       cell: ({ row }) => {
         const wday = row.original.working_day?.toLowerCase();
         if (wday !== 'jornada 24 horas') {
-          return <span className="text-muted-foreground text-xs">—</span>;
+          return <span className="text-muted-foreground">-</span>;
         }
         const rels = row.original.dailyreportemployeerelations.filter(
           (r) => r.role === 'ayudante_noche' && r.employees

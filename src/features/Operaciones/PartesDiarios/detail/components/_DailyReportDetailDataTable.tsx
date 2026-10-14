@@ -14,17 +14,17 @@ import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers'
 import { dailyReportRowStatusLabels, dailyReportTypeServiceLabels } from '@/shared/utils/mappers';
 import { useQuery } from '@tanstack/react-query';
 import {
-  AlertTriangle,
   CalendarCheck,
-  CalendarOff,
   CheckCircle2,
   CircleOff,
-  Clock,
   Pencil,
+  Plus,
   XCircle,
   type LucideIcon,
 } from 'lucide-react';
 import moment from 'moment';
+import { DAILY_REPORT_ROW_STATUS_ICONS } from '../../lib/daily-report-status-ui';
+import { ROW_HIGHLIGHT_CLASSES } from '../lib/row-highlight';
 import dynamic from 'next/dynamic';
 import { useCallback, useMemo, useState } from 'react';
 import { useDailyReportDetailFormStore } from '../../store/dailyReportDetailFormStore';
@@ -62,15 +62,8 @@ const CloneRowsDialog = dynamic(() => import('./CloneRowsDialog').then((m) => ({
 /** Only 3 filters visible by default */
 const DEFAULT_VISIBLE_FILTERS = ['status', 'customer', 'working_day'];
 
-/** Status icons for faceted filter */
-const rowStatusIcons: Record<string, LucideIcon> = {
-  pendiente: Clock,
-  sin_recursos_asignados: AlertTriangle,
-  ejecutado: CheckCircle2,
-  reprogramado: CalendarOff,
-  cancelado: XCircle,
-  en_certificacion: CheckCircle2,
-};
+/** Íconos de estado del filtro: los mismos que el badge de la columna */
+const rowStatusIcons: Record<string, LucideIcon> = DAILY_REPORT_ROW_STATUS_ICONS;
 
 // ============================================================================
 // PROPS
@@ -251,9 +244,9 @@ export function _DailyReportDetailDataTable({
   const reportDateMoment = useMemo(() => moment(reportDate), [reportDate]);
   const getRowClassName = useCallback(
     (row: DailyReportDetailRow) => {
-      if (row.last_comercial_edit_at) return 'bg-blue-100 dark:bg-blue-900/30';
+      if (row.last_comercial_edit_at) return ROW_HIGHLIGHT_CLASSES.commercialEdit;
       if (row.created_at && moment(row.created_at).isAfter(reportDateMoment))
-        return 'bg-yellow-100 dark:bg-yellow-900/30';
+        return ROW_HIGHLIGHT_CLASSES.lateCreated;
       return '';
     },
     [reportDateMoment]
@@ -565,17 +558,19 @@ export function _DailyReportDetailDataTable({
 
     return (
       <TooltipProvider delayDuration={150}>
-        <div className={cn('flex items-center', canCreate ? 'justify-between' : 'justify-end')}>
+        <div className="flex flex-wrap items-center gap-2">
           {canCreate ? (
-            <Button variant="default" onClick={() => openForm()}>
-              Crear
+            <Button variant="brand" size="sm" onClick={() => openForm()}>
+              <Plus className="mr-2 size-4" />
+              Crear registro
             </Button>
           ) : (
             <Tooltip>
               <TooltipTrigger asChild>
                 <span tabIndex={0} className="inline-flex">
-                  <Button variant="default" disabled>
-                    Crear
+                  <Button variant="brand" size="sm" disabled>
+                    <Plus className="mr-2 size-4" />
+                    Crear registro
                   </Button>
                 </span>
               </TooltipTrigger>
@@ -584,8 +579,8 @@ export function _DailyReportDetailDataTable({
               </TooltipContent>
             </Tooltip>
           )}
-          <Button onClick={() => setShowClone(true)} className="flex items-center gap-2 ml-2">
-            <CalendarCheck className="h-4 w-4" />
+          <Button variant="outline" size="sm" onClick={() => setShowClone(true)} className="order-first gap-1.5">
+            <CalendarCheck className="size-4" />
             {hasBulk ? (
               <>
                 Clonar
@@ -657,7 +652,6 @@ export function _DailyReportDetailDataTable({
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
-      {topActionBar && <div className="mb-4">{topActionBar}</div>}
       <DataTable
         columns={columns}
         data={data}
@@ -677,7 +671,15 @@ export function _DailyReportDetailDataTable({
         enableRowSelection={true}
         showRowSelection={true}
         onRowSelectionChange={setSelectedRows}
-        toolbarActions={toolbarActions}
+        toolbarActions={
+          toolbarActions || topActionBar ? (
+            <>
+              {toolbarActions}
+              {topActionBar}
+            </>
+          ) : undefined
+        }
+        mobileCards
         rowClassName={getRowClassName}
         data-testid="daily-report-detail-table"
         exportConfig={{

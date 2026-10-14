@@ -1,3 +1,4 @@
+import { Card, CardContent } from '@/components/ui/card';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
@@ -11,6 +12,7 @@ import { _DailyReportDataTable } from './components/_DailyReportDataTable';
 interface Props {
   searchParams: DataTableSearchParams;
   permissionsMap: Record<string, boolean>;
+  canCreate: boolean;
 }
 
 // ============================================================================
@@ -19,7 +21,7 @@ interface Props {
 
 const TABLE_ID = 'daily-reports';
 
-export async function DailyReportList({ searchParams, permissionsMap }: Props) {
+export async function DailyReportList({ searchParams, permissionsMap, canCreate }: Props) {
   // Extraer solo los params de esta tabla (quitar prefijo del namespace)
   const tableParams = stripPrefixFromSearchParams(searchParams, TABLE_ID);
 
@@ -29,14 +31,19 @@ export async function DailyReportList({ searchParams, permissionsMap }: Props) {
   ]);
 
   return (
-    <_DailyReportDataTable
-      data={data}
-      totalRows={total}
-      searchParams={tableParams}
-      tableId={TABLE_ID}
-      permissionsMap={permissionsMap}
-      initialColumnVisibility={preferences.columnVisibility ?? {}}
-      initialFilterVisibility={preferences.filterVisibility ?? {}}
-    />
+    <Card>
+      <CardContent className="pt-6">
+        <_DailyReportDataTable
+          data={data}
+          totalRows={total}
+          searchParams={tableParams}
+          tableId={TABLE_ID}
+          permissionsMap={permissionsMap}
+          canCreate={canCreate}
+          initialColumnVisibility={preferences.columnVisibility ?? {}}
+          initialFilterVisibility={preferences.filterVisibility ?? {}}
+        />
+      </CardContent>
+    </Card>
   );
 }

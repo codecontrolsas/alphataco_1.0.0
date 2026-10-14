@@ -11,7 +11,6 @@
  * - Item: 44444444-4444-4444-4444-444444444444 (Item Testing E2E)
  *
  * data-testid agregados:
- * - preparte-title: Título "Gestión de Pedidos"
  * - nuevo-pedido-button: Botón "Nuevo Pedido"
  * - status-card-todos: Card "Todos"
  * - status-card-pendiente: Card "Pendientes"
@@ -61,9 +60,7 @@ describe('Operaciones - Preparte (Gestor de Pedidos)', () => {
       cy.url().should('include', '/dashboard/operations');
 
       // Verificar que estamos en la tab correcta mediante el título
-      cy.get('[data-testid="preparte-title"]', { timeout: 10000 })
-        .should('be.visible')
-        .and('contain.text', 'Gestión de Pedidos');
+      cy.contains('h1', 'Gestor de Pedidos', { timeout: 10000 }).should('be.visible');
     });
   });
 
@@ -231,7 +228,7 @@ describe('Operaciones - Preparte (Gestor de Pedidos)', () => {
         });
 
       // Verificar que estamos de vuelta en la vista principal
-      cy.get('[data-testid="preparte-title"]').should('be.visible');
+      cy.get('[data-testid="status-card-todos"]').should('be.visible');
 
       // 16. Verificar que el preparte aparece en la tabla con el número de pedido
       cy.get('@numeroPedido').then((numeroPedido) => {

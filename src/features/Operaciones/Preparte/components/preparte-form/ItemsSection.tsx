@@ -92,11 +92,11 @@ export function ItemsSection({ form, contractItems, isEditing, isLoading, isLoad
                         const rowKey = row.id || `temp-${index}`;
 
                         return (
-                          <div key={rowKey} className="border rounded-lg p-4 space-y-4 bg-muted/30">
+                          <div key={rowKey} className="bg-muted/40 space-y-4 rounded-lg border p-4">
                             {/* Fila superior: Item, Cantidad, Eliminar */}
                             <div className="flex items-end gap-2">
                               <div className="flex-1">
-                                <FormLabel>{index === 0 ? 'Item' : `Item ${index + 1}`}</FormLabel>
+                                <FormLabel>{selectedItems.length > 1 ? `Ítem ${index + 1}` : 'Ítem'}</FormLabel>
                                 <MultiSelectCombobox
                                   data-testid={`item-select-${index}`}
                                   options={contractItems.filter(
@@ -121,8 +121,8 @@ export function ItemsSection({ form, contractItems, isEditing, isLoading, isLoad
 
                                     syncFormValue(updatedItems);
                                   }}
-                                  placeholder="Seleccionar item"
-                                  emptyMessage="No hay items disponibles"
+                                  placeholder="Seleccionar ítem"
+                                  emptyMessage="No hay ítems disponibles"
                                   disabled={isItemDisabled}
                                   maxSelections={1}
                                 />
@@ -208,7 +208,7 @@ export function ItemsSection({ form, contractItems, isEditing, isLoading, isLoad
 
                                 {/* Horario (solo si jornada es "por horario") */}
                                 {row.jornada === 'por horario' && (
-                                  <div className="grid grid-cols-2 gap-4">
+                                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <div className="flex flex-col gap-2">
                                       <FormLabel className="text-sm">Hora de inicio</FormLabel>
                                       <Input

@@ -8,16 +8,7 @@ import {
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { useQuery } from '@tanstack/react-query';
-import {
-  Ban,
-  CheckCircle2,
-  CircleOff,
-  Clock,
-  Edit,
-  RefreshCw,
-  XCircle,
-  type LucideIcon,
-} from 'lucide-react';
+import { CircleOff, Edit } from 'lucide-react';
 import moment from 'moment';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
@@ -26,6 +17,7 @@ import {
   getPrepartesPaginated,
   type PreparteListItem,
 } from '../actions.server';
+import { PREPARTE_STATUS_UI } from '../../lib/preparte-status-ui';
 import {
   HIDDEN_COLUMNS_BY_DEFAULT,
   PREPARTE_STATUS_LABELS,
@@ -46,16 +38,9 @@ interface Props {
   initialFilterVisibility: Record<string, boolean>;
   callbacks: PreparteTableCallbacks;
   clearSelectionTrigger?: number;
+  /** Acciones de la sección (informe, alta) que van junto a las de la tabla. */
+  extraToolbarActions?: React.ReactNode;
 }
-
-const STATUS_ICONS: Record<string, LucideIcon> = {
-  pendiente: Clock,
-  confirmado: CheckCircle2,
-  reprogramado: RefreshCw,
-  cancelado: Ban,
-  rechazado: XCircle,
-  vencido: XCircle,
-};
 
 const ALL_FILTER_IDS = [
   'requestDate',
@@ -103,6 +88,7 @@ export function _PreparteDataTable({
   initialFilterVisibility,
   callbacks,
   clearSelectionTrigger,
+  extraToolbarActions,
 }: Props) {
   const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
   const [selectedRows, setSelectedRows] = useState<PreparteListItem[]>([]);
@@ -139,10 +125,10 @@ export function _PreparteDataTable({
         columnId: 'status',
         title: 'Estado',
         options: withNullOption(
-          Object.entries(PREPARTE_STATUS_LABELS).map(([value, label]) => ({
+          Object.entries(PREPARTE_STATUS_UI).map(([value, ui]) => ({
             value,
-            label,
-            icon: STATUS_ICONS[value],
+            label: ui.label,
+            icon: ui.icon,
           })),
           facets?.status,
           'Sin estado'
@@ -308,6 +294,7 @@ export function _PreparteDataTable({
       onStateChange={handleStateChange}
       searchPlaceholder="Buscar por pedido, solicitante, observación o motivo..."
       showSearch
+      mobileCards
       facetedFilters={facetedFilters}
       initialColumnVisibility={mergedColumnVisibility}
       initialFilterVisibility={mergedFilterVisibility}
@@ -326,17 +313,23 @@ export function _PreparteDataTable({
       onRowSelectionChange={setSelectedRows}
       clearSelectionTrigger={(clearSelectionTrigger ?? 0) + localClearSelectionTrigger}
       toolbarActions={
-        canUpdate ? (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={selectedRows.length === 0}
-            onClick={() => callbacks.onBulkStatus(selectedRows)}
-          >
-            <Edit className="mr-2 h-4 w-4" />
-            Cambiar estado
-          </Button>
-        ) : undefined
+        <>
+          {canUpdate && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={selectedRows.length === 0}
+              onClick={() => callbacks.onBulkStatus(selectedRows)}
+            >
+              <Edit className="mr-2 size-4" />
+              Cambiar estado
+              {selectedRows.length > 0 && (
+                <span className="font-mono tabular-nums">({selectedRows.length})</span>
+              )}
+            </Button>
+          )}
+          {extraToolbarActions}
+        </>
       }
       exportConfig={{
         fetchAllData: () => getAllPrepartesForExport(currentParams),

@@ -9,7 +9,8 @@ import { useImageUpload } from '@/shared/hooks/useUploadImage';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Building } from 'lucide-react';
+import { SectionCard } from '@/shared/components/common/SectionCard';
+import { Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -274,7 +275,7 @@ export function PreparteForm({ formData, clientes, isEditing, onInputChange, onS
   };
 
   return (
-    <div className=" gap-4 space-y-4 rounded-lg dark:bg-slate-900 bg-slate-50 p-4 w-full">
+    <div className="w-full">
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(
@@ -291,13 +292,10 @@ export function PreparteForm({ formData, clientes, isEditing, onInputChange, onS
               });
             }
           )}
-          className="space-y-6"
+          className="space-y-4"
         >
-          <div className="space-y-4">
-            <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <Building className="h-4 w-4" />
-              Datos del Cliente
-            </h4>
+          <SectionCard title="Cliente y contrato">
+            <div className="space-y-4">
             <CustomerContractSection
               form={form}
               clientes={clientes}
@@ -306,7 +304,11 @@ export function PreparteForm({ formData, clientes, isEditing, onInputChange, onS
               isLoading={isLoading}
               isLoadingContratos={isLoadingContratos}
             />
+            </div>
+          </SectionCard>
 
+          <SectionCard title="Ubicación" description="Sector, área y equipo del cliente donde se presta el servicio.">
+            <div className="space-y-4">
             <LocationSection
               form={form}
               clientes={clientes}
@@ -319,7 +321,11 @@ export function PreparteForm({ formData, clientes, isEditing, onInputChange, onS
               isLoadingAreas={isLoadingAreas}
               isLoadingEquipments={isLoadingEquipments}
             />
+            </div>
+          </SectionCard>
 
+          <SectionCard title="Ítems" description="Cada ítem lleva su jornada, horario y fecha de ejecución.">
+            <div className="space-y-4">
             <ItemsSection
               form={form}
               contractItems={contractItems}
@@ -340,11 +346,11 @@ export function PreparteForm({ formData, clientes, isEditing, onInputChange, onS
                 name="item_change_reason"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-amber-600">Motivo del cambio de ítem *</FormLabel>
+                    <FormLabel className="text-warn-subtle-foreground">Motivo del cambio de ítem *</FormLabel>
                     <FormControl>
                       <Textarea
                         placeholder="Ingrese el motivo por el cual se está cambiando el ítem..."
-                        className="min-h-[80px] bg-background border-amber-300"
+                        className="bg-background border-warn/50 min-h-[80px]"
                         {...field}
                         value={field.value || ''}
                       />
@@ -358,7 +364,11 @@ export function PreparteForm({ formData, clientes, isEditing, onInputChange, onS
               />
             )}
 
-            {/* Imagen del pedido - No usa FormField porque es manejado localmente */}
+            </div>
+          </SectionCard>
+
+          {/* Imagen del pedido - No usa FormField porque es manejado localmente */}
+          <SectionCard title="Adjunto" description="Imagen o PDF del pedido del cliente (opcional).">
             {isEditing ? (
               <div className="space-y-2">
                 <FormLabel>
@@ -383,43 +393,22 @@ export function PreparteForm({ formData, clientes, isEditing, onInputChange, onS
                 />
               </div>
             )}
+          </SectionCard>
 
-            <div className="flex justify-end space-x-4 pt-4">
-              <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={isSubmitting} data-testid="guardar-preparte-button">
-                {isSubmitting ? (
-                  <>
-                    <svg
-                      className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                    {isEditing ? 'Actualizando...' : 'Guardando...'}
-                  </>
-                ) : isEditing ? (
-                  'Actualizar'
-                ) : (
-                  'Guardar'
-                )}
-              </Button>
-            </div>
+          <div className="bg-background/90 sticky bottom-0 -mx-4 flex justify-end gap-2 border-t px-4 py-3 backdrop-blur-sm">
+            <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              variant="brand"
+              disabled={isSubmitting}
+              aria-busy={isSubmitting}
+              data-testid="guardar-preparte-button"
+            >
+              {isSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
+              {isSubmitting ? (isEditing ? 'Actualizando...' : 'Guardando...') : isEditing ? 'Actualizar' : 'Guardar'}
+            </Button>
           </div>
         </form>
       </Form>
