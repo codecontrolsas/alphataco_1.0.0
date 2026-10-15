@@ -145,3 +145,21 @@ entero) en diseño y revisión. Si no, aplicar este resumen:
 - Con >3 agentes o dos `tsc`, la máquina se queda sin RAM y los agentes acotan su verificación (queda sin cubrir el resto).
 - Los avisos "new-diagnostics" del editor suelen ser caché vieja: la verdad es `tsc`/`next build`.
 - Al renombrar/mover una acción, buscar TODOS los importadores (otros módulos importan acciones de Almacenes, Compras y Tesorería).
+
+## 9. Autonomía y criterio de producto (decisión del usuario)
+
+- **Lógica ineficiente o mejorable → se mejora directo, sin preguntar**, siempre que el resultado observable no cambie (se verifica
+  la equivalencia: comparar resultados viejos/nuevos con `EXCEPT` en `alphataco_test`, o razonando con el código). Incluye: N+1,
+  agregaciones en Node que van en SQL, consultas sin acotar, cálculos duplicados, código copiado entre módulos, archivos enormes.
+- **Los flujos están muy personalizados a como GH los quería** (Mantenimiento en especial, y el resto). Está permitido y buscado
+  **estandarizarlos y simplificarlos** para que al usuario le resulte más fácil: menos pasos, menos modales, mejores valores por
+  defecto, nombres y rótulos consistentes, una sola forma de hacer lo mismo en todos los módulos. Condiciones: mismas reglas de
+  negocio, mismos datos, mismos permisos, y se documenta el cambio visible en `ESTADO.md` ("Cambios visibles a avisar").
+- **Sí se consulta al usuario**: migraciones, claves nuevas en `permissions-map.ts`, y cualquier cambio que altere cifras, importes
+  o quién puede hacer qué. Todo lo demás se decide y se reporta.
+
+## 10. Herramientas e instalación
+
+Ver `PROMPT-LOOP.md §C` (feature-dev, skills.sh, ui-skills MCP/CLI, CodeGraph, agent-browser, Postgres y modo sin base de datos).
+Comandos clave: `/plugin install feature-dev@claude-plugins-official` · `npx skills find|add|list|update` ·
+`claude mcp add --transport http ui-skills https://www.ui-skills.com/mcp` · `npx ui-skills` · `codegraph init -i`.

@@ -45,6 +45,13 @@ muertos**, **responsive** y **sin cambiar flujos de negocio**. No es un cambio d
    de navegador por TODOS los módulos y viewports, dos revisiones independientes, actualizar "Learned Corrections" del `CLAUDE.md`,
    reporte final al usuario y **detener el loop** (`ScheduleWakeup stop:true`).
 
+## Autonomía
+
+- Lógica ineficiente o mejorable → **mejorarla directo sin preguntar** (verificando equivalencia). Flujos personalizados a GH
+  (Mantenimiento y el resto) → **estandarizar y simplificar** para el usuario, sin cambiar reglas de negocio, datos ni permisos
+  (`MODELO-DE-TRABAJO.md §9`). Solo se consulta: migraciones, claves nuevas de permisos, cambios de cifras/importes/quién-puede-qué.
+- Si el entorno no tiene Postgres, seguir `PROMPT-LOOP.md §C.4` (Docker → Postgres local → remoto de prueba → modo estático sin declarar "certificado").
+
 ## Reglas duras (resumen; ver MODELO-DE-TRABAJO.md)
 
 - NO commitear/pushear salvo pedido explícito del usuario (entonces: rama nueva desde `origin/main`, commit de UNA línea, sin
