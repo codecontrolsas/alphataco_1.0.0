@@ -133,6 +133,11 @@ export interface BuildTruckSvgInput {
   wheelIdPrefix?: string;
   /** Dibuja el aro de selección en TODAS las ruedas (cuando el gemelo tiene seleccionada la zona de cubiertas). */
   selectAllWheels?: boolean;
+  /**
+   * Separación entre ejes consecutivos (de adelante hacia atrás: `axleGaps[0]` es entre el eje 1 y el 2).
+   * Sin ella, dos ejes dobles seguidos van juntos (tándem) y el resto a distancia de eje delantero.
+   */
+  axleGaps?: number[];
 }
 
 /** Carrocería de la figura: ver `BuildTruckSvgInput.body`. */
@@ -159,6 +164,27 @@ export interface TruckZones {
   checklists?: TruckZone;
   maintenance?: TruckZone;
   hitch?: TruckZone;
+}
+
+// ─── Distancia entre ejes ──────────────────────────────────────────────────
+
+const GAP_TANDEM = 75;
+const GAP_TWIN_STEER = 100;
+const GAP_WHEELBASE = 140;
+
+/**
+ * Separación entre ejes consecutivos (de adelante hacia atrás) según cómo son los dos vecinos: dos dobles
+ * forman tándem o trídem, dos simples seguidos son doble dirección y simple-doble es la distancia entre ejes.
+ * La usan todas las vistas, así una misma configuración pone las ruedas en el mismo lugar en cualquier pantalla.
+ */
+export function defaultAxleGaps(regular: DiagramAxle[]): number[] {
+  const dual = (axle: DiagramAxle) => axle.tires_per_side !== 1;
+  return regular.slice(1).map((axle, index) => {
+    const previous = regular[index];
+    if (dual(previous) && dual(axle)) return GAP_TANDEM;
+    if (!dual(previous) && !dual(axle)) return GAP_TWIN_STEER;
+    return GAP_WHEELBASE;
+  });
 }
 
 // ─── Utilidades ────────────────────────────────────────────────────────────
@@ -203,6 +229,7 @@ export function buildTruckSvg({
   zones,
   wheelIdPrefix = '',
   selectAllWheels = false,
+  axleGaps,
 }: BuildTruckSvgInput): string {
   const body: TruckBody = bodyInput ?? 'truck';
   const computed = calculatePositions(axles);
@@ -216,13 +243,13 @@ export function buildTruckSvg({
   const hasCab = Boolean(cabinLabel);
 
   // ── Distribución en X: el eje 1 en x = 0, los demás hacia atrás. Dos ejes dobles seguidos = tándem (más juntos).
+  const gaps = axleGaps ?? defaultAxleGaps(regular);
   const slots: AxleSlot[] = [];
   let cursor = 0;
   regular.forEach((axle, index) => {
     const dual = axle.tires_per_side !== 1;
     if (index > 0) {
-      const prev = slots[index - 1];
-      cursor -= prev.dual && dual ? 75 : 140;
+      cursor -= gaps[index - 1] ?? GAP_WHEELBASE;
     }
     slots.push({ axle, x: cursor, dual });
   });
@@ -332,13 +359,17 @@ export function buildTruckSvg({
       isSelected ? ', seleccionada' : ''
     }`;
     const attrs = interactive ? `role="button" aria-pressed="${isSelected}"` : `role="img"`;
+    // Número de la posición: sobre la banda de rodamiento (se ve en todas, también en la rueda interior de un dual).
+    const hub = G.pointOf(F, cp.side === 'SPARE' ? TIRE_W + 1.4 : TIRE_W / 2, 0, 0);
+    const [bx, by] = at(cp.side === 'SPARE' ? hub : [hub[0], hub[1], hub[2] + TIRE_R + 0.5]);
+    const badge = `<g aria-hidden="true" pointer-events="none"><circle cx="${bx}" cy="${by}" r="8.2" style="fill:var(--anatomy-paper);stroke:var(--anatomy-hi);stroke-width:.9"/><text x="${bx}" y="${by}" text-anchor="middle" dominant-baseline="central" style="fill:var(--anatomy-hi);font:600 9.5px var(--anatomy-mono);font-variant-numeric:tabular-nums">${cp.position_number}</text></g>`;
     return `<g data-iso-id="${wheelIdPrefix}${cp.position_number}" tabindex="0" ${attrs} aria-label="${esc(aria)}">${tire(
       F,
       tone,
       empty,
       isSelected || selectAllWheels,
       highlightedSet.has(cp.position_number)
-    )}</g>`;
+    )}${badge}</g>`;
   }
 
   // ── Ruedas de los ejes: siempre con el eje hacia +y, así la cara visible es la que mira a la cámara.
@@ -420,6 +451,20 @@ export function buildTruckSvg({
       axleParts.push(S(G.disc(0, 2 * half, 5, F, P), { tone: 'lo', crease: 'none' }));
       axleParts.push(S(G.disc(half - 8, half + 8, 8.5, F, P), { tone: 'mid' }));
     }
+    // Ejes motrices (con "tractor = eje motriz"): carcasa del diferencial y cardán entre ellos y hacia la cabina.
+    const driveSlots = slots.filter((slot) => slot.axle.is_drive_axle);
+    const driveParts: string[] = [];
+    driveSlots.forEach((slot, index) => {
+      const fromX = index === 0 ? (hasCab && body === 'truck' ? frontEnd - 68 : slot.x + 60) : driveSlots[index - 1].x;
+      if (fromX - slot.x > 12) {
+        const shaft: k.Plan = { x: slot.x, y: -2.5, w: fromX - slot.x, d: 5, r: 1 };
+        driveParts.push(S(k.slabOf(shaft, 34, 5, P, 2, 0.3), { tone: 'lo', crease: 'none' }));
+      }
+      driveParts.push(S(k.cylinder(slot.x, 0, 10, 20, 13, P, 28), { tone: 'hi', crease: 'lo' }));
+      driveParts.push(L(k.ring(slot.x, 0, 10, 33, P, 28), { tone: 'lo' }));
+      driveParts.push(D([at([slot.x, 0, 33])], { size: 0.6, tone: 'hi' }));
+    });
+    axleParts.push(...driveParts);
     if (trailerLike && zones?.maintenance && slots.length) {
       const frontAxle = slots[0];
       axleParts.push(
