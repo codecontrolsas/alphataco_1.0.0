@@ -78,7 +78,7 @@ const updateTireSchema = z.object({
   tread_depth: treadDepthSchema,
 });
 
-const tireStatusSchema = z.enum(['AVAILABLE', 'DISCARDED']);
+const tireStatusSchema = z.enum(['AVAILABLE', 'INSTALLED', 'IN_REPAIR', 'DISCARDED', 'MISSING']);
 
 type NewTireData = z.infer<typeof newTireSchema>;
 

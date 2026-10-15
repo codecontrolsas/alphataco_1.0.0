@@ -22,6 +22,10 @@ vi.mock('@/shared/lib/session', () => ({
 }));
 vi.mock('@/shared/lib/tenant', () => ({ getActiveCompanyId: async () => COMPANY }));
 vi.mock('@/features/Permissions', () => ({ checkPermissionServer: async () => true }));
+vi.mock('@/features/Permissions/actionsServer', () => ({
+  checkPermissionServer: async () => true,
+  canViewServer: async () => true,
+}));
 vi.mock('@/shared/actions/auth.actions', () => {
   const profile = { id: PROFILE, credentialId: PROFILE, fullname: null, email: null };
   return { getServerAuthProfile: async () => profile, requireServerAuthProfile: async () => profile };
@@ -106,7 +110,10 @@ describe.skipIf(!RUN)('cubiertas en el stock (integracion)', () => {
     await cleanup();
     const prisma = await db();
     const city = await prisma.cities.findFirstOrThrow({ select: { id: true } });
-    const vehicleKind = await prisma.types_of_vehicles.create({ data: { name: VEHICLE_KIND_NAME }, select: { id: true } });
+    const vehicleKind = await prisma.types_of_vehicles.create({
+      data: { name: VEHICLE_KIND_NAME },
+      select: { id: true },
+    });
     await prisma.company.create({
       data: {
         id: COMPANY,
@@ -121,7 +128,9 @@ describe.skipIf(!RUN)('cubiertas en el stock (integracion)', () => {
         company_cuit: '30999999996',
       },
     });
-    await prisma.profile.create({ data: { id: PROFILE, credential_id: PROFILE, email: 'cubiertas-stock@alphataco.local' } });
+    await prisma.profile.create({
+      data: { id: PROFILE, credential_id: PROFILE, email: 'cubiertas-stock@alphataco.local' },
+    });
     await prisma.warehouses.createMany({
       data: [
         { id: W1, company_id: COMPANY, code: 'B', name: 'Base' },
@@ -130,7 +139,9 @@ describe.skipIf(!RUN)('cubiertas en el stock (integracion)', () => {
     });
     await prisma.type.create({ data: { id: VEHICLE_TYPE, name: 'Camión test', company_id: COMPANY } });
     await prisma.tire_templates.create({ data: { id: TEMPLATE, name: 'Plantilla test', company_id: COMPANY } });
-    await prisma.tire_template_axles.create({ data: { id: AXLE, template_id: TEMPLATE, axle_number: 1, tires_per_side: 1 } });
+    await prisma.tire_template_axles.create({
+      data: { id: AXLE, template_id: TEMPLATE, axle_number: 1, tires_per_side: 1 },
+    });
     await prisma.vehicles.create({
       data: {
         id: VEHICLE,
@@ -209,7 +220,13 @@ describe.skipIf(!RUN)('cubiertas en el stock (integracion)', () => {
 
     const first = await openOrder();
     expectOk(
-      await performReplace({ serviceOrderId: first.id, positionNumber: 1, vehicleId: VEHICLE, tireId: null, newTireId: s1.id })
+      await performReplace({
+        serviceOrderId: first.id,
+        positionNumber: 1,
+        vehicleId: VEHICLE,
+        tireId: null,
+        newTireId: s1.id,
+      })
     );
     expect((await tireBySerial('S1')).material_unit?.status).toBe('OUT');
     expect(await balance(W1)).toBe(3);
@@ -264,7 +281,13 @@ describe.skipIf(!RUN)('cubiertas en el stock (integracion)', () => {
     // Misma orden: S3 entra en la posición 2 y después sale a disponible, reemplazada por... S1.
     const s1 = await tireBySerial('S1');
     expectOk(
-      await performReplace({ serviceOrderId: second.id, positionNumber: 2, vehicleId: VEHICLE, tireId: null, newTireId: s3.id })
+      await performReplace({
+        serviceOrderId: second.id,
+        positionNumber: 2,
+        vehicleId: VEHICLE,
+        tireId: null,
+        newTireId: s3.id,
+      })
     );
     expectOk(
       await performReplace({
@@ -409,7 +432,10 @@ describe.skipIf(!RUN)('cubiertas en el stock (integracion)', () => {
       })
     );
     await closeServiceOrder(order.id);
-    const mountExit = await prisma.material_units.findUniqueOrThrow({ where: { id: n1Unit }, select: { last_movement_id: true } });
+    const mountExit = await prisma.material_units.findUniqueOrThrow({
+      where: { id: n1Unit },
+      select: { last_movement_id: true },
+    });
     const loanReturn = await returnLoanedUnitsAction({
       exitMovementId: mountExit.last_movement_id!,
       unitIds: [n1Unit],
@@ -484,7 +510,13 @@ describe.skipIf(!RUN)('cubiertas en el stock (integracion)', () => {
     const s2 = await tireBySerial('S2');
     const order = await openOrder();
     expectOk(
-      await performRepair({ serviceOrderId: order.id, positionNumber: 2, vehicleId: VEHICLE, tireId: lIn.id, newTireId: s2.id })
+      await performRepair({
+        serviceOrderId: order.id,
+        positionNumber: 2,
+        vehicleId: VEHICLE,
+        tireId: lIn.id,
+        newTireId: s2.id,
+      })
     );
     // Reparada antes de cerrar la orden: vuelve al depósito.
     expectOk(await updateTireStatus(lIn.id, 'AVAILABLE', W1));
