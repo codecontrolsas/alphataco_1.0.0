@@ -10,6 +10,7 @@ interface PreLegajoPageProps {
   searchParams: Promise<{
     action?: 'view' | 'new' | 'edit';
     pre_employee_id?: string;
+    section?: string;
     [key: string]: string | string[] | undefined;
   }>;
 }
@@ -41,7 +42,12 @@ export default async function PreLegajoPage({ searchParams }: PreLegajoPageProps
       {/* La key fuerza el remontaje al cambiar de candidato (o al pasar a "nuevo"): sin ella
           Next reutiliza el componente entre searchParams y react-hook-form conserva los
           defaultValues del anterior, arrastrando los datos del ultimo abierto. */}
-      <PreEmployeeDetailClient key={preEmployee?.id ?? 'new'} preEmployee={preEmployee} mode={mode} />
+      <PreEmployeeDetailClient
+        key={preEmployee?.id ?? 'new'}
+        preEmployee={preEmployee}
+        mode={mode}
+        section={resolvedSearchParams.section}
+      />
     </>
   );
 }
