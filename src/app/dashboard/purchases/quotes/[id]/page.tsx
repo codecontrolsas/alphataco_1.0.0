@@ -1,4 +1,4 @@
-import { getPurchaseQuoteDetail } from '@/features/Purchases/actions/quotes.server';
+import { getPurchaseQuoteDetail } from '@/features/Purchases/actions/quote-queries.server';
 import { PurchaseQuotePage } from '@/features/Purchases/Quotes/PurchaseQuotePages';
 import { notFound } from 'next/navigation';
 import { cache } from 'react';

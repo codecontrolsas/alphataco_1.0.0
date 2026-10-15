@@ -61,9 +61,7 @@ export function ReplaceTab({ actions, vehicleId }: { actions: TirePositionAction
       {(oldDest === 'DISCARD' || oldDest === 'REPAIR') && (
         <div
           className={`space-y-2 rounded-md border p-3 ${
-            oldDest === 'DISCARD'
-              ? 'border-destructive/30 bg-destructive/5'
-              : 'border-yellow-500/30 bg-yellow-50/50 dark:bg-yellow-950/20'
+            oldDest === 'DISCARD' ? 'border-destructive/30 bg-destructive/5' : 'border-warn/30 bg-warn-subtle/50'
           }`}
         >
           <div className="space-y-1">

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DATE_RE, UUID_RE, isNonZeroAmount, isPositiveAmount } from './shared';
+import { DATE_RE, UUID_RE, isCalendarDay, isNonZeroAmount, isPositiveAmount } from './shared';
 
 /** Movimientos manuales y saldo inicial (spec Tesorería etapa 1 §3). Módulo SIN directiva. */
 
@@ -17,7 +17,7 @@ export const TREASURY_MOVEMENT_KIND_LABELS = {
 
 export const manualMovementFormSchema = z.object({
   accountId: z.string().regex(UUID_RE, 'Elegí la cuenta'),
-  date: z.string().regex(DATE_RE, 'Indicá la fecha'),
+  date: z.string().regex(DATE_RE, 'Indicá la fecha').refine(isCalendarDay, 'Fecha inválida'),
   direction: z.enum(['IN', 'OUT']),
   amount: z.string().trim().refine(isPositiveAmount, 'El importe tiene que ser mayor a 0'),
   conceptId: z.string().regex(UUID_RE, 'Elegí el concepto'),
@@ -28,7 +28,7 @@ export type ManualMovementFormValues = z.infer<typeof manualMovementFormSchema>;
 
 export const openingBalanceFormSchema = z.object({
   accountId: z.string().regex(UUID_RE, 'Elegí la cuenta'),
-  date: z.string().regex(DATE_RE, 'Indicá la fecha'),
+  date: z.string().regex(DATE_RE, 'Indicá la fecha').refine(isCalendarDay, 'Fecha inválida'),
   amount: z.string().trim().refine(isNonZeroAmount, 'Importe inválido'),
 });
 

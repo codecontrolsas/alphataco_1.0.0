@@ -9,6 +9,7 @@ import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { useQuery } from '@tanstack/react-query';
 import { CalendarDays, ChevronLeft, ChevronRight, Loader2, Wrench } from 'lucide-react';
 import moment from 'moment';
@@ -56,7 +57,7 @@ function fmtNum(value: string): string {
  * solicitudes abiertas y tooltip). Cuenta dominios unicos que entraron a taller.
  */
 export function MaintenanceByTypeCard() {
-  const [selectedMonth, setSelectedMonth] = React.useState(() => moment().startOf('month'));
+  const [selectedMonth, setSelectedMonth] = React.useState(() => moment(argentinaDate()).startOf('month'));
   const [selectedTypeId, setSelectedTypeId] = React.useState<string | null>(null);
   const [filterTypeIds, setFilterTypeIds] = React.useState<string[]>([]);
   const [monthPickerOpen, setMonthPickerOpen] = React.useState(false);
@@ -66,7 +67,7 @@ export function MaintenanceByTypeCard() {
     const f = selectedMonth.clone().locale('es').format('MMMM YYYY');
     return f.charAt(0).toUpperCase() + f.slice(1);
   }, [selectedMonth]);
-  const maxMonth = React.useMemo(() => moment().add(1, 'month').startOf('month'), []);
+  const maxMonth = React.useMemo(() => moment(argentinaDate()).add(1, 'month').startOf('month'), []);
   const canGoForward = selectedMonth.isBefore(maxMonth, 'month');
 
   // Cambiar de mes resetea seleccion y filtro (los tipos pueden no existir).
@@ -133,6 +134,7 @@ export function MaintenanceByTypeCard() {
               {/* Selector de mes: flechas mes a mes + calendario para saltar de mes/año */}
               <div className="mt-3 flex w-fit items-center gap-1 rounded-md border bg-card/40 p-0.5">
                 <Button
+                  type="button"
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
@@ -164,11 +166,12 @@ export function MaintenanceByTypeCard() {
                           setMonthPickerOpen(false);
                         }
                       }}
-                      disabled={(date) => moment(date).isAfter(moment(), 'month')}
+                      disabled={(date) => moment(date).isAfter(moment(argentinaDate()), 'month')}
                     />
                   </PopoverContent>
                 </Popover>
                 <Button
+                  type="button"
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
@@ -220,10 +223,22 @@ export function MaintenanceByTypeCard() {
                         <Cell key={entry.typeId} fill={entry.fill} fillOpacity={entry.fillOpacity} />
                       ))}
                     </Pie>
-                    <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle" className="fill-foreground text-3xl font-bold">
+                    <text
+                      x="50%"
+                      y="46%"
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      className="fill-foreground text-3xl font-bold"
+                    >
                       {total}
                     </text>
-                    <text x="50%" y="58%" textAnchor="middle" dominantBaseline="middle" className="fill-muted-foreground text-xs">
+                    <text
+                      x="50%"
+                      y="58%"
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      className="fill-muted-foreground text-xs"
+                    >
                       equipos
                     </text>
                   </PieChart>
@@ -248,7 +263,9 @@ export function MaintenanceByTypeCard() {
                           aria-label={`${g.typeName}: ${g.count} equipos. Tocá para ver la lista`}
                           className={cn(
                             'group flex w-full cursor-pointer items-center gap-2 rounded-md border px-2 py-1.5 text-left transition-all',
-                            isSel ? 'border-foreground/30 bg-muted/70' : 'border-transparent hover:border-border hover:bg-muted/50',
+                            isSel
+                              ? 'border-foreground/30 bg-muted/70'
+                              : 'border-transparent hover:border-border hover:bg-muted/50',
                             dimmed && 'opacity-50'
                           )}
                         >
@@ -295,7 +312,7 @@ export function MaintenanceByTypeCard() {
                             {v.openCount > 0 && (
                               <Badge
                                 variant="outline"
-                                className="shrink-0 border-amber-300 tabular-nums text-amber-600 dark:border-amber-700 dark:text-amber-400"
+                                className="shrink-0 border-[var(--dash-warn)] tabular-nums text-foreground"
                               >
                                 {v.openCount} {v.openCount === 1 ? 'abierta' : 'abiertas'}
                               </Badge>

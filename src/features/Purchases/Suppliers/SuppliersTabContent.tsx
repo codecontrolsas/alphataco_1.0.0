@@ -3,7 +3,7 @@ import type { DataTableSearchParams } from '@/shared/components/common/DataTable
 import { Plus } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense } from 'react';
-import { NoPermission } from '../fallback/NoPermission';
+import { StateBlock } from '@/shared/components/common/StateBlock';
 import { SuppliersList } from './SuppliersList/SuppliersList';
 import { SuppliersTableSkeleton } from './SuppliersList/fallback/SuppliersTableSkeleton';
 
@@ -15,7 +15,7 @@ export default async function SuppliersTabContent({
   searchParams: DataTableSearchParams;
   permissions: Record<string, boolean>;
 }) {
-  if (permissions['compras:proveedores:view'] !== true) return <NoPermission />;
+  if (permissions['compras:proveedores:view'] !== true) return <StateBlock variant="noperm" title="No tenés permiso para ver esta información" />;
 
   return (
     <div className="space-y-4">

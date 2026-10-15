@@ -1,5 +1,7 @@
 'use server';
 
+import { percentageOrNull } from '@/features/Dashboard/lib/metric';
+import { requireDashboardView } from '@/features/Dashboard/lib/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
@@ -11,31 +13,27 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { getOperationToday, getTodayParts } from '../lib/dashboard-dates';
-import { aggregateDiagramIndicators, percentage } from '../lib/indicators';
+import { aggregateDiagramIndicators } from '../lib/indicators';
 import { positionFilter, sanitizePositionIds } from '../lib/position-filter';
-import { mapEmployeesNotInReport, toFacetMap, type EmployeeDiagramRow } from '../lib/row-mapping';
-import type { DiagramIndicatorResult, EmployeeIndicatorResult, EmployeeNotInReportResult } from './types';
+import { toFacetMap } from '../lib/row-mapping';
+import type { DiagramIndicatorResult, EmployeeIndicatorResult } from './types';
 
 const logger = new Logger('features/Dashboard/Principal/rrhh');
 
 /**
- * Personal del dashboard principal: indicador de uso, distribución por diagrama, empleados
- * fuera del parte y la tabla paginada del diálogo de disponibles.
+ * Personal del dashboard principal: indicador de uso, distribución por diagrama y la tabla
+ * paginada del diálogo de disponibles.
  *
  * Perímetro: la empresa sale de `getActiveCompanyId()`. Los `positionIds` que manda el
  * cliente sólo acotan el listado y se sanean antes de entrar al SQL — ver
  * `lib/position-filter`, que además deja el filtro fallando CERRADO.
  */
-
-const DEFAULT_EMPLOYEE_INDICATOR: EmployeeIndicatorResult = {
-  employees_operativos: 0,
-  employees_used: 0,
-  indicator: 0,
-};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Indicadores
@@ -43,6 +41,7 @@ const DEFAULT_EMPLOYEE_INDICATOR: EmployeeIndicatorResult = {
 
 /** Indicador de uso de personal: operativos (con diagrama de trabajo hoy) vs. usados en el parte. */
 export async function getEmployeeIndicators(positionIds?: string[]): Promise<EmployeeIndicatorResult> {
+  await requireDashboardView('principal');
   logger.debug('Obteniendo indicadores de empleados', { data: { positionIds } });
 
   try {
@@ -82,16 +81,18 @@ export async function getEmployeeIndicators(positionIds?: string[]): Promise<Emp
     return {
       employees_operativos: employeesOperativos,
       employees_used: employeesUsed,
-      indicator: percentage(employeesUsed, employeesOperativos),
+      indicator: percentageOrNull(employeesUsed, employeesOperativos),
     };
   } catch (error) {
     logger.error('Error al obtener indicadores de empleados', { data: { error } });
-    return DEFAULT_EMPLOYEE_INDICATOR;
+    // Sin dato no hay 0: un indicador en 0 % se leería como "nadie está en operación".
+    throw error;
   }
 }
 
 /** Cantidad de empleados por tipo de diagrama para el día de hoy. */
 export async function getDiagramIndicators(positionIds?: string[]): Promise<DiagramIndicatorResult[]> {
+  await requireDashboardView('principal');
   logger.debug('Obteniendo indicadores de diagramas', { data: { positionIds } });
 
   try {
@@ -121,76 +122,9 @@ export async function getDiagramIndicators(positionIds?: string[]): Promise<Diag
     return aggregateDiagramIndicators(diagrams, totalActiveEmployees);
   } catch (error) {
     logger.error('Error al obtener indicadores de diagramas', { data: { error } });
-    return [];
+    throw error;
   }
 }
-
-/** Empleados con diagrama de trabajo activo hoy que no están en el parte diario. */
-export async function getEmployeesNotInDailyReport(positionIds?: string[]): Promise<EmployeeNotInReportResult[]> {
-  logger.debug('Obteniendo empleados fuera del parte diario', { data: { positionIds } });
-
-  try {
-    const companyId = await getActiveCompanyId();
-    const { day, month, year } = getTodayParts();
-    const todayDate = getOperationToday();
-    const positions = sanitizePositionIds(positionIds);
-
-    const employeesInReport = await prisma.dailyreportemployeerelations.findMany({
-      where: {
-        employee_id: { not: null },
-        dailyreportrows: {
-          dailyreport: { date: new Date(todayDate), is_active: true, company_id: companyId },
-        },
-        employees: { is_active: true, ...positionFilter(positions) },
-      },
-      select: { employee_id: true },
-      distinct: ['employee_id'],
-    });
-
-    const inReportIds = employeesInReport.map((row) => row.employee_id).filter((id): id is string => id != null);
-
-    const diagrams = await prisma.employees_diagram.findMany({
-      where: {
-        day,
-        month,
-        year,
-        diagram_type_employees_diagram_diagram_typeTodiagram_type: { work_active: true, is_active: true },
-        employees: withCompany(
-          {
-            is_active: true,
-            ...positionFilter(positions),
-            ...(inReportIds.length > 0 ? { id: { notIn: inReportIds } } : {}),
-          },
-          companyId
-        ),
-      },
-      select: {
-        employees: {
-          select: {
-            id: true,
-            firstname: true,
-            lastname: true,
-            cuil: true,
-            file: true,
-            company_positions: { select: { name: true } },
-            contractor_employee: { select: { customers: { select: { name: true } } } },
-          },
-        },
-        diagram_type_employees_diagram_diagram_typeTodiagram_type: {
-          select: { short_description: true, color: true },
-        },
-      },
-      orderBy: { employees: { lastname: 'asc' } },
-    });
-
-    return mapEmployeesNotInReport(diagrams as EmployeeDiagramRow[]);
-  } catch (error) {
-    logger.error('Error al obtener empleados fuera del parte', { data: { error } });
-    return [];
-  }
-}
-
-export type EmployeesNotInDailyReportData = Awaited<ReturnType<typeof getEmployeesNotInDailyReport>>;
 
 /**
  * Puestos de la empresa activa, para el filtro del tablero.
@@ -199,6 +133,7 @@ export type EmployeesNotInDailyReportData = Awaited<ReturnType<typeof getEmploye
  * TODAS las empresas, que además son los valores que el filtro manda de vuelta.
  */
 export async function getAllPositions() {
+  await requireDashboardView('principal');
   logger.debug('Obteniendo todas las posiciones');
 
   try {
@@ -222,11 +157,13 @@ export type PositionItem = AllPositionsData[number];
 // Diálogo de empleados disponibles — DataTable server-side
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TEXT_COLUMNS = ['file', 'cuil'];
+/** Filtros de texto por coincidencia parcial. El legajo (`file`) va aparte: coincidencia EXACTA. */
+const TEXT_COLUMNS = ['cuil'];
 const COLUMN_MAP: Record<string, string> = { company_positions: 'company_position' };
-const VALID_SORT_FIELDS = new Set(['lastname', 'firstname', 'cuil', 'file', 'company_positions']);
-const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Record<string, unknown>> = {
-  company_positions: (dir) => ({ company_positions: { name: dir } }),
+const VALID_SORT_FIELDS = new Set(['name', 'cuil', 'file', 'company_positions']);
+const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Record<string, unknown>[]> = {
+  company_positions: (dir) => [{ company_positions: { name: dir } }],
+  name: (dir) => [{ lastname: dir }, { firstname: dir }],
 };
 
 /**
@@ -346,7 +283,7 @@ async function buildAvailableEmployeesWhere(
   const availableIds = await getAvailableEmployeeIds(companyId, positionIds, todayDate, day, month, year);
 
   const filtersWhere = buildFiltersWhere(state.filters, COLUMN_MAP, {
-    exclude: [...TEXT_COLUMNS, 'customers', 'diagram'],
+    exclude: [...TEXT_COLUMNS, 'file', 'name', 'comments', 'customers', 'diagram'],
   });
 
   const customerValues = state.filters['customers'];
@@ -370,24 +307,74 @@ async function buildAvailableEmployeesWhere(
     }
   }
 
+  // Nombre: el filtro busca en apellido o nombre (la columna los muestra juntos).
+  const nameText = state.filters['name']?.[0]?.trim();
+  if (nameText) {
+    extraAndConditions.push({
+      OR: [
+        { lastname: { contains: nameText, mode: 'insensitive' } },
+        { firstname: { contains: nameText, mode: 'insensitive' } },
+      ],
+    });
+  }
+
+  // Diagrama: el tipo de diagrama de trabajo de HOY (todos los disponibles tienen uno).
+  const diagramValues = (state.filters['diagram'] ?? []).filter((value) => value !== NULL_FILTER_VALUE);
+  if (diagramValues.length > 0) {
+    extraAndConditions.push({
+      employees_diagram: {
+        some: {
+          day,
+          month,
+          year,
+          diagram_type: { in: diagramValues },
+          diagram_type_employees_diagram_diagram_typeTodiagram_type: { work_active: true, is_active: true },
+        },
+      },
+    });
+  }
+
+  // Comentario: el del diagrama de HOY, el mismo que muestra la columna.
+  const commentText = state.filters['comments']?.[0]?.trim();
+  if (commentText) {
+    extraAndConditions.push({
+      employees_diagram: {
+        some: {
+          day,
+          month,
+          year,
+          comments: { contains: commentText, mode: 'insensitive' },
+          diagram_type_employees_diagram_diagram_typeTodiagram_type: { work_active: true, is_active: true },
+        },
+      },
+    });
+  }
+
+  // Legajo: coincidencia exacta (con `contains`, buscar «1» traería 1, 10, 100...).
+  const fileNumber = state.filters['file']?.[0]?.trim();
+
   const filtersWhereRecord = filtersWhere as Record<string, unknown> & { AND?: Record<string, unknown>[] };
   const allAndConditions = [...(filtersWhereRecord.AND ?? []), ...extraAndConditions];
   const { AND: _discarded, ...filtersWhereWithoutAnd } = filtersWhereRecord;
 
+  // Los filtros del usuario primero; lo que define el diálogo (disponibles de la empresa activa) va al
+  // final y no se puede pisar desde la URL.
   return {
-    id: { in: availableIds },
-    is_active: true as const,
-    company_id: companyId,
+    ...(fileNumber ? { file: fileNumber } : {}),
     ...buildSearchWhere(state.search, ['lastname', 'firstname', 'cuil', 'file']),
     ...filtersWhereWithoutAnd,
     ...buildTextFiltersWhere(state.filters, TEXT_COLUMNS),
     ...m2mFilter,
     ...(allAndConditions.length > 0 ? { AND: allAndConditions } : {}),
+    id: { in: availableIds },
+    is_active: true as const,
+    company_id: companyId,
   };
 }
 
 /** Empleados disponibles paginados (con diagrama de trabajo hoy y fuera del parte). */
 export async function getAvailableEmployeesPaginated(searchParams: DataTableSearchParams, positionIds?: string[]) {
+  await requireDashboardView('principal');
   logger.debug('Obteniendo empleados disponibles paginados', { data: { positionIds } });
 
   try {
@@ -401,7 +388,7 @@ export async function getAvailableEmployeesPaginated(searchParams: DataTableSear
       if (!VALID_SORT_FIELDS.has(sort.id)) continue;
       const dir: 'asc' | 'desc' = sort.desc ? 'desc' : 'asc';
       const fkMapper = FK_SORT_MAP[sort.id];
-      resolvedSorts.push(fkMapper ? fkMapper(dir) : { [sort.id]: dir });
+      resolvedSorts.push(...(fkMapper ? fkMapper(dir) : [{ [sort.id]: dir }]));
     }
     const safeOrderBy = [...resolvedSorts, { lastname: 'asc' as const }];
 
@@ -420,23 +407,46 @@ export async function getAvailableEmployeesPaginated(searchParams: DataTableSear
 // Tipo inferido desde la query — NUNCA tipar manualmente
 export type AvailableEmployeeListItem = Awaited<ReturnType<typeof getAvailableEmployeesPaginated>>['data'][number];
 
-/** Todos los empleados disponibles sin paginar, para la exportación a Excel. */
-export async function getAllAvailableEmployeesForExport(searchParams: DataTableSearchParams, positionIds?: string[]) {
+/** Tope de filas de la exportación del diálogo. */
+const EXPORT_LIMIT = 10_000;
+
+/** Todos los empleados disponibles (hasta el tope), para la exportación a Excel. */
+export async function getAllAvailableEmployeesForExport(
+  searchParams: DataTableSearchParams,
+  positionIds?: string[]
+): Promise<ExportResult<AvailableEmployeeListItem[]>> {
+  await requireDashboardView('principal');
   logger.debug('Exportando empleados disponibles', { data: { positionIds } });
 
   try {
     const companyId = await getActiveCompanyId();
     const state = parseSearchParams(searchParams);
     const where = await buildAvailableEmployeesWhere(companyId, sanitizePositionIds(positionIds), state);
+    const orderBy = [{ lastname: 'asc' as const }, { id: 'asc' as const }];
 
-    return await prisma.employees.findMany({
-      where,
-      orderBy: [{ lastname: 'asc' }],
-      select: buildAvailableEmployeeSelect(),
+    const rows = await fetchExportRowsInBatches({
+      maxRows: EXPORT_LIMIT,
+      listIds: (take) => prisma.employees.findMany({ where, orderBy, select: { id: true }, take }),
+      fetchByIds: (ids) =>
+        prisma.employees.findMany({
+          where: { id: { in: ids }, company_id: companyId },
+          select: buildAvailableEmployeeSelect(),
+        }),
+      tooLargeMessage: (maxRows) =>
+        `Hay más de ${maxRows.toLocaleString('es-AR')} empleados con los filtros actuales. Acote la exportación con filtros.`,
     });
+
+    return { ok: true, data: rows };
   } catch (error) {
     logger.error('Error al exportar empleados disponibles', { data: { error } });
-    throw error;
+    // Next enmascara el mensaje de un error lanzado desde una server action: se devuelve como resultado.
+    return {
+      ok: false,
+      message:
+        error instanceof ExportTooLargeError
+          ? error.message
+          : 'No se pudo exportar la lista de empleados. Intente nuevamente.',
+    };
   }
 }
 
@@ -446,6 +456,7 @@ export async function getAvailableEmployeeSingleFacet(
   searchParams: DataTableSearchParams,
   positionIds?: string[]
 ): Promise<{ counts: Map<string, number>; resolvedOptions?: Array<{ id: string; name: string | null }> } | null> {
+  await requireDashboardView('principal');
   logger.debug('Obteniendo facet de empleados disponibles', { data: { columnId } });
 
   try {

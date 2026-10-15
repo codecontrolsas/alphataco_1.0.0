@@ -1,7 +1,6 @@
 'use server';
 
 import { checkPermissionServer } from '@/features/Permissions';
-import { pickFilters } from '@/features/Warehouses/lib/filters';
 import { Prisma } from '@/generated/prisma/client';
 import { payment_method } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
@@ -13,8 +12,15 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { formatCuit } from '../../lib/supplier-ids';
+import { getPaymentOrdersToApproveCount, getPaymentOrdersToPayCount } from '../../lib/section-counts';
+import { PAYMENT_METHOD_LABELS, PAYMENT_ORDERS_EXPORT_MAX_ROWS } from './constants';
+import { PAYMENT_ORDER_STATUS_LABELS } from '../../lib/payment-order-state-machine';
 
 const logger = new Logger('features/Purchases/Payments/PaymentOrdersList');
 
@@ -60,11 +66,44 @@ const COLUMN_MAP: Record<string, string> = {
 /** Columnas de importe con filtro de texto (coincidencia exacta del decimal). */
 const AMOUNT_COLUMNS = ['invoices_total', 'credits_total', 'advance_total', 'withholdings_total', 'net_total'] as const;
 
+/** Filtros que no pasan por `buildFiltersWhere` (se resuelven a mano). */
+const OWN_FILTERS = ['number', 'methods', ...AMOUNT_COLUMNS] as const;
+
+/** Unicas claves de filtro que se aceptan: cualquier otra de la URL se descarta antes de armar el `where`. */
+const ALLOWED_FILTER_KEYS: ReadonlySet<string> = new Set([
+  ...FACETED_COLUMNS,
+  ...OWN_FILTERS,
+  ...dateRangeKeys(DATE_RANGE_COLUMNS),
+]);
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Valores validos por columna con lista cerrada (un valor ajeno haria fallar a Prisma y tumbaria la lista). */
+const VALID_VALUES: Record<string, (value: string) => boolean> = {
+  supplier: (v) => UUID_RE.test(v),
+  creator: (v) => UUID_RE.test(v),
+  status: (v) => v in PAYMENT_ORDER_STATUS_LABELS,
+  methods: (v) => v === NULL_FILTER_VALUE || v in PAYMENT_METHOD_LABELS,
+};
+
 const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
 
 // ============================================================================
 // HELPERS INTERNOS
 // ============================================================================
+
+/** Estado de la tabla ya parseado, con solo los filtros permitidos y sus valores validos. */
+function parseListState(searchParams: DataTableSearchParams): FilterState {
+  const state = sanitizeFilters(parseSearchParams(searchParams), ALLOWED_FILTER_KEYS);
+  for (const [column, isValid] of Object.entries(VALID_VALUES)) {
+    const values = state.filters[column];
+    if (!values) continue;
+    const valid = values.filter(isValid);
+    if (valid.length > 0) state.filters[column] = valid;
+    else delete state.filters[column];
+  }
+  return state;
+}
 
 /** Empresa si el usuario puede ver la tabla; `null` = sin acceso -> lista vacia. */
 async function resolveCompanyId(): Promise<string | null> {
@@ -95,7 +134,7 @@ function buildWhereClause(companyId: string, state: FilterState): OrderWhere {
     });
   }
 
-  and.push(buildFiltersWhere(pickFilters(f, FACETED_COLUMNS), COLUMN_MAP) as OrderWhere);
+  and.push(buildFiltersWhere(f, COLUMN_MAP, { exclude: [...OWN_FILTERS] }) as OrderWhere);
   and.push(buildDateRangeFiltersWhere(f, DATE_RANGE_COLUMNS) as OrderWhere);
 
   // Texto: numero (parcial) e importes (exactos)
@@ -137,7 +176,7 @@ const ORDER_SELECT = {
   withholdings_total: true,
   net_total: true,
   created_at: true,
-  supplier: { select: { id: true, name: true } },
+  supplier: { select: { id: true, name: true, cuit: true } },
   creator: { select: { id: true, fullname: true, email: true } },
   payments: { select: { method: true } },
 } as const;
@@ -157,7 +196,7 @@ function shape(rows: Prisma.payment_ordersGetPayload<{ select: typeof ORDER_SELE
     withholdings_total: r.withholdings_total.toString(),
     net_total: r.net_total.toString(),
     created_at: r.created_at,
-    supplier: { id: r.supplier.id, name: r.supplier.name },
+    supplier: { id: r.supplier.id, name: r.supplier.name, cuit: formatCuit(r.supplier.cuit) },
     creator: { id: r.creator.id, name: profileName(r.creator) },
     methods: [...new Set(r.payments.map((p) => p.method))],
   }));
@@ -172,7 +211,7 @@ export async function getPaymentOrdersPaginated(searchParams: DataTableSearchPar
   if (!companyId) return { data: [], total: 0 };
 
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseListState(searchParams);
     const { skip, take } = stateToPrismaParams(state);
     const where = buildWhereClause(companyId, state);
 
@@ -201,22 +240,50 @@ export async function getPaymentOrdersPaginated(searchParams: DataTableSearchPar
 // EXPORT (sin paginacion)
 // ============================================================================
 
-export async function getAllPaymentOrdersForExport(searchParams: DataTableSearchParams) {
+export async function getAllPaymentOrdersForExport(searchParams: DataTableSearchParams): Promise<ExportResult<PaymentOrderListItem[]>> {
   const companyId = await resolveCompanyId();
-  if (!companyId) return [];
+  if (!companyId) return { ok: true, data: [] };
 
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseListState(searchParams);
     const where = buildWhereClause(companyId, state);
-    const rows = await prisma.payment_orders.findMany({
-      where,
-      orderBy: [{ planned_on: 'desc' }, { created_at: 'desc' }],
-      select: ORDER_SELECT,
+    const orderBy: OrderOrderBy[] = [{ planned_on: 'desc' }, { created_at: 'desc' }, { id: 'asc' }];
+
+    const rows = await fetchExportRowsInBatches({
+      maxRows: PAYMENT_ORDERS_EXPORT_MAX_ROWS,
+      listIds: (take) => prisma.payment_orders.findMany({ where, orderBy, select: { id: true }, take }),
+      fetchByIds: (ids) => prisma.payment_orders.findMany({ where: { id: { in: ids }, company_id: companyId }, select: ORDER_SELECT }),
+      tooLargeMessage: (maxRows) =>
+        `Hay más de ${maxRows.toLocaleString('es-AR')} órdenes de pago con los filtros actuales. Acote la exportación con filtros.`,
     });
-    return shape(rows);
+    return { ok: true, data: shape(rows) };
   } catch (error) {
     logger.error('Error al exportar ordenes de pago', { data: { error } });
-    throw new Error('No se pudo exportar la lista de ordenes de pago');
+    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
+    return {
+      ok: false,
+      message: error instanceof ExportTooLargeError ? error.message : 'No se pudo exportar la lista de órdenes de pago. Intente nuevamente.',
+    };
+  }
+}
+
+// ============================================================================
+// BANDA DE ATENCION
+// ============================================================================
+
+/**
+ * Órdenes de pago que esperan una decisión: por aprobar (`pagos:approve`) y por pagar (`pagos:update`). Usan los
+ * mismos contadores que las listas filtradas por estado (Pendiente de aprobación / Aprobada). Nunca rechaza:
+ * `null` si no se pudo contar; cada número es `null` cuando el usuario no tiene el permiso de actuar.
+ */
+export async function getPaymentOrdersAttention(): Promise<{ toApprove: number | null; toPay: number | null } | null> {
+  try {
+    if (!(await checkPermissionServer('compras', 'pagos', 'view'))) return null;
+    const [toApprove, toPay] = await Promise.all([getPaymentOrdersToApproveCount(), getPaymentOrdersToPayCount()]);
+    return { toApprove, toPay };
+  } catch (error) {
+    logger.error('Error al contar ordenes de pago pendientes', { data: { error } });
+    return null;
   }
 }
 
@@ -231,11 +298,11 @@ export async function getPaymentOrderSingleFacet(
   const companyId = await resolveCompanyId();
   if (!companyId) return null;
 
-  const parsed = searchParams && Object.keys(searchParams).length > 0 ? parseSearchParams(searchParams) : null;
+  const parsed = searchParams && Object.keys(searchParams).length > 0 ? parseListState(searchParams) : null;
 
   /** WHERE con todos los filtros activos MENOS el de la columna que se esta abriendo. */
   function crossWhere(excludeColumn: string): OrderWhere {
-    const base: FilterState = parsed ?? parseSearchParams({});
+    const base: FilterState = parsed ?? parseListState({});
     const filters = { ...base.filters };
     delete filters[excludeColumn];
     return buildWhereClause(companyId as string, { ...base, filters });

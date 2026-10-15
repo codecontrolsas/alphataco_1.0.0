@@ -9,16 +9,15 @@ import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { PermissionGuard } from '@/features/Permissions';
-import { VAT_RATE_LABELS, VAT_RATES, type VatRateId } from '@/shared/lib/arca/catalogs';
+import { PermissionGuard, usePermissions } from '@/features/Permissions';
+import { Logger } from '@/lib/logger';
+import { VAT_RATES, VAT_RATE_LABELS, type VatRateId } from '@/shared/lib/arca/catalogs';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { Logger } from '@/lib/logger';
 import { toast } from 'sonner';
 import type { MeasureUnitRow } from '../../actions/measure-units.server';
 import { createServiceItem, updateServiceItem, type ServiceItemRow } from '../../actions/service-items.server';
 import { serviceItemFormSchema, type ServiceItemFormValues } from '../../schemas/service-item';
-
 
 const logger = new Logger('features/Empresa/Clientes/ServiceItemsForm');
 
@@ -41,7 +40,8 @@ function toFormValues(item: ServiceItemRow | null): ServiceItemFormValues {
     item_description: item?.item_description ?? '',
     code_item: item?.code_item ?? '',
     item_number: item?.item_number ?? '',
-    item_price: item?.item_price ?? 0,
+    // Texto (`Decimal(15,4)`). null (sin view_prices) se envía como '0' y el servidor lo ignora.
+    item_price: item?.item_price ?? '0',
     item_measure_units: item ? String(item.item_measure_units) : '',
     vat_rate_id: item ? String(item.vat_rate_id) : String(DEFAULT_VAT_RATE_ID),
     is_active: item?.is_active ?? true,
@@ -62,6 +62,10 @@ export default function ServiceItemsForm({
   onSaved,
 }: ServiceItemsFormProps) {
   const isEditing = !!editingItem;
+  const { hasPermission } = usePermissions();
+  // El importe se ve con `view_prices` y se modifica con `update_prices` (permisos separados).
+  const canViewPrices = hasPermission('comercial', 'items-contrato', 'view_prices');
+  const canUpdatePrices = hasPermission('comercial', 'items-contrato', 'update_prices');
   const form = useForm<ServiceItemFormValues>({
     resolver: zodResolver(serviceItemFormSchema),
     defaultValues: toFormValues(editingItem),
@@ -140,20 +144,32 @@ export default function ServiceItemsForm({
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="item_price"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Precio*</FormLabel>
-                  <FormControl>
-                    <Input type="number" placeholder="0.00" {...field} />
-                  </FormControl>
-                  <FormDescription>Precio neto, sin IVA</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {canViewPrices && (
+              <FormField
+                control={form.control}
+                name="item_price"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Precio*</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        disabled={!canUpdatePrices}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {canUpdatePrices
+                        ? 'Precio neto, sin IVA'
+                        : 'Precio neto, sin IVA. No tenés permiso para modificarlo.'}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             <FormField
               control={form.control}
               name="vat_rate_id"

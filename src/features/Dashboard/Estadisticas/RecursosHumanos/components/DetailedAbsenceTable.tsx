@@ -1,12 +1,17 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { getDailyAbsenceTimeseries } from '../actions.server';
 import { _DailyAbsenceDataTable } from './DailyAbsenceTable/_DailyAbsenceDataTable';
 
-function getCurrentMonthYearLabel(date = new Date()) {
-  const month = new Intl.DateTimeFormat('es-AR', { month: 'long' }).format(date);
-  const year = date.getFullYear();
-  return `${month.charAt(0).toUpperCase()}${month.slice(1)} ${year}`;
+/** «Octubre 2026» del mes en curso en hora argentina (no del servidor, que corre en UTC). */
+function getCurrentMonthYearLabel() {
+  const [year, month] = argentinaDate().split('-');
+  const monthName = new Date(`${year}-${month}-15T12:00:00Z`).toLocaleDateString('es-AR', {
+    timeZone: 'UTC',
+    month: 'long',
+  });
+  return `${monthName.charAt(0).toUpperCase()}${monthName.slice(1)} ${year}`;
 }
 
 export async function DetailedAbsenceTable() {

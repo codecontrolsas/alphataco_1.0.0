@@ -1,14 +1,16 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { DataTableColumnHeader, inMemoryDateSortingFn } from '@/shared/components/common/DataTable';
+import { LEVEL_TEXT_CLASS } from '@/features/Dashboard/lib/chart-thresholds';
+import {
+  DataTableColumnHeader,
+  inMemoryDateSortingFn,
+  inMemoryTextFilterFn,
+} from '@/shared/components/common/DataTable';
 import { ColumnDef } from '@tanstack/react-table';
 import { Users } from 'lucide-react';
 import { DailyAbsenceTimeseriesItem } from '../../actions.server';
-
-// Constantes para colores de ausentismo
-const EXPECTED_ABSENTEEISM_PERCENTAGE = 5;
-const WARNING_THRESHOLD = 4;
+import { ABSENCE_BADGE_CLASS, absenceLevel, formatAbsencePercent } from '../../lib/absence-level';
 
 export function getDailyAbsenceColumns(
   onViewEmployees: (row: DailyAbsenceTimeseriesItem) => void
@@ -21,6 +23,7 @@ export function getDailyAbsenceColumns(
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha" />,
       cell: ({ row }) => <span className="font-medium">{row.original.fecha}</span>,
       sortingFn: inMemoryDateSortingFn,
+      filterFn: inMemoryTextFilterFn,
     },
     {
       accessorKey: 'dotacion',
@@ -28,20 +31,23 @@ export function getDailyAbsenceColumns(
       meta: { title: 'Dotación' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Dotación" />,
       cell: ({ row }) => <div>{row.original.dotacion}</div>,
+      filterFn: inMemoryTextFilterFn,
     },
     {
       accessorKey: 'altas',
       id: 'altas',
       meta: { title: 'Altas' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Altas" />,
-      cell: ({ row }) => <div className="text-green-600 font-medium">{row.original.altas || '-'}</div>,
+      cell: ({ row }) => <div className={`font-medium ${LEVEL_TEXT_CLASS.ok}`}>{row.original.altas || '-'}</div>,
+      filterFn: inMemoryTextFilterFn,
     },
     {
       accessorKey: 'bajas',
       id: 'bajas',
       meta: { title: 'Bajas' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Bajas" />,
-      cell: ({ row }) => <div className="text-red-600 font-medium">{row.original.bajas || '-'}</div>,
+      cell: ({ row }) => <div className={`font-medium ${LEVEL_TEXT_CLASS.danger}`}>{row.original.bajas || '-'}</div>,
+      filterFn: inMemoryTextFilterFn,
     },
     {
       accessorKey: 'vacaciones',
@@ -49,6 +55,7 @@ export function getDailyAbsenceColumns(
       meta: { title: 'Vacaciones' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Vacaciones" />,
       cell: ({ row }) => <div>{row.original.vacaciones || '-'}</div>,
+      filterFn: inMemoryTextFilterFn,
     },
     {
       accessorKey: 'totalDotacion',
@@ -56,6 +63,7 @@ export function getDailyAbsenceColumns(
       meta: { title: 'Total Dotación' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Total Dotación" />,
       cell: ({ row }) => <div className="font-medium">{row.original.totalDotacion}</div>,
+      filterFn: inMemoryTextFilterFn,
     },
     {
       accessorKey: 'totalAusentes',
@@ -63,6 +71,7 @@ export function getDailyAbsenceColumns(
       meta: { title: 'Total Ausentes' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Total Ausentes" />,
       cell: ({ row }) => <div>{row.original.totalAusentes}</div>,
+      filterFn: inMemoryTextFilterFn,
     },
     {
       accessorKey: 'porcentajeAusentismo',
@@ -70,19 +79,16 @@ export function getDailyAbsenceColumns(
       meta: { title: '% Ausentismo' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="% Ausentismo" />,
       cell: ({ row }) => {
-        const p = row.original.porcentajeAusentismo ?? 0;
-        const cls =
-          p > EXPECTED_ABSENTEEISM_PERCENTAGE
-            ? 'bg-red-100 text-red-800'
-            : p >= WARNING_THRESHOLD
-              ? 'bg-yellow-100 text-yellow-800'
-              : 'bg-green-100 text-green-800';
+        const p = row.original.porcentajeAusentismo;
         return (
           <div>
-            <span className={`px-2 py-1 rounded text-xs ${cls}`}>{p.toFixed(2)}%</span>
+            <span className={`rounded px-2 py-1 text-xs font-medium ${ABSENCE_BADGE_CLASS[absenceLevel(p)]}`}>
+              {formatAbsencePercent(p)}
+            </span>
           </div>
         );
       },
+      filterFn: inMemoryTextFilterFn,
     },
     {
       id: 'actions',
@@ -91,8 +97,10 @@ export function getDailyAbsenceColumns(
       enableHiding: false,
       cell: ({ row }) => (
         <Button
+          type="button"
           variant="ghost"
           size="sm"
+          aria-label={`Ver ausentes del ${row.original.fecha}`}
           onClick={() => onViewEmployees(row.original)}
           disabled={row.original.totalAusentes === 0}
           className="gap-1.5"

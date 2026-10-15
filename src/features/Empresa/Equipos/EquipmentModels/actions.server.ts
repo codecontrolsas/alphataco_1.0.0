@@ -11,8 +11,14 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import { prisma } from '@/shared/lib/prisma';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { withCompany } from '@/shared/lib/prisma-tenant';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
+import {
+  equipmentModelCreateSchema,
+  equipmentModelUpdateSchema,
+  firstIssueMessage,
+} from '../../lib/catalog-input-schemas';
+import { requireConfigTabPermission } from '../../lib/config-access.server';
 import { assertBrandReadable } from '../lib/catalog-guards';
 import { catalogReadScope } from '../lib/catalog-scope';
 
@@ -101,6 +107,7 @@ function buildWhereClause(state: ReturnType<typeof parseSearchParams>) {
 // ============================================================================
 
 export async function getEquipmentModelsPaginated(searchParams: DataTableSearchParams) {
+  await requireConfigTabPermission('modelos', 'view');
   try {
     const state = parseSearchParams(searchParams);
     const { skip, take } = stateToPrismaParams(state);
@@ -152,6 +159,7 @@ export async function getEquipmentModelsPaginated(searchParams: DataTableSearchP
 // ============================================================================
 
 export async function getAllEquipmentModelsForExport(searchParams: DataTableSearchParams) {
+  await requireConfigTabPermission('modelos', 'view');
   try {
     const state = parseSearchParams(searchParams);
     const where = withCompany(buildWhereClause(state), await getActiveCompanyId());
@@ -199,6 +207,7 @@ export async function getEquipmentModelSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
 ): Promise<FacetResult | null> {
+  await requireConfigTabPermission('modelos', 'view');
   try {
     const state = searchParams ? parseSearchParams(searchParams) : parseSearchParams({});
 
@@ -322,6 +331,10 @@ async function findDuplicateEquipmentModel(name: string, brand: number, excludeI
 }
 
 export async function createEquipmentModelPrisma(data: { name: string; brand: number; is_active: boolean }) {
+  await requireConfigTabPermission('modelos', 'create');
+  const parsedInput = equipmentModelCreateSchema.safeParse(data);
+  if (!parsedInput.success) return { ok: false as const, error: firstIssueMessage(parsedInput.error) };
+  data = parsedInput.data;
   try {
     // `brand` llega del cliente: tiene que ser una marca legible por la empresa (propia o global).
     await assertBrandReadable(await getActiveCompanyId(), data.brand);
@@ -370,6 +383,10 @@ export async function updateEquipmentModelPrisma(data: {
   brand: number;
   is_active: boolean;
 }) {
+  await requireConfigTabPermission('modelos', 'update');
+  const parsedInput = equipmentModelUpdateSchema.safeParse(data);
+  if (!parsedInput.success) return { ok: false as const, error: firstIssueMessage(parsedInput.error) };
+  data = parsedInput.data;
   try {
     await assertBrandReadable(await getActiveCompanyId(), data.brand);
 

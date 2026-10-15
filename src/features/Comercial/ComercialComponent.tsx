@@ -29,6 +29,8 @@ export default async function ComercialComponent({
             ),
             moduleSlug: 'comercial',
             tabSlug: 'comerce',
+            // Las secciones traen su propio título; sin esto se repetiría un h1 "Comercial".
+            hideTitle: true,
             content: <ComerceTabContent searchParams={searchParams} permissions={permissions} />,
           },
         ]}

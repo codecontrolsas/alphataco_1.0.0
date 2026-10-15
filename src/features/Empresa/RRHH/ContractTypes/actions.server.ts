@@ -10,9 +10,20 @@ import {
   parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
+import { fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { contractTypeCreateSchema, contractTypeUpdateSchema } from '../../lib/catalog-input-schemas';
+import {
+  CATALOG_EXPORT_MAX_ROWS,
+  buildIsActiveWhere,
+  catalogExportFailure,
+  catalogTooLargeMessage,
+} from '../../lib/catalog-table.server';
+import { requireConfigTabPermission } from '../../lib/config-access.server';
 
 // ============================================================================
 // LOGGER
@@ -24,34 +35,27 @@ const logger = new Logger('features/Empresa/RRHH/ContractTypes');
 // VALID SORT FIELDS — solo campos reales de BD
 // ============================================================================
 
+const LIST_SELECT = { id: true, name: true, description: true, is_active: true, created_at: true } as const;
+
 const VALID_SORT_FIELDS = new Set(['name', 'description', 'is_active', 'created_at']);
 
 // ============================================================================
 // WHERE BUILDER — DRY helper compartido por paginated, export y facets
 // ============================================================================
 
-function buildWhereClause(state: ReturnType<typeof parseSearchParams>) {
+/** Claves de filtro que esta tabla realmente usa; el resto de la URL se descarta antes de armar el where. */
+const ALLOWED_FILTER_KEYS = new Set(['is_active', 'name', 'description', ...dateRangeKeys(['created_at'])]);
+
+function parseState(searchParams: DataTableSearchParams | undefined) {
+  return sanitizeFilters(parseSearchParams(searchParams ?? {}), ALLOWED_FILTER_KEYS);
+}
+
+function buildWhereClause(state: ReturnType<typeof parseState>) {
   // Búsqueda global en name y description
   const searchWhere = buildSearchWhere(state.search, ['name', 'description']);
 
-  // is_active es booleano nullable — viene como string 'true'/'false'/NULL_FILTER_VALUE desde URL
-  // Se maneja manualmente: buildFiltersWhere es para enums/FK string, no para booleanos
-  const isActiveValues = state.filters['is_active'];
-  const isActiveFilter: Record<string, unknown> = {};
-  if (isActiveValues?.length === 1) {
-    if (isActiveValues[0] === NULL_FILTER_VALUE) {
-      isActiveFilter.is_active = null;
-    } else {
-      isActiveFilter.is_active = isActiveValues[0] === 'true';
-    }
-  } else if (isActiveValues && isActiveValues.length > 1) {
-    const conditions: Array<{ is_active: boolean | null }> = [];
-    for (const v of isActiveValues) {
-      if (v === NULL_FILTER_VALUE) conditions.push({ is_active: null });
-      else conditions.push({ is_active: v === 'true' });
-    }
-    isActiveFilter.OR = conditions;
-  }
+  // is_active (booleano nullable): 'true' / 'false' / NULL_FILTER_VALUE
+  const isActiveFilter = buildIsActiveWhere(state.filters['is_active']);
 
   // Filtros de texto libre por columna
   const textFiltersWhere = buildTextFiltersWhere(state.filters, ['name', 'description']);
@@ -60,8 +64,8 @@ function buildWhereClause(state: ReturnType<typeof parseSearchParams>) {
   const dateFiltersWhere = buildDateRangeFiltersWhere(state.filters, ['created_at']);
 
   return {
-    ...searchWhere,
-    ...isActiveFilter,
+    // La búsqueda y el filtro de estado pueden traer un OR cada uno: van en AND para que no se pisen.
+    AND: [searchWhere, isActiveFilter],
     ...textFiltersWhere,
     ...dateFiltersWhere,
   };
@@ -72,8 +76,9 @@ function buildWhereClause(state: ReturnType<typeof parseSearchParams>) {
 // ============================================================================
 
 export async function getContractTypesPaginated(searchParams: DataTableSearchParams) {
+  await requireConfigTabPermission('contract-types', 'view');
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseState(searchParams);
     const { skip, take } = stateToPrismaParams(state);
 
     const where = withCompany(buildWhereClause(state), await getActiveCompanyId());
@@ -94,13 +99,7 @@ export async function getContractTypesPaginated(searchParams: DataTableSearchPar
         take,
         orderBy: safeOrderBy,
         where,
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          is_active: true,
-          created_at: true,
-        },
+        select: LIST_SELECT,
       }),
       prisma.types_of_contract.count({ where }),
     ]);
@@ -116,10 +115,14 @@ export async function getContractTypesPaginated(searchParams: DataTableSearchPar
 // EXPORT COMPLETO — sin skip/take, mismos filtros
 // ============================================================================
 
-export async function getAllContractTypesForExport(searchParams: DataTableSearchParams) {
+export async function getAllContractTypesForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<ContractTypeListItem[]>> {
+  await requireConfigTabPermission('contract-types', 'view');
   try {
-    const state = parseSearchParams(searchParams);
-    const where = withCompany(buildWhereClause(state), await getActiveCompanyId());
+    const state = parseState(searchParams);
+    const companyId = await getActiveCompanyId();
+    const where = withCompany(buildWhereClause(state), companyId);
 
     const resolvedSorts: Array<Record<string, unknown>> = [];
     for (const s of state.sorting) {
@@ -127,22 +130,24 @@ export async function getAllContractTypesForExport(searchParams: DataTableSearch
         resolvedSorts.push({ [s.id]: s.desc ? 'desc' : 'asc' });
       }
     }
-    const safeOrderBy = [{ is_active: 'desc' as const }, ...resolvedSorts, { name: 'asc' as const }];
+    const safeOrderBy = [
+      { is_active: 'desc' as const },
+      ...resolvedSorts,
+      { name: 'asc' as const },
+      { id: 'asc' as const },
+    ];
 
-    return await prisma.types_of_contract.findMany({
-      where,
-      orderBy: safeOrderBy,
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        is_active: true,
-        created_at: true,
-      },
+    const rows = await fetchExportRowsInBatches({
+      maxRows: CATALOG_EXPORT_MAX_ROWS,
+      listIds: (take) => prisma.types_of_contract.findMany({ where, orderBy: safeOrderBy, select: { id: true }, take }),
+      fetchByIds: (ids) =>
+        prisma.types_of_contract.findMany({ where: { id: { in: ids }, company_id: companyId }, select: LIST_SELECT }),
+      tooLargeMessage: catalogTooLargeMessage('tipos de contrato'),
     });
+    return { ok: true, data: rows };
   } catch (error) {
     logger.error('Error al exportar tipos de contrato', { data: { error } });
-    throw new Error('No se pudo exportar la lista. Intente nuevamente.');
+    return catalogExportFailure(error, 'la lista de tipos de contrato');
   }
 }
 
@@ -158,8 +163,9 @@ export async function getContractTypeSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
 ): Promise<FacetResult | null> {
+  await requireConfigTabPermission('contract-types', 'view');
   try {
-    const state = searchParams ? parseSearchParams(searchParams) : parseSearchParams({});
+    const state = parseState(searchParams);
 
     // crossWhere: aplica todos los filtros EXCEPTO el de la columna propia
     const crossState = {
@@ -180,12 +186,7 @@ export async function getContractTypeSingleFacet(
 
         const counts = new Map<string, number>();
         for (const r of rows) {
-          counts.set(String(r.is_active), r._count);
-        }
-        // is_active es Boolean? (nullable), manejar null como NULL_FILTER_VALUE
-        const nullRow = rows.find((r) => r.is_active === null);
-        if (nullRow) {
-          counts.set(NULL_FILTER_VALUE, nullRow._count);
+          counts.set(r.is_active === null ? NULL_FILTER_VALUE : String(r.is_active), r._count);
         }
 
         return {
@@ -212,6 +213,8 @@ export async function getContractTypeSingleFacet(
 // ============================================================================
 
 export async function createContractTypePrisma(data: { name: string; description: string | null }) {
+  await requireConfigTabPermission('contract-types', 'create');
+  data = contractTypeCreateSchema.parse(data);
   try {
     const result = await prisma.types_of_contract.create({
       data: {
@@ -235,6 +238,8 @@ export async function updateContractTypePrisma(data: {
   description: string | null;
   is_active: boolean;
 }) {
+  await requireConfigTabPermission('contract-types', 'update');
+  data = contractTypeUpdateSchema.parse(data);
   try {
     // Perímetro sin RLS: sólo se edita un tipo de contrato de la empresa activa.
     const companyId = await getActiveCompanyId();

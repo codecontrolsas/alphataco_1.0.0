@@ -89,6 +89,8 @@ export function NewMovementForm({ lookups, allowedTypes, canDirectExit, canReque
       queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.movements });
       queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.stock });
       queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.availability });
+      // Una salida de herramienta serializada es un préstamo.
+      queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.loans });
       router.push(`/dashboard/warehouse/movements/${result.id}`);
     },
     onError: (error) => {

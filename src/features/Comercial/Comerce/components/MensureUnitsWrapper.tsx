@@ -1,6 +1,7 @@
 import { Card } from '@/components/ui/card';
 import { getMeasureUnits } from '@/features/Empresa/Clientes/actions/measure-units.server';
 import MensureUnitsTab from '@/features/Empresa/Clientes/components/meansure_units/MensureUnitsTab';
+import { readCookieJson } from '@/shared/lib/cookie-json';
 import { cookies } from 'next/headers';
 
 async function MensureUnitsWrapper() {
@@ -12,8 +13,8 @@ async function MensureUnitsWrapper() {
     <Card className="p-6">
       <MensureUnitsTab
         units={unitMeasurements}
-        savedVisibility={savedVisibility ? JSON.parse(savedVisibility) : {}}
-        savedFilters={savedFilters ? JSON.parse(savedFilters) : []}
+        savedVisibility={readCookieJson(savedVisibility, {})}
+        savedFilters={readCookieJson(savedFilters, [])}
       />
     </Card>
   );

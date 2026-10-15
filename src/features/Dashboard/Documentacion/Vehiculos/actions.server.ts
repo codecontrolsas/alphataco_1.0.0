@@ -1,5 +1,6 @@
 'use server';
 
+import { requireDashboardView } from '@/features/Dashboard/lib/permissions.server';
 import {
   equipmentDocumentSpec,
   loadEquipmentDocumentRows,
@@ -54,6 +55,7 @@ const SPEC: InMemoryTableSpec<EquipmentDocumentRow> = {
  * motor de cumplimiento (estado derivado en hora argentina), sin faltantes ni "ya no aplica".
  */
 async function loadRows() {
+  await requireDashboardView('vehiculos');
   const [companyId, canViewPrivate] = await Promise.all([
     getActiveCompanyId(),
     checkPermissionServer('documentacion', 'documentos-de-equipos', 'view_private'),

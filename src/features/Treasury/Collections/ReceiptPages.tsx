@@ -4,15 +4,15 @@ import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { cache } from 'react';
-import { getReceiptDetail, getReceiptFormData } from '../actions/receipts.server';
-import { NoPermission } from '../fallback/NoPermission';
+import { getReceiptDetail, getReceiptFormData } from '../actions/receipt-reads.server';
+import { StateBlock } from '@/shared/components/common/StateBlock';
 import { emptyReceiptForm, type ReceiptFormValues } from '../schemas/receipts';
 import { ReceiptDetailView } from './components/ReceiptDetailView';
 import { ReceiptEditor } from './components/ReceiptEditor';
 
 const BACK = '/dashboard/treasury?tab=cobranzas';
 
-function Header({ title, back = BACK }: { title: string; back?: string }) {
+function Header({ title, back = BACK }: { title?: string; back?: string }) {
   return (
     <div className="flex items-center gap-2">
       <Button asChild variant="ghost" size="sm">
@@ -21,7 +21,7 @@ function Header({ title, back = BACK }: { title: string; back?: string }) {
           Cobranzas
         </Link>
       </Button>
-      <h1 className="text-xl font-semibold">{title}</h1>
+      {title && <h1 className="text-xl font-semibold">{title}</h1>}
     </div>
   );
 }
@@ -32,9 +32,9 @@ function Header({ title, back = BACK }: { title: string; back?: string }) {
  */
 export async function NewReceiptPage({ customerId, invoiceId, checkId = null }: { customerId: string | null; invoiceId: string | null; checkId?: string | null }) {
   const permissions = await getUserPermissionsMapServer();
-  if (permissions['tesoreria:cobranzas:create'] !== true) return <NoPermission />;
+  if (permissions['tesoreria:cobranzas:create'] !== true) return <StateBlock variant="noperm" title="No tenés permiso para ver esta información" />;
   const data = await getReceiptFormData({ customerId: customerId ?? undefined });
-  if (!data) return <NoPermission />;
+  if (!data) return <StateBlock variant="error" title="No se pudo cargar la información" description="Actualizá la pantalla para intentarlo de nuevo." />;
   const values: ReceiptFormValues = emptyReceiptForm(data.today, data.customer?.id ?? '');
   const invoice = invoiceId ? data.openInvoices.find((i) => i.invoiceId === invoiceId) : undefined;
   if (invoice) {
@@ -63,7 +63,7 @@ export async function receiptPageTitle(id: string): Promise<string> {
 /** `/dashboard/treasury/receipts/[id]`: un borrador se edita; un confirmado o anulado se ve. */
 export async function ReceiptPage({ id }: { id: string }) {
   const [detail, permissions] = await Promise.all([loadReceiptDetail(id), getUserPermissionsMapServer()]);
-  if (permissions['tesoreria:cobranzas:view'] !== true) return <NoPermission />;
+  if (permissions['tesoreria:cobranzas:view'] !== true) return <StateBlock variant="noperm" title="No tenés permiso para ver esta información" />;
   if (!detail) notFound();
   const can = {
     update: permissions['tesoreria:cobranzas:update'] === true,
@@ -84,7 +84,7 @@ export async function ReceiptPage({ id }: { id: string }) {
 
   return (
     <div className="space-y-4">
-      <Header title={detail.number ? `Recibo ${detail.number}` : 'Borrador de recibo'} back={`${BACK}&view=receipts`} />
+      <Header back={`${BACK}&view=receipts`} />
       <ReceiptDetailView
         detail={detail}
         can={can}

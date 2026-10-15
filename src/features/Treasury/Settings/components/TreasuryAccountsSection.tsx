@@ -12,7 +12,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -22,6 +21,7 @@ import { Separator } from '@/components/ui/separator';
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
+import { SectionCard } from '@/shared/components/common/SectionCard';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Landmark, Pencil, Plus, Power, RotateCcw, Scale, Trash2, Wallet, WalletCards } from 'lucide-react';
@@ -38,6 +38,7 @@ import {
   type TreasuryAccountRow,
 } from '../../actions/accounts.server';
 import { OpeningBalanceDialog } from '../../Movements/components/OpeningBalanceDialog';
+import { formatDay } from '../../lib/dates';
 import { invalidateTreasury } from '../../lib/invalidate';
 import { TREASURY_ACCOUNT_KIND_LABELS, treasuryAccountFormSchema, type TreasuryAccountFormValues } from '../../schemas/accounts';
 
@@ -112,7 +113,10 @@ export function TreasuryAccountsSection({
       setConfirmDeactivate(null);
       refresh();
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : 'No se pudo cambiar la cuenta'),
+    onError: (error) => {
+      logger.error('Error al cambiar la cuenta', { data: { error } });
+      toast.error(error instanceof Error ? error.message : 'No se pudo cambiar la cuenta');
+    },
   });
 
   const remove = useMutation({
@@ -138,20 +142,18 @@ export function TreasuryAccountsSection({
   };
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
-        <div className="space-y-1">
-          <CardTitle>Cuentas y cajas</CardTitle>
-          <CardDescription>Cuentas bancarias y cajas de efectivo, con su saldo inicial. Compras paga desde acá.</CardDescription>
-        </div>
-        {canUpdate && (
+    <SectionCard
+      title="Cuentas y cajas"
+      description="Cuentas bancarias y cajas de efectivo, con su saldo inicial. Compras paga desde acá."
+      action={
+        canUpdate && (
           <Button type="button" size="sm" variant="outline" onClick={() => openForm('new')}>
             <Plus className="mr-1 h-4 w-4" />
             Agregar
           </Button>
-        )}
-      </CardHeader>
-      <CardContent>
+        )
+      }
+    >
         {accounts.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">Todavía no hay cuentas. Hacen falta para registrar movimientos y pagos.</p>
         ) : (
@@ -161,7 +163,7 @@ export function TreasuryAccountsSection({
               const opening = openings[a.id];
               return (
                 <li key={a.id} className="flex items-center gap-3 py-2">
-                  <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className={a.is_active ? 'truncate' : 'truncate text-muted-foreground'}>{a.name}</span>
@@ -177,7 +179,7 @@ export function TreasuryAccountsSection({
                       {a.kind === 'CHECK_PORTFOLIO'
                         ? 'Cheques en cartera'
                         : opening
-                          ? `Saldo inicial ${formatMoney(opening.amount)} al ${moment(opening.date, 'YYYY-MM-DD').format('DD/MM/YYYY')}`
+                          ? `Saldo inicial ${formatMoney(opening.amount)} al ${formatDay(opening.date)}`
                           : 'Sin saldo inicial'}
                       {' · '}Saldo hoy <span className="tabular-nums">{formatMoney(a.balance)}</span>
                     </p>
@@ -228,7 +230,6 @@ export function TreasuryAccountsSection({
             })}
           </ul>
         )}
-      </CardContent>
 
       <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
         <DialogContent className="sm:max-w-md">
@@ -430,6 +431,6 @@ export function TreasuryAccountsSection({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Card>
+    </SectionCard>
   );
 }

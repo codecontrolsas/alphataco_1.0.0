@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { useQuery } from '@tanstack/react-query';
 import { CalendarDays, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import moment from 'moment';
@@ -93,10 +94,10 @@ export function MantenimientoChartsClient({ initialSummary, initialMonthKey }: P
 
   const earliestMonth = React.useMemo(() => {
     const fromData = summary?.earliestMonth ?? initialSummary.earliestMonth;
-    return fromData ? moment(fromData, MONTH_KEY_FORMAT) : moment().subtract(1, 'year').startOf('month');
+    return fromData ? moment(fromData, MONTH_KEY_FORMAT) : moment(argentinaDate()).subtract(1, 'year').startOf('month');
   }, [summary?.earliestMonth, initialSummary.earliestMonth]);
 
-  const maxMonth = React.useMemo(() => moment().add(1, 'month').startOf('month'), []);
+  const maxMonth = React.useMemo(() => moment(argentinaDate()).add(1, 'month').startOf('month'), []);
 
   const canGoBack = selectedMonth.isAfter(earliestMonth, 'month');
   const canGoForward = selectedMonth.isBefore(maxMonth, 'month');
@@ -240,6 +241,7 @@ export function MantenimientoChartsClient({ initialSummary, initialMonthKey }: P
             <div className="flex flex-wrap items-center gap-2 mt-3">
               <div className="flex items-center gap-1 rounded-md border bg-card/40 p-0.5">
                 <Button
+                  type="button"
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
@@ -254,6 +256,7 @@ export function MantenimientoChartsClient({ initialSummary, initialMonthKey }: P
                   {monthLabel}
                 </span>
                 <Button
+                  type="button"
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"

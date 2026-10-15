@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { ChartSummary } from '@/features/Dashboard/shared/charts/ChartSummary';
+import { argentinaDate, formatDateAr } from '@/shared/lib/argentina-time';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import moment from 'moment';
 import 'moment/locale/es';
@@ -74,7 +76,9 @@ export function DesviosChartsClient({ data }: Props) {
    * Ordena lexicograficamente igual que cronologicamente, asi que sirve tambien
    * para comparar contra los limites.
    */
-  const [selectedMonthKey, setSelectedMonthKey] = React.useState(() => moment().format(MONTH_KEY_FORMAT));
+  const [selectedMonthKey, setSelectedMonthKey] = React.useState(() =>
+    moment(argentinaDate()).format(MONTH_KEY_FORMAT)
+  );
   const [granularity, setGranularity] = React.useState<DeviationGranularity>('daily');
   const [selectedCustomerIds, setSelectedCustomerIds] = React.useState<string[]>([]);
   const [visibleSeries, setVisibleSeries] = React.useState<DeviationSeriesKey[]>(DEFAULT_VISIBLE_SERIES);
@@ -85,7 +89,7 @@ export function DesviosChartsClient({ data }: Props) {
     [data.customers]
   );
 
-  const currentMonthKey = moment().format(MONTH_KEY_FORMAT);
+  const currentMonthKey = moment(argentinaDate()).format(MONTH_KEY_FORMAT);
   const earliestMonthKey = data.days.length > 0 ? data.days[0].date.slice(0, 7) : currentMonthKey;
   const canGoBack = selectedMonthKey > earliestMonthKey;
   const canGoForward = selectedMonthKey < currentMonthKey;
@@ -302,14 +306,31 @@ export function DesviosChartsClient({ data }: Props) {
           {!hasDays ? (
             <div className="flex h-[300px] flex-col items-center justify-center gap-1 text-center">
               <p className="text-sm font-medium">Sin datos para este período</p>
-              <p className="max-w-md text-xs text-muted-foreground">
-                No hay partes diarios cerrados en {periodLabel.toLowerCase()}. El registro de desvíos comienza el{' '}
-                {moment(data.days[0]?.date ?? undefined).format('DD/MM/YYYY')}.
+              <p role="status" className="max-w-md text-xs text-muted-foreground">
+                {data.days.length === 0
+                  ? 'Todavía no hay registros de desvíos del parte diario.'
+                  : `No hay partes diarios cerrados en ${periodLabel.toLowerCase()}. El registro de desvíos comienza el ${formatDateAr(data.days[0].date)}.`}
               </p>
             </div>
           ) : (
             <>
               <DesviosTimeSeriesChart chartData={chartData} visibleSeries={visibleSeries} />
+
+              <ChartSummary
+                className="mt-3"
+                title="Desvíos del parte diario"
+                summary={`${periodLabel}: ${DEVIATION_SERIES.filter((serie) => visibleSeries.includes(serie.key))
+                  .map((serie) => `${serie.label} ${periodTotals[serie.key] ?? 'sin medición'}`)
+                  .join(', ')}. La meta es 0 desvíos.`}
+                columns={[
+                  { key: 'label', header: 'Período' },
+                  ...DEVIATION_SERIES.map((serie) => ({ key: serie.key, header: serie.label, numeric: true })),
+                ]}
+                rows={chartData.map((point) => ({
+                  label: point.label,
+                  ...Object.fromEntries(DEVIATION_SERIES.map((serie) => [serie.key, point[serie.key] ?? '—'])),
+                }))}
+              />
 
               {hasNoDeviations && (
                 <p className="px-4 pt-3 text-xs text-muted-foreground sm:px-0">

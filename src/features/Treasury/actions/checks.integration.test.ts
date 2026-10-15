@@ -450,7 +450,8 @@ describe.skipIf(!RUN)('cheques de terceros (integracion)', () => {
     });
 
     it('aviso de repetidos: encuentra el vigente y no el anulado', async () => {
-      const { confirmReceipt, cancelReceipt, findDuplicateReceiptChecks } = await actions();
+      const { confirmReceipt, cancelReceipt } = await actions();
+      const { findDuplicateReceiptChecks } = await import('./receipt-reads.server');
       const alive = chequePayment('10', { checkNumber: '818181' });
       const gone = chequePayment('10', { checkNumber: '828282' });
       expectOk(await confirmReceipt(null, form([alive])));
@@ -700,7 +701,8 @@ describe.skipIf(!RUN)('cheques de terceros (integracion)', () => {
     });
 
     it('detalle del cheque: historial con su documento y aviso de vencimiento', async () => {
-      const { depositChecks, getCheckDetail } = await ops();
+      const { depositChecks } = await ops();
+      const { getCheckDetail } = await import('./check-reads.server');
       const [a] = await openChecks(['8.00'], day(-27));
       const pending = await getCheckDetail(a!.id);
       expect(pending?.depositWarning).toBe('DUE_SOON');

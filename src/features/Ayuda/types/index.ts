@@ -1,9 +1,9 @@
 import type { Comment, Ticket, TicketPriority } from '@/shared/lib/taskapp/types';
 import type { CategorySlug } from '../constants/categories';
 
-export type { CategorySlug, CategoryDef } from '../constants/categories';
-export type { StatusDef } from '../constants/ticket-status';
+export type { CategoryDef, CategorySlug } from '../constants/categories';
 export type { PriorityDef, PrioritySlug } from '../constants/ticket-priority';
+export type { TicketStatusPresentation as StatusDef } from '../constants/ticket-status';
 
 export interface ReporterIdentity {
   email: string;

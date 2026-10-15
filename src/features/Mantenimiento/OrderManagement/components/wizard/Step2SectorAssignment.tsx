@@ -183,7 +183,7 @@ export function Step2SectorAssignment({
 
       {/* Warning for unassigned items */}
       {unassignedCount > 0 && (
-        <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400">
+        <div className="flex items-center gap-2 p-2.5 rounded-lg bg-warn-subtle border border-warn/30 text-warn-subtle-foreground">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span className="text-xs">{unassignedCount} desvío(s) necesitan asignación manual de sector.</span>
         </div>
@@ -193,7 +193,7 @@ export function Step2SectorAssignment({
       {autoAssigned.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+            <CheckCircle2 className="h-4 w-4 text-ok" />
             <span className="text-sm font-medium">Auto-asignados ({autoAssigned.length})</span>
           </div>
           <div className="space-y-1.5">
@@ -226,7 +226,7 @@ export function Step2SectorAssignment({
                   </div>
                   <Badge
                     variant="outline"
-                    className="ml-2 shrink-0 bg-emerald-50 dark:bg-emerald-900/30 border-emerald-300 text-emerald-700 dark:text-emerald-400"
+                    className="ml-2 shrink-0 bg-ok-subtle border-ok/30 text-ok-subtle-foreground"
                   >
                     <CheckCircle2 className="h-3 w-3 mr-1" />
                     {sectorName}
@@ -244,7 +244,7 @@ export function Step2SectorAssignment({
       {needsManualSelection.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <HelpCircle className="h-4 w-4 text-amber-500" />
+            <HelpCircle className="h-4 w-4 text-warn" />
             <span className="text-sm font-medium">Requieren selección manual ({needsManualSelection.length})</span>
           </div>
           <div className="space-y-2">
@@ -263,7 +263,7 @@ export function Step2SectorAssignment({
                     'p-3 border rounded-lg',
                     info.assignedSectorId
                       ? 'border-border bg-muted/20'
-                      : 'border-amber-200 dark:border-amber-800/50 bg-amber-50/30 dark:bg-amber-950/20'
+                      : 'border-warn/30 bg-warn-subtle/30'
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -313,7 +313,7 @@ export function Step2SectorAssignment({
 
       {/* All assigned message */}
       {regularItems.length > 0 && unassignedCount === 0 && (
-        <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400">
+        <div className="flex items-center gap-2 p-2.5 rounded-lg bg-ok-subtle border border-ok/30 text-ok-subtle-foreground">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
           <span className="text-xs font-medium">Todos los desvíos tienen sector asignado.</span>
         </div>

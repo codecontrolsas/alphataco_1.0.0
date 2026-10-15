@@ -70,11 +70,16 @@ export function ReturnTaskDialog({ repairId, open, onClose }: ReturnTaskDialogPr
         variant="outline"
         onClick={handleClose}
         disabled={mutation.isPending}
-        className="h-11 w-full sm:w-auto"
+        className="h-12 w-full sm:h-11 sm:w-auto"
       >
         Cancelar
       </Button>
-      <Button type="button" onClick={handleSubmit} disabled={mutation.isPending} className="h-11 w-full sm:w-auto">
+      <Button
+        type="button"
+        onClick={handleSubmit}
+        disabled={mutation.isPending}
+        className="h-12 w-full sm:h-11 sm:w-auto"
+      >
         {mutation.isPending ? 'Devolviendo...' : 'Devolver Tarea'}
       </Button>
     </div>
@@ -96,14 +101,29 @@ export function ReturnTaskDialog({ repairId, open, onClose }: ReturnTaskDialogPr
               if (e.target.value.trim().length >= 10) setShowError(false);
             }}
             rows={4}
-            className={`min-h-[100px] ${showError ? 'border-destructive' : ''}`}
+            aria-invalid={showError}
+            aria-describedby="return-reason-help"
+            className={`min-h-[100px] text-base ${showError ? 'border-destructive' : ''}`}
           />
-          {showError && <p className="text-sm text-destructive">El motivo debe tener al menos 10 caracteres</p>}
+          <div id="return-reason-help" className="flex items-start justify-between gap-3">
+            {showError ? (
+              <p role="alert" className="text-sm text-destructive">
+                El motivo debe tener al menos 10 caracteres
+              </p>
+            ) : (
+              <span />
+            )}
+            {/* Contador hacia el mínimo: el operario ve cuánto le falta, no solo un error al enviar */}
+            <p className="shrink-0 text-sm text-muted-foreground tabular-nums" aria-live="polite">
+              {Math.min(returnReason.trim().length, 10)}/10
+              <span className="sr-only"> caracteres mínimos</span>
+            </p>
+          </div>
         </div>
 
-        <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-3.5 flex items-start gap-3">
-          <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
-          <div className="text-sm text-amber-800 dark:text-amber-200">
+        <div className="rounded-lg border border-warn/30 bg-warn-subtle p-3.5 flex items-start gap-3">
+          <AlertTriangle aria-hidden="true" className="h-5 w-5 text-warn-subtle-foreground flex-shrink-0 mt-0.5" />
+          <div className="text-sm text-warn-subtle-foreground">
             <p className="font-medium">Esta seguro?</p>
             <p className="mt-1">La tarea sera enviada al jefe de taller para reasignacion</p>
           </div>

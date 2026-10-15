@@ -10,6 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PermissionGuard } from '@/features/Permissions';
+import { Logger } from '@/lib/logger';
 import { cn } from '@/lib/utils';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
@@ -18,15 +19,13 @@ import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Logger } from '@/lib/logger';
 import { toast } from 'sonner';
 import type { AreaRow } from '../../actions/areas.server';
 import type { SectorRow } from '../../actions/sectors.server';
 import { createCustomerService, updateCustomerService, type CustomerServiceRow } from '../../actions/services.server';
-import { dbDateToLocal, localDateToDb } from '../../lib/service-dates';
 import type { CustomerRef } from '../../lib/serializers';
+import { dbDateToLocal, localDateToDb } from '../../lib/service-dates';
 import { serviceFormSchema, type ServiceFormValues } from '../../schemas/service';
-
 
 const logger = new Logger('features/Empresa/Clientes/ServicesForm');
 
@@ -88,9 +87,7 @@ export default function ServicesForm({
 
   const areaOptions = useMemo(
     () =>
-      areas
-        .filter((area) => area.customers.id === customerId)
-        .map((area) => ({ label: area.nombre, value: area.id })),
+      areas.filter((area) => area.customers.id === customerId).map((area) => ({ label: area.nombre, value: area.id })),
     [areas, customerId]
   );
 
@@ -131,6 +128,8 @@ export default function ServicesForm({
 
       toast.success(isEditing ? 'Contrato actualizado correctamente' : 'Contrato creado correctamente');
       queryClient.invalidateQueries({ queryKey: ['customer-services'] });
+      // La pestaña Contratos de la ficha del cliente lee por React Query (['comercial', 'customer', id, 'contracts']).
+      queryClient.invalidateQueries({ queryKey: ['comercial', 'customer'] });
       if (!isEditing) resetForm();
       setOpen?.(false);
       router.refresh();
@@ -245,7 +244,9 @@ export default function ServicesForm({
                   render={({ field }) => (
                     <FormItem>
                       <div className="flex gap-4 items-center w-full justify-between">
-                        <FormLabel>{name === 'service_start' ? 'Inicio del Contrato' : 'Validez del Contrato'}</FormLabel>
+                        <FormLabel>
+                          {name === 'service_start' ? 'Inicio del Contrato' : 'Validez del Contrato'}
+                        </FormLabel>
                         <FormControl>
                           <Popover>
                             <PopoverTrigger asChild>

@@ -4,12 +4,14 @@ import { Logger } from '@/lib/logger';
 import { taskAppClient } from '@/shared/lib/taskapp/client';
 import { TaskAppError } from '@/shared/lib/taskapp/errors';
 import type { Ticket } from '@/shared/lib/taskapp/types';
+import { canSupportTickets, requireSupportTickets } from '../lib/access.server';
 import { getReporterEmail } from './getReporterEmail';
 import { getSupportTicketById } from './support-tickets';
 
 const logger = new Logger('features/Ayuda/support-approval');
 
 async function assertCanApprove(ticketId: number): Promise<{ approverEmail: string; ticket: Ticket }> {
+  await requireSupportTickets();
   const reporter = await getReporterEmail();
   if (!reporter) throw new Error('No hay usuario autenticado');
 
@@ -31,11 +33,7 @@ async function assertCanApprove(ticketId: number): Promise<{ approverEmail: stri
  * carrera entre aprobadores: el segundo recibe 400 "not pending" del server.
  */
 function approvalError(error: unknown, fallback: string): Error {
-  if (
-    error instanceof TaskAppError &&
-    error.status === 400 &&
-    error.message.includes('not pending')
-  ) {
+  if (error instanceof TaskAppError && error.status === 400 && error.message.includes('not pending')) {
     return new Error('Este ticket ya fue aprobado o rechazado por otro aprobador.');
   }
   return new Error(fallback);
@@ -47,6 +45,7 @@ function approvalError(error: unknown, fallback: string): Error {
  * el backend responde 403 y devolvemos lista vacía.
  */
 export async function getTicketsForApprover(): Promise<Ticket[]> {
+  if (!(await canSupportTickets())) return [];
   const reporter = await getReporterEmail();
   if (!reporter) return [];
   try {
@@ -69,6 +68,7 @@ export interface ApproverTicketsPage {
  * (server-side, más recientes primero).
  */
 export async function getApproverTicketsPage(page: number, pageSize: number): Promise<ApproverTicketsPage> {
+  if (!(await canSupportTickets())) return { tickets: [], total: 0 };
   const reporter = await getReporterEmail();
   if (!reporter) return { tickets: [], total: 0 };
   try {
@@ -90,6 +90,7 @@ export async function getApproverTicketsPage(page: number, pageSize: number): Pr
  * del banner de aprobación en el detalle).
  */
 export async function getPendingApproverTickets(): Promise<Ticket[]> {
+  if (!(await canSupportTickets())) return [];
   const reporter = await getReporterEmail();
   if (!reporter) return [];
   try {

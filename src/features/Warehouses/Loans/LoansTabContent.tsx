@@ -3,7 +3,7 @@ import type { DataTableSearchParams } from '@/shared/components/common/DataTable
 import { HandHelping } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense } from 'react';
-import { NoPermission } from '../fallback/NoPermission';
+import { StateBlock } from '@/shared/components/common/StateBlock';
 import { canWarehouse, type PermissionsMap } from '../lib/permissions';
 import { LoansList } from './components/LoansList/LoansList';
 import { LoansTableSkeleton } from './components/LoansList/fallback/LoansTableSkeleton';
@@ -16,7 +16,7 @@ export default async function LoansTabContent({
   searchParams: DataTableSearchParams;
   permissions: PermissionsMap;
 }) {
-  if (!canWarehouse(permissions, 'prestamos', 'view')) return <NoPermission />;
+  if (!canWarehouse(permissions, 'prestamos', 'view')) return <StateBlock variant="noperm" title="No tenés permiso para ver esta información." />;
 
   // Un prestamo nace de una salida de herramienta en Movimientos: el acceso abre esa salida.
   return (

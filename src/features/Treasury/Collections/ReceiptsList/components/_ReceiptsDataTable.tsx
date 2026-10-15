@@ -8,6 +8,7 @@ import {
   type DataTableSearchParams,
   type FacetResult,
 } from '@/shared/components/common/DataTable';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Users } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { TREASURY_QUERY_KEYS } from '../../../lib/query-keys';
@@ -108,7 +109,7 @@ export function _ReceiptsDataTable({
 
   const exportConfig: DataTableExportConfig<ReceiptListItem> = useMemo(
     () => ({
-      fetchAllData: () => getAllReceiptsForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllReceiptsForExport(currentParams)),
       options: { filename: 'recibos-cobranza', title: 'Recibos', sheetName: 'Recibos' },
       formatters: {
         date: (value) => formatValueDate(value as string),

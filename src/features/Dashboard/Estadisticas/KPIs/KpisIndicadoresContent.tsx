@@ -23,7 +23,7 @@ export default async function KpisIndicadoresContent({ searchParams }: KpisIndic
   const permissionsMap = await getUserPermissionsMapServer();
 
   const canCreateOrUpdate =
-    permissionsMap['dashboard:kpis:create'] === true || permissionsMap['dashboard:kpis:update'] === true;
+    permissionsMap['configuracion:kpis:create'] === true || permissionsMap['configuracion:kpis:update'] === true;
 
   return (
     <Card className="w-full">

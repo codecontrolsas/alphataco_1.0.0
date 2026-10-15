@@ -1,5 +1,6 @@
 'use server';
 
+import { requireDashboardView } from '@/features/Dashboard/lib/permissions.server';
 import {
   employeeDocumentSpec,
   loadEmployeeDocumentRows,
@@ -37,6 +38,7 @@ const SPEC: typeof BASE_SPEC = {
  * motor de cumplimiento (estado derivado en hora argentina), sin faltantes ni "ya no aplica".
  */
 async function loadRows() {
+  await requireDashboardView('empleados');
   const [companyId, canViewPrivate] = await Promise.all([
     getActiveCompanyId(),
     checkPermissionServer('documentacion', 'documentos-de-empleados', 'view_private'),

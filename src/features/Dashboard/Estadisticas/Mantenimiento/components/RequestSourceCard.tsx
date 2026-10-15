@@ -3,6 +3,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ChartSummary } from '@/features/Dashboard/shared/charts/ChartSummary';
 import { useQuery } from '@tanstack/react-query';
 import { Inbox, Loader2 } from 'lucide-react';
 import * as React from 'react';
@@ -104,7 +105,7 @@ export function RequestSourceCard() {
 
       <CardContent className="px-6 pb-5">
         {isError ? (
-          <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+          <div role="alert" className="flex h-40 items-center justify-center text-sm text-muted-foreground">
             No se pudo cargar el origen de las solicitudes.
           </div>
         ) : isLoading ? (
@@ -172,6 +173,19 @@ export function RequestSourceCard() {
                 </li>
               ))}
             </ul>
+
+            <ChartSummary
+              title="Origen de las solicitudes de mantenimiento"
+              summary={`${periodLabel}: ${total} ${total === 1 ? 'solicitud creada' : 'solicitudes creadas'}; ${rows
+                .map((row) => `${row.label} ${row.count} (${row.pct}%)`)
+                .join(', ')}.`}
+              columns={[
+                { key: 'label', header: 'Origen' },
+                { key: 'count', header: 'Solicitudes', numeric: true },
+                { key: 'pct', header: 'Participación', numeric: true },
+              ]}
+              rows={rows.map((row) => ({ label: row.label, count: row.count, pct: `${row.pct}%` }))}
+            />
           </div>
         )}
       </CardContent>

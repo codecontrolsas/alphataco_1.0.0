@@ -3,17 +3,20 @@
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { StackedCell } from '@/shared/components/common/StackedCell';
+import { formatArgentinaDateTime, formatDateAr } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
-import moment from 'moment';
 import Link from 'next/link';
 import { PurchaseOrderStatusBadge } from '../components/PurchaseOrderStatusBadge';
 import type { PurchaseOrderListItem } from './actions.server';
 
 export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['sent_at', 'creator', 'approver'];
 
-const formatDateTime = (value: Date | string | null) => (value ? moment(value).format('DD/MM/YYYY') : '-');
-/** Columnas DATE (sin hora): se leen en UTC para no correr un dia. */
-const formatDateOnly = (value: Date | string | null) => (value ? moment.utc(value).format('DD/MM/YYYY') : '-');
+/** Timestamps (alta, envío): fecha y hora argentinas. */
+const formatDateTime = (value: Date | string | null) => (value ? formatArgentinaDateTime(value) : '-');
+/** Columnas DATE (sin hora): llegan como medianoche UTC, se leen como fecha para no correr un día. */
+const formatDateOnly = (value: Date | string | null) =>
+  value ? formatDateAr(new Date(value).toISOString().slice(0, 10)) : '-';
 
 export function getColumns(): ColumnDef<PurchaseOrderListItem>[] {
   return [
@@ -25,7 +28,7 @@ export function getColumns(): ColumnDef<PurchaseOrderListItem>[] {
       cell: ({ row }) => (
         <Link
           href={`/dashboard/purchases/orders/${row.original.id}`}
-          className="font-mono text-sm font-medium text-blue-600 hover:underline"
+          className="font-mono text-sm font-medium text-brand-ink hover:underline"
         >
           {row.original.number}
         </Link>
@@ -39,9 +42,9 @@ export function getColumns(): ColumnDef<PurchaseOrderListItem>[] {
       cell: ({ row }) => (
         <Link
           href={`/dashboard/purchases/suppliers/${row.original.supplier.id}`}
-          className="text-blue-600 hover:underline"
+          className="block hover:underline"
         >
-          {row.original.supplier.name}
+          <StackedCell primary={row.original.supplier.name} secondary={`CUIT ${row.original.supplier.cuit}`} />
         </Link>
       ),
       filterFn: (row, _id, value: string[]) => value.includes(row.original.supplier.id),
@@ -95,7 +98,7 @@ export function getColumns(): ColumnDef<PurchaseOrderListItem>[] {
             <Link
               key={r.id}
               href={`/dashboard/purchases/requests/${r.id}`}
-              className="font-mono text-sm text-blue-600 hover:underline"
+              className="font-mono text-sm text-brand-ink hover:underline"
             >
               {r.number}
             </Link>
@@ -109,7 +112,7 @@ export function getColumns(): ColumnDef<PurchaseOrderListItem>[] {
       accessorFn: (row) => row.creator.name,
       meta: { title: 'Creó' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Creó" />,
-      cell: ({ row }) => <span>{row.original.creator.name}</span>,
+      cell: ({ row }) => <StackedCell primary={row.original.creator.name} />,
       filterFn: (row, _id, value: string[]) => value.includes(row.original.creator.id),
     },
     {

@@ -34,6 +34,7 @@ import {
 } from '@/features/Mantenimiento/shared/preventive-maintenance';
 import { uploadRepairImages } from '@/features/Mantenimiento/shared/utils/uploadRepairImages';
 import { invalidateAllMaintenanceQueries } from '@/features/Mantenimiento/utils/queryInvalidation';
+import { MaintenanceStatusPill } from '@/features/Mantenimiento/shared/components/MaintenanceStatusPill';
 import { Logger } from '@/lib/logger';
 import { cn } from '@/lib/utils';
 import { conditionLabels } from '@/shared/utils/mappers';
@@ -103,6 +104,15 @@ export function NuevoPedidoChecklistForm({
   // Estado del paso actual (0-indexed)
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Resultado de la última creación: lo que se registró, con números, para la pantalla final.
+  // Se arma ANTES de reiniciar los pasos, porque el resumen sale del estado del formulario.
+  const [completion, setCompletion] = useState<{
+    createdByCurrentSupervisor: boolean;
+    itemCount: number;
+    itemNoun: string;
+    equipmentLabel: string | null;
+    supervisorName: string | null;
+  } | null>(null);
 
   // Tipo de recurso (ticket 596): define qué se lista en el selector del paso Equipo
   const [resourceKind, setResourceKind] = useState<MaintenanceResourceKind>('vehicle');
@@ -301,6 +311,7 @@ export function NuevoPedidoChecklistForm({
     data: templates,
     isLoading: isLoadingTemplates,
     error: templatesError,
+    refetch: refetchTemplates,
   } = useQuery({
     queryKey: ['checklist-templates-for-equipment', selectedEquipmentId],
     queryFn: () => getChecklistTemplatesForEquipment(selectedEquipmentId),
@@ -325,7 +336,12 @@ export function NuevoPedidoChecklistForm({
   // La lista sale de la empresa DEL RECURSO elegido, no de la sesión: este formulario también
   // se usa desde `/maintenance/equipment/[id]/request` (QR anónimo), donde no hay empresa
   // activa y resolverla por sesión dejaba el paso "Supervisor" vacío y sin poder avanzar.
-  const { data: supervisors = [], isLoading: isLoadingSupervisors } = useQuery({
+  const {
+    data: supervisors = [],
+    isLoading: isLoadingSupervisors,
+    isError: hasSupervisorsError,
+    refetch: refetchSupervisors,
+  } = useQuery({
     queryKey: ['supervisors-for-resource', resourceKind, selectedEquipmentId],
     queryFn: () => fetchSupervisorsForResource(resourceKind, selectedEquipmentId),
     enabled:
@@ -635,6 +651,31 @@ export function NuevoPedidoChecklistForm({
         invalidateAllMaintenanceQueries(queryClient);
       }
 
+      // Resumen para la pantalla final (antes del reset: sale del estado del formulario)
+      const itemCount =
+        requestType === 'manual'
+          ? manualRepairs.length
+          : requestType === 'preventive'
+            ? 1
+            : selectedDeviations.length + manualItems.length;
+      const itemNoun =
+        requestType === 'manual'
+          ? itemCount === 1
+            ? 'reparación'
+            : 'reparaciones'
+          : requestType === 'preventive'
+            ? 'programa preventivo'
+            : itemCount === 1
+              ? 'ítem'
+              : 'ítems';
+      setCompletion({
+        createdByCurrentSupervisor: isCurrentUserSupervisor === true,
+        itemCount,
+        itemNoun,
+        equipmentLabel: selectedEquipment?.label ?? null,
+        supervisorName: isCurrentUserSupervisor ? (currentUser?.fullname ?? null) : (selectedSupervisor?.fullName ?? null),
+      });
+
       // Reset form
       setCurrentStep(0);
       setSelectedEquipmentId(default_equipment_id || '');
@@ -644,6 +685,7 @@ export function NuevoPedidoChecklistForm({
       setSelectedDeviations([]);
       setDeviationComments({});
       setManualItems([]);
+      setManualRepairs([]);
       setSelectedSupervisorId('');
       setIsCurrentUserSupervisor(skipSupervisorQuestion ? false : null);
       setSelectedPreventiveType('');
@@ -658,9 +700,8 @@ export function NuevoPedidoChecklistForm({
         onSuccess();
       }
 
-      if (successRedirectUrl) {
-        router.push(successRedirectUrl);
-      }
+      // Sin redirección automática: la pantalla final confirma lo que se registró y el operario
+      // vuelve al equipo con su propio botón (antes el toast desaparecía con la pantalla).
     } catch (error) {
       logger.error('Error al crear pedido', { data: { error } });
       // Un "failed to fetch" generico no le dice al usuario que reintentar. Las
@@ -804,6 +845,7 @@ export function NuevoPedidoChecklistForm({
       setSelectedPreventiveType={setSelectedPreventiveType}
       templates={templates}
       templatesError={templatesError}
+      refetchTemplates={() => void refetchTemplates()}
       visibleRequestTypes={visibleRequestTypes}
     />
   );
@@ -859,6 +901,8 @@ export function NuevoPedidoChecklistForm({
       isCurrentUserSupervisor={isCurrentUserSupervisor}
       isLoadingCurrentUser={isLoadingCurrentUser}
       isLoadingSupervisors={isLoadingSupervisors}
+      hasSupervisorsError={hasSupervisorsError}
+      refetchSupervisors={() => void refetchSupervisors()}
       selectedSupervisor={selectedSupervisor}
       selectedSupervisorId={selectedSupervisorId}
       setIsCurrentUserSupervisor={setIsCurrentUserSupervisor}
@@ -912,27 +956,126 @@ export function NuevoPedidoChecklistForm({
   // ============================================
   // RENDER PRINCIPAL
   // ============================================
+  // Pantalla final: dice QUÉ se registró (con números) y deja al operario decidir cómo seguir
+  if (completion) {
+    return (
+      <div className="mx-auto w-full max-w-xl space-y-4" role="status" aria-live="polite">
+        <div className="flex flex-col items-center gap-3 pt-4 text-center">
+          <span className="flex size-16 items-center justify-center rounded-full bg-ok-subtle text-ok-subtle-foreground">
+            <CheckCircle aria-hidden="true" className="size-8" />
+          </span>
+          <h2 className="text-2xl font-semibold text-balance">
+            {completion.createdByCurrentSupervisor ? 'Pedido creado' : 'Solicitud enviada'}
+          </h2>
+          <p className="text-base text-muted-foreground text-pretty">
+            {completion.createdByCurrentSupervisor
+              ? 'Pedido de mantenimiento creado exitosamente. Lo cargó el supervisor, así que no necesita validación.'
+              : 'El supervisor debe aprobarla antes de que pase a Pedidos.'}
+          </p>
+        </div>
+
+        <Card>
+          <CardContent className="grid grid-cols-2 gap-4 p-4">
+            {completion.equipmentLabel && (
+              <div className="min-w-0">
+                <p className="text-sm text-muted-foreground">Equipo</p>
+                <p className="truncate font-mono text-base font-semibold">{completion.equipmentLabel}</p>
+              </div>
+            )}
+            <div>
+              <p className="text-sm text-muted-foreground">Registrado</p>
+              <p className="text-base font-semibold tabular-nums">
+                {completion.itemCount} {completion.itemNoun}
+              </p>
+            </div>
+            <div>
+              <p className="mb-1 text-sm text-muted-foreground">
+                {completion.createdByCurrentSupervisor ? 'Estado inicial del pedido' : 'Estado inicial de la solicitud'}
+              </p>
+              {completion.createdByCurrentSupervisor ? (
+                <MaintenanceStatusPill entity="order" status="pending_scheduling" />
+              ) : (
+                <MaintenanceStatusPill entity="request" status="pending_approval" />
+              )}
+            </div>
+            {completion.supervisorName && (
+              <div className="min-w-0">
+                <p className="text-sm text-muted-foreground">Supervisor</p>
+                <p className="truncate text-base font-semibold">{completion.supervisorName}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="flex flex-col gap-3">
+          {successRedirectUrl && (
+            <Button type="button" className="h-12 w-full text-base" onClick={() => router.push(successRedirectUrl)}>
+              Volver al equipo
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            className="h-12 w-full text-base"
+            onClick={() => setCompletion(null)}
+          >
+            Cargar otro pedido
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const isLastStep = currentStep >= steps.length - 1;
+
+  // ============================================
+  // RENDER PRINCIPAL
+  // ============================================
   return (
     <div className="grid gap-6 lg:grid-cols-3">
-      {/* Stepper lateral */}
-      <Card className="lg:col-span-1 h-fit">
+      {/* Progreso en móvil: un paso por pantalla, con barra accesible */}
+      <div className="space-y-2 lg:hidden">
+        <div
+          role="progressbar"
+          aria-label="Progreso del pedido"
+          aria-valuemin={1}
+          aria-valuemax={steps.length}
+          aria-valuenow={currentStep + 1}
+          aria-valuetext={`Paso ${currentStep + 1} de ${steps.length}: ${steps[currentStep].title}`}
+          className="flex gap-1"
+        >
+          {steps.map((step, index) => (
+            <span
+              key={step.key}
+              className={cn('h-1.5 flex-1 rounded-full', index <= currentStep ? 'bg-primary' : 'bg-muted')}
+            />
+          ))}
+        </div>
+        <p className="text-sm text-muted-foreground tabular-nums" aria-live="polite">
+          Paso {currentStep + 1} de {steps.length} · {steps[currentStep].title}
+        </p>
+      </div>
+
+      {/* Stepper lateral (escritorio) */}
+      <Card className="hidden h-fit lg:col-span-1 lg:block">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Plus className="h-5 w-5" />
+            <Plus aria-hidden="true" className="h-5 w-5" />
             Nuevo Pedido
           </CardTitle>
           <CardDescription>Crea un pedido desde items de checklist</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
+          <ol className="space-y-2">
             {steps.map((step, index) => {
               const StepIcon = step.icon;
               const isCompleted = index < currentStep;
               const isCurrent = index === currentStep;
 
               return (
-                <div
+                <li
                   key={step.key}
+                  aria-current={isCurrent ? 'step' : undefined}
                   className={cn(
                     'flex items-center gap-3 p-2 rounded-lg transition-all',
                     isCurrent && 'bg-primary/10',
@@ -947,53 +1090,69 @@ export function NuevoPedidoChecklistForm({
                       !isCurrent && !isCompleted && 'border-muted-foreground/30'
                     )}
                   >
-                    {isCompleted ? <Check className="h-4 w-4" /> : <StepIcon className="h-4 w-4" />}
+                    {isCompleted ? (
+                      <Check aria-hidden="true" className="h-4 w-4" />
+                    ) : (
+                      <StepIcon aria-hidden="true" className="h-4 w-4" />
+                    )}
                   </div>
                   <span className={cn('text-sm font-medium', !isCurrent && !isCompleted && 'text-muted-foreground')}>
                     {step.title}
+                    {isCompleted && <span className="sr-only"> (completado)</span>}
                   </span>
-                </div>
+                </li>
               );
             })}
-          </div>
+          </ol>
         </CardContent>
       </Card>
 
       {/* Contenido del paso */}
-      <Card className="lg:col-span-2">
+      <Card className="lg:col-span-2" aria-busy={isSubmitting}>
         <CardHeader>
-          <CardTitle className="text-lg">{steps[currentStep].title}</CardTitle>
+          <CardTitle className="text-xl">{steps[currentStep].title}</CardTitle>
         </CardHeader>
         <CardContent>{renderCurrentStep()}</CardContent>
 
         <Separator />
 
-        {/* Botones de navegación */}
-        <div className="p-4 flex justify-between">
+        {/* Botones de navegación: pegados al borde inferior en móvil para no perderlos al scrollear */}
+        <div className="sticky bottom-0 z-10 flex justify-between gap-3 rounded-b-xl bg-card p-4 max-lg:border-t">
           <Button
             type="button"
             variant="outline"
+            className="h-12 flex-1 text-base lg:h-10 lg:flex-none lg:text-sm"
             onClick={() => setCurrentStep((prev) => Math.max(0, prev - 1))}
             disabled={currentStep === 0 || isSubmitting}
           >
-            <ChevronLeft className="mr-2 h-4 w-4" />
+            <ChevronLeft aria-hidden="true" className="mr-2 h-4 w-4" />
             Anterior
           </Button>
 
-          {currentStep < steps.length - 1 ? (
-            <Button type="button" onClick={handleAdvanceStep} disabled={!canAdvanceStep}>
+          {!isLastStep ? (
+            <Button
+              type="button"
+              className="h-12 flex-1 text-base lg:h-10 lg:flex-none lg:text-sm"
+              onClick={handleAdvanceStep}
+              disabled={!canAdvanceStep}
+            >
               Siguiente
-              <ChevronRight className="ml-2 h-4 w-4" />
+              <ChevronRight aria-hidden="true" className="ml-2 h-4 w-4" />
             </Button>
           ) : (
             <Button
               type="button"
+              variant={isCurrentUserSupervisor ? 'success' : 'default'}
+              className="h-12 flex-1 text-base lg:h-10 lg:flex-none lg:text-sm"
               onClick={handleSubmit}
               disabled={isSubmitting}
-              className={isCurrentUserSupervisor ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'}
             >
-              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isCurrentUserSupervisor ? 'Crear Pedido' : 'Enviar Solicitud'}
+              {isSubmitting && <Loader2 aria-hidden="true" className="mr-2 h-4 w-4 animate-spin" />}
+              {isSubmitting
+                ? 'Enviando…'
+                : isCurrentUserSupervisor
+                  ? 'Crear Pedido'
+                  : 'Enviar Solicitud'}
             </Button>
           )}
         </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { ActivityHistoryModal } from '@/features/Mantenimiento/components/ActivityHistoryModal';
+import { Card, CardContent } from '@/components/ui/card';
 import { DataTable } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type {
@@ -12,14 +12,17 @@ import type {
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { conditionLabels } from '@/shared/utils/mappers';
 import { CircleOff } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { useCallback, useMemo, useState } from 'react';
-import { OrderDetailDialog } from '../MaintenanceOrders/components/OrderDetailDialog';
 import {
   getAllWorkshopTrackingForExport,
   getWorkshopTrackingPaginated,
   getWorkshopTrackingSingleFacet,
   type WorkshopTrackingListItem,
 } from './actions.server';
+import type { getWorkshopTrackingMetrics } from './actions/metrics.server';
+import { TrackingMetrics } from './components/TrackingMetrics';
+import { WORKSHOP_TRACKING_PARAM_NAMESPACE, WORKSHOP_TRACKING_TABLE_ID } from './constants';
 import {
   HIDDEN_COLUMNS_BY_DEFAULT,
   WORKSHOP_STATUS_ICONS,
@@ -32,7 +35,13 @@ import {
 // CONSTANTS
 // ============================================================================
 
-const TABLE_ID = 'workshop-tracking';
+// El panel de detalle y el historial pesan y solo se abren a demanda: se cargan al primer uso.
+const OrderDetailDialog = dynamic(() =>
+  import('../MaintenanceOrders/components/OrderDetailDialog').then((m) => m.OrderDetailDialog)
+);
+const ActivityHistoryModal = dynamic(() =>
+  import('@/features/Mantenimiento/components/ActivityHistoryModal').then((m) => m.ActivityHistoryModal)
+);
 
 const DEFAULT_VISIBLE_FILTERS = ['status', 'vehicle', 'workshop_entry_date'];
 
@@ -44,6 +53,8 @@ interface WorkshopTrackingDataTableProps {
   data: WorkshopTrackingListItem[];
   totalRows: number;
   searchParams: DataTableSearchParams;
+  /** Promesa de las métricas que arrancó el servidor junto con la tabla; nunca rechaza (`null` si no pudo contar). */
+  metricsPromise: Promise<Awaited<ReturnType<typeof getWorkshopTrackingMetrics>>>;
   initialColumnVisibility?: Record<string, boolean>;
   initialFilterVisibility?: Record<string, boolean>;
 }
@@ -56,24 +67,32 @@ export function _WorkshopTrackingDataTable({
   data,
   totalRows,
   searchParams,
+  metricsPromise,
   initialColumnVisibility,
   initialFilterVisibility,
 }: WorkshopTrackingDataTableProps) {
   // ── Dialog state ──────────────────────────────────────────────────────────
-  const [selectedOrder, setSelectedOrder] = useState<WorkshopTrackingListItem | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  // Una vez montado el panel no se desmonta: así conserva su animación de salida y su foco.
+  const [detailMounted, setDetailMounted] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [historyOrder, setHistoryOrder] = useState<WorkshopTrackingListItem | null>(null);
+  const [historyMounted, setHistoryMounted] = useState(false);
 
-  const handleViewDetail = (order: WorkshopTrackingListItem) => {
+  const openDetail = useCallback((orderId: string) => {
     setLoadingDetail(true);
-    setSelectedOrder(order);
+    setSelectedOrderId(orderId);
+    setDetailMounted(true);
     setDialogOpen(true);
-  };
+  }, []);
 
-  const handleViewHistory = (order: WorkshopTrackingListItem) => {
+  const handleViewDetail = useCallback((order: WorkshopTrackingListItem) => openDetail(order.id), [openDetail]);
+
+  const handleViewHistory = useCallback((order: WorkshopTrackingListItem) => {
+    setHistoryMounted(true);
     setHistoryOrder(order);
-  };
+  }, []);
 
   const handleCloseHistory = () => {
     setHistoryOrder(null);
@@ -82,8 +101,7 @@ export function _WorkshopTrackingDataTable({
   // ── Columns ───────────────────────────────────────────────────────────────
   const columns = useMemo(
     () => getWorkshopTrackingColumns({ onViewDetail: handleViewDetail, onViewHistory: handleViewHistory }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [handleViewDetail, handleViewHistory]
   );
 
   // ── Client-side navigation: estado reactivo para queries dependientes (export) ──
@@ -230,60 +248,75 @@ export function _WorkshopTrackingDataTable({
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <>
-      <DataTable
-        columns={columns}
-        data={data}
-        totalRows={totalRows}
-        searchParams={searchParams}
-        tableId={TABLE_ID}
-        paramNamespace={TABLE_ID}
-        searchPlaceholder="Buscar por equipo (dominio, serie, N° interno) o N° de orden..."
-        emptyMessage="No hay órdenes de mantenimiento en taller"
-        showFilterToggle={true}
-        facetedFilters={facetedFilters}
-        exportConfig={exportConfig}
-        initialColumnVisibility={{
-          ...Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((c) => [c, false])),
-          ...(initialColumnVisibility ?? {}),
-        }}
-        initialFilterVisibility={mergedFilterVisibility}
-        // Client-side navigation: fetch instantáneo vía React Query, sin router.push
-        queryFn={tableQueryFn}
-        queryKey={['workshop-tracking-paginated']}
-        onStateChange={handleStateChange}
-      />
+    <div className="space-y-4">
+      <TrackingMetrics metricsPromise={metricsPromise} onViewOrder={openDetail} />
 
-      {/* Loading overlay para carga de detalle */}
+      <Card>
+        <CardContent className="pt-6">
+          <DataTable
+            columns={columns}
+            data={data}
+            totalRows={totalRows}
+            searchParams={searchParams}
+            tableId={WORKSHOP_TRACKING_TABLE_ID}
+            paramNamespace={WORKSHOP_TRACKING_PARAM_NAMESPACE}
+            searchPlaceholder="Buscar por equipo (dominio, serie, N° interno) o N° de orden..."
+            emptyMessage="No hay órdenes de mantenimiento en taller"
+            showFilterToggle={true}
+            mobileCards
+            facetedFilters={facetedFilters}
+            exportConfig={exportConfig}
+            initialColumnVisibility={{
+              ...Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((c) => [c, false])),
+              ...(initialColumnVisibility ?? {}),
+            }}
+            initialFilterVisibility={mergedFilterVisibility}
+            // Client-side navigation: fetch instantáneo vía React Query, sin router.push
+            queryFn={tableQueryFn}
+            queryKey={['workshop-tracking-paginated']}
+            onStateChange={handleStateChange}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Mientras llega el detalle (el chunk del panel y la orden) */}
       {loadingDetail && (
-        <div className="fixed inset-0 bg-background/50 flex items-center justify-center z-50">
-          <div className="bg-card p-4 rounded-lg shadow-lg flex items-center gap-3">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <div
+          role="status"
+          aria-live="polite"
+          className="bg-background/50 fixed inset-0 z-50 flex items-center justify-center"
+        >
+          <div className="bg-card flex items-center gap-3 rounded-lg p-4 shadow-lg">
+            <div className="border-primary h-5 w-5 animate-spin rounded-full border-2 border-t-transparent" aria-hidden="true" />
             <span className="text-sm">Cargando detalle de orden...</span>
           </div>
         </div>
       )}
 
-      {/* Dialog de detalle — solo lectura para operaciones */}
-      <OrderDetailDialog
-        orderId={selectedOrder?.id}
-        open={dialogOpen}
-        onClose={() => {
-          setDialogOpen(false);
-          setSelectedOrder(null);
-        }}
-        onLoaded={() => setLoadingDetail(false)}
-        context="operations"
-      />
+      {/* Detalle de la orden — Operaciones lo abre en modo "operations" */}
+      {detailMounted && (
+        <OrderDetailDialog
+          orderId={selectedOrderId ?? undefined}
+          open={dialogOpen}
+          onClose={() => {
+            setDialogOpen(false);
+            setSelectedOrderId(null);
+          }}
+          onLoaded={() => setLoadingDetail(false)}
+          context="operations"
+        />
+      )}
 
-      {/* Modal de historial */}
-      <ActivityHistoryModal
-        open={!!historyOrder}
-        onClose={handleCloseHistory}
-        maintenanceOrderId={historyOrder?.id}
-        maintenanceRequestId={historyOrder?.maintenance_requests?.id}
-        title="Historial de la Orden"
-      />
-    </>
+      {/* Historial de la orden */}
+      {historyMounted && (
+        <ActivityHistoryModal
+          open={!!historyOrder}
+          onClose={handleCloseHistory}
+          maintenanceOrderId={historyOrder?.id}
+          maintenanceRequestId={historyOrder?.maintenance_requests?.id}
+          title="Historial de la Orden"
+        />
+      )}
+    </div>
   );
 }

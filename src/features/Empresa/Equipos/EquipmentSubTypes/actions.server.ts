@@ -13,18 +13,11 @@ import {
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
-import {
-  catalogAccessError,
-  catalogReadScope,
-  catalogWriteScope,
-  resolveCatalogAccess,
-} from '../lib/catalog-scope';
+import { equipmentSubTypeCreateSchema, equipmentSubTypeUpdateSchema } from '../../lib/catalog-input-schemas';
+import { requireConfigTabPermission } from '../../lib/config-access.server';
 import { assertChecklistTemplatesOwned, assertCompatibleItemsReadable } from '../lib/catalog-guards';
-import {
-  canHaveCompatibleItems,
-  parseCompatibleItemKeys,
-  typeIdsWithoutSubTypes,
-} from '../lib/hitch-compatibility';
+import { catalogAccessError, catalogReadScope, catalogWriteScope, resolveCatalogAccess } from '../lib/catalog-scope';
+import { canHaveCompatibleItems, parseCompatibleItemKeys, typeIdsWithoutSubTypes } from '../lib/hitch-compatibility';
 
 // ============================================================================
 // LOGGER
@@ -106,6 +99,7 @@ function buildWhereClause(state: ReturnType<typeof parseSearchParams>) {
 // ============================================================================
 
 export async function getEquipmentSubTypesPaginated(searchParams: DataTableSearchParams) {
+  await requireConfigTabPermission('subtipos', 'view');
   try {
     const state = parseSearchParams(searchParams);
     const { skip, take } = stateToPrismaParams(state);
@@ -157,6 +151,7 @@ export async function getEquipmentSubTypesPaginated(searchParams: DataTableSearc
 // ============================================================================
 
 export async function getAllEquipmentSubTypesForExport(searchParams: DataTableSearchParams) {
+  await requireConfigTabPermission('subtipos', 'view');
   try {
     const state = parseSearchParams(searchParams);
     // `buildWhereClause` puede traer su propio `OR`: se combinan con AND para no pisarse.
@@ -204,6 +199,7 @@ export async function getEquipmentSubTypeSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
 ): Promise<FacetResult | null> {
+  await requireConfigTabPermission('subtipos', 'view');
   try {
     const state = searchParams ? parseSearchParams(searchParams) : parseSearchParams({});
 
@@ -374,7 +370,10 @@ export async function getCompatibleItemsForSubTypePrisma(subTypeId: string) {
  * tienen ningún subtipo cargado se ofrecen enteros (si no, quedarían sin forma de elegirse).
  */
 export async function getAvailableCompatibleItems(parentTypeId: string) {
-  const empty = { subTypes: [] as { id: string; name: string; type: string | null }[], types: [] as { id: string; name: string }[] };
+  const empty = {
+    subTypes: [] as { id: string; name: string; type: string | null }[],
+    types: [] as { id: string; name: string }[],
+  };
   try {
     const companyId = await getActiveCompanyId();
 
@@ -457,6 +456,8 @@ async function validateSubTypeInput(companyId: string, input: EquipmentSubTypeIn
 }
 
 export async function createEquipmentSubType(input: EquipmentSubTypeInput) {
+  await requireConfigTabPermission('subtipos', 'create');
+  input = equipmentSubTypeCreateSchema.parse(input);
   try {
     const companyId = await getActiveCompanyId();
     const compatibleItems = await validateSubTypeInput(companyId, input);
@@ -504,6 +505,8 @@ export async function createEquipmentSubType(input: EquipmentSubTypeInput) {
 }
 
 export async function updateEquipmentSubType(input: EquipmentSubTypeInput & { id: string }) {
+  await requireConfigTabPermission('subtipos', 'update');
+  input = equipmentSubTypeUpdateSchema.parse(input);
   try {
     const companyId = await getActiveCompanyId();
 

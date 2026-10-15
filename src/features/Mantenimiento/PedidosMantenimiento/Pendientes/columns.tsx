@@ -3,20 +3,28 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PreventiveItemsBadge } from '@/features/Mantenimiento/components/PreventiveItemsBadge';
-import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
+import {
+  LEGACY_HISTORY_LABELS,
+  ORDER_STATUS_UI,
+  TONE_TO_BADGE,
+} from '@/features/Mantenimiento/lib/status-presentation';
+import { ATTENTION_THRESHOLDS } from '@/features/Mantenimiento/lib/attention-thresholds';
+import { MaintenanceStatusPill } from '@/features/Mantenimiento/shared/components/MaintenanceStatusPill';
+import { RelativeAge } from '@/features/Mantenimiento/shared/components/RelativeAge';
+import { ResourceCell, toResourceCellResource } from '@/features/Mantenimiento/shared/components/ResourceCell';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { type ColumnDef } from '@tanstack/react-table';
-import { Calendar, ClipboardList, Clock, Eye, History, HourglassIcon, Shield, Wrench, XCircle } from 'lucide-react';
+import { Calendar, ClipboardList, Eye, History, Shield, Wrench, XCircle } from 'lucide-react';
 import moment from 'moment';
-import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
-import { getResourceInternNumber, getResourceKindLabel, getResourceLabel } from '../../shared/maintenance-resource';
+import { getResourceLabel } from '../../shared/maintenance-resource';
+import { OrderActionsMenu, type OrderMenuItem } from '../components/OrderActionsMenu';
 import { type PendingOrderListItem } from './actions.server';
 
 // ── Labels y badges de estado ─────────────────────────────────────────────────
 
 export const PENDING_STATUS_LABELS: Record<string, string> = {
-  pending_scheduling: 'Pendiente Planificar',
-  scheduled: 'Pendiente Aprobación',
+  pending_scheduling: ORDER_STATUS_UI.pending_scheduling.label,
+  scheduled: ORDER_STATUS_UI.scheduled.label,
 };
 
 // ── Labels de origen ──────────────────────────────────────────────────────────
@@ -33,20 +41,19 @@ export const SOURCE_ICONS: Record<string, React.ComponentType<{ className?: stri
   preventive: Shield,
 };
 
-type StatusVariant = 'warning' | 'secondary';
-
-const STATUS_BADGE_CONFIG: Record<string, { label: string; variant: StatusVariant }> = {
-  pending_scheduling: { label: 'Pendiente Planificar', variant: 'warning' },
-  scheduled: { label: 'Pendiente Aprobación', variant: 'secondary' },
-};
-
+/** Íconos del filtro de estado: los mismos que dibuja la pastilla de la celda (misma fuente). */
 export const STATUS_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  pending_scheduling: HourglassIcon,
-  scheduled: Clock,
+  pending_scheduling: ORDER_STATUS_UI.pending_scheduling.icon,
+  scheduled: ORDER_STATUS_UI.scheduled.icon,
 };
 
 // ── Columnas ocultas por defecto ──────────────────────────────────────────────
-export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['created_at', 'source'];
+// Las atómicas que alimentan a la columna compuesta "N° Orden" quedan ocultas, no borradas: siguen siendo
+// filtrables, ordenables y se exportan a Excel.
+export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['order_number', 'description', 'scheduled_date'];
+
+/** Pasadas estas horas desde la aprobación el pedido se marca como atrasado (mismo corte que la tarjeta). */
+const OVERDUE_HOURS = ATTENTION_THRESHOLDS.schedulingPendingDays * 24;
 
 // ── Interfaz de callbacks para acciones ──────────────────────────────────────
 
@@ -58,30 +65,18 @@ export interface PendingOrdersColumnCallbacks {
   onReject: (order: PendingOrderListItem) => void;
 }
 
+/** Permisos de la tab, resueltos en el servidor (`pedidos_pendientes:update`: planificar y rechazar). */
+export interface PendingOrdersColumnPermissions {
+  canUpdate: boolean;
+}
+
 // ── Definición de columnas ────────────────────────────────────────────────────
 
-export function getPendingOrderColumns(callbacks: PendingOrdersColumnCallbacks): ColumnDef<PendingOrderListItem>[] {
+export function getPendingOrderColumns(
+  callbacks: PendingOrdersColumnCallbacks,
+  permissions: PendingOrdersColumnPermissions
+): ColumnDef<PendingOrderListItem>[] {
   return [
-    // ── Estado ──────────────────────────────────────────────────────────────
-    {
-      accessorKey: 'status',
-      id: 'status',
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
-      cell: ({ row }) => {
-        const status = row.original.status;
-        const config = STATUS_BADGE_CONFIG[status] ?? { label: status, variant: 'secondary' as const };
-        const Icon = STATUS_ICONS[status];
-        return (
-          <Badge variant={config.variant} className="gap-1 whitespace-nowrap">
-            {Icon && <Icon className="h-3 w-3" />}
-            {config.label}
-          </Badge>
-        );
-      },
-      filterFn: (row, id, value: string[]) => value.includes(row.getValue(id) as string),
-    },
-
     // ── Equipo / Vehículo ────────────────────────────────────────────────────
     {
       id: 'vehicle',
@@ -89,52 +84,93 @@ export function getPendingOrderColumns(callbacks: PendingOrdersColumnCallbacks):
       accessorFn: (row) => getResourceLabel(row),
       meta: { title: 'Equipo' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Equipo" />,
-      cell: ({ row }) => {
-        const internNumber = getResourceInternNumber(row.original);
-        return (
-          <div className="flex flex-col">
-            <span className="font-medium">{getResourceLabel(row.original)}</span>
-            <span className="text-xs text-muted-foreground">
-              {getResourceKindLabel(row.original)}
-              {internNumber ? ` · #${internNumber}` : ''}
-            </span>
-          </div>
-        );
-      },
+      cell: ({ row }) => <ResourceCell resource={toResourceCellResource(row.original)} />,
       filterFn: (row, _id, value: string[]) => {
         const resourceId = row.original.vehicles?.id ?? row.original.other_equipment?.id;
         if (!resourceId) return false;
         return value.includes(resourceId);
       },
-      enableSorting: false,
     },
 
-    // ── Número de Pedido ──────────────────────────────────────────────────────
+    // ── N° Orden + descripción (compuesta, solo presentación) ─────────────────
     {
-      accessorKey: 'order_number',
-      id: 'order_number',
-      meta: { title: 'Nro. Pedido' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nro. Pedido" />,
+      id: 'order',
+      meta: { title: 'N° Orden y descripción', excludeFromExport: true },
+      header: 'N° Orden',
+      enableSorting: false,
       cell: ({ row }) => {
-        const num = row.original.order_number;
-        return <span className="font-mono text-sm">{num ?? '—'}</span>;
+        const order = row.original;
+        const description = order.description ?? order.maintenance_requests?.description ?? '';
+        return (
+          <button
+            type="button"
+            onClick={() => callbacks.onView(order)}
+            aria-label={`Ver detalle del pedido ${order.order_number ?? getResourceLabel(order)}`}
+            className="focus-visible:ring-ring block max-w-[300px] rounded-sm text-left hover:underline focus-visible:ring-2 focus-visible:outline-none"
+          >
+            {order.order_number ? (
+              <span className="block truncate font-mono text-sm font-semibold tabular-nums">{order.order_number}</span>
+            ) : (
+              <span className="text-muted-foreground block text-sm">Se asigna al ingresar</span>
+            )}
+            {description ? (
+              <span className="text-muted-foreground block truncate text-[13px]" title={description}>
+                {description}
+              </span>
+            ) : null}
+          </button>
+        );
       },
     },
 
-    // ── Descripción del pedido ────────────────────────────────────────────────
+    // ── Estado ──────────────────────────────────────────────────────────────
     {
-      id: 'description',
-      accessorFn: (row) => row.description ?? row.maintenance_requests?.description ?? '',
-      meta: { title: 'Descripción' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción" />,
+      accessorKey: 'status',
+      id: 'status',
+      meta: { title: 'Estado' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
       cell: ({ row }) => {
-        const value = row.original.description ?? row.original.maintenance_requests?.description ?? '';
-        if (!value) return <span className="text-muted-foreground">—</span>;
-        const truncated = value.length > 60 ? `${value.slice(0, 60)}…` : value;
+        const { status, date_rejected_at, date_rejection_reason } = row.original;
+        // "Fecha Rechazada" acompaña al estado (no lo reemplaza: el filtro de Estado sigue diciendo
+        // "Pend. Programación"). Solo aplica mientras el pedido espera una fecha nueva.
+        const dateRejected = status === 'pending_scheduling' && date_rejected_at != null;
         return (
-          <span className="block max-w-[280px] truncate" title={value}>
-            {truncated}
-          </span>
+          <div className="flex flex-col items-start gap-1">
+            <MaintenanceStatusPill entity="order" status={status} />
+            {dateRejected ? (
+              <>
+                <Badge variant={TONE_TO_BADGE.danger} className="whitespace-nowrap">
+                  <XCircle aria-hidden="true" />
+                  {LEGACY_HISTORY_LABELS.date_rejected}
+                </Badge>
+                {date_rejection_reason ? (
+                  <span className="text-muted-foreground max-w-[220px] truncate text-xs" title={date_rejection_reason}>
+                    {date_rejection_reason}
+                  </span>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        );
+      },
+      filterFn: (row, id, value: string[]) => value.includes(row.getValue(id) as string),
+    },
+
+    // ── Items ─────────────────────────────────────────────────────────────────
+    {
+      id: 'items',
+      accessorFn: (row) => row._count.maintenance_order_items,
+      meta: { title: 'Items' },
+      header: 'Items',
+      cell: ({ row }) => {
+        const count = row.original._count.maintenance_order_items;
+        if (count === 0 && row.original.source === 'preventive') {
+          return <PreventiveItemsBadge preventiveType={row.original.preventive_type ?? ''} />;
+        }
+        return (
+          <Badge variant="secondary">
+            {count} {count === 1 ? 'item' : 'items'}
+          </Badge>
         );
       },
       enableSorting: false,
@@ -161,19 +197,61 @@ export function getPendingOrderColumns(callbacks: PendingOrdersColumnCallbacks):
       filterFn: (row, id, value: string[]) => value.includes(row.getValue(id) as string),
     },
 
-    // ── Fecha de Aprobación (created_at) ─────────────────────────────────────
+    // ── Fecha de Aprobación (created_at) + antigüedad ─────────────────────────
     {
       accessorKey: 'created_at',
       id: 'created_at',
       meta: { title: 'Fecha Aprobación' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha Aprobación" />,
       cell: ({ row }) => {
-        const date = row.original.created_at;
-        return <span>{date ? formatArgentinaDateTime(date) : '—'}</span>;
+        const { created_at, status } = row.original;
+        if (!created_at) return <span className="text-muted-foreground">—</span>;
+        // El corte solo importa mientras el pedido espera fecha; si ya está planificado no "atrasa".
+        return (
+          <RelativeAge
+            value={created_at}
+            thresholdHours={status === 'pending_scheduling' ? OVERDUE_HOURS : undefined}
+          />
+        );
       },
     },
 
-    // ── Fecha Planificada ─────────────────────────────────────────────────────
+    // ── N° Orden (atómica, oculta por defecto: filtro, orden y Excel) ─────────
+    {
+      accessorKey: 'order_number',
+      id: 'order_number',
+      meta: { title: 'N° Orden' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="N° Orden" />,
+      cell: ({ row }) => {
+        const num = row.original.order_number;
+        return num ? (
+          <span className="font-mono text-sm">{num}</span>
+        ) : (
+          <span className="text-muted-foreground">Se asigna al ingresar</span>
+        );
+      },
+    },
+
+    // ── Descripción del pedido (atómica, oculta por defecto) ──────────────────
+    {
+      id: 'description',
+      accessorFn: (row) => row.description ?? row.maintenance_requests?.description ?? '',
+      meta: { title: 'Descripción' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción" />,
+      cell: ({ row }) => {
+        const value = row.original.description ?? row.original.maintenance_requests?.description ?? '';
+        if (!value) return <span className="text-muted-foreground">—</span>;
+        const truncated = value.length > 60 ? `${value.slice(0, 60)}…` : value;
+        return (
+          <span className="block max-w-[280px] truncate" title={value}>
+            {truncated}
+          </span>
+        );
+      },
+      enableSorting: false,
+    },
+
+    // ── Fecha Planificada (oculta por defecto) ────────────────────────────────
     {
       accessorKey: 'scheduled_date',
       id: 'scheduled_date',
@@ -187,92 +265,50 @@ export function getPendingOrderColumns(callbacks: PendingOrdersColumnCallbacks):
       },
     },
 
-    // ── Items ─────────────────────────────────────────────────────────────────
-    {
-      id: 'items',
-      accessorFn: (row) => row._count.maintenance_order_items,
-      meta: { title: 'Items' },
-      header: 'Items',
-      cell: ({ row }) => {
-        const count = row.original._count.maintenance_order_items;
-        if (count === 0 && row.original.source === 'preventive') {
-          return <PreventiveItemsBadge preventiveType={row.original.preventive_type ?? ''} />;
-        }
-        return (
-          <Badge variant="secondary">
-            {count} {count === 1 ? 'item' : 'items'}
-          </Badge>
-        );
-      },
-      enableSorting: false,
-    },
-
     // ── Acciones ──────────────────────────────────────────────────────────────
     {
       id: 'actions',
       meta: { excludeFromExport: true, title: '' },
       enableSorting: false,
       enableHiding: false,
+      header: () => <span className="sr-only">Acciones</span>,
       cell: ({ row }) => {
         const order = row.original;
+        const resourceLabel = getResourceLabel(order);
         const isPendingScheduling = order.status === 'pending_scheduling';
+        // Planificar y rechazar exigen `update` en esta tab (mismo permiso que el servidor).
+        const canAct = permissions.canUpdate && isPendingScheduling;
+
+        const items: OrderMenuItem[] = [
+          { key: 'view', label: 'Ver detalle', icon: Eye, onSelect: () => callbacks.onView(order) },
+          { key: 'history', label: 'Ver historial', icon: History, onSelect: () => callbacks.onViewHistory(order) },
+          ...(canAct
+            ? [
+                {
+                  key: 'reject',
+                  label: 'Rechazar pedido',
+                  icon: XCircle,
+                  destructive: true,
+                  onSelect: () => callbacks.onReject(order),
+                },
+              ]
+            : []),
+        ];
 
         return (
-          <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => callbacks.onView(order)}
-              title="Ver detalle"
-              aria-label="Ver detalle"
-            >
-              <Eye className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => callbacks.onViewHistory(order)}
-              title="Ver historial"
-              aria-label="Ver historial"
-              className="text-purple-600 hover:text-purple-700"
-            >
-              <History className="h-4 w-4" />
-            </Button>
-            {/* Planificar la fecha requiere `update` en esta tab (ver permissions-map). */}
-            {isPendingScheduling && (
-              <PermissionGuard module="mantenimiento" tab="pedidos_pendientes" action="update">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => callbacks.onSchedule(order)}
-                  title="Planificar fecha"
-                  aria-label="Planificar fecha"
-                  className="text-blue-600 hover:text-blue-700"
-                >
-                  <Calendar className="h-4 w-4" />
-                </Button>
-              </PermissionGuard>
-            )}
-            {/* Ticket 676: rechazo del taller (ej. solicitud duplicada). Se oculta
-                la accion puntual, nunca la columna completa. */}
-            {isPendingScheduling && (
-              <PermissionGuard module="mantenimiento" tab="pedidos_pendientes" action="update">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => callbacks.onReject(order)}
-                  title="Rechazar pedido"
-                  aria-label="Rechazar pedido"
-                  className="text-destructive hover:text-destructive"
-                >
-                  <XCircle className="h-4 w-4" />
-                </Button>
-              </PermissionGuard>
-            )}
+          <div className="flex items-center justify-end gap-1">
+            {canAct ? (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => callbacks.onSchedule(order)}
+                aria-label={`Planificar ${resourceLabel}`}
+              >
+                <Calendar aria-hidden="true" />
+                Planificar
+              </Button>
+            ) : null}
+            <OrderActionsMenu resourceLabel={resourceLabel} items={items} />
           </div>
         );
       },

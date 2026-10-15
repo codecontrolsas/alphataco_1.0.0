@@ -21,6 +21,7 @@ import {
   getAvailableEmployeesPaginated,
   type AvailableEmployeeListItem,
 } from '../actions/rrhh.server';
+import { unwrapExportWithToast } from '../lib/export-client';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -170,6 +171,7 @@ export default function AvailableEmployeesDialog({ open, onOpenChange, count, po
           return d?.diagram_type_employees_diagram_diagram_typeTodiagram_type?.short_description ?? '';
         },
         meta: { title: 'Diagrama' },
+        enableSorting: false,
         header: ({ column }) => <DataTableColumnHeader column={column} title="Diagrama" />,
         cell: ({ row }) => {
           const d = row.original.employees_diagram[0];
@@ -177,7 +179,11 @@ export default function AvailableEmployeesDialog({ open, onOpenChange, count, po
           return (
             <div className="flex items-center gap-2">
               {dt?.color && (
-                <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: dt.color }} />
+                <span
+                  className="h-2.5 w-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: dt.color }}
+                  aria-hidden="true"
+                />
               )}
               <span className="text-muted-foreground">{dt?.short_description ?? '-'}</span>
             </div>
@@ -194,6 +200,7 @@ export default function AvailableEmployeesDialog({ open, onOpenChange, count, po
         id: 'comments',
         accessorFn: (row) => row.employees_diagram[0]?.comments ?? '',
         meta: { title: 'Comentario' },
+        enableSorting: false,
         header: ({ column }) => <DataTableColumnHeader column={column} title="Comentario" />,
         cell: ({ row }) => {
           const comment = row.original.employees_diagram[0]?.comments;
@@ -225,6 +232,11 @@ export default function AvailableEmployeesDialog({ open, onOpenChange, count, po
 
   const facetedFilters = useMemo<DataTableFacetedFilterConfig[]>(
     () => [
+      // Legajo ANTES que el nombre; coincidencia exacta (con parcial, «1» traería 1, 10, 100...).
+      { columnId: 'file', title: 'Legajo', type: 'text', placeholder: 'Legajo completo (coincidencia exacta)' },
+      { columnId: 'name', title: 'Nombre', type: 'text', placeholder: 'Buscar por apellido o nombre...' },
+      { columnId: 'cuil', title: 'CUIL', type: 'text', placeholder: 'Buscar por CUIL...' },
+      { columnId: 'comments', title: 'Comentario', type: 'text', placeholder: 'Buscar en el comentario...' },
       {
         columnId: 'company_positions',
         title: 'Posición',
@@ -248,7 +260,8 @@ export default function AvailableEmployeesDialog({ open, onOpenChange, count, po
 
   const exportConfig = useMemo(
     () => ({
-      fetchAllData: () => getAllAvailableEmployeesForExport(currentParams, positionIds),
+      fetchAllData: async () =>
+        unwrapExportWithToast(await getAllAvailableEmployeesForExport(currentParams, positionIds)),
       options: {
         filename: 'empleados-disponibles',
         sheetName: 'Empleados Disponibles',
@@ -286,7 +299,8 @@ export default function AvailableEmployeesDialog({ open, onOpenChange, count, po
         <DialogHeader>
           <DialogTitle>Empleados Disponibles ({count})</DialogTitle>
           <DialogDescription>
-            Empleados con diagrama activo que no están asignados al parte diario de hoy.
+            Empleados activos con diagrama de trabajo hoy que no figuran en el parte diario de hoy. La cifra del título
+            es una resta (con diagrama − en operación) y puede diferir del total de la tabla.
           </DialogDescription>
         </DialogHeader>
 
@@ -304,7 +318,7 @@ export default function AvailableEmployeesDialog({ open, onOpenChange, count, po
             showSearch
             showFilterToggle
             showColumnToggle
-            emptyMessage="No hay empleados disponibles"
+            emptyMessage="No hay empleados disponibles con los filtros elegidos"
             exportConfig={exportConfig as never}
             paramNamespace="avail-emp"
           />

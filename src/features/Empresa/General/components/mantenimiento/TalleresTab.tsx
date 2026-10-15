@@ -1,4 +1,4 @@
-import { cookies } from 'next/headers';
+import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { fetchAllWorkshops } from '../../actions/workshops.server';
 import { TalleresTabClient } from './talleres/TalleresTabClient';
 
@@ -13,20 +13,11 @@ import { TalleresTabClient } from './talleres/TalleresTabClient';
  * La promesa de `fetchAllWorkshops()` se pasa SIN await a propósito: el cliente la consume
  * con `use()`, así el componente no bloquea el render de la sección.
  */
-async function TalleresTab() {
-  const cookiesStore = await cookies();
+function TalleresTab() {
   const workshops = fetchAllWorkshops();
+  const preferences = getTablePreferences('workshops');
 
-  const savedVisibility = cookiesStore.get('talleres-table')?.value;
-  const savedFilter = cookiesStore.get('talleres-table-filters')?.value;
-
-  return (
-    <TalleresTabClient
-      workshops={workshops}
-      savedVisibility={savedVisibility ? JSON.parse(savedVisibility) : {}}
-      savedFilter={savedFilter ? JSON.parse(savedFilter) : []}
-    />
-  );
+  return <TalleresTabClient workshops={workshops} preferences={preferences} />;
 }
 
 export default TalleresTab;

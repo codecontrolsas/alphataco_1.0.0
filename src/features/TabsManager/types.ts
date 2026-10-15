@@ -76,6 +76,11 @@ export interface TabDefinition<M extends ModuleSlug = ModuleSlug> {
    * título (ej. el Centro de Ayuda del módulo de TaskApp). Sin esto quedaban dos títulos.
    */
   hideTitle?: boolean;
+  /**
+   * `SectionManagerServer` con `sectionNav`: contador que se dibuja junto al nombre de la sección en la
+   * sub-navegación (suele ser un Server Component async envuelto en su propio `<Suspense>`).
+   */
+  navCounter?: React.ReactNode;
 }
 
 /**
@@ -215,4 +220,10 @@ export interface TabsManagerClientProps<M extends ModuleSlug = ModuleSlug> {
  * la URL existente.
  */
 export interface SectionManagerServerProps<M extends ModuleSlug = ModuleSlug>
-  extends Omit<TabsManagerServerProps<M>, 'variant' | 'dependentParams'> {}
+  extends Omit<TabsManagerServerProps<M>, 'variant' | 'dependentParams'> {
+  /**
+   * Opt-in (default `false`): dibuja una sub-navegación con enlaces y contadores por sección sobre el
+   * contenido. Los módulos que no la piden siguen navegando solo por el sidebar.
+   */
+  sectionNav?: boolean;
+}

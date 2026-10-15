@@ -10,6 +10,7 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { CircleOff, Landmark, Percent, Users, Wallet } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { CHECK_KIND_LABELS, CHECK_STATUS_LABELS } from '../../../lib/check-transitions';
@@ -149,7 +150,7 @@ export function _ChecksDataTable({
 
   const exportConfig: DataTableExportConfig<CheckListItem> = useMemo(
     () => ({
-      fetchAllData: () => getAllChecksForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllChecksForExport(currentParams)),
       options: { filename: 'cheques', title: 'Cheques', sheetName: 'Cheques' },
       formatters: {
         amount: (value) => formatMoney(String(value)),

@@ -2,6 +2,8 @@
 
 import { Button } from '@/components/ui/button';
 import { ChartContainer, type ChartConfig } from '@/components/ui/chart';
+import { categoricalColorVar } from '@/features/Dashboard/shared/charts/ChartColorVars';
+import { ChartSummary } from '@/features/Dashboard/shared/charts/ChartSummary';
 import { cn } from '@/lib/utils';
 import { Cell, Pie, PieChart } from 'recharts';
 import {
@@ -17,9 +19,9 @@ import { WorkdaysProgress } from './WorkdaysProgress';
 
 // Paleta semantica para distinguir las 3 categorias.
 const CATEGORY_COLORS: Record<OwnershipCategory, string> = {
-  Propios: 'var(--chart-2)',
-  Leasing: 'var(--chart-4)',
-  Contratados: 'var(--chart-1)',
+  Propios: categoricalColorVar(1),
+  Leasing: categoricalColorVar(5),
+  Contratados: categoricalColorVar(0),
 };
 
 // Labels + clases visuales para los KPIs de condicion operativa.
@@ -27,15 +29,15 @@ const CATEGORY_COLORS: Record<OwnershipCategory, string> = {
 const STATUS_META: Record<VehicleStatus, { label: string; dotClass: string; ringClass: string; tintClass: string }> = {
   operativo: {
     label: 'Operativos',
-    dotClass: 'bg-emerald-500',
-    ringClass: 'ring-1 ring-emerald-500/50',
-    tintClass: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+    dotClass: 'bg-[var(--dash-ok)]',
+    ringClass: 'ring-1 ring-[var(--dash-ok)]',
+    tintClass: 'bg-[color-mix(in_oklab,var(--dash-ok)_12%,transparent)] text-foreground',
   },
   operativo_condicionado: {
     label: 'Op. condicionado',
-    dotClass: 'bg-amber-500',
-    ringClass: 'ring-1 ring-amber-500/50',
-    tintClass: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
+    dotClass: 'bg-[var(--dash-warn)]',
+    ringClass: 'ring-1 ring-[var(--dash-warn)]',
+    tintClass: 'bg-[color-mix(in_oklab,var(--dash-warn)_12%,transparent)] text-foreground',
   },
   en_preparacion: {
     label: 'En preparación',
@@ -45,9 +47,9 @@ const STATUS_META: Record<VehicleStatus, { label: string; dotClass: string; ring
   },
   no_operativo: {
     label: 'No operativos',
-    dotClass: 'bg-rose-500',
-    ringClass: 'ring-1 ring-rose-500/50',
-    tintClass: 'bg-rose-500/10 text-rose-700 dark:text-rose-300',
+    dotClass: 'bg-[var(--dash-danger)]',
+    ringClass: 'ring-1 ring-[var(--dash-danger)]',
+    tintClass: 'bg-[color-mix(in_oklab,var(--dash-danger)_12%,transparent)] text-foreground',
   },
   en_reparacion: {
     label: 'En reparación',
@@ -102,9 +104,7 @@ export function OwnershipDonutChart({
 
   // Banda de condiciones: solo mostramos chips con count > 0 O seleccionados
   // (un chip seleccionado siempre visible aunque su count baje a 0 por filtros).
-  const visibleStatuses = VEHICLE_STATUSES.filter(
-    (s) => effectiveConditionCounts[s] > 0 || selectedStatuses.has(s)
-  );
+  const visibleStatuses = VEHICLE_STATUSES.filter((s) => effectiveConditionCounts[s] > 0 || selectedStatuses.has(s));
 
   const conditionLabel = drilledCategory ? `${drilledCategory}` : 'Todas las categorías';
 
@@ -171,6 +171,22 @@ export function OwnershipDonutChart({
         </div>
       </div>
 
+      {total === 0 && (
+        <p role="status" className="text-center text-sm text-muted-foreground">
+          No hay equipos activos con tipo de contrato cargado para mostrar.
+        </p>
+      )}
+
+      <ChartSummary
+        title="Equipos por categoría"
+        summary={`${total} equipos: ${OWNERSHIP_CATEGORIES.map((category) => `${category} ${countsByCategory[category]}`).join(', ')}.`}
+        columns={[
+          { key: 'category', header: 'Categoría' },
+          { key: 'count', header: 'Equipos', numeric: true },
+        ]}
+        rows={OWNERSHIP_CATEGORIES.map((category) => ({ category, count: countsByCategory[category] }))}
+      />
+
       {/* Banda de condicion — chips multi-select */}
       {visibleStatuses.length > 0 && (
         <div className="border-t pt-4 space-y-2">
@@ -190,12 +206,7 @@ export function OwnershipDonutChart({
               </Button>
             )}
           </div>
-          <div
-            className={cn(
-              'flex flex-wrap items-center gap-2 lg:gap-3',
-              drilledCategory && 'lg:justify-start'
-            )}
-          >
+          <div className={cn('flex flex-wrap items-center gap-2 lg:gap-3', drilledCategory && 'lg:justify-start')}>
             {visibleStatuses.map((status) => {
               const meta = STATUS_META[status];
               const count = effectiveConditionCounts[status];

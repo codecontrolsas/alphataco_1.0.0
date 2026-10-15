@@ -8,9 +8,10 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay, formatDateAr } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { CircleOff, FileText, ShoppingCart, Truck, User, Warehouse } from 'lucide-react';
-import moment from 'moment';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { PURCHASES_QUERY_KEYS } from '../../../lib/query-keys';
 import {
   getAllPurchaseReceiptsForExport,
@@ -21,18 +22,19 @@ import {
 import {
   HIDDEN_COLUMNS_BY_DEFAULT,
   NO_WAREHOUSE_LABEL,
-  RECEIPT_STATUS_ACTIVE,
-  RECEIPT_STATUS_CANCELLED,
   RECEIPT_STATUS_LABELS,
   getColumns,
   receiptStatusIcons,
 } from '../columns';
+import { RECEIPT_STATUS_ACTIVE, RECEIPT_STATUS_CANCELLED } from '../constants';
 
 interface Props {
   data: PurchaseReceiptListItem[];
   totalRows: number;
   searchParams: DataTableSearchParams;
   tableId: string;
+  /** Banda de atención sobre la tabla (la arma el Server Component con su propio Suspense). */
+  topSlot?: ReactNode;
   initialColumnVisibility?: Record<string, boolean>;
   initialFilterVisibility?: Record<string, boolean>;
 }
@@ -46,6 +48,7 @@ export function _ReceiptsDataTable({
   totalRows,
   searchParams,
   tableId,
+  topSlot,
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
@@ -113,11 +116,12 @@ export function _ReceiptsDataTable({
 
   const exportConfig: DataTableExportConfig<PurchaseReceiptListItem> = useMemo(
     () => ({
-      fetchAllData: () => getAllPurchaseReceiptsForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllPurchaseReceiptsForExport(currentParams)),
       options: { filename: 'recepciones', title: 'Recepciones', sheetName: 'Recepciones' },
       formatters: {
-        received_on: (value) => (value ? moment.utc(value as string | Date).format('DD/MM/YYYY') : ''),
-        created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : ''),
+        // `received_on` es @db.Date (medianoche UTC): se lee como fecha, no como instante.
+        received_on: (value) => (value ? formatDateAr(new Date(value as string | Date).toISOString().slice(0, 10)) : ''),
+        created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : ''),
         delivery_note: (value) => (value ? String(value) : ''),
       },
     }),
@@ -125,7 +129,9 @@ export function _ReceiptsDataTable({
   );
 
   return (
-    <DataTable
+    <div className="space-y-4">
+      {topSlot}
+      <DataTable
       columns={columns}
       data={data}
       totalRows={totalRows}
@@ -143,6 +149,7 @@ export function _ReceiptsDataTable({
       emptyMessage="No hay recepciones"
       exportConfig={exportConfig}
       data-testid="purchase-receipts-table"
-    />
+      />
+    </div>
   );
 }

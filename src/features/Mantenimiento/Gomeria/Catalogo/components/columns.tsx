@@ -1,13 +1,11 @@
 'use client';
 
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { RowActionsMenu, type RowAction } from '@/features/Mantenimiento/Gomeria/shared/RowActionsMenu';
+import { TireStatusPill } from '@/features/Mantenimiento/Gomeria/shared/TireStatusPills';
 import {
+  tirePositionSideLabels,
   tireRetreadLabels,
-  tireStatusBadges,
-  tireStatusLabels,
   tireTreadTypeLabels,
 } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
 import { formatMoney } from '@/features/Warehouses/lib/format';
@@ -45,6 +43,24 @@ export function getTireWarehouseLabel(unit: TireListItem['material_unit']): stri
 // ============================================================================
 // COLUMNS
 // ============================================================================
+
+/**
+ * Columnas que arrancan ocultas en el diseño nuevo (`-v2`): quedan disponibles en el selector de columnas y en
+ * el export. Las preferencias guardadas del usuario ganan sobre esta lista.
+ */
+export const TIRE_HIDDEN_COLUMNS_BY_DEFAULT: Record<string, boolean> = {
+  retread_level: false,
+  tread_type: false,
+  cost: false,
+  created_at: false,
+};
+
+/** "E1 Izq.": eje y lado donde está montada la cubierta. */
+function formatTirePosition(position: TireListItem['vehicle_tire_positions'][number] | undefined): string | null {
+  if (!position) return null;
+  const side = tirePositionSideLabels[position.side] ?? position.side;
+  return `E${position.axle_number} ${side}`;
+}
 
 export function getColumns(
   permissions: Permissions,
@@ -89,6 +105,20 @@ export function getColumns(
       meta: { title: 'Número' },
     },
 
+    // --- Status ---
+    {
+      id: 'status',
+      accessorKey: 'status',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      cell: ({ row }) => <TireStatusPill status={row.original.status} />,
+      filterFn: (row, id, value: string[]) => {
+        const val = row.getValue(id) as string | null;
+        if (val == null) return value.includes(NULL_FILTER_VALUE);
+        return value.includes(val);
+      },
+      meta: { title: 'Estado' },
+    },
+
     // --- Brand ---
     {
       id: 'brand_id',
@@ -112,21 +142,23 @@ export function getColumns(
       meta: { title: 'Medida' },
     },
 
-    // --- Is New ---
+    // --- Condition (compuesta: nueva / usada + nivel de precurado; el precurado sigue como columna oculta) ---
     {
       id: 'is_new',
       accessorKey: 'is_new',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Condición" />,
-      cell: ({ row }) => (
-        <Badge variant={row.original.is_new ? 'success' : 'outline'}>{row.original.is_new ? 'Nueva' : 'Usada'}</Badge>
-      ),
+      cell: ({ row }) => {
+        const retread = row.original.retread_level;
+        if (retread) return <div>{tireRetreadLabels[retread] ?? retread}</div>;
+        return <div>{row.original.is_new ? 'Nueva' : 'Usada'}</div>;
+      },
       filterFn: (row, id, value: string[]) => {
         return value.includes(String(row.getValue(id)));
       },
       meta: { title: 'Condición' },
     },
 
-    // --- Retread Level (nullable) ---
+    // --- Retread Level (nullable; atómica, oculta por defecto) ---
     {
       id: 'retread_level',
       accessorKey: 'retread_level',
@@ -134,7 +166,7 @@ export function getColumns(
       cell: ({ row }) => {
         const val = row.original.retread_level;
         if (!val) return <div className="text-muted-foreground">-</div>;
-        return <Badge variant="outline">{tireRetreadLabels[val] ?? val}</Badge>;
+        return <div>{tireRetreadLabels[val] ?? val}</div>;
       },
       filterFn: (row, id, value: string[]) => {
         const val = row.getValue(id) as string | null;
@@ -144,7 +176,84 @@ export function getColumns(
       meta: { title: 'Precurado' },
     },
 
-    // --- Tread Type ---
+    // --- Vehicle (compuesta: dominio + posición actual) ---
+    {
+      id: 'vehicle',
+      accessorFn: (row) => row.vehicle_tire_positions?.[0]?.vehicle?.domain ?? '',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Vehículo" />,
+      cell: ({ row }) => {
+        const position = row.original.vehicle_tire_positions?.[0];
+        const domain = position?.vehicle?.domain;
+        if (!domain)
+          return (
+            <div className="text-muted-foreground inline-flex items-center gap-1">
+              <CircleOff className="h-3 w-3" aria-hidden="true" />
+              Sin asignar
+            </div>
+          );
+        const place = formatTirePosition(position);
+        return (
+          <div className="font-mono text-sm">
+            {domain}
+            {place ? <span className="text-muted-foreground"> · {place}</span> : null}
+          </div>
+        );
+      },
+      filterFn: (row, _id, value: string[]) => {
+        const vehicleId = row.original.vehicle_tire_positions?.[0]?.vehicle?.id ?? null;
+        if (vehicleId == null) return value.includes(NULL_FILTER_VALUE);
+        return value.includes(vehicleId);
+      },
+      enableSorting: false,
+      meta: { title: 'Vehículo' },
+    },
+
+    // --- Tread Depth ---
+    {
+      id: 'tread_depth',
+      accessorKey: 'tread_depth',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Profundidad (mm)" />,
+      cell: ({ row }) => {
+        const val = row.original.tread_depth;
+        if (val == null) return <div className="text-muted-foreground">-</div>;
+        return <div className="font-mono text-sm tabular-nums">{String(val)} mm</div>;
+      },
+      meta: { title: 'Profundidad (mm)' },
+    },
+
+    // --- Warehouse (stock unit location) ---
+    {
+      id: 'warehouse',
+      accessorFn: (row) => getTireWarehouseLabel(row.material_unit),
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Depósito" />,
+      cell: ({ row }) => {
+        const unit = row.original.material_unit;
+        const label = getTireWarehouseLabel(unit);
+        if (unit?.status === 'IN_STOCK' && unit.warehouse) {
+          return (
+            <div className="inline-flex items-center gap-1">
+              <Warehouse className="text-muted-foreground h-3 w-3" aria-hidden="true" />
+              {label}
+            </div>
+          );
+        }
+        return (
+          <div className="text-muted-foreground inline-flex items-center gap-1">
+            <CircleOff className="h-3 w-3" aria-hidden="true" />
+            {label}
+          </div>
+        );
+      },
+      filterFn: (row, _id, value: string[]) => {
+        const unit = row.original.material_unit;
+        const warehouseId = unit?.status === 'IN_STOCK' ? unit.warehouse?.id ?? null : null;
+        if (warehouseId == null) return value.includes(NULL_FILTER_VALUE);
+        return value.includes(warehouseId);
+      },
+      meta: { title: 'Depósito' },
+    },
+
+    // --- Tread Type (atómica, oculta por defecto) ---
     {
       id: 'tread_type',
       accessorFn: (row) => row.tire_type?.tread_type ?? '',
@@ -159,93 +268,6 @@ export function getColumns(
         return value.includes(val);
       },
       meta: { title: 'Tipo de banda' },
-    },
-
-    // --- Tread Depth ---
-    {
-      id: 'tread_depth',
-      accessorKey: 'tread_depth',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Profundidad" />,
-      cell: ({ row }) => {
-        const val = row.original.tread_depth;
-        if (val == null) return <div className="text-muted-foreground">-</div>;
-        return <div>{String(val)} mm</div>;
-      },
-      meta: { title: 'Profundidad (mm)' },
-    },
-
-    // --- Status ---
-    {
-      id: 'status',
-      accessorKey: 'status',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
-      cell: ({ row }) => {
-        const status = row.original.status;
-        return <Badge variant={tireStatusBadges[status] ?? 'default'}>{tireStatusLabels[status] ?? status}</Badge>;
-      },
-      filterFn: (row, id, value: string[]) => {
-        const val = row.getValue(id) as string | null;
-        if (val == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(val);
-      },
-      meta: { title: 'Estado' },
-    },
-
-    // --- Vehicle (current installation) ---
-    {
-      id: 'vehicle',
-      accessorFn: (row) => row.vehicle_tire_positions?.[0]?.vehicle?.domain ?? '',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Vehículo" />,
-      cell: ({ row }) => {
-        const domain = row.original.vehicle_tire_positions?.[0]?.vehicle?.domain;
-        if (!domain)
-          return (
-            <div className="inline-flex items-center gap-1 text-muted-foreground">
-              <CircleOff className="h-3 w-3" />
-              Sin asignar
-            </div>
-          );
-        return <Badge variant="outline">{domain}</Badge>;
-      },
-      filterFn: (row, _id, value: string[]) => {
-        const vehicleId = row.original.vehicle_tire_positions?.[0]?.vehicle?.id ?? null;
-        if (vehicleId == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(vehicleId);
-      },
-      enableSorting: false,
-      meta: { title: 'Vehículo' },
-    },
-
-    // --- Warehouse (stock unit location) ---
-    {
-      id: 'warehouse',
-      accessorFn: (row) => getTireWarehouseLabel(row.material_unit),
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Depósito" />,
-      cell: ({ row }) => {
-        const unit = row.original.material_unit;
-        const label = getTireWarehouseLabel(unit);
-        if (unit?.status === 'IN_STOCK' && unit.warehouse) {
-          return (
-            <div className="inline-flex items-center gap-1">
-              <Warehouse className="h-3 w-3 text-muted-foreground" />
-              {label}
-            </div>
-          );
-        }
-        return (
-          <div className="inline-flex items-center gap-1 text-muted-foreground">
-            <CircleOff className="h-3 w-3" />
-            {label}
-          </div>
-        );
-      },
-      filterFn: (row, _id, value: string[]) => {
-        const unit = row.original.material_unit;
-        const warehouseId = unit?.status === 'IN_STOCK' ? unit.warehouse?.id ?? null : null;
-        if (warehouseId == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(warehouseId);
-      },
-      meta: { title: 'Depósito' },
     },
 
     // --- Cost (latest entry cost of the unit; only with view_prices) ---
@@ -276,72 +298,42 @@ export function getColumns(
       meta: { title: 'Fecha de alta' },
     },
 
-    // --- Actions ---
+    // --- Actions: menú ⋯; cada acción con la misma clave que exige el servidor (update / delete) ---
     ...(canUpdate || canDelete
       ? [
           {
             id: 'actions',
-            cell: ({ row }: { row: import('@tanstack/react-table').Row<TireListItem> }) => (
-              <TooltipProvider delayDuration={200}>
-                <div className="flex items-center gap-1">
-                  {canUpdate && row.original.status === 'MISSING' && onMarkFound && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-green-600 hover:text-green-700"
-                          onClick={() => onMarkFound(row.original)}
-                        >
-                          <MapPin className="h-3.5 w-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Marcar como encontrada</TooltipContent>
-                    </Tooltip>
-                  )}
-                  {canUpdate && row.original.status === 'IN_REPAIR' && onMarkRepaired && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-blue-600 hover:text-blue-700"
-                          onClick={() => onMarkRepaired(row.original)}
-                        >
-                          <Wrench className="h-3.5 w-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Marcar como reparada</TooltipContent>
-                    </Tooltip>
-                  )}
-                  {canUpdate && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(row.original)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Editar</TooltipContent>
-                    </Tooltip>
-                  )}
-                  {canDelete && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => onDelete(row.original)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Eliminar</TooltipContent>
-                    </Tooltip>
-                  )}
-                </div>
-              </TooltipProvider>
-            ),
+            cell: ({ row }: { row: import('@tanstack/react-table').Row<TireListItem> }) => {
+              const tire = row.original;
+              const actions: RowAction[] = [];
+              if (canUpdate && tire.status === 'MISSING' && onMarkFound) {
+                actions.push({
+                  key: 'found',
+                  label: 'Marcar como encontrada',
+                  icon: MapPin,
+                  onSelect: () => onMarkFound(tire),
+                });
+              }
+              if (canUpdate && tire.status === 'IN_REPAIR' && onMarkRepaired) {
+                actions.push({
+                  key: 'repaired',
+                  label: 'Marcar como reparada',
+                  icon: Wrench,
+                  onSelect: () => onMarkRepaired(tire),
+                });
+              }
+              if (canUpdate) actions.push({ key: 'edit', label: 'Editar', icon: Pencil, onSelect: () => onEdit(tire) });
+              if (canDelete) {
+                actions.push({
+                  key: 'delete',
+                  label: 'Eliminar',
+                  icon: Trash2,
+                  destructive: true,
+                  onSelect: () => onDelete(tire),
+                });
+              }
+              return <RowActionsMenu label={`Acciones de la cubierta ${tire.serial_number}`} actions={actions} />;
+            },
             enableSorting: false,
             enableHiding: false,
             meta: { title: '', excludeFromExport: true },

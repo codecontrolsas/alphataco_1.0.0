@@ -15,10 +15,8 @@ import { sanitizeFilters, dateRangeKeys } from '@/shared/lib/table-filters';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { cache } from 'react';
-import { visibleEquipmentTypeCondition } from '../../shared/maintenance-resource';
-import { getHiddenEquipmentTypeIds } from '../../utils/equipmentTypeVisibility';
-import { getSupervisorFilterInfo } from '../../utils/supervisorFilter';
+import { isRequestAttentionKey, requestAttentionCondition } from './request-attention';
+import { requestScopeConditions, resolveRequestListScope, type RequestListScope } from './request-scope';
 
 const logger = new Logger('SolicitudesMantenimiento/actionsTableServer');
 
@@ -34,15 +32,6 @@ async function assertCanViewRequests() {
     throw new Error('No tenés permiso para ver las solicitudes de mantenimiento');
   }
 }
-
-/**
- * Memoiza getSupervisorFilterInfo dentro del mismo request del servidor.
- * NO se exporta — solo se usa internamente en este módulo. Evita que
- * getMaintenanceRequestsPaginated / getAllMaintenanceRequestsForExport /
- * getMaintenanceRequestSingleFacet repitan las 2 queries de permisos cada una
- * cuando se resuelven en el mismo request (ej: SSR inicial de la página).
- */
-const getCachedSupervisorFilterInfo = cache(getSupervisorFilterInfo);
 
 // Columnas de texto filtrable (usan "contains" insensitive)
 const TEXT_COLUMNS = ['kilometer', 'engine_hours'];
@@ -65,6 +54,8 @@ const ALLOWED_FILTER_KEYS = new Set<string>([
   ...TEXT_COLUMNS,
   ...dateRangeKeys(DATE_COLUMNS),
   'fileNumber',
+  // Filtro virtual: lo escriben la banda y las métricas de atención (ver `request-attention.ts`).
+  'attention',
 ]);
 
 // Campos válidos para ordenamiento (deben existir en el modelo Prisma)
@@ -92,29 +83,96 @@ const VEHICLE_SELECT = {
   intern_number: true,
 } as const;
 
+// Para la celda "Equipo" de la tabla: suma el tipo (subtítulo de la patente).
+const VEHICLE_LIST_SELECT = {
+  ...VEHICLE_SELECT,
+  type_vehicles_typeTotype: { select: { name: true } },
+} as const;
+
 const OTHER_EQUIPMENT_SELECT = {
   id: true,
   intern_number: true,
   serial_number: true,
   type: { select: { name: true } },
+  sub_type: { select: { name: true } },
 } as const;
 
 /**
- * Construye el where base. Todo va dentro de un único AND con la empresa y el estado fijos primero:
- * ningún filtro de la URL puede pisar la empresa ni el estado.
- * Recibe filterInfo pre-cargado para evitar múltiples llamadas a getSupervisorFilterInfo.
+ * Columnas que lee la tabla (y su export). Una sola definición para que el listado y el export no diverjan.
+ * `checklist_deviations.is_critical` alimenta "N crítico(s)" de la celda Desvíos; el legajo del supervisor
+ * sale de su empleado vinculado (`profile.employees`).
  */
-function buildWhereClause(
-  companyId: string,
-  rawState: ReturnType<typeof parseSearchParams>,
-  filterInfo: Awaited<ReturnType<typeof getSupervisorFilterInfo>>,
-  hiddenTypeIds: readonly string[]
-) {
+const REQUEST_LIST_SELECT = {
+  id: true,
+  status: true,
+  created_at: true,
+  source: true,
+  preventive_type: true,
+  kilometer: true,
+  engine_hours: true,
+  supervisor_id: true,
+  rejection_reason: true,
+  vehicles: { select: VEHICLE_LIST_SELECT },
+  other_equipment: { select: OTHER_EQUIPMENT_SELECT },
+  employees: {
+    select: {
+      id: true,
+      firstname: true,
+      lastname: true,
+      file: true,
+    },
+  },
+  driver_employee: {
+    select: {
+      id: true,
+      firstname: true,
+      lastname: true,
+      file: true,
+    },
+  },
+  profile_maintenance_requests_supervisor_idToprofile: {
+    select: {
+      id: true,
+      fullname: true,
+      employees: { select: { file: true } },
+    },
+  },
+  checklist_answers: {
+    select: {
+      id: true,
+      answer_data: true,
+    },
+  },
+  maintenance_request_items: {
+    select: {
+      id: true,
+      status: true,
+      checklist_deviations: { select: { is_critical: true } },
+    },
+  },
+  maintenance_orders: {
+    select: {
+      id: true,
+      status: true,
+      scheduled_date: true,
+    },
+    orderBy: { created_at: 'desc' },
+    take: 1,
+  },
+} as const;
+
+/**
+ * Construye el where base. Todo va dentro de un único AND con el perímetro (empresa, estado fijo, tipos
+ * ocultos, supervisor) primero: ningún filtro de la URL puede pisar la empresa ni el estado.
+ * Recibe el perímetro ya resuelto para no repetir las consultas de permisos en cada función.
+ * El perímetro y la condición de `attention` son los MISMOS que usan las métricas y el contador del pipeline.
+ */
+function buildWhereClause(rawState: ReturnType<typeof parseSearchParams>, scope: RequestListScope) {
   const state = sanitizeFilters(rawState, ALLOWED_FILTER_KEYS);
 
   // Filtros facetados
   const filtersWhere = buildFiltersWhere(state.filters, COLUMN_MAP, {
-    exclude: [...TEXT_COLUMNS, ...DATE_COLUMNS, 'fileNumber'],
+    exclude: [...TEXT_COLUMNS, ...DATE_COLUMNS, 'fileNumber', 'attention'],
   });
 
   // Filtros de texto (kilometer, engine_hours — "contains" insensitive)
@@ -125,18 +183,22 @@ function buildWhereClause(
     created_at: 'created_at',
   });
 
-  // Búsqueda global: dominio / interno del equipo, nombre y legajo del chofer
+  // Búsqueda global: dominio / serie / N° interno del equipo (vehículo o equipamiento, ticket 596),
+  // nombre y legajo del chofer. Va dentro del AND: es un OR y no puede pisar al perímetro.
   const search = state.search?.trim();
-  const searchCondition = search
+  const contains = search ? { contains: search, mode: 'insensitive' as const } : null;
+  const searchCondition = contains
     ? {
         OR: [
-          { vehicles: { domain: { contains: search, mode: 'insensitive' as const } } },
-          { vehicles: { intern_number: { contains: search, mode: 'insensitive' as const } } },
-          { driver_employee: { lastname: { contains: search, mode: 'insensitive' as const } } },
-          { driver_employee: { firstname: { contains: search, mode: 'insensitive' as const } } },
-          { driver_employee: { file: { contains: search, mode: 'insensitive' as const } } },
-          { employees: { lastname: { contains: search, mode: 'insensitive' as const } } },
-          { employees: { firstname: { contains: search, mode: 'insensitive' as const } } },
+          { vehicles: { OR: [{ domain: contains }, { serie: contains }, { intern_number: contains }] } },
+          { other_equipment: { OR: [{ serial_number: contains }, { intern_number: contains }] } },
+          { other_equipment: { type: { name: contains } } },
+          { other_equipment: { sub_type: { name: contains } } },
+          { driver_employee: { lastname: contains } },
+          { driver_employee: { firstname: contains } },
+          { driver_employee: { file: contains } },
+          { employees: { lastname: contains } },
+          { employees: { firstname: contains } },
         ],
       }
     : null;
@@ -149,26 +211,19 @@ function buildWhereClause(
     ? { OR: [{ driver_employee: { file: fileNumberValue } }, { employees: { file: fileNumberValue } }] }
     : null;
 
-  // Tipos de equipamiento ocultos para el usuario actual (ticket 690).
-  const equipmentCondition = visibleEquipmentTypeCondition(hiddenTypeIds);
+  // Filtro virtual de atención (banda y métricas): una sola clave válida, el resto se descarta.
+  const attentionValue = state.filters.attention?.[0];
+  const attentionCondition = isRequestAttentionKey(attentionValue) ? requestAttentionCondition(attentionValue) : null;
 
   const conditions: Record<string, unknown>[] = [
-    { company_id: companyId },
-    // Solo solicitudes pendientes de aprobación (paso "Validar Solicitud").
-    // Las rechazadas se limpian de este listado: quedan como registro histórico
-    // en el legajo del equipo, tab "Historial de Mantenimiento".
-    { status: 'pending_approval' },
+    ...requestScopeConditions(scope),
     filtersWhere,
     textFiltersWhere,
     dateFiltersWhere,
   ];
   if (searchCondition) conditions.push(searchCondition);
   if (fileNumberCondition) conditions.push(fileNumberCondition);
-  if (equipmentCondition) conditions.push(equipmentCondition);
-
-  // Sin perfil resuelto no se puede saber si ve todo: no ve nada (antes quedaba sin restricción).
-  if (!filterInfo) conditions.push({ id: { in: [] } });
-  else if (filterInfo.shouldFilterBySupervisor) conditions.push({ supervisor_id: filterInfo.userId });
+  if (attentionCondition) conditions.push(attentionCondition);
 
   return { AND: conditions };
 }
@@ -187,11 +242,8 @@ export async function getMaintenanceRequestsPaginated(searchParams: DataTableSea
     const state = parseSearchParams(searchParams);
     const { skip, take } = clampedPageParams(state);
 
-    const [filterInfo, hiddenTypeIds] = await Promise.all([
-      getCachedSupervisorFilterInfo(),
-      getHiddenEquipmentTypeIds(),
-    ]);
-    const where = buildWhereClause(companyId, state, filterInfo, hiddenTypeIds);
+    const scope = await resolveRequestListScope(companyId);
+    const where = buildWhereClause(state, scope);
 
     // Resolver ordenamiento con validación y soporte de FK/relaciones derivadas
     const resolvedSorts: Record<string, unknown>[] = [];
@@ -212,62 +264,7 @@ export async function getMaintenanceRequestsPaginated(searchParams: DataTableSea
         skip,
         take,
         orderBy,
-        select: {
-          id: true,
-          status: true,
-          created_at: true,
-          source: true,
-          preventive_type: true,
-          kilometer: true,
-          engine_hours: true,
-          supervisor_id: true,
-          rejection_reason: true,
-          vehicles: { select: VEHICLE_SELECT },
-          other_equipment: { select: OTHER_EQUIPMENT_SELECT },
-          employees: {
-            select: {
-              id: true,
-              firstname: true,
-              lastname: true,
-              file: true,
-            },
-          },
-          driver_employee: {
-            select: {
-              id: true,
-              firstname: true,
-              lastname: true,
-              file: true,
-            },
-          },
-          profile_maintenance_requests_supervisor_idToprofile: {
-            select: {
-              id: true,
-              fullname: true,
-            },
-          },
-          checklist_answers: {
-            select: {
-              id: true,
-              answer_data: true,
-            },
-          },
-          maintenance_request_items: {
-            select: {
-              id: true,
-              status: true,
-            },
-          },
-          maintenance_orders: {
-            select: {
-              id: true,
-              status: true,
-              scheduled_date: true,
-            },
-            orderBy: { created_at: 'desc' },
-            take: 1,
-          },
-        },
+        select: REQUEST_LIST_SELECT,
       }),
       prisma.maintenance_requests.count({ where }),
     ]);
@@ -295,72 +292,14 @@ export async function getAllMaintenanceRequestsForExport(
 
   try {
     const state = parseSearchParams(searchParams);
-    const [filterInfo, hiddenTypeIds] = await Promise.all([
-      getCachedSupervisorFilterInfo(),
-      getHiddenEquipmentTypeIds(),
-    ]);
-    const where = buildWhereClause(companyId, state, filterInfo, hiddenTypeIds);
+    const scope = await resolveRequestListScope(companyId);
+    const where = buildWhereClause(state, scope);
 
     const data = await prisma.maintenance_requests.findMany({
       where,
       orderBy: { created_at: 'desc' },
       take: EXPORT_MAX_ROWS + 1,
-      select: {
-        id: true,
-        status: true,
-        created_at: true,
-        source: true,
-        preventive_type: true,
-        kilometer: true,
-        engine_hours: true,
-        rejection_reason: true,
-        supervisor_id: true,
-        vehicles: { select: VEHICLE_SELECT },
-        other_equipment: { select: OTHER_EQUIPMENT_SELECT },
-        employees: {
-          select: {
-            id: true,
-            firstname: true,
-            lastname: true,
-            file: true,
-          },
-        },
-        driver_employee: {
-          select: {
-            id: true,
-            firstname: true,
-            lastname: true,
-            file: true,
-          },
-        },
-        profile_maintenance_requests_supervisor_idToprofile: {
-          select: {
-            id: true,
-            fullname: true,
-          },
-        },
-        checklist_answers: {
-          select: {
-            id: true,
-            answer_data: true,
-          },
-        },
-        maintenance_request_items: {
-          select: {
-            id: true,
-            status: true,
-          },
-        },
-        maintenance_orders: {
-          select: {
-            id: true,
-            status: true,
-            scheduled_date: true,
-          },
-          orderBy: { created_at: 'desc' },
-          take: 1,
-        },
-      },
+      select: REQUEST_LIST_SELECT,
     });
 
     if (data.length > EXPORT_MAX_ROWS) {
@@ -395,13 +334,10 @@ export async function getMaintenanceRequestSingleFacet(
 
   try {
     const state = parseSearchParams(searchParams || {});
-    const [filterInfo, hiddenTypeIds] = await Promise.all([
-      getCachedSupervisorFilterInfo(),
-      getHiddenEquipmentTypeIds(),
-    ]);
+    const scope = await resolveRequestListScope(companyId);
 
     function crossWhere(excludeColumn: string) {
-      return buildWhereClause(companyId, withoutOwnFilter(state, excludeColumn), filterInfo, hiddenTypeIds);
+      return buildWhereClause(withoutOwnFilter(state, excludeColumn), scope);
     }
 
     const where = crossWhere(columnId);

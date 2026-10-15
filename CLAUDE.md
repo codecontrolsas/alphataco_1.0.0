@@ -2,6 +2,12 @@
 
 **IDIOMA**: SIEMPRE comunicarte, planificar, comentar y documentar en **espanol**.
 
+> **REDISEÑO EN CURSO — leer `docs/rediseno/README.md` primero.** El objetivo es que alphataco (fork de GH Gestión) NO se parezca a GH:
+> rediseño estructural completo + refactor + responsive, módulo por módulo. El modelo de trabajo (skill `/dev`, comando `/rediseno`,
+> reglas del usuario, agentes, verificación, trampas) está en `docs/rediseno/` y `.claude/commands/`. **Superpowers está prohibido**
+> (ignorar la tabla "Skills (Superpowers)" de más abajo): usar `/dev`. No commitear sin pedido explícito; commits de una línea sin
+> atribución a IA; sin tests nuevos hasta el OK del usuario.
+
 ## Project Overview
 
 Sistema de gestion integral para Grupo Horizonte (GH). Administra empleados, equipos, documentacion, operaciones (partes diarios), mantenimiento de vehiculos, formularios, y modulo comercial. Multi-empresa con RLS en Supabase.

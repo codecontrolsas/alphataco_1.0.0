@@ -8,9 +8,10 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatDateAr } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { CircleOff } from 'lucide-react';
-import moment from 'moment';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { DESTINATION_TYPE_LABELS } from '../../../../lib/labels';
 import { WAREHOUSE_QUERY_KEYS } from '../../../../lib/query-keys';
 import { STOCK_DESTINATION_TYPES, type StockDestinationTypeValue } from '../../../../schemas/stock-movement';
@@ -26,6 +27,7 @@ interface Props {
   permissionsMap: Record<string, boolean>;
   initialColumnVisibility?: Record<string, boolean>;
   initialFilterVisibility?: Record<string, boolean>;
+  topSlot?: ReactNode;
 }
 
 const DEFAULT_VISIBLE_FILTERS = ['destination_type', 'holder', 'since'];
@@ -40,6 +42,7 @@ export function _LoansDataTable({
   permissionsMap,
   initialColumnVisibility,
   initialFilterVisibility,
+  topSlot,
 }: Props) {
   const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
   const handleStateChange = useCallback((params: DataTableSearchParams) => setCurrentParams(params), []);
@@ -100,12 +103,12 @@ export function _LoansDataTable({
 
   const exportConfig: DataTableExportConfig<LoanListItem> = useMemo(
     () => ({
-      fetchAllData: () => getAllLoansForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllLoansForExport(currentParams)),
       options: { filename: 'prestamos', title: 'Préstamos abiertos', sheetName: 'Préstamos' },
       formatters: {
         destination_type: (value) =>
           value ? (DESTINATION_TYPE_LABELS[value as StockDestinationTypeValue] ?? String(value)) : '',
-        since: (value) => (value ? moment.utc(value as string).format('DD/MM/YYYY') : ''),
+        since: (value) => (value ? formatDateAr(value as string) : ''),
         days: (value) => (value == null || value === '' ? '' : String(value)),
       },
     }),
@@ -113,7 +116,9 @@ export function _LoansDataTable({
   );
 
   return (
-    <DataTable
+    <>
+      {topSlot}
+      <DataTable
       columns={columns}
       data={data}
       totalRows={totalRows}
@@ -131,6 +136,7 @@ export function _LoansDataTable({
       emptyMessage="No hay préstamos abiertos"
       exportConfig={exportConfig}
       data-testid="warehouse-loans-table"
-    />
+      />
+    </>
   );
 }

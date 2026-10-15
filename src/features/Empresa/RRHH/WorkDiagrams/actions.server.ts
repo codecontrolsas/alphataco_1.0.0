@@ -10,9 +10,20 @@ import {
   parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
+import { fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { workDiagramCreateSchema, workDiagramUpdateSchema } from '../../lib/catalog-input-schemas';
+import {
+  CATALOG_EXPORT_MAX_ROWS,
+  buildIsActiveWhere,
+  catalogExportFailure,
+  catalogTooLargeMessage,
+} from '../../lib/catalog-table.server';
+import { requireConfigTabPermission } from '../../lib/config-access.server';
 
 // ============================================================================
 // LOGGER
@@ -24,34 +35,68 @@ const logger = new Logger('features/Empresa/RRHH/WorkDiagrams');
 // VALID SORT FIELDS — solo campos reales de BD
 // ============================================================================
 
+const LIST_SELECT = {
+  id: true,
+  name: true,
+  is_active: true,
+  active_working_days: true,
+  inactive_working_days: true,
+  inactive_novelty: true,
+  created_at: true,
+  diagram_type: {
+    select: { id: true, name: true },
+  },
+  work_diagram_active_novelties: {
+    select: {
+      id: true,
+      diagram_type: {
+        select: { id: true, name: true },
+      },
+    },
+  },
+} as const;
+
+/** Decimal → number para que sea compatible con las props Server→Client. */
+function serializeDiagram<
+  Row extends {
+    active_working_days: { toString(): string } | null;
+    inactive_working_days: { toString(): string } | null;
+  },
+>(item: Row) {
+  return {
+    ...item,
+    active_working_days: item.active_working_days !== null ? Number(item.active_working_days) : null,
+    inactive_working_days: item.inactive_working_days !== null ? Number(item.inactive_working_days) : null,
+  };
+}
+
 const VALID_SORT_FIELDS = new Set(['name', 'is_active', 'created_at', 'active_working_days', 'inactive_working_days']);
 
 // ============================================================================
 // WHERE BUILDER — DRY helper compartido por paginated, export y facets
 // ============================================================================
 
-function buildWhereClause(state: ReturnType<typeof parseSearchParams>) {
+/** Claves de filtro que esta tabla realmente usa; el resto de la URL se descarta antes de armar el where. */
+const ALLOWED_FILTER_KEYS = new Set([
+  'is_active',
+  'inactive_novelty',
+  'active_novelties',
+  'name',
+  'active_working_days',
+  'inactive_working_days',
+  ...dateRangeKeys(['created_at']),
+]);
+
+function parseState(searchParams: DataTableSearchParams | undefined) {
+  return sanitizeFilters(parseSearchParams(searchParams ?? {}), ALLOWED_FILTER_KEYS);
+}
+
+function buildWhereClause(state: ReturnType<typeof parseState>) {
   // Búsqueda global sobre nombre
   const searchWhere = buildSearchWhere(state.search, ['name']);
 
-  // is_active es Boolean? (nullable) — viene como string 'true'/'false'/NULL_FILTER_VALUE desde URL
-  // Manejado manualmente porque buildFiltersWhere es para enums/FK string, no booleanos
-  const isActiveValues = state.filters['is_active'];
-  const isActiveFilter: Record<string, unknown> = {};
-  if (isActiveValues?.length === 1) {
-    if (isActiveValues[0] === NULL_FILTER_VALUE) {
-      isActiveFilter.is_active = null;
-    } else {
-      isActiveFilter.is_active = isActiveValues[0] === 'true';
-    }
-  } else if (isActiveValues && isActiveValues.length > 1) {
-    const conditions: Array<{ is_active: boolean | null }> = [];
-    for (const v of isActiveValues) {
-      if (v === NULL_FILTER_VALUE) conditions.push({ is_active: null });
-      else conditions.push({ is_active: v === 'true' });
-    }
-    isActiveFilter.OR = conditions;
-  }
+  // is_active (booleano nullable): 'true' / 'false' / NULL_FILTER_VALUE
+  const isActiveFilter = buildIsActiveWhere(state.filters['is_active']);
 
   // Filtro FK UUID: inactive_novelty (diagram_type)
   const inactiveNoveltyValues = state.filters['inactive_novelty'];
@@ -75,28 +120,41 @@ function buildWhereClause(state: ReturnType<typeof parseSearchParams>) {
   const activeNoveltiesValues = state.filters['active_novelties'];
   const activeNoveltiesFilter: Record<string, unknown> = {};
   if (activeNoveltiesValues?.length) {
-    activeNoveltiesFilter.work_diagram_active_novelties = {
-      some: {
-        diagram_type_id: { in: activeNoveltiesValues },
-      },
-    };
+    const realIds = activeNoveltiesValues.filter((v) => v !== NULL_FILTER_VALUE);
+    const hasNull = activeNoveltiesValues.includes(NULL_FILTER_VALUE);
+    if (hasNull && realIds.length > 0) {
+      activeNoveltiesFilter.OR = [
+        { work_diagram_active_novelties: { some: { diagram_type_id: { in: realIds } } } },
+        { work_diagram_active_novelties: { none: {} } },
+      ];
+    } else if (hasNull) {
+      activeNoveltiesFilter.work_diagram_active_novelties = { none: {} };
+    } else {
+      activeNoveltiesFilter.work_diagram_active_novelties = { some: { diagram_type_id: { in: realIds } } };
+    }
   }
 
   // Filtros de texto libre por columna individual
-  const textFiltersWhere = buildTextFiltersWhere(state.filters, [
-    'name',
-    'active_working_days',
-    'inactive_working_days',
-  ]);
+  const textFiltersWhere = buildTextFiltersWhere(state.filters, ['name']);
+
+  // Días de trabajo/descanso: columnas Decimal, no admiten `contains` — se filtra por igualdad numérica
+  const numericFilters: Record<string, unknown> = {};
+  for (const column of ['active_working_days', 'inactive_working_days'] as const) {
+    const raw = state.filters[column]?.[0]?.trim().replace(',', '.');
+    if (raw) {
+      const parsed = Number(raw);
+      // Un texto que no es número no puede coincidir con ninguna fila: se fuerza a "sin resultados"
+      numericFilters[column] = Number.isFinite(parsed) ? parsed : { in: [] };
+    }
+  }
 
   // Filtros de rango de fecha
   const dateFiltersWhere = buildDateRangeFiltersWhere(state.filters, ['created_at']);
 
   return {
-    ...searchWhere,
-    ...isActiveFilter,
-    ...inactiveNoveltyFilter,
-    ...activeNoveltiesFilter,
+    // Varios filtros pueden traer un OR (búsqueda, estado, novedades): van en AND para que no se pisen.
+    AND: [searchWhere, isActiveFilter, inactiveNoveltyFilter, activeNoveltiesFilter],
+    ...numericFilters,
     ...textFiltersWhere,
     ...dateFiltersWhere,
   };
@@ -107,8 +165,9 @@ function buildWhereClause(state: ReturnType<typeof parseSearchParams>) {
 // ============================================================================
 
 export async function getWorkDiagramsPaginated(searchParams: DataTableSearchParams) {
+  await requireConfigTabPermission('listado', 'view');
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseState(searchParams);
     const { skip, take } = stateToPrismaParams(state);
 
     const where = withCompany(buildWhereClause(state), await getActiveCompanyId());
@@ -129,38 +188,12 @@ export async function getWorkDiagramsPaginated(searchParams: DataTableSearchPara
         take,
         orderBy: safeOrderBy,
         where,
-        select: {
-          id: true,
-          name: true,
-          is_active: true,
-          active_working_days: true,
-          inactive_working_days: true,
-          inactive_novelty: true,
-          created_at: true,
-          diagram_type: {
-            select: { id: true, name: true },
-          },
-          work_diagram_active_novelties: {
-            select: {
-              id: true,
-              diagram_type: {
-                select: { id: true, name: true },
-              },
-            },
-          },
-        },
+        select: LIST_SELECT,
       }),
       prisma.work_diagram.count({ where }),
     ]);
 
-    // Serializar Decimal → number para que sea compatible con Server→Client props
-    const serializedData = data.map((item) => ({
-      ...item,
-      active_working_days: item.active_working_days !== null ? Number(item.active_working_days) : null,
-      inactive_working_days: item.inactive_working_days !== null ? Number(item.inactive_working_days) : null,
-    }));
-
-    return { data: serializedData, total };
+    return { data: data.map(serializeDiagram), total };
   } catch (error) {
     logger.error('Error al obtener diagramas de trabajo', { data: { error } });
     throw new Error('No se pudo obtener la lista. Intente nuevamente.');
@@ -171,10 +204,14 @@ export async function getWorkDiagramsPaginated(searchParams: DataTableSearchPara
 // EXPORT COMPLETO — sin skip/take, mismos filtros
 // ============================================================================
 
-export async function getAllWorkDiagramsForExport(searchParams: DataTableSearchParams) {
+export async function getAllWorkDiagramsForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<WorkDiagramListItem[]>> {
+  await requireConfigTabPermission('listado', 'view');
   try {
-    const state = parseSearchParams(searchParams);
-    const where = withCompany(buildWhereClause(state), await getActiveCompanyId());
+    const state = parseState(searchParams);
+    const companyId = await getActiveCompanyId();
+    const where = withCompany(buildWhereClause(state), companyId);
 
     const resolvedSorts: Array<Record<string, unknown>> = [];
     for (const s of state.sorting) {
@@ -182,41 +219,24 @@ export async function getAllWorkDiagramsForExport(searchParams: DataTableSearchP
         resolvedSorts.push({ [s.id]: s.desc ? 'desc' : 'asc' });
       }
     }
-    const safeOrderBy = [{ is_active: 'desc' as const }, ...resolvedSorts, { name: 'asc' as const }];
+    const safeOrderBy = [
+      { is_active: 'desc' as const },
+      ...resolvedSorts,
+      { name: 'asc' as const },
+      { id: 'asc' as const },
+    ];
 
-    const rawData = await prisma.work_diagram.findMany({
-      where,
-      orderBy: safeOrderBy,
-      select: {
-        id: true,
-        name: true,
-        is_active: true,
-        active_working_days: true,
-        inactive_working_days: true,
-        inactive_novelty: true,
-        created_at: true,
-        diagram_type: {
-          select: { id: true, name: true },
-        },
-        work_diagram_active_novelties: {
-          select: {
-            id: true,
-            diagram_type: {
-              select: { id: true, name: true },
-            },
-          },
-        },
-      },
+    const rows = await fetchExportRowsInBatches({
+      maxRows: CATALOG_EXPORT_MAX_ROWS,
+      listIds: (take) => prisma.work_diagram.findMany({ where, orderBy: safeOrderBy, select: { id: true }, take }),
+      fetchByIds: (ids) =>
+        prisma.work_diagram.findMany({ where: { id: { in: ids }, company_id: companyId }, select: LIST_SELECT }),
+      tooLargeMessage: catalogTooLargeMessage('diagramas de trabajo'),
     });
-
-    return rawData.map((item) => ({
-      ...item,
-      active_working_days: item.active_working_days !== null ? Number(item.active_working_days) : null,
-      inactive_working_days: item.inactive_working_days !== null ? Number(item.inactive_working_days) : null,
-    }));
+    return { ok: true, data: rows.map(serializeDiagram) };
   } catch (error) {
     logger.error('Error al exportar diagramas de trabajo', { data: { error } });
-    throw new Error('No se pudo exportar la lista. Intente nuevamente.');
+    return catalogExportFailure(error, 'la lista de diagramas de trabajo');
   }
 }
 
@@ -232,8 +252,9 @@ export async function getWorkDiagramSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
 ): Promise<FacetResult | null> {
+  await requireConfigTabPermission('listado', 'view');
   try {
-    const state = searchParams ? parseSearchParams(searchParams) : parseSearchParams({});
+    const state = parseState(searchParams);
 
     // crossWhere: aplica todos los filtros EXCEPTO el de la columna propia
     const crossState = {
@@ -291,7 +312,7 @@ export async function getWorkDiagramSingleFacet(
         const diagramTypes =
           ids.length > 0
             ? await prisma.diagram_type.findMany({
-                where: { id: { in: ids } },
+                where: withCompany({ id: { in: ids } }, await getActiveCompanyId()),
                 select: { id: true, name: true },
                 orderBy: { name: 'asc' },
               })
@@ -329,7 +350,7 @@ export async function getWorkDiagramSingleFacet(
         const diagramTypes =
           ids.length > 0
             ? await prisma.diagram_type.findMany({
-                where: { id: { in: ids } },
+                where: withCompany({ id: { in: ids } }, await getActiveCompanyId()),
                 select: { id: true, name: true },
                 orderBy: { name: 'asc' },
               })
@@ -339,6 +360,14 @@ export async function getWorkDiagramSingleFacet(
           value: dt.id,
           label: dt.name ?? '—',
         }));
+
+        // Diagramas sin ninguna novedad activa
+        const withoutNovelties = await prisma.work_diagram.count({
+          where: { AND: [crossWhere, { work_diagram_active_novelties: { none: {} } }] },
+        });
+        if (withoutNovelties > 0) {
+          counts.set(NULL_FILTER_VALUE, withoutNovelties);
+        }
 
         return { options, counts };
       }
@@ -390,9 +419,9 @@ export type WorkDiagramInput = {
 };
 
 /** Los días son `Decimal` en Prisma: se serializan a number para cruzar a Client Components. */
-function serializeWorkDiagram<
-  T extends { active_working_days: unknown; inactive_working_days: unknown },
->(row: T): Omit<T, 'active_working_days' | 'inactive_working_days'> & {
+function serializeWorkDiagram<T extends { active_working_days: unknown; inactive_working_days: unknown }>(
+  row: T
+): Omit<T, 'active_working_days' | 'inactive_working_days'> & {
   active_working_days: number | null;
   inactive_working_days: number | null;
 } {
@@ -425,6 +454,8 @@ async function assertDiagramTypesOwned(companyId: string, ids: string[]): Promis
 }
 
 export async function createWorkDiagramPrisma(input: WorkDiagramInput) {
+  await requireConfigTabPermission('listado', 'create');
+  input = workDiagramCreateSchema.parse(input);
   try {
     const companyId = await getActiveCompanyId();
     const inactiveNovelty = input.inactive_novelty || null;
@@ -455,6 +486,8 @@ export async function createWorkDiagramPrisma(input: WorkDiagramInput) {
 }
 
 export async function updateWorkDiagramPrisma(input: WorkDiagramInput & { id: string }) {
+  await requireConfigTabPermission('listado', 'update');
+  input = workDiagramUpdateSchema.parse(input);
   try {
     const companyId = await getActiveCompanyId();
     // Perímetro sin RLS: sólo se edita un diagrama de la empresa activa.

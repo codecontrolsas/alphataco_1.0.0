@@ -1,4 +1,3 @@
-import { Skeleton } from '@/components/ui/skeleton';
 import { EquiposConDesviosTabContent } from '@/features/Mantenimiento/EquiposConDesvios';
 import { EquipmentsWithDeviationsSkeleton } from '@/features/Mantenimiento/EquiposConDesvios/fallback';
 import GomeriaTabContent from '@/features/Mantenimiento/Gomeria/GomeriaTabContent';
@@ -7,6 +6,8 @@ import { WorkshopSectorsSkeleton, WorkshopViewTabContent } from '@/features/Mant
 import { SectionManagerServer } from '@/features/TabsManager';
 import { AlertTriangle, Building2, CircleDot, ClipboardList, Plus, Warehouse } from 'lucide-react';
 import { Suspense } from 'react';
+import { GomeriaSkeleton } from './Gomeria/fallback/GomeriaSkeleton';
+import { SectionCounter } from './shared/components/SectionCounter';
 import { OperacionesPipelineContent } from './Pipeline/OperacionesPipeline/OperacionesPipelineContent';
 import { OperacionesPipelineSkeleton } from './Pipeline/OperacionesPipeline/fallback/OperacionesPipelineSkeleton';
 import { TallerPipelineContent } from './Pipeline/TallerPipeline/TallerPipelineContent';
@@ -34,6 +35,7 @@ export default async function MantenimientoComponent({ searchParams, permissions
       searchParams={searchParams}
       defaultTab="maint_operaciones"
       permissions={permissions}
+      sectionNav
       tabs={[
         // ============================================
         // TAB: OPERACIONES (Pipeline visual)
@@ -48,6 +50,11 @@ export default async function MantenimientoComponent({ searchParams, permissions
           ),
           moduleSlug: 'mantenimiento',
           tabSlug: 'maint_operaciones',
+          navCounter: (
+            <Suspense fallback={null}>
+              <SectionCounter section="operaciones" label="Solicitudes por validar" />
+            </Suspense>
+          ),
           content: (
             <Suspense fallback={<OperacionesPipelineSkeleton />}>
               <OperacionesPipelineContent searchParams={searchParams} permissions={permissions} />
@@ -86,6 +93,11 @@ export default async function MantenimientoComponent({ searchParams, permissions
           ),
           moduleSlug: 'mantenimiento',
           tabSlug: 'maint_taller',
+          navCounter: (
+            <Suspense fallback={null}>
+              <SectionCounter section="taller" label="Pedidos en el circuito de taller" />
+            </Suspense>
+          ),
           content: (
             <Suspense fallback={<TallerPipelineSkeleton />}>
               <TallerPipelineContent searchParams={searchParams} permissions={permissions} />
@@ -124,6 +136,11 @@ export default async function MantenimientoComponent({ searchParams, permissions
           ),
           moduleSlug: 'mantenimiento',
           tabSlug: 'equipments_with_deviations',
+          navCounter: (
+            <Suspense fallback={null}>
+              <SectionCounter section="deviations" label="Equipos con desvíos" />
+            </Suspense>
+          ),
           content: (
             <Suspense fallback={<EquipmentsWithDeviationsSkeleton />}>
               <EquiposConDesviosTabContent searchParams={searchParams} />
@@ -143,7 +160,7 @@ export default async function MantenimientoComponent({ searchParams, permissions
           moduleSlug: 'mantenimiento',
           tabSlug: 'gomeria',
           content: (
-            <Suspense fallback={<Skeleton className="h-[400px] w-full rounded-md" />}>
+            <Suspense fallback={<GomeriaSkeleton />}>
               <GomeriaTabContent searchParams={searchParams} permissions={permissions} />
             </Suspense>
           ),

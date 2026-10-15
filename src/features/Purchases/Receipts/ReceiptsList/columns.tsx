@@ -1,34 +1,33 @@
-'use client';
-
 import { Badge } from '@/components/ui/badge';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { StackedCell } from '@/shared/components/common/StackedCell';
+import { formatArgentinaDay, formatDateAr } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Ban, CheckCircle2, type LucideIcon } from 'lucide-react';
-import moment from 'moment';
+import type { LucideIcon } from 'lucide-react';
 import Link from 'next/link';
+import { RECEIPT_STATUS_UI, TONE_TO_BADGE } from '../../lib/status-presentation';
 import type { PurchaseReceiptListItem } from './actions.server';
+import { RECEIPT_STATUS_ACTIVE, RECEIPT_STATUS_CANCELLED } from './constants';
 
-export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['created_at'];
+export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['order', 'created_at', 'creator'];
 
-/** Valores del filtro de estado (derivado de `cancelled_at`). */
-export const RECEIPT_STATUS_ACTIVE = 'active';
-export const RECEIPT_STATUS_CANCELLED = 'cancelled';
-export const RECEIPT_STATUS_LABELS: Record<string, string> = {
-  [RECEIPT_STATUS_ACTIVE]: 'Vigente',
-  [RECEIPT_STATUS_CANCELLED]: 'Anulada',
-};
-export const receiptStatusIcons: Record<string, LucideIcon> = {
-  [RECEIPT_STATUS_ACTIVE]: CheckCircle2,
-  [RECEIPT_STATUS_CANCELLED]: Ban,
-};
+/** Etiquetas e íconos del estado (derivado de `cancelled_at`): salen de `lib/status-presentation.ts`. */
+export const RECEIPT_STATUS_LABELS: Record<string, string> = Object.fromEntries(
+  Object.entries(RECEIPT_STATUS_UI).map(([value, ui]) => [value, ui.label])
+);
+export const receiptStatusIcons: Record<string, LucideIcon> = Object.fromEntries(
+  Object.entries(RECEIPT_STATUS_UI).map(([value, ui]) => [value, ui.icon])
+);
 
 export const NO_WAREHOUSE_LABEL = 'Sin depósito (servicios)';
 
 const statusOf = (row: PurchaseReceiptListItem) => (row.cancelled ? RECEIPT_STATUS_CANCELLED : RECEIPT_STATUS_ACTIVE);
-const formatDateTime = (value: Date | string | null) => (value ? moment(value).format('DD/MM/YYYY') : '-');
-/** Columnas DATE (sin hora): se leen en UTC para no correr un dia. */
-const formatDateOnly = (value: Date | string | null) => (value ? moment.utc(value).format('DD/MM/YYYY') : '-');
+/** Timestamps: dia en hora argentina, igual en el servidor y en cualquier navegador. */
+const formatDateTime = (value: Date | string | null) => (value ? formatArgentinaDay(value) : '-');
+/** Columnas DATE (sin hora): llegan como medianoche UTC, se leen como fecha para no correr un dia. */
+const formatDateOnly = (value: Date | string | null) =>
+  value ? formatDateAr(new Date(value).toISOString().slice(0, 10)) : '-';
 
 export function getColumns(): ColumnDef<PurchaseReceiptListItem>[] {
   return [
@@ -40,7 +39,7 @@ export function getColumns(): ColumnDef<PurchaseReceiptListItem>[] {
       cell: ({ row }) => (
         <Link
           href={`/dashboard/purchases/receipts/${row.original.id}`}
-          className="font-mono text-sm font-medium text-blue-600 hover:underline"
+          className="font-mono text-sm font-medium text-brand-ink hover:underline"
         >
           {row.original.number}
         </Link>
@@ -61,7 +60,7 @@ export function getColumns(): ColumnDef<PurchaseReceiptListItem>[] {
       cell: ({ row }) => (
         <Link
           href={`/dashboard/purchases/orders/${row.original.order.id}`}
-          className="font-mono text-sm text-blue-600 hover:underline"
+          className="font-mono text-sm text-brand-ink hover:underline"
         >
           {row.original.order.number}
         </Link>
@@ -74,12 +73,25 @@ export function getColumns(): ColumnDef<PurchaseReceiptListItem>[] {
       meta: { title: 'Proveedor' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Proveedor" />,
       cell: ({ row }) => (
-        <Link
-          href={`/dashboard/purchases/suppliers/${row.original.supplier.id}`}
-          className="text-blue-600 hover:underline"
-        >
-          {row.original.supplier.name}
-        </Link>
+        <StackedCell
+          maxWidthClass="max-w-[260px]"
+          primary={
+            <Link
+              href={`/dashboard/purchases/suppliers/${row.original.supplier.id}`}
+              className="text-brand-ink hover:underline"
+            >
+              {row.original.supplier.name}
+            </Link>
+          }
+          secondary={
+            <>
+              OC{' '}
+              <Link href={`/dashboard/purchases/orders/${row.original.order.id}`} className="text-brand-ink font-mono hover:underline">
+                {row.original.order.number}
+              </Link>
+            </>
+          }
+        />
       ),
       filterFn: (row, _id, value: string[]) => value.includes(row.original.supplier.id),
     },
@@ -113,17 +125,12 @@ export function getColumns(): ColumnDef<PurchaseReceiptListItem>[] {
       meta: { title: 'Estado' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
       cell: ({ row }) => {
-        const status = statusOf(row.original);
-        const Icon = receiptStatusIcons[status];
-        return status === RECEIPT_STATUS_CANCELLED ? (
-          <Badge variant="destructive" className="gap-1">
-            <Icon className="h-3 w-3" />
-            {RECEIPT_STATUS_LABELS[status]}
-          </Badge>
-        ) : (
-          <Badge className="gap-1 bg-green-600 text-white">
-            <Icon className="h-3 w-3" />
-            {RECEIPT_STATUS_LABELS[status]}
+        const ui = RECEIPT_STATUS_UI[statusOf(row.original)];
+        const Icon = ui.icon;
+        return (
+          <Badge variant={TONE_TO_BADGE[ui.tone]} className="gap-1 whitespace-nowrap">
+            <Icon className="h-3 w-3" aria-hidden="true" />
+            {ui.label}
           </Badge>
         );
       },
@@ -137,12 +144,12 @@ export function getColumns(): ColumnDef<PurchaseReceiptListItem>[] {
       enableSorting: false,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Solicitudes de origen" />,
       cell: ({ row }) => (
-        <div className="flex flex-wrap gap-x-2">
+        <div className="flex max-w-[220px] flex-wrap gap-x-2">
           {row.original.requests.map((r) => (
             <Link
               key={r.id}
               href={`/dashboard/purchases/requests/${r.id}`}
-              className="font-mono text-sm text-blue-600 hover:underline"
+              className="font-mono text-sm text-brand-ink hover:underline"
             >
               {r.number}
             </Link>

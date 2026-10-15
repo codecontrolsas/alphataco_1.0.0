@@ -17,6 +17,7 @@ import {
   tireStatusLabels,
   tireTreadTypeLabels,
 } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
+import { TIRE_STATUS_UI } from '@/features/Mantenimiento/Gomeria/shared/tire-status-presentation';
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { TireRetreadLevel, TireStatus, TireTreadType } from '@/generated/prisma/enums';
@@ -43,7 +44,7 @@ import { deleteTire, updateTireStatus } from '../actions/tire-mutations.server';
 import { TireBulkForm } from './TireBulkForm';
 import { TireForm } from './TireForm';
 import { TireReturnDialog } from './TireReturnDialog';
-import { getColumns, getTireWarehouseLabel } from './columns';
+import { TIRE_HIDDEN_COLUMNS_BY_DEFAULT, getColumns, getTireWarehouseLabel } from './columns';
 
 // ============================================================================
 // TYPES
@@ -53,7 +54,10 @@ interface TiresDataTableProps {
   data: TireListItem[];
   totalRows: number;
   searchParams: DataTableSearchParams;
+  /** Clave de las preferencias guardadas de la tabla (`-v2`). */
   tableId: string;
+  /** Prefijo de los params de la URL de la tabla (no cambia con el rediseño). */
+  paramNamespace: string;
   permissionsMap: Record<string, boolean>;
   initialColumnVisibility?: Record<string, boolean>;
   initialFilterVisibility?: Record<string, boolean>;
@@ -62,6 +66,10 @@ interface TiresDataTableProps {
 // ============================================================================
 // DEFAULT VISIBLE FILTERS
 // ============================================================================
+
+const STATUS_ICONS: Record<string, LucideIcon> = Object.fromEntries(
+  Object.entries(TIRE_STATUS_UI).map(([status, ui]) => [status, ui.icon])
+);
 
 const DEFAULT_VISIBLE_FILTERS = ['status', 'brand_id', 'tread_type'];
 
@@ -87,6 +95,7 @@ export default function _TiresDataTable({
   totalRows,
   searchParams,
   tableId,
+  paramNamespace,
   permissionsMap,
   initialColumnVisibility,
   initialFilterVisibility,
@@ -167,6 +176,15 @@ export default function _TiresDataTable({
     [permissions, handleMarkAvailable, canViewPrices]
   );
 
+  // ─── Column visibility: las preferencias guardadas ganan; sin ellas, las atómicas arrancan ocultas ──
+  const mergedColumnVisibility = useMemo(
+    () =>
+      initialColumnVisibility && Object.keys(initialColumnVisibility).length > 0
+        ? initialColumnVisibility
+        : TIRE_HIDDEN_COLUMNS_BY_DEFAULT,
+    [initialColumnVisibility]
+  );
+
   // ─── Filter visibility ────────────────────────────────────────────────────
   const mergedFilterVisibility = useMemo(() => {
     if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
@@ -208,7 +226,7 @@ export default function _TiresDataTable({
       {
         columnId: 'status',
         title: 'Estado',
-        fetchFacet: makeEnumFetchFacet('status', Object.values(TireStatus), tireStatusLabels),
+        fetchFacet: makeEnumFetchFacet('status', Object.values(TireStatus), tireStatusLabels, STATUS_ICONS),
       },
 
       // ── Brand (FK UUID) ────────────────────────────────────────────────────
@@ -313,17 +331,18 @@ export default function _TiresDataTable({
         totalRows={totalRows}
         searchParams={searchParams}
         tableId={tableId}
-        paramNamespace={tableId}
+        paramNamespace={paramNamespace}
         facetedFilters={facetedFilters}
-        initialColumnVisibility={initialColumnVisibility}
+        initialColumnVisibility={mergedColumnVisibility}
         initialFilterVisibility={mergedFilterVisibility}
         toolbarActions={toolbarActions}
         showFilterToggle
         queryFn={tableQueryFn}
         queryKey={['tires-catalog']}
         onStateChange={handleStateChange}
-        emptyMessage="No hay cubiertas registradas"
-        searchPlaceholder="Buscar por número o medida..."
+        mobileCards
+        emptyMessage="No hay cubiertas para mostrar. Si hay filtros aplicados, quitalos; si no, se muestran las cubiertas a medida que se dan de alta."
+        searchPlaceholder="Buscar por número..."
         exportConfig={{
           fetchAllData: async () => unwrapExportResult(await getTiresForExport(currentParams)),
           options: {

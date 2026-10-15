@@ -96,10 +96,17 @@ function MensureUnitsTable({ units, setSelectedUnit, setMode, savedVisibility, s
                   setMode('edit');
                 }}
                 title="Editar unidad"
+                aria-label="Editar unidad"
               >
                 <PencilIcon className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => setUnitToDelete(unit)} title="Eliminar unidad">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setUnitToDelete(unit)}
+                title="Eliminar unidad"
+                aria-label="Eliminar unidad"
+              >
                 <TrashIcon className="h-4 w-4" />
               </Button>
             </div>

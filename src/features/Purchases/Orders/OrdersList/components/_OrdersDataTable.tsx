@@ -10,8 +10,9 @@ import {
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { CircleOff, FileText, Truck, User } from 'lucide-react';
-import moment from 'moment';
-import { useCallback, useMemo, useState } from 'react';
+import { formatArgentinaDateTime, formatDateAr } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import {
   PURCHASE_ORDER_STATUS_LABELS,
   PURCHASE_ORDER_STATUSES,
@@ -32,6 +33,8 @@ interface Props {
   totalRows: number;
   searchParams: DataTableSearchParams;
   tableId: string;
+  /** Bandas de atención resueltas en el servidor; se muestran sobre la tabla. */
+  topSlot?: ReactNode;
   initialColumnVisibility?: Record<string, boolean>;
   initialFilterVisibility?: Record<string, boolean>;
 }
@@ -45,6 +48,7 @@ export function _OrdersDataTable({
   totalRows,
   searchParams,
   tableId,
+  topSlot,
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
@@ -146,13 +150,14 @@ export function _OrdersDataTable({
 
   const exportConfig: DataTableExportConfig<PurchaseOrderListItem> = useMemo(
     () => ({
-      fetchAllData: () => getAllPurchaseOrdersForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllPurchaseOrdersForExport(currentParams)),
       options: { filename: 'ordenes-de-compra', title: 'Órdenes de compra', sheetName: 'Órdenes' },
       formatters: {
         status: (value) => PURCHASE_ORDER_STATUS_LABELS[value as PurchaseOrderStatus] ?? String(value),
-        created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : ''),
-        delivery_date: (value) => (value ? moment.utc(value as string | Date).format('DD/MM/YYYY') : ''),
-        sent_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : ''),
+        created_at: (value) => (value ? formatArgentinaDateTime(value as string | Date) : ''),
+        delivery_date: (value) =>
+          value ? formatDateAr(new Date(value as string | Date).toISOString().slice(0, 10)) : '',
+        sent_at: (value) => (value ? formatArgentinaDateTime(value as string | Date) : ''),
         total: (value) => formatMoney(value == null ? null : String(value)),
       },
     }),
@@ -160,7 +165,9 @@ export function _OrdersDataTable({
   );
 
   return (
-    <DataTable
+    <div className="space-y-4">
+      {topSlot}
+      <DataTable
       columns={columns}
       data={data}
       totalRows={totalRows}
@@ -178,6 +185,7 @@ export function _OrdersDataTable({
       emptyMessage="No hay órdenes de compra"
       exportConfig={exportConfig}
       data-testid="purchase-orders-table"
-    />
+      />
+    </div>
   );
 }

@@ -12,7 +12,7 @@ import { getCustomerStatement } from '../lib/customer-statement';
 import { COLLECTABLE_CBTE_TYPES, isCollectable } from '../lib/receipt-rules';
 import { invoiceBalanceSql, invoiceBalances } from '../lib/receivables';
 import { TreasuryError } from '../lib/treasury-errors';
-import { DATE_RE } from '../schemas/shared';
+import { isCalendarDay } from '../schemas/shared';
 import { localToday } from './shared';
 
 /**
@@ -25,10 +25,13 @@ const logger = new Logger('features/Treasury/customer-statement');
 
 const canView = () => checkPermissionServer('tesoreria', 'cobranzas', 'view');
 
+/** Buscar clientes lo hacen también quienes cargan cheques (carga inicial): ya veían el catálogo en ese formulario. */
+const canSearchCustomers = async () => (await canView()) || (await checkPermissionServer('tesoreria', 'cheques', 'create'));
+
 /** Cuenta corriente del cliente entre `from` y `to` (null si no existe o sin permiso). */
 export async function getCustomerStatementData(customerId: string, from: string, to: string) {
   if (!(await canView())) return null;
-  if (!UUID_RE.test(customerId) || !DATE_RE.test(from) || !DATE_RE.test(to)) return null;
+  if (!UUID_RE.test(customerId) || !isCalendarDay(from) || !isCalendarDay(to)) return null;
   const companyId = await getActiveCompanyId();
   try {
     return { from, to, ...(await getCustomerStatement(prisma, companyId, customerId, from, to)) };
@@ -44,9 +47,10 @@ export type CustomerStatementData = NonNullable<Awaited<ReturnType<typeof getCus
 /**
  * Clientes para los selectores de Cobranzas: por razón social o CUIT (prefijo de 3 a 11 dígitos).
  * `activeOnly` para un recibo nuevo; la cuenta corriente busca también los dados de baja.
+ * Cada resultado trae además `name` y `cuit` por separado (para precargar al librador de un cheque).
  */
 export async function searchCollectionCustomers(query: string, activeOnly = true) {
-  if (!(await canView())) return { items: [], total: 0 };
+  if (!(await canSearchCustomers())) return { items: [], total: 0 };
   const companyId = await getActiveCompanyId();
   const term = query.trim();
   const digits = term.replace(/\D/g, '');
@@ -73,6 +77,8 @@ export async function searchCollectionCustomers(query: string, activeOnly = true
       id: c.id,
       label: `${c.name} · CUIT ${c.cuit.toString()}${c.is_active === false ? ' (inactivo)' : ''}`,
       email: c.client_email,
+      name: c.name,
+      cuit: c.cuit.toString(),
     })),
     total,
   };

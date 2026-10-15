@@ -1,8 +1,17 @@
 import 'server-only';
 
+import type { Prisma } from '@/generated/prisma/client';
 import { argentinaDate } from '@/features/Jobs/lib/dates';
 import { dateColumnToYmd, daysBetween } from './batch-expiry';
 import { DESTINATION_SELECT, destinationLabel } from './labels';
+
+/**
+ * Filtro de prestamos abiertos de una empresa: unidades `OUT`, sin las cubiertas (se desmontan desde
+ * Gomeria). Lo comparten la lista de Prestamos y el contador de la sub-navegacion.
+ */
+export function openLoansWhere(companyId: string): Prisma.material_unitsWhereInput {
+  return { company_id: companyId, status: 'OUT', material: { tire_combination: null } };
+}
 
 /**
  * Un prestamo abierto es una unidad serializada en estado `OUT` (spec etapa 2 §4.1). Esta es la

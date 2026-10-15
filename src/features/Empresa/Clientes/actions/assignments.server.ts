@@ -1,6 +1,7 @@
 'use server';
 
 import { refreshDocumentStatus } from '@/features/Documentacion/shared/compliance/server/document-status.server';
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { Logger } from '@/lib/logger';
 import { withActor } from '@/shared/lib/actor';
 import { prisma } from '@/shared/lib/prisma';
@@ -8,6 +9,7 @@ import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { syncAllocatedTo } from '../lib/allocated-to';
 import { resolveAssignmentChanges, type AssignmentChanges, type AssignmentUpdateResult } from '../lib/assignment-diff';
+import { requireComercialPermission } from '../lib/require-permission.server';
 
 const logger = new Logger('features/Empresa/Clientes/assignments');
 
@@ -50,6 +52,9 @@ async function requireActor(): Promise<string> {
  * pantalla (que puede estar a medio cargar).
  */
 export async function getCustomerEmployeeAssignments(customerId: string): Promise<string[]> {
+  if (!(await checkPermissionServer('comercial', 'empleados-cliente', 'view'))) {
+    throw new Error('No tenés permiso para ver las afectaciones de empleados');
+  }
   const companyId = await getActiveCompanyId();
   try {
     const rows = await prisma.contractor_employee.findMany({
@@ -65,6 +70,9 @@ export async function getCustomerEmployeeAssignments(customerId: string): Promis
 
 /** Afectaciones vigentes de equipos para un cliente. */
 export async function getCustomerEquipmentAssignments(customerId: string): Promise<string[]> {
+  if (!(await checkPermissionServer('comercial', 'equipos-cliente', 'view'))) {
+    throw new Error('No tenés permiso para ver las afectaciones de equipos');
+  }
   const companyId = await getActiveCompanyId();
   try {
     const rows = await prisma.contractor_equipment.findMany({
@@ -86,6 +94,8 @@ export async function updateCustomerEmployeeAssignments(
   customerId: string,
   changes: AssignmentChanges
 ): Promise<AssignmentUpdateResult> {
+  const permissionError = await requireComercialPermission('empleados-cliente', 'update');
+  if (permissionError) return { success: false, error: permissionError };
   try {
     const { toAdd, toRemove } = resolveAssignmentChanges(changes);
     if (toAdd.length === 0 && toRemove.length === 0) {
@@ -157,6 +167,8 @@ export async function updateCustomerEquipmentAssignments(
   customerId: string,
   changes: AssignmentChanges
 ): Promise<AssignmentUpdateResult> {
+  const permissionError = await requireComercialPermission('equipos-cliente', 'update');
+  if (permissionError) return { success: false, error: permissionError };
   try {
     const { toAdd, toRemove } = resolveAssignmentChanges(changes);
     if (toAdd.length === 0 && toRemove.length === 0) {

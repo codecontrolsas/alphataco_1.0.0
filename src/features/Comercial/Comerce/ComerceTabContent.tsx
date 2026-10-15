@@ -1,14 +1,15 @@
 import { Skeleton } from '@/components/ui/skeleton';
 import CertificacionesTabContent from '@/features/Comercial/Certificaciones/CertificacionesTabContent';
+import { CertificationsTableSkeleton } from '@/features/Comercial/Certificaciones/fallback/CertificationsTableSkeleton';
 import DailyReportWrapper from '@/features/Comercial/Comerce/components/DailyReportWrapper';
 import DataCustomersWrapper from '@/features/Comercial/Comerce/components/DataCustomersWrapper';
 import MensureUnitsWrapper from '@/features/Comercial/Comerce/components/MensureUnitsWrapper';
 import ServiceComponentWrapper from '@/features/Comercial/Comerce/components/ServiceComponentWrapper';
+import { DailyReportsSkeleton } from '@/features/Comercial/Comerce/fallback/DailyReportsSkeleton';
 import FacturacionTabContent from '@/features/Comercial/Facturacion/FacturacionTabContent';
 import { InvoicesTableSkeleton } from '@/features/Comercial/Facturacion/fallback/InvoicesTableSkeleton';
 import ReglasPrecioTabContent from '@/features/Comercial/ReglasPrecio/ReglasPrecioTabContent';
-import { CertificationTableSkeleton } from '@/features/Operaciones/Certificacion/list/fallback/CertificationTableSkeleton';
-import { TabsManagerServer } from '@/features/TabsManager';
+import { SectionManagerServer } from '@/features/TabsManager';
 import { ClipboardList, FileSpreadsheet, FileText, Receipt, Ruler, TrendingUp, Users } from 'lucide-react';
 import { Suspense } from 'react';
 
@@ -20,7 +21,7 @@ export default function ComerceTabContent({
   permissions: Record<string, boolean>;
 }) {
   return (
-    <TabsManagerServer
+    <SectionManagerServer
       paramName="subtab"
       searchParams={searchParams}
       defaultTab="customers"
@@ -38,7 +39,7 @@ export default function ComerceTabContent({
           tabSlug: 'customers',
           content: (
             <Suspense fallback={<Skeleton className="h-[400px] w-full rounded-md" />}>
-              <DataCustomersWrapper />
+              <DataCustomersWrapper searchParams={searchParams} permissions={permissions} />
             </Suspense>
           ),
         },
@@ -101,8 +102,8 @@ export default function ComerceTabContent({
           moduleSlug: 'comercial',
           tabSlug: 'certificaciones',
           content: (
-            <Suspense fallback={<Skeleton className="h-[400px] w-full rounded-md" />}>
-              <CertificacionesTabContent />
+            <Suspense fallback={<CertificationsTableSkeleton />}>
+              <CertificacionesTabContent searchParams={searchParams} />
             </Suspense>
           ),
         },
@@ -133,7 +134,7 @@ export default function ComerceTabContent({
           moduleSlug: 'comercial',
           tabSlug: 'daily_reports',
           content: (
-            <Suspense fallback={<CertificationTableSkeleton />}>
+            <Suspense fallback={<DailyReportsSkeleton />}>
               <DailyReportWrapper searchParams={searchParams} />
             </Suspense>
           ),

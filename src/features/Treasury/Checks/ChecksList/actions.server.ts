@@ -5,6 +5,8 @@ import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { NULL_FILTER_VALUE, parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import moment from 'moment';
@@ -19,6 +21,7 @@ import {
   safePaging,
   textValue,
 } from '../../lib/filter-values';
+import { isoDay } from '../../lib/dates';
 import { treasuryToday } from '../../lib/today';
 import { CHECK_KIND_VALUES, CHECK_STATUS_VALUES } from './constants';
 
@@ -42,6 +45,9 @@ const SORT_MAP: Record<string, (dir: 'asc' | 'desc') => CheckOrderBy[]> = {
   deposit_deadline: (dir) => [{ payment_date: dir }],
   destination: (dir) => [{ bank_account: { name: dir } }, { supplier: { name: dir } }],
 };
+
+/** Tope de filas por export. */
+const EXPORT_LIMIT = 10_000;
 
 const DATE_RANGE_COLUMNS = ['issue_date', 'payment_date'];
 const TEXT_COLUMNS = ['number', 'bank', 'drawer_name', 'drawer_cuit'] as const;
@@ -150,7 +156,7 @@ function shape(rows: Prisma.third_party_checksGetPayload<{ select: typeof CHECK_
   const today = treasuryToday();
   return rows.map((r) => {
     // Fechas @db.Date: el dia tal cual, sin correr zona horaria
-    const paymentDate = r.payment_date.toISOString().slice(0, 10);
+    const paymentDate = isoDay(r.payment_date);
     const warning: DepositWarning = r.status === 'IN_PORTFOLIO' ? depositWarning(paymentDate, today) : 'OK';
     return {
       id: r.id,
@@ -160,7 +166,7 @@ function shape(rows: Prisma.third_party_checksGetPayload<{ select: typeof CHECK_
       drawerName: r.drawer_name,
       drawerCuit: r.drawer_cuit,
       amount: r.amount.toString(),
-      issueDate: r.issue_date.toISOString().slice(0, 10),
+      issueDate: isoDay(r.issue_date),
       paymentDate,
       depositDeadline: depositDeadline(paymentDate),
       depositWarning: warning,
@@ -210,22 +216,30 @@ export async function getChecksPaginated(searchParams: DataTableSearchParams) {
 // EXPORT (sin paginacion)
 // ============================================================================
 
-export async function getAllChecksForExport(searchParams: DataTableSearchParams) {
+export async function getAllChecksForExport(searchParams: DataTableSearchParams): Promise<ExportResult<CheckListItem[]>> {
   const companyId = await resolveCompanyId();
-  if (!companyId) return [];
+  if (!companyId) return { ok: false, message: 'No tiene permiso para exportar los cheques.' };
 
   try {
     const state = parseSearchParams(searchParams);
     const where = buildWhereClause(companyId, state);
-    const rows = await prisma.third_party_checks.findMany({
-      where,
-      orderBy: [{ payment_date: 'asc' }, { number: 'asc' }, { id: 'asc' }],
-      select: CHECK_SELECT,
+    const orderBy: CheckOrderBy[] = [{ payment_date: 'asc' }, { number: 'asc' }, { id: 'asc' }];
+
+    const rows = await fetchExportRowsInBatches({
+      maxRows: EXPORT_LIMIT,
+      listIds: (take) => prisma.third_party_checks.findMany({ where, orderBy, select: { id: true }, take }),
+      fetchByIds: (ids) => prisma.third_party_checks.findMany({ where: { id: { in: ids }, company_id: companyId }, select: CHECK_SELECT }),
+      tooLargeMessage: (maxRows) =>
+        `Hay más de ${maxRows.toLocaleString('es-AR')} cheques con los filtros actuales. Acote la exportación con filtros.`,
     });
-    return shape(rows);
+    return { ok: true, data: shape(rows) };
   } catch (error) {
     logger.error('Error al exportar cheques', { data: { error } });
-    throw new Error('No se pudo exportar la lista de cheques');
+    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en producción.
+    return {
+      ok: false,
+      message: error instanceof ExportTooLargeError ? error.message : 'No se pudo exportar la lista de cheques. Intente nuevamente.',
+    };
   }
 }
 

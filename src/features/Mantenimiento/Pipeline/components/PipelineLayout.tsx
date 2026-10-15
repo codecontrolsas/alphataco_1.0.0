@@ -1,9 +1,11 @@
 'use client';
 
+import { SectionErrorBoundary } from '@/shared/components/common/SectionErrorBoundary';
+import { useQuery } from '@tanstack/react-query';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import type { PipelineCounts, PipelineStep } from '../types';
-import { WorkflowPipelineChevrons } from './WorkflowPipelineChevrons';
+import { PipelineSteps } from '../../shared/components/PipelineSteps';
+import type { PipelineStep, PipelineSummary } from '../types';
 
 /**
  * Prefijos de parámetros de URL relacionados con tablas paginadas.
@@ -20,9 +22,19 @@ export interface PipelineStepEntry {
   content: ReactNode;
 }
 
+/** Contadores y atención de la cabecera: se hidratan con lo que calculó el servidor y se refrescan solos. */
+export interface PipelineSummaryQuery {
+  queryKey: readonly unknown[];
+  queryFn: () => Promise<PipelineSummary>;
+  initialData: PipelineSummary;
+}
+
+/** Los contadores se consideran frescos 30 s; `invalidateAllMaintenanceQueries` (prefijo `['maintenance']`) los fuerza. */
+const SUMMARY_STALE_TIME_MS = 30_000;
+
 interface PipelineLayoutProps {
   steps: PipelineStep[];
-  counts: PipelineCounts;
+  summaryQuery: PipelineSummaryQuery;
   initialStep: string;
   paramName: string;
   stepContents: PipelineStepEntry[];
@@ -37,9 +49,16 @@ interface PipelineLayoutProps {
  * - replaceState para actualizar la URL sin navegación Next.js
  * - TODOS los pasos se renderizan simultáneamente, show/hide con CSS
  */
-export function PipelineLayout({ steps, counts, initialStep, paramName, stepContents }: PipelineLayoutProps) {
+export function PipelineLayout({ steps, summaryQuery, initialStep, paramName, stepContents }: PipelineLayoutProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { data: summary } = useQuery({
+    queryKey: summaryQuery.queryKey,
+    // Arrow: React Query le pasa un contexto (con un AbortSignal) que no se puede serializar hacia la server action.
+    queryFn: () => summaryQuery.queryFn(),
+    initialData: summaryQuery.initialData,
+    staleTime: SUMMARY_STALE_TIME_MS,
+  });
   // Leer la URL actual al montar (fuente de verdad), no el prop del servidor que puede
   // estar stale si el componente se desmontó/remontó por cambio de tab (Radix TabsContent).
   const [activeStep, setActiveStep] = useState(() => {
@@ -81,15 +100,24 @@ export function PipelineLayout({ steps, counts, initialStep, paramName, stepCont
   );
 
   return (
-    // pt-4: los chevrones quedaban pegados a la barra de tabs (Radix no deja gap
+    // pt-4: los pasos quedaban pegados a la barra de tabs (Radix no deja gap
     // entre TabsList y TabsContent). El pt-4 respeta el mismo ritmo que el
     // gap-4 del TabsManager en el resto del dashboard.
     <div className="pt-4 space-y-6">
-      <WorkflowPipelineChevrons steps={steps} counts={counts} activeStep={activeStep} onStepClick={handleStepClick} />
+      <PipelineSteps
+        steps={steps}
+        counts={summary.counts}
+        attention={summary.attention}
+        activeStep={activeStep}
+        onStepClick={handleStepClick}
+      />
 
       {stepContents.map(({ id, content }) => (
         <div key={id} className={activeStep === id ? undefined : 'hidden'}>
-          {content}
+          {/* Un error de render en un paso no tumba a los demás. */}
+          <SectionErrorBoundary title={`No se pudo mostrar el paso "${steps.find((s) => s.id === id)?.label ?? id}"`}>
+            {content}
+          </SectionErrorBoundary>
         </div>
       ))}
     </div>

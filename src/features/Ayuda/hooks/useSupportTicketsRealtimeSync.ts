@@ -1,14 +1,14 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { MY_TICKETS_WITH_UNREAD_QUERY_KEY } from './useMyTicketsWithUnread';
-import { MY_TICKETS_PAGE_QUERY_KEY } from './useMyTicketsPage';
-import { APPROVER_TICKETS_QUERY_KEY } from './useApproverTickets';
-import { TICKET_TIMELINE_QUERY_KEY } from './useTicketTimeline';
-import { TICKET_DETAIL_QUERY_PREFIX } from './useTicketDetail';
-import type { TaskAppRealtimeEvent } from '@/shared/lib/taskapp/types';
 import { Logger } from '@/lib/logger';
+import type { TaskAppRealtimeEvent } from '@/shared/lib/taskapp/types';
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { MY_TICKETS_PAGE_QUERY_KEY } from './queryKeys';
+import { APPROVER_TICKETS_QUERY_KEY } from './useApproverTickets';
+import { MY_TICKETS_WITH_UNREAD_QUERY_KEY } from './useMyTicketsWithUnread';
+import { TICKET_DETAIL_QUERY_PREFIX } from './useTicketDetail';
+import { TICKET_TIMELINE_QUERY_KEY } from './useTicketTimeline';
 
 const logger = new Logger('features/Ayuda/realtime-sync');
 
@@ -28,11 +28,7 @@ export function useSupportTicketsRealtimeSync() {
     source.onmessage = (msg) => {
       try {
         const event = JSON.parse(msg.data) as TaskAppRealtimeEvent;
-        if (
-          event.type === 'ticket.created' ||
-          event.type === 'ticket.updated' ||
-          event.type === 'comment.created'
-        ) {
+        if (event.type === 'ticket.created' || event.type === 'ticket.updated' || event.type === 'comment.created') {
           queryClient.invalidateQueries({ queryKey: MY_TICKETS_WITH_UNREAD_QUERY_KEY });
           queryClient.invalidateQueries({ queryKey: MY_TICKETS_PAGE_QUERY_KEY });
           queryClient.invalidateQueries({ queryKey: APPROVER_TICKETS_QUERY_KEY });

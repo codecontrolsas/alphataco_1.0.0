@@ -5,7 +5,7 @@ import type { PurchaseRequestStatus } from '@/features/Purchases/lib/request-sta
 import { ShoppingCart } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import moment from 'moment';
+import { formatArgentinaDateTime, formatDateAr } from '@/shared/lib/argentina-time';
 import Link from 'next/link';
 import type { MaterialRequestDetail } from '../../actions/requests.server';
 import { formatMoney, formatQuantity } from '../../lib/format';
@@ -33,21 +33,16 @@ export interface RequestPurchases {
 /** Estados en los que el pedido espera entregas: ahi tiene sentido comprar lo que falta. */
 const AWAITING_DELIVERY = new Set(['APPROVED', 'PARTIALLY_DELIVERED']);
 
-/** Detalle del pedido: cabecera, lineas con lo entregado y pendiente, sus entregas y sus compras. */
-export function RequestDetail({ request, purchases }: { request: MaterialRequestDetail; purchases: RequestPurchases }) {
+/**
+ * Cuerpo del detalle (datos del pedido, materiales, entregas y compras). Lo comparten la pagina de detalle
+ * y el panel lateral de la lista, que ponen su propia cabecera con el numero, el estado y las acciones.
+ */
+export function RequestDetailBody({ request, purchases }: { request: MaterialRequestDetail; purchases: RequestPurchases }) {
   const canGeneratePurchase = purchases.canCreate && AWAITING_DELIVERY.has(request.status);
-  const at = (iso: string) => moment(iso).format('DD/MM/YYYY HH:mm');
+  const at = formatArgentinaDateTime;
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="font-mono text-2xl font-semibold">{request.number}</h1>
-        <RequestStatusBadge status={request.status} />
-        <div className="ml-auto">
-          <RequestActions request={request} />
-        </div>
-      </div>
-
       <Card>
         <CardContent className="pt-6">
           <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -95,6 +90,7 @@ export function RequestDetail({ request, purchases }: { request: MaterialRequest
           <CardTitle className="text-base">Materiales</CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -125,6 +121,7 @@ export function RequestDetail({ request, purchases }: { request: MaterialRequest
               ))}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 
@@ -143,7 +140,7 @@ export function RequestDetail({ request, purchases }: { request: MaterialRequest
                     {d.number}
                   </Link>
                   <span className="text-muted-foreground">
-                    {moment(d.occurredOn).format('DD/MM/YYYY')} · {d.warehouse}
+                    {formatDateAr(d.occurredOn)} · {d.warehouse}
                   </span>
                   {d.isReversal && <Badge variant="outline">Anulación</Badge>}
                   {d.reversedBy && <Badge variant="destructive">Anulada por {d.reversedBy}</Badge>}
@@ -187,6 +184,22 @@ export function RequestDetail({ request, purchases }: { request: MaterialRequest
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+/** Detalle del pedido en su propia pagina: cabecera con numero, estado y acciones + el cuerpo. */
+export function RequestDetail({ request, purchases }: { request: MaterialRequestDetail; purchases: RequestPurchases }) {
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="font-mono text-2xl font-semibold">{request.number}</h1>
+        <RequestStatusBadge status={request.status} />
+        <div className="ml-auto">
+          <RequestActions request={request} />
+        </div>
+      </div>
+      <RequestDetailBody request={request} purchases={purchases} />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { createTabVisibilityChecker } from '@/features/Permissions/lib/tab-visibility';
 import type { ModuleSlug } from '@/features/Permissions/permissions-map';
+import { SectionNav } from './components/SectionNav';
 import type { SectionManagerServerProps } from './types';
 
 /**
@@ -25,6 +26,7 @@ export async function SectionManagerServer<M extends ModuleSlug = ModuleSlug>({
   searchParams,
   permissions,
   actions,
+  sectionNav = false,
 }: SectionManagerServerProps<M>) {
   const resolvedSearchParams = await searchParams;
 
@@ -62,6 +64,15 @@ export async function SectionManagerServer<M extends ModuleSlug = ModuleSlug>({
           {!activeTab.hideTitle && <h1 className="text-2xl font-semibold tracking-tight">{activeTab.label}</h1>}
           {actions && <div className="flex items-center gap-2">{actions}</div>}
         </div>
+      )}
+
+      {sectionNav && visibleTabs.length > 1 && (
+        <SectionNav
+          paramName={paramName}
+          activeValue={activeTab.value}
+          ariaLabel="Secciones"
+          items={visibleTabs.map((tab) => ({ value: tab.value, label: tab.label, counter: tab.navCounter }))}
+        />
       )}
 
       {activeTab.content}

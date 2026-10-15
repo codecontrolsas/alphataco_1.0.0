@@ -1,57 +1,69 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import type { VisibilityState } from '@tanstack/react-table';
-import { useMemo } from 'react';
-import type { AreaRow } from '../../actions/areas.server';
-import type { MeasureUnitRow } from '../../actions/measure-units.server';
-import type { SectorRow } from '../../actions/sectors.server';
-import type { CustomerServiceRow } from '../../actions/services.server';
-import type { CustomerRow } from '../../lib/serializers';
+import { getCustomerContractsData } from '../../actions/customer-detail.server';
+import { CustomersTableSkeleton } from '../../fallback/CustomersTableSkeleton';
+import { customerTabKey } from '../../lib/query-keys';
 import ServiceTable from '../Services/ServiceTable';
+import { QueryErrorState } from './QueryErrorState';
 
-interface CustomerContractsTabProps {
-  customer: CustomerRow;
-  services: CustomerServiceRow[];
-  areas: AreaRow[];
-  sectors: SectorRow[];
-  measureUnits: MeasureUnitRow[];
-  savedFilters: string[];
-  savedVisibility: VisibilityState;
-  savedItemsFilters: string[];
-  savedItemsVisibility: VisibilityState;
+/**
+ * @deprecated Las tablas de contratos e ítems leen sus preferencias de la base (`useTablePreferences`), ya no
+ * de cookies. Se conserva el tipo solo para no romper a los que todavía lo pasan.
+ */
+export interface ContractsTabPreferences {
+  servicesFilters: string[];
+  servicesVisibility: VisibilityState;
+  serviceItemsFilters: string[];
+  serviceItemsVisibility: VisibilityState;
 }
 
-/** Pestaña "Contratos": los contratos del cliente seleccionado (hereda permisos de comercial/service). */
-export function CustomerContractsTab({
-  customer,
-  services,
-  areas,
-  sectors,
-  measureUnits,
-  savedFilters,
-  savedVisibility,
-  savedItemsFilters,
-  savedItemsVisibility,
-}: CustomerContractsTabProps) {
-  const customerServices = useMemo(
-    () => services.filter((service) => service.customer_id === customer.id),
-    [services, customer.id]
-  );
+interface CustomerContractsTabProps {
+  customer: { id: string; name: string };
+  /** @deprecated No se usa: ver `ContractsTabPreferences`. */
+  preferences?: ContractsTabPreferences;
+}
 
-  return (
-    <div className="p-6 rounded-lg border">
-      <h3 className="text-xl font-semibold mb-6">Contratos del Cliente</h3>
+/**
+ * Pestaña "Contratos": los contratos del cliente seleccionado (hereda permisos de comercial/service).
+ * Pide SUS datos al abrirse: los contratos, áreas y sectores de este cliente y las unidades de medida.
+ */
+export function CustomerContractsTab({ customer }: CustomerContractsTabProps) {
+  const contractsQuery = useQuery({
+    queryKey: customerTabKey(customer.id, 'contracts'),
+    queryFn: () => getCustomerContractsData(customer.id),
+    staleTime: 60 * 1000,
+  });
+
+  let content: React.ReactNode;
+  if (contractsQuery.isError) {
+    content = (
+      <QueryErrorState
+        title="No se pudieron cargar los contratos del cliente"
+        isRetrying={contractsQuery.isFetching}
+        onRetry={() => contractsQuery.refetch()}
+      />
+    );
+  } else if (contractsQuery.isPending) {
+    content = <CustomersTableSkeleton rows={4} />;
+  } else {
+    const { services, areas, sectors, measureUnits } = contractsQuery.data;
+    content = (
       <ServiceTable
-        services={customerServices}
+        services={services}
         customers={[{ id: customer.id, name: customer.name }]}
         areas={areas}
         sectors={sectors}
         measureUnits={measureUnits}
-        savedFilters={savedFilters}
-        savedVisibility={savedVisibility}
-        savedItemsFilters={savedItemsFilters}
-        savedItemsVisibility={savedItemsVisibility}
       />
+    );
+  }
+
+  return (
+    <div className="rounded-lg border p-4 sm:p-6">
+      <h3 className="mb-6 text-xl font-semibold">Contratos del Cliente</h3>
+      {content}
     </div>
   );
 }

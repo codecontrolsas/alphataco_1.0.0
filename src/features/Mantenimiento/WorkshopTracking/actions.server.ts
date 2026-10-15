@@ -29,6 +29,7 @@ import {
   resourceTextCondition,
   scopeConditions,
 } from '../PedidosMantenimiento/lib/order-list-shared';
+import { isTrackingAttentionKey, trackingAttentionCondition } from './attention-conditions';
 import { DEFAULT_TRACKING_STATUSES, WORKSHOP_TRACKING_STATUSES } from './statuses';
 
 const logger = new Logger('WorkshopTracking/actions.server');
@@ -64,6 +65,8 @@ const DATE_RANGE_COLUMNS = ['workshop_entry_date', 'created_at', 'scheduled_date
 /** Lista blanca de filtros: todo lo demás que venga en la URL se descarta. */
 const ALLOWED_FILTERS = new Set([
   'status',
+  // Filtro virtual: lo escriben las tarjetas de antigüedad (ver attention-conditions.ts)
+  'attention',
   'vehicle',
   'condition',
   'description',
@@ -76,7 +79,7 @@ const ALLOWED_FILTERS = new Set([
  * Select común con todas las relaciones resueltas para el tracking.
  *
  * `maintenance_order_items` viaja podado a solo lo que consumen las columnas
- * "Recorrido Sectores" y "Progreso" (y sus equivalentes de export): sin
+ * "Recorrido Sectores" (buildSectorRoute) y "Progreso" (y sus equivalentes de export): sin
  * `is_diagnostico`, sin `order_number`/`status` de `work_orders`, sin
  * `id`/`status` de `work_order_items` y sin `repair_type_id` de las reparaciones
  * — ninguno se lee en `workshopTrackingColumns.tsx`. La auditoría del ticket 673
@@ -101,6 +104,8 @@ const WORKSHOP_TRACKING_SELECT = {
       intern_number: true,
       kilometer: true,
       condition: true,
+      // Subtipo que se muestra bajo la patente en la celda "Equipo"
+      types_of_vehicles: { select: { name: true } },
     },
   },
   other_equipment: {
@@ -109,6 +114,7 @@ const WORKSHOP_TRACKING_SELECT = {
       serial_number: true,
       intern_number: true,
       condition: true,
+      type: { select: { name: true } },
     },
   },
   // Solicitud vinculada (fallback de descripción, origen y tipo preventivo)
@@ -126,8 +132,11 @@ const WORKSHOP_TRACKING_SELECT = {
       id: true,
       assigned_sector_id: true,
       sector_sequence_order: true,
+      // Un ítem rechazado en taller no cuenta como trabajo activo del sector (buildSectorRoute)
+      is_rejected: true,
       workshop_sectors: {
         select: {
+          id: true,
           name: true,
         },
       },
@@ -180,6 +189,9 @@ async function buildWhereClause(
   };
 
   const extra: Record<string, unknown>[] = [statusCondition];
+  // Filtro virtual de las tarjetas de antigüedad: la MISMA condición que las cuenta (metrics.server.ts)
+  const attention = filters.attention?.[0];
+  if (isTrackingAttentionKey(attention)) extra.push(trackingAttentionCondition(attention));
   if (state.search) extra.push(resourceSearchCondition(state.search));
   if (filters.vehicle?.length) extra.push(resourceIdsCondition(filters.vehicle));
   if (filters.condition?.length) extra.push(resourceConditionCondition(filters.condition));

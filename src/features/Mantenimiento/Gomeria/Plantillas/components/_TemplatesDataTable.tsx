@@ -12,21 +12,22 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { DataTable, type DataTableSearchParams } from '@/shared/components/common/DataTable';
-import { Plus } from 'lucide-react';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useQueryClient } from '@tanstack/react-query';
+import { Plus } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { getTemplatesForExport, getTemplatesPaginated, type TemplateListItem } from '../actions/actions.server';
 import { deleteTemplate } from '../actions/template-crud.server';
-import {
-  getTemplatesForExport,
-  getTemplatesPaginated,
-  type TemplateListItem,
-} from '../actions/actions.server';
 import { TemplateAssignDialog } from './TemplateAssignDialog';
 import { TemplateForm } from './TemplateForm';
-import { computePositionCount, getColumns, templateSizesStatusLabels } from './columns';
+import {
+  TEMPLATE_HIDDEN_COLUMNS_BY_DEFAULT,
+  computePositionCount,
+  getColumns,
+  templateSizesStatusLabels,
+} from './columns';
 
 // ============================================================================
 // CONSTANTS
@@ -44,7 +45,10 @@ interface TemplatesDataTableProps {
   data: TemplateListItem[];
   totalRows: number;
   searchParams: DataTableSearchParams;
+  /** Clave de las preferencias guardadas de la tabla (`-v2`). */
   tableId: string;
+  /** Prefijo de los params de la URL de la tabla (no cambia con el rediseño). */
+  paramNamespace: string;
   permissionsMap: Record<string, boolean>;
   initialColumnVisibility?: Record<string, boolean>;
   initialFilterVisibility?: Record<string, boolean>;
@@ -59,6 +63,7 @@ export default function _TemplatesDataTable({
   totalRows,
   searchParams,
   tableId,
+  paramNamespace,
   permissionsMap,
   initialColumnVisibility,
   initialFilterVisibility,
@@ -102,6 +107,15 @@ export default function _TemplatesDataTable({
         (t) => setAssigningTemplate(t)
       ),
     [permissions]
+  );
+
+  // ─── Column visibility: las preferencias guardadas ganan; sin ellas, las atómicas arrancan ocultas ──
+  const mergedColumnVisibility = useMemo(
+    () =>
+      initialColumnVisibility && Object.keys(initialColumnVisibility).length > 0
+        ? initialColumnVisibility
+        : TEMPLATE_HIDDEN_COLUMNS_BY_DEFAULT,
+    [initialColumnVisibility]
   );
 
   // ─── Filter visibility ────────────────────────────────────────────────────
@@ -161,16 +175,17 @@ export default function _TemplatesDataTable({
         totalRows={totalRows}
         searchParams={searchParams}
         tableId={tableId}
-        paramNamespace={tableId}
+        paramNamespace={paramNamespace}
         facetedFilters={facetedFilters}
-        initialColumnVisibility={initialColumnVisibility}
+        initialColumnVisibility={mergedColumnVisibility}
         initialFilterVisibility={mergedFilterVisibility}
         toolbarActions={toolbarActions}
         showFilterToggle
         queryFn={tableQueryFn}
         queryKey={['tire-templates']}
         onStateChange={handleStateChange}
-        emptyMessage="No hay plantillas registradas"
+        mobileCards
+        emptyMessage="No hay plantillas para mostrar. Si hay filtros aplicados, quitalos; si no, se muestran al crear la primera plantilla."
         searchPlaceholder="Buscar por nombre..."
         exportConfig={{
           fetchAllData: async () => unwrapExportResult(await getTemplatesForExport(currentParams)),

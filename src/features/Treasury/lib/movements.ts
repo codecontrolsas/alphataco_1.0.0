@@ -4,6 +4,7 @@ import { AMOUNT_SCALE, formatScaled } from '@/features/Comercial/Facturacion/lib
 import { Prisma } from '@/generated/prisma/client';
 import type { treasury_movement_kind } from '@/generated/prisma/enums';
 import { TreasuryError } from './treasury-errors';
+import { UUID_RE } from '../schemas/shared';
 
 /**
  * Única escritura del libro de movimientos (spec Tesorería etapa 1 §3). La llaman las actions de
@@ -13,7 +14,6 @@ import { TreasuryError } from './treasury-errors';
 
 type MovementsTx = Pick<Prisma.TransactionClient, 'treasury_movements' | 'treasury_accounts' | '$queryRaw'>;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** `YYYY-MM-DD` → Date para una columna `@db.Date` (medianoche UTC, sin corrimiento). */
 export const dateOnly = (value: string) => new Date(`${value}T00:00:00.000Z`);

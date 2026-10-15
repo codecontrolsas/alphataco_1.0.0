@@ -3,10 +3,12 @@
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { StackedCell } from '@/shared/components/common/StackedCell';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { employeeLabel } from '../../../lib/labels';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Check, X, type LucideIcon } from 'lucide-react';
-import moment from 'moment';
 import { DepotRowActions } from '../DepotRowActions';
 import type { DepotListItem } from './actions.server';
 
@@ -59,13 +61,14 @@ export function getColumns({ canUpdate, canDelete }: DepotPermissions): ColumnDe
     },
     {
       id: 'manager',
-      accessorFn: (row) => (row.manager ? `${row.manager.lastname} ${row.manager.firstname}` : ''),
+      accessorFn: (row) => (row.manager ? employeeLabel(row.manager) : ''),
       meta: { title: 'Responsable' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Responsable" />,
       cell: ({ row }) => (
-        <span className={cn(dim(row.original))}>
-          {row.original.manager ? `${row.original.manager.lastname} ${row.original.manager.firstname}` : '-'}
-        </span>
+        <StackedCell
+          className={cn(dim(row.original))}
+          primary={row.original.manager ? employeeLabel(row.original.manager) : '—'}
+        />
       ),
       filterFn: (row, _id, value: string[]) => {
         const id = row.original.manager?.id;
@@ -95,7 +98,7 @@ export function getColumns({ canUpdate, canDelete }: DepotPermissions): ColumnDe
       accessorKey: 'created_at',
       meta: { title: 'Creado' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Creado" />,
-      cell: ({ row }) => <span>{moment(row.original.created_at).format('DD/MM/YYYY')}</span>,
+      cell: ({ row }) => <span className="whitespace-nowrap tabular-nums">{formatArgentinaDay(row.original.created_at)}</span>,
     },
     {
       id: 'actions',

@@ -1,7 +1,9 @@
+import { StateBlock } from '@/shared/components/common/StateBlock';
 import { Suspense } from 'react';
 import { PipelineLayout, type PipelineStepEntry } from '../components/PipelineLayout';
 import type { PipelineStep } from '../types';
-import { getOperacionesPipelineCounts } from './actions/pipeline-counts.server';
+import { getOperacionesPipelineSummary } from './actions/pipeline-summary.server';
+import { getOperacionesSummaryCached } from '../../lib/section-counts';
 
 // TabContent components existentes
 import { SolicitudesMantenimientoTabContent } from '@/features/Mantenimiento/SolicitudesMantenimiento';
@@ -51,16 +53,16 @@ export async function OperacionesPipelineContent({ searchParams, permissions }: 
 
   if (visibleSteps.length === 0) {
     return (
-      <div className="flex items-center justify-center p-8 text-center">
-        <div className="space-y-2">
-          <p className="text-muted-foreground font-medium">Sin acceso</p>
-          <p className="text-muted-foreground text-sm">No tenés permisos para ver ningún paso de Operaciones.</p>
-        </div>
-      </div>
+      <StateBlock
+        variant="noperm"
+        title="Sin acceso"
+        description="No tenés permisos para ver ningún paso de Operaciones."
+      />
     );
   }
 
-  const counts = await getOperacionesPipelineCounts();
+  // Contadores y atención de la cabecera (mismo `where` que cada tabla). Hidratan el cliente, que los refresca solo.
+  const summary = await getOperacionesSummaryCached();
 
   // Determinar paso inicial desde la URL o usar el default
   const rawStep = searchParams[PARAM_NAME];
@@ -95,7 +97,11 @@ export async function OperacionesPipelineContent({ searchParams, permissions }: 
   return (
     <PipelineLayout
       steps={visibleSteps}
-      counts={counts}
+      summaryQuery={{
+        queryKey: ['maintenance', 'pipeline', 'operaciones'],
+        queryFn: getOperacionesPipelineSummary,
+        initialData: summary,
+      }}
       initialStep={initialStep}
       paramName={PARAM_NAME}
       stepContents={stepContents}

@@ -58,6 +58,9 @@ export function TimelineItem({
   const workOrderNumber = metadata?.work_order_number as string | undefined;
   const workOrderSectorName = metadata?.sector_name as string | undefined;
 
+  // El log de una OT habla de estados de OT; el del pedido, de estados de la orden.
+  const statusEntity = entry.source === 'work_order' ? 'workOrder' : 'order';
+
   return (
     <div className="relative flex items-start gap-3 pl-1">
       {/* Línea conectora */}
@@ -92,11 +95,11 @@ export function TimelineItem({
             <Badge variant="outline" className="text-xs inline-flex items-center gap-1">
               {entry.previous_status && entry.previous_status !== entry.new_status && (
                 <>
-                  <span className="text-muted-foreground">{getStatusLabel(entry.previous_status)}</span>
+                  <span className="text-muted-foreground">{getStatusLabel(entry.previous_status, statusEntity)}</span>
                   <ArrowRight className="h-3 w-3 text-muted-foreground" />
                 </>
               )}
-              {getStatusLabel(entry.new_status)}
+              {getStatusLabel(entry.new_status, statusEntity)}
             </Badge>
           )}
         </div>

@@ -1,20 +1,36 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { StackedCell } from '@/shared/components/common/StackedCell';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { formSourceLabels } from '@/shared/utils/mappers';
 import { type ColumnDef } from '@tanstack/react-table';
-import { CheckCircle2, ClipboardCheck, ClipboardList, FileText, XCircle } from 'lucide-react';
-import moment from 'moment';
+import { CheckCircle2, CircleOff, ClipboardCheck, FileText, XCircle, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
-import type { FormsListItem } from './actions.server';
+import type { FormListItem } from './actions.server';
 
 // ============================================================================
 // COLUMNAS OCULTAS POR DEFECTO
 // ============================================================================
 
-export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['code', 'source'];
+export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['description', 'code'];
+
+// ============================================================================
+// ÍCONOS (compartidos con los filtros: misma imagen en la celda y en la opción)
+// ============================================================================
+
+export const formSourceIcons: Record<string, LucideIcon> = {
+  checklist_template: ClipboardCheck,
+  custom_form: FileText,
+};
+
+/** Tonos por tipo (tokens info / warn del sistema de diseño). */
+const SOURCE_TONE_CLASS: Record<string, string> = {
+  checklist_template: 'text-info',
+  custom_form: 'text-warn',
+};
 
 // ============================================================================
 // TIPO DE PERMISOS
@@ -28,64 +44,47 @@ type Permissions = {
 // COLUMNAS
 // ============================================================================
 
-export function getColumns(permissions: Permissions): ColumnDef<FormsListItem>[] {
+export function getColumns(permissions: Permissions): ColumnDef<FormListItem>[] {
   const canView = permissions.hasPermission('formularios', 'formularios', 'view');
 
   return [
-    // ── Nombre del formulario ──────────────────────────────────────────────
+    // ── Nombre del formulario (+ descripción) ─────────────────────────────
     {
       accessorKey: 'name',
       meta: { title: 'Nombre' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
       cell: ({ row }) => {
-        const isActive = row.original.is_active;
-        const href = `/dashboard/forms/${row.original.id}`;
+        const { id, name, description, is_active } = row.original;
+        const inactive = is_active === false;
 
         return (
-          <div className={`flex items-center gap-2 ${!isActive ? 'opacity-50' : ''}`}>
-            <TooltipProvider>
-              <Tooltip delayDuration={50}>
-                <TooltipTrigger asChild>
-                  <div className="relative z-50">
-                    <Badge variant="outline" className="shrink-0">
-                      <ClipboardList className="h-3 w-3 mr-1.5" />
-                      {row.original.total_responses}
-                    </Badge>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>Cantidad de respuestas: {row.original.total_responses}</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-
-            {canView && isActive ? (
-              <Link
-                href={href}
-                className="font-medium hover:underline truncate max-w-[350px]"
-                title={row.original.name}
-              >
-                {row.original.name}
-              </Link>
-            ) : (
-              <span
-                className="font-medium truncate max-w-[350px]"
-                title={isActive ? row.original.name : `${row.original.name} (Inactivo)`}
-              >
-                {row.original.name}
-              </span>
-            )}
-          </div>
+          <StackedCell
+            className={inactive ? 'opacity-50' : undefined}
+            maxWidthClass="max-w-[350px]"
+            primary={
+              canView && !inactive ? (
+                <Link href={`/dashboard/forms/${id}`} title={name} className="hover:underline">
+                  {name}
+                </Link>
+              ) : (
+                <span title={inactive ? `${name} (Inactivo)` : name}>{name}</span>
+              )
+            }
+            secondary={description}
+          />
         );
       },
     },
 
-    // ── Descripción ────────────────────────────────────────────────────────
+    // ── Descripción (oculta por defecto: ya se ve bajo el nombre) ──────────
     {
       accessorKey: 'description',
       meta: { title: 'Descripción' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción" />,
       cell: ({ row }) => (
         <span
-          className={`text-sm text-muted-foreground truncate max-w-[300px] block ${!row.original.is_active ? 'opacity-50' : ''}`}
+          title={row.original.description ?? undefined}
+          className={`text-muted-foreground block max-w-[300px] truncate text-sm ${row.original.is_active === false ? 'opacity-50' : ''}`}
         >
           {row.original.description || '—'}
         </span>
@@ -98,7 +97,7 @@ export function getColumns(permissions: Permissions): ColumnDef<FormsListItem>[]
       meta: { title: 'Código' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Código" />,
       cell: ({ row }) => (
-        <span className={`font-mono text-sm ${!row.original.is_active ? 'opacity-50' : ''}`}>
+        <span className={`font-mono text-sm ${row.original.is_active === false ? 'opacity-50' : ''}`}>
           {row.original.code || '—'}
         </span>
       ),
@@ -111,39 +110,49 @@ export function getColumns(permissions: Permissions): ColumnDef<FormsListItem>[]
       header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo" />,
       cell: ({ row }) => {
         const source = row.original.source;
-        const isNormalized = source === 'checklist_template';
+        const Icon = formSourceIcons[source];
         return (
-          <div className={`flex items-center gap-1.5 ${!row.original.is_active ? 'opacity-50' : ''}`}>
-            {isNormalized ? (
-              <ClipboardCheck className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-            ) : (
-              <FileText className="h-3.5 w-3.5 text-orange-500 shrink-0" />
-            )}
-            <span className="text-sm whitespace-nowrap">{formSourceLabels[source]}</span>
+          <div className={`flex items-center gap-1.5 ${row.original.is_active === false ? 'opacity-50' : ''}`}>
+            {Icon ? (
+              <Icon aria-hidden="true" className={`h-3.5 w-3.5 shrink-0 ${SOURCE_TONE_CLASS[source] ?? ''}`} />
+            ) : null}
+            <span className="text-sm whitespace-nowrap">{formSourceLabels[source] ?? source}</span>
           </div>
         );
       },
       filterFn: (row, _id, value: string[]) => value.includes(row.original.source),
-      enableSorting: false,
     },
 
-    // ── Estado (is_active) ────────────────────────────────────────────────
+    // ── Estado (is_active; null = sin definir en la plantilla) ─────────────
     {
       accessorKey: 'is_active',
       meta: { title: 'Estado' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
       cell: ({ row }) => {
         const isActive = row.original.is_active;
+        if (isActive == null) {
+          return (
+            <Badge variant="outline" className="flex items-center gap-1 whitespace-nowrap">
+              <CircleOff aria-hidden="true" className="h-3 w-3" />
+              Sin asignar
+            </Badge>
+          );
+        }
         return (
-          <Badge variant={isActive ? 'success' : 'secondary'} className="whitespace-nowrap flex items-center gap-1">
-            {isActive ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+          <Badge variant={isActive ? 'success' : 'secondary'} className="flex items-center gap-1 whitespace-nowrap">
+            {isActive ? (
+              <CheckCircle2 aria-hidden="true" className="h-3 w-3" />
+            ) : (
+              <XCircle aria-hidden="true" className="h-3 w-3" />
+            )}
             {isActive ? 'Activo' : 'Inactivo'}
           </Badge>
         );
       },
+      // Mismo criterio que el servidor: null solo coincide con "Sin asignar".
       filterFn: (row, id, value: string[]) => {
-        const val = row.getValue(id);
-        if (val == null) return value.includes('true');
+        const val = row.getValue(id) as boolean | null;
+        if (val == null) return value.includes(NULL_FILTER_VALUE);
         return value.includes(String(val));
       },
     },
@@ -154,22 +163,21 @@ export function getColumns(permissions: Permissions): ColumnDef<FormsListItem>[]
       meta: { title: 'Fecha de creación' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Creación" />,
       cell: ({ row }) => (
-        <span className={`whitespace-nowrap text-sm ${!row.original.is_active ? 'opacity-50' : ''}`}>
-          {moment(row.original.created_at).format('DD/MM/YYYY')}
+        <span className={`text-sm whitespace-nowrap ${row.original.is_active === false ? 'opacity-50' : ''}`}>
+          {row.original.created_at ? formatArgentinaDay(row.original.created_at) : '—'}
         </span>
       ),
     },
 
-    // ── Total de respuestas ────────────────────────────────────────────────
+    // ── Total de respuestas (calculado: sin filtro) ────────────────────────
     {
       accessorKey: 'total_responses',
       meta: { title: 'Respuestas' },
-      enableSorting: false,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Respuestas" />,
       cell: ({ row }) => (
         <Badge
           variant={row.original.total_responses > 0 ? 'default' : 'secondary'}
-          className={`min-w-[28px] justify-center ${!row.original.is_active ? 'opacity-50' : ''}`}
+          className={`min-w-[28px] justify-center tabular-nums ${row.original.is_active === false ? 'opacity-50' : ''}`}
         >
           {row.original.total_responses}
         </Badge>
@@ -184,16 +192,12 @@ export function getColumns(permissions: Permissions): ColumnDef<FormsListItem>[]
       enableHiding: false,
       header: () => null,
       cell: ({ row }) => {
-        const isActive = row.original.is_active;
-
-        if (!canView || !isActive) {
-          return null;
-        }
+        if (!canView || row.original.is_active === false) return null;
 
         return (
           <Link
             href={`/dashboard/forms/${row.original.id}`}
-            className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors whitespace-nowrap"
+            className="border-input bg-background hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium whitespace-nowrap shadow-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
           >
             Ver formulario
           </Link>

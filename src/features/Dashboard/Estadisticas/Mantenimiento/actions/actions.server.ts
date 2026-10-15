@@ -1,16 +1,20 @@
 'use server';
 
-import {
-  daily_report_status,
-  type_of_maintenance_ENUM,
-  work_order_item_status,
-  work_order_status,
-} from '@/generated/prisma/enums';
+import { argentinaDayStart } from '@/features/Dashboard/Principal/lib/dashboard-dates';
+import { requireDashboardView } from '@/features/Dashboard/lib/permissions.server';
+import { type_of_maintenance_ENUM, work_order_item_status, work_order_status } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { prisma } from '@/shared/lib/prisma';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 import moment from 'moment';
 import { UNKNOWN_SOURCE_KEY } from '../chart-constants';
+import {
+  CONTRACT_TYPES_BY_CATEGORY,
+  categoryForContractType,
+  computeDaysElapsed,
+  emptyTypeMap,
+  toSortedOptions,
+} from '../lib/ownership';
 import type {
   MaintenanceMonthSummary,
   MaintenanceVehicle,
@@ -18,14 +22,7 @@ import type {
   VehicleStatus,
   WorkdaysAggregate,
 } from '../types';
-import {
-  categoryForContractType,
-  computeDaysElapsed,
-  CONTRACT_TYPES_BY_CATEGORY,
-  emptyTypeMap,
-  toSortedOptions,
-} from '../lib/ownership';
-import { resolvePeriodRange, type PeriodGranularity } from '../utils/periods';
+import { resolvePeriodInstants, type PeriodGranularity } from '../utils/periods';
 
 const logger = new Logger('Dashboard/Estadisticas/Mantenimiento');
 
@@ -46,6 +43,37 @@ const TERMINAL_WORK_ORDER_STATUSES: work_order_status[] = [
 // HELPERS
 // ============================================================================
 
+/**
+ * Días DISTINTOS con parte (sin cancelados) por equipo en `[from, to)`, contados en Postgres.
+ * `dailyreport.date` es `@db.Date`, así que se compara contra fechas calendario ISO.
+ * `contractTypes` null = todos los equipos con tipo de contrato; si no, sólo esos tipos.
+ */
+async function queryWorkedDaysByVehicle(
+  companyId: string,
+  from: string,
+  to: string,
+  contractTypes: string[] | null
+): Promise<{ vehicleId: string; days: number }[]> {
+  const rows = await prisma.$queryRaw<{ vehicle_id: string; days: number }[]>`
+    SELECT der.equipment_id::text AS vehicle_id, COUNT(DISTINCT dr.date)::int AS days
+    FROM dailyreportequipmentrelations der
+    JOIN vehicles v ON v.id = der.equipment_id
+    JOIN dailyreportrows drr ON drr.id = der.daily_report_row_id
+    JOIN dailyreport dr ON dr.id = drr.daily_report_id
+    WHERE v.company_id = ${companyId}::uuid
+      AND v.is_active = true
+      AND v.type_of_contract IS NOT NULL
+      AND (${contractTypes}::text[] IS NULL OR v.type_of_contract::text = ANY(${contractTypes}::text[]))
+      AND drr.status <> 'cancelado'
+      AND dr.company_id = ${companyId}::uuid
+      AND dr.is_active = true
+      AND dr.date >= ${from}::date
+      AND dr.date < ${to}::date
+    GROUP BY der.equipment_id
+  `;
+  return rows.map((row) => ({ vehicleId: row.vehicle_id, days: row.days }));
+}
+
 // ============================================================================
 // SUMMARY (liviano — se carga upfront)
 // ============================================================================
@@ -57,11 +85,12 @@ const TERMINAL_WORK_ORDER_STATUSES: work_order_status[] = [
  * con `getMaintenanceCategoryVehicles` cuando se abre cada acordeon.
  */
 export async function getMaintenanceMonthSummary(monthKey: string): Promise<MaintenanceMonthSummary> {
+  await requireDashboardView('mantenimiento');
   const companyId = await getActiveCompanyId();
   logger.debug('Fetching maintenance month summary', { data: { companyId, monthKey } });
 
   try {
-    const monthStart = moment(monthKey, 'YYYY-MM').startOf('month');
+    const monthStart = moment.utc(monthKey, 'YYYY-MM').startOf('month');
     if (!monthStart.isValid()) {
       throw new Error(`Invalid monthKey: ${monthKey}`);
     }
@@ -75,7 +104,7 @@ export async function getMaintenanceMonthSummary(monthKey: string): Promise<Main
       type_of_contract: { not: null },
     } as const;
 
-    const [vehiclesLight, workedRelations, oldestReport] = await Promise.all([
+    const [vehiclesLight, workedDaysRows, oldestReport] = await Promise.all([
       // Trae lo necesario para counts + types + condicion por categoria
       prisma.vehicles.findMany({
         where: baseWhere,
@@ -86,26 +115,9 @@ export async function getMaintenanceMonthSummary(monthKey: string): Promise<Main
           type_vehicles_typeTotype: { select: { id: true, name: true } },
         },
       }),
-      // Para workdays globales: trae todas las relaciones dailyreport↔vehiculo
-      // del mes (cualquier categoria). Luego agrupamos en memoria por categoria.
-      prisma.dailyreportequipmentrelations.findMany({
-        where: {
-          equipment_id: { not: null },
-          vehicles: { company_id: companyId, is_active: true, type_of_contract: { not: null } },
-          dailyreportrows: {
-            status: { not: daily_report_status.cancelado },
-            dailyreport: {
-              company_id: companyId,
-              is_active: true,
-              date: { gte: monthStart.toDate(), lt: monthEnd.toDate() },
-            },
-          },
-        },
-        select: {
-          equipment_id: true,
-          dailyreportrows: { select: { dailyreport: { select: { date: true } } } },
-        },
-      }),
+      // Para workdays globales: días DISTINTOS con parte (sin cancelados) por equipo del mes, contados
+      // en la base. Antes se traían todas las relaciones del mes a Node para deduplicar fechas.
+      queryWorkedDaysByVehicle(companyId, monthStart.format('YYYY-MM-DD'), monthEnd.format('YYYY-MM-DD'), null),
       prisma.dailyreport.findFirst({
         where: { company_id: companyId, is_active: true },
         orderBy: { date: 'asc' },
@@ -148,31 +160,16 @@ export async function getMaintenanceMonthSummary(monthKey: string): Promise<Main
       }
     }
 
-    // Fechas unicas trabajadas por vehiculo, luego sumadas por categoria
-    const daysByVehicle = new Map<string, Set<string>>();
-    for (const rel of workedRelations) {
-      const vehicleId = rel.equipment_id;
-      const date = rel.dailyreportrows?.dailyreport?.date;
-      if (!vehicleId || !date) continue;
-      const key = moment(date).format('YYYY-MM-DD');
-      let set = daysByVehicle.get(vehicleId);
-      if (!set) {
-        set = new Set();
-        daysByVehicle.set(vehicleId, set);
-      }
-      set.add(key);
-    }
-
     const workdaysByCategory: Record<OwnershipCategory, WorkdaysAggregate> = {
       Propios: { worked: 0, possible: countsByCategory.Propios * daysElapsed },
       Leasing: { worked: 0, possible: countsByCategory.Leasing * daysElapsed },
       Contratados: { worked: 0, possible: countsByCategory.Contratados * daysElapsed },
     };
-    for (const [vehicleId, dates] of daysByVehicle) {
+    for (const { vehicleId, days } of workedDaysRows) {
       const cat = categoryByVehicleId.get(vehicleId);
       if (!cat) continue;
       // Cap a daysElapsed: si se cargaron dias futuros, no inflan el worked.
-      workdaysByCategory[cat].worked += Math.min(dates.size, daysElapsed);
+      workdaysByCategory[cat].worked += Math.min(days, daysElapsed);
     }
 
     return {
@@ -187,7 +184,7 @@ export async function getMaintenanceMonthSummary(monthKey: string): Promise<Main
       },
       conditionCountsByCategory,
       workdaysByCategory,
-      earliestMonth: oldestReport ? moment(oldestReport.date).startOf('month').format('YYYY-MM') : null,
+      earliestMonth: oldestReport ? moment.utc(oldestReport.date).startOf('month').format('YYYY-MM') : null,
     };
   } catch (error) {
     logger.error('Error fetching maintenance month summary', { data: { error, monthKey } });
@@ -209,18 +206,19 @@ export async function getMaintenanceCategoryVehicles(
   monthKey: string,
   category: OwnershipCategory
 ): Promise<MaintenanceVehicle[]> {
+  await requireDashboardView('mantenimiento');
   const companyId = await getActiveCompanyId();
   logger.debug('Fetching maintenance category vehicles', { data: { companyId, monthKey, category } });
 
   try {
-    const monthStart = moment(monthKey, 'YYYY-MM').startOf('month');
+    const monthStart = moment.utc(monthKey, 'YYYY-MM').startOf('month');
     if (!monthStart.isValid()) {
       throw new Error(`Invalid monthKey: ${monthKey}`);
     }
     const monthEnd = monthStart.clone().add(1, 'month').startOf('month');
     const contractTypes = CONTRACT_TYPES_BY_CATEGORY[category];
 
-    const [vehiclesRaw, equipmentRelations] = await Promise.all([
+    const [vehiclesRaw, workedDaysRows] = await Promise.all([
       prisma.vehicles.findMany({
         where: {
           company_id: companyId,
@@ -246,44 +244,15 @@ export async function getMaintenanceCategoryVehicles(
         },
         orderBy: { domain: 'asc' },
       }),
-      prisma.dailyreportequipmentrelations.findMany({
-        where: {
-          equipment_id: { not: null },
-          vehicles: {
-            company_id: companyId,
-            is_active: true,
-            type_of_contract: { in: contractTypes },
-          },
-          dailyreportrows: {
-            status: { not: daily_report_status.cancelado },
-            dailyreport: {
-              company_id: companyId,
-              is_active: true,
-              date: { gte: monthStart.toDate(), lt: monthEnd.toDate() },
-            },
-          },
-        },
-        select: {
-          equipment_id: true,
-          dailyreportrows: { select: { dailyreport: { select: { date: true } } } },
-        },
-      }),
+      queryWorkedDaysByVehicle(
+        companyId,
+        monthStart.format('YYYY-MM-DD'),
+        monthEnd.format('YYYY-MM-DD'),
+        contractTypes
+      ),
     ]);
 
-    // Fechas unicas trabajadas por equipment_id
-    const daysByVehicle = new Map<string, Set<string>>();
-    for (const rel of equipmentRelations) {
-      const vehicleId = rel.equipment_id;
-      const date = rel.dailyreportrows?.dailyreport?.date;
-      if (!vehicleId || !date) continue;
-      const key = moment(date).format('YYYY-MM-DD');
-      let set = daysByVehicle.get(vehicleId);
-      if (!set) {
-        set = new Set();
-        daysByVehicle.set(vehicleId, set);
-      }
-      set.add(key);
-    }
+    const workedDaysByVehicle = new Map(workedDaysRows.map((row) => [row.vehicleId, row.days]));
 
     // Mapear al shape final
     const vehicles: MaintenanceVehicle[] = vehiclesRaw.map((v) => {
@@ -309,7 +278,7 @@ export async function getMaintenanceCategoryVehicles(
           orders,
           workOrders,
         },
-        workedDays: daysByVehicle.get(v.id)?.size ?? 0,
+        workedDays: workedDaysByVehicle.get(v.id) ?? 0,
       };
     });
 
@@ -352,11 +321,12 @@ export type MaintenanceByTypeGroup = {
  * por cantidad de equipos desc.
  */
 export async function getMaintenanceByTypeForMonth(monthKey: string): Promise<MaintenanceByTypeGroup[]> {
+  await requireDashboardView('mantenimiento');
   const companyId = await getActiveCompanyId();
   logger.debug('Fetching maintenance by type for month', { data: { companyId, monthKey } });
 
   try {
-    const monthStart = moment(monthKey, 'YYYY-MM').startOf('month');
+    const monthStart = moment.utc(monthKey, 'YYYY-MM').startOf('month');
     if (!monthStart.isValid()) {
       throw new Error(`Invalid monthKey: ${monthKey}`);
     }
@@ -367,7 +337,12 @@ export async function getMaintenanceByTypeForMonth(monthKey: string): Promise<Ma
         company_id: companyId,
         is_active: true,
         maintenance_orders: {
-          some: { workshop_entry_date: { gte: monthStart.toDate(), lt: monthEnd.toDate() } },
+          some: {
+            workshop_entry_date: {
+              gte: argentinaDayStart(monthStart.format('YYYY-MM-DD')),
+              lt: argentinaDayStart(monthEnd.format('YYYY-MM-DD')),
+            },
+          },
         },
       },
       select: {
@@ -399,10 +374,7 @@ export async function getMaintenanceByTypeForMonth(monthKey: string): Promise<Ma
         group = { typeId, typeName, count: 0, vehicles: [] };
         byType.set(typeId, group);
       }
-      const openCount =
-        v._count.maintenance_requests +
-        v._count.maintenance_orders +
-        v._count.work_orders;
+      const openCount = v._count.maintenance_requests + v._count.maintenance_orders + v._count.work_orders;
       group.vehicles.push({
         id: v.id,
         domain: v.domain,
@@ -452,16 +424,17 @@ export async function getMaintenanceRequestSourceStats(
   granularity: PeriodGranularity,
   anchor: string
 ): Promise<RequestSourceStats> {
+  await requireDashboardView('mantenimiento');
   const companyId = await getActiveCompanyId();
   logger.debug('Fetching maintenance request source stats', { data: { companyId, granularity, anchor } });
 
   try {
-    const { start, end } = resolvePeriodRange(granularity, anchor);
+    const { start, end } = resolvePeriodInstants(granularity, anchor);
 
     const grouped = await prisma.maintenance_requests.groupBy({
       by: ['source'],
       where: {
-        created_at: { gte: start.toDate(), lt: end.toDate() },
+        created_at: { gte: start, lt: end },
         // La solicitud es de un vehiculo O de un equipamiento (excluyentes por
         // CHECK en BD). En los dos casos la empresa sale del recurso.
         OR: [{ vehicles: { company_id: companyId } }, { other_equipment: { company_id: companyId } }],
@@ -530,15 +503,16 @@ export async function getMaintenanceKindStats(
   granularity: PeriodGranularity,
   anchor: string
 ): Promise<MaintenanceKindStats> {
+  await requireDashboardView('mantenimiento');
   const companyId = await getActiveCompanyId();
   logger.debug('Fetching maintenance kind stats', { data: { companyId, granularity, anchor } });
 
   try {
-    const { start, end } = resolvePeriodRange(granularity, anchor);
+    const { start, end } = resolvePeriodInstants(granularity, anchor);
 
     const periodWhere = {
       status: work_order_item_status.completed,
-      completed_at: { gte: start.toDate(), lt: end.toDate() },
+      completed_at: { gte: start, lt: end },
       work_order_items: { work_orders: { company_id: companyId } },
     } as const;
 

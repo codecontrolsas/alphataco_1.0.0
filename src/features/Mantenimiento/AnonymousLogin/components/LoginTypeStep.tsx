@@ -14,14 +14,14 @@ interface LoginTypeStepProps {
 export function LoginTypeStep({ onSelect }: LoginTypeStepProps) {
   return (
     <div className="space-y-4">
-      <p className="text-center text-gray-700 mb-4">Seleccione su tipo de usuario para continuar:</p>
-      <Button className="w-full" onClick={() => onSelect('empleado')}>
+      <p className="mb-4 text-center text-base text-foreground">Seleccione su tipo de usuario para continuar:</p>
+      <Button type="button" className="h-12 w-full text-base" onClick={() => onSelect('empleado')}>
         Empleado
       </Button>
-      <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => onSelect('invitado')}>
+      <Button type="button" variant="secondary" className="h-12 w-full text-base" onClick={() => onSelect('invitado')}>
         Invitado
       </Button>
-      <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => onSelect('invitado')}>
+      <Button type="button" variant="secondary" className="h-12 w-full text-base" onClick={() => onSelect('invitado')}>
         Mecanico
       </Button>
     </div>

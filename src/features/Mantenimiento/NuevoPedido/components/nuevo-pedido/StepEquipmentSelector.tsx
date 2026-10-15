@@ -68,12 +68,14 @@ export function StepEquipmentSelector({
         >
           <PopoverTrigger asChild>
             <Button
+              type="button"
               variant="outline"
               role="combobox"
+              aria-expanded={equipmentOpen}
               aria-labelledby="resource-select-label"
               aria-busy={isOtherEquipment && isLoadingOtherEquipment}
               disabled={!!default_equipment_id || (isOtherEquipment && isLoadingOtherEquipment)}
-              className={cn('w-full justify-between', !selectedEquipmentId && 'text-muted-foreground')}
+              className={cn('h-12 w-full justify-between text-base', !selectedEquipmentId && 'text-muted-foreground')}
             >
               <span className="truncate">
                 {isOtherEquipment && isLoadingOtherEquipment
@@ -128,7 +130,7 @@ export function StepEquipmentSelector({
                 </CommandEmpty>
                 <CommandGroup>
                   {filteredEquipment.map((equip) => (
-                    <CommandItem key={equip.id} value={equip.label} onSelect={() => handleSelectEquipment(equip.id)}>
+                    <CommandItem className="min-h-12" key={equip.id} value={equip.label} onSelect={() => handleSelectEquipment(equip.id)}>
                       <Check
                         className={cn(
                           'mr-2 h-4 w-4 shrink-0',
@@ -140,7 +142,7 @@ export function StepEquipmentSelector({
                           {equip.label}
                           {equip.internNumber && ` (Nº${equip.internNumber})`}
                         </span>
-                        <span className="min-w-0 truncate text-xs text-muted-foreground">
+                        <span className="min-w-0 truncate text-sm text-muted-foreground">
                           {[
                             equip.typeName,
                             equip.subTypeName,
@@ -165,13 +167,13 @@ export function StepEquipmentSelector({
             encontró", afirmando que no hay equipamientos cuando en realidad no
             se pudieron traer. */}
         {isOtherEquipment && hasOtherEquipmentError && (
-          <p className="flex items-center gap-2 text-xs text-destructive">
+          <p role="alert" className="flex items-center gap-2 text-sm text-destructive">
             No se pudieron cargar los equipamientos.
             <Button
               type="button"
               variant="link"
               size="sm"
-              className="h-auto p-0 text-xs"
+              className="h-auto min-h-11 p-0 text-sm"
               onClick={() => refetchOtherEquipment()}
             >
               Reintentar
@@ -189,14 +191,15 @@ export function StepEquipmentSelector({
               <Input
                 id="kilometer"
                 type="number"
+                inputMode="numeric"
                 value={kilometer}
                 onChange={(e) => setKilometer(e.target.value)}
                 placeholder="0"
                 min={Number(selectedEquipment.kilometer) || 0}
-                className="tabular-nums"
+                className="h-12 text-base tabular-nums"
               />
               {selectedEquipment.kilometer && (
-                <p className="text-xs text-muted-foreground tabular-nums">
+                <p className="text-sm text-muted-foreground tabular-nums">
                   Último registrado: {selectedEquipment.kilometer} km
                 </p>
               )}
@@ -208,14 +211,15 @@ export function StepEquipmentSelector({
             <Input
               id="engineHours"
               type="number"
+              inputMode="decimal"
               value={engineHours}
               onChange={(e) => setEngineHours(e.target.value)}
               placeholder="0"
               min={Number(selectedEquipment.engineHours) || 0}
-              className="tabular-nums"
+              className="h-12 text-base tabular-nums"
             />
             {/* null no es 0: sin lectura previa se dice que no hay, no se inventa un cero */}
-            <p className="text-xs text-muted-foreground tabular-nums">
+            <p className="text-sm text-muted-foreground tabular-nums">
               {selectedEquipment.engineHours
                 ? `Último registrado: ${selectedEquipment.engineHours} hs`
                 : 'Sin registro previo'}

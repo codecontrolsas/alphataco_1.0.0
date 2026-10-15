@@ -11,7 +11,7 @@ export function TireActionsWithTire(props: TirePositionActionsParams) {
 
   return (
     <Tabs defaultValue="calibrate">
-      <TabsList className="grid w-full grid-cols-4">
+      <TabsList aria-label="Acción sobre la cubierta" className="grid h-auto w-full grid-cols-2 sm:grid-cols-4">
         <TabsTrigger value="calibrate">Calibrar</TabsTrigger>
         <TabsTrigger value="repair">Reparar</TabsTrigger>
         <TabsTrigger value="replace">Reemplazar</TabsTrigger>

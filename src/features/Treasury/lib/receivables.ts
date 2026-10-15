@@ -4,6 +4,7 @@ import { amountOf, AMOUNT_SCALE, formatScaled } from '@/features/Comercial/Factu
 import { formatVoucherLabel } from '@/features/Comercial/Facturacion/lib/invoice-type';
 import { Prisma } from '@/generated/prisma/client';
 import { COLLECTABLE_CBTE_TYPES, CREDIT_NOTE_CBTE_TYPES } from './receipt-rules';
+import { customerCheckDebtSql } from './rejected-checks';
 
 /**
  * Cobranzas (spec Tesorería etapa 2 §2.6): UNA sola definición SQL del pendiente de un
@@ -280,4 +281,49 @@ export async function availableAdvancesOfCustomer(
 /** Suma de los disponibles (para el encabezado de la cuenta corriente). */
 export function sumAvailable(advances: CustomerAdvanceBalance[]): string {
   return money(advances.reduce((acc, a) => acc + amountOf(a.available), BigInt(0)));
+}
+
+/** Label de la deuda de un cheque (misma frase que `rejectedCheckLabel`), armado en SQL sobre el alias `d`. */
+function rejectedCheckLabelSql(): Prisma.Sql {
+  return Prisma.sql`('Cheque rechazado Nº ' || d.number || ' — ' || d.bank)`;
+}
+
+/**
+ * Definición ÚNICA de lo que figura en "A cobrar" (subconsulta `r`): saldo de cada comprobante cobrable
+ * de la empresa (`invoiceBalanceSql`) UNIDO a las deudas por cheques rechazados (`customerCheckDebtSql`),
+ * + nombre del cliente. Solo con algo por cobrar. La deuda de un cheque se muestra en ARS, con la fecha
+ * del rechazo como emisión y vencimiento. La usan la lista de "A cobrar" y el contador de Cobranzas.
+ */
+export function receivablesBaseSql(companyId: string): Prisma.Sql {
+  const collectable = [...COLLECTABLE];
+  const invoiceWhere = Prisma.sql`i.company_id = ${companyId}::uuid AND i.status = 'autorizada' AND i.cbte_type = ANY(${collectable}::int[])`;
+  const checkWhere = Prisma.sql`c.company_id = ${companyId}::uuid`;
+  return Prisma.sql`
+    SELECT u.*, c.name AS customer_name, c.cuit::text AS customer_cuit
+    FROM (
+      SELECT b.id, b.customer_id, b.cbte_type, b.currency::text AS currency, b.sales_point, b.number,
+             b.issue_date::date AS issue_date, b.due_date::date AS due_date, b.total::numeric AS total,
+             b.pending::numeric AS pending, b.reserved::numeric AS reserved,
+             'INVOICE'::text AS row_kind, NULL::text AS check_label
+      FROM (${invoiceBalanceSql(invoiceWhere, null)}) b
+      WHERE b.pending > 0 OR (b.pending = 0 AND b.reserved > 0)
+      UNION ALL
+      SELECT d.id, d.customer_id, NULL::int, 'ARS'::text, NULL::int, NULL::int,
+             d.rejected_on::date, d.rejected_on::date, d.amount::numeric,
+             d.pending::numeric, d.reserved::numeric,
+             'CHECK'::text, ${rejectedCheckLabelSql()}
+      FROM (${customerCheckDebtSql(checkWhere, null)}) d
+      WHERE d.pending::numeric > 0 OR (d.pending::numeric = 0 AND d.reserved::numeric > 0)
+    ) u
+    JOIN customers c ON c.id = u.customer_id
+  `;
+}
+
+/** Estado derivado sobre la subconsulta `r` de `receivablesBaseSql`: misma regla que `receivableState` (libre = pendiente, reservado = reservado). */
+export function receivableStateSql(today: string): Prisma.Sql {
+  return Prisma.sql`(CASE
+    WHEN r.pending <= 0 AND r.reserved > 0 THEN 'IN_DRAFT'
+    WHEN r.row_kind = 'CHECK' THEN 'OVERDUE'
+    WHEN r.due_date IS NOT NULL AND r.due_date < ${today}::date THEN 'OVERDUE'
+    ELSE 'DUE' END)`;
 }

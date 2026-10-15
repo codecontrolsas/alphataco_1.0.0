@@ -5,22 +5,26 @@ export function Field({
   label,
   value,
   mono = false,
+  children,
 }: {
   label: string;
-  value: string | null | undefined;
+  value?: string | null;
   mono?: boolean;
+  /** Valor ya armado (por ejemplo con un link). Si viene, manda sobre `value`. */
+  children?: React.ReactNode;
 }) {
+  const content = children ?? value;
   return (
     <div className="space-y-1">
       <dt className="text-muted-foreground text-sm">{label}</dt>
       <dd
         className={cn(
           'font-medium',
-          value && mono && 'font-mono tabular-nums',
-          !value && 'text-muted-foreground font-normal'
+          content && mono && 'font-mono tabular-nums',
+          !content && 'text-muted-foreground font-normal'
         )}
       >
-        {value || 'Sin dato'}
+        {content || 'Sin dato'}
       </dd>
     </div>
   );

@@ -1,1 +1,1 @@
-export { MaintenanceOrdersSkeleton } from './MaintenanceOrdersSkeleton';
+export { InWorkshopMetricsSkeleton, MaintenanceOrdersSkeleton } from './MaintenanceOrdersSkeleton';

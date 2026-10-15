@@ -21,7 +21,7 @@ import {
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { Check, Plus, X, type LucideIcon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { toggleTireBrandActive } from '../actions/actions.server';
@@ -118,13 +118,21 @@ export default function _MarcasDataTable({
   }, [initialFilterVisibility]);
 
   // ─── fetchFacet factories ─────────────────────────────────────────────────
-  const makeEnumFetchFacet = useCallback((columnId: string, enumValues: string[], labels: Record<string, string>) => {
-    return async (params: DataTableSearchParams): Promise<FacetResult> => {
-      const result = await getTireBrandSingleFacet(columnId, params);
-      if (!result) return { options: [], counts: new Map() };
-      return buildEnumFacetResult(enumValues, labels, undefined, result.counts);
-    };
-  }, []);
+  const makeEnumFetchFacet = useCallback(
+    (
+      columnId: string,
+      enumValues: string[],
+      labels: Record<string, string>,
+      icons?: Record<string, LucideIcon | undefined>
+    ) => {
+      return async (params: DataTableSearchParams): Promise<FacetResult> => {
+        const result = await getTireBrandSingleFacet(columnId, params);
+        if (!result) return { options: [], counts: new Map() };
+        return buildEnumFacetResult(enumValues, labels, icons, result.counts);
+      };
+    },
+    []
+  );
 
   // ─── Faceted filters ──────────────────────────────────────────────────────
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
@@ -133,10 +141,15 @@ export default function _MarcasDataTable({
       {
         columnId: 'is_active',
         title: 'Estado',
-        fetchFacet: makeEnumFetchFacet('is_active', ['true', 'false'], {
-          true: 'Activa',
-          false: 'Inactiva',
-        }),
+        fetchFacet: makeEnumFetchFacet(
+          'is_active',
+          ['true', 'false'],
+          {
+            true: 'Activa',
+            false: 'Inactiva',
+          },
+          { true: Check, false: X }
+        ),
       },
 
       // ── name (text filter) ─────────────────────────────────────────────────
@@ -200,7 +213,8 @@ export default function _MarcasDataTable({
         queryFn={tableQueryFn}
         queryKey={QUERY_KEY}
         onStateChange={handleStateChange}
-        emptyMessage="No hay marcas registradas"
+        mobileCards
+        emptyMessage="No hay marcas para mostrar. Si hay filtros aplicados, quitalos; si no, se muestran al crear la primera marca."
         searchPlaceholder="Buscar por nombre..."
         exportConfig={{
           fetchAllData: async () => unwrapExportResult(await getTireBrandsForExport(currentParams)),

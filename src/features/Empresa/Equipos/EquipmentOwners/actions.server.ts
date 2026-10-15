@@ -15,13 +15,14 @@ import {
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { assertEquipmentOwnerReadable } from '../lib/catalog-guards';
 import {
-  catalogAccessError,
-  catalogReadScope,
-  catalogWriteScope,
-  resolveCatalogAccess,
-} from '../lib/catalog-scope';
+  equipmentOwnerCreateSchema,
+  equipmentOwnerUpdateSchema,
+  reassignVehiclesSchema,
+} from '../../lib/catalog-input-schemas';
+import { requireConfigTabPermission } from '../../lib/config-access.server';
+import { assertEquipmentOwnerReadable } from '../lib/catalog-guards';
+import { catalogAccessError, catalogReadScope, catalogWriteScope, resolveCatalogAccess } from '../lib/catalog-scope';
 
 // ============================================================================
 // LOGGER
@@ -79,6 +80,7 @@ function buildWhereClause(state: ReturnType<typeof parseSearchParams>) {
 // ============================================================================
 
 export async function getEquipmentOwnersPaginated(searchParams: DataTableSearchParams) {
+  await requireConfigTabPermission('titulares', 'view');
   try {
     const state = parseSearchParams(searchParams);
     const { skip, take } = stateToPrismaParams(state);
@@ -131,6 +133,7 @@ export async function getEquipmentOwnersPaginated(searchParams: DataTableSearchP
 // ============================================================================
 
 export async function getAllEquipmentOwnersForExport(searchParams: DataTableSearchParams) {
+  await requireConfigTabPermission('titulares', 'view');
   try {
     const state = parseSearchParams(searchParams);
     const where = { AND: [buildWhereClause(state), catalogReadScope(await getActiveCompanyId())] };
@@ -178,6 +181,7 @@ export async function getEquipmentOwnerSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
 ): Promise<FacetResult | null> {
+  await requireConfigTabPermission('titulares', 'view');
   try {
     const state = searchParams ? parseSearchParams(searchParams) : parseSearchParams({});
 
@@ -363,6 +367,7 @@ function buildVehicleWhereClause(
 }
 
 export async function getVehiclesByOwnerPaginated(ownerId: string, searchParams: DataTableSearchParams) {
+  await requireConfigTabPermission('titulares', 'view');
   try {
     const state = parseSearchParams(searchParams);
     const { skip, take } = stateToPrismaParams(state);
@@ -427,6 +432,7 @@ export async function getVehiclesByOwnerPaginated(ownerId: string, searchParams:
 // ============================================================================
 
 export async function getAllVehiclesByOwnerForExport(ownerId: string, searchParams: DataTableSearchParams) {
+  await requireConfigTabPermission('titulares', 'view');
   try {
     const state = parseSearchParams(searchParams);
     const companyId = await getActiveCompanyId();
@@ -486,6 +492,7 @@ export async function getVehicleByOwnerSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
 ): Promise<FacetResult | null> {
+  await requireConfigTabPermission('titulares', 'view');
   try {
     const state = searchParams ? parseSearchParams(searchParams) : parseSearchParams({});
 
@@ -662,6 +669,8 @@ export async function createEquipmentOwnerPrisma(data: {
   cuit: string;
   contract_types: ('Leasing' | 'Alquiler' | 'Prendado')[];
 }) {
+  await requireConfigTabPermission('titulares', 'create');
+  data = equipmentOwnerCreateSchema.parse(data);
   try {
     const result = await prisma.equipment_owners.create({
       data: {
@@ -698,6 +707,8 @@ export async function updateEquipmentOwnerPrisma(data: {
   cuit: string;
   contract_types: ('Leasing' | 'Alquiler' | 'Prendado')[];
 }) {
+  await requireConfigTabPermission('titulares', 'update');
+  data = equipmentOwnerUpdateSchema.parse(data);
   try {
     // Perímetro sin RLS: un titular global se lee pero no se edita desde una empresa.
     const companyId = await getActiveCompanyId();
@@ -745,6 +756,8 @@ export async function updateEquipmentOwnerPrisma(data: {
  * escritura va acotada a la empresa activa (sin RLS, es la única defensa del endpoint).
  */
 export async function reassignVehiclesToOwner(fromOwnerId: string, toOwnerId: string | null) {
+  await requireConfigTabPermission('titulares', 'update');
+  ({ fromOwnerId, toOwnerId } = reassignVehiclesSchema.parse({ fromOwnerId, toOwnerId }));
   try {
     const companyId = await getActiveCompanyId();
     // `toOwnerId` llega del cliente: tiene que ser un titular legible por la empresa activa.

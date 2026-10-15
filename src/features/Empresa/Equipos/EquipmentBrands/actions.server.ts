@@ -12,12 +12,9 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import {
-  catalogAccessError,
-  catalogReadScope,
-  catalogWriteScope,
-  resolveCatalogAccess,
-} from '../lib/catalog-scope';
+import { equipmentBrandCreateSchema, equipmentBrandUpdateSchema } from '../../lib/catalog-input-schemas';
+import { requireConfigTabPermission } from '../../lib/config-access.server';
+import { catalogAccessError, catalogReadScope, catalogWriteScope, resolveCatalogAccess } from '../lib/catalog-scope';
 
 // ============================================================================
 // LOGGER
@@ -76,6 +73,7 @@ function buildWhereClause(state: ReturnType<typeof parseSearchParams>) {
 // ============================================================================
 
 export async function getEquipmentBrandsPaginated(searchParams: DataTableSearchParams) {
+  await requireConfigTabPermission('marcas', 'view');
   try {
     const state = parseSearchParams(searchParams);
     const { skip, take } = stateToPrismaParams(state);
@@ -121,6 +119,7 @@ export async function getEquipmentBrandsPaginated(searchParams: DataTableSearchP
 // ============================================================================
 
 export async function getAllEquipmentBrandsForExport(searchParams: DataTableSearchParams) {
+  await requireConfigTabPermission('marcas', 'view');
   try {
     const state = parseSearchParams(searchParams);
     // `buildWhereClause` puede traer su propio `OR`: se combinan con AND para no pisarse.
@@ -162,6 +161,7 @@ export async function getEquipmentBrandSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
 ): Promise<FacetResult | null> {
+  await requireConfigTabPermission('marcas', 'view');
   try {
     const state = searchParams ? parseSearchParams(searchParams) : parseSearchParams({});
 
@@ -216,6 +216,8 @@ export async function getEquipmentBrandSingleFacet(
 // ============================================================================
 
 export async function createEquipmentBrand(data: { name: string; is_active: boolean }) {
+  await requireConfigTabPermission('marcas', 'create');
+  data = equipmentBrandCreateSchema.parse(data);
   try {
     const result = await prisma.brand_vehicles.create({
       data: {
@@ -233,6 +235,8 @@ export async function createEquipmentBrand(data: { name: string; is_active: bool
 }
 
 export async function updateEquipmentBrand(data: { id: number; name: string; is_active: boolean }) {
+  await requireConfigTabPermission('marcas', 'update');
+  data = equipmentBrandUpdateSchema.parse(data);
   try {
     // Perímetro sin RLS: una marca global se lee pero no se edita desde una empresa.
     const companyId = await getActiveCompanyId();

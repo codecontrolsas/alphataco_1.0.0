@@ -8,11 +8,13 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { CircleOff } from 'lucide-react';
-import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
 import { TRACKING_TYPE_LABELS } from '../../../../lib/labels';
 import { WAREHOUSE_QUERY_KEYS } from '../../../../lib/query-keys';
+import { STOCK_LEVEL_UI } from '../../../../lib/status-presentation';
 import { MATERIAL_TRACKING_TYPES, type MaterialTrackingTypeValue } from '../../../../schemas/stock-movement';
 import {
   getAllMaterialsForExport,
@@ -20,7 +22,7 @@ import {
   getMaterialsPaginated,
   type MaterialListItem,
 } from '../actions.server';
-import { HIDDEN_COLUMNS_BY_DEFAULT, boolIcons, getColumns, trackingIcons } from '../columns';
+import { HIDDEN_COLUMNS_BY_DEFAULT, boolIcons, getColumns, stockLevelByBelowMin, trackingIcons } from '../columns';
 
 interface Props {
   data: MaterialListItem[];
@@ -38,6 +40,7 @@ const ALL_FILTER_IDS = [
   'unit',
   'tracking_type',
   'requires_approval',
+  'below_min',
   'is_active',
   'code',
   'name',
@@ -135,6 +138,22 @@ export function _MaterialsDataTable({
         title: 'Requiere aprobación',
         fetchFacet: makeBoolFetchFacet('requires_approval', 'Sí', 'No'),
       },
+      {
+        columnId: 'below_min',
+        title: 'Nivel de stock',
+        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
+          const result = await getMaterialSingleFacet('below_min', params);
+          if (!result) return EMPTY_FACET;
+          return {
+            options: [
+              // Mismos textos e íconos que el badge de la celda (agotados incluidos en "Bajo mínimo")
+              { value: 'true', label: stockLevelByBelowMin.true.label, icon: stockLevelByBelowMin.true.icon },
+              { value: 'false', label: stockLevelByBelowMin.false.label, icon: stockLevelByBelowMin.false.icon },
+            ],
+            counts: result.counts,
+          };
+        },
+      },
       { columnId: 'is_active', title: 'Estado', fetchFacet: makeBoolFetchFacet('is_active', 'Activo', 'Inactivo') },
       { columnId: 'code', title: 'Código', type: 'text' as const, placeholder: 'Buscar por código...' },
       { columnId: 'name', title: 'Nombre', type: 'text' as const, placeholder: 'Buscar por nombre...' },
@@ -153,15 +172,16 @@ export function _MaterialsDataTable({
 
   const exportConfig: DataTableExportConfig<MaterialListItem> = useMemo(
     () => ({
-      fetchAllData: () => getAllMaterialsForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllMaterialsForExport(currentParams)),
       options: { filename: 'materiales', title: 'Listado de Materiales', sheetName: 'Materiales' },
       formatters: {
         description: (value) => (value ? String(value) : ''),
         tracking_type: (value) => TRACKING_TYPE_LABELS[value as MaterialTrackingTypeValue] ?? String(value),
         requires_approval: (value) => (value ? 'Sí' : 'No'),
         min_stock: (value) => (value == null ? '' : String(value)),
+        below_min: (value) => STOCK_LEVEL_UI[value as keyof typeof STOCK_LEVEL_UI]?.label ?? '',
         is_active: (value) => (value ? 'Activo' : 'Inactivo'),
-        created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : ''),
+        created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : ''),
       },
     }),
     [currentParams]

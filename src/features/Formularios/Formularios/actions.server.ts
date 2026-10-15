@@ -1,16 +1,21 @@
 'use server';
 
+import { canForms, requireFormsPermission } from '@/features/Formularios/lib/access.server';
 import { Logger } from '@/lib/logger';
 import {
+  NULL_FILTER_VALUE,
   buildDateRangeFiltersWhere,
   buildSearchWhere,
   buildTextFiltersWhere,
-  NULL_FILTER_VALUE,
   parseSearchParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
+import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
+import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 
 const logger = new Logger('Formularios/list/actions.server');
@@ -19,87 +24,111 @@ const logger = new Logger('Formularios/list/actions.server');
 // CONSTANTES
 // ============================================================================
 
-/** Params de URL de navegación que NO son filtros de la tabla */
-const IGNORED_PARAMS = new Set(['tab', 'subtab']);
-
 /** Columnas con filtro de texto libre (IDs de columna == campo en Prisma) */
 const TEXT_FILTER_COLUMNS = ['name', 'description', 'code'];
 
 /** Columnas con filtro de rango de fechas */
 const DATE_RANGE_COLUMNS = ['created_at'];
 
-/**
- * Tipo normalizado que unifica custom_form y checklist_templates.
- * Usado internamente para combinar ambas fuentes.
- */
-export type FormListItem = {
-  id: string;
-  name: string;
-  description: string | null;
-  code: string | null;
-  source: 'custom_form' | 'checklist_template';
-  is_active: boolean;
-  created_at: Date;
-  total_responses: number;
-  frequency: string | null;
-};
+/** Columnas facetadas */
+const FACET_COLUMNS = ['is_active', 'source'];
 
-// ============================================================================
-// HELPERS INTERNOS
-// ============================================================================
+/** Únicas claves de URL que filtran esta tabla; el resto se descarta antes de armar el `where`. */
+const ALLOWED_FILTER_KEYS = new Set([...FACET_COLUMNS, ...TEXT_FILTER_COLUMNS, ...dateRangeKeys(DATE_RANGE_COLUMNS)]);
 
 /**
- * Construye el WHERE clause para checklist_templates.
- * custom_form no tiene filtros por campo (sin is_active, sin code).
+ * Las dos fuentes (custom_form legacy + checklist_templates) se unen, ordenan y paginan EN MEMORIA:
+ * por eso cada una se trae con tope. Si una fuente lo alcanza, el listado queda truncado a sus filas
+ * más recientes (se avisa por log).
  */
-function buildChecklistWhere(state: ReturnType<typeof parseSearchParams>, companyId: string) {
-  const searchWhere = buildSearchWhere(state.search, ['name', 'description', 'code']);
+const UNION_MAX_ROWS_PER_SOURCE = 2_000;
 
-  const textFiltersWhere = buildTextFiltersWhere(state.filters, TEXT_FILTER_COLUMNS);
+/** Tope de filas de un export: más que esto no se descarga entero (se pide acotar con filtros). */
+const EXPORT_MAX_ROWS = 10_000;
 
-  const dateFiltersWhere = buildDateRangeFiltersWhere(state.filters, DATE_RANGE_COLUMNS);
+/** Campos válidos para sort (whitelist explícita; el orden se resuelve en memoria). */
+const VALID_SORT_FIELDS = new Set([
+  'name',
+  'created_at',
+  'is_active',
+  'total_responses',
+  'source',
+  'code',
+  'description',
+]);
 
-  // is_active manual
-  const manualFilters: Record<string, unknown> = {};
+type FormSource = 'checklist_template' | 'custom_form';
+
+// ============================================================================
+// TIPOS INTERNOS
+// ============================================================================
+
+type ListState = ReturnType<typeof parseSearchParams>;
+
+function parseListState(searchParams: DataTableSearchParams | undefined): ListState {
+  return sanitizeFilters(parseSearchParams(searchParams ?? {}), ALLOWED_FILTER_KEYS);
+}
+
+// ============================================================================
+// WHERE (compartido entre listado, export y facets)
+// ============================================================================
+
+/** Condiciones de `is_active` (nullable en checklist_templates) a partir de los valores del filtro. */
+function buildIsActiveCondition(values: string[] | undefined) {
+  if (!values?.length) return null;
+  const conditions: { is_active: boolean | null }[] = [];
+  if (values.includes('true')) conditions.push({ is_active: true });
+  if (values.includes('false')) conditions.push({ is_active: false });
+  if (values.includes(NULL_FILTER_VALUE)) conditions.push({ is_active: null });
+  if (!conditions.length) return null;
+  return conditions.length === 1 ? conditions[0] : { OR: conditions };
+}
+
+/**
+ * Resuelve qué fuentes entran y con qué `where`. custom_form no tiene `is_active` (siempre activo), `code`
+ * ni columna `description` (vive en el JSON `form`): un filtro por `code` la excluye, y uno por `description`
+ * busca en el JSON (sensible a mayúsculas, limitación del filtro JSON de Prisma).
+ */
+function buildWhereClause(state: ListState, companyId: string) {
+  const sourceFilter = state.filters['source'];
   const isActiveValues = state.filters['is_active'];
-  if (isActiveValues?.length) {
-    if (isActiveValues.includes(NULL_FILTER_VALUE)) {
-      manualFilters.is_active = null;
-    } else {
-      const boolVal = isActiveValues[0] === 'true';
-      manualFilters.is_active = boolVal;
-    }
-  }
 
-  return withCompany(
-    {
-      ...searchWhere,
-      ...textFiltersWhere,
-      ...dateFiltersWhere,
-      ...manualFilters,
-    },
-    companyId
-  );
-}
+  const includeChecklist = !sourceFilter?.length || sourceFilter.includes('checklist_template');
+  const customFormMatchesActive = !isActiveValues?.length || isActiveValues.includes('true');
+  const codeFilter = state.filters['code']?.[0];
+  const includeCustomForm =
+    (!sourceFilter?.length || sourceFilter.includes('custom_form')) && customFormMatchesActive && !codeFilter;
 
-function buildCustomFormWhere(state: ReturnType<typeof parseSearchParams>, companyId: string) {
-  // custom_form solo tiene 'name' como campo de texto filtrable (sin description ni code)
-  const searchWhere = buildSearchWhere(state.search, ['name']);
-  const textFiltersWhere = buildTextFiltersWhere(state.filters, ['name']);
   const dateFiltersWhere = buildDateRangeFiltersWhere(state.filters, DATE_RANGE_COLUMNS);
+  const isActiveCondition = buildIsActiveCondition(isActiveValues);
 
-  return withCompany(
+  const checklistWhere = withCompany(
     {
-      ...searchWhere,
-      ...textFiltersWhere,
+      ...buildSearchWhere(state.search, ['name', 'description', 'code']),
+      ...buildTextFiltersWhere(state.filters, TEXT_FILTER_COLUMNS),
       ...dateFiltersWhere,
+      // En AND: la condición puede ser un OR y pisaría el OR de la búsqueda global.
+      ...(isActiveCondition ? { AND: [isActiveCondition] } : {}),
     },
     companyId
   );
+
+  const descriptionFilter = state.filters['description']?.[0];
+  const customFormWhere = withCompany(
+    {
+      ...buildSearchWhere(state.search, ['name']),
+      ...buildTextFiltersWhere(state.filters, ['name']),
+      ...dateFiltersWhere,
+      ...(descriptionFilter ? { form: { path: ['description'], string_contains: descriptionFilter } } : {}),
+    },
+    companyId
+  );
+
+  return { includeChecklist, includeCustomForm, checklistWhere, customFormWhere };
 }
 
 // ============================================================================
-// FUNCIONES DE TRANSFORMACIÓN
+// FETCH + TRANSFORMACIÓN
 // ============================================================================
 
 function mapChecklistTemplate(t: {
@@ -109,18 +138,17 @@ function mapChecklistTemplate(t: {
   code: string;
   is_active: boolean | null;
   created_at: Date | null;
-  checklist_answers: { id: string }[];
-}): FormListItem {
+  _count: { checklist_answers: number };
+}) {
   return {
     id: t.id,
     name: t.name,
     description: t.description,
-    code: t.code,
-    source: 'checklist_template',
-    is_active: t.is_active ?? true,
-    created_at: t.created_at ?? new Date(),
-    total_responses: t.checklist_answers.length,
-    frequency: null,
+    code: t.code as string | null,
+    source: 'checklist_template' as FormSource,
+    is_active: t.is_active,
+    created_at: t.created_at,
+    total_responses: t._count.checklist_answers,
   };
 }
 
@@ -129,8 +157,8 @@ function mapCustomForm(f: {
   name: string;
   form: unknown;
   created_at: Date;
-  form_answers: { id: string }[];
-}): FormListItem {
+  _count: { form_answers: number };
+}): ReturnType<typeof mapChecklistTemplate> {
   const formData = f.form as Record<string, string> | null;
   return {
     id: f.id,
@@ -138,10 +166,83 @@ function mapCustomForm(f: {
     description: formData?.description || null,
     code: null,
     source: 'custom_form',
-    is_active: true, // custom_form siempre activo (no tiene campo is_active)
+    is_active: true, // custom_form no tiene is_active: siempre activo
     created_at: f.created_at,
-    total_responses: f.form_answers.length,
-    frequency: formData?.frequency || null,
+    total_responses: f._count.form_answers,
+  };
+}
+
+async function fetchForms(where: ReturnType<typeof buildWhereClause>, limit: number) {
+  const [checklists, customForms] = await Promise.all([
+    where.includeChecklist
+      ? prisma.checklist_templates.findMany({
+          where: where.checklistWhere,
+          orderBy: [{ created_at: 'desc' }, { id: 'asc' }],
+          take: limit,
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            code: true,
+            is_active: true,
+            created_at: true,
+            _count: { select: { checklist_answers: true } },
+          },
+        })
+      : Promise.resolve([]),
+    where.includeCustomForm
+      ? prisma.custom_form.findMany({
+          where: where.customFormWhere,
+          orderBy: [{ created_at: 'desc' }, { id: 'asc' }],
+          take: limit,
+          select: {
+            id: true,
+            name: true,
+            form: true,
+            created_at: true,
+            _count: { select: { form_answers: true } },
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  return {
+    items: [...checklists.map(mapChecklistTemplate), ...customForms.map(mapCustomForm)],
+    checklistCount: checklists.length,
+    customFormCount: customForms.length,
+  };
+}
+
+type FormRow = ReturnType<typeof mapChecklistTemplate>;
+
+/** Comparador: inactivos siempre al final; luego los sorts del usuario (multi-sort) y por fecha desc. */
+function compareForms(sorting: ListState['sorting']) {
+  const userSorts = sorting.filter((s) => VALID_SORT_FIELDS.has(s.id));
+
+  return (a: FormRow, b: FormRow) => {
+    const aInactive = a.is_active === false;
+    const bInactive = b.is_active === false;
+    if (aInactive !== bInactive) return aInactive ? 1 : -1;
+
+    for (const sort of userSorts) {
+      const dir = sort.desc ? -1 : 1;
+      const aVal = a[sort.id as keyof FormRow];
+      const bVal = b[sort.id as keyof FormRow];
+
+      if (aVal == null && bVal == null) continue;
+      if (aVal == null) return dir;
+      if (bVal == null) return -dir;
+
+      let diff: number;
+      if (aVal instanceof Date && bVal instanceof Date) diff = aVal.getTime() - bVal.getTime();
+      else if (typeof aVal === 'number' && typeof bVal === 'number') diff = aVal - bVal;
+      else if (typeof aVal === 'boolean' && typeof bVal === 'boolean') diff = Number(aVal) - Number(bVal);
+      else diff = String(aVal).localeCompare(String(bVal), 'es', { sensitivity: 'base' });
+
+      if (diff !== 0) return diff * dir;
+    }
+
+    return (b.created_at?.getTime() ?? 0) - (a.created_at?.getTime() ?? 0) || a.id.localeCompare(b.id);
   };
 }
 
@@ -150,309 +251,121 @@ function mapCustomForm(f: {
 // ============================================================================
 
 export async function getFormsPaginated(searchParams: DataTableSearchParams) {
+  await requireFormsPermission('view');
   try {
-    const state = parseSearchParams(searchParams);
-    for (const key of IGNORED_PARAMS) {
-      delete state.filters[key];
+    const state = parseListState(searchParams);
+    const companyId = await getActiveCompanyId();
+
+    const { items, checklistCount, customFormCount } = await fetchForms(
+      buildWhereClause(state, companyId),
+      UNION_MAX_ROWS_PER_SOURCE
+    );
+    if (checklistCount >= UNION_MAX_ROWS_PER_SOURCE || customFormCount >= UNION_MAX_ROWS_PER_SOURCE) {
+      logger.warn('Listado de formularios truncado por el tope de la unión en memoria', {
+        data: { companyId, checklistCount, customFormCount, limit: UNION_MAX_ROWS_PER_SOURCE },
+      });
     }
 
-    // Filtros de source
-    const sourceFilter = state.filters['source'];
-    const includeChecklist = !sourceFilter?.length || sourceFilter.includes('checklist_template');
-    const includeCustomForm = !sourceFilter?.length || sourceFilter.includes('custom_form');
+    const sorted = items.sort(compareForms(state.sorting));
 
-    const companyId = await getActiveCompanyId();
-    const checklistWhere = buildChecklistWhere(state, companyId);
-    const customFormWhere = buildCustomFormWhere(state, companyId);
-
-    // Si hay filtro is_active activo, los custom_forms (siempre activos) se excluyen
-    // cuando el usuario filtra por "Inactivo" o "Sin asignar"
-    const isActiveValues = state.filters['is_active'];
-    const hasIsActiveFilter = isActiveValues?.length > 0;
-    const includeCustomFormByActive =
-      !hasIsActiveFilter || isActiveValues.includes('true') || isActiveValues.includes(NULL_FILTER_VALUE);
-
-    // Fetch en paralelo
-    const [checklists, customForms] = await Promise.all([
-      includeChecklist
-        ? prisma.checklist_templates.findMany({
-            where: checklistWhere,
-            select: {
-              id: true,
-              name: true,
-              description: true,
-              code: true,
-              is_active: true,
-              created_at: true,
-              checklist_answers: { select: { id: true } },
-            },
-          })
-        : Promise.resolve([]),
-      includeCustomForm && includeCustomFormByActive
-        ? prisma.custom_form.findMany({
-            where: customFormWhere,
-            select: {
-              id: true,
-              name: true,
-              form: true,
-              created_at: true,
-              form_answers: { select: { id: true } },
-            },
-          })
-        : Promise.resolve([]),
-    ]);
-
-    // Combinar y normalizar
-    const checklistMapped = checklists.map(mapChecklistTemplate);
-    const customFormMapped = customForms.map(mapCustomForm);
-
-    // Campos válidos para sort dinámico (whitelist explícita)
-    const VALID_SORT_FIELDS = new Set([
-      'name',
-      'created_at',
-      'is_active',
-      'total_responses',
-      'source',
-      'code',
-      'description',
-    ]);
-
-    const allForms: FormListItem[] = [...checklistMapped, ...customFormMapped].sort((a, b) => {
-      // Activos primero como criterio estable base
-      if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
-
-      // Aplicar el sort del usuario si hay sorting activo y el campo es válido
-      const userSort = state.sorting[0];
-      if (userSort && VALID_SORT_FIELDS.has(userSort.id)) {
-        const dir = userSort.desc ? -1 : 1;
-        const aVal = a[userSort.id as keyof FormListItem];
-        const bVal = b[userSort.id as keyof FormListItem];
-
-        if (aVal == null && bVal == null) return 0;
-        if (aVal == null) return dir;
-        if (bVal == null) return -dir;
-
-        if (aVal instanceof Date && bVal instanceof Date) {
-          return (aVal.getTime() - bVal.getTime()) * dir;
-        }
-
-        if (typeof aVal === 'number' && typeof bVal === 'number') {
-          return (aVal - bVal) * dir;
-        }
-
-        if (typeof aVal === 'boolean' && typeof bVal === 'boolean') {
-          return (Number(aVal) - Number(bVal)) * dir;
-        }
-
-        const aStr = String(aVal).toLowerCase();
-        const bStr = String(bVal).toLowerCase();
-        return aStr.localeCompare(bStr) * dir;
-      }
-
-      // Fallback: por fecha desc
-      return b.created_at.getTime() - a.created_at.getTime();
-    });
-
-    // Paginación manual (ya que combinamos 2 fuentes)
-    const skip = state.page * state.pageSize;
-    const take = state.pageSize;
-    const total = allForms.length;
-    const data = allForms.slice(skip, skip + take);
-
-    return { data, total };
+    // Paginación en memoria (se combinan 2 fuentes)
+    const { skip, take } = clampedPageParams(state);
+    return { data: sorted.slice(skip, skip + take), total: sorted.length };
   } catch (error) {
     logger.error('Error al obtener formularios paginados', { data: { error } });
     throw new Error('No se pudo obtener la lista de formularios. Intente nuevamente.');
   }
 }
 
-export type FormsListItem = Awaited<ReturnType<typeof getFormsPaginated>>['data'][number];
+/** Fila del listado, inferida del retorno de la query (NUNCA tipada a mano). */
+export type FormListItem = Awaited<ReturnType<typeof getFormsPaginated>>['data'][number];
 
 // ============================================================================
-// EXPORT QUERY (sin paginación)
-// ============================================================================
-
-export async function getAllFormsForExport(searchParams: DataTableSearchParams) {
-  try {
-    const state = parseSearchParams(searchParams);
-    for (const key of IGNORED_PARAMS) {
-      delete state.filters[key];
-    }
-
-    const sourceFilter = state.filters['source'];
-    const includeChecklist = !sourceFilter?.length || sourceFilter.includes('checklist_template');
-    const includeCustomForm = !sourceFilter?.length || sourceFilter.includes('custom_form');
-
-    const companyId = await getActiveCompanyId();
-    const checklistWhere = buildChecklistWhere(state, companyId);
-    const customFormWhere = buildCustomFormWhere(state, companyId);
-
-    const isActiveValues = state.filters['is_active'];
-    const hasIsActiveFilter = isActiveValues?.length > 0;
-    const includeCustomFormByActive =
-      !hasIsActiveFilter || isActiveValues.includes('true') || isActiveValues.includes(NULL_FILTER_VALUE);
-
-    const [checklists, customForms] = await Promise.all([
-      includeChecklist
-        ? prisma.checklist_templates.findMany({
-            where: checklistWhere,
-            select: {
-              id: true,
-              name: true,
-              description: true,
-              code: true,
-              is_active: true,
-              created_at: true,
-              checklist_answers: { select: { id: true } },
-            },
-          })
-        : Promise.resolve([]),
-      includeCustomForm && includeCustomFormByActive
-        ? prisma.custom_form.findMany({
-            where: customFormWhere,
-            select: {
-              id: true,
-              name: true,
-              form: true,
-              created_at: true,
-              form_answers: { select: { id: true } },
-            },
-          })
-        : Promise.resolve([]),
-    ]);
-
-    const allForms: FormListItem[] = [...checklists.map(mapChecklistTemplate), ...customForms.map(mapCustomForm)].sort(
-      (a, b) => {
-        if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
-        return b.created_at.getTime() - a.created_at.getTime();
-      }
-    );
-
-    return allForms;
-  } catch (error) {
-    logger.error('Error al exportar formularios', { data: { error } });
-    throw new Error('No se pudo exportar la lista de formularios. Intente nuevamente.');
-  }
-}
-
-// ============================================================================
-// FACETS (cross-filtering: texto + dateRange + faceted)
+// EXPORT QUERY (sin paginación, con tope)
 // ============================================================================
 
 /**
- * Construye WHERE para facets, excluyendo el filtro de una columna específica
- * (patrón crossWhere idéntico al de Vehicles/OtherEquipment/Employees).
+ * Filas del export con los mismos filtros de la tabla, hasta `EXPORT_MAX_ROWS`. Si se supera (o no hay
+ * permiso) devuelve `{ ok: false, message }`: Next enmascara el mensaje de un error lanzado desde una server
+ * action. El cliente lo abre con `unwrapExportResult`.
  */
-function crossChecklistWhere(state: ReturnType<typeof parseSearchParams>, excludeColumn: string, companyId: string) {
-  const modified = { ...state, filters: { ...state.filters } };
-  delete modified.filters[excludeColumn];
-  delete modified.filters[`${excludeColumn}_from`];
-  delete modified.filters[`${excludeColumn}_to`];
-  return buildChecklistWhere(modified, companyId);
-}
-
-function crossCustomFormWhere(state: ReturnType<typeof parseSearchParams>, excludeColumn: string, companyId: string) {
-  const modified = { ...state, filters: { ...state.filters } };
-  delete modified.filters[excludeColumn];
-  delete modified.filters[`${excludeColumn}_from`];
-  delete modified.filters[`${excludeColumn}_to`];
-  return buildCustomFormWhere(modified, companyId);
-}
-
-export async function getFormsFacets(searchParams?: DataTableSearchParams) {
+export async function getAllFormsForExport(searchParams: DataTableSearchParams): Promise<ExportResult<FormListItem[]>> {
   try {
-    // Parsear filtros activos
-    let parsedState: ReturnType<typeof parseSearchParams> | null = null;
-    if (searchParams && Object.keys(searchParams).length > 0) {
-      parsedState = parseSearchParams(searchParams);
-      for (const key of IGNORED_PARAMS) {
-        delete parsedState.filters[key];
-      }
-    }
+    if (!(await canForms('view'))) return { ok: false, message: 'No tenés permiso para exportar formularios' };
 
-    const hasActiveFilters = parsedState && (Object.keys(parsedState.filters).length > 0 || parsedState.search);
+    const state = parseListState(searchParams);
     const companyId = await getActiveCompanyId();
-    const companyOnlyWhere = withCompany({}, companyId);
 
-    // ── Facet is_active: WHERE con todos los filtros EXCEPTO is_active ──
-    // Para checklist_templates: cross-filter excluyendo is_active
-    // Para custom_form: aplicar todos los filtros (custom_form no tiene is_active)
-    const checklistWhereForIsActive =
-      parsedState && hasActiveFilters ? crossChecklistWhere(parsedState, 'is_active', companyId) : companyOnlyWhere;
-    const customFormWhereForIsActive =
-      parsedState && hasActiveFilters ? crossCustomFormWhere(parsedState, 'is_active', companyId) : companyOnlyWhere;
-
-    // Además, para custom_form en el facet is_active: si hay filtro source activo
-    // que excluye custom_form, el count de custom_form debe ser 0
-    const sourceFilter = parsedState?.filters['source'] ?? [];
-    const includeCustomFormInIsActive = !sourceFilter.length || sourceFilter.includes('custom_form');
-    const includeChecklistInIsActive = !sourceFilter.length || sourceFilter.includes('checklist_template');
-
-    // ── Facet source: WHERE con todos los filtros EXCEPTO source ──
-    const checklistWhereForSource =
-      parsedState && hasActiveFilters ? crossChecklistWhere(parsedState, 'source', companyId) : companyOnlyWhere;
-    const customFormWhereForSource =
-      parsedState && hasActiveFilters ? crossCustomFormWhere(parsedState, 'source', companyId) : companyOnlyWhere;
-
-    // Para el facet source, si hay filtro is_active que excluye activos,
-    // custom_form (siempre activo) debe quedar en 0
-    const isActiveFilter = parsedState?.filters['is_active'] ?? [];
-    const includeCustomFormInSource =
-      !isActiveFilter.length || isActiveFilter.includes('true') || isActiveFilter.includes(NULL_FILTER_VALUE);
-
-    // Queries en paralelo
-    const [checklistIsActiveCounts, checklistCountForSource, customFormCountForSource] = await Promise.all([
-      // Facet is_active: groupBy sobre checklist_templates
-      includeChecklistInIsActive
-        ? prisma.checklist_templates.groupBy({
-            by: ['is_active'],
-            where: checklistWhereForIsActive,
-            _count: true,
-          })
-        : Promise.resolve([]),
-      // Facet source: count checklist_templates
-      prisma.checklist_templates.count({ where: checklistWhereForSource }),
-      // Facet source: count custom_form
-      includeCustomFormInSource ? prisma.custom_form.count({ where: customFormWhereForSource }) : Promise.resolve(0),
-    ]);
-
-    // Count de custom_form para el facet is_active (custom_form siempre = activo)
-    const customFormCountForIsActive = includeCustomFormInIsActive
-      ? await prisma.custom_form.count({ where: customFormWhereForIsActive })
-      : 0;
-
-    // ── Construir Map is_active ──
-    const isActiveMap = new Map<string, number>();
-    for (const row of checklistIsActiveCounts) {
-      if (row.is_active === null) {
-        isActiveMap.set(NULL_FILTER_VALUE, (isActiveMap.get(NULL_FILTER_VALUE) ?? 0) + row._count);
-      } else {
-        const key = String(row.is_active);
-        isActiveMap.set(key, (isActiveMap.get(key) ?? 0) + row._count);
-      }
-    }
-    // custom_form siempre activo → sumar al count de "true"
-    if (customFormCountForIsActive > 0) {
-      isActiveMap.set('true', (isActiveMap.get('true') ?? 0) + customFormCountForIsActive);
+    const { items } = await fetchForms(buildWhereClause(state, companyId), EXPORT_MAX_ROWS + 1);
+    if (items.length > EXPORT_MAX_ROWS) {
+      return {
+        ok: false,
+        message: `La exportación supera el máximo de ${EXPORT_MAX_ROWS.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`,
+      };
     }
 
-    // ── Construir Map source ──
-    const sourceMap = new Map<string, number>();
-    if (checklistCountForSource > 0) {
-      sourceMap.set('checklist_template', checklistCountForSource);
-    }
-    if (customFormCountForSource > 0) {
-      sourceMap.set('custom_form', customFormCountForSource);
-    }
-
-    return {
-      is_active: isActiveMap,
-      source: sourceMap,
-    };
+    return { ok: true, data: items.sort(compareForms(state.sorting)) };
   } catch (error) {
-    logger.error('Error al obtener facets de formularios', { data: { error } });
-    return null;
+    logger.error('Error al exportar formularios', { data: { error } });
+    return { ok: false, message: 'No se pudo exportar la lista de formularios. Intente nuevamente.' };
   }
 }
 
-export type FormsFacets = Awaited<ReturnType<typeof getFormsFacets>>;
+// ============================================================================
+// SINGLE FACET (lazy-load, con cross-filtering)
+// ============================================================================
+
+type FacetResponse = { counts: Map<string, number> };
+
+/**
+ * Counts de UNA columna facetada, sin su propio filtro (cross-filter). `is_active` suma a checklist_templates
+ * las plantillas custom_form (siempre activas); `source` cuenta cada fuente por separado.
+ */
+export async function getFormsSingleFacet(
+  columnId: string,
+  searchParams?: DataTableSearchParams
+): Promise<FacetResponse | null> {
+  await requireFormsPermission('view');
+
+  if (!FACET_COLUMNS.includes(columnId)) {
+    logger.warn('getFormsSingleFacet: columnId desconocido', { data: { columnId } });
+    return null;
+  }
+
+  try {
+    const companyId = await getActiveCompanyId();
+    const where = buildWhereClause(withoutOwnFilter(parseListState(searchParams), columnId), companyId);
+
+    if (columnId === 'is_active') {
+      const [checklistRows, customFormCount] = await Promise.all([
+        where.includeChecklist
+          ? prisma.checklist_templates.groupBy({ by: ['is_active'], where: where.checklistWhere, _count: true })
+          : Promise.resolve([]),
+        where.includeCustomForm ? prisma.custom_form.count({ where: where.customFormWhere }) : Promise.resolve(0),
+      ]);
+
+      return {
+        counts: toFacetMap([
+          ...checklistRows.map((row) => ({ key: row.is_active, count: row._count })),
+          ...(customFormCount > 0 ? [{ key: true, count: customFormCount }] : []),
+        ]),
+      };
+    }
+
+    // source
+    const [checklistCount, customFormCount] = await Promise.all([
+      where.includeChecklist ? prisma.checklist_templates.count({ where: where.checklistWhere }) : Promise.resolve(0),
+      where.includeCustomForm ? prisma.custom_form.count({ where: where.customFormWhere }) : Promise.resolve(0),
+    ]);
+
+    return {
+      counts: toFacetMap([
+        ...(checklistCount > 0 ? [{ key: 'checklist_template', count: checklistCount }] : []),
+        ...(customFormCount > 0 ? [{ key: 'custom_form', count: customFormCount }] : []),
+      ]),
+    };
+  } catch (error) {
+    logger.error('Error al obtener facet de formularios', { data: { error, columnId } });
+    return null;
+  }
+}

@@ -6,14 +6,17 @@ import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { OrderDetailDialog } from '@/features/Mantenimiento/MaintenanceOrders/components/OrderDetailDialog';
 import { ActivityHistoryModal } from '@/features/Mantenimiento/components/ActivityHistoryModal';
+import { ATTENTION_THRESHOLDS } from '@/features/Mantenimiento/lib/attention-thresholds';
+import { RelativeAge } from '@/features/Mantenimiento/shared/components/RelativeAge';
+import { ResourceCell, toResourceCellResource } from '@/features/Mantenimiento/shared/components/ResourceCell';
 import { calculateRepairProgress } from '@/features/Mantenimiento/utils/repairProgress';
+import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
 import { DataTable } from '@/shared/components/common/DataTable';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Clock, Eye } from 'lucide-react';
-import moment from 'moment';
+import { ClipboardCheck, Clock, Eye } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
-import { getResourceInternNumber, getResourceKindLabel, getResourceLabel } from '../../shared/maintenance-resource';
+import { getResourceLabel } from '../../shared/maintenance-resource';
 import type { ValidationOrdersData } from '../actions/actionsServer';
 
 // ============================================================================
@@ -45,8 +48,15 @@ function HistoryCell({ maintenanceOrderId, orderNumber }: { maintenanceOrderId: 
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button variant="ghost" size="icon" onClick={() => setOpen(true)} title="Ver historial">
-        <Clock className="h-4 w-4" />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        onClick={() => setOpen(true)}
+        title="Ver historial"
+        aria-label="Ver historial de la orden"
+      >
+        <Clock className="h-4 w-4" aria-hidden="true" />
       </Button>
       <ActivityHistoryModal
         open={open}
@@ -62,7 +72,9 @@ function HistoryCell({ maintenanceOrderId, orderNumber }: { maintenanceOrderId: 
 // TABLE ID
 // ============================================================================
 
-const TABLE_ID = 'approval-validation-orders';
+/** `-v2`: columnas nuevas, así no se hereda la visibilidad guardada de la tabla anterior. */
+const TABLE_ID = 'approval-validation-orders-v2';
+const PARAM_NAMESPACE = 'approval-validation-orders';
 
 // ============================================================================
 // INNER TABLE COMPONENT (tipado correcto via genérico)
@@ -74,9 +86,12 @@ const TABLE_ID = 'approval-validation-orders';
  */
 function ValidationOrdersTable({
   data,
+  canClose,
   onViewDetail,
 }: {
   data: ValidationOrder[];
+  /** `ordenes_mantenimiento:update`: sin él la fila solo permite ver la orden. */
+  canClose: boolean;
   onViewDetail: (order: ValidationOrder) => void;
 }) {
   const columns: ColumnDef<ValidationOrder>[] = useMemo(
@@ -87,7 +102,12 @@ function ValidationOrdersTable({
         id: 'order_number',
         meta: { title: 'N° Orden' },
         header: ({ column }) => <DataTableColumnHeader column={column} title="N° Orden" />,
-        cell: ({ row }) => <span className="font-mono text-sm font-medium">{row.original.order_number ?? '-'}</span>,
+        cell: ({ row }) =>
+          row.original.order_number ? (
+            <span className="font-mono text-sm font-medium">{row.original.order_number}</span>
+          ) : (
+            <span className="text-muted-foreground text-sm">Se asigna al ingresar</span>
+          ),
       },
 
       // ── Equipo / Vehículo ─────────────────────────────────────────────────
@@ -96,18 +116,7 @@ function ValidationOrdersTable({
         accessorFn: (row) => getVehicleLabel(row),
         meta: { title: 'Equipo' },
         header: ({ column }) => <DataTableColumnHeader column={column} title="Equipo" />,
-        cell: ({ row }) => {
-          const internNumber = getResourceInternNumber(row.original);
-          return (
-            <div className="flex flex-col">
-              <span className="font-medium">{getVehicleLabel(row.original)}</span>
-              <span className="text-xs text-muted-foreground">
-                {getResourceKindLabel(row.original)}
-                {internNumber ? ` · #${internNumber}` : ''}
-              </span>
-            </div>
-          );
-        },
+        cell: ({ row }) => <ResourceCell resource={toResourceCellResource(row.original)} />,
         enableSorting: false,
       },
 
@@ -189,7 +198,11 @@ function ValidationOrdersTable({
         header: ({ column }) => <DataTableColumnHeader column={column} title="Ingreso a Taller" />,
         cell: ({ row }) => {
           const date = row.original.workshop_entry_date;
-          return <span className="text-sm">{date ? moment(date).format('DD/MM/YYYY') : '-'}</span>;
+          return date ? (
+            <RelativeAge value={date} thresholdDays={ATTENTION_THRESHOLDS.inWorkshopDays} />
+          ) : (
+            <span className="text-muted-foreground text-sm">—</span>
+          );
         },
       },
 
@@ -212,18 +225,23 @@ function ValidationOrdersTable({
         header: 'Acciones',
         cell: ({ row }) => (
           <Button
-            variant="ghost"
+            type="button"
+            variant={canClose ? 'default' : 'ghost'}
             size="sm"
             onClick={() => onViewDetail(row.original)}
-            title="Ver detalle y validar orden"
+            title={canClose ? 'Ver detalle y validar orden' : 'Ver detalle de la orden'}
           >
-            <Eye className="h-4 w-4 mr-1" />
-            Ver detalle
+            {canClose ? (
+              <ClipboardCheck className="h-4 w-4 mr-1" aria-hidden="true" />
+            ) : (
+              <Eye className="h-4 w-4 mr-1" aria-hidden="true" />
+            )}
+            {canClose ? 'Revisar y cerrar' : 'Ver orden'}
           </Button>
         ),
       },
     ],
-    [onViewDetail]
+    [canClose, onViewDetail]
   );
 
   return (
@@ -232,8 +250,10 @@ function ValidationOrdersTable({
       data={data}
       totalRows={data.length}
       searchParams={{}}
-      paramNamespace={TABLE_ID}
+      paramNamespace={PARAM_NAMESPACE}
       tableId={TABLE_ID}
+      inMemory
+      mobileCards
       searchPlaceholder="Buscar por N° orden o equipo..."
       emptyMessage="No hay órdenes pendientes de validación"
       showFilterToggle={false}
@@ -253,6 +273,8 @@ interface Props {
 
 export function _ValidationOrdersDataTable({ validationOrders }: Props) {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const { hasPermission } = usePermissions();
+  const canClose = hasPermission('mantenimiento', 'ordenes_mantenimiento', 'update');
 
   const handleViewDetail = useCallback((order: ValidationOrder) => {
     setSelectedOrderId(order.id);
@@ -260,7 +282,7 @@ export function _ValidationOrdersDataTable({ validationOrders }: Props) {
 
   return (
     <>
-      <ValidationOrdersTable data={validationOrders} onViewDetail={handleViewDetail} />
+      <ValidationOrdersTable data={validationOrders} canClose={canClose} onViewDetail={handleViewDetail} />
 
       <OrderDetailDialog
         orderId={selectedOrderId}

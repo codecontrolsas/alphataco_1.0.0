@@ -1,7 +1,11 @@
 'use server';
 
-import { composeAnd, GOMERIA_EXPORT_MAX_ROWS, gomeriaExportTooLargeMessage } from '@/features/Mantenimiento/Gomeria/shared/list-query';
 import { requireGomeriaPermission } from '@/features/Mantenimiento/Gomeria/shared/access.server';
+import {
+  composeAnd,
+  GOMERIA_EXPORT_MAX_ROWS,
+  gomeriaExportTooLargeMessage,
+} from '@/features/Mantenimiento/Gomeria/shared/list-query';
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
@@ -86,11 +90,7 @@ function buildWhereClause(state: ListState, companyId: string) {
   return composeAnd<Prisma.tire_service_ordersWhereInput>(
     { company_id: companyId },
     buildSearchWhere(state.search, ['kilometer']),
-    buildFiltersWhere(
-      state.filters,
-      {},
-      { exclude: [...TEXT_FILTER_COLUMNS, ...dateRangeKeys(DATE_RANGE_COLUMNS)] }
-    ),
+    buildFiltersWhere(state.filters, {}, { exclude: [...TEXT_FILTER_COLUMNS, ...dateRangeKeys(DATE_RANGE_COLUMNS)] }),
     buildTextFiltersWhere(state.filters, TEXT_FILTER_COLUMNS),
     buildDateRangeFiltersWhere(state.filters, DATE_RANGE_COLUMNS)
   );
@@ -137,6 +137,44 @@ export async function getServiceOrdersPaginated(searchParams: DataTableSearchPar
 }
 
 export type ServiceOrderListItem = Awaited<ReturnType<typeof getServiceOrdersPaginated>>['data'][number];
+
+// ============================================================================
+// OPEN ORDERS SUMMARY (banda "N órdenes abiertas")
+// ============================================================================
+
+/**
+ * Cuántas órdenes de gomería siguen abiertas en la empresa activa y cuál es la última (la que se retoma con
+ * "Continuar orden"). Mismo perímetro que el listado; solo `count` y una fila con los campos de la banda.
+ */
+export async function getOpenServiceOrdersSummary() {
+  const companyId = await requireGomeriaPermission('ordenes_gomeria', 'view');
+
+  try {
+    const where = composeAnd<Prisma.tire_service_ordersWhereInput>({ company_id: companyId }, { status: 'OPEN' });
+
+    const [count, latest] = await Promise.all([
+      prisma.tire_service_orders.count({ where }),
+      prisma.tire_service_orders.findFirst({
+        where,
+        orderBy: [{ created_at: 'desc' }, { id: 'asc' }],
+        select: {
+          id: true,
+          vehicle_id: true,
+          trailer_vehicle_id: true,
+          created_at: true,
+          vehicle: { select: { domain: true } },
+          trailer: { select: { domain: true } },
+          creator: { select: { fullname: true } },
+        },
+      }),
+    ]);
+
+    return { count, latest };
+  } catch (error) {
+    logger.error('Error fetching open service orders summary', { data: { error } });
+    throw new Error('Error al obtener las órdenes abiertas');
+  }
+}
 
 // ============================================================================
 // EXPORT QUERY (con tope)

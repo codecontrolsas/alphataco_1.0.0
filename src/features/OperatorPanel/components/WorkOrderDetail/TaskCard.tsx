@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RepairGroupBadge } from '@/features/Mantenimiento/shared/components/RepairGroupBadge';
 import { RepairItemPhotos } from '@/features/Mantenimiento/shared/components/RepairItemPhotos';
-import { AlertTriangle, Clock, RotateCcw, UserPlus } from 'lucide-react';
+import type { work_order_item_status } from '@/generated/prisma/client';
+import { REPAIR_STATUS_UI, TONE_TO_BADGE } from '@/features/Mantenimiento/lib/status-presentation';
+import { RotateCcw, UserPlus } from 'lucide-react';
 import { TaskNotes } from './TaskNotes';
 
 type BadgeVariant = NonNullable<BadgeProps['variant']>;
@@ -79,16 +81,20 @@ export function TaskCard({
   const repairType = repair.types_of_repairs;
 
   const borderColor = isCompleted
-    ? 'border-l-emerald-400'
+    ? 'border-l-ok'
     : isRejected
-      ? 'border-l-red-500'
+      ? 'border-l-danger'
       : isReassignmentRequested
-        ? 'border-l-orange-400'
+        ? 'border-l-danger'
         : isPendingApproval
-          ? 'border-l-amber-400'
-          : 'border-l-slate-300 dark:border-l-slate-600';
+          ? 'border-l-warn'
+          : 'border-l-pending';
 
   const isBlocked = isBlockedByDiag || isBlockedByPending;
+  const attentionStatusUi =
+    isRejected || isPendingApproval || isReassignmentRequested
+      ? REPAIR_STATUS_UI[repair.status as work_order_item_status]
+      : null;
 
   /**
    * Atenuacion del contenido.
@@ -128,7 +134,7 @@ export function TaskCard({
                 isRejected ||
                 isMutating
               }
-              className="mt-0.5 h-5 w-5 sm:h-6 sm:w-6 rounded-md"
+              className="mt-0.5 size-6 rounded-md"
             />
           </div>
           <div className="flex-1 min-w-0 space-y-2">
@@ -136,7 +142,7 @@ export function TaskCard({
               {/* Task name */}
               <label
                 htmlFor={`task-${repair.id}`}
-                className={`text-sm font-semibold cursor-pointer block sm:text-base leading-tight ${
+                className={`text-base font-semibold cursor-pointer block leading-tight ${
                   isCompleted ? 'line-through text-muted-foreground' : ''
                 }`}
               >
@@ -147,51 +153,40 @@ export function TaskCard({
               <div className="flex flex-wrap gap-1">
                 <RepairGroupBadge groupName={groupName} />
                 {repairType?.name && repairType.name !== title && (
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                  <Badge variant="outline" className="text-xs px-1.5 py-0">
                     {repairType.name}
                   </Badge>
                 )}
                 {repairType?.criticity && (
                   <Badge
                     variant={criticityVariants[repairType.criticity] || 'default'}
-                    className="text-[10px] px-1.5 py-0"
+                    className="text-xs px-1.5 py-0"
                   >
                     {repairType.criticity}
                   </Badge>
                 )}
                 {repairType?.autorizable && (
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                  <Badge variant="outline" className="text-xs px-1.5 py-0">
                     Autorizable
                   </Badge>
                 )}
                 {repair.is_operator_added && (
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-0.5">
-                    <UserPlus className="h-2.5 w-2.5" />
+                  <Badge variant="secondary" className="text-xs px-1.5 py-0 gap-0.5">
+                    <UserPlus aria-hidden="true" className="h-3 w-3" />
                     Operario
                   </Badge>
                 )}
-                {isRejected && (
-                  <Badge variant="destructive" className="text-[10px] px-1.5 py-0 gap-0.5">
-                    <AlertTriangle className="h-2.5 w-2.5" />
-                    Rechazada
-                  </Badge>
-                )}
-                {isPendingApproval && (
-                  <Badge variant="warning" className="text-[10px] px-1.5 py-0 gap-0.5">
-                    <Clock className="h-2.5 w-2.5" />
-                    Pend. Aprobacion
-                  </Badge>
-                )}
-                {isReassignmentRequested && (
-                  <Badge variant="destructive" className="text-[10px] px-1.5 py-0 gap-0.5">
-                    <AlertTriangle className="h-2.5 w-2.5" />
-                    Devolucion
+                {/* Estados que bloquean la tarea: etiqueta e ícono de la fuente única (nunca solo color) */}
+                {attentionStatusUi && (
+                  <Badge variant={TONE_TO_BADGE[attentionStatusUi.tone]} className="text-xs px-1.5 py-0 gap-0.5">
+                    <attentionStatusUi.icon aria-hidden="true" className="h-3 w-3" />
+                    {attentionStatusUi.label}
                   </Badge>
                 )}
               </div>
 
               {/* Description */}
-              {description && <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>}
+              {description && <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>}
             </div>
 
             {/* Fotos del pedido: HERMANAS del bloque atenuado, nunca descendientes.
@@ -200,7 +195,7 @@ export function TaskCard({
             {images.length > 0 && (
               <div className="space-y-1">
                 {isBlocked && (
-                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                     Fotos del pedido
                   </p>
                 )}
@@ -212,20 +207,20 @@ export function TaskCard({
               {/* Rejection reason (from validation) */}
               {isRejected && repair.rejection_reason && (
                 <div className="p-2.5 bg-destructive/10 rounded-md border border-destructive/20">
-                  <p className="text-[10px] font-semibold text-destructive uppercase tracking-wide">
+                  <p className="text-xs font-semibold text-destructive uppercase tracking-wide">
                     Motivo de rechazo
                   </p>
-                  <p className="text-xs text-destructive/80 mt-0.5">{repair.rejection_reason}</p>
+                  <p className="text-sm text-destructive/80 mt-0.5">{repair.rejection_reason}</p>
                 </div>
               )}
 
               {/* Return reason */}
               {repair.return_reason && !isRejected && (
                 <div className="p-2.5 bg-destructive/10 rounded-md border border-destructive/20">
-                  <p className="text-[10px] font-semibold text-destructive uppercase tracking-wide">
+                  <p className="text-xs font-semibold text-destructive uppercase tracking-wide">
                     Motivo de devolucion
                   </p>
-                  <p className="text-xs text-destructive/80 mt-0.5">{repair.return_reason}</p>
+                  <p className="text-sm text-destructive/80 mt-0.5">{repair.return_reason}</p>
                 </div>
               )}
 
@@ -247,9 +242,9 @@ export function TaskCard({
                   variant="ghost"
                   size="sm"
                   onClick={() => onReturn(repair.id)}
-                  className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-destructive"
+                  className="min-h-11 gap-1.5 text-sm text-muted-foreground hover:text-destructive"
                 >
-                  <RotateCcw className="h-3 w-3" />
+                  <RotateCcw aria-hidden="true" className="h-4 w-4" />
                   Devolver tarea
                 </Button>
               )}

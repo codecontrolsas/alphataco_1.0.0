@@ -20,6 +20,7 @@ import { nextPurchaseDocumentNumber } from '../lib/document-number';
 import { lockRequestsForLines, recomputeRequestProgress, remainingOf, requestLineLabel } from '../lib/order-progress';
 import { canApplyPurchaseOrderAction, type PurchaseOrderStatus } from '../lib/order-state-machine';
 import { computeOrderLine, computeOrderTotals } from '../lib/order-totals';
+import { assertReceiptCancellationKeepsInvoicesCovered } from '../lib/invoices';
 import { lockPurchaseOrder, receivedByOrderLine, recomputeOrderReceiptStatus } from '../lib/orders';
 import { PurchaseError } from '../lib/purchase-errors';
 import { splitReceived } from '../lib/receipt-math';
@@ -348,6 +349,14 @@ export async function cancelPurchaseReceipt(id: string, reason: string): Promise
           }
         }
 
+        // Facturado vs recibido: si la anulacion dejaria facturas vigentes sin respaldo, se bloquea
+        // antes de revertir nada (todo corre en esta transaccion, con la OC ya lockeada).
+        await assertReceiptCancellationKeepsInvoicesCovered(
+          tx,
+          receipt.id,
+          complements.map((c) => c.id)
+        );
+
         // Solicitudes de la OC y de las complementarias, antes del motor (orden de locks).
         const lines = await tx.purchase_order_lines.findMany({
           where: { OR: [{ order_id: receipt.orderId }, { order_id: { in: complements.map((c) => c.id) } }] },
@@ -534,7 +543,6 @@ export async function getPurchaseReceiptDetail(id: string) {
         }),
         unitAbbr: requestLine.unit.abbreviation,
         quantity: line.quantity.toString(),
-        unitCost: line.unit_cost.toString(),
         batchNumber: line.batch_number,
         batchExpiresOn: line.batch_expires_on ? line.batch_expires_on.toISOString().slice(0, 10) : null,
         serialNumbers: line.serial_numbers,

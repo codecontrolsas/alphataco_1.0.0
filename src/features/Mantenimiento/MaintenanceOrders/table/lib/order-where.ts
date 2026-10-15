@@ -11,6 +11,7 @@ import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { withoutOwnFilter } from '@/shared/lib/table-facets';
 import { visibleEquipmentTypeCondition } from '../../../shared/maintenance-resource';
 import { computeCurrentSector, type CurrentSectorItemLike } from '../../utils/currentSector';
+import { buildInWorkshopAttentionCondition, isInWorkshopAttentionKey } from './order-attention';
 
 // ============================================================================
 // CONSTANTS
@@ -30,6 +31,8 @@ const ALLOWED_FILTER_KEYS: ReadonlySet<string> = new Set([
   'status',
   'vehicle',
   'currentSector',
+  // Filtro virtual de las tarjetas de métricas (sin columna): ver `order-attention`
+  'attention',
   ...VEHICLE_TEXT_FILTER_COLUMNS,
   ...TEXT_FILTER_COLUMNS,
   ...dateRangeKeys(DATE_RANGE_COLUMNS),
@@ -200,6 +203,10 @@ export async function buildOrdersWhere(
   // Tipos de equipamiento ocultos para el usuario actual (ticket 690)
   const equipmentCondition = visibleEquipmentTypeCondition(hiddenTypeIds);
   if (equipmentCondition) and.push(equipmentCondition);
+
+  // ─── Atención (virtual): la MISMA condición que cuenta la tarjeta de métricas ──────────────────
+  const attentionValue = filters['attention']?.[0];
+  if (isInWorkshopAttentionKey(attentionValue)) and.push(buildInWorkshopAttentionCondition(attentionValue));
 
   // ─── Sector actual (calculado — ticket 675) ─────────────────────────────────
   // Se resuelve al final, con el resto ya armado, para que la subquery solo considere

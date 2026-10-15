@@ -13,8 +13,8 @@ import {
   rejectPurchaseOrder,
   sendPurchaseOrder,
   submitPurchaseOrder,
-  type PurchaseOrderDetail,
 } from '../../actions/orders.server';
+import type { PurchaseOrderDetail } from '../../lib/order-query-types';
 import { ConfirmAction } from '../../components/ConfirmAction';
 import { ExpiredSupplierDocumentsAlert } from '../../components/ExpiredSupplierDocumentsAlert';
 import { SendToSupplierDialog } from '../../components/SendToSupplierDialog';

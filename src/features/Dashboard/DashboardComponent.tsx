@@ -1,6 +1,7 @@
 import PrincipalSkeleton from '@/features/Dashboard/Principal/components/PrincipalSkeleton';
 import { getUserPermissionsMapServer } from '@/features/Permissions';
 import { SectionManagerServer } from '@/features/TabsManager';
+import { SectionErrorBoundary } from '@/shared/components/common/SectionErrorBoundary';
 import { BarChart3, FileText, Home } from 'lucide-react';
 import { Suspense } from 'react';
 import DocumentsTabContent from './Documentacion/DocumentsTabContent';
@@ -23,6 +24,7 @@ export default async function DashboardComponent({
         searchParams={searchParams}
         defaultTab="principal"
         permissions={permissions} // ← Pasar permisos explícitamente como prop
+        sectionNav
         tabs={[
           {
             value: 'principal',
@@ -35,9 +37,11 @@ export default async function DashboardComponent({
             moduleSlug: 'dashboard',
             tabSlug: 'principal',
             content: (
-              <Suspense fallback={<PrincipalSkeleton />}>
-                <PrincipalTabContent />
-              </Suspense>
+              <SectionErrorBoundary title="No se pudo mostrar Principal">
+                <Suspense fallback={<PrincipalSkeleton />}>
+                  <PrincipalTabContent />
+                </Suspense>
+              </SectionErrorBoundary>
             ),
           },
           {
@@ -50,7 +54,11 @@ export default async function DashboardComponent({
             ),
             moduleSlug: 'dashboard',
             tabSlug: 'documentacion',
-            content: <DocumentsTabContent searchParams={searchParams} permissions={permissions} />,
+            content: (
+              <SectionErrorBoundary title="No se pudo mostrar Documentación">
+                <DocumentsTabContent searchParams={searchParams} permissions={permissions} />
+              </SectionErrorBoundary>
+            ),
           },
           {
             value: 'estadisticas',
@@ -62,7 +70,11 @@ export default async function DashboardComponent({
             ),
             moduleSlug: 'dashboard',
             tabSlug: 'estadisticas',
-            content: <EstadisticasTabComponent searchParams={searchParams} permissions={permissions} />,
+            content: (
+              <SectionErrorBoundary title="No se pudo mostrar Estadísticas">
+                <EstadisticasTabComponent searchParams={searchParams} permissions={permissions} />
+              </SectionErrorBoundary>
+            ),
           },
         ]}
       />

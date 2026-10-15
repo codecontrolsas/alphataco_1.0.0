@@ -1,8 +1,7 @@
 import { SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Clock } from 'lucide-react';
-import moment from 'moment';
-import 'moment/locale/es';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import type { Ticket } from '@/shared/lib/taskapp/types';
+import { Clock } from 'lucide-react';
 import { parseCategoryFromTitle } from '../../constants/categories';
 import { TicketCategoryBadge } from '../TicketCategoryBadge';
 import { TicketPriorityBadge } from '../TicketPriorityBadge';
@@ -27,9 +26,7 @@ export function TicketDetailHeader({ ticket }: Props) {
             {ticket.estimated_hours} hs estimadas
           </span>
         )}
-        <span className="text-xs text-muted-foreground">
-          Creado {moment(ticket.created_at).locale('es').format('LL [a las] HH:mm')}
-        </span>
+        <span className="text-xs text-muted-foreground">Creado {formatArgentinaDateTime(ticket.created_at)}</span>
       </div>
     </SheetHeader>
   );

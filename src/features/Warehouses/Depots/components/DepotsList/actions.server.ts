@@ -1,6 +1,5 @@
 'use server';
 
-import { pickFilters } from '../../../lib/filters';
 import { employeeLabel } from '../../../lib/labels';
 import { checkPermissionServer } from '@/features/Permissions';
 import type { Prisma } from '@/generated/prisma/client';
@@ -15,7 +14,10 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import type { ExportResult } from '@/shared/lib/export-result';
+import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import { prisma } from '@/shared/lib/prisma';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 
 const logger = new Logger('features/Warehouses/Depots/DepotsList');
@@ -35,8 +37,21 @@ const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Prisma.warehousesOrde
 const TEXT_FILTER_COLUMNS = ['code', 'name', 'address'];
 const DATE_RANGE_COLUMNS = ['created_at'];
 
-/** Unicas columnas que pasan por `buildFiltersWhere` (lista de permitidas, ver `lib/filters.ts`). */
-const FACETED_COLUMNS = ['manager'] as const;
+/** Tope de filas de un export. */
+const EXPORT_MAX = 10_000;
+
+/** Claves de filtro que la tabla realmente usa: el resto de la URL se descarta antes de armar el WHERE. */
+const ALLOWED_FILTER_KEYS = new Set<string>([
+  'manager',
+  'is_active',
+  'fileNumber',
+  ...TEXT_FILTER_COLUMNS,
+  ...dateRangeKeys(DATE_RANGE_COLUMNS),
+]);
+
+function parseListState(searchParams: DataTableSearchParams) {
+  return sanitizeFilters(parseSearchParams(searchParams), ALLOWED_FILTER_KEYS);
+}
 
 /** columnId (URL) -> campo Prisma, solo donde difieren. */
 const COLUMN_MAP: Record<string, string> = { manager: 'manager_employee_id' };
@@ -56,12 +71,12 @@ const DEPOT_SELECT = {
 // ============================================================================
 
 /** WHERE compartido entre paginated, export y facets. */
-function buildWhereClause(companyId: string, state: ReturnType<typeof parseSearchParams>): Prisma.warehousesWhereInput {
+function buildWhereClause(companyId: string, state: ReturnType<typeof parseListState>): Prisma.warehousesWhereInput {
   const and: Prisma.warehousesWhereInput[] = [{ company_id: companyId }];
 
   and.push(buildSearchWhere(state.search, ['code', 'name', 'address']) as Prisma.warehousesWhereInput);
   and.push(
-    buildFiltersWhere(pickFilters(state.filters, FACETED_COLUMNS), COLUMN_MAP) as Prisma.warehousesWhereInput
+    buildFiltersWhere(state.filters.manager ? { manager: state.filters.manager } : {}, COLUMN_MAP) as Prisma.warehousesWhereInput
   );
   and.push(buildTextFiltersWhere(state.filters, TEXT_FILTER_COLUMNS) as Prisma.warehousesWhereInput);
 
@@ -94,7 +109,7 @@ export async function getDepotsPaginated(searchParams: DataTableSearchParams) {
   const companyId = await getActiveCompanyId();
 
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseListState(searchParams);
     const { skip, take } = stateToPrismaParams(state);
     const where = buildWhereClause(companyId, state);
 
@@ -127,21 +142,34 @@ export async function getDepotsPaginated(searchParams: DataTableSearchParams) {
 // EXPORT (sin paginacion)
 // ============================================================================
 
-export async function getAllDepotsForExport(searchParams: DataTableSearchParams) {
-  if (!(await checkPermissionServer('almacenes', 'depositos', 'view'))) return [];
-  const companyId = await getActiveCompanyId();
+export async function getAllDepotsForExport(searchParams: DataTableSearchParams): Promise<ExportResult<DepotListItem[]>> {
+  if (!(await checkPermissionServer('almacenes', 'depositos', 'view'))) {
+    return { ok: false, message: 'No tenés permiso para exportar los depósitos.' };
+  }
 
   try {
-    const state = parseSearchParams(searchParams);
+    const companyId = await getActiveCompanyId();
+    const state = parseListState(searchParams);
     const where = buildWhereClause(companyId, state);
-    return await prisma.warehouses.findMany({
-      where,
-      orderBy: [{ is_active: 'desc' }, { name: 'asc' }],
-      select: DEPOT_SELECT,
+    const orderBy: Prisma.warehousesOrderByWithRelationInput[] = [{ is_active: 'desc' }, { name: 'asc' }, { id: 'asc' }];
+
+    const rows = await fetchExportRowsInBatches({
+      maxRows: EXPORT_MAX,
+      listIds: (take) => prisma.warehouses.findMany({ where, orderBy, select: { id: true }, take }),
+      fetchByIds: (ids) =>
+        prisma.warehouses.findMany({ where: { id: { in: ids }, company_id: companyId }, select: DEPOT_SELECT }),
+      tooLargeMessage: (maxRows) =>
+        `Hay más de ${maxRows.toLocaleString('es-AR')} depósitos con los filtros actuales. Acote la exportación con filtros.`,
     });
+    return { ok: true, data: rows };
   } catch (error) {
     logger.error('Error al exportar depositos', { data: { error } });
-    throw new Error('No se pudo exportar la lista de depositos');
+    // Next enmascara el mensaje de un error lanzado desde una action: se devuelve como resultado.
+    return {
+      ok: false,
+      message:
+        error instanceof ExportTooLargeError ? error.message : 'No se pudo exportar la lista de depósitos. Intente nuevamente.',
+    };
   }
 }
 
@@ -156,7 +184,7 @@ export async function getDepotSingleFacet(
   if (!(await checkPermissionServer('almacenes', 'depositos', 'view'))) return null;
   const companyId = await getActiveCompanyId();
 
-  const parsed = searchParams && Object.keys(searchParams).length > 0 ? parseSearchParams(searchParams) : null;
+  const parsed = searchParams && Object.keys(searchParams).length > 0 ? parseListState(searchParams) : null;
 
   /** WHERE con todos los filtros activos MENOS el de la columna que se esta abriendo. */
   function crossWhere(excludeColumn: string): Prisma.warehousesWhereInput {

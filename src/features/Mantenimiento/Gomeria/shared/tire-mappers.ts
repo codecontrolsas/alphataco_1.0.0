@@ -1,23 +1,17 @@
 import type { BadgeProps } from '@/components/ui/badge';
+import {
+  tireServiceOrderStatusBadgesFromUi,
+  tireServiceOrderStatusLabelsFromUi,
+  tireStatusBadgesFromUi,
+  tireStatusLabelsFromUi,
+} from './tire-status-presentation';
 
 type BadgeVariant = NonNullable<BadgeProps['variant']>;
 
 // TireStatus
-export const tireStatusLabels: Record<string, string> = {
-  AVAILABLE: 'Disponible',
-  INSTALLED: 'Instalada',
-  IN_REPAIR: 'En reparación',
-  DISCARDED: 'Descartada',
-  MISSING: 'Extraviada',
-};
+export const tireStatusLabels: Record<string, string> = tireStatusLabelsFromUi;
 
-export const tireStatusBadges: Record<string, BadgeVariant> = {
-  AVAILABLE: 'success',
-  INSTALLED: 'default',
-  IN_REPAIR: 'yellow',
-  DISCARDED: 'destructive',
-  MISSING: 'destructive',
-};
+export const tireStatusBadges: Record<string, BadgeVariant> = tireStatusBadgesFromUi;
 
 // TireRetreadLevel
 export const tireRetreadLabels: Record<string, string> = {
@@ -56,15 +50,9 @@ export const tireOldDestinationLabels: Record<string, string> = {
 };
 
 // TireServiceOrderStatus
-export const tireServiceOrderStatusLabels: Record<string, string> = {
-  OPEN: 'Abierta',
-  CLOSED: 'Cerrada',
-};
+export const tireServiceOrderStatusLabels: Record<string, string> = tireServiceOrderStatusLabelsFromUi;
 
-export const tireServiceOrderStatusBadges: Record<string, BadgeVariant> = {
-  OPEN: 'yellow',
-  CLOSED: 'success',
-};
+export const tireServiceOrderStatusBadges: Record<string, BadgeVariant> = tireServiceOrderStatusBadgesFromUi;
 
 // TirePositionSide
 export const tirePositionSideLabels: Record<string, string> = {

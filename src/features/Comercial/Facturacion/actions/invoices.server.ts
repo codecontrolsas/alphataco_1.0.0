@@ -87,7 +87,11 @@ function serializeInvoice(invoice: LoadedInvoice) {
     associatedInvoice: invoice.associated_invoice
       ? {
           id: invoice.associated_invoice.id,
-          label: formatVoucherLabel(invoice.associated_invoice.cbte_type, invoice.associated_invoice.sales_point.number, invoice.associated_invoice.number),
+          label: formatVoucherLabel(
+            invoice.associated_invoice.cbte_type,
+            invoice.associated_invoice.sales_point.number,
+            invoice.associated_invoice.number
+          ),
           total: money(invoice.associated_invoice.total),
         }
       : null,
@@ -101,7 +105,9 @@ function serializeInvoice(invoice: LoadedInvoice) {
     cae: invoice.cae,
     caeDueDate: toDateOnly(invoice.cae_due_date),
     authorizedAt: invoice.authorized_at?.toISOString() ?? null,
-    arcaObservations: Array.isArray(invoice.arca_observations) ? (invoice.arca_observations as { code: number; message: string }[]) : [],
+    arcaObservations: Array.isArray(invoice.arca_observations)
+      ? (invoice.arca_observations as { code: number; message: string }[])
+      : [],
     arcaErrors: Array.isArray(invoice.arca_errors) ? (invoice.arca_errors as { code: number; message: string }[]) : [],
     needsReview: invoice.needs_review,
     reviewNote: invoice.review_note,
@@ -220,6 +226,7 @@ export async function getInvoiceableCustomers() {
 export async function getInvoiceableCertifications(customerId: string) {
   const canView = await checkPermissionServer('comercial', 'facturacion', 'view');
   if (!canView) return [];
+  const canViewPrices = await checkPermissionServer('comercial', 'facturacion', 'view_prices');
   const companyId = await getActiveCompanyId();
   const overview = await getFiscalDataOverview();
   const rows = await prisma.certifications.findMany({
@@ -241,7 +248,8 @@ export async function getInvoiceableCertifications(customerId: string) {
     periodFrom: toDateOnly(r.period_from),
     periodTo: toDateOnly(r.period_to),
     currency: r.currency,
-    total: money(r.total),
+    // Sin `view_prices` el importe no sale del servidor.
+    total: canViewPrices ? money(r.total) : null,
     contract: r.customer_services.service_name,
     contractNumber: r.customer_services.contract_number,
   }));
@@ -257,5 +265,10 @@ export async function getCustomersForManualInvoice() {
     select: { id: true, name: true, cuit: true, vat_condition_id: true },
     orderBy: { name: 'asc' },
   });
-  return rows.map((c) => ({ id: c.id, name: c.name, cuit: c.cuit.toString(), hasFiscalData: c.vat_condition_id !== null }));
+  return rows.map((c) => ({
+    id: c.id,
+    name: c.name,
+    cuit: c.cuit.toString(),
+    hasFiscalData: c.vat_condition_id !== null,
+  }));
 }

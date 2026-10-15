@@ -1,34 +1,16 @@
-import { Button } from '@/components/ui/button';
-import { ArrowLeft } from 'lucide-react';
-import Link from 'next/link';
-import type { ReactNode } from 'react';
-import type { SupplierInvoiceDetail, SupplierInvoiceFormData } from '../actions/invoices.server';
+import { PurchasesPageShell } from '../components/PurchasesPageShell';
+import type { SupplierInvoiceDetail, SupplierInvoiceFormData } from '../lib/invoice-query-types';
 import type { SupplierInvoiceFormValues } from '../schemas/invoices';
 import { SupplierInvoiceDetailView } from './components/SupplierInvoiceDetailView';
 import { SupplierInvoiceForm } from './components/SupplierInvoiceForm';
-
-function Shell({ title, back, children }: { title?: string; back: { href: string; label: string }; children: ReactNode }) {
-  return (
-    <div className="mx-auto max-w-5xl space-y-4">
-      <Button asChild variant="ghost" size="sm" className="-ml-2">
-        <Link href={back.href}>
-          <ArrowLeft className="mr-1 h-4 w-4" />
-          {back.label}
-        </Link>
-      </Button>
-      {title && <h1 className="text-2xl font-semibold">{title}</h1>}
-      {children}
-    </div>
-  );
-}
 
 const LIST = { href: '/dashboard/purchases?tab=facturas', label: 'Facturas' };
 
 export function NewSupplierInvoicePage({ data }: { data: SupplierInvoiceFormData }) {
   return (
-    <Shell title="Cargar comprobante" back={LIST}>
+    <PurchasesPageShell title="Cargar comprobante" back={LIST}>
       <SupplierInvoiceForm mode={{ kind: 'create' }} initialData={data} />
-    </Shell>
+    </PurchasesPageShell>
   );
 }
 
@@ -44,21 +26,21 @@ export function EditSupplierInvoicePage({
   data: SupplierInvoiceFormData;
 }) {
   return (
-    <Shell title={`Editar ${label}`} back={{ href: `/dashboard/purchases/invoices/${invoiceId}`, label }}>
+    <PurchasesPageShell title={`Editar ${label}`} back={{ href: `/dashboard/purchases/invoices/${invoiceId}`, label }}>
       <SupplierInvoiceForm
         mode={{ kind: 'edit', invoiceId, label }}
         initialValues={values}
         initialData={data}
         initialSupplierLabel={data.supplier?.name ?? null}
       />
-    </Shell>
+    </PurchasesPageShell>
   );
 }
 
 export function SupplierInvoicePage({ invoice }: { invoice: SupplierInvoiceDetail }) {
   return (
-    <Shell back={LIST}>
+    <PurchasesPageShell back={LIST}>
       <SupplierInvoiceDetailView invoice={invoice} />
-    </Shell>
+    </PurchasesPageShell>
   );
 }

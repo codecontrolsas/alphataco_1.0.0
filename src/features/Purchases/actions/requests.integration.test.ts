@@ -226,7 +226,7 @@ describe.skipIf(!RUN)('solicitudes de compra (integracion)', () => {
   });
 
   it('ciclo completo: borrador, edicion, envio y aprobacion con mail al solicitante', async () => {
-    const actions = await import('./requests.server');
+    const actions = { ...(await import('./requests.server')), ...(await import('./request-queries.server')) };
     const draft = expectOk(await actions.createPurchaseRequest(request(), { submit: false }));
     expect(draft.number).toMatch(/^SC-\d{6}$/);
     expect(await statusOf(draft.id)).toBe('DRAFT');
@@ -253,7 +253,7 @@ describe.skipIf(!RUN)('solicitudes de compra (integracion)', () => {
   });
 
   it('rechazo con motivo obligatorio; anulacion; copia como nueva', async () => {
-    const actions = await import('./requests.server');
+    const actions = { ...(await import('./requests.server')), ...(await import('./request-queries.server')) };
     const pending = expectOk(await actions.createPurchaseRequest(request(), { submit: true }));
     state.profileId = APPROVER;
     expect(await actions.rejectPurchaseRequest(pending.id, '  ')).toEqual({ ok: false, error: 'Indicá el motivo' });
@@ -270,7 +270,7 @@ describe.skipIf(!RUN)('solicitudes de compra (integracion)', () => {
   });
 
   it('dos aprobaciones simultaneas: una gana y la otra recibe el mensaje', async () => {
-    const actions = await import('./requests.server');
+    const actions = { ...(await import('./requests.server')), ...(await import('./request-queries.server')) };
     const pending = expectOk(await actions.createPurchaseRequest(request(), { submit: true }));
     state.profileId = APPROVER;
     const results = await Promise.all([
@@ -282,7 +282,7 @@ describe.skipIf(!RUN)('solicitudes de compra (integracion)', () => {
   });
 
   it('un borrador que quedo invalido no se envia: proveedor desactivado y empleado de baja', async () => {
-    const actions = await import('./requests.server');
+    const actions = { ...(await import('./requests.server')), ...(await import('./request-queries.server')) };
     const prisma = await db();
     const draft = expectOk(
       await actions.createPurchaseRequest(request({ destinationType: 'EMPLOYEE', employeeId: EMPLOYEE }), { submit: false })
@@ -322,7 +322,7 @@ describe.skipIf(!RUN)('solicitudes de compra (integracion)', () => {
   });
 
   it('permisos: sin approve no se aprueba; con solo view no se ve la ajena; ajeno sin update no anula', async () => {
-    const actions = await import('./requests.server');
+    const actions = { ...(await import('./requests.server')), ...(await import('./request-queries.server')) };
     const pending = expectOk(await actions.createPurchaseRequest(request(), { submit: true }));
     state.profileId = APPROVER;
     state.denied.add('compras:solicitudes:approve');
@@ -342,7 +342,7 @@ describe.skipIf(!RUN)('solicitudes de compra (integracion)', () => {
   });
 
   it('si el mail falla, la aprobacion queda hecha', async () => {
-    const actions = await import('./requests.server');
+    const actions = { ...(await import('./requests.server')), ...(await import('./request-queries.server')) };
     const pending = expectOk(await actions.createPurchaseRequest(request(), { submit: true }));
     state.profileId = APPROVER;
     state.mailFails = true;
@@ -352,7 +352,7 @@ describe.skipIf(!RUN)('solicitudes de compra (integracion)', () => {
   });
 
   it('desde un pedido de Almacenes: propone solo el faltante y hereda el destino', async () => {
-    const actions = await import('./requests.server');
+    const actions = { ...(await import('./requests.server')), ...(await import('./request-queries.server')) };
     const shortfall = expectOk(await actions.getMaterialRequestShortfall(PEDIDO));
     // Filtro: pide 4, hay 1 -> faltan 3. Grasa: pide 2, hay 5 -> no se propone.
     expect(shortfall.lines.map((l) => [l.code, l.shortfall])).toEqual([['FIL-01', '3']]);
@@ -380,7 +380,7 @@ describe.skipIf(!RUN)('solicitudes de compra (integracion)', () => {
   });
 
   it('desde un pedido: material ajeno al pedido, texto libre, pedido sin aprobar o sin faltante se rechazan', async () => {
-    const actions = await import('./requests.server');
+    const actions = { ...(await import('./requests.server')), ...(await import('./request-queries.server')) };
     expect(
       await actions.createPurchaseRequestFromMaterialRequest(PEDIDO, request({ lines: [freeTextLine()] }), { submit: false })
     ).toEqual({ ok: false, error: 'Línea 1: solo se piden materiales del pedido PED-T1' });
@@ -397,7 +397,7 @@ describe.skipIf(!RUN)('solicitudes de compra (integracion)', () => {
   });
 
   it('un borrador generado desde un pedido sigue atado al pedido al editarlo', async () => {
-    const actions = await import('./requests.server');
+    const actions = { ...(await import('./requests.server')), ...(await import('./request-queries.server')) };
     const draft = expectOk(
       await actions.createPurchaseRequestFromMaterialRequest(PEDIDO, request({ lines: [materialLine({ quantity: '2' })] }), {
         submit: false,
@@ -415,7 +415,7 @@ describe.skipIf(!RUN)('solicitudes de compra (integracion)', () => {
   });
 
   it('visibilidad: sin view_all no se copia una ajena ni se genera desde un pedido ajeno, y el pedido no la lista', async () => {
-    const actions = await import('./requests.server');
+    const actions = { ...(await import('./requests.server')), ...(await import('./request-queries.server')) };
     const rejected = expectOk(await actions.createPurchaseRequest(request(), { submit: true }));
     state.profileId = APPROVER;
     expectOk(await actions.rejectPurchaseRequest(rejected.id, 'No'));

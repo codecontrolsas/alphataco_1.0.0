@@ -2,7 +2,7 @@ import type { DataTableSearchParams } from '@/shared/components/common/DataTable
 import { getActiveMoneyAccountOptions } from '../actions/accounts.server';
 import { getTreasuryConcepts } from '../actions/concepts.server';
 import { Suspense } from 'react';
-import { NoPermission } from '../fallback/NoPermission';
+import { StateBlock } from '@/shared/components/common/StateBlock';
 import { NewMovementButton } from './components/NewMovementButton';
 import { MovementsList } from './MovementsList/MovementsList';
 import { MovementsTableSkeleton } from './MovementsList/fallback/MovementsTableSkeleton';
@@ -18,7 +18,7 @@ export default async function MovementsTabContent({
   searchParams: DataTableSearchParams;
   permissions: Record<string, boolean>;
 }) {
-  if (permissions['tesoreria:movimientos:view'] !== true) return <NoPermission />;
+  if (permissions['tesoreria:movimientos:view'] !== true) return <StateBlock variant="noperm" title="No tenés permiso para ver esta información" />;
   const canCreate = permissions['tesoreria:movimientos:create'] === true;
   const canUpdate = permissions['tesoreria:movimientos:update'] === true;
   const [accounts, concepts] = canCreate || canUpdate ? await Promise.all([getActiveMoneyAccountOptions(), getTreasuryConcepts()]) : [[], []];

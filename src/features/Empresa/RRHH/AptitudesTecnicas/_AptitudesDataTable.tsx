@@ -1,6 +1,5 @@
 'use client';
 
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import {
   DataTable,
   type DataTableFacetedFilterConfig,
@@ -8,8 +7,11 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { Check, CircleOff, X } from 'lucide-react';
+import { unwrapExportResult } from '@/shared/lib/export-result';
+import { CircleOff } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
+import { CatalogSplitLayout } from '../../components/CatalogSplitLayout';
+import { activeStatusLabel, buildActiveFacetResult } from '../../lib/active-status';
 import { AptitudesForm } from './AptitudesForm';
 import {
   getAllAptitudesTecnicasForExport,
@@ -101,12 +103,12 @@ export default function _AptitudesDataTable({
   }, [initialColumnVisibility]);
 
   // ── Filter visibility — 3 visibles por defecto ────────────────────────────
-  const DEFAULT_VISIBLE_FILTERS = ['is_active', 'nombre'];
+  const DEFAULT_VISIBLE_FILTERS = ['is_active', 'puestos', 'nombre'];
   const mergedFilterVisibility = useMemo(() => {
     if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
       return initialFilterVisibility;
     }
-    const allFilterIds = ['nombre', 'is_active'];
+    const allFilterIds = ['nombre', 'puestos', 'is_active'];
     return Object.fromEntries(allFilterIds.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
   }, [initialFilterVisibility]);
 
@@ -114,11 +116,17 @@ export default function _AptitudesDataTable({
   const fetchIsActiveFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
     const result = await getAptitudesTecnicasSingleFacet('is_active', params);
     if (!result) return { options: [], counts: new Map() };
+    return buildActiveFacetResult(result.counts);
+  }, []);
+
+  // ── Lazy-load facet: puestos (M:M) ─────────────────────────────────────────
+  const fetchPuestosFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
+    const result = await getAptitudesTecnicasSingleFacet('puestos', params);
+    if (!result) return { options: [], counts: new Map() };
     const options = [
-      { value: 'true', label: 'Activo', icon: Check },
-      { value: 'false', label: 'Inactivo', icon: X },
+      ...result.options,
       ...(result.counts.has(NULL_FILTER_VALUE)
-        ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
+        ? [{ value: NULL_FILTER_VALUE, label: 'Sin puestos asignados', icon: CircleOff }]
         : []),
     ];
     return { options, counts: result.counts };
@@ -135,6 +143,13 @@ export default function _AptitudesDataTable({
         placeholder: 'Buscar por nombre...',
       },
 
+      // ── puestos (M:M) ──────────────────────────────────────────────────────
+      {
+        columnId: 'puestos',
+        title: 'Puestos',
+        fetchFacet: fetchPuestosFacet,
+      },
+
       // ── is_active (booleano nullable) ──────────────────────────────────────
       {
         columnId: 'is_active',
@@ -142,7 +157,7 @@ export default function _AptitudesDataTable({
         fetchFacet: fetchIsActiveFacet,
       },
     ],
-    [fetchIsActiveFacet]
+    [fetchIsActiveFacet, fetchPuestosFacet]
   );
 
   // ── DataTable ─────────────────────────────────────────────────────────────
@@ -164,18 +179,16 @@ export default function _AptitudesDataTable({
       searchPlaceholder="Buscar aptitudes técnicas..."
       emptyMessage="No se encontraron aptitudes técnicas"
       exportConfig={{
-        fetchAllData: () => getAllAptitudesTecnicasForExport(currentParams),
+        fetchAllData: async () => unwrapExportResult(await getAllAptitudesTecnicasForExport(currentParams)),
         options: {
           filename: 'aptitudes-tecnicas',
           sheetName: 'Aptitudes Técnicas',
           title: 'Aptitudes Técnicas',
         },
         formatters: {
-          is_active: (value) => {
-            if (value === null || value === undefined) return 'Sin asignar';
-            return value ? 'Activo' : 'Inactivo';
-          },
-          // puestos: accessorFn ya retorna string concatenado — no necesita formatter
+          is_active: (value) => activeStatusLabel(value),
+          // puestos: accessorFn ya retorna string concatenado
+          puestos: (value) => (value ? String(value) : 'Sin puestos asignados'),
         },
       }}
     />
@@ -186,20 +199,6 @@ export default function _AptitudesDataTable({
     return table;
   }
 
-  // Con permisos: layout resizable con formulario a la izquierda y tabla a la derecha
-  return (
-    <div className="w-full">
-      <ResizablePanelGroup className="min-h-[400px]" direction="horizontal">
-        <ResizablePanel defaultSize={30}>
-          <div className="overflow-auto h-full pr-2">
-            <AptitudesForm positions={positions} queryKey={QUERY_KEY} />
-          </div>
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={70}>
-          <div className="overflow-auto h-full pl-2">{table}</div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    </div>
-  );
+  // Con permisos: formulario + tabla (apilados en pantallas chicas, paneles redimensionables desde lg)
+  return <CatalogSplitLayout form={<AptitudesForm positions={positions} queryKey={QUERY_KEY} />} table={table} />;
 }

@@ -1,6 +1,6 @@
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { Suspense } from 'react';
-import { NoPermission } from '../fallback/NoPermission';
+import { StateBlock } from '@/shared/components/common/StateBlock';
 import { canWarehouse, type PermissionsMap } from '../lib/permissions';
 import { DepotFormDialog } from './components/DepotFormDialog';
 import { DepotsList } from './components/DepotsList/DepotsList';
@@ -13,7 +13,7 @@ export default async function DepotsTabContent({
   searchParams: DataTableSearchParams;
   permissions: PermissionsMap;
 }) {
-  if (!canWarehouse(permissions, 'depositos', 'view')) return <NoPermission />;
+  if (!canWarehouse(permissions, 'depositos', 'view')) return <StateBlock variant="noperm" title="No tenés permiso para ver esta información." />;
 
   return (
     <div className="space-y-4">

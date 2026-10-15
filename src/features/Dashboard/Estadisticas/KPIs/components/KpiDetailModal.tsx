@@ -18,7 +18,7 @@ interface KpiDetailModalProps {
 
 export function KpiDetailModal({ kpi, isOpen, onClose }: KpiDetailModalProps) {
   const { hasPermission } = usePermissions();
-  const canUpdate = hasPermission('dashboard', 'kpis', 'update');
+  const canUpdate = hasPermission('configuracion', 'kpis', 'update');
 
   // Cargar revisiones con useQuery — se activa solo cuando el modal está abierto
   const {

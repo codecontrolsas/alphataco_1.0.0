@@ -811,9 +811,9 @@ export const ManualRepairsInput = memo(function ManualRepairsInput({
             {images.length > 0 && !canAdd && !disabled && (
               <div
                 role="alert"
-                className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs"
+                className="flex items-start gap-2 rounded-md border border-warn/40 bg-warn/10 p-2.5 text-xs"
               >
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" />
                 <span>
                   {images.length === 1 ? 'Cargaste 1 foto' : `Cargaste ${images.length} fotos`}, pero todavía falta
                   elegir la tarea del listado o escribir la reparación. Sin eso no se puede agregar al pedido ni

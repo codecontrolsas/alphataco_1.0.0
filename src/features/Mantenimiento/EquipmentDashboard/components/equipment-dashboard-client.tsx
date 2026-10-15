@@ -3,10 +3,10 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { signOutMaintenanceSession } from '@/features/Mantenimiento/actions/maintenance-actions';
 import { ActionButton } from '@/features/Mantenimiento/shared/components/action-button';
 import { MaintenanceHeader } from '@/features/Mantenimiento/shared/components/maintenance-header';
 import { PendingDeviationsAlert } from '@/features/Mantenimiento/shared/components/pending-deviations-alert';
-import { signOutMaintenanceSession } from '@/features/Mantenimiento/actions/maintenance-actions';
 import {
   AlertCircle,
   CheckCircle,
@@ -64,12 +64,12 @@ export default function EquipmentDashboardClient({
   // Configuración de condición
   const conditionConfig: Record<
     string,
-    { icon: typeof CheckCircle; label: string; variant: 'default' | 'destructive' | 'secondary' | 'outline' }
+    { icon: typeof CheckCircle; label: string; variant: 'success' | 'destructive' | 'secondary' | 'warning' }
   > = {
-    operativo: { icon: CheckCircle, label: 'Operativo', variant: 'default' },
+    operativo: { icon: CheckCircle, label: 'Operativo', variant: 'success' },
     'no operativo': { icon: XCircle, label: 'No Operativo', variant: 'destructive' },
     'en reparacion': { icon: WrenchIcon, label: 'En Reparación', variant: 'secondary' },
-    'operativo condicionado': { icon: AlertCircle, label: 'Operativo Condicionado', variant: 'outline' },
+    'operativo condicionado': { icon: AlertCircle, label: 'Operativo Condicionado', variant: 'warning' },
     'en preparacion': { icon: WrenchIcon, label: 'En Preparación', variant: 'secondary' },
   };
 
@@ -77,7 +77,7 @@ export default function EquipmentDashboardClient({
   const ConditionIcon = condition.icon;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-dvh bg-background flex flex-col">
       <MaintenanceHeader title="Acciones" employeeName={employeeName} employeeCuil={employeeCuil} />
 
       <main className="flex-1 p-4 space-y-6 pb-24">
@@ -107,7 +107,7 @@ export default function EquipmentDashboardClient({
               <div className="flex-1 min-w-0 space-y-3">
                 <div className="flex items-start justify-between gap-2 flex-wrap">
                   <div className="min-w-0 flex-1">
-                    <h1 className="text-xl sm:text-2xl font-bold text-foreground truncate">
+                    <h1 className="text-xl sm:text-2xl font-bold text-foreground truncate font-mono tracking-tight">
                       {equipment.domain || equipment.serie || 'Sin identificador'}
                     </h1>
                     <p className="text-sm sm:text-base text-muted-foreground mt-0.5">
@@ -115,34 +115,34 @@ export default function EquipmentDashboardClient({
                     </p>
                   </div>
                   <Badge variant={condition.variant} className="shrink-0">
-                    <ConditionIcon className="h-3 w-3 mr-1.5" />
+                    <ConditionIcon aria-hidden="true" className="h-3 w-3 mr-1.5" />
                     {condition.label}
                   </Badge>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                   <div>
-                    <p className="text-xs text-muted-foreground">Tipo</p>
-                    <p className="text-sm font-medium">{equipment.type || '-'}</p>
+                    <p className="text-sm text-muted-foreground">Tipo</p>
+                    <p className="text-base font-medium">{equipment.type || '-'}</p>
                   </div>
                   {equipment.sub_type && (
                     <div>
-                      <p className="text-xs text-muted-foreground">Subtipo</p>
-                      <p className="text-sm font-medium">{equipment.sub_type}</p>
+                      <p className="text-sm text-muted-foreground">Subtipo</p>
+                      <p className="text-base font-medium">{equipment.sub_type}</p>
                     </div>
                   )}
                   <div>
-                    <p className="text-xs text-muted-foreground">N° Interno</p>
-                    <p className="text-sm font-medium">{equipment.intern_number || '-'}</p>
+                    <p className="text-sm text-muted-foreground">N° Interno</p>
+                    <p className="text-base font-medium tabular-nums">{equipment.intern_number || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Kilometraje</p>
-                    <p className="text-sm font-medium">{equipment.kilometer} km</p>
+                    <p className="text-sm text-muted-foreground">Kilometraje</p>
+                    <p className="text-base font-medium tabular-nums">{equipment.kilometer} km</p>
                   </div>
                   {equipment.engine_hours && (
                     <div>
-                      <p className="text-xs text-muted-foreground">Horómetro</p>
-                      <p className="text-sm font-medium">{equipment.engine_hours} hs</p>
+                      <p className="text-sm text-muted-foreground">Horómetro</p>
+                      <p className="text-base font-medium tabular-nums">{equipment.engine_hours} hs</p>
                     </div>
                   )}
                 </div>
@@ -197,12 +197,8 @@ export default function EquipmentDashboardClient({
 
         {/* Logout Button */}
         <div className="pt-4">
-          <Button
-            variant="outline"
-            onClick={handleLogout}
-            className="w-full h-12 text-primary border-primary/30 hover:bg-primary/5 bg-transparent"
-          >
-            <LogOut className="h-5 w-5 mr-2" />
+          <Button type="button" variant="outline" onClick={handleLogout} className="w-full h-12 text-base">
+            <LogOut aria-hidden="true" className="h-5 w-5 mr-2" />
             Salir del Sistema
           </Button>
         </div>

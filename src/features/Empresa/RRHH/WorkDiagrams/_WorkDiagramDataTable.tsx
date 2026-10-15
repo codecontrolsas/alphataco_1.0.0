@@ -1,6 +1,5 @@
 'use client';
 
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import {
   DataTable,
   type DataTableFacetedFilterConfig,
@@ -8,9 +7,12 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { Check, CircleOff, X } from 'lucide-react';
-import moment from 'moment';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
+import { CircleOff } from 'lucide-react';
 import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
+import { CatalogSplitLayout } from '../../components/CatalogSplitLayout';
+import { activeStatusLabel, buildActiveFacetResult } from '../../lib/active-status';
 import WorkDiagramForm from './WorkDiagramForm';
 import {
   getAllWorkDiagramsForExport,
@@ -142,28 +144,34 @@ export default function _WorkDiagramDataTable({
   const fetchIsActiveFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
     const result = await getWorkDiagramSingleFacet('is_active', params);
     if (!result) return { options: [], counts: new Map() };
-    const options = [
-      { value: 'true', label: 'Activo', icon: Check },
-      { value: 'false', label: 'Inactivo', icon: X },
-      ...(result.counts.has(NULL_FILTER_VALUE)
-        ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-        : []),
-    ];
-    return { options, counts: result.counts };
+    return buildActiveFacetResult(result.counts);
   }, []);
 
   // ── Lazy-load facet: inactive_novelty (FK → diagram_type) ─────────────────
   const fetchInactiveNoveltyFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
     const result = await getWorkDiagramSingleFacet('inactive_novelty', params);
     if (!result) return { options: [], counts: new Map() };
-    return result;
+    return {
+      options: result.options.map((option) =>
+        option.value === NULL_FILTER_VALUE ? { ...option, icon: CircleOff } : option
+      ),
+      counts: result.counts,
+    };
   }, []);
 
   // ── Lazy-load facet: active_novelties (M:M → diagram_type) ──────────────
   const fetchActiveNoveltiesFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
     const result = await getWorkDiagramSingleFacet('active_novelties', params);
     if (!result) return { options: [], counts: new Map() };
-    return result;
+    return {
+      options: [
+        ...result.options,
+        ...(result.counts.has(NULL_FILTER_VALUE)
+          ? [{ value: NULL_FILTER_VALUE, label: 'Sin novedades', icon: CircleOff }]
+          : []),
+      ],
+      counts: result.counts,
+    };
   }, []);
 
   // ── Faceted filters ───────────────────────────────────────────────────────
@@ -244,7 +252,7 @@ export default function _WorkDiagramDataTable({
       emptyMessage="No se encontraron diagramas de trabajo"
       data-testid="work-diagrams-table"
       exportConfig={{
-        fetchAllData: () => getAllWorkDiagramsForExport(currentParams),
+        fetchAllData: async () => unwrapExportResult(await getAllWorkDiagramsForExport(currentParams)),
         options: {
           filename: 'diagramas-de-trabajo',
           sheetName: 'Diagramas',
@@ -252,15 +260,12 @@ export default function _WorkDiagramDataTable({
         },
         formatters: {
           // Booleano nullable
-          is_active: (value) => {
-            if (value === null || value === undefined) return 'Sin asignar';
-            return value ? 'Activo' : 'Inactivo';
-          },
+          is_active: (value) => activeStatusLabel(value),
           // Decimales — Prisma Decimal llega como objeto, convertir a string
           active_working_days: (value) => (value !== null && value !== undefined ? String(value) : '—'),
           inactive_working_days: (value) => (value !== null && value !== undefined ? String(value) : '—'),
           // Fecha
-          created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '—'),
+          created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '—'),
           // M:M activas — el accessorFn ya retorna un string joinado
           active_novelties: (value) => (value ? String(value) : '—'),
         },
@@ -273,25 +278,18 @@ export default function _WorkDiagramDataTable({
     return table;
   }
 
-  // Con permisos: layout resizable con formulario a la izquierda y tabla a la derecha
+  // Con permisos: formulario + tabla (apilados en pantallas chicas, paneles redimensionables desde lg)
   return (
-    <div className="w-full">
-      <ResizablePanelGroup className="min-h-[400px]" direction="horizontal">
-        <ResizablePanel defaultSize={30}>
-          <div className="overflow-auto h-full pr-2">
-            <WorkDiagramForm
-              diagram={workDiagram}
-              mode={effectiveMode}
-              diagramsTypes={diagramTypes}
-              setMode={handleSetMode}
-            />
-          </div>
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={70}>
-          <div className="overflow-auto h-full pl-2">{table}</div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    </div>
+    <CatalogSplitLayout
+      form={
+        <WorkDiagramForm
+          diagram={workDiagram}
+          mode={effectiveMode}
+          diagramsTypes={diagramTypes}
+          setMode={handleSetMode}
+        />
+      }
+      table={table}
+    />
   );
 }

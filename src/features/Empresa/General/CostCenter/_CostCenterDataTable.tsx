@@ -1,16 +1,16 @@
 'use client';
 
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import {
   DataTable,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
   type FacetResult,
 } from '@/shared/components/common/DataTable';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { Check, CircleOff, X } from 'lucide-react';
-import moment from 'moment';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useCallback, useMemo, useState } from 'react';
+import { CatalogSplitLayout } from '../../components/CatalogSplitLayout';
+import { activeStatusLabel, buildActiveFacetResult } from '../../lib/active-status';
 import CostCenterForm from '../components/cost-center/CostCenterForm';
 import { useCostCenterStore } from '../components/cost-center/store/costCenter.store';
 import {
@@ -106,15 +106,7 @@ export default function _CostCenterDataTable({
   const fetchIsActiveFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
     const result = await getCostCenterSingleFacet('is_active', params);
     if (!result) return { options: [], counts: new Map() };
-    // Enriquecer las opciones con iconos semánticos
-    const options = [
-      { value: 'true', label: 'Activo', icon: Check },
-      { value: 'false', label: 'Inactivo', icon: X },
-      ...(result.counts.has(NULL_FILTER_VALUE)
-        ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-        : []),
-    ];
-    return { options, counts: result.counts };
+    return buildActiveFacetResult(result.counts);
   }, []);
 
   // ── Faceted filters ───────────────────────────────────────────────────────
@@ -164,18 +156,15 @@ export default function _CostCenterDataTable({
       searchPlaceholder="Buscar centros de costo..."
       emptyMessage="No se encontraron centros de costo"
       exportConfig={{
-        fetchAllData: () => getAllCostCentersForExport(currentParams),
+        fetchAllData: async () => unwrapExportResult(await getAllCostCentersForExport(currentParams)),
         options: {
           filename: 'centros-de-costo',
           sheetName: 'Centros de Costo',
           title: 'Centros de Costo',
         },
         formatters: {
-          is_active: (value) => {
-            if (value === null || value === undefined) return 'Sin asignar';
-            return value ? 'Activo' : 'Inactivo';
-          },
-          created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
+          is_active: (value) => activeStatusLabel(value),
+          created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
         },
       }}
     />
@@ -186,20 +175,6 @@ export default function _CostCenterDataTable({
     return table;
   }
 
-  // Con permisos: layout resizable con formulario a la izquierda y tabla a la derecha
-  return (
-    <div className="w-full">
-      <ResizablePanelGroup className="min-h-[400px]" direction="horizontal">
-        <ResizablePanel defaultSize={30}>
-          <div className="overflow-auto h-full pr-2">
-            <CostCenterForm />
-          </div>
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={70}>
-          <div className="overflow-auto h-full pl-2">{table}</div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    </div>
-  );
+  // Con permisos: formulario + tabla (apilados en pantallas chicas, paneles redimensionables desde lg)
+  return <CatalogSplitLayout form={<CostCenterForm />} table={table} />;
 }

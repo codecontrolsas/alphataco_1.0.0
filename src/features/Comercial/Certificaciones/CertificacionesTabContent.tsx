@@ -1,38 +1,33 @@
 import { Card } from '@/components/ui/card';
-import { getCustomerServices } from '@/features/Empresa/Clientes/actions/services.server';
-import { getCustomers } from '@/features/Empresa/Clientes/actions/customers.server';
-import { getCertificationById, getCertifications } from './actions/certifications.server';
-import { CertificacionesPanel } from './components/CertificacionesPanel';
+import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { Suspense } from 'react';
+import { CertificationsTableSkeleton } from './fallback/CertificationsTableSkeleton';
+import { CertificationsList } from './list/CertificationsList';
 
 /**
- * Sección Certificaciones del módulo Comercial.
- *
- * El detalle se pide bajo demanda (`getCertificationById` viaja como server action) en vez de
- * traer todas las líneas de todas las certificaciones en el listado: una certificación de un
- * mes puede tener cientos de líneas y casi siempre se mira una sola.
+ * Comercial → Certificaciones. El encabezado es estático y el listado carga detrás de su Suspense. El
+ * detalle se pide bajo demanda (`getCertificationById`) al abrir el panel: una certificación de un mes
+ * puede tener cientos de líneas y casi siempre se mira una sola.
  */
-export default async function CertificacionesTabContent() {
-  const [certifications, customers, services] = await Promise.all([
-    getCertifications(),
-    getCustomers(),
-    getCustomerServices(),
-  ]);
-
-  const customerOptions = customers.map((customer) => ({
-    id: customer.id,
-    name: customer.name,
-    services: services
-      .filter((service) => service.customer_id === customer.id)
-      .map((service) => ({ id: service.id, service_name: service.service_name })),
-  }));
-
+export default function CertificacionesTabContent({
+  searchParams,
+}: {
+  searchParams: { [key: string]: string | string[] | undefined };
+}) {
   return (
     <Card className="p-6">
-      <CertificacionesPanel
-        certifications={certifications}
-        customers={customerOptions}
-        onOpenDetail={getCertificationById}
-      />
+      <div className="flex flex-col gap-4">
+        <div className="min-w-0">
+          <h3 className="text-lg font-semibold text-balance">Certificaciones</h3>
+          <p className="text-muted-foreground text-sm text-pretty">
+            Lo trabajado para un cliente, bajo un contrato, en un período.
+          </p>
+        </div>
+
+        <Suspense fallback={<CertificationsTableSkeleton />}>
+          <CertificationsList searchParams={searchParams as DataTableSearchParams} />
+        </Suspense>
+      </div>
     </Card>
   );
 }

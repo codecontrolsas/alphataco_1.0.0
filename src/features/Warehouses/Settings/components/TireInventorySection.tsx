@@ -1,11 +1,11 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { tireStatusLabels, tireTreadTypeLabels } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
+import { SectionCard } from '@/shared/components/common/SectionCard';
 import { Logger } from '@/lib/logger';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -53,6 +53,7 @@ export function TireInventorySection({ groups, warehouses }: TireInventorySectio
       toast.success(`Inventario cargado: ${result.tires} cubiertas en ${result.entryNumber}${exits}${kept}`);
       void queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.stock });
       void queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.movements });
+      void queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.stockAttention });
       router.refresh();
     },
     onError: (error) => {
@@ -64,16 +65,16 @@ export function TireInventorySection({ groups, warehouses }: TireInventorySectio
   const total = groups.reduce((acc, g) => acc + g.total, 0);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Inventario inicial de cubiertas</CardTitle>
-        <CardDescription>
+    <SectionCard
+      title="Inventario inicial de cubiertas"
+      description={
+        <>
           Hay <span className="tabular-nums">{total}</span> cubiertas de Gomería sin stock. Al cargarlas entran al
           depósito con el costo de su tipo y marca; las montadas, en reparación o extraviadas quedan imputadas al equipo
           donde están.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+        </>
+      }
+    >
         <Form {...form}>
           <form onSubmit={form.handleSubmit((values) => mutation.mutate(values))} className="space-y-4">
             <FormField
@@ -137,7 +138,6 @@ export function TireInventorySection({ groups, warehouses }: TireInventorySectio
             </Button>
           </form>
         </Form>
-      </CardContent>
-    </Card>
+    </SectionCard>
   );
 }

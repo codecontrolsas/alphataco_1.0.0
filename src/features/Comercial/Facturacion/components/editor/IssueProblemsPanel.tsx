@@ -2,8 +2,8 @@
 
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, X } from 'lucide-react';
-import { useCallback } from 'react';
 import Link from 'next/link';
+import { useCallback } from 'react';
 import type { IssueProblem } from '../../lib/invoice-validation';
 import { FISCAL_DATA_HREF, countLabel } from '../../utils/invoice-links';
 import { focusEditorField } from './editor-form';
@@ -23,14 +23,20 @@ export function IssueProblemsPanel({ problems, onDismiss }: { problems: IssuePro
       role="alert"
       tabIndex={-1}
       ref={focusOnMount}
-      className="flex flex-col gap-3 border border-amber-500/50 bg-amber-500/5 px-4 py-3 text-sm text-amber-900 outline-none focus-visible:ring-[3px] focus-visible:ring-amber-500/40 dark:text-amber-200"
+      className="flex flex-col gap-3 border border-warn/35 bg-warn-subtle px-4 py-3 text-sm text-warn-subtle-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-warn/40"
     >
       <div className="flex items-start justify-between gap-3">
         <h2 className="flex items-center gap-2 font-semibold">
           <AlertTriangle className="size-4 shrink-0" aria-hidden />
           Antes de emitir, corregí {countLabel(problems.length, 'cosa', 'cosas')}:
         </h2>
-        <Button type="button" variant="ghost" size="icon-sm" aria-label="Cerrar la lista de correcciones" onClick={onDismiss}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Cerrar la lista de correcciones"
+          onClick={onDismiss}
+        >
           <X aria-hidden />
         </Button>
       </div>
@@ -44,7 +50,7 @@ export function IssueProblemsPanel({ problems, onDismiss }: { problems: IssuePro
             ) : (
               <button
                 type="button"
-                className="text-left underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-amber-500/40"
+                className="text-left underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-warn/40"
                 onClick={() => focusEditorField(problem.field)}
               >
                 {problem.message}

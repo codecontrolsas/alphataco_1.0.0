@@ -1,7 +1,6 @@
 'use server';
 
 import { checkPermissionServer } from '@/features/Permissions';
-import { pickFilters } from '@/features/Warehouses/lib/filters';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
@@ -13,14 +12,19 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { getReceiptsSectionCount } from '../../lib/section-counts';
+import { RECEIPT_STATUS_ACTIVE as STATUS_ACTIVE, RECEIPT_STATUS_CANCELLED as STATUS_CANCELLED } from './constants';
 
 const logger = new Logger('features/Purchases/Receipts/ReceiptsList');
 
 type ReceiptWhere = Prisma.purchase_receiptsWhereInput;
 type ReceiptOrderBy = Prisma.purchase_receiptsOrderByWithRelationInput;
-type FilterState = ReturnType<typeof parseSearchParams>;
+type FilterState = ReturnType<typeof parseListState>;
 
 // ============================================================================
 // CONSTANTS
@@ -52,8 +56,35 @@ const COLUMN_MAP: Record<string, string> = {
   creator: 'created_by',
 };
 
-const STATUS_ACTIVE = 'active';
-const STATUS_CANCELLED = 'cancelled';
+const REQUESTS_FILTER = 'requests';
+
+/** Unicas claves de filtro que se aceptan: cualquier otra de la URL se descarta antes de armar el `where`. */
+const ALLOWED_FILTER_KEYS: ReadonlySet<string> = new Set([
+  ...FACETED_COLUMNS,
+  ...TEXT_FILTER_COLUMNS,
+  ...dateRangeKeys(DATE_RANGE_COLUMNS),
+  'status',
+  REQUESTS_FILTER,
+]);
+
+/** Filtros que no pasan por `buildFiltersWhere` (texto, estado derivado y M:M se arman a mano). */
+const MANUAL_FILTERS = [...TEXT_FILTER_COLUMNS, 'status', REQUESTS_FILTER];
+
+/** Tope de filas del export. */
+const EXPORT_MAX_ROWS = 10_000;
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const isUuid = (v: string) => UUID_RE.test(v);
+
+/** Valores validos por columna con lista cerrada (un valor ajeno haria fallar a Prisma y tumbaria la lista). */
+const VALID_VALUES: Record<string, (value: string) => boolean> = {
+  status: (v) => v === STATUS_ACTIVE || v === STATUS_CANCELLED,
+  order: isUuid,
+  supplier: isUuid,
+  warehouse: (v) => v === NULL_FILTER_VALUE || isUuid(v),
+  creator: isUuid,
+  [REQUESTS_FILTER]: (v) => v === NULL_FILTER_VALUE || isUuid(v),
+};
 
 const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
 
@@ -66,6 +97,19 @@ async function resolveCompanyId(): Promise<string | null> {
   const canView = await checkPermissionServer('compras', 'recepciones', 'view');
   if (!canView) return null;
   return getActiveCompanyId();
+}
+
+/** Estado de la tabla ya parseado, con solo los filtros permitidos y sus valores validos. */
+function parseListState(searchParams: DataTableSearchParams) {
+  const state = sanitizeFilters(parseSearchParams(searchParams), ALLOWED_FILTER_KEYS);
+  for (const [column, isValid] of Object.entries(VALID_VALUES)) {
+    const values = state.filters[column];
+    if (!values) continue;
+    const valid = values.filter(isValid);
+    if (valid.length > 0) state.filters[column] = valid;
+    else delete state.filters[column];
+  }
+  return state;
 }
 
 /** WHERE compartido entre paginated, export y facets. */
@@ -85,7 +129,7 @@ function buildWhereClause(companyId: string, state: FilterState): ReceiptWhere {
     });
   }
 
-  and.push(buildFiltersWhere(pickFilters(f, FACETED_COLUMNS), COLUMN_MAP) as ReceiptWhere);
+  and.push(buildFiltersWhere(f, COLUMN_MAP, { exclude: MANUAL_FILTERS }) as ReceiptWhere);
   and.push(buildTextFiltersWhere(f, TEXT_FILTER_COLUMNS) as ReceiptWhere);
   and.push(buildDateRangeFiltersWhere(f, DATE_RANGE_COLUMNS) as ReceiptWhere);
 
@@ -96,7 +140,7 @@ function buildWhereClause(companyId: string, state: FilterState): ReceiptWhere {
   if (wantsCancelled && !wantsActive) and.push({ cancelled_at: { not: null } });
 
   // Solicitudes de origen (M:M via lineas -> linea de OC -> linea de solicitud)
-  const requestIds = f.requests?.filter((v) => v !== NULL_FILTER_VALUE) ?? [];
+  const requestIds = f[REQUESTS_FILTER]?.filter((v) => v !== NULL_FILTER_VALUE) ?? [];
   if (requestIds.length > 0) {
     and.push({ lines: { some: { order_line: { request_line: { request_id: { in: requestIds } } } } } });
   }
@@ -150,7 +194,7 @@ export async function getPurchaseReceiptsPaginated(searchParams: DataTableSearch
   if (!companyId) return { data: [], total: 0 };
 
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseListState(searchParams);
     const { skip, take } = stateToPrismaParams(state);
     const where = buildWhereClause(companyId, state);
 
@@ -178,22 +222,39 @@ export async function getPurchaseReceiptsPaginated(searchParams: DataTableSearch
 // EXPORT (sin paginacion)
 // ============================================================================
 
-export async function getAllPurchaseReceiptsForExport(searchParams: DataTableSearchParams) {
+export async function getAllPurchaseReceiptsForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<PurchaseReceiptListItem[]>> {
   const companyId = await resolveCompanyId();
-  if (!companyId) return [];
+  if (!companyId) return { ok: true, data: [] };
 
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseListState(searchParams);
     const where = buildWhereClause(companyId, state);
-    const rows = await prisma.purchase_receipts.findMany({
-      where,
-      orderBy: [{ received_on: 'desc' }, { number: 'desc' }],
-      select: RECEIPT_SELECT,
+    const orderBy: ReceiptOrderBy[] = [{ received_on: 'desc' }, { number: 'desc' }, { id: 'asc' }];
+
+    const rows = await fetchExportRowsInBatches({
+      maxRows: EXPORT_MAX_ROWS,
+      listIds: (take) => prisma.purchase_receipts.findMany({ where, orderBy, select: { id: true }, take }),
+      fetchByIds: (ids) =>
+        prisma.purchase_receipts.findMany({
+          where: { id: { in: ids }, company_id: companyId },
+          select: RECEIPT_SELECT,
+        }),
+      tooLargeMessage: (maxRows) =>
+        `Hay más de ${maxRows.toLocaleString('es-AR')} recepciones con los filtros actuales. Acote la exportación con filtros.`,
     });
-    return shape(rows);
+    return { ok: true, data: shape(rows) };
   } catch (error) {
     logger.error('Error al exportar recepciones', { data: { error } });
-    throw new Error('No se pudo exportar la lista de recepciones');
+    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
+    return {
+      ok: false,
+      message:
+        error instanceof ExportTooLargeError
+          ? error.message
+          : 'No se pudo exportar la lista de recepciones. Intente nuevamente.',
+    };
   }
 }
 
@@ -208,11 +269,11 @@ export async function getPurchaseReceiptSingleFacet(
   const companyId = await resolveCompanyId();
   if (!companyId) return null;
 
-  const parsed = searchParams && Object.keys(searchParams).length > 0 ? parseSearchParams(searchParams) : null;
+  const parsed = searchParams && Object.keys(searchParams).length > 0 ? parseListState(searchParams) : null;
 
   /** WHERE con todos los filtros activos MENOS el de la columna que se esta abriendo. */
   function crossWhere(excludeColumn: string): ReceiptWhere {
-    const base: FilterState = parsed ?? parseSearchParams({});
+    const base: FilterState = parsed ?? parseListState({});
     const filters = { ...base.filters };
     delete filters[excludeColumn];
     return buildWhereClause(companyId as string, { ...base, filters });
@@ -336,6 +397,26 @@ export async function getPurchaseReceiptSingleFacet(
     return null;
   } catch (error) {
     logger.error('Error al obtener facet de recepciones', { data: { error, columnId } });
+    return null;
+  }
+}
+
+// ============================================================================
+// BANDA DE ATENCION
+// ============================================================================
+
+/**
+ * Ordenes de compra pendientes de recibir (enviadas o recibidas en parte), para quien puede registrar
+ * recepciones. Usa el mismo conteo que el contador de la sub-navegacion (`getReceiptsSectionCount`), asi
+ * ambos numeros coinciden. Nunca rechaza: `null` si no corresponde o no se pudo contar.
+ */
+export async function getPurchaseReceiptsAttention(): Promise<{ pendingToReceive: number; canViewOrders: boolean } | null> {
+  try {
+    const pendingToReceive = await getReceiptsSectionCount();
+    if (pendingToReceive == null) return null;
+    return { pendingToReceive, canViewOrders: await checkPermissionServer('compras', 'ordenes', 'view') };
+  } catch (error) {
+    logger.error('Error al contar ordenes pendientes de recibir', { data: { error } });
     return null;
   }
 }

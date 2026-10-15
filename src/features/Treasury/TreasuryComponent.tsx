@@ -1,4 +1,5 @@
 import { getUserPermissionsMapServer } from '@/features/Permissions';
+import { SectionErrorBoundary } from '@/shared/components/common/SectionErrorBoundary';
 import { SectionManagerServer } from '@/features/TabsManager';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { ArrowLeftRight, HandCoins, Landmark, ListChecks, Percent, Repeat, ScrollText, Settings, WalletCards } from 'lucide-react';
@@ -14,6 +15,7 @@ import SettingsTabContent from './Settings/SettingsTabContent';
 import { TreasurySettingsSkeleton } from './Settings/fallback/TreasurySettingsSkeleton';
 import TransfersTabContent from './Transfers/TransfersTabContent';
 import WithholdingsTabContent from './Withholdings/WithholdingsTabContent';
+import { TreasurySectionCounter } from './components/TreasurySectionCounter';
 import { TreasurySectionSkeleton } from './fallback/TreasurySectionSkeleton';
 
 /**
@@ -40,6 +42,7 @@ export default async function TreasuryComponent({ searchParams }: { searchParams
       searchParams={searchParams}
       defaultTab="cuentas"
       permissions={permissions}
+      sectionNav
       tabs={[
         {
           value: 'cuentas',
@@ -47,9 +50,11 @@ export default async function TreasuryComponent({ searchParams }: { searchParams
           moduleSlug: 'tesoreria',
           tabSlug: 'cuentas',
           content: (
-            <Suspense fallback={<AccountCardsSkeleton />}>
-              <AccountsTabContent permissions={permissions} />
-            </Suspense>
+            <SectionErrorBoundary title="No se pudo mostrar Cuentas">
+              <Suspense fallback={<AccountCardsSkeleton />}>
+                <AccountsTabContent permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
         {
@@ -58,9 +63,11 @@ export default async function TreasuryComponent({ searchParams }: { searchParams
           moduleSlug: 'tesoreria',
           tabSlug: 'movimientos',
           content: (
-            <Suspense fallback={<TreasurySectionSkeleton />}>
-              <MovementsTabContent searchParams={searchParams} permissions={permissions} />
-            </Suspense>
+            <SectionErrorBoundary title="No se pudo mostrar Movimientos">
+              <Suspense fallback={<TreasurySectionSkeleton />}>
+                <MovementsTabContent searchParams={searchParams} permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
         {
@@ -69,9 +76,11 @@ export default async function TreasuryComponent({ searchParams }: { searchParams
           moduleSlug: 'tesoreria',
           tabSlug: 'transferencias',
           content: (
-            <Suspense fallback={<TreasurySectionSkeleton />}>
-              <TransfersTabContent searchParams={searchParams} permissions={permissions} />
-            </Suspense>
+            <SectionErrorBoundary title="No se pudo mostrar Transferencias">
+              <Suspense fallback={<TreasurySectionSkeleton />}>
+                <TransfersTabContent searchParams={searchParams} permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
         {
@@ -79,10 +88,17 @@ export default async function TreasuryComponent({ searchParams }: { searchParams
           label: label(HandCoins, 'Cobranzas'),
           moduleSlug: 'tesoreria',
           tabSlug: 'cobranzas',
-          content: (
-            <Suspense fallback={<TreasurySectionSkeleton />}>
-              <CollectionsTabContent searchParams={searchParams} permissions={permissions} />
+          navCounter: (
+            <Suspense fallback={null}>
+              <TreasurySectionCounter section="collections" label="Cobros vencidos" />
             </Suspense>
+          ),
+          content: (
+            <SectionErrorBoundary title="No se pudo mostrar Cobranzas">
+              <Suspense fallback={<TreasurySectionSkeleton />}>
+                <CollectionsTabContent searchParams={searchParams} permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
         {
@@ -90,10 +106,17 @@ export default async function TreasuryComponent({ searchParams }: { searchParams
           label: label(WalletCards, 'Cheques'),
           moduleSlug: 'tesoreria',
           tabSlug: 'cheques',
-          content: (
-            <Suspense fallback={<TreasurySectionSkeleton />}>
-              <ChecksTabContent searchParams={searchParams} permissions={permissions} />
+          navCounter: (
+            <Suspense fallback={null}>
+              <TreasurySectionCounter section="checks" label="Cheques por vencer o vencidos para depositar" />
             </Suspense>
+          ),
+          content: (
+            <SectionErrorBoundary title="No se pudo mostrar Cheques">
+              <Suspense fallback={<TreasurySectionSkeleton />}>
+                <ChecksTabContent searchParams={searchParams} permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
         {
@@ -101,10 +124,17 @@ export default async function TreasuryComponent({ searchParams }: { searchParams
           label: label(ScrollText, 'Cheques propios'),
           moduleSlug: 'tesoreria',
           tabSlug: 'cheques-propios',
-          content: (
-            <Suspense fallback={<TreasurySectionSkeleton />}>
-              <OwnChecksTabContent searchParams={searchParams} permissions={permissions} />
+          navCounter: (
+            <Suspense fallback={null}>
+              <TreasurySectionCounter section="ownChecks" label="Débitos pendientes de confirmar" />
             </Suspense>
+          ),
+          content: (
+            <SectionErrorBoundary title="No se pudo mostrar Cheques propios">
+              <Suspense fallback={<TreasurySectionSkeleton />}>
+                <OwnChecksTabContent searchParams={searchParams} permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
         {
@@ -112,10 +142,17 @@ export default async function TreasuryComponent({ searchParams }: { searchParams
           label: label(ListChecks, 'Conciliación'),
           moduleSlug: 'tesoreria',
           tabSlug: 'conciliacion',
-          content: (
-            <Suspense fallback={<TreasurySectionSkeleton />}>
-              <ReconciliationTabContent searchParams={searchParams} permissions={permissions} />
+          navCounter: (
+            <Suspense fallback={null}>
+              <TreasurySectionCounter section="reconciliation" label="Líneas de extracto pendientes de conciliar" />
             </Suspense>
+          ),
+          content: (
+            <SectionErrorBoundary title="No se pudo mostrar Conciliación">
+              <Suspense fallback={<TreasurySectionSkeleton />}>
+                <ReconciliationTabContent searchParams={searchParams} permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
         {
@@ -124,9 +161,11 @@ export default async function TreasuryComponent({ searchParams }: { searchParams
           moduleSlug: 'tesoreria',
           tabSlug: 'retenciones-sufridas',
           content: (
-            <Suspense fallback={<TreasurySectionSkeleton />}>
-              <WithholdingsTabContent searchParams={searchParams} permissions={permissions} />
-            </Suspense>
+            <SectionErrorBoundary title="No se pudo mostrar Retenciones sufridas">
+              <Suspense fallback={<TreasurySectionSkeleton />}>
+                <WithholdingsTabContent searchParams={searchParams} permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
         {
@@ -135,9 +174,11 @@ export default async function TreasuryComponent({ searchParams }: { searchParams
           moduleSlug: 'tesoreria',
           tabSlug: 'config-tesoreria',
           content: (
-            <Suspense fallback={<TreasurySettingsSkeleton />}>
-              <SettingsTabContent permissions={permissions} />
-            </Suspense>
+            <SectionErrorBoundary title="No se pudo mostrar Configuración">
+              <Suspense fallback={<TreasurySettingsSkeleton />}>
+                <SettingsTabContent permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
       ]}

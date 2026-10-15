@@ -21,7 +21,8 @@ export interface TirePositionActionsParams {
   position: EnsuredTirePosition;
   serviceOrderId: string;
   vehicleId: string;
-  onActionComplete: () => void;
+  /** Recibe el texto de la intervención registrada (para el resumen de la orden). */
+  onActionComplete: (summary: string) => void;
   onClose: () => void;
 }
 
@@ -43,7 +44,7 @@ export function useTirePositionActions({
     void queryClient.invalidateQueries({ queryKey: ['vehicle-tire-positions', vehicleId] });
     // La que salio a disponible vuelve a ofrecerse; la que se monto deja de ofrecerse.
     void queryClient.invalidateQueries({ queryKey: ['available-tires', vehicleId] });
-    onActionComplete();
+    onActionComplete(message);
     onClose();
   }
 

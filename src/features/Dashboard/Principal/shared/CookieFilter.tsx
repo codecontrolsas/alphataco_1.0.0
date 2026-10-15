@@ -28,8 +28,8 @@ export function CookieFilter({ cookieName, options, placeholder, initialValues }
   };
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="w-[280px]">
+    <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
+      <div className="w-full min-w-0 sm:w-[280px]">
         <MultiSelectCombobox
           options={options}
           placeholder={placeholder}
@@ -39,7 +39,7 @@ export function CookieFilter({ cookieName, options, placeholder, initialValues }
           showSelectAll
         />
       </div>
-      <Button size="sm" variant="outline" onClick={handleApply}>
+      <Button type="button" size="sm" variant="outline" onClick={handleApply}>
         <Filter className="mr-1.5 h-3.5 w-3.5" />
         Filtrar
       </Button>

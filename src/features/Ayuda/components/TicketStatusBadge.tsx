@@ -7,9 +7,5 @@ interface Props {
 
 export function TicketStatusBadge({ slug }: Props) {
   const def = statusFor(slug);
-  return (
-    <Badge variant="outline" className={`border-transparent ${def.badgeClass}`}>
-      {def.label}
-    </Badge>
-  );
+  return <Badge variant={def.badgeVariant}>{def.label}</Badge>;
 }

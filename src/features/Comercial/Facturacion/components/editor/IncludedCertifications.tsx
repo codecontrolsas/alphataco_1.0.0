@@ -33,7 +33,7 @@ type Props = {
 
 function formatPeriod(from: string | null, to: string | null): string {
   if (!from || !to) return '';
-  return `${moment(from).format('DD/MM')}–${moment(to).format('DD/MM/YYYY')}`;
+  return `${moment.utc(from).format('DD/MM')}–${moment.utc(to).format('DD/MM/YYYY')}`;
 }
 
 /**
@@ -62,12 +62,13 @@ export function IncludedCertifications({
     if (ok) setTarget(null);
   };
 
-  const targetLines = target ? (linesByCertification[target.id] ?? 0) : 0;
+  const targetLines = target ? linesByCertification[target.id] ?? 0 : 0;
 
   return (
     <section aria-labelledby="invoice-certifications-title" className="flex flex-col gap-3">
       <h2 id="invoice-certifications-title" className="text-lg font-semibold">
-        Certificaciones incluidas <span className="text-muted-foreground font-normal tabular-nums">({certifications.length})</span>
+        Certificaciones incluidas{' '}
+        <span className="text-muted-foreground font-normal tabular-nums">({certifications.length})</span>
       </h2>
       <ul className="divide-y border">
         {certifications.map((cert) => (
@@ -102,7 +103,8 @@ export function IncludedCertifications({
           <AlertDialogHeader>
             <AlertDialogTitle>¿Quitar {target?.number} de la factura?</AlertDialogTitle>
             <AlertDialogDescription className="text-pretty">
-              Se quitan sus {countLabel(targetLines, 'línea', 'líneas')} y la certificación queda disponible para facturar.
+              Se quitan sus {countLabel(targetLines, 'línea', 'líneas')} y la certificación queda disponible para
+              facturar.
               {isDirty && ' Antes se guardan los cambios del borrador.'}
             </AlertDialogDescription>
           </AlertDialogHeader>

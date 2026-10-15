@@ -18,6 +18,7 @@ import { sanitizeFilters } from '@/shared/lib/table-filters';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { cacheLife, cacheTag } from 'next/cache';
+import { isDeviationAttentionKey, matchesDeviationAttention, type DeviationAggregate } from './deviation-attention';
 
 const logger = new Logger('EquiposConDesvios/actions.server');
 
@@ -32,6 +33,7 @@ const logger = new Logger('EquiposConDesvios/actions.server');
  * ordenamiento se resuelve en memoria con `SORT_ACCESSORS`, no con `orderBy`.
  */
 const VALID_SORT_FIELDS = new Set([
+  'equipment',
   'domain',
   'serie',
   'intern_number',
@@ -40,7 +42,9 @@ const VALID_SORT_FIELDS = new Set([
   'sub_type',
   'sector',
   'deviation_count',
+  'critical_count',
   'last_deviation_date',
+  'first_deviation_date',
 ]);
 
 const MODULE_SLUG = 'mantenimiento';
@@ -50,7 +54,17 @@ const TAB_SLUG = 'equipments_with_deviations';
 const EXPORT_MAX_ROWS = 10_000;
 
 /** Lista blanca de filtros: todo lo demás que venga en la URL se descarta. */
-const ALLOWED_FILTERS = new Set(['type_of_vehicle', 'type', 'sub_type', 'sector', 'domain', 'serie', 'intern_number']);
+const ALLOWED_FILTERS = new Set([
+  'type_of_vehicle',
+  'type',
+  'sub_type',
+  'sector',
+  'domain',
+  'serie',
+  'intern_number',
+  // Filtro virtual: lo escriben la banda y las tarjetas de atención (ver `deviation-attention.ts`).
+  'attention',
+]);
 
 /** Columnas con filtro de texto libre (contains insensitive) sobre vehicles */
 const TEXT_FILTER_COLUMNS = ['domain', 'serie', 'intern_number'];
@@ -83,7 +97,11 @@ type EquipmentRow = Prisma.vehiclesGetPayload<{ select: typeof EQUIPMENT_SELECT 
 /** Item final combinado: datos del vehículo + agregados de desvíos pendientes */
 export type EquipmentWithDeviationsListItem = EquipmentRow & {
   deviation_count: number;
+  /** Cuántos de los desvíos pendientes son críticos. */
+  critical_count: number;
   last_deviation_date: Date | null;
+  /** Desvío pendiente más viejo: la antigüedad que dispara la banda de atención. */
+  first_deviation_date: Date | null;
 };
 
 // ============================================================================
@@ -91,7 +109,13 @@ export type EquipmentWithDeviationsListItem = EquipmentRow & {
 // ============================================================================
 
 /** Entrada serializable de la agregación cacheada (ver `getPendingDeviationsAggregateCached`) */
-type PendingDeviationAggEntry = { equipmentId: string; count: number; lastDeviationDateMs: number };
+type PendingDeviationAggEntry = {
+  equipmentId: string;
+  count: number;
+  criticalCount: number;
+  lastDeviationDateMs: number;
+  firstDeviationDateMs: number;
+};
 
 /**
  * Reproduce en Prisma la lógica de la vista SQL `equipments_with_pending_deviations`:
@@ -123,6 +147,7 @@ async function getPendingDeviationsAggregateCached(companyId: string): Promise<P
       id: true,
       equipment_id: true,
       created_at: true,
+      is_critical: true,
     },
   });
 
@@ -137,25 +162,35 @@ async function getPendingDeviationsAggregateCached(companyId: string): Promise<P
 
   const inRequestSet = new Set(requestItems.map((r) => r.checklist_deviation_id).filter(Boolean));
 
-  const aggregate = new Map<string, { count: number; lastDeviationDate: Date }>();
+  const aggregate = new Map<string, DeviationAggregate>();
 
   for (const d of deviations) {
     if (inRequestSet.has(d.id)) continue;
 
     const createdAt = d.created_at ?? new Date(0);
+    const critical = d.is_critical === true ? 1 : 0;
     const entry = aggregate.get(d.equipment_id);
     if (!entry) {
-      aggregate.set(d.equipment_id, { count: 1, lastDeviationDate: createdAt });
+      aggregate.set(d.equipment_id, {
+        count: 1,
+        criticalCount: critical,
+        lastDeviationDate: createdAt,
+        firstDeviationDate: createdAt,
+      });
     } else {
       entry.count += 1;
+      entry.criticalCount += critical;
       if (createdAt > entry.lastDeviationDate) entry.lastDeviationDate = createdAt;
+      if (createdAt < entry.firstDeviationDate) entry.firstDeviationDate = createdAt;
     }
   }
 
   return [...aggregate.entries()].map(([equipmentId, agg]) => ({
     equipmentId,
     count: agg.count,
+    criticalCount: agg.criticalCount,
     lastDeviationDateMs: agg.lastDeviationDate.getTime(),
+    firstDeviationDateMs: agg.firstDeviationDate.getTime(),
   }));
 }
 
@@ -164,15 +199,34 @@ async function getPendingDeviationsAggregateCached(companyId: string): Promise<P
  * y reconstruye el `Map<string, { count, lastDeviationDate: Date }>` que consume el
  * resto del módulo (paginado, export y facets).
  */
-async function getPendingDeviationsAggregateByVehicle(
-  companyId: string
-): Promise<Map<string, { count: number; lastDeviationDate: Date }>> {
+async function getPendingDeviationsAggregateByVehicle(companyId: string): Promise<Map<string, DeviationAggregate>> {
   const rows = await getPendingDeviationsAggregateCached(companyId);
-  const result = new Map<string, { count: number; lastDeviationDate: Date }>();
+  const result = new Map<string, DeviationAggregate>();
   for (const row of rows) {
-    result.set(row.equipmentId, { count: row.count, lastDeviationDate: new Date(row.lastDeviationDateMs) });
+    result.set(row.equipmentId, {
+      count: row.count,
+      criticalCount: row.criticalCount,
+      lastDeviationDate: new Date(row.lastDeviationDateMs),
+      firstDeviationDate: new Date(row.firstDeviationDateMs),
+    });
   }
   return result;
+}
+
+/**
+ * Ids de los equipos del agregado que cumplen el filtro virtual `attention` de la URL (todos si no hay).
+ * La comparación con "ahora" va AFUERA de la caché: el agregado cacheado no depende del reloj.
+ */
+function selectEquipmentIds(
+  perVehicle: Map<string, DeviationAggregate>,
+  state: ReturnType<typeof parseSearchParams>,
+  now: Date
+): string[] {
+  const attention = sanitizeFilters(state, ALLOWED_FILTERS).filters.attention?.[0];
+  if (!isDeviationAttentionKey(attention)) return [...perVehicle.keys()];
+  return [...perVehicle.entries()]
+    .filter(([, agg]) => matchesDeviationAttention(attention, agg, now))
+    .map(([id]) => id);
 }
 
 /**
@@ -185,7 +239,7 @@ function buildVehicleWhereClause(companyId: string, state: ReturnType<typeof par
   const searchWhere = buildSearchWhere(state.search, TEXT_FILTER_COLUMNS);
 
   const { AND: nestedAnd, ...filtersRest } = buildFiltersWhere(filters, COLUMN_MAP, {
-    exclude: [...TEXT_FILTER_COLUMNS, 'type_of_vehicle'],
+    exclude: [...TEXT_FILTER_COLUMNS, 'type_of_vehicle', 'attention'],
   }) as Record<string, unknown> & { AND?: Record<string, unknown>[] };
 
   const textFiltersWhere = buildTextFiltersWhere(filters, TEXT_FILTER_COLUMNS);
@@ -215,6 +269,7 @@ function buildVehicleWhereClause(companyId: string, state: ReturnType<typeof par
 }
 
 const SORT_ACCESSORS: Record<string, (item: EquipmentWithDeviationsListItem) => string | number> = {
+  equipment: (i) => i.domain ?? '',
   domain: (i) => i.domain ?? '',
   serie: (i) => i.serie ?? '',
   intern_number: (i) => i.intern_number ?? '',
@@ -223,7 +278,9 @@ const SORT_ACCESSORS: Record<string, (item: EquipmentWithDeviationsListItem) => 
   sub_type: (i) => i.sub_type?.name ?? '',
   sector: (i) => i.hierarchy?.name ?? '',
   deviation_count: (i) => i.deviation_count,
+  critical_count: (i) => i.critical_count,
   last_deviation_date: (i) => i.last_deviation_date?.getTime() ?? 0,
+  first_deviation_date: (i) => i.first_deviation_date?.getTime() ?? 0,
 };
 
 function compareValues(a: string | number, b: string | number): number {
@@ -261,18 +318,25 @@ function sortDataset(
  */
 async function buildDataset(companyId: string, state: ReturnType<typeof parseSearchParams>) {
   const perVehicle = await getPendingDeviationsAggregateByVehicle(companyId);
-  if (perVehicle.size === 0) return [];
+  const equipmentIds = selectEquipmentIds(perVehicle, state, new Date());
+  if (equipmentIds.length === 0) return [];
 
   const where = buildVehicleWhereClause(companyId, state);
 
   const vehicles = await prisma.vehicles.findMany({
-    where: { AND: [where, { id: { in: [...perVehicle.keys()] } }] },
+    where: { AND: [where, { id: { in: equipmentIds } }] },
     select: EQUIPMENT_SELECT,
   });
 
   const combined: EquipmentWithDeviationsListItem[] = vehicles.map((v) => {
     const agg = perVehicle.get(v.id)!;
-    return { ...v, deviation_count: agg.count, last_deviation_date: agg.lastDeviationDate };
+    return {
+      ...v,
+      deviation_count: agg.count,
+      critical_count: agg.criticalCount,
+      last_deviation_date: agg.lastDeviationDate,
+      first_deviation_date: agg.firstDeviationDate,
+    };
   });
 
   return sortDataset(combined, state.sorting);
@@ -351,11 +415,11 @@ export async function getEquipmentsWithDeviationsSingleFacet(
   try {
     const companyId = await getActiveCompanyId();
     const perVehicle = await getPendingDeviationsAggregateByVehicle(companyId);
-    const vehicleIds = [...perVehicle.keys()];
-    if (vehicleIds.length === 0) return { counts: new Map() };
 
-    // Cross-filter: sin el filtro propio de la columna consultada
+    // Cross-filter: sin el filtro propio de la columna consultada (el de `attention` sí se conserva)
     const state = withoutOwnFilter(parseSearchParams(searchParams || {}), columnId);
+    const vehicleIds = selectEquipmentIds(perVehicle, state, new Date());
+    if (vehicleIds.length === 0) return { counts: new Map() };
     const where = { AND: [buildVehicleWhereClause(companyId, state), { id: { in: vehicleIds } }] };
 
     switch (columnId) {
@@ -405,5 +469,101 @@ export async function getEquipmentsWithDeviationsSingleFacet(
   } catch (error) {
     logger.error('Error al obtener facet de equipos con desvíos', { data: { error, columnId } });
     return { counts: new Map() };
+  }
+}
+
+// ============================================================================
+// ATENCIÓN — banda y tarjetas
+// ============================================================================
+
+/**
+ * Equipos cuyo desvío pendiente más viejo lleva más de 30 días sin pedido, del más viejo al más nuevo.
+ *
+ * Mismo perímetro que la tabla (empresa activa + permiso `view`) y MISMA condición que el filtro `attention=stale`
+ * del listado. Devuelve `[]` si no hay permiso o si falla: la banda no se muestra, pero la tabla no se rompe.
+ */
+export async function getStaleDeviationEquipments() {
+  if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) return [];
+
+  try {
+    const companyId = await getActiveCompanyId();
+    const perVehicle = await getPendingDeviationsAggregateByVehicle(companyId);
+    const now = new Date();
+
+    const stale = [...perVehicle.entries()]
+      .filter(([, agg]) => matchesDeviationAttention('stale', agg, now))
+      .sort(([, a], [, b]) => a.firstDeviationDate.getTime() - b.firstDeviationDate.getTime());
+    if (stale.length === 0) return [];
+
+    const vehicles = await prisma.vehicles.findMany({
+      where: { AND: [{ company_id: companyId }, { id: { in: stale.map(([id]) => id) } }] },
+      select: {
+        id: true,
+        domain: true,
+        intern_number: true,
+        sub_type: { select: { name: true } },
+        type_vehicles_typeTotype: { select: { name: true } },
+      },
+    });
+    const byId = new Map(vehicles.map((v) => [v.id, v]));
+
+    return stale.flatMap(([id, agg]) => {
+      const vehicle = byId.get(id);
+      if (!vehicle) return [];
+      return [
+        {
+          id,
+          domain: vehicle.domain,
+          internNumber: vehicle.intern_number,
+          typeName: vehicle.sub_type?.name ?? vehicle.type_vehicles_typeTotype?.name ?? null,
+          deviationCount: agg.count,
+          firstDeviationDate: agg.firstDeviationDate.toISOString(),
+        },
+      ];
+    });
+  } catch (error) {
+    logger.error('Error al obtener los equipos con desvíos sin pedido hace más de 30 días', { data: { error } });
+    return [];
+  }
+}
+
+/**
+ * Métricas de "Equipos con Desvíos". Cada cifra sale del MISMO agregado y de la MISMA condición que la tabla
+ * (`selectEquipmentIds` / `matchesDeviationAttention`): al tocar una tarjeta la tabla muestra tantas filas como
+ * dice la tarjeta.
+ *
+ * Nunca lanza: si falla devuelve `null` y la pantalla muestra "—" (jamás un 0 inventado).
+ */
+export async function getEquipmentsWithDeviationsMetrics() {
+  try {
+    if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) {
+      logger.warn('Métricas de equipos con desvíos pedidas sin permiso de lectura');
+      return null;
+    }
+
+    const companyId = await getActiveCompanyId();
+    const [perVehicle, staleEquipments] = await Promise.all([
+      getPendingDeviationsAggregateByVehicle(companyId),
+      getStaleDeviationEquipments(),
+    ]);
+    const now = new Date();
+
+    let critical = 0;
+    let stale = 0;
+    for (const agg of perVehicle.values()) {
+      if (matchesDeviationAttention('critical', agg, now)) critical += 1;
+      if (matchesDeviationAttention('stale', agg, now)) stale += 1;
+    }
+
+    return {
+      total: perVehicle.size,
+      critical,
+      stale,
+      // Solo los más viejos: la banda nombra uno y avisa cuántos más hay.
+      staleSamples: staleEquipments.slice(0, 3),
+    };
+  } catch (error) {
+    logger.error('Error al calcular las métricas de equipos con desvíos', { data: { error } });
+    return null;
   }
 }

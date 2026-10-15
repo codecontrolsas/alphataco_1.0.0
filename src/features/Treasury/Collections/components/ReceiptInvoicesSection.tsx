@@ -14,8 +14,9 @@ import { arsToApplied, RATE_SCALE } from '../../lib/receipt-math';
 import type { ReceiptPreview } from '../../lib/receipt-preview';
 import type { ReceiptFormValues } from '../../schemas/receipts';
 import { treasuryToday } from '../../lib/today';
+import { formatDay } from '../../lib/dates';
 
-const dmy = (value: string | null) => (value ? moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY') : null);
+const dmy = (value: string | null) => formatDay(value) || null;
 
 /**
  * Comprobantes pendientes del cliente: se tildan con el pendiente completo ("Total") y se
@@ -134,7 +135,7 @@ export function ReceiptInvoicesSection({
                       onBlur={() => setPesosDraft(({ [invoice.invoiceId]: _gone, ...rest }) => rest)}
                     />
                     {computed && computed.fx !== '0.00' && (
-                      <span className={computed.fx.startsWith('-') ? 'text-red-600 dark:text-red-400' : 'text-green-700 dark:text-green-400'}>
+                      <span className={computed.fx.startsWith('-') ? 'text-danger' : 'text-ok'}>
                         Diferencia de cambio {formatInCurrency(computed.fx, 'ARS')}
                       </span>
                     )}

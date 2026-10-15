@@ -45,30 +45,6 @@ export const fetchAllEmployees = async (_role?: string) => {
   }
 };
 
-/**
- * Empleados de la empresa activa; `contractor_employee` viene filtrado al contratista dado
- * (igual que el `.eq('contractor_employee.contractor_id', ...)` de PostgREST, que filtraba
- * la relación embebida y no las filas padre).
- */
-export const fetchAllEmployees2 = async (contractor_id: string) => {
-  const company_id = await activeCompanyOrNull();
-  if (!company_id) return [];
-
-  try {
-    return await prisma.employees.findMany({
-      where: withCompany({}, company_id),
-      include: {
-        ...employeeRelations,
-        contractor_employee: { where: { contractor_id }, include: { customers: true } },
-      },
-      orderBy: [{ lastname: 'asc' }, { firstname: 'asc' }],
-    });
-  } catch (error) {
-    logger.error('Error fetching employees by contractor', { data: { error, contractor_id } });
-    return [];
-  }
-};
-
 export const fetchAllEmployeesOnlyName = async (_role?: string) => {
   const company_id = await activeCompanyOrNull();
   if (!company_id) return [];

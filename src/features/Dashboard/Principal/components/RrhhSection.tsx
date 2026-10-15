@@ -1,6 +1,7 @@
-import moment from 'moment';
+import { formatDateAr } from '@/shared/lib/argentina-time';
 import { cookies } from 'next/headers';
 import { getAllPositions, getDiagramIndicators, getEmployeeIndicators } from '../actions/rrhh.server';
+import { getOperationToday } from '../lib/dashboard-dates';
 import { RrhhSectionClient } from './RrhhSectionClient';
 
 export async function RrhhSection() {
@@ -16,11 +17,13 @@ export async function RrhhSection() {
     getAllPositions(),
   ]);
 
-  const date = moment().format('DD/MM/YYYY');
+  const date = formatDateAr(getOperationToday());
 
   // server-serialization — pre-compute values, minimize props to client
   const operativos = employeeIndicator.employees_operativos;
   const enOperacion = employeeIndicator.employees_used;
+  // Resta simple: con diagrama − cargados en el parte. Cuenta como "en operación" a todo activo que
+  // figura en el parte, tenga o no diagrama de trabajo, así que puede diferir del listado del diálogo.
   const disponibles = operativos - enOperacion;
   const indicatorPercent = employeeIndicator.indicator;
 

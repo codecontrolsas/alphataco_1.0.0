@@ -27,6 +27,17 @@ export function depositWarning(paymentDate: string, today: string): DepositWarni
   return day(deadline).diff(day(today), 'days') <= DUE_SOON_DAYS ? 'DUE_SOON' : 'OK';
 }
 
+/**
+ * Los mismos avisos de `depositWarning`, pero como corte sobre la fecha de pago para filtrar en SQL:
+ * VENCIDO si `payment_date < expiredBefore`; POR VENCER (o ya vencido) si `payment_date <= warnUntil`.
+ */
+export function depositWarningCutoffs(today: string): { expiredBefore: string; warnUntil: string } {
+  return {
+    expiredBefore: day(today).subtract(DEPOSIT_WINDOW_DAYS, 'days').format('YYYY-MM-DD'),
+    warnUntil: day(today).subtract(DEPOSIT_WINDOW_DAYS - DUE_SOON_DAYS, 'days').format('YYYY-MM-DD'),
+  };
+}
+
 export const DEPOSIT_WARNING_LABELS: Record<DepositWarning, string> = {
   OK: '',
   DUE_SOON: 'Por vencer',

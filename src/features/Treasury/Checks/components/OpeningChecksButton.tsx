@@ -18,7 +18,11 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useFieldArray, useForm, type UseFormReturn } from 'react-hook-form';
 import { toast } from 'sonner';
-import { createOpeningChecks, getCheckOperationFormData, type CheckOperationFormData } from '../../actions/checks.server';
+import { SearchCombobox } from '@/features/Warehouses/components/SearchCombobox';
+import { searchCollectionCustomers } from '../../actions/customer-statement.server';
+import { getCheckOperationFormData } from '../../actions/check-reads.server';
+import { createOpeningChecks } from '../../actions/checks.server';
+import type { CheckOperationFormData } from '../../lib/check-types';
 import { CHECK_KIND_LABELS } from '../../lib/check-transitions';
 import { invalidateTreasury } from '../../lib/invalidate';
 import { TREASURY_QUERY_KEYS } from '../../lib/query-keys';
@@ -86,7 +90,8 @@ function OpeningForm({ data, onClose }: { data: CheckOperationFormData; onClose:
     },
   });
   const checks = useFieldArray({ control: form.control, name: 'checks' });
-  const customerOf = (id: string) => data.customers.find((c) => c.id === id) ?? null;
+  // El cliente elegido (nombre y CUIT) sale del resultado de la búsqueda, no de un catálogo cargado de antemano.
+  const [customer, setCustomer] = useState<{ id: string; label: string; name: string; cuit: string } | null>(null);
 
   const save = useMutation({
     mutationFn: async (values: OpeningChecksValues) => unwrapAction(await createOpeningChecks(values)),
@@ -103,13 +108,13 @@ function OpeningForm({ data, onClose }: { data: CheckOperationFormData; onClose:
   });
 
   /** El librador se precarga con el cliente (editable): solo en los cheques que todavía no lo tienen. */
-  const changeCustomer = (customerId: string) => {
-    form.setValue('customerId', customerId, { shouldValidate: form.formState.isSubmitted });
-    const customer = customerOf(customerId);
-    if (!customer) return;
+  const changeCustomer = (option: { id: string; label: string; name: string; cuit: string } | null) => {
+    setCustomer(option);
+    form.setValue('customerId', option?.id ?? '', { shouldValidate: form.formState.isSubmitted });
+    if (!option) return;
     form.getValues('checks').forEach((c, i) => {
-      if (!c.drawerName) form.setValue(`checks.${i}.drawerName`, customer.name);
-      if (!c.drawerCuit) form.setValue(`checks.${i}.drawerCuit`, customer.cuit);
+      if (!c.drawerName) form.setValue(`checks.${i}.drawerName`, option.name);
+      if (!c.drawerCuit) form.setValue(`checks.${i}.drawerCuit`, option.cuit);
     });
   };
 
@@ -160,20 +165,18 @@ function OpeningForm({ data, onClose }: { data: CheckOperationFormData; onClose:
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Cliente de origen</FormLabel>
-                <Select value={field.value} onValueChange={changeCustomer}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Elegí el cliente" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {data.customers.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <SearchCombobox
+                    queryKey={['treasury-opening-customers']}
+                    search={(query) => searchCollectionCustomers(query, true)}
+                    value={field.value}
+                    selectedLabel={customer?.label ?? null}
+                    onSelect={changeCustomer}
+                    placeholder="Elegí el cliente"
+                    searchPlaceholder="Razón social o CUIT…"
+                    noun="clientes"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -190,7 +193,6 @@ function OpeningForm({ data, onClose }: { data: CheckOperationFormData; onClose:
             variant="outline"
             size="sm"
             onClick={() => {
-              const customer = customerOf(form.getValues('customerId'));
               checks.append(emptyCheck(customer ? { name: customer.name, cuit: customer.cuit } : null, data.today));
             }}
           >

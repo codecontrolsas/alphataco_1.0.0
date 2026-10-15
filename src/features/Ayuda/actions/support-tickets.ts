@@ -6,6 +6,7 @@ import { taskAppClient } from '@/shared/lib/taskapp/client';
 import { TaskAppError } from '@/shared/lib/taskapp/errors';
 import type { Ticket, TicketWithUnread } from '@/shared/lib/taskapp/types';
 import { buildTitleWithCategory } from '../constants/categories';
+import { canSupportTickets, requireSupportTickets } from '../lib/access.server';
 import type { CreateSupportTicketInput } from '../types';
 import { getReporterEmail } from './getReporterEmail';
 import { listSupportTicketComments } from './support-comments';
@@ -21,6 +22,7 @@ const RESOLVED_STATUS_SLUGS = new Set(['resolved', 'done', 'closed', 'cancelled'
 const UNREAD_COMMENT_FETCH_LIMIT = 25;
 
 export async function createSupportTicket(input: CreateSupportTicketInput): Promise<Ticket> {
+  await requireSupportTickets();
   const reporter = await getReporterEmail();
   if (!reporter) {
     logger.warn('createSupportTicket sin usuario autenticado');
@@ -69,6 +71,7 @@ export async function createSupportTicket(input: CreateSupportTicketInput): Prom
 }
 
 export async function getMySupportTickets(): Promise<Ticket[]> {
+  if (!(await canSupportTickets())) return [];
   const reporter = await getReporterEmail();
   if (!reporter) return [];
 
@@ -89,6 +92,7 @@ export async function getMySupportTickets(): Promise<Ticket[]> {
  * muestre un estado "no encontrado").
  */
 export async function getSupportTicketById(id: number): Promise<Ticket | null> {
+  if (!(await canSupportTickets())) return null;
   const reporter = await getReporterEmail();
   if (!reporter) {
     logger.warn('getSupportTicketById sin usuario autenticado', { data: { id } });
@@ -143,6 +147,7 @@ export async function getSupportTicketById(id: number): Promise<Ticket | null> {
  * - hasNewAgentComment: hay comentarios de otros (no el reporter) creados después del last_seen_at
  */
 export async function getMyTicketsWithUnread(): Promise<TicketWithUnread[]> {
+  if (!(await canSupportTickets())) return [];
   const reporter = await getReporterEmail();
   if (!reporter) {
     notifLogger.warn('No authenticated user, returning empty');
@@ -167,6 +172,7 @@ export interface MyTicketsPage {
  * navegación y las estadísticas.
  */
 export async function getMyTicketsPageWithUnread(page: number, pageSize: number): Promise<MyTicketsPage> {
+  if (!(await canSupportTickets())) return { tickets: [], total: 0, completed: 0 };
   const reporter = await getReporterEmail();
   if (!reporter) {
     notifLogger.warn('No authenticated user, returning empty page');
@@ -257,14 +263,11 @@ async function enrichWithUnread(
     const lastSeenAt = view?.lastSeenAt ?? null;
     const lastSeenStatusId = view?.lastSeenStatusId ?? null;
 
-    const hasStatusChange =
-      lastSeenStatusId !== null && BigInt(t.status_id) !== lastSeenStatusId;
+    const hasStatusChange = lastSeenStatusId !== null && BigInt(t.status_id) !== lastSeenStatusId;
 
     const comments = commentsByTicket.get(t.id) ?? [];
     const hasNewAgentComment = comments.some(
-      (c) =>
-        c.author_email !== reporter.email &&
-        (lastSeenAt === null || new Date(c.created_at) > lastSeenAt)
+      (c) => c.author_email !== reporter.email && (lastSeenAt === null || new Date(c.created_at) > lastSeenAt)
     );
 
     return {

@@ -10,7 +10,9 @@ import {
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { CircleOff, Landmark, Tag, type LucideIcon } from 'lucide-react';
-import { formatArgentinaDay } from '../../../lib/today';
+import { formatArgentinaDateTime } from '../../../lib/today';
+import { unwrapExportResult } from '@/shared/lib/export-result';
+import { MOVEMENT_STATE_UI } from '../../../lib/status-presentation';
 import { useCallback, useMemo, useState } from 'react';
 import type { TreasuryAccountRow } from '../../../actions/accounts.server';
 import type { TreasuryConceptRow } from '../../../actions/concepts.server';
@@ -28,7 +30,6 @@ import {
   formatValueDate,
   getColumns,
   movementKindIcons,
-  movementStateIcons,
 } from '../columns';
 import { MOVEMENT_STATE_LABELS } from '../constants';
 
@@ -123,7 +124,7 @@ export function _MovementsDataTable({
             options: STATE_VALUES.map((value) => ({
               value,
               label: MOVEMENT_STATE_LABELS[value],
-              icon: movementStateIcons[value],
+              icon: MOVEMENT_STATE_UI[value].icon,
             })),
             counts: result.counts,
           };
@@ -145,11 +146,11 @@ export function _MovementsDataTable({
 
   const exportConfig: DataTableExportConfig<TreasuryMovementListItem> = useMemo(
     () => ({
-      fetchAllData: () => getAllTreasuryMovementsForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllTreasuryMovementsForExport(currentParams)),
       options: { filename: 'movimientos-tesoreria', title: 'Movimientos', sheetName: 'Movimientos' },
       formatters: {
         date: (value) => formatValueDate(value as string),
-        created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : ''),
+        created_at: (value) => (value ? formatArgentinaDateTime(value as string | Date) : ''),
         income: exportMoney,
         expense: exportMoney,
       },

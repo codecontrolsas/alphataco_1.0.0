@@ -78,7 +78,12 @@ export function CategorySection({
 }: CategorySectionProps) {
   // Lazy fetch: solo dispara la query cuando el acordeon esta abierto.
   // Cachea por monthKey+category — reabrir es instantaneo dentro del staleTime.
-  const { data: vehicles, isLoading, isError, refetch } = useQuery({
+  const {
+    data: vehicles,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ['mantenimiento-vehicles', monthKey, category],
     queryFn: () => getMaintenanceCategoryVehicles(monthKey, category),
     enabled: open,
@@ -132,12 +137,7 @@ export function CategorySection({
 
   return (
     <Collapsible open={open} onOpenChange={onOpenChange} asChild>
-      <Card
-        className={cn(
-          'py-0 transition-shadow duration-300',
-          showRing && 'ring-2 ring-primary/50 shadow-md'
-        )}
-      >
+      <Card className={cn('py-0 transition-shadow duration-300', showRing && 'ring-2 ring-primary/50 shadow-md')}>
         <CardHeader className="flex flex-col gap-3 px-6 py-3 border-b sm:flex-row sm:items-center sm:justify-between">
           <CollapsibleTrigger asChild>
             <Button
@@ -161,7 +161,7 @@ export function CategorySection({
               {open && vehicles && inMaintenanceCount > 0 && (
                 <Badge
                   variant="outline"
-                  className="ml-1 tabular-nums border-amber-300 text-amber-600 dark:border-amber-700 dark:text-amber-400"
+                  className="ml-1 tabular-nums border-[var(--dash-warn)] text-foreground"
                   title="Equipos únicos en mantenimiento"
                 >
                   {inMaintenanceCount} en mant.
@@ -218,9 +218,7 @@ export function CategorySection({
                 ))}
               </>
             ) : vehicles.length === 0 ? (
-              <p className="px-6 py-8 text-center text-sm text-muted-foreground">
-                No hay equipos en esta categoría.
-              </p>
+              <p className="px-6 py-8 text-center text-sm text-muted-foreground">No hay equipos en esta categoría.</p>
             ) : filteredVehicles.length === 0 ? (
               <p className="px-6 py-8 text-center text-sm text-muted-foreground">
                 Ningún equipo coincide con los filtros aplicados.

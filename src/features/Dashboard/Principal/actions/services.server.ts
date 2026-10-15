@@ -1,31 +1,27 @@
 'use server';
 
+import { requireDashboardView } from '@/features/Dashboard/lib/permissions.server';
 import { Logger } from '@/lib/logger';
-import {
-  buildDateRangeFiltersWhere,
-  buildFiltersWhere,
-  buildSearchWhere,
-  buildTextFiltersWhere,
-  parseSearchParams,
-  stateToPrismaParams,
-} from '@/shared/components/common/DataTable/helpers';
-import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { buildTodayReportWhere } from '../lib/dashboard-dates';
 import { groupServicesByClient, summarizeServicesByType } from '../lib/indicators';
-import { toFacetMap } from '../lib/row-mapping';
 import type { ServiceDetailByClient, ServicesSummaryResult } from './types';
 
 const logger = new Logger('features/Dashboard/Principal/services');
 
 /**
- * Servicios del parte diario: resumen por tipo, detalle por cliente y la tabla paginada
- * del diálogo. Todo acotado a la empresa activa (`getActiveCompanyId()`).
+ * Servicios del parte diario: resumen por tipo y detalle por cliente. Todo acotado a la empresa
+ * activa (`getActiveCompanyId()`).
  */
 
-/** Resumen de servicios por tipo de operación para el día de hoy. */
+/**
+ * Resumen de servicios por tipo para hoy (hora argentina): partes pendientes o ejecutados que
+ * tienen tipo de servicio informado. Los porcentajes son sobre TODOS los del día, incluso los
+ * sin tipo, así que pueden no sumar 100.
+ */
 export async function getServicesSummary(): Promise<ServicesSummaryResult[]> {
+  await requireDashboardView('principal');
   logger.debug('Obteniendo resumen de servicios por tipo');
 
   try {
@@ -40,13 +36,19 @@ export async function getServicesSummary(): Promise<ServicesSummaryResult[]> {
     return summarizeServicesByType(grouped);
   } catch (error) {
     logger.error('Error al obtener resumen de servicios', { data: { error } });
-    return [];
+    // Sin dato no hay []: "sin servicios" se leería como un día sin actividad.
+    throw error;
   }
 }
 
-/** Detalle de servicios por cliente para una fecha (por defecto, hoy). */
+/**
+ * Detalle de servicios por cliente para una fecha (por defecto, hoy en hora argentina): sólo
+ * partes pendientes o ejecutados que tienen cliente; el total cuenta tipos mensual y adicional.
+ */
 export async function getServicesDetailByClient(date?: string): Promise<ServiceDetailByClient[]> {
+  await requireDashboardView('principal');
   logger.debug('Obteniendo detalle de servicios por cliente', { data: { date } });
+  if (date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Fecha inválida');
 
   try {
     const companyId = await getActiveCompanyId();
@@ -67,164 +69,8 @@ export async function getServicesDetailByClient(date?: string): Promise<ServiceD
     return groupServicesByClient(rows);
   } catch (error) {
     logger.error('Error al obtener detalle de servicios por cliente', { data: { error } });
-    return [];
+    throw error;
   }
 }
 
 export type ServicesDetailByClientData = Awaited<ReturnType<typeof getServicesDetailByClient>>;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Detalle de servicios — DataTable server-side
-// ─────────────────────────────────────────────────────────────────────────────
-
-const VALID_SORT_FIELDS = new Set(['status', 'type_service', 'created_at', 'description', 'remit_number']);
-const TEXT_COLUMNS = ['description', 'remit_number'];
-const DATE_COLUMNS = ['created_at'];
-
-const SERVICES_DETAIL_SELECT = {
-  id: true,
-  status: true,
-  type_service: true,
-  description: true,
-  remit_number: true,
-  created_at: true,
-  customers: { select: { id: true, name: true } },
-} as const;
-
-/** WHERE compartido entre la query paginada, la exportación y las facetas. */
-function buildServicesDetailWhere(companyId: string, targetDate: string, state: ReturnType<typeof parseSearchParams>) {
-  const filtersWhere = buildFiltersWhere(
-    state.filters,
-    { customer: 'customer_id' },
-    { exclude: [...TEXT_COLUMNS, ...DATE_COLUMNS.flatMap((column) => [`${column}_from`, `${column}_to`])] }
-  );
-
-  return {
-    customer_id: { not: null },
-    ...buildTodayReportWhere(companyId, targetDate),
-    ...buildSearchWhere(state.search, ['description', 'remit_number']),
-    ...filtersWhere,
-    ...buildTextFiltersWhere(state.filters, TEXT_COLUMNS),
-    ...buildDateRangeFiltersWhere(state.filters, DATE_COLUMNS),
-  };
-}
-
-/** Detalle de servicios paginado para el DataTable del diálogo. */
-export async function getServicesDetailPaginated(searchParams: DataTableSearchParams, targetDate: string) {
-  logger.debug('Obteniendo servicios detalle paginados', { data: { targetDate } });
-
-  try {
-    const companyId = await getActiveCompanyId();
-    const state = parseSearchParams(searchParams);
-    const { skip, take } = stateToPrismaParams(state);
-    const where = buildServicesDetailWhere(companyId, targetDate, state);
-
-    const resolvedSorts: Record<string, unknown>[] = [];
-    for (const sort of state.sorting) {
-      if (!VALID_SORT_FIELDS.has(sort.id)) continue;
-      const dir: 'asc' | 'desc' = sort.desc ? 'desc' : 'asc';
-      resolvedSorts.push(sort.id === 'customer' ? { customers: { name: dir } } : { [sort.id]: dir });
-    }
-    const safeOrderBy = [...resolvedSorts, { created_at: 'desc' as const }];
-
-    const [data, total] = await Promise.all([
-      prisma.dailyreportrows.findMany({ skip, take, orderBy: safeOrderBy, where, select: SERVICES_DETAIL_SELECT }),
-      prisma.dailyreportrows.count({ where }),
-    ]);
-
-    return { data, total };
-  } catch (error) {
-    logger.error('Error al obtener servicios detalle paginados', { data: { error } });
-    throw new Error(`Error al obtener servicios: ${error instanceof Error ? error.message : String(error)}`);
-  }
-}
-
-export type ServicesDetailListItem = Awaited<ReturnType<typeof getServicesDetailPaginated>>['data'][number];
-
-/** Todos los servicios detalle sin paginar, para la exportación a Excel. */
-export async function getAllServicesDetailForExport(searchParams: DataTableSearchParams, targetDate: string) {
-  logger.debug('Exportando servicios detalle', { data: { targetDate } });
-
-  try {
-    const companyId = await getActiveCompanyId();
-    const state = parseSearchParams(searchParams);
-
-    return await prisma.dailyreportrows.findMany({
-      orderBy: [{ created_at: 'desc' as const }],
-      where: buildServicesDetailWhere(companyId, targetDate, state),
-      select: SERVICES_DETAIL_SELECT,
-    });
-  } catch (error) {
-    logger.error('Error al exportar servicios detalle', { data: { error } });
-    throw new Error('Error al exportar servicios');
-  }
-}
-
-/** Facetas por columna con cross-filter para el DataTable de servicios detalle. */
-export async function getServicesDetailSingleFacet(
-  columnId: string,
-  targetDate: string,
-  searchParams?: DataTableSearchParams
-): Promise<{ counts: Map<string, number>; resolvedOptions?: Array<{ id: string; name: string | null }> } | null> {
-  logger.debug('Obteniendo facet de servicios detalle', { data: { columnId, targetDate } });
-
-  try {
-    const companyId = await getActiveCompanyId();
-    const parsedState = parseSearchParams(searchParams && Object.keys(searchParams).length > 0 ? searchParams : {});
-
-    function crossWhere(excludeColumn: string) {
-      const modified = { ...parsedState, filters: { ...parsedState.filters } };
-      delete modified.filters[excludeColumn];
-      delete modified.filters[`${excludeColumn}_from`];
-      delete modified.filters[`${excludeColumn}_to`];
-      return buildServicesDetailWhere(companyId, targetDate, modified);
-    }
-
-    switch (columnId) {
-      case 'status': {
-        const groups = await prisma.dailyreportrows.groupBy({
-          by: ['status'],
-          where: crossWhere('status'),
-          _count: { id: true },
-        });
-        return { counts: toFacetMap(groups.map((group) => ({ key: group.status, count: group._count.id }))) };
-      }
-
-      case 'type_service': {
-        const groups = await prisma.dailyreportrows.groupBy({
-          by: ['type_service'],
-          where: crossWhere('type_service'),
-          _count: { id: true },
-        });
-        return { counts: toFacetMap(groups.map((group) => ({ key: group.type_service, count: group._count.id }))) };
-      }
-
-      case 'customer': {
-        const groups = await prisma.dailyreportrows.groupBy({
-          by: ['customer_id'],
-          where: crossWhere('customer'),
-          _count: { id: true },
-        });
-        const ids = groups.map((group) => group.customer_id).filter((id): id is string => id != null);
-        const resolvedOptions =
-          ids.length > 0
-            ? await prisma.customers.findMany({
-                where: { id: { in: ids } },
-                select: { id: true, name: true },
-                orderBy: { name: 'asc' },
-              })
-            : [];
-        return {
-          counts: toFacetMap(groups.map((group) => ({ key: group.customer_id, count: group._count.id }))),
-          resolvedOptions,
-        };
-      }
-
-      default:
-        return null;
-    }
-  } catch (error) {
-    logger.error('Error al obtener facet de servicios detalle', { data: { error, columnId } });
-    return null;
-  }
-}

@@ -1,14 +1,22 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AMOUNT_SCALE, amountOf, formatScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { formatMoney } from '@/features/Warehouses/lib/format';
-import { ChevronRight, Landmark, Wallet } from 'lucide-react';
+import { MetricCard } from '@/shared/components/common/MetricCard';
+import { ChevronRight, FileText, Landmark, Wallet } from 'lucide-react';
 import Link from 'next/link';
 import type { TreasuryAccountRow } from '../../actions/accounts.server';
 
 type Indicators = Pick<TreasuryAccountRow, 'balance' | 'toDebit' | 'toCredit' | 'projected'>;
 
+const KIND_ICONS = { BANK: Landmark, CASH: Wallet, CHECK_PORTFOLIO: FileText } as const;
+
+function subtitleOf(a: TreasuryAccountRow) {
+  if (a.kind === 'BANK') return [a.bank_name, a.account_number].filter(Boolean).join(' · ') || 'Cuenta bancaria';
+  return a.kind === 'CASH' ? 'Caja' : 'Cartera de cheques';
+}
+
 const negative = (value: string) => value.startsWith('-');
-const amountTone = (value: string) => (negative(value) ? 'text-red-600 dark:text-red-400' : '');
+const amountTone = (value: string) => (negative(value) ? 'text-danger' : '');
 
 function sumIndicators(rows: Indicators[]): Indicators {
   const total = (key: keyof Indicators) => formatScaled(rows.reduce((acc, r) => acc + amountOf(r[key]), BigInt(0)), AMOUNT_SCALE);
@@ -57,43 +65,52 @@ export function AccountCards({ accounts, canConfigure }: { accounts: TreasuryAcc
 
   const banks = accounts.filter((a) => a.kind === 'BANK');
   const cash = accounts.filter((a) => a.kind === 'CASH');
+  const portfolios = accounts.filter((a) => a.kind === 'CHECK_PORTFOLIO');
+  const groups = [
+    { title: 'Bancos', rows: banks },
+    { title: 'Cajas', rows: cash },
+    { title: 'Carteras de cheques', rows: portfolios },
+  ].filter((g) => g.rows.length > 0);
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className={`grid gap-3 sm:grid-cols-2 ${portfolios.length > 0 ? 'xl:grid-cols-3' : ''}`}>
         {[
           { title: 'Total bancos', rows: banks },
           { title: 'Total cajas', rows: cash },
+          // Las carteras de cheques no suman a bancos ni a cajas: tienen su propio total.
+          ...(portfolios.length > 0 ? [{ title: 'Total carteras de cheques', rows: portfolios }] : []),
         ].map((group) => {
           const total = sumIndicators(group.rows);
           return (
-            <Card key={group.title}>
-              <CardHeader className="pb-2">
-                <CardDescription>{group.title}</CardDescription>
-                <CardTitle className={`text-2xl tabular-nums ${amountTone(total.balance)}`}>{formatMoney(total.balance)}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <IndicatorGrid value={total} />
-              </CardContent>
-            </Card>
+            <MetricCard
+              key={group.title}
+              label={group.title}
+              value={formatMoney(total.balance)}
+              tone={negative(total.balance) ? 'danger' : 'default'}
+              hint={`A debitar ${formatMoney(total.toDebit)} · A acreditar ${formatMoney(total.toCredit)} · Proyectado ${formatMoney(total.projected)}`}
+            />
           );
         })}
       </div>
 
+      {groups.map((group) => (
+        <section key={group.title} aria-label={group.title} className="space-y-2">
+          <h2 className="text-sm font-medium text-muted-foreground">{group.title}</h2>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {accounts.map((a) => {
-          const Icon = a.kind === 'BANK' ? Landmark : Wallet;
+        {group.rows.map((a) => {
+          const Icon = KIND_ICONS[a.kind];
           return (
             <Link key={a.id} href={`/dashboard/treasury/accounts/${a.id}`} className="group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <Card className="h-full transition-colors group-hover:border-primary/50">
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
-                    <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
                     <CardTitle className="min-w-0 flex-1 truncate text-base">{a.name}</CardTitle>
-                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
                   </div>
                   <CardDescription className="truncate">
-                    {a.kind === 'BANK' ? [a.bank_name, a.account_number].filter(Boolean).join(' · ') || 'Cuenta bancaria' : 'Caja'}
+                    {subtitleOf(a)}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -108,6 +125,8 @@ export function AccountCards({ accounts, canConfigure }: { accounts: TreasuryAcc
           );
         })}
       </div>
+        </section>
+      ))}
     </div>
   );
 }

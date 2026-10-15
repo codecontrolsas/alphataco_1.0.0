@@ -8,45 +8,19 @@ import {
   ChartLegendContent,
   ChartTooltip,
   ChartTooltipContent,
-  type ChartConfig,
 } from '@/components/ui/chart';
+import { ChartSummary } from '@/features/Dashboard/shared/charts/ChartSummary';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useState } from 'react';
 import { Bar, BarChart, XAxis, YAxis } from 'recharts';
+import { ORDER_CHART_CONFIG, ORDER_SERIES, type OrderActiveView } from '../utils/order-series';
 import type { OrderChartDataPoint } from './OrderManagementChart';
 
 const MAX_CLIENTS_VISIBLE = 7;
 
-const chartConfig = {
-  confirmado: {
-    label: 'Confirmados',
-    color: 'oklch(0.72 0.17 150)',
-  },
-  pendiente: {
-    label: 'Pendientes',
-    color: 'oklch(0.80 0.15 85)',
-  },
-  rechazado: {
-    label: 'Rechazados',
-    color: 'oklch(0.75 0.15 55)',
-  },
-  cancelado: {
-    label: 'Cancelados',
-    color: 'oklch(0.63 0.20 25)',
-  },
-  otros: {
-    label: 'Otros',
-    color: 'oklch(0.70 0.02 260)',
-  },
-} satisfies ChartConfig;
-
-type ActiveView = 'total' | 'confirmado' | 'pendiente' | 'rechazado' | 'cancelado';
-
-const SERIES = ['confirmado', 'pendiente', 'rechazado', 'cancelado', 'otros'] as const;
-
 interface Props {
   chartData: OrderChartDataPoint[];
-  activeView: ActiveView;
+  activeView: OrderActiveView;
   periodLabel: string;
 }
 
@@ -55,7 +29,7 @@ export function OrderManagementBarChart({ chartData, activeView, periodLabel }: 
 
   const remainingCount = Math.max(0, chartData.length - MAX_CLIENTS_VISIBLE);
   const displayData = showAll ? chartData : chartData.slice(0, MAX_CLIENTS_VISIBLE);
-  const visibleSeries = SERIES.filter((key) => activeView === 'total' || activeView === key);
+  const visibleSeries = ORDER_SERIES.filter((key) => activeView === 'total' || activeView === key);
 
   const chartHeight = Math.max(200, displayData.length * 45 + 60);
 
@@ -66,7 +40,7 @@ export function OrderManagementBarChart({ chartData, activeView, periodLabel }: 
         <CardDescription>{periodLabel}</CardDescription>
       </CardHeader>
       <CardContent className="px-2 pb-4 sm:px-6">
-        <ChartContainer config={chartConfig} className="w-full" style={{ height: chartHeight }}>
+        <ChartContainer config={ORDER_CHART_CONFIG} className="w-full" style={{ height: chartHeight }}>
           <BarChart accessibilityLayer data={displayData} layout="vertical" margin={{ left: 0, right: 12 }}>
             <XAxis type="number" hide />
             <YAxis
@@ -94,6 +68,7 @@ export function OrderManagementBarChart({ chartData, activeView, periodLabel }: 
         {remainingCount > 0 && (
           <div className="flex justify-center mt-1">
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               className="text-xs text-muted-foreground h-7 gap-1"
@@ -112,6 +87,19 @@ export function OrderManagementBarChart({ chartData, activeView, periodLabel }: 
             </Button>
           </div>
         )}
+        <ChartSummary
+          className="mt-2"
+          title="Pedidos por cliente"
+          summary={`${periodLabel}: ${chartData.length} ${chartData.length === 1 ? 'cliente' : 'clientes'} con pedidos.`}
+          columns={[
+            { key: 'label', header: 'Cliente' },
+            ...ORDER_SERIES.map((key) => ({ key, header: ORDER_CHART_CONFIG[key].label, numeric: true })),
+          ]}
+          rows={chartData.map((row) => ({
+            label: row.label,
+            ...Object.fromEntries(ORDER_SERIES.map((key) => [key, row[key].toLocaleString('es-AR')])),
+          }))}
+        />
       </CardContent>
     </Card>
   );

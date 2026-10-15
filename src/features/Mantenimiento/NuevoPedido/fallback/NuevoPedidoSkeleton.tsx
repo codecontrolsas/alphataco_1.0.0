@@ -4,9 +4,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 export function NuevoPedidoSkeleton() {
   return (
     <Card className="p-6">
-      <div className="flex gap-6 pt-6">
+      <div className="flex flex-col gap-6 pt-6 lg:flex-row">
         {/* Panel izquierdo - Formulario */}
-        <div className="min-w-[280px] space-y-4 p-3">
+        <div className="space-y-4 p-3 lg:min-w-[280px]">
           {/* Label + Input equipo */}
           <div className="space-y-2">
             <Skeleton className="h-4 w-32" />
@@ -38,12 +38,12 @@ export function NuevoPedidoSkeleton() {
         </div>
 
         {/* Panel derecho - Tabla */}
-        <div className="flex-1 space-y-4 pl-6">
+        <div className="flex-1 space-y-4 lg:pl-6">
           <CardTitle>Se registrarán los siguientes trabajos</CardTitle>
 
           <div className="space-y-3">
             {/* Headers de la tabla */}
-            <div className="flex gap-4">
+            <div className="hidden gap-4 lg:flex">
               <Skeleton className="h-8 w-[200px]" />
               <Skeleton className="h-8 w-[150px]" />
               <Skeleton className="h-8 w-[100px]" />
@@ -51,9 +51,14 @@ export function NuevoPedidoSkeleton() {
               <Skeleton className="h-8 w-[100px]" />
             </div>
 
+            {/* En móvil las filas se reducen a una tira por trabajo */}
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={`m-${i}`} className="h-14 w-full lg:hidden" />
+            ))}
+
             {/* Filas vacías de la tabla */}
             {[1, 2, 3].map((i) => (
-              <div key={i} className="flex gap-4">
+              <div key={i} className="hidden gap-4 lg:flex">
                 <Skeleton className="h-12 w-[200px]" />
                 <Skeleton className="h-12 w-[150px]" />
                 <Skeleton className="h-12 w-[100px]" />

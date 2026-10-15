@@ -1,35 +1,52 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   TireDiagramRenderer,
+  describePositionNumber,
   type DiagramAxle,
   type DiagramPosition,
+  type TireDiagramHitch,
 } from '@/features/Mantenimiento/Gomeria/shared/TireDiagramRenderer';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { ensureVehicleTirePositions, type EnsuredTirePosition } from '../actions/service-order-queries.server';
-import { TirePositionCard } from './TirePositionCard';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
 interface TireDiagramProps {
   vehicleId: string;
-  serviceOrderId: string;
   label?: string;
-  onInterventionDone?: () => void;
+  /** Texto de la cabina (solo el vehículo principal). */
+  cabinLabel?: string;
+  /** Extremo de enganche con el otro vehículo de la orden. */
+  hitch?: TireDiagramHitch;
+  /** Posición abierta en el panel (controlada por el asistente: un solo panel por orden). */
+  selectedPositionNumber?: number | null;
+  /** Posiciones ya intervenidas en esta orden para este vehículo. */
+  highlightedPositions?: number[];
+  onSelectPosition: (position: EnsuredTirePosition, positionLabel: string) => void;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function TireDiagram({ vehicleId, serviceOrderId, label, onInterventionDone }: TireDiagramProps) {
-  const [selectedPosition, setSelectedPosition] = useState<EnsuredTirePosition | null>(null);
-  const [highlightedPositions, setHighlightedPositions] = useState<number[]>([]);
-
+/** Diagrama interactivo de un vehículo: cada posición es un botón, el detalle lo muestra el asistente. */
+export function TireDiagram({
+  vehicleId,
+  label,
+  cabinLabel,
+  hitch,
+  selectedPositionNumber = null,
+  highlightedPositions = [],
+  onSelectPosition,
+}: TireDiagramProps) {
   const {
     data: positions,
     isLoading,
     error,
+    refetch,
+    isFetching,
   } = useQuery({
     queryKey: ['vehicle-tire-positions', vehicleId],
     queryFn: () => ensureVehicleTirePositions(vehicleId),
@@ -38,28 +55,40 @@ export function TireDiagram({ vehicleId, serviceOrderId, label, onInterventionDo
 
   if (isLoading) {
     return (
-      <div className="space-y-2">
+      <div className="space-y-2" role="status" aria-label="Cargando el diagrama de cubiertas">
         <Skeleton className="h-4 w-32" />
-        <Skeleton className="h-28 w-full max-w-xs" />
+        <Skeleton className="h-44 w-full" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <p className="text-sm text-destructive">
-        {error instanceof Error ? error.message : 'Error al cargar posiciones de cubiertas.'}
-      </p>
+      <div
+        role="alert"
+        className="flex flex-wrap items-center gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm"
+      >
+        <AlertTriangle className="size-4 shrink-0 text-destructive" aria-hidden="true" />
+        <p className="min-w-0 flex-1 text-destructive">
+          {error instanceof Error ? error.message : 'Error al cargar posiciones de cubiertas.'}
+        </p>
+        <Button type="button" variant="outline" size="sm" onClick={() => void refetch()} disabled={isFetching}>
+          Reintentar
+        </Button>
+      </div>
     );
   }
 
   if (!positions || positions.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">No hay posiciones de cubiertas configuradas para este vehículo.</p>
+      <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+        No hay posiciones de cubiertas configuradas para este vehículo. Se definen asignándole una plantilla de
+        cubiertas.
+      </p>
     );
   }
 
-  // Build DiagramAxle[] from the positions' template_axle data (unique by axle_number)
+  // Build DiagramAxle[] from the positions' template_axle data (unique by axle id)
   const axleMap = new Map<string, DiagramAxle>();
   for (const pos of positions) {
     if (!pos.template_axle) continue;
@@ -77,7 +106,6 @@ export function TireDiagram({ vehicleId, serviceOrderId, label, onInterventionDo
   }
   const axles: DiagramAxle[] = Array.from(axleMap.values());
 
-  // Build DiagramPosition[]
   const diagramPositions: DiagramPosition[] = positions.map((p) => ({
     position_number: p.position_number,
     axle_number: p.axle_number,
@@ -90,41 +118,20 @@ export function TireDiagram({ vehicleId, serviceOrderId, label, onInterventionDo
 
   function handlePositionClick(positionNumber: number) {
     const pos = positions?.find((p) => p.position_number === positionNumber);
-    if (pos) setSelectedPosition(pos);
-  }
-
-  function handleInterventionDone() {
-    if (selectedPosition) {
-      setHighlightedPositions((prev) =>
-        prev.includes(selectedPosition.position_number) ? prev : [...prev, selectedPosition.position_number]
-      );
-    }
-    onInterventionDone?.();
+    if (pos) onSelectPosition(pos, describePositionNumber(positionNumber, axles));
   }
 
   return (
-    <>
-      <TireDiagramRenderer
-        axles={axles}
-        positions={diagramPositions}
-        interactive
-        onPositionClick={handlePositionClick}
-        highlightedPositions={highlightedPositions}
-        label={label}
-      />
-
-      {selectedPosition && (
-        <TirePositionCard
-          position={selectedPosition}
-          serviceOrderId={serviceOrderId}
-          vehicleId={vehicleId}
-          open={selectedPosition !== null}
-          onOpenChange={(open) => {
-            if (!open) setSelectedPosition(null);
-          }}
-          onActionComplete={handleInterventionDone}
-        />
-      )}
-    </>
+    <TireDiagramRenderer
+      axles={axles}
+      positions={diagramPositions}
+      interactive
+      onPositionClick={handlePositionClick}
+      highlightedPositions={highlightedPositions}
+      selectedPosition={selectedPositionNumber}
+      label={label}
+      cabinLabel={cabinLabel}
+      hitch={hitch}
+    />
   );
 }

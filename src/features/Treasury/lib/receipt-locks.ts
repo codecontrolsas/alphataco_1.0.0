@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { Prisma } from '@/generated/prisma/client';
 import { TreasuryError } from './treasury-errors';
+import { UUID_RE } from '../schemas/shared';
 
 /**
  * Locks del recibo de cobranza (spec Tesorería etapa 2 §3.7). Guardar, confirmar, anular y
@@ -11,7 +12,6 @@ import { TreasuryError } from './treasury-errors';
 
 type RawTx = Pick<Prisma.TransactionClient, '$queryRaw'>;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type LockedReceipt = {
   id: string;

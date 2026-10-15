@@ -46,6 +46,9 @@ export function ReverseMovementDialog({ movementId, number }: { movementId: stri
       queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.availability });
       // Anular una entrega recalcula el estado y el avance del pedido.
       queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.requests });
+      // Anular la salida de una herramienta serializada cierra o reabre un préstamo.
+      queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.loans });
+      queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.movementDetail });
       setOpen(false);
       router.push(`/dashboard/warehouse/movements/${result.id}`);
     },
@@ -64,7 +67,7 @@ export function ReverseMovementDialog({ movementId, number }: { movementId: stri
       }}
     >
       <Button type="button" variant="outline" className="text-destructive hover:text-destructive" onClick={() => setOpen(true)}>
-        <Undo2 className="mr-2 h-4 w-4" />
+        <Undo2 className="mr-2 h-4 w-4" aria-hidden="true" />
         Anular
       </Button>
       <AlertDialogContent>

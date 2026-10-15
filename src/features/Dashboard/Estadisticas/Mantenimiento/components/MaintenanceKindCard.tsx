@@ -3,6 +3,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ChartSummary } from '@/features/Dashboard/shared/charts/ChartSummary';
 import { type_of_maintenance_ENUM } from '@/generated/prisma/enums';
 import { useQuery } from '@tanstack/react-query';
 import { Gauge, Loader2 } from 'lucide-react';
@@ -108,7 +109,7 @@ export function MaintenanceKindCard() {
 
       <CardContent className="px-6 pb-5">
         {isError ? (
-          <div className="flex h-44 items-center justify-center text-sm text-muted-foreground">
+          <div role="alert" className="flex h-44 items-center justify-center text-sm text-muted-foreground">
             No se pudo cargar el indicador de preventivo/correctivo.
           </div>
         ) : isLoading ? (
@@ -191,6 +192,19 @@ export function MaintenanceKindCard() {
                 ))}
               </ul>
             </div>
+
+            <ChartSummary
+              title="Mantenimiento preventivo vs. correctivo"
+              summary={`${periodLabel}: ${total} ${total === 1 ? 'tarea ejecutada' : 'tareas ejecutadas'}, ${preventivePct}% preventivas; ${slices
+                .map((slice) => `${slice.label} ${slice.count} (${slice.pct}%)`)
+                .join(', ')}.`}
+              columns={[
+                { key: 'label', header: 'Tipo' },
+                { key: 'count', header: 'Tareas', numeric: true },
+                { key: 'pct', header: 'Participación', numeric: true },
+              ]}
+              rows={slices.map((slice) => ({ label: slice.label, count: slice.count, pct: `${slice.pct}%` }))}
+            />
 
             {(diagnostics > 0 || unclassified > 0) && (
               <div className="space-y-0.5 border-t pt-3 text-xs text-muted-foreground">

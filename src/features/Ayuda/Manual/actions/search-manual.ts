@@ -1,8 +1,9 @@
 'use server';
 
-import { Logger } from '@/lib/logger';
 import { getUserPermissionsMapServer } from '@/features/Permissions';
+import { Logger } from '@/lib/logger';
 import { z } from 'zod';
+import { canManual } from '../../lib/access.server';
 import { visibleGuides } from '../lib/guide-access';
 import { getManual } from '../lib/manual.server';
 import { searchGuides } from '../lib/search-index.server';
@@ -18,6 +19,9 @@ const querySchema = z.string().trim().min(2).max(100);
 export async function searchManual(query: string) {
   const parsed = querySchema.safeParse(query);
   if (!parsed.success) return [];
+
+  // Sin `ayuda:manual:view` no hay resultados (ni error): el buscador no debe romper la pantalla.
+  if (!(await canManual())) return [];
 
   try {
     const permissions = await getUserPermissionsMapServer();

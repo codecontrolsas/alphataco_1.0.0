@@ -1,11 +1,14 @@
 'use server';
 
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
 import { errorMessage, fail, ok, type ActionResult } from '../lib/action-result';
+import { assertComercialView, requireComercialPermission } from '../lib/require-permission.server';
+import { SECTOR_SELECT, serializeSector } from '../lib/sector-row';
 import { sectorFormSchema, type SectorFormValues } from '../schemas/sector';
 
 const logger = new Logger('features/Empresa/Clientes/sectors');
@@ -23,31 +26,15 @@ const COMERCIAL_PATH = '/dashboard/comercial';
 
 /** Sectores de los clientes de la empresa activa (lo que lista la tabla de Sectores). */
 export async function getSectors() {
+  await assertComercialView(['sectores-cliente', 'service']);
   const companyId = await getActiveCompanyId();
   try {
     const rows = await prisma.sectors.findMany({
       where: { customers: { company_id: companyId } },
-      select: {
-        id: true,
-        customer_id: true,
-        name: true,
-        descripcion_corta: true,
-        created_at: true,
-        customers: { select: { id: true, name: true } },
-      },
+      select: SECTOR_SELECT,
       orderBy: { name: 'asc' },
     });
-
-    // Se conserva la forma anidada `sectors: {...}` que ya consumían las 14 pantallas: el
-    // ticket pide reordenar el dominio, no rehacer un DTO que atraviesa media aplicación.
-    return rows.map((s) => ({
-      id: s.id,
-      sector_id: s.id,
-      customer_id: s.customer_id,
-      created_at: s.created_at,
-      sectors: { id: s.id, name: s.name, descripcion_corta: s.descripcion_corta },
-      customers: s.customers,
-    }));
+    return rows.map(serializeSector);
   } catch (error) {
     logger.error('Error al obtener sectores', { data: { error, companyId } });
     throw error;
@@ -55,6 +42,25 @@ export async function getSectors() {
 }
 
 export type SectorRow = Awaited<ReturnType<typeof getSectors>>[number];
+
+/** Sectores de UN cliente de la empresa activa (pestaña "Sectores" de la ficha). */
+export async function getSectorsByCustomer(customerId: string): Promise<SectorRow[]> {
+  if (!(await checkPermissionServer('comercial', 'sectores-cliente', 'view'))) {
+    throw new Error('No tenés permiso para ver los sectores del cliente');
+  }
+  const companyId = await getActiveCompanyId();
+  try {
+    const rows = await prisma.sectors.findMany({
+      where: { customer_id: customerId, customers: { company_id: companyId } },
+      select: SECTOR_SELECT,
+      orderBy: { name: 'asc' },
+    });
+    return rows.map(serializeSector);
+  } catch (error) {
+    logger.error('Error al obtener los sectores del cliente', { data: { error, customerId } });
+    throw new Error('No se pudieron cargar los sectores del cliente');
+  }
+}
 
 async function assertCustomerOwned(customerId: string, companyId: string): Promise<void> {
   const customer = await prisma.customers.findFirst({
@@ -74,6 +80,8 @@ export async function createSector(input: SectorFormValues): Promise<ActionResul
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos');
   const values = parsed.data;
 
+  const permissionError = await requireComercialPermission('sectores-cliente', 'create');
+  if (permissionError) return fail(permissionError);
   const companyId = await getActiveCompanyId();
   try {
     await assertCustomerOwned(values.customer_id, companyId);
@@ -101,6 +109,8 @@ export async function updateSector(input: SectorFormValues & { id: string }): Pr
   const values = parsed.data;
   const sectorId = input.id;
 
+  const permissionError = await requireComercialPermission('sectores-cliente', 'update');
+  if (permissionError) return fail(permissionError);
   const companyId = await getActiveCompanyId();
   try {
     // Perímetro: el sector tiene que ser de un cliente de la empresa activa. No lo garantiza la
@@ -127,7 +137,9 @@ export async function updateSector(input: SectorFormValues & { id: string }): Pr
   } catch (error) {
     if (nombreRepetido(error)) return fail('Ese cliente ya tiene un sector con ese nombre');
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
-      return fail('No se puede cambiar el cliente del sector porque está siendo utilizado en contratos o partes diarios');
+      return fail(
+        'No se puede cambiar el cliente del sector porque está siendo utilizado en contratos o partes diarios'
+      );
     }
     logger.error('Error al actualizar el sector', { data: { error, sectorId } });
     return fail(errorMessage(error, 'Error al actualizar el sector'));

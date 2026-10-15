@@ -1,4 +1,5 @@
 import { getUserPermissionsMapServer } from '@/features/Permissions';
+import { SectionErrorBoundary } from '@/shared/components/common/SectionErrorBoundary';
 import { Suspense } from 'react';
 import TemplatesList from './TemplatesList';
 import { PlantillasSkeleton } from './fallback/PlantillasSkeleton';
@@ -12,9 +13,11 @@ export default async function PlantillasTabContent({
 
   return (
     <div className="space-y-6">
-      <Suspense fallback={<PlantillasSkeleton />}>
-        <TemplatesList searchParams={searchParams} permissionsMap={permissionsMap} />
-      </Suspense>
+      <SectionErrorBoundary title="No se pudieron cargar las plantillas">
+        <Suspense fallback={<PlantillasSkeleton />}>
+          <TemplatesList searchParams={searchParams} permissionsMap={permissionsMap} />
+        </Suspense>
+      </SectionErrorBoundary>
     </div>
   );
 }

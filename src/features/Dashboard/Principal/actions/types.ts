@@ -14,7 +14,8 @@ export interface ServicesSummaryResult {
 export interface EmployeeIndicatorResult {
   employees_operativos: number;
   employees_used: number;
-  indicator: number;
+  /** Porcentaje de uso; `null` cuando no hay empleados con diagrama de trabajo (no es 0 %). */
+  indicator: number | null;
 }
 
 export interface DiagramIndicatorResult {

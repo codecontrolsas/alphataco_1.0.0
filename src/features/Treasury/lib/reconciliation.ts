@@ -3,6 +3,8 @@ import 'server-only';
 import { Prisma } from '@/generated/prisma/client';
 import { AUTO_MATCH_DAYS } from '../schemas/reconciliation';
 import { TreasuryError } from './treasury-errors';
+import { UUID_RE } from '../schemas/shared';
+import { compareAmounts } from '@/features/Comercial/Facturacion/lib/invoice-math';
 
 /**
  * Conciliación bancaria (spec Tesorería etapa 4 §3): ÚNICA escritura del estado de las líneas del
@@ -12,7 +14,6 @@ import { TreasuryError } from './treasury-errors';
 
 type RawTx = Pick<Prisma.TransactionClient, '$queryRaw' | '$executeRaw'>;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type BankLineStatus = 'PENDING' | 'MATCHED' | 'CREATED' | 'IGNORED';
 
@@ -29,7 +30,7 @@ export type LockedLine = {
 
 /** Candado de la conciliación de una cuenta (advisory lock de la transacción). */
 export async function lockAccountReconciliation(tx: RawTx, accountId: string): Promise<void> {
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`reconcile:${accountId}`}))`;
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`reconcile:${accountId}`}, 0))`;
 }
 
 /** La línea de la empresa, con `FOR UPDATE`, después de tomar el candado de su cuenta. */
@@ -68,7 +69,7 @@ export async function lockMatchableMovement(tx: RawTx, line: LockedLine, movemen
   if (!m || m.account_id !== line.accountId) throw new TreasuryError('El movimiento no existe');
   if (m.cancelled) throw new TreasuryError('El movimiento está anulado');
   if (m.reconciled) throw new TreasuryError('El movimiento ya está conciliado con otra línea');
-  if (Number(m.amount) !== Number(line.amount)) throw new TreasuryError('El movimiento no tiene el importe de la línea');
+  if (compareAmounts(m.amount, line.amount) !== 0) throw new TreasuryError('El movimiento no tiene el importe de la línea');
 }
 
 /** Cambia el estado de la línea (con lo que exige el estado nuevo). */

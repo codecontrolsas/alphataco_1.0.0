@@ -6,6 +6,7 @@ import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
 import { errorMessage, fail, ok, type ActionResult } from '../lib/action-result';
+import { assertComercialView, requireComercialPermission } from '../lib/require-permission.server';
 import { measureUnitFormSchema, type MeasureUnitFormValues } from '../schemas/measure-unit';
 
 const logger = new Logger('features/Empresa/Clientes/measure-units');
@@ -17,6 +18,7 @@ const COMERCIAL_PATH = '/dashboard/comercial';
  * para no exponer el catálogo sin autenticación.
  */
 export async function getMeasureUnits() {
+  await assertComercialView(['mensure_units', 'service', 'items-contrato']);
   await getActiveCompanyId();
   try {
     return await prisma.measure_units.findMany({ orderBy: { unit: 'asc' } });
@@ -31,10 +33,15 @@ export type MeasureUnitRow = Awaited<ReturnType<typeof getMeasureUnits>>[number]
 export async function createMeasureUnit(input: MeasureUnitFormValues): Promise<ActionResult<{ id: number }>> {
   const parsed = measureUnitFormSchema.safeParse(input);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos');
+  const permissionError = await requireComercialPermission('mensure_units', 'create');
+  if (permissionError) return fail(permissionError);
   await getActiveCompanyId();
 
   try {
-    const existing = await prisma.measure_units.findFirst({ where: { simbol: parsed.data.simbol }, select: { id: true } });
+    const existing = await prisma.measure_units.findFirst({
+      where: { simbol: parsed.data.simbol },
+      select: { id: true },
+    });
     if (existing) return fail('Ya existe una unidad de medida con este símbolo');
 
     const created = await prisma.measure_units.create({ data: parsed.data, select: { id: true } });
@@ -47,9 +54,14 @@ export async function createMeasureUnit(input: MeasureUnitFormValues): Promise<A
   }
 }
 
-export async function updateMeasureUnit(id: number, input: MeasureUnitFormValues): Promise<ActionResult<{ id: number }>> {
+export async function updateMeasureUnit(
+  id: number,
+  input: MeasureUnitFormValues
+): Promise<ActionResult<{ id: number }>> {
   const parsed = measureUnitFormSchema.safeParse(input);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos');
+  const permissionError = await requireComercialPermission('mensure_units', 'update');
+  if (permissionError) return fail(permissionError);
   await getActiveCompanyId();
 
   try {
@@ -73,6 +85,8 @@ export async function updateMeasureUnit(id: number, input: MeasureUnitFormValues
 }
 
 export async function deleteMeasureUnit(id: number): Promise<ActionResult> {
+  const permissionError = await requireComercialPermission('mensure_units', 'update');
+  if (permissionError) return fail(permissionError);
   await getActiveCompanyId();
   try {
     const inUse = await prisma.service_items.count({ where: { item_measure_units: id } });

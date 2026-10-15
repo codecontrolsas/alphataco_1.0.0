@@ -1,8 +1,8 @@
 import { Button } from '@/components/ui/button';
-import { getPurchaseRequestsForMaterialRequest } from '@/features/Purchases/actions/requests.server';
 import { checkPermissionServer } from '@/features/Permissions';
-import { getMaterialRequestDetail } from '@/features/Warehouses/actions/requests.server';
+import { getPurchaseRequestsForMaterialRequest } from '@/features/Purchases/actions/request-queries.server';
 import { RequestDetail } from '@/features/Warehouses/Requests/components/RequestDetail';
+import { getMaterialRequestDetail } from '@/features/Warehouses/actions/requests.server';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';

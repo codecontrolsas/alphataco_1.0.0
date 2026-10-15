@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { createPurchaseOrderFromQuote } from '../../actions/orders.server';
-import type { RequestQuoteComparison } from '../../actions/quotes.server';
+import type { RequestQuoteComparison } from '../../lib/quote-query-types';
 import { invalidatePurchases } from '../../lib/invalidate';
 import { PurchaseQuoteStatusBadge } from '../../Quotes/components/PurchaseQuoteStatusBadge';
 
@@ -96,7 +96,7 @@ export function QuoteComparison({ comparison }: { comparison: RequestQuoteCompar
                     return (
                       <td
                         key={column.quoteId}
-                        className={best ? 'bg-emerald-50 p-2 tabular-nums dark:bg-emerald-950/40' : 'p-2 tabular-nums'}
+                        className={best ? 'bg-ok-subtle text-ok-subtle-foreground p-2 tabular-nums' : 'p-2 tabular-nums'}
                       >
                         {!cell ? (
                           <span className="text-muted-foreground">No incluida</span>
@@ -106,7 +106,7 @@ export function QuoteComparison({ comparison }: { comparison: RequestQuoteCompar
                           <span className="text-muted-foreground">Sin respuesta</span>
                         ) : (
                           <span className="flex items-center gap-1">
-                            {best && <Trophy className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" aria-label="Mejor precio" />}
+                            {best && <Trophy className="h-3.5 w-3.5 text-ok" aria-label="Mejor precio" />}
                             {formatUnitCost(cell.unitPrice)}
                             <span className="text-xs text-muted-foreground">
                               + IVA {isVatRateId(cell.vatRateId) ? VAT_RATE_LABELS[cell.vatRateId] : ''}

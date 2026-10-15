@@ -1,7 +1,6 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   buildDateRangeFiltersWhere,
   buildFiltersWhere,
@@ -13,6 +12,8 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { requireConfigTabPermission } from '../../lib/config-access.server';
 
 const logger = new Logger('AccesosExternos/list/actions.server');
 
@@ -141,6 +142,7 @@ function toFacetMap(rows: { key: string | null | undefined; count: number }[]): 
 // ============================================================================
 
 export async function getExternalApiClientsPaginated(searchParams: DataTableSearchParams) {
+  await requireConfigTabPermission('accesos-externos', 'view');
   const companyId = await getActiveCompanyId();
 
   try {
@@ -174,6 +176,7 @@ export type ExternalApiClientListItem = Awaited<ReturnType<typeof getExternalApi
 // ============================================================================
 
 export async function getAllExternalApiClientsForExport(searchParams: DataTableSearchParams) {
+  await requireConfigTabPermission('accesos-externos', 'view');
   const companyId = await getActiveCompanyId();
 
   try {
@@ -207,6 +210,7 @@ export async function getExternalApiClientsSingleFacet(
   counts: Map<string, number>;
   resolvedOptions?: Array<{ id: string; name: string | null }>;
 } | null> {
+  await requireConfigTabPermission('accesos-externos', 'view');
   const companyId = await getActiveCompanyId();
   const baseWhere = { company_id: companyId };
 

@@ -9,6 +9,7 @@ import { revalidatePath } from 'next/cache';
 import { errorMessage, fail, ok, type ActionResult } from '../lib/action-result';
 import { diffAssignments } from '../lib/assignment-diff';
 import { CONTRACT_DOCUMENTS_BUCKET, buildContractDocumentPath, classifyDocumentType } from '../lib/contract-documents';
+import { assertComercialView, requireComercialPermission } from '../lib/require-permission.server';
 import { cascadeServiceItemsActive } from '../lib/service-items-cascade';
 import { serviceFormSchema, type ServiceFormValues } from '../schemas/service';
 
@@ -40,6 +41,7 @@ function ownedServiceWhere(companyId: string): Prisma.customer_servicesWhereInpu
 
 /** Contratos de la empresa activa con cliente, áreas y sectores; ordenados por nombre. */
 export async function getCustomerServices() {
+  await assertComercialView(['service']);
   const companyId = await getActiveCompanyId();
   try {
     return await prisma.customer_services.findMany({
@@ -59,6 +61,7 @@ export type CustomerServiceRow = Awaited<ReturnType<typeof getCustomerServices>>
  * Contratos activos de un cliente de la empresa activa (para vincular áreas recién creadas).
  */
 export async function getActiveContractsByCustomer(customerId: string) {
+  await assertComercialView(['areas-cliente', 'service']);
   const companyId = await getActiveCompanyId();
   try {
     return await prisma.customer_services.findMany({
@@ -108,6 +111,8 @@ export async function createCustomerService(input: ServiceFormValues): Promise<A
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos');
   const values = parsed.data;
 
+  const permissionError = await requireComercialPermission('service', 'create');
+  if (permissionError) return fail(permissionError);
   const companyId = await getActiveCompanyId();
   try {
     const customer = await prisma.customers.findFirst({
@@ -165,6 +170,8 @@ export async function updateCustomerService(
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos');
   const values = parsed.data;
 
+  const permissionError = await requireComercialPermission('detalle-contrato', 'update');
+  if (permissionError) return fail(permissionError);
   const companyId = await getActiveCompanyId();
   try {
     const service = await findOwnedService(serviceId, companyId);
@@ -254,6 +261,7 @@ export async function updateCustomerService(
  * `getContractDocumentDownloadUrl()`.
  */
 export async function getContractDocuments(serviceId: string) {
+  await assertComercialView(['documentos-contrato']);
   const companyId = await getActiveCompanyId();
   const service = await findOwnedService(serviceId, companyId);
   if (!service) throw new Error('Contrato no encontrado');
@@ -299,6 +307,8 @@ export async function uploadContractDocument(formData: FormData): Promise<Action
   if (!(file instanceof File) || file.size === 0) return fail('No se recibió ningún archivo');
   if (!serviceId) return fail('Contrato no indicado');
 
+  const permissionError = await requireComercialPermission('detalle-contrato', 'update');
+  if (permissionError) return fail(permissionError);
   const companyId = await getActiveCompanyId();
   const service = await findOwnedService(serviceId, companyId);
   if (!service || !service.customer_id) return fail('Contrato no encontrado');
@@ -345,6 +355,8 @@ async function findOwnedDocument(documentId: string, companyId: string) {
 
 /** Borra metadatos y archivo. Si el archivo no se puede borrar, el registro ya no existe (se loguea). */
 export async function deleteContractDocument(documentId: string): Promise<ActionResult> {
+  const permissionError = await requireComercialPermission('detalle-contrato', 'update');
+  if (permissionError) return fail(permissionError);
   const companyId = await getActiveCompanyId();
   try {
     const doc = await findOwnedDocument(documentId, companyId);
@@ -367,6 +379,8 @@ export async function deleteContractDocument(documentId: string): Promise<Action
 
 /** URL de descarga de un documento del contrato. */
 export async function getContractDocumentDownloadUrl(documentId: string): Promise<ActionResult<{ url: string }>> {
+  const permissionError = await requireComercialPermission('documentos-contrato', 'view');
+  if (permissionError) return fail(permissionError);
   const companyId = await getActiveCompanyId();
   try {
     const doc = await findOwnedDocument(documentId, companyId);

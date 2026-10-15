@@ -3,9 +3,10 @@
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
-import { contactSchema } from '@/shared/schemas/schemas';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { contactSchema } from '@/shared/schemas/schemas';
 import { revalidatePath } from 'next/cache';
+import { requireComercialPermission } from '../../Clientes/lib/require-permission.server';
 
 /**
  * Contactos de la EMPRESA activa (`contacts.company_id`), asociados a un cliente de la misma
@@ -21,7 +22,7 @@ const logger = new Logger('features/Empresa/Contactos');
 
 const COMPANY_PATH = '/dashboard/configuration';
 
-export type ContactMutationResult = { status: 200 | 201 | 400 | 404 | 500; body: string };
+export type ContactMutationResult = { status: 200 | 201 | 400 | 403 | 404 | 500; body: string };
 
 /** Contacto de la empresa activa por id (bigint del teléfono → string), o null. */
 export async function getContactById(contactId: string) {
@@ -60,7 +61,16 @@ function formString(formData: FormData, key: string): string | undefined {
 }
 
 type ParsedContact =
-  | { ok: true; data: { contact_name: string; constact_email: string | null; contact_phone: bigint; contact_charge: string; customer_id: string } }
+  | {
+      ok: true;
+      data: {
+        contact_name: string;
+        constact_email: string | null;
+        contact_phone: bigint;
+        contact_charge: string;
+        customer_id: string;
+      };
+    }
   | { ok: false; error: string };
 
 /** Valida el FormData con el mismo `contactSchema` del formulario; el teléfono va a bigint. */
@@ -90,12 +100,17 @@ function parseContactForm(formData: FormData): ParsedContact {
 }
 
 async function assertCustomerInCompany(customerId: string, companyId: string): Promise<boolean> {
-  const customer = await prisma.customers.findFirst({ where: withCompany({ id: customerId }, companyId), select: { id: true } });
+  const customer = await prisma.customers.findFirst({
+    where: withCompany({ id: customerId }, companyId),
+    select: { id: true },
+  });
   return customer !== null;
 }
 
 /** Alta de contacto. Rechaza el duplicado exacto (mismos datos, mismo cliente) dentro de la empresa. */
 export async function createdContact(formData: FormData): Promise<ContactMutationResult> {
+  const denied = await requireComercialPermission('customers', 'create');
+  if (denied) return { status: 403, body: denied };
   const parsed = parseContactForm(formData);
   if (!parsed.ok) return { status: 400, body: parsed.error };
 
@@ -123,6 +138,8 @@ export async function createdContact(formData: FormData): Promise<ContactMutatio
 
 /** Edición de contacto (`id` en el FormData), acotada a la empresa activa. */
 export async function updateContact(formData: FormData): Promise<ContactMutationResult> {
+  const denied = await requireComercialPermission('customers', 'create');
+  if (denied) return { status: 403, body: denied };
   const id = formString(formData, 'id');
   if (!id) return { status: 400, body: 'Falta el contacto a editar' };
   const parsed = parseContactForm(formData);

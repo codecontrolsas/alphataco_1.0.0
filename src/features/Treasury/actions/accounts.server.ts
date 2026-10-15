@@ -11,6 +11,7 @@ import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { NO_PERMISSION, UUID_RE, firstIssue, toTreasuryActionError } from '../lib/action-errors';
 import { ZERO_INDICATORS, getAccountIndicators } from '../lib/balances';
 import { createMovement } from '../lib/movements';
+import { TreasuryError } from '../lib/treasury-errors';
 import { treasuryAccountFormSchema, type TreasuryAccountFormValues } from '../schemas/accounts';
 import { SESSION_EXPIRED, TRANSACTION_OPTIONS, localToday, revalidateTreasury } from './shared';
 
@@ -170,17 +171,32 @@ export async function updateTreasuryAccount(id: string, values: TreasuryAccountF
 export async function setTreasuryAccountActive(id: string, isActive: boolean): Promise<ActionResult> {
   if (!(await checkPermissionServer('tesoreria', 'config-tesoreria', 'update'))) return fail(NO_PERMISSION);
   if (!UUID_RE.test(id)) return fail(NOT_FOUND);
+  const profile = await getServerAuthProfile();
+  if (!profile) return fail(SESSION_EXPIRED);
   const companyId = await getActiveCompanyId();
   try {
-    // Un cheque propio emitido se debita contra su cuenta (etapa 3b): con la cuenta inactiva no se podría confirmar.
-    if (!isActive) {
-      const issued = await prisma.own_checks.count({ where: { account_id: id, company_id: companyId, status: 'ISSUED' } });
-      if (issued > 0) {
-        return fail(`La cuenta tiene ${issued} ${issued === 1 ? 'cheque emitido' : 'cheques emitidos'} sin debitar: confirmá su débito o registrá el rechazo antes de desactivarla`);
-      }
-    }
-    const { count } = await prisma.treasury_accounts.updateMany({ where: { id, company_id: companyId }, data: { is_active: isActive } });
-    if (count === 0) return fail(NOT_FOUND);
+    await withActor(
+      profile.credentialId,
+      async (tx) => {
+        // Bloquea la cuenta antes de contar: así la emisión de un cheque (que toma la misma fila) no se cuela entre el conteo y el update.
+        const locked = await tx.$queryRaw<{ id: string }[]>`
+          SELECT id FROM treasury_accounts WHERE id = ${id}::uuid AND company_id = ${companyId}::uuid FOR UPDATE
+        `;
+        if (locked.length === 0) throw new TreasuryError(NOT_FOUND);
+        // Un cheque propio emitido se debita contra su cuenta (etapa 3b): con la cuenta inactiva no se podría confirmar.
+        if (!isActive) {
+          const issued = await tx.own_checks.count({ where: { account_id: id, company_id: companyId, status: 'ISSUED' } });
+          if (issued > 0) {
+            throw new TreasuryError(
+              `La cuenta tiene ${issued} ${issued === 1 ? 'cheque emitido' : 'cheques emitidos'} sin debitar: confirmá su débito o registrá el rechazo antes de desactivarla`
+            );
+          }
+        }
+        await tx.treasury_accounts.update({ where: { id }, data: { is_active: isActive } });
+      },
+      prisma,
+      TRANSACTION_OPTIONS
+    );
     revalidateTreasury();
     return ok(null);
   } catch (error) {

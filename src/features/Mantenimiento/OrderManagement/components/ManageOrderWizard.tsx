@@ -12,8 +12,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { invalidateAllMaintenanceQueries } from '@/features/Mantenimiento/utils/queryInvalidation';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import { Logger } from '@/lib/logger';
@@ -25,7 +25,6 @@ import { toast } from 'sonner';
 import { saveOrderChanges } from '../actions/items.server';
 import { getOrderForManagement, type ExternalWorkshop, type OrderManagementItem, type WorkshopSector } from '../actions/queries.server';
 import { setupAndGenerateWorkOrders } from '../actions/work-orders.server';
-import { AddItemDialog } from './AddItemDialog';
 import { AssignRepairTypesDialog } from './AssignRepairTypesDialog';
 import { computeInitialWizardState } from './wizard/initial-state';
 import { Step1Tasks } from './wizard/Step1Tasks';
@@ -81,7 +80,6 @@ function ManageOrderWizardSession({
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSavingStep, setIsSavingStep] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
-  const [addItemOpen, setAddItemOpen] = useState(false);
   const [editingRepairTypesItem, setEditingRepairTypesItem] = useState<LocalItem | null>(null);
 
   // Paso 4: fechas (hoy y +7 días, en hora argentina)
@@ -236,26 +234,29 @@ function ManageOrderWizardSession({
 
   return (
     <>
-      <Dialog open onOpenChange={(isOpen) => !isOpen && handleClose()}>
-        <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+      <Sheet open onOpenChange={(isOpen) => !isOpen && handleClose()}>
+        <SheetContent side="right" className="w-full gap-0 p-4 sm:max-w-3xl sm:p-6">
           {/* Header fijo */}
-          <DialogHeader className="space-y-3 shrink-0">
-            <DialogTitle className="flex items-center justify-between">
+          <SheetHeader className="shrink-0 space-y-3 p-0">
+            <SheetTitle className="flex items-center justify-between pr-8">
               <span className="font-mono text-lg">{order.order_number || 'Orden sin numero'}</span>
-              <Badge variant="outline" className="text-xs">
+              <Badge variant="outline" className="text-xs" aria-live="polite">
                 Paso {currentStep} de 4
               </Badge>
-            </DialogTitle>
+            </SheetTitle>
+            <SheetDescription className="sr-only">
+              Gestión de la orden: revisar desvíos, asignar sectores, definir el orden de ejecución y confirmar.
+            </SheetDescription>
             <WizardResourceHeader order={order} />
             <WizardStepIndicator currentStep={currentStep} />
-          </DialogHeader>
+          </SheetHeader>
 
           {/* Contenido con scroll */}
-          <div className="flex-1 min-h-0 overflow-y-auto mt-4 pr-1">
+          <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
             {currentStep === 1 && (
               <>
                 {items.eligibleItems.length === 0 && items.regularItems.length > 0 && !items.allItemsRejected && (
-                  <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 mb-4">
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-info-subtle border border-info/30 text-info-subtle-foreground mb-4">
                     <ClipboardList className="h-4 w-4 shrink-0" aria-hidden="true" />
                     <span className="text-xs">
                       Todos los items ya tienen OT generada. Agregue un nuevo item para continuar con el wizard.
@@ -266,7 +267,7 @@ function ManageOrderWizardSession({
                   order={order}
                   localItems={items.localItems}
                   repairTypes={repairTypes}
-                  onAddItem={() => setAddItemOpen(true)}
+                  onAddItem={items.handleAddItem}
                   onDeleteItem={items.handleDeleteItem}
                   onRejectItem={items.handleRejectItem}
                   onRestoreItem={items.handleRestoreItem}
@@ -369,17 +370,10 @@ function ManageOrderWizardSession({
               )}
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
 
-      {/* Sub-diálogos */}
-      <AddItemDialog
-        open={addItemOpen}
-        onClose={() => setAddItemOpen(false)}
-        repairTypes={repairTypes}
-        onAdd={items.handleAddItem}
-      />
-
+      {/* Asignar tipos de reparación a un desvío existente */}
       {editingRepairTypesItem && (
         <AssignRepairTypesDialog
           key={editingRepairTypesItem.id}

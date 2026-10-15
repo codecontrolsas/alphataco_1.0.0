@@ -6,7 +6,10 @@ import { customer_receipt_status } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
 import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { formatCuitText } from '@/shared/utils/cuit-text';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   buildTreasuryDateRangeWhere,
@@ -17,6 +20,7 @@ import {
   safePaging,
   textValue,
 } from '../../lib/filter-values';
+import { isoDay } from '../../lib/dates';
 
 const logger = new Logger('features/Treasury/Collections/ReceiptsList');
 
@@ -36,6 +40,9 @@ const SORT_MAP: Record<string, (dir: 'asc' | 'desc') => ReceiptOrderBy[]> = {
   status: (dir) => [{ status: dir }],
   sent: (dir) => [{ sent_at: { sort: dir, nulls: 'last' } }],
 };
+
+/** Tope de filas por export: más que esto se pide acotar con filtros. */
+const EXPORT_LIMIT = 10_000;
 
 const DATE_RANGE_COLUMNS = ['date'];
 
@@ -124,7 +131,7 @@ const RECEIPT_SELECT = {
   received_total: true,
   sent_at: true,
   cancel_reason: true,
-  customer: { select: { id: true, name: true } },
+  customer: { select: { id: true, name: true, cuit: true } },
   _count: { select: { lines: { where: { kind: 'INVOICE' } } } },
 } satisfies Prisma.customer_receiptsSelect;
 
@@ -133,9 +140,9 @@ function shape(rows: Prisma.customer_receiptsGetPayload<{ select: typeof RECEIPT
     id: r.id,
     number: r.number,
     // Fecha valor (@db.Date): se toma el dia tal cual, sin correr zona horaria
-    date: r.date.toISOString().slice(0, 10),
+    date: isoDay(r.date),
     status: r.status,
-    customer: { id: r.customer.id, name: r.customer.name },
+    customer: { id: r.customer.id, name: r.customer.name, cuit: formatCuitText(r.customer.cuit.toString()) },
     invoicesCount: r._count.lines,
     withholdingsTotal: r.withholdings_total.toString(),
     receivedTotal: r.received_total.toString(),
@@ -186,22 +193,35 @@ export async function getReceiptsPaginated(searchParams: DataTableSearchParams) 
 // EXPORT (sin paginacion)
 // ============================================================================
 
-export async function getAllReceiptsForExport(searchParams: DataTableSearchParams) {
+export async function getAllReceiptsForExport(searchParams: DataTableSearchParams): Promise<ExportResult<ReceiptListItem[]>> {
   const companyId = await resolveCompanyId();
-  if (!companyId) return [];
+  if (!companyId) return { ok: false, message: 'No tiene permiso para exportar los recibos.' };
 
   try {
     const state = parseSearchParams(searchParams);
     const where = await buildWhereClause(companyId, state);
-    const rows = await prisma.customer_receipts.findMany({
-      where,
-      orderBy: [{ date: 'desc' }, { number: { sort: 'desc', nulls: 'first' } }, { created_at: 'desc' }],
-      select: RECEIPT_SELECT,
+    const orderBy: ReceiptOrderBy[] = [
+      { date: 'desc' },
+      { number: { sort: 'desc', nulls: 'first' } },
+      { created_at: 'desc' },
+      { id: 'asc' },
+    ];
+    const rows = await fetchExportRowsInBatches({
+      maxRows: EXPORT_LIMIT,
+      listIds: (take) => prisma.customer_receipts.findMany({ where, orderBy, select: { id: true }, take }),
+      fetchByIds: (ids) =>
+        prisma.customer_receipts.findMany({ where: { id: { in: ids }, company_id: companyId }, select: RECEIPT_SELECT }),
+      tooLargeMessage: (maxRows) =>
+        `Hay más de ${maxRows.toLocaleString('es-AR')} recibos con los filtros actuales. Acote la exportación con filtros.`,
     });
-    return shape(rows);
+    return { ok: true, data: shape(rows) };
   } catch (error) {
     logger.error('Error al exportar recibos de cobranza', { data: { error } });
-    throw new Error('No se pudo exportar la lista de recibos');
+    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en producción.
+    return {
+      ok: false,
+      message: error instanceof ExportTooLargeError ? error.message : 'No se pudo exportar la lista de recibos. Intente nuevamente.',
+    };
   }
 }
 

@@ -5,10 +5,7 @@ import { DataTableColumnHeader, inMemoryTextFilterFn } from '@/shared/components
 import { ColumnDef } from '@tanstack/react-table';
 import { Users } from 'lucide-react';
 import { DepartmentAbsenceSummaryItem } from '../../actions.server';
-
-// Constantes para colores de ausentismo
-const EXPECTED_ABSENTEEISM_PERCENTAGE = 5;
-const WARNING_THRESHOLD = 4;
+import { ABSENCE_BADGE_CLASS, absenceLevel, formatAbsencePercent } from '../../lib/absence-level';
 
 export function getDepartmentSummaryColumns(
   onViewEmployees: (row: DepartmentAbsenceSummaryItem) => void
@@ -28,6 +25,7 @@ export function getDepartmentSummaryColumns(
       meta: { title: 'Dotación' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Dotación" />,
       cell: ({ row }) => <div>{row.original.dotacion}</div>,
+      filterFn: inMemoryTextFilterFn,
     },
     {
       accessorKey: 'ausentes',
@@ -35,6 +33,7 @@ export function getDepartmentSummaryColumns(
       meta: { title: 'Ausentes' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Ausentes" />,
       cell: ({ row }) => <div>{row.original.ausentes}</div>,
+      filterFn: inMemoryTextFilterFn,
     },
     {
       accessorKey: 'porcentaje',
@@ -42,19 +41,16 @@ export function getDepartmentSummaryColumns(
       meta: { title: '% Ausentismo' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="% Ausentismo" />,
       cell: ({ row }) => {
-        const p = row.original.porcentaje ?? 0;
-        const cls =
-          p > EXPECTED_ABSENTEEISM_PERCENTAGE
-            ? 'bg-red-100 text-red-800'
-            : p >= WARNING_THRESHOLD
-              ? 'bg-yellow-100 text-yellow-800'
-              : 'bg-green-100 text-green-800';
+        const p = row.original.porcentaje;
         return (
           <div>
-            <span className={`px-2 py-1 rounded text-xs ${cls}`}>{p.toFixed(2)}%</span>
+            <span className={`rounded px-2 py-1 text-xs font-medium ${ABSENCE_BADGE_CLASS[absenceLevel(p)]}`}>
+              {formatAbsencePercent(p)}
+            </span>
           </div>
         );
       },
+      filterFn: inMemoryTextFilterFn,
     },
     {
       id: 'actions',
@@ -63,8 +59,10 @@ export function getDepartmentSummaryColumns(
       enableHiding: false,
       cell: ({ row }) => (
         <Button
+          type="button"
           variant="ghost"
           size="sm"
+          aria-label={`Ver ausentes de ${row.original.sector}`}
           onClick={() => onViewEmployees(row.original)}
           disabled={row.original.ausentes === 0}
           className="gap-1.5"

@@ -6,10 +6,12 @@ import { OperacionesChartsSkeleton } from '@/features/Dashboard/Estadisticas/Ope
 import SalaDeControlTabContent from '@/features/Dashboard/Estadisticas/SalaDeControl/SalaDeControlTabContent';
 import { SalaDeControlSkeleton } from '@/features/Dashboard/Estadisticas/SalaDeControl/fallback/SalaDeControlSkeleton';
 import { TabsManagerServer } from '@/features/TabsManager';
+import { SectionErrorBoundary } from '@/shared/components/common/SectionErrorBoundary';
 import FeatureFlagShow from '@/shared/components/posthug/FeatureFlagShow';
 import { Calendar, MonitorDot, Users, Wrench } from 'lucide-react';
 import { Suspense } from 'react';
 import { AbsenteeismDashboard } from './RecursosHumanos/absenteeism-dashboard';
+import { RrhhTabSkeleton } from './RecursosHumanos/fallback/RrhhSkeletons';
 
 function EstadisticasTabComponent({
   searchParams,
@@ -55,7 +57,11 @@ function EstadisticasTabComponent({
             tabSlug: 'rrhh',
             content: (
               <Card className="grid grid-cols-1 gap-3 mb-4 p-4">
-                <AbsenteeismDashboard />
+                <SectionErrorBoundary title="No se pudo mostrar Recursos Humanos">
+                  <Suspense fallback={<RrhhTabSkeleton />}>
+                    <AbsenteeismDashboard />
+                  </Suspense>
+                </SectionErrorBoundary>
               </Card>
             ),
           },

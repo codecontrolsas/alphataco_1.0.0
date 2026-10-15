@@ -1,7 +1,7 @@
 'use server';
 
 import { checkPermissionServer } from '@/features/Permissions';
-import type { Prisma } from '@/generated/prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
   buildDateRangeFiltersWhere,
@@ -10,8 +10,15 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { argentinaDate } from '@/shared/lib/argentina-time';
+import type { ExportResult } from '@/shared/lib/export-result';
+import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import { prisma } from '@/shared/lib/prisma';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { EXPIRING_WINDOW_DAYS } from '../../../lib/batch-expiry';
+import { findExpiringBatches } from '../../../lib/expiring-batches';
+import { getBelowMinimumMaterials } from '../../../lib/stock-levels';
 
 const logger = new Logger('features/Warehouses/Stock/StockList');
 
@@ -50,6 +57,31 @@ const contains = (value: string) => ({ contains: value, mode: 'insensitive' as c
 
 type FilterState = ReturnType<typeof parseSearchParams>;
 
+/** Tope de filas del export (ver `fetchExportRowsInBatches`). */
+const STOCK_EXPORT_MAX_ROWS = 10_000;
+
+/**
+ * Filtros que la tabla realmente usa. El resto de las claves de la URL se descarta antes de armar el
+ * WHERE. `average_cost` solo entra con `view_prices`: filtrar por un costo que no se puede ver permitiria
+ * deducirlo probando valores.
+ */
+const ALLOWED_FILTER_KEYS = [
+  'code',
+  'material',
+  'quantity',
+  'category',
+  'unit',
+  'warehouse',
+  'batch',
+  'below_min',
+  ...dateRangeKeys(['expires_at']),
+];
+
+function parseListState(searchParams: DataTableSearchParams | undefined, withPrices: boolean): FilterState {
+  const allowed = withPrices ? [...ALLOWED_FILTER_KEYS, 'average_cost'] : ALLOWED_FILTER_KEYS;
+  return sanitizeFilters(parseSearchParams(searchParams ?? {}), allowed);
+}
+
 /** Arma `OR` entre "valores reales" y "sin asignar" cuando el filtro trae el sentinel de null. */
 function nullableIn(values: string[], build: (cond: { in: string[] } | null) => StockWhere): StockWhere {
   const real = values.filter((v) => v !== NULL_FILTER_VALUE);
@@ -59,26 +91,9 @@ function nullableIn(values: string[], build: (cond: { in: string[] } | null) => 
   return parts.length === 1 ? parts[0]! : { OR: parts };
 }
 
-/**
- * Ids de materiales cuyo STOCK TOTAL de la empresa (suma de todos sus saldos) es menor al
- * `min_stock`. Se resuelve antes de armar el WHERE porque Prisma no puede comparar una suma
- * contra una columna del mismo material.
- */
+/** Ids de los materiales bajo su mínimo: la regla única de `lib/stock-levels.ts` (activos, agotados incluidos). */
 async function getBelowMinMaterialIds(companyId: string): Promise<string[]> {
-  const [withMin, totals] = await Promise.all([
-    prisma.materials.findMany({
-      where: { company_id: companyId, min_stock: { not: null } },
-      select: { id: true, min_stock: true },
-    }),
-    prisma.stock_balances.groupBy({ by: ['material_id'], where: { company_id: companyId }, _sum: { quantity: true } }),
-  ]);
-  const totalById = new Map(totals.map((t) => [t.material_id, t._sum.quantity]));
-  return withMin
-    .filter((m) => {
-      const total = totalById.get(m.id);
-      return (total ? total.toNumber() : 0) < Number(m.min_stock);
-    })
-    .map((m) => m.id);
+  return (await getBelowMinimumMaterials(companyId)).map((m) => m.id);
 }
 
 /** WHERE compartido entre paginated, export y facets. */
@@ -151,26 +166,13 @@ const STOCK_SELECT = (withPrices: boolean) =>
     batch: { select: { id: true, batch_number: true, expires_at: true } },
   }) as const;
 
-/** Decimals -> string y calculo de "Bajo minimo" / valorizado; sin permiso, los costos van null. */
-async function shape(
+/** Decimals -> string y valorizado; sin permiso, los costos van null. "Bajo mínimo" sale de la regla única. */
+function shape(
   rows: Prisma.stock_balancesGetPayload<{ select: ReturnType<typeof STOCK_SELECT> }>[],
-  companyId: string,
+  belowMinIds: Set<string>,
   withPrices: boolean
 ) {
-  // Stock total de los materiales de ESTA pagina (una sola consulta agrupada)
-  const materialIds = [...new Set(rows.map((r) => r.material.id))];
-  const totals = materialIds.length
-    ? await prisma.stock_balances.groupBy({
-        by: ['material_id'],
-        where: { company_id: companyId, material_id: { in: materialIds } },
-        _sum: { quantity: true },
-      })
-    : [];
-  const totalById = new Map(totals.map((t) => [t.material_id, t._sum.quantity ? t._sum.quantity.toNumber() : 0]));
-
   return rows.map((r) => {
-    const min = r.material.min_stock ? Number(r.material.min_stock.toString()) : null;
-    const total = totalById.get(r.material.id) ?? 0;
     const avg = withPrices ? String(r.material.average_cost) : null;
     return {
       id: r.id,
@@ -184,7 +186,7 @@ async function shape(
       },
       warehouse: r.warehouse,
       batch: r.batch,
-      below_min: min != null && total < min,
+      below_min: belowMinIds.has(r.material.id),
       average_cost: avg,
       valued: avg != null ? r.quantity.mul(avg).toString() : null,
     };
@@ -200,7 +202,7 @@ export async function getStockPaginated(searchParams: DataTableSearchParams) {
   const [companyId, withPrices] = await Promise.all([getActiveCompanyId(), canViewPrices()]);
 
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseListState(searchParams, withPrices);
     const { skip, take } = stateToPrismaParams(state);
     const where = await buildWhereClause(companyId, state, { canViewPrices: withPrices });
 
@@ -212,11 +214,12 @@ export async function getStockPaginated(searchParams: DataTableSearchParams) {
     }
     orderBy.push({ material: { name: 'asc' } }, { warehouse: { name: 'asc' } }, { id: 'asc' });
 
-    const [rows, total] = await Promise.all([
+    const [rows, total, belowMin] = await Promise.all([
       prisma.stock_balances.findMany({ where, orderBy, skip, take, select: STOCK_SELECT(withPrices) }),
       prisma.stock_balances.count({ where }),
+      getBelowMinimumMaterials(companyId),
     ]);
-    return { data: await shape(rows, companyId, withPrices), total };
+    return { data: shape(rows, new Set(belowMin.map((m) => m.id)), withPrices), total };
   } catch (error) {
     logger.error('Error al obtener stock', { data: { error } });
     throw new Error('No se pudo obtener el stock');
@@ -227,22 +230,42 @@ export async function getStockPaginated(searchParams: DataTableSearchParams) {
 // EXPORT (sin paginacion)
 // ============================================================================
 
-export async function getAllStockForExport(searchParams: DataTableSearchParams) {
-  if (!(await checkPermissionServer('almacenes', 'stock', 'view'))) return [];
+export async function getAllStockForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<StockListItem[]>> {
+  if (!(await checkPermissionServer('almacenes', 'stock', 'view'))) {
+    return { ok: false, message: 'No tenés permiso para exportar el stock.' };
+  }
   const [companyId, withPrices] = await Promise.all([getActiveCompanyId(), canViewPrices()]);
 
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseListState(searchParams, withPrices);
     const where = await buildWhereClause(companyId, state, { canViewPrices: withPrices });
-    const rows = await prisma.stock_balances.findMany({
-      where,
-      orderBy: [{ material: { name: 'asc' } }, { warehouse: { name: 'asc' } }, { id: 'asc' }],
-      select: STOCK_SELECT(withPrices),
-    });
-    return await shape(rows, companyId, withPrices);
+    const orderBy: StockOrderBy[] = [{ material: { name: 'asc' } }, { warehouse: { name: 'asc' } }, { id: 'asc' }];
+
+    const [rows, belowMin] = await Promise.all([
+      fetchExportRowsInBatches({
+        maxRows: STOCK_EXPORT_MAX_ROWS,
+        listIds: (take) => prisma.stock_balances.findMany({ where, orderBy, select: { id: true }, take }),
+        fetchByIds: (ids) =>
+          prisma.stock_balances.findMany({
+            where: { id: { in: ids }, company_id: companyId },
+            select: STOCK_SELECT(withPrices),
+          }),
+        tooLargeMessage: (maxRows) =>
+          `Hay más de ${maxRows.toLocaleString('es-AR')} saldos con los filtros actuales. Acote la exportación con filtros.`,
+      }),
+      getBelowMinimumMaterials(companyId),
+    ]);
+    return { ok: true, data: shape(rows, new Set(belowMin.map((m) => m.id)), withPrices) };
   } catch (error) {
     logger.error('Error al exportar stock', { data: { error } });
-    throw new Error('No se pudo exportar el stock');
+    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en producción.
+    return {
+      ok: false,
+      message:
+        error instanceof ExportTooLargeError ? error.message : 'No se pudo exportar el stock. Intente nuevamente.',
+    };
   }
 }
 
@@ -257,11 +280,12 @@ export async function getStockSingleFacet(
   if (!(await checkPermissionServer('almacenes', 'stock', 'view'))) return null;
   const companyId = await getActiveCompanyId();
 
-  const parsed = searchParams && Object.keys(searchParams).length > 0 ? parseSearchParams(searchParams) : null;
+  // Los facets no usan costos: sin `average_cost` entre las claves permitidas.
+  const parsed = searchParams && Object.keys(searchParams).length > 0 ? parseListState(searchParams, false) : null;
 
   /** WHERE con todos los filtros activos MENOS el de la columna que se esta abriendo. */
   async function crossWhere(excludeColumn: string): Promise<StockWhere> {
-    const base: FilterState = parsed ?? parseSearchParams({});
+    const base: FilterState = parsed ?? parseListState({}, false);
     const filters = { ...base.filters };
     delete filters[excludeColumn];
     delete filters[`${excludeColumn}_from`];
@@ -342,8 +366,10 @@ export async function getStockSingleFacet(
 
     if (columnId === 'below_min') {
       const underIds = await getBelowMinMaterialIds(companyId);
-      const under = await prisma.stock_balances.count({ where: { AND: [where, { material_id: { in: underIds } }] } });
-      const total = await prisma.stock_balances.count({ where });
+      const [under, total] = await Promise.all([
+        prisma.stock_balances.count({ where: { AND: [where, { material_id: { in: underIds } }] } }),
+        prisma.stock_balances.count({ where }),
+      ]);
       return {
         counts: new Map([
           ['true', under],
@@ -356,6 +382,55 @@ export async function getStockSingleFacet(
     return null;
   } catch (error) {
     logger.error('Error al obtener facet de stock', { data: { error, columnId } });
+    return null;
+  }
+}
+
+// ============================================================================
+// ATENCIÓN: bajo mínimo y lotes vencidos / por vencer
+// ============================================================================
+
+/**
+ * Datos de la banda y las tarjetas de Stock. Nunca rechaza: devuelve `null` si no hay permiso o si no se
+ * pudo calcular (la banda simplemente no se muestra, nunca un 0 inventado).
+ *
+ * - `belowMin`: materiales (no filas de la tabla) bajo su mínimo, agotados incluidos: el mismo número que el
+ *   contador de la sub-navegación (`lib/stock-levels.ts`).
+ * - `expired` / `expiring`: lotes con saldo (mismas filas que la tabla filtrada por vencimiento hasta
+ *   `expiringUntil`).
+ * - `valued`: valorizado total, SOLO con `view_prices` (sin permiso ni se calcula ni viaja).
+ */
+export async function getStockAttention() {
+  try {
+    if (!(await checkPermissionServer('almacenes', 'stock', 'view'))) return null;
+    const [companyId, withPrices] = await Promise.all([getActiveCompanyId(), canViewPrices()]);
+    const today = argentinaDate();
+    const limit = new Date(`${today}T00:00:00.000Z`);
+    limit.setUTCDate(limit.getUTCDate() + EXPIRING_WINDOW_DAYS);
+
+    const [belowMin, batches, valuedRows] = await Promise.all([
+      getBelowMinimumMaterials(companyId),
+      findExpiringBatches(companyId, today),
+      withPrices
+        ? prisma.$queryRaw<{ total: Prisma.Decimal | null }[]>(
+            Prisma.sql`SELECT COALESCE(SUM(sb.quantity * m.average_cost), 0) AS total
+              FROM stock_balances sb JOIN materials m ON m.id = sb.material_id
+              WHERE sb.company_id = ${companyId}::uuid AND sb.quantity > 0`
+          )
+        : Promise.resolve(null),
+    ]);
+
+    const expired = batches.filter((b) => b.status === 'EXPIRED').length;
+    return {
+      belowMin: belowMin.length,
+      expired,
+      expiring: batches.length - expired,
+      /** `YYYY-MM-DD`: tope del filtro de Vencimiento que muestra exactamente estos lotes. */
+      expiringUntil: limit.toISOString().slice(0, 10),
+      valued: valuedRows ? String(valuedRows[0]?.total ?? 0) : null,
+    };
+  } catch (error) {
+    logger.error('Error al calcular la atención de stock', { data: { error } });
     return null;
   }
 }

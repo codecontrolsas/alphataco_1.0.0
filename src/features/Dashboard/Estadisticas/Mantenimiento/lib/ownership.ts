@@ -1,4 +1,5 @@
 import { contract_type_vehicles_enum } from '@/generated/prisma/enums';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import moment from 'moment';
 import type { MaintenanceTypeOption, OwnershipCategory } from '../types';
 
@@ -34,16 +35,20 @@ export function categoryForContractType(
 }
 
 /**
- * Días calendario transcurridos del mes del `monthStart`:
+ * Días calendario transcurridos del mes del `monthStart`, contando "hoy" en hora argentina:
  * - mes en curso → del 1 a hoy (inclusive);
  * - mes pasado → todos los días del mes;
  * - mes futuro → 0.
+ * Se compara con fechas ISO (`YYYY-MM-DD`), no con instantes: en las últimas horas del día
+ * argentino el servidor (UTC) ya está en el día siguiente y sumaba un día de más.
  */
 export function computeDaysElapsed(monthStart: moment.Moment, now: Date = new Date()): number {
-  const today = moment(now).startOf('day');
-  if (monthStart.isAfter(today, 'month')) return 0;
-  if (monthStart.isBefore(today, 'month')) return monthStart.daysInMonth();
-  return today.date();
+  const today = argentinaDate(now);
+  const monthKey = monthStart.format('YYYY-MM');
+  const todayMonthKey = today.slice(0, 7);
+  if (monthKey > todayMonthKey) return 0;
+  if (monthKey < todayMonthKey) return monthStart.daysInMonth();
+  return Number(today.slice(8, 10));
 }
 
 /** Mapa vacío de tipos por categoría, para ir acumulando. */

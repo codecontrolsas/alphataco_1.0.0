@@ -1,32 +1,36 @@
-'use client';
-
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { StackedCell } from '@/shared/components/common/StackedCell';
+import { formatArgentinaDay, formatDateAr } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import { AlertCircle, CheckCircle2, Clock, FileX, type LucideIcon } from 'lucide-react';
-import moment from 'moment';
 import Link from 'next/link';
+import { TONE_TO_BADGE, type StatusUi } from '../../lib/status-presentation';
 import type { SupplierListItem } from './actions.server';
 import { SUPPLIER_DOCUMENT_STATE_LABELS, type SupplierDocumentState } from './labels';
 
 export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['created_at'];
 
-/** Icono por estado de documentacion: lo comparten la celda y el filtro. */
-export const supplierDocumentStateIcons: Record<SupplierDocumentState, LucideIcon> = {
-  EXPIRED: AlertCircle,
-  EXPIRING: Clock,
-  OK: CheckCircle2,
-  NONE: FileX,
+/** Presentación del estado de documentación: misma fuente para la celda y el filtro. */
+const SUPPLIER_DOCUMENT_STATE_UI: Record<SupplierDocumentState, StatusUi> = {
+  EXPIRED: { label: SUPPLIER_DOCUMENT_STATE_LABELS.EXPIRED, tone: 'danger', icon: AlertCircle },
+  EXPIRING: { label: SUPPLIER_DOCUMENT_STATE_LABELS.EXPIRING, tone: 'warn', icon: Clock },
+  OK: { label: SUPPLIER_DOCUMENT_STATE_LABELS.OK, tone: 'ok', icon: CheckCircle2 },
+  NONE: { label: SUPPLIER_DOCUMENT_STATE_LABELS.NONE, tone: 'neutral', icon: FileX },
 };
 
-const DOCUMENT_STATE_CLASSES: Record<SupplierDocumentState, string> = {
-  EXPIRED: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
-  EXPIRING: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
-  OK: 'bg-green-600 text-white hover:bg-green-600/90',
-  NONE: 'text-muted-foreground',
+/** Icono por estado de documentacion: lo comparten la celda y el filtro. */
+export const supplierDocumentStateIcons: Record<SupplierDocumentState, LucideIcon> = {
+  EXPIRED: SUPPLIER_DOCUMENT_STATE_UI.EXPIRED.icon,
+  EXPIRING: SUPPLIER_DOCUMENT_STATE_UI.EXPIRING.icon,
+  OK: SUPPLIER_DOCUMENT_STATE_UI.OK.icon,
+  NONE: SUPPLIER_DOCUMENT_STATE_UI.NONE.icon,
 };
+
+/** Vencimientos: columnas DATE llegan como `YYYY-MM-DD`, se leen como fecha para no correr un dia. */
+const formatExpiry = (value: string) => formatDateAr(value);
 
 export function getColumns(): ColumnDef<SupplierListItem>[] {
   return [
@@ -36,15 +40,16 @@ export function getColumns(): ColumnDef<SupplierListItem>[] {
       meta: { title: 'Razón social' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Razón social" />,
       cell: ({ row }) => (
-        <div className={cn('flex flex-col', !row.original.is_active && 'opacity-50')}>
-          <Link
-            href={`/dashboard/purchases/suppliers/${row.original.id}`}
-            className="font-medium text-blue-600 hover:underline"
-          >
-            {row.original.name}
-          </Link>
-          {row.original.trade_name && <span className="text-xs text-muted-foreground">{row.original.trade_name}</span>}
-        </div>
+        <StackedCell
+          maxWidthClass="max-w-[280px]"
+          className={cn(!row.original.is_active && 'opacity-60')}
+          primary={
+            <Link href={`/dashboard/purchases/suppliers/${row.original.id}`} className="text-brand-ink hover:underline">
+              {row.original.name}
+            </Link>
+          }
+          secondary={[row.original.trade_name, row.original.cuit].filter(Boolean).join(' · ')}
+        />
       ),
     },
     {
@@ -53,7 +58,7 @@ export function getColumns(): ColumnDef<SupplierListItem>[] {
       meta: { title: 'CUIT' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="CUIT" />,
       cell: ({ row }) => (
-        <span className={cn('font-mono text-sm tabular-nums', !row.original.is_active && 'opacity-50')}>
+        <span className={cn('font-mono text-sm tabular-nums', !row.original.is_active && 'opacity-60')}>
           {row.original.cuit}
         </span>
       ),
@@ -102,13 +107,7 @@ export function getColumns(): ColumnDef<SupplierListItem>[] {
       cell: ({ row }) => {
         const c = row.original.contact;
         if (!c) return <span className="text-muted-foreground">-</span>;
-        const via = c.email ?? c.phone;
-        return (
-          <span>
-            {c.name}
-            {via && <span className="text-muted-foreground"> · {via}</span>}
-          </span>
-        );
+        return <StackedCell maxWidthClass="max-w-[240px]" primary={c.name} secondary={c.email ?? c.phone ?? ''} />;
       },
     },
     {
@@ -120,15 +119,16 @@ export function getColumns(): ColumnDef<SupplierListItem>[] {
       header: ({ column }) => <DataTableColumnHeader column={column} title="Documentos" />,
       cell: ({ row }) => {
         const { state, nextExpiry } = row.original.documents;
-        const Icon = supplierDocumentStateIcons[state];
+        const ui = SUPPLIER_DOCUMENT_STATE_UI[state];
+        const Icon = ui.icon;
         return (
           <Badge
-            variant={state === 'NONE' ? 'outline' : 'default'}
-            className={cn('gap-1', DOCUMENT_STATE_CLASSES[state])}
-            title={nextExpiry ? `Próximo vencimiento: ${moment.utc(nextExpiry).format('DD/MM/YYYY')}` : undefined}
+            variant={TONE_TO_BADGE[ui.tone]}
+            className="gap-1 whitespace-nowrap"
+            title={nextExpiry ? `Próximo vencimiento: ${formatExpiry(nextExpiry)}` : undefined}
           >
-            <Icon className="h-3 w-3" />
-            {SUPPLIER_DOCUMENT_STATE_LABELS[state]}
+            <Icon className="h-3 w-3" aria-hidden="true" />
+            {ui.label}
           </Badge>
         );
       },
@@ -141,13 +141,13 @@ export function getColumns(): ColumnDef<SupplierListItem>[] {
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
       cell: ({ row }) =>
         row.original.is_active ? (
-          <Badge className="gap-1 bg-green-600 text-white hover:bg-green-600/90">
-            <CheckCircle2 className="h-3 w-3" />
+          <Badge variant="success" className="gap-1 whitespace-nowrap">
+            <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
             Activo
           </Badge>
         ) : (
-          <Badge variant="secondary" className="gap-1 text-muted-foreground">
-            <AlertCircle className="h-3 w-3" />
+          <Badge variant="secondary" className="gap-1 whitespace-nowrap">
+            <AlertCircle className="h-3 w-3" aria-hidden="true" />
             Inactivo
           </Badge>
         ),
@@ -158,7 +158,7 @@ export function getColumns(): ColumnDef<SupplierListItem>[] {
       accessorKey: 'created_at',
       meta: { title: 'Fecha de alta' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de alta" />,
-      cell: ({ row }) => <span>{moment(row.original.created_at).format('DD/MM/YYYY')}</span>,
+      cell: ({ row }) => <span>{formatArgentinaDay(row.original.created_at)}</span>,
     },
   ];
 }

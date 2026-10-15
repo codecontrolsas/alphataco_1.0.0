@@ -1,9 +1,9 @@
 'use server';
 
 import { checkPermissionServer } from '@/features/Permissions';
+import { STOCK_DESTINATION_TYPES } from '@/features/Warehouses/schemas/stock-movement';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
-import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import {
   buildDateRangeFiltersWhere,
   buildFiltersWhere,
@@ -14,17 +14,24 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { pickFilters } from '@/features/Warehouses/lib/filters';
-import { orderedQuantitySql } from '../../lib/ordered-quantity-sql';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { DESTINATION_SELECT, destinationLabel } from '@/features/Warehouses/lib/labels';
+import { orderedQuantitySql } from '../../lib/ordered-quantity-sql';
+import {
+  purchaseRequestScopeConditions,
+  resolvePurchaseRequestScope as resolveScope,
+  type PurchaseRequestScope as Scope,
+} from '../../lib/request-scope';
+import { PURCHASE_REQUEST_STATUSES } from '../../lib/request-state-machine';
 
 const logger = new Logger('features/Purchases/Requests/RequestsList');
 
 type RequestWhere = Prisma.purchase_requestsWhereInput;
 type RequestOrderBy = Prisma.purchase_requestsOrderByWithRelationInput;
-type FilterState = ReturnType<typeof parseSearchParams>;
+type FilterState = ReturnType<typeof parseListState>;
 
 // ============================================================================
 // CONSTANTS
@@ -42,8 +49,33 @@ const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => RequestOrderBy> = {
 const TEXT_FILTER_COLUMNS = ['number'];
 const DATE_RANGE_COLUMNS = ['created_at', 'needed_by'];
 
-/** Unicas columnas que pasan por `buildFiltersWhere` (lista de permitidas). */
+/** Columnas con filtro facetado (pasan por `buildFiltersWhere`). */
 const FACETED_COLUMNS = ['status', 'requester', 'destination_type'] as const;
+
+/** Filtros de texto que se resuelven a mano (relaciones). */
+const ORIGIN_FILTER = 'material_request';
+const DESTINATION_FILTER = 'destination';
+
+/** Unicas claves de filtro que se aceptan: cualquier otra de la URL se descarta antes de armar el `where`. */
+const ALLOWED_FILTER_KEYS: ReadonlySet<string> = new Set([
+  ...FACETED_COLUMNS,
+  ...TEXT_FILTER_COLUMNS,
+  ORIGIN_FILTER,
+  DESTINATION_FILTER,
+  ...dateRangeKeys(DATE_RANGE_COLUMNS),
+]);
+
+/** Tope de filas del export. */
+const EXPORT_MAX_ROWS = 10_000;
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Valores validos por columna con lista cerrada (un valor ajeno haria fallar a Prisma y tumbaria la lista). */
+const VALID_VALUES: Record<string, (value: string) => boolean> = {
+  status: (v) => (PURCHASE_REQUEST_STATUSES as readonly string[]).includes(v),
+  destination_type: (v) => v === NULL_FILTER_VALUE || (STOCK_DESTINATION_TYPES as readonly string[]).includes(v),
+  requester: (v) => UUID_RE.test(v),
+};
 
 /** columnId (URL) -> campo Prisma, solo donde difieren. */
 const COLUMN_MAP: Record<string, string> = {
@@ -56,47 +88,36 @@ const contains = (value: string) => ({ contains: value, mode: 'insensitive' as c
 // HELPERS INTERNOS
 // ============================================================================
 
-interface Scope {
-  companyId: string;
-  /** Si no es null, el usuario solo ve sus propias solicitudes (sin `view_all_requests`). */
-  ownProfileId: string | null;
-}
-
-/** Empresa + visibilidad. `null` = sin acceso (sin `view` o sin perfil) -> lista vacia. */
-async function resolveScope(): Promise<Scope | null> {
-  const [canView, canViewAll] = await Promise.all([
-    checkPermissionServer('compras', 'solicitudes', 'view'),
-    checkPermissionServer('compras', 'solicitudes', 'view_all_requests'),
-  ]);
-  if (!canView) return null;
-
-  const companyId = await getActiveCompanyId();
-  if (canViewAll) return { companyId, ownProfileId: null };
-
-  const profile = await getServerAuthProfile();
-  if (!profile) return null;
-  return { companyId, ownProfileId: profile.id };
+/** Estado de la tabla ya parseado, con solo los filtros permitidos y sus valores validos. */
+function parseListState(searchParams: DataTableSearchParams) {
+  const state = sanitizeFilters(parseSearchParams(searchParams), ALLOWED_FILTER_KEYS);
+  for (const [column, isValid] of Object.entries(VALID_VALUES)) {
+    const values = state.filters[column];
+    if (!values) continue;
+    const valid = values.filter(isValid);
+    if (valid.length > 0) state.filters[column] = valid;
+    else delete state.filters[column];
+  }
+  return state;
 }
 
 /** WHERE compartido entre paginated, export y facets (incluye la visibilidad). */
 function buildWhereClause(scope: Scope, state: FilterState): RequestWhere {
   const f = state.filters;
-  const and: RequestWhere[] = [{ company_id: scope.companyId }];
-
-  // Visibilidad: sin `view_all_requests` solo las solicitudes propias
-  if (scope.ownProfileId) and.push({ requested_by: scope.ownProfileId });
+  // Empresa + visibilidad (sin `view_all_requests` solo las propias): alcance compartido
+  const and: RequestWhere[] = purchaseRequestScopeConditions(scope);
 
   and.push(buildSearchWhere(state.search, ['number', 'notes']) as RequestWhere);
-  and.push(buildFiltersWhere(pickFilters(f, FACETED_COLUMNS), COLUMN_MAP) as RequestWhere);
+  and.push(buildFiltersWhere(f, COLUMN_MAP, { exclude: [...TEXT_FILTER_COLUMNS, ORIGIN_FILTER, DESTINATION_FILTER] }) as RequestWhere);
   and.push(buildTextFiltersWhere(f, TEXT_FILTER_COLUMNS) as RequestWhere);
   and.push(buildDateRangeFiltersWhere(f, DATE_RANGE_COLUMNS) as RequestWhere);
 
   // Pedido de origen (texto sobre su numero)
-  const origin = f.material_request?.[0]?.trim();
+  const origin = f[ORIGIN_FILTER]?.[0]?.trim();
   if (origin) and.push({ material_request: { number: contains(origin) } });
 
   // Destino (texto): mismo criterio que el filtro `destination` de las solicitudes de Almacenes
-  const dest = f.destination?.[0]?.trim();
+  const dest = f[DESTINATION_FILTER]?.[0]?.trim();
   if (dest) {
     and.push({
       OR: [
@@ -161,7 +182,7 @@ async function shape(rows: Prisma.purchase_requestsGetPayload<{ select: typeof R
     needed_by: r.needed_by,
     destination_type: r.destination_type,
     destination: destinationLabel(r),
-    requester: { id: r.requester.id, name: profileName(r.requester) },
+    requester: { id: r.requester.id, name: profileName(r.requester), email: r.requester.email },
     material_request: r.material_request,
     lines_count: r._count.lines,
     // null = no aplica por el estado (borrador, pendiente, rechazada, anulada)
@@ -178,7 +199,7 @@ export async function getPurchaseRequestsPaginated(searchParams: DataTableSearch
   if (!scope) return { data: [], total: 0 };
 
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseListState(searchParams);
     const { skip, take } = stateToPrismaParams(state);
     const where = buildWhereClause(scope, state);
 
@@ -206,22 +227,39 @@ export async function getPurchaseRequestsPaginated(searchParams: DataTableSearch
 // EXPORT (sin paginacion)
 // ============================================================================
 
-export async function getAllPurchaseRequestsForExport(searchParams: DataTableSearchParams) {
+export async function getAllPurchaseRequestsForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<PurchaseRequestListItem[]>> {
   const scope = await resolveScope();
-  if (!scope) return [];
+  if (!scope) return { ok: true, data: [] };
 
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseListState(searchParams);
     const where = buildWhereClause(scope, state);
-    const rows = await prisma.purchase_requests.findMany({
-      where,
-      orderBy: [{ created_at: 'desc' }, { number: 'desc' }],
-      select: REQUEST_SELECT,
+    const orderBy: RequestOrderBy[] = [{ created_at: 'desc' }, { number: 'desc' }, { id: 'asc' }];
+
+    const rows = await fetchExportRowsInBatches({
+      maxRows: EXPORT_MAX_ROWS,
+      listIds: (take) => prisma.purchase_requests.findMany({ where, orderBy, select: { id: true }, take }),
+      fetchByIds: (ids) =>
+        prisma.purchase_requests.findMany({
+          where: { id: { in: ids }, company_id: scope.companyId },
+          select: REQUEST_SELECT,
+        }),
+      tooLargeMessage: (maxRows) =>
+        `Hay más de ${maxRows.toLocaleString('es-AR')} solicitudes con los filtros actuales. Acote la exportación con filtros.`,
     });
-    return await shape(rows);
+    return { ok: true, data: await shape(rows) };
   } catch (error) {
     logger.error('Error al exportar solicitudes de compra', { data: { error } });
-    throw new Error('No se pudo exportar la lista de solicitudes de compra');
+    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
+    return {
+      ok: false,
+      message:
+        error instanceof ExportTooLargeError
+          ? error.message
+          : 'No se pudo exportar la lista de solicitudes de compra. Intente nuevamente.',
+    };
   }
 }
 
@@ -236,11 +274,11 @@ export async function getPurchaseRequestSingleFacet(
   const scope = await resolveScope();
   if (!scope) return null;
 
-  const parsed = searchParams && Object.keys(searchParams).length > 0 ? parseSearchParams(searchParams) : null;
+  const parsed = searchParams && Object.keys(searchParams).length > 0 ? parseListState(searchParams) : null;
 
   /** WHERE con todos los filtros activos MENOS el de la columna que se esta abriendo. */
   function crossWhere(excludeColumn: string): RequestWhere {
-    const base: FilterState = parsed ?? parseSearchParams({});
+    const base: FilterState = parsed ?? parseListState({});
     const filters = { ...base.filters };
     delete filters[excludeColumn];
     return buildWhereClause(scope as Scope, { ...base, filters });
@@ -288,6 +326,30 @@ export async function getPurchaseRequestSingleFacet(
     return null;
   } catch (error) {
     logger.error('Error al obtener facet de solicitudes de compra', { data: { error, columnId } });
+    return null;
+  }
+}
+
+// ============================================================================
+// ATENCION (banda sobre la tabla)
+// ============================================================================
+
+/**
+ * Solicitudes pendientes de aprobación, para quien puede aprobar. Usa el alcance de la lista y el mismo
+ * estado que el filtro de la banda, así coincide con el total de la tabla filtrada y con el contador de
+ * la sub-navegación. Nunca rechaza: `null` si no corresponde o no se pudo contar (la banda no se muestra).
+ */
+export async function getPurchaseRequestsAttention(): Promise<{ pendingApproval: number } | null> {
+  try {
+    if (!(await checkPermissionServer('compras', 'solicitudes', 'approve'))) return null;
+    const scope = await resolveScope();
+    if (!scope) return null;
+    const pendingApproval = await prisma.purchase_requests.count({
+      where: { AND: [...purchaseRequestScopeConditions(scope), { status: 'PENDING_APPROVAL' }] },
+    });
+    return { pendingApproval };
+  } catch (error) {
+    logger.error('Error al contar solicitudes de compra pendientes de aprobación', { data: { error } });
     return null;
   }
 }

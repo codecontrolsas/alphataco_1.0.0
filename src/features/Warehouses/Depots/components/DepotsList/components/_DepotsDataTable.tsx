@@ -7,9 +7,10 @@ import {
   type DataTableSearchParams,
   type FacetResult,
 } from '@/shared/components/common/DataTable';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { CircleOff, User } from 'lucide-react';
-import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
 import { WAREHOUSE_QUERY_KEYS } from '../../../../lib/query-keys';
 import {
@@ -112,11 +113,11 @@ export function _DepotsDataTable({
 
   const exportConfig: DataTableExportConfig<DepotListItem> = useMemo(
     () => ({
-      fetchAllData: () => getAllDepotsForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllDepotsForExport(currentParams)),
       options: { filename: 'depositos', title: 'Listado de Depósitos', sheetName: 'Depósitos' },
       formatters: {
         is_active: (value) => (value ? 'Activo' : 'Inactivo'),
-        created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : ''),
+        created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : ''),
         address: (value) => (value ? String(value) : ''),
       },
     }),

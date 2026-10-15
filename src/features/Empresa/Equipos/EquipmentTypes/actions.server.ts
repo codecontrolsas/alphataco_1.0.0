@@ -13,15 +13,12 @@ import {
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { assertChecklistTemplatesOwned, assertTypesReadable } from '../lib/catalog-guards';
-import {
-  catalogAccessError,
-  catalogReadScope,
-  catalogWriteScope,
-  resolveCatalogAccess,
-} from '../lib/catalog-scope';
-import { effectiveHitchTypeIds } from '../lib/hitch-compatibility';
 import { revalidatePath } from 'next/cache';
+import { equipmentTypeCreateSchema, equipmentTypeUpdateSchema } from '../../lib/catalog-input-schemas';
+import { requireConfigTabPermission } from '../../lib/config-access.server';
+import { assertChecklistTemplatesOwned, assertTypesReadable } from '../lib/catalog-guards';
+import { catalogAccessError, catalogReadScope, catalogWriteScope, resolveCatalogAccess } from '../lib/catalog-scope';
+import { effectiveHitchTypeIds } from '../lib/hitch-compatibility';
 
 // ============================================================================
 // LOGGER
@@ -115,6 +112,7 @@ function buildWhereClause(state: ReturnType<typeof parseSearchParams>) {
 // ============================================================================
 
 export async function getEquipmentTypesPaginated(searchParams: DataTableSearchParams) {
+  await requireConfigTabPermission('tipos', 'view');
   try {
     const state = parseSearchParams(searchParams);
     const { skip, take } = stateToPrismaParams(state);
@@ -165,6 +163,7 @@ export async function getEquipmentTypesPaginated(searchParams: DataTableSearchPa
 // ============================================================================
 
 export async function getAllEquipmentTypesForExport(searchParams: DataTableSearchParams) {
+  await requireConfigTabPermission('tipos', 'view');
   try {
     const state = parseSearchParams(searchParams);
     // `buildWhereClause` puede traer su propio `OR`: se combinan con AND para no pisarse.
@@ -211,6 +210,7 @@ export async function getEquipmentTypeSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
 ): Promise<FacetResult | null> {
+  await requireConfigTabPermission('tipos', 'view');
   try {
     const state = searchParams ? parseSearchParams(searchParams) : parseSearchParams({});
 
@@ -392,6 +392,8 @@ export interface EquipmentTypeFormData {
 }
 
 export async function createEquipmentType(formData: EquipmentTypeFormData) {
+  await requireConfigTabPermission('tipos', 'create');
+  formData = equipmentTypeCreateSchema.parse(formData);
   try {
     const companyId = await getActiveCompanyId();
 
@@ -448,6 +450,8 @@ export async function createEquipmentType(formData: EquipmentTypeFormData) {
 }
 
 export async function updateEquipmentType(formData: EquipmentTypeFormData & { id: string }) {
+  await requireConfigTabPermission('tipos', 'update');
+  formData = equipmentTypeUpdateSchema.parse(formData);
   try {
     const companyId = await getActiveCompanyId();
 

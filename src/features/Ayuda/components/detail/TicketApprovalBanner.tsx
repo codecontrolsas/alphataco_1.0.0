@@ -1,10 +1,10 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import type { Ticket } from '@/shared/lib/taskapp/types';
 import { Loader2, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import type { Ticket } from '@/shared/lib/taskapp/types';
 import { useApproveTicket } from '../../hooks/useApproveTicket';
 import { usePendingApproverTickets } from '../../hooks/useApproverTickets';
 import { useRejectTicket } from '../../hooks/useRejectTicket';
@@ -68,30 +68,24 @@ export function TicketApprovalBanner({ ticket, currentUserEmail }: Props) {
       : 'Al aprobar, el ticket pasa a planificación y el equipo avanza con él.';
 
   return (
-    <div className="border-b bg-amber-50 dark:bg-amber-950/40 p-4">
+    <div className="border-b bg-warn-subtle p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-start gap-3">
-          <ShieldCheck className="mt-0.5 h-5 w-5 text-amber-600" />
+          <ShieldCheck className="mt-0.5 h-5 w-5 text-warn-subtle-foreground" />
           <div>
             <p className="text-sm font-medium">Aprobá la valorización de este ticket</p>
             <p className="text-xs text-muted-foreground">
-              El equipo valorizó este ticket. Aprobá para que pase a planificación, o rechazalo si
-              no corresponde.
+              El equipo valorizó este ticket. Aprobá para que pase a planificación, o rechazalo si no corresponde.
             </p>
             {ticket.estimated_hours != null ? (
-              <p className="mt-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+              <p className="mt-0.5 text-xs font-medium text-warn-subtle-foreground">
                 Horas valorizadas: {ticket.estimated_hours} h
               </p>
             ) : null}
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={isBusy}
-            onClick={() => setConfirming('reject')}
-          >
+          <Button variant="outline" size="sm" disabled={isBusy} onClick={() => setConfirming('reject')}>
             Rechazar
           </Button>
           <Button size="sm" disabled={isBusy} onClick={() => setConfirming('approve')}>

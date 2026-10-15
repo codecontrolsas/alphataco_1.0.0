@@ -1,45 +1,39 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatMoney, formatQuantity, formatUnitCost } from '@/features/Warehouses/lib/format';
 import { VAT_RATE_LABELS, isVatRateId } from '@/shared/lib/arca/catalogs';
 import { Paperclip } from 'lucide-react';
-import moment from 'moment';
+import { argentinaDate, formatDateAr } from '@/shared/lib/argentina-time';
 import Link from 'next/link';
-import type { PurchaseQuoteDetail } from '../../actions/quotes.server';
+import type { PurchaseQuoteDetail } from '../../lib/quote-query-types';
 import { HistoryCard } from '../../components/HistoryCard';
 import { PurchaseOrderStatusBadge } from '../../Orders/components/PurchaseOrderStatusBadge';
 import { PurchaseQuoteActions } from './PurchaseQuoteActions';
 import { PurchaseQuoteStatusBadge } from './PurchaseQuoteStatusBadge';
+import { Field, FieldGrid } from '@/shared/components/common/FieldGrid';
+import { RecordHeader } from '@/shared/components/common/RecordHeader';
+import { SectionCard } from '@/shared/components/common/SectionCard';
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="text-sm">{children}</dd>
-    </div>
-  );
-}
-
-const date = (value: string | null) => (value ? moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY') : '—');
+const date = (value: string | null) => (value ? formatDateAr(value) : '—');
 
 /** Detalle del pedido de cotizacion: proveedor, lineas con lo cotizado, respuesta, OC e historial. */
 export function PurchaseQuoteDetailView({ quote }: { quote: PurchaseQuoteDetail }) {
   const answered = quote.status === 'RECEIVED';
-  const expired = quote.validUntil !== null && quote.validUntil < moment().format('YYYY-MM-DD');
+  const expired = quote.validUntil !== null && quote.validUntil < argentinaDate();
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="font-mono text-2xl font-semibold">{quote.number}</h1>
-        <PurchaseQuoteStatusBadge status={quote.status} />
-        <div className="ml-auto">
-          <PurchaseQuoteActions quote={quote} />
-        </div>
-      </div>
+      <RecordHeader
+        identity={
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="font-mono text-2xl font-semibold">{quote.number}</h1>
+            <PurchaseQuoteStatusBadge status={quote.status} />
+          </div>
+        }
+        actions={<PurchaseQuoteActions quote={quote} />}
+      />
 
-      <Card>
-        <CardContent className="pt-6">
-          <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <SectionCard title="Datos del pedido">
+          <FieldGrid>
             <Field label="Proveedor">
               <Link href={`/dashboard/purchases/suppliers/${quote.supplier.id}`} className="hover:underline">
                 {quote.supplier.name}
@@ -67,34 +61,30 @@ export function PurchaseQuoteDetailView({ quote }: { quote: PurchaseQuoteDetail 
             {quote.attachment && (
               <Field label="Presupuesto">
                 <a href={quote.attachment.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 underline">
-                  <Paperclip className="h-3.5 w-3.5" />
+                  <Paperclip className="h-3.5 w-3.5" aria-hidden="true" />
                   {quote.attachment.name}
                 </a>
               </Field>
             )}
             {quote.notes && (
-              <div className="sm:col-span-2">
+              <div className="sm:col-span-2 xl:col-span-3">
                 <Field label="Observaciones para el proveedor">
                   <span className="whitespace-pre-wrap">{quote.notes}</span>
                 </Field>
               </div>
             )}
             {quote.supplierNotes && (
-              <div className="sm:col-span-2">
+              <div className="sm:col-span-2 xl:col-span-3">
                 <Field label="Notas del proveedor">
                   <span className="whitespace-pre-wrap">{quote.supplierNotes}</span>
                 </Field>
               </div>
             )}
-          </dl>
-        </CardContent>
-      </Card>
+          </FieldGrid>
+      </SectionCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Qué se cotiza</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <SectionCard title="Qué se cotiza">
+        <div className="space-y-4">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -142,27 +132,22 @@ export function PurchaseQuoteDetailView({ quote }: { quote: PurchaseQuoteDetail 
               <dd className="text-right font-medium">{formatMoney(quote.totals.total)}</dd>
             </dl>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </SectionCard>
 
       {quote.orders.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Órdenes de compra</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2">
-              {quote.orders.map((order) => (
-                <li key={order.id} className="flex items-center gap-3 text-sm">
-                  <Link href={`/dashboard/purchases/orders/${order.id}`} className="font-mono underline">
-                    {order.number}
-                  </Link>
-                  <PurchaseOrderStatusBadge status={order.status} />
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
+        <SectionCard title="Órdenes de compra">
+          <ul className="space-y-2">
+            {quote.orders.map((order) => (
+              <li key={order.id} className="flex items-center gap-3 text-sm">
+                <Link href={`/dashboard/purchases/orders/${order.id}`} className="font-mono underline">
+                  {order.number}
+                </Link>
+                <PurchaseOrderStatusBadge status={order.status} />
+              </li>
+            ))}
+          </ul>
+        </SectionCard>
       )}
 
       <HistoryCard history={quote.history} />

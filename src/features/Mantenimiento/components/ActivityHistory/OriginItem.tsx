@@ -19,7 +19,7 @@ export function SiblingWorkOrders({ siblings }: { siblings: { id: string; order_
         {siblings.map((wo) => (
           <Badge key={wo.id} variant="secondary" className="text-xs font-normal">
             {formatOrderNumber(wo.order_number)}
-            <span className="ml-1 text-muted-foreground">• {getStatusLabel(wo.status)}</span>
+            <span className="ml-1 text-muted-foreground">• {getStatusLabel(wo.status, 'workOrder')}</span>
           </Badge>
         ))}
       </div>
