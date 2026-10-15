@@ -482,11 +482,18 @@ export async function cancelPurchaseOrder(id: string, reason: string): Promise<A
   try {
     await prisma.$transaction(async (tx) => {
       // Lock primero: una recepcion que se confirma en paralelo ya esta visible al contar.
-      await lockPurchaseOrder(tx, companyId, id, 'cancel');
+      // El error de estado se difiere: con recepciones vigentes el motivo útil es "cerrala".
+      let stateError: unknown = null;
+      try {
+        await lockPurchaseOrder(tx, companyId, id, 'cancel');
+      } catch (error) {
+        stateError = error;
+      }
       // Con recepciones vigentes no se anula (en cualquier estado): se cierra.
       const receipts = await tx.purchase_receipts.count({
         where: { order_id: id, cancelled_at: null, company_id: companyId },
       });
+      if (stateError && receipts === 0) throw stateError;
       if (receipts > 0) {
         const current = await tx.purchase_orders.findUniqueOrThrow({ where: { id }, select: { number: true } });
         throw new PurchaseError(
