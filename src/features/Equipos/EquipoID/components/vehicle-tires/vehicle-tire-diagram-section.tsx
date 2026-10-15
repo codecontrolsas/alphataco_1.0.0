@@ -14,12 +14,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { DiagramAxle, DiagramPosition } from '@/features/Mantenimiento/Gomeria/shared/TireDiagramRenderer';
-import { TireDiagramRenderer } from '@/features/Mantenimiento/Gomeria/shared/TireDiagramRenderer';
 import { TireReturnWarehouseSelect } from '@/features/Mantenimiento/Gomeria/shared/TireReturnWarehouseSelect';
 import { useTireReturnWarehouse } from '@/features/Mantenimiento/Gomeria/shared/hooks/useTireReturnWarehouse';
+import { toDiagramPosition } from '@/features/Mantenimiento/Gomeria/shared/iso/diagram-position';
+import type { DiagramAxle, DiagramPosition } from '@/features/Mantenimiento/Gomeria/shared/tire-diagram-utils';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ExternalLink, Pencil, RotateCcw } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -28,6 +29,12 @@ import { resetVehicleToSubTypeTemplate } from './actions/template.server';
 import type { AxleInput } from './schemas/axles';
 import { VehicleAxleEditor, type TirePositionSummary } from './vehicle-axle-editor';
 import { VehicleAxleSizesForm } from './vehicle-axle-sizes-form';
+
+// El diagrama isométrico se carga bajo demanda y solo en el cliente.
+const TireDiagramIso = dynamic(
+  () => import('@/features/Mantenimiento/Gomeria/shared/iso/TireDiagramIso').then((m) => m.TireDiagramIso),
+  { ssr: false, loading: () => <Skeleton className="h-44 w-full rounded-xl" /> }
+);
 
 // ============================================================================
 // TYPES
@@ -110,17 +117,7 @@ export function VehicleTireDiagramSection({ vehicleId, canUpdate }: VehicleTireD
     }
     axles.push(...Array.from(axleMap.values()));
 
-    for (const pos of positions) {
-      diagramPositions.push({
-        position_number: pos.position_number,
-        axle_number: pos.axle_number,
-        side: pos.side as 'LEFT' | 'RIGHT' | 'SPARE',
-        tire_id: pos.tire_id,
-        tire_serial: pos.tire?.serial_number ?? undefined,
-        tire_brand: pos.tire?.brand?.name ?? undefined,
-        tire_size: pos.effective_tire_size ?? pos.tire?.tire_type?.size ?? undefined,
-      });
-    }
+    diagramPositions.push(...positions.map(toDiagramPosition));
   }
 
   // ── Current axles for editor ──────────────────────────────────────────────
@@ -285,7 +282,7 @@ export function VehicleTireDiagramSection({ vehicleId, canUpdate }: VehicleTireD
               <Skeleton className="h-44 w-full rounded-xl" />
             </div>
           ) : axles.length > 0 ? (
-            <TireDiagramRenderer axles={axles} positions={diagramPositions} interactive={false} />
+            <TireDiagramIso axles={axles} positions={diagramPositions} interactive={false} />
           ) : (
             <p className="text-sm text-muted-foreground text-center py-4">
               No hay posiciones configuradas en esta plantilla.

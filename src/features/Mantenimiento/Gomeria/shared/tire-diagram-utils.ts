@@ -19,6 +19,12 @@ export interface DiagramPosition {
   tire_serial?: string;
   tire_brand?: string;
   tire_size?: string;
+  /** Profundidad de dibujo de la cubierta montada, en mm. */
+  tread_depth_mm?: number;
+  /** Última presión medida de la cubierta montada, en psi (último servicio con medición). */
+  pressure_psi?: number;
+  /** Nivel de recapado: `null` = sin recapar; `undefined` = no se informó. */
+  retread_level?: 'FIRST' | 'SECOND' | 'THIRD' | null;
 }
 
 export interface ComputedPosition {
@@ -66,4 +72,20 @@ export function calculatePositions(axles: DiagramAxle[]): ComputedPosition[] {
   }
 
   return positions;
+}
+
+// ─── Descripciones de texto ────────────────────────────────────────────────
+
+/** "Posición 3 · Eje 2 · izquierda exterior" (o "Posición 9 · Auxilio"). */
+export function describePosition(position: ComputedPosition): string {
+  if (position.side === 'SPARE') return `Posición ${position.position_number} · Auxilio`;
+  const side = position.side === 'LEFT' ? 'izquierda' : 'derecha';
+  const role = position.dual_role === 'INNER' ? ' interior' : position.dual_role === 'OUTER' ? ' exterior' : '';
+  return `Posición ${position.position_number} · Eje ${position.axle_number} · ${side}${role}`;
+}
+
+/** Descripción de una posición por número, a partir de los ejes del vehículo. */
+export function describePositionNumber(positionNumber: number, axles: DiagramAxle[]): string {
+  const found = calculatePositions(axles).find((p) => p.position_number === positionNumber);
+  return found ? describePosition(found) : `Posición ${positionNumber}`;
 }

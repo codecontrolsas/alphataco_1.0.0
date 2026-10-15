@@ -2,15 +2,22 @@
 
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { AxleInput as PlantillasAxleInput } from '@/features/Mantenimiento/Gomeria/Plantillas/actions/actions.server';
 import { AxleConfigurator } from '@/features/Mantenimiento/Gomeria/Plantillas/components/AxleConfigurator';
-import { TireDiagramRenderer } from '@/features/Mantenimiento/Gomeria/shared/TireDiagramRenderer';
 import { calculatePositions, type DiagramAxle } from '@/features/Mantenimiento/Gomeria/shared/tire-diagram-utils';
+import dynamic from 'next/dynamic';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { DisplacedTiresDialog, type DisplacedTireInfo } from './DisplacedTiresDialog';
 import { createVehicleCustomTemplate, updateVehicleCustomAxles } from './actions/template.server';
 import { axlesSchema, type AxleInput, type DisplacedTireAction } from './schemas/axles';
+
+// Vista previa isométrica (sin estados de color): se carga bajo demanda y solo en el cliente.
+const TireDiagramIso = dynamic(
+  () => import('@/features/Mantenimiento/Gomeria/shared/iso/TireDiagramIso').then((m) => m.TireDiagramIso),
+  { ssr: false, loading: () => <Skeleton className="h-44 w-full rounded-xl" /> }
+);
 
 // ============================================================================
 // TYPES
@@ -205,7 +212,7 @@ export function VehicleAxleEditor({
               <div className="space-y-2">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Vista previa</p>
                 <div className="rounded-lg border bg-muted/30 p-3">
-                  <TireDiagramRenderer axles={previewAxles} interactive={false} />
+                  <TireDiagramIso axles={previewAxles} interactive={false} />
                 </div>
               </div>
             )}

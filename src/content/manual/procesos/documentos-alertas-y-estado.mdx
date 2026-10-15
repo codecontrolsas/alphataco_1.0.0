@@ -8,27 +8,37 @@ updated: 2026-10-07
 La documentación es el corazón del sistema: de ella depende si un empleado o un equipo está en regla. El circuito siempre es el mismo: un **tipo de documento** define qué se pide y a quién; el sistema crea una **alerta pendiente** para cada recurso que lo debe presentar; alguien **sube el archivo**; y con eso se recalcula el **estado** del recurso. Los vencimientos se siguen desde el **Dashboard** y por **mail semanal**.
 
 <Flow title="De la configuración al estado del recurso">
-  <FlowStep title="Tipo de documento" module="Configuración" to="tipos-de-documento">Se define qué se pide, a quién y con qué reglas.</FlowStep>
-  <FlowStep title="Alertas pendientes" module="Documentación" tone="warning" to="documentos-de-empleados">El sistema crea un pendiente por cada recurso que lo debe presentar.</FlowStep>
-  <FlowStep title="Carga" module="Documentación" to="detalle-de-documento">Se sube el archivo, se renueva o se reemplaza.</FlowStep>
-  <FlowStep title="Estado del recurso" module="Empleados / Equipos" tone="success" to="ficha-del-empleado">Completo, Incompleto o Completo con doc vencida.</FlowStep>
-  <FlowStep title="Vencimientos" module="Dashboard" tone="info" to="dashboard-vencimientos">Lo que vence en los próximos 30 días y el resumen semanal.</FlowStep>
+  <FlowStep title="Tipo de documento" module="Configuración" to="tipos-de-documento">
+    Se define qué se pide, a quién y con qué reglas.
+  </FlowStep>
+  <FlowStep title="Alertas pendientes" module="Documentación" tone="warning" to="documentos-de-empleados">
+    El sistema crea un pendiente por cada recurso que lo debe presentar.
+  </FlowStep>
+  <FlowStep title="Carga" module="Documentación" to="detalle-de-documento">
+    Se sube el archivo, se renueva o se reemplaza.
+  </FlowStep>
+  <FlowStep title="Estado del recurso" module="Empleados / Equipos" tone="success" to="ficha-del-empleado">
+    Completo, Incompleto o Completo con doc vencida.
+  </FlowStep>
+  <FlowStep title="Vencimientos" module="Dashboard" tone="info" to="dashboard-vencimientos">
+    Lo que vence en los próximos 30 días y el resumen semanal.
+  </FlowStep>
 </Flow>
 
 ## 1. El tipo de documento define qué se pide
 
 Los tipos se crean en <GuideLink to="tipos-de-documento">Configuración → Documentos</GuideLink> con **Crear tipo de documento**. Además del **Nombre**, se elige a qué **Aplica a** (**Empleados**, **Equipos** o **Empresa**) y eso no se puede cambiar después. Las opciones son las que deciden el comportamiento:
 
-| Opción | Qué hace |
-|---|---|
-| **Es obligatorio** | Solo los tipos obligatorios generan alertas. Un tipo no obligatorio se puede subir, pero nadie lo reclama. |
-| **Tiene vencimiento** | Al subirlo se pide **Fecha de vencimiento** y aparece en los vencimientos del Dashboard y del mail. |
-| **Es mensual** | Se presenta uno por período (mes). Al subirlo se pide el **Periodo**, y se ve en las pestañas de documentos mensuales. |
-| **Es privado** | Solo lo ven quienes tienen el permiso **Ver privados**, y lo suben quienes tienen **Subir privados**. |
-| **Documento de baja** | Es documentación de egreso: se le sigue pidiendo al recurso aunque esté dado de baja. |
+| Opción                                | Qué hace                                                                                                                                             |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Es obligatorio**                    | Solo los tipos obligatorios generan alertas. Un tipo no obligatorio se puede subir, pero nadie lo reclama.                                           |
+| **Tiene vencimiento**                 | Al subirlo se pide **Fecha de vencimiento** y aparece en los vencimientos del Dashboard y del mail.                                                  |
+| **Es mensual**                        | Se presenta uno por período (mes). Al subirlo se pide el **Periodo**, y se ve en las pestañas de documentos mensuales.                               |
+| **Es privado**                        | Solo lo ven quienes tienen el permiso **Ver privados**, y lo suben quienes tienen **Subir privados**.                                                |
+| **Documento de baja**                 | Es documentación de egreso: se le sigue pidiendo al recurso aunque esté dado de baja.                                                                |
 | **Puede cargarse desde un candidato** | (Empleados) Aparece en la documentación de los candidatos de Selección. Ver <GuideLink to="de-candidato-a-legajo">De candidato a legajo</GuideLink>. |
-| **Es multirrecurso** | Un mismo archivo vale para varios recursos (por ejemplo, una póliza que cubre a toda la flota). |
-| **Documento condicional** | No se pide a todos: solo a los que cumplen las condiciones elegidas. |
+| **Es multirrecurso**                  | Un mismo archivo vale para varios recursos (por ejemplo, una póliza que cubre a toda la flota).                                                      |
+| **Documento condicional**             | No se pide a todos: solo a los que cumplen las condiciones elegidas.                                                                                 |
 
 ### Documentos condicionales
 
@@ -38,7 +48,8 @@ Un tipo condicional se pide solo a quienes cumplen **al menos una opción de cad
 - **Para equipos**: **Marca**, **Modelo**, **Tipo**, **Subtipo**, **Categoría Vehículo**, **Condición**, **Tipo de Costo**, **Tipo de Contrato** y **Clientes**.
 
 <Callout type="info" title="La configuración la decide la empresa">
-Si un tipo está configurado para ciertos puestos, a los demás no se les pide, aunque intuitivamente parezca que "debería aplicar a todos". El sistema aplica exactamente las condiciones cargadas.
+  Si un tipo está configurado para ciertos puestos, a los demás no se les pide, aunque intuitivamente parezca que
+  "debería aplicar a todos". El sistema aplica exactamente las condiciones cargadas.
 </Callout>
 
 ## 2. Qué se le exige a cada empleado y equipo
@@ -58,14 +69,15 @@ Los pendientes se ven en <GuideLink to="documentos-de-empleados">Documentos de E
 - **Subir documento** pide el archivo, la **Fecha de vencimiento** si el tipo vence y el **Periodo** si es mensual. Al enviarlo, el documento queda **Presentado**.
 - Un documento ya presentado **no se vuelve a subir** ("El documento ya ha sido subido anteriormente"): se actualiza desde la pestaña **Actualizar** del detalle.
 
-| Acción del detalle | Qué hace | ¿Se recupera el anterior? |
-|---|---|---|
-| **Renovar** | El nuevo archivo pasa a ser el vigente y el anterior queda en el historial. Es la acción normal cuando un documento vence. | Sí, queda en el historial. |
-| **Reemplazar** | El nuevo archivo pisa al anterior (para corregir una carga equivocada). | **No**, el anterior se elimina. |
-| **Eliminar** | Borra el archivo (hay que escribir **ELIMINAR**) y la fila vuelve a **Pendiente**. | **No**. |
+| Acción del detalle | Qué hace                                                                                                                   | ¿Se recupera el anterior?       |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| **Renovar**        | El nuevo archivo pasa a ser el vigente y el anterior queda en el historial. Es la acción normal cuando un documento vence. | Sí, queda en el historial.      |
+| **Reemplazar**     | El nuevo archivo pisa al anterior (para corregir una carga equivocada).                                                    | **No**, el anterior se elimina. |
+| **Eliminar**       | Borra el archivo (hay que escribir **ELIMINAR**) y la fila vuelve a **Pendiente**.                                         | **No**.                         |
 
 <Callout type="danger" title="Reemplazar y Eliminar no se deshacen">
-Ante la duda, usá **Renovar**: conserva la versión anterior. En un documento multirrecurso, **Eliminar** afecta a todos los recursos que comparten ese archivo.
+  Ante la duda, usá **Renovar**: conserva la versión anterior. En un documento multirrecurso, **Eliminar** afecta a
+  todos los recursos que comparten ese archivo.
 </Callout>
 
 ### Documentos multirrecurso
@@ -73,29 +85,42 @@ Ante la duda, usá **Renovar**: conserva la versión anterior. En un documento m
 Con **Documento Multirecurso** (en Documentos de Empleados o de Equipos) se sube un archivo una sola vez y se vincula a los recursos elegidos. Solo completa los que lo tienen pendiente (o rechazado, vencido o archivado); a los que ya lo tienen presentado los deja como están. El mensaje dice a cuántos recursos se cargó.
 
 <Callout type="warning" title="Ojo al subir un multirrecurso desde una fila">
-Si usás **Subir documento** en una fila y el tipo es multirrecurso, el archivo se vincula a **todos los recursos activos** que lo tengan pendiente, no solo al de esa fila.
+  Si usás **Subir documento** en una fila y el tipo es multirrecurso, el archivo se vincula a **todos los recursos
+  activos** que lo tengan pendiente, no solo al de esa fila.
 </Callout>
 
 ### Estados de un documento
 
 <States title="Estados de un documento">
-  <State name="Pendiente" tone="danger" next="Presentado">Se exige y todavía no tiene archivo.</State>
-  <State name="Presentado" tone="info">Tiene archivo cargado. Es el estado en el que queda toda carga, renovación o reemplazo.</State>
-  <State name="Aprobado" tone="success">Estado de revisión aprobada.</State>
-  <State name="Rechazado" tone="danger">Estado de revisión rechazada, con su motivo.</State>
-  <State name="Vencido" tone="warning">Estado de documento vencido.</State>
-  <State name="Ya no aplica" tone="default">Archivado: el recurso dejó de cumplir las condiciones. Se conserva como historial (ver la sección 5).</State>
+  <State name="Pendiente" tone="danger" next="Presentado">
+    Se exige y todavía no tiene archivo.
+  </State>
+  <State name="Presentado" tone="info">
+    Tiene archivo cargado. Es el estado en el que queda toda carga, renovación o reemplazo.
+  </State>
+  <State name="Aprobado" tone="success">
+    Estado de revisión aprobada.
+  </State>
+  <State name="Rechazado" tone="danger">
+    Estado de revisión rechazada, con su motivo.
+  </State>
+  <State name="Vencido" tone="warning">
+    Estado de documento vencido.
+  </State>
+  <State name="Ya no aplica" tone="default">
+    Archivado: el recurso dejó de cumplir las condiciones. Se conserva como historial (ver la sección 5).
+  </State>
 </States>
 
 ## 4. El estado del recurso
 
 Cada empleado y cada equipo tiene un estado de documentación, visible en la columna **Estado** de los listados de <GuideLink to="empleados-listado">empleados</GuideLink> y <GuideLink to="equipos-listado">equipos</GuideLink>. Se calcula mirando **todos sus documentos vigentes** (los archivados como "Ya no aplica" no cuentan):
 
-| Estado | Cuándo |
-|---|---|
-| **Completo con doc vencida** | Alguno de sus documentos está en estado **Vencido**. |
-| **Completo** | Todos sus documentos están **Presentado**. |
-| **Incompleto** | Cualquier otro caso: hay algún **Pendiente** o **Rechazado**, por ejemplo. |
+| Estado                       | Cuándo                                                                     |
+| ---------------------------- | -------------------------------------------------------------------------- |
+| **Completo con doc vencida** | Alguno de sus documentos está en estado **Vencido**.                       |
+| **Completo**                 | Todos sus documentos están **Presentado**.                                 |
+| **Incompleto**               | Cualquier otro caso: hay algún **Pendiente** o **Rechazado**, por ejemplo. |
 
 Se recalcula solo cada vez que se sube, renueva, reemplaza o elimina un documento, cada vez que se edita el recurso y cada vez que se activa, desactiva o elimina un tipo.
 
@@ -115,7 +140,9 @@ Cuando un documento **deja de aplicarle** a un recurso:
 - Si más adelante el recurso **vuelve a cumplir** la condición, o se le vuelve a subir ese documento, se reactiva con su archivo.
 
 <Callout type="info" title="Editar las condiciones de un tipo no archiva">
-Cuando cambiás las condiciones de un tipo de documento, el sistema crea los pendientes nuevos, reactiva los archivados que vuelven a aplicar y borra los pendientes vacíos que ya no aplican, pero **no archiva** los documentos con archivo de quienes dejaron de cumplir. Esos se archivan cuando se edita el recurso.
+  Cuando cambiás las condiciones de un tipo de documento, el sistema crea los pendientes nuevos, reactiva los archivados
+  que vuelven a aplicar y borra los pendientes vacíos que ya no aplican, pero **no archiva** los documentos con archivo
+  de quienes dejaron de cumplir. Esos se archivan cuando se edita el recurso.
 </Callout>
 
 ### Recursos dados de baja
@@ -127,10 +154,16 @@ A un empleado o equipo dado de baja **solo se le siguen pidiendo los tipos marca
 Desde la edición del tipo, **Desactivar** ofrece mantener sus alertas, borrar las alertas vacías o eliminar el tipo por completo; esto último solo si ningún recurso tiene un archivo subido de ese tipo (si lo tiene, el sistema pide desactivarlo en su lugar). **Activar** ofrece crear las alertas pendientes o no crearlas.
 
 <Callout type="warning" title="Activar con alertas no respeta las condiciones">
-Al reactivar un tipo condicional con **Activar y crear alertas**, el pendiente se crea a todos los recursos que no lo tienen, sin mirar las condiciones. Revisá el resultado después.
+  Al reactivar un tipo condicional con **Activar y crear alertas**, el pendiente se crea a todos los recursos que no lo
+  tienen, sin mirar las condiciones. Revisá el resultado después.
 </Callout>
 
 ## 6. Vencimientos: Dashboard y mail semanal
+
+<Figure
+  name="vencimientos-regla"
+  caption="La regla marca un día por división. El cursor es hoy: lo que quedó a su izquierda ya venció (rojo), el pórtico cubre los próximos 7 días (naranja) y el tope está a 30 días, el límite de lo que lista la tarjeta Próximos vencimientos."
+/>
 
 - **Dashboard**: en <GuideLink to="dashboard-vencimientos">Dashboard → Documentación</GuideLink>, la tarjeta **Proximos vencimientos** lista los documentos que vencen en los próximos 30 días, **incluidos los que ya vencieron** (ícono rojo si venció, naranja si vence en 7 días o menos), separados en **Empleados** y **Vehículos**. No muestra archivados, mensuales, recursos dados de baja ni, sin el permiso correspondiente, los privados.
 - **Mail semanal**: **todos los lunes a las 08:00** cada empresa recibe el "Resumen semanal de documentos" con tres totales —**Por vencer en 7 días**, **Vencidos** y **Pendientes de carga**— separados por empleados, equipos y empresa, cada uno con un enlace a la tabla ya filtrada, más el detalle de lo que vence en la semana. Si no hay novedades dice "Todo al día". Se envía a los destinatarios que la empresa tenga configurados.
@@ -139,14 +172,14 @@ Tanto el Dashboard como el mail consideran vencido un documento por su **fecha d
 
 ## Permisos
 
-| Acción | Permiso |
-|---|---|
-| Ver las tablas de documentos | Documentos de Empleados / Equipos / Empresa: **Ver** |
-| Subir un documento pendiente | Pestaña de documentos permanentes o mensuales: **Editar** |
-| Subir un multirrecurso | **Crear** en la pestaña de documentos |
-| Ver y subir documentos privados | **Ver privados** y **Subir privados** |
-| Renovar, reemplazar o eliminar | Detalle de Documento: **Editar** |
-| Crear y editar tipos de documento | Configuración → Documentos: **Crear** / **Editar** |
+| Acción                            | Permiso                                                   |
+| --------------------------------- | --------------------------------------------------------- |
+| Ver las tablas de documentos      | Documentos de Empleados / Equipos / Empresa: **Ver**      |
+| Subir un documento pendiente      | Pestaña de documentos permanentes o mensuales: **Editar** |
+| Subir un multirrecurso            | **Crear** en la pestaña de documentos                     |
+| Ver y subir documentos privados   | **Ver privados** y **Subir privados**                     |
+| Renovar, reemplazar o eliminar    | Detalle de Documento: **Editar**                          |
+| Crear y editar tipos de documento | Configuración → Documentos: **Crear** / **Editar**        |
 
 ## Problemas frecuentes
 

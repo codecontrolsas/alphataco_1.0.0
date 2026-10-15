@@ -1,18 +1,16 @@
 'use server';
 
-import { checkVehicleTireReadiness } from '@/features/Mantenimiento/Gomeria/shared/check-vehicle-tire-readiness';
-import {
-  assertVehicleInActiveCompany,
-  getVehicleCompanyId,
-} from '@/features/Mantenimiento/Gomeria/shared/perimeter';
-import { resolveVehicleTireTemplateId } from '@/features/Mantenimiento/Gomeria/shared/resolve-template';
-import type { DiagramAxle } from '@/features/Mantenimiento/Gomeria/shared/tire-diagram-utils';
-import { calculatePositions } from '@/features/Mantenimiento/Gomeria/shared/tire-diagram-utils';
-import { TIRE_READINESS_MESSAGES } from '@/features/Mantenimiento/Gomeria/shared/tire-readiness-messages';
 import {
   requireGomeriaAccessForCompany,
   requireGomeriaPermission,
 } from '@/features/Mantenimiento/Gomeria/shared/access.server';
+import { checkVehicleTireReadiness } from '@/features/Mantenimiento/Gomeria/shared/check-vehicle-tire-readiness';
+import { withLastPressure } from '@/features/Mantenimiento/Gomeria/shared/last-tire-pressure.server';
+import { assertVehicleInActiveCompany, getVehicleCompanyId } from '@/features/Mantenimiento/Gomeria/shared/perimeter';
+import { resolveVehicleTireTemplateId } from '@/features/Mantenimiento/Gomeria/shared/resolve-template';
+import type { DiagramAxle } from '@/features/Mantenimiento/Gomeria/shared/tire-diagram-utils';
+import { calculatePositions } from '@/features/Mantenimiento/Gomeria/shared/tire-diagram-utils';
+import { TIRE_READINESS_MESSAGES } from '@/features/Mantenimiento/Gomeria/shared/tire-readiness-messages';
 import { parseInput, uuidSchema } from '@/features/Mantenimiento/Gomeria/shared/validation';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
@@ -366,8 +364,7 @@ export async function ensureVehicleTirePositions(vehicleId: string) {
     ): Array<T & { effective_tire_size: string | null }> {
       return positions.map((pos) => ({
         ...pos,
-        effective_tire_size:
-          overrideMap.get(pos.axle_number) ?? pos.template_axle?.tire_size ?? null,
+        effective_tire_size: overrideMap.get(pos.axle_number) ?? pos.template_axle?.tire_size ?? null,
       }));
     }
 
@@ -403,7 +400,7 @@ export async function ensureVehicleTirePositions(vehicleId: string) {
     });
 
     if (existingPositions.length > 0) {
-      return enrich(existingPositions);
+      return await withLastPressure(enrich(existingPositions));
     }
 
     // 2. No positions — need to generate from vehicle's effective template
@@ -499,7 +496,7 @@ export async function ensureVehicleTirePositions(vehicleId: string) {
       data: { vehicleId, count: newPositions.length, templateId },
     });
 
-    return enrich(newPositions);
+    return await withLastPressure(enrich(newPositions));
   } catch (error) {
     logger.error('Error ensuring vehicle tire positions', { data: { error, vehicleId } });
     throw error;

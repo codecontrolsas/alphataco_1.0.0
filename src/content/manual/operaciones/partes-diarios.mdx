@@ -20,16 +20,16 @@ Si tenés permiso para crear, la pantalla se divide en dos paneles (el divisor d
 
 La tabla tiene estas columnas:
 
-| Columna | Qué muestra |
-|---|---|
-| **Fecha** | El día del parte. |
-| **Estado** | **Abierto**, **Cerrado completo** o **Cerrado incompleto** (ver más abajo). |
-| **Fecha de creación** | Cuándo se creó el parte. |
-| **Sin Recursos** | Cuántas líneas todavía no tienen personal ni equipos asignados. |
-| **Pendientes** | Cuántas líneas tienen recursos pero todavía no se marcaron como ejecutadas, canceladas o reprogramadas. |
-| **Total** | Cuántas líneas tiene el parte. |
-| **Activo** | Oculta al principio. Indica si el parte está activo. |
-| Acciones | **Ver** (abre el detalle) y la papelera para eliminar. |
+| Columna               | Qué muestra                                                                                             |
+| --------------------- | ------------------------------------------------------------------------------------------------------- |
+| **Fecha**             | El día del parte.                                                                                       |
+| **Estado**            | **Abierto**, **Cerrado completo** o **Cerrado incompleto** (ver más abajo).                             |
+| **Fecha de creación** | Cuándo se creó el parte.                                                                                |
+| **Sin Recursos**      | Cuántas líneas todavía no tienen personal ni equipos asignados.                                         |
+| **Pendientes**        | Cuántas líneas tienen recursos pero todavía no se marcaron como ejecutadas, canceladas o reprogramadas. |
+| **Total**             | Cuántas líneas tiene el parte.                                                                          |
+| **Activo**            | Oculta al principio. Indica si el parte está activo.                                                    |
+| Acciones              | **Ver** (abre el detalle) y la papelera para eliminar.                                                  |
 
 Las columnas **Sin Recursos** y **Pendientes** son las que conviene mirar todos los días: un parte de ayer con números en esas columnas va a quedar **Cerrado incompleto**.
 
@@ -54,10 +54,12 @@ En la práctica, la mayoría de los partes nacen de los pedidos confirmados. Cre
     En **Crear parte diario**, abrí el calendario de **Fecha** y elegí el día. Solo se pueden elegir hoy y días futuros.
   </Step>
   <Step title="Creá el parte">
-    Hacé clic en **Crear parte diario**. Si ya hay un parte para ese día, vas a ver **Ya existe un parte diario para esta fecha.** y no se crea otro.
+    Hacé clic en **Crear parte diario**. Si ya hay un parte para ese día, vas a ver **Ya existe un parte diario para
+    esta fecha.** y no se crea otro.
   </Step>
   <Step title="Cargá las líneas">
-    Si se creó bien (**Parte diario creado exitosamente!**), el sistema te lleva directo al detalle del parte para que empieces a cargar líneas. Seguí en <GuideLink to="detalle-del-parte">Detalle del parte</GuideLink>.
+    Si se creó bien (**Parte diario creado exitosamente!**), el sistema te lleva directo al detalle del parte para que
+    empieces a cargar líneas. Seguí en <GuideLink to="detalle-del-parte">Detalle del parte</GuideLink>.
   </Step>
 </Steps>
 
@@ -66,9 +68,17 @@ Para crear los partes de varios días seguidos, la forma más rápida es armar u
 ## Estados del parte
 
 <States title="Ciclo de vida de un parte diario">
-  <State name="Abierto" tone="info" next="Cerrado completo, Cerrado incompleto">El parte del día de hoy o de días futuros. Se le pueden agregar líneas libremente.</State>
-  <State name="Cerrado incompleto" tone="danger" next="Cerrado completo">Ya pasó su fecha y alguna línea quedó en Pendiente o Sin recursos asignados. Se vuelve a evaluar cada noche: si se completan las líneas, pasa a Cerrado completo.</State>
-  <State name="Cerrado completo" tone="success">Ya pasó su fecha y todas sus líneas quedaron resueltas (Ejecutado, Reprogramado, Cancelado o En certificación), o el parte no tenía líneas.</State>
+  <State name="Abierto" tone="info" next="Cerrado completo, Cerrado incompleto">
+    El parte del día de hoy o de días futuros. Se le pueden agregar líneas libremente.
+  </State>
+  <State name="Cerrado incompleto" tone="danger" next="Cerrado completo">
+    Ya pasó su fecha y alguna línea quedó en Pendiente o Sin recursos asignados. Se vuelve a evaluar cada noche: si se
+    completan las líneas, pasa a Cerrado completo.
+  </State>
+  <State name="Cerrado completo" tone="success">
+    Ya pasó su fecha y todas sus líneas quedaron resueltas (Ejecutado, Reprogramado, Cancelado o En certificación), o el
+    parte no tenía líneas.
+  </State>
 </States>
 
 ### El cierre automático
@@ -78,12 +88,19 @@ Nadie cierra los partes a mano. Todas las noches, a las 00:30 (hora de Argentina
 - Si no tienen líneas, o si todas sus líneas están en **Ejecutado**, **Reprogramado**, **Cancelado** o **En certificación**, pasan a **Cerrado completo**.
 - Si queda alguna línea **Pendiente** o **Sin recursos asignados**, pasan a **Cerrado incompleto**.
 
+<Figure
+  name="parte-cierre-nocturno"
+  caption="Una bandeja por día, con sus líneas de pie. A las 00:30 el pórtico revisa los días anteriores: bandera verde si todas las líneas están resueltas (Cerrado completo), roja si queda alguna Pendiente o Sin recursos asignados (Cerrado incompleto). La bandeja de hoy sigue Abierta, sin bandera."
+/>
+
 El número de remito no es requisito para el cierre.
 
 En la misma pasada, las líneas que estaban **Sin recursos asignados** pero ya tienen personal o equipos cargados pasan a **Pendiente**.
 
 <Callout type="tip" title="Un parte incompleto se puede arreglar">
-Un parte **Cerrado incompleto** no queda trabado. Entrá a su detalle, poné cada línea en el estado que corresponde (ejecutada, cancelada o reprogramada) y a la noche siguiente el sistema lo pasa a **Cerrado completo**. Lo que ya no se puede en un parte cerrado de un día pasado es **agregar** líneas nuevas.
+  Un parte **Cerrado incompleto** no queda trabado. Entrá a su detalle, poné cada línea en el estado que corresponde
+  (ejecutada, cancelada o reprogramada) y a la noche siguiente el sistema lo pasa a **Cerrado completo**. Lo que ya no
+  se puede en un parte cerrado de un día pasado es **agregar** líneas nuevas.
 </Callout>
 
 ## Cómo eliminar un parte diario
@@ -94,13 +111,11 @@ Solo se puede eliminar un parte **vacío**, sin ninguna línea. Si tiene líneas
   <Step title="Vaciá el parte si hace falta">
     Si el parte tiene líneas que no corresponden, eliminalas primero desde su detalle.
   </Step>
-  <Step title="Eliminá">
-    Hacé clic en la papelera y confirmá en **¿Está seguro de eliminar este parte diario?**
-  </Step>
+  <Step title="Eliminá">Hacé clic en la papelera y confirmá en **¿Está seguro de eliminar este parte diario?**</Step>
 </Steps>
 
 <Callout type="danger" title="No se puede deshacer">
-El parte eliminado no se recupera. Igualmente, como solo se borran partes vacíos, no se pierden líneas ni recursos.
+  El parte eliminado no se recupera. Igualmente, como solo se borran partes vacíos, no se pierden líneas ni recursos.
 </Callout>
 
 En esta pantalla no hay acciones masivas sobre los partes: las operaciones masivas (editar el estado de muchas líneas, clonar) se hacen dentro de cada parte, en su detalle.
@@ -114,19 +129,21 @@ En esta pantalla no hay acciones masivas sobre los partes: las operaciones masiv
 
 ## Permisos
 
-| Para… | Hace falta |
-|---|---|
-| Ver la pestaña y el listado | **Ver** en Partes Diarios |
-| Ver el panel **Crear parte diario** y crear partes | **Crear** |
-| Eliminar un parte vacío | **Eliminar** |
-| Entrar al detalle de un parte | **Ver** en Detalle de Parte Diario (sin ese permiso, **Ver** te devuelve al inicio) |
+| Para…                                              | Hace falta                                                                          |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Ver la pestaña y el listado                        | **Ver** en Partes Diarios                                                           |
+| Ver el panel **Crear parte diario** y crear partes | **Crear**                                                                           |
+| Eliminar un parte vacío                            | **Eliminar**                                                                        |
+| Entrar al detalle de un parte                      | **Ver** en Detalle de Parte Diario (sin ese permiso, **Ver** te devuelve al inicio) |
 
 ## Problemas frecuentes
 
 <Callout type="info" title="No veo el panel para crear partes">
-Te falta el permiso **Crear** en Partes Diarios. Igual podés ver los partes y entrar a su detalle.
+  Te falta el permiso **Crear** en Partes Diarios. Igual podés ver los partes y entrar a su detalle.
 </Callout>
 
 <Callout type="info" title="El calendario no me deja elegir una fecha pasada">
-Desde esta pantalla solo se crean partes de hoy en adelante. Si necesitás cargar un servicio de un día que no tiene parte, revisá primero si existe (filtrá por **Fecha**): los partes de días pasados normalmente ya existen porque se crearon al confirmar pedidos o al clonar.
+  Desde esta pantalla solo se crean partes de hoy en adelante. Si necesitás cargar un servicio de un día que no tiene
+  parte, revisá primero si existe (filtrá por **Fecha**): los partes de días pasados normalmente ya existen porque se
+  crearon al confirmar pedidos o al clonar.
 </Callout>

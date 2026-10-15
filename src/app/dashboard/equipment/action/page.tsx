@@ -1,15 +1,18 @@
 import type { getVehicleById } from '@/features/Equipos/EquipoID/lib/actions/vehicle-actions';
 import { getVehicleByIdCached } from '@/features/Equipos/EquipoID/lib/get-vehicle';
 import { notFound, redirect } from 'next/navigation';
+import { Suspense } from 'react';
 
 import { getCostCenterOptions } from '@/features/Empresa/General/actions/cost-centers.server';
 import { fetchAllContractorForVehicles } from '@/features/Equipos/EquipoID/actions/customer-catalog-actions';
 import { EquipmentDocumentDetail } from '@/features/Equipos/EquipoID/components/equipment-document-detail';
+import { VehicleTwinSkeleton } from '@/features/Equipos/EquipoID/components/iso/VehicleTwinLoader';
 import { VehicleChecklistsTabContent } from '@/features/Equipos/EquipoID/components/vehicle-checklists-tab-content';
 import { VehicleForm } from '@/features/Equipos/EquipoID/components/vehicle-form';
 import { VehicleOperationsHistory } from '@/features/Equipos/EquipoID/components/vehicle-operations-history';
 import VehicleQr from '@/features/Equipos/EquipoID/components/vehicle-qr';
 import { VehicleTiresTab } from '@/features/Equipos/EquipoID/components/vehicle-tires/vehicle-tires-tab';
+import { VehicleTwinSection } from '@/features/Equipos/EquipoID/components/vehicle-twin-section';
 import { VehicleReadView } from '@/features/Equipos/EquipoID/components/view/VehicleReadView';
 import {
   getHierarchicalPositions,
@@ -199,6 +202,11 @@ export default async function VehiclePage({ searchParams }: VehiclePageProps) {
         hierarchicalPositionsPromise={hierarchicalPositionsPromise}
         searchParams={resolvedSearchParams}
         permissions={permissions}
+        summaryComponent={
+          <Suspense fallback={<VehicleTwinSkeleton />}>
+            <VehicleTwinSection vehicle={vehicle} permissions={permissions} />
+          </Suspense>
+        }
         documentsComponent={<EquipmentDocumentDetail equipmentId={vehicle.id} searchParams={resolvedSearchParams} />}
         checklistsComponent={<VehicleChecklistsTabContent equipmentId={vehicle.id} />}
         operationsComponent={<VehicleOperationsHistory equipmentId={vehicle.id} searchParams={resolvedSearchParams} />}

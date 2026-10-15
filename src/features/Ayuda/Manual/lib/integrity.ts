@@ -2,8 +2,9 @@ import { findTabDef } from '../../../Permissions/lib/permissions-map-utils.ts';
 import { PERMISSIONS } from '../../../Permissions/permissions-map.ts';
 import { MDX_COMPONENT_NAMES } from '../catalog/mdx-vocabulary.ts';
 import type { CoverageExclusion, ReadingPath, ScreenRef, SectionDef, TabRef } from '../catalog/types.ts';
-import { firstConcreteScreen } from './route-table.ts';
+import { FIGURE_NAMES } from '../figures/names.ts';
 import { guideFile, type LoadedManual } from './manual-loader.ts';
+import { firstConcreteScreen } from './route-table.ts';
 
 /**
  * Contrato de mantenimiento del manual. Cada regla existe porque su falta es un error silencioso:
@@ -85,9 +86,14 @@ export function checkManualIntegrity(input: IntegrityInput): string[] {
     for (const slug of guide.scan.screenLinks) {
       checkSlug(`${where} (<OpenScreen>)`, slug);
       const target = manual.bySlug.get(slug);
-      if (target && !hasConcreteScreen(target)) problems.push(`${where}: <OpenScreen to="${slug}"> pero esa guía no declara pantallas`);
+      if (target && !hasConcreteScreen(target))
+        problems.push(`${where}: <OpenScreen to="${slug}"> pero esa guía no declara pantallas`);
     }
-    if (guide.scan.components.includes('OpenScreen') && !hasConcreteScreen(guide) && guide.scan.screenLinks.length === 0) {
+    if (
+      guide.scan.components.includes('OpenScreen') &&
+      !hasConcreteScreen(guide) &&
+      guide.scan.screenLinks.length === 0
+    ) {
       problems.push(`${where}: usa <OpenScreen /> sin destino y la guía no declara pantallas`);
     }
 
@@ -96,6 +102,19 @@ export function checkManualIntegrity(input: IntegrityInput): string[] {
       if (!(MDX_COMPONENT_NAMES as readonly string[]).includes(name)) {
         problems.push(`${where}: componente desconocido <${name}>`);
       }
+    }
+
+    // 5b. Figuras: el `name` tiene que existir en el registro y llevar `caption` (el pie explica
+    // lo que se ve; sin él la figura queda como decoración).
+    for (const figure of guide.scan.figures) {
+      if (figure.name === null) {
+        problems.push(`${where}: <Figure> sin name="…" literal (tiene que ser una de: ${FIGURE_NAMES.join(', ')})`);
+      } else if (!(FIGURE_NAMES as readonly string[]).includes(figure.name)) {
+        problems.push(
+          `${where}: <Figure name="${figure.name}"> no existe en el registro de figuras (opciones: ${FIGURE_NAMES.join(', ')})`
+        );
+      }
+      if (!figure.hasCaption) problems.push(`${where}: <Figure name="${figure.name ?? '?'}"> sin caption="…"`);
     }
 
     // 6. Permisos que existen (por si se esquivó el tipado de `tab()`).
@@ -120,7 +139,8 @@ export function checkManualIntegrity(input: IntegrityInput): string[] {
   // 8. Cada módulo tiene una guía para su ruta raíz: las páginas de detalle la heredan.
   for (const root of moduleRoots) {
     const covered = manual.guides.some((g) => g.screens?.some((s) => s.path === root && !s.tab && !s.subtab));
-    if (!covered) problems.push(`ninguna guía declara la pantalla raíz ${root} (sin tab): el botón "?" no tendría a dónde ir`);
+    if (!covered)
+      problems.push(`ninguna guía declara la pantalla raíz ${root} (sin tab): el botón "?" no tendría a dónde ir`);
   }
 
   // 9. Cobertura: toda tab y subtab del sistema está documentada o excluida con motivo.
@@ -132,7 +152,8 @@ export function checkManualIntegrity(input: IntegrityInput): string[] {
     }
   }
   for (const exclusion of exclusions) {
-    if (!findTabDef(PERMISSIONS, exclusion.module, exclusion.tab)) problems.push(`exclusión de una tab que no existe: ${key(exclusion)}`);
+    if (!findTabDef(PERMISSIONS, exclusion.module, exclusion.tab))
+      problems.push(`exclusión de una tab que no existe: ${key(exclusion)}`);
     if (covered.has(key(exclusion))) problems.push(`${key(exclusion)} está excluida pero también documentada`);
   }
 

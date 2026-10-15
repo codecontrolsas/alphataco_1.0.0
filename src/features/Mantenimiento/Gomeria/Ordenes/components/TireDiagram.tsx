@@ -2,16 +2,32 @@
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { TireDiagramHitch } from '@/features/Mantenimiento/Gomeria/shared/TireDiagramRenderer';
+import { toDiagramPosition } from '@/features/Mantenimiento/Gomeria/shared/iso/diagram-position';
 import {
-  TireDiagramRenderer,
   describePositionNumber,
   type DiagramAxle,
   type DiagramPosition,
-  type TireDiagramHitch,
-} from '@/features/Mantenimiento/Gomeria/shared/TireDiagramRenderer';
+} from '@/features/Mantenimiento/Gomeria/shared/tire-diagram-utils';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { ensureVehicleTirePositions, type EnsuredTirePosition } from '../actions/service-order-queries.server';
+
+// El diagrama isométrico no es lo primero de la pantalla: se carga bajo demanda y solo en el cliente.
+const TireDiagramIso = dynamic(
+  () => import('@/features/Mantenimiento/Gomeria/shared/iso/TireDiagramIso').then((m) => m.TireDiagramIso),
+  { ssr: false, loading: () => <DiagramLoading /> }
+);
+
+function DiagramLoading() {
+  return (
+    <div className="space-y-2" role="status" aria-label="Cargando el diagrama de cubiertas">
+      <Skeleton className="h-4 w-32" />
+      <Skeleton className="h-44 w-full" />
+    </div>
+  );
+}
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -54,12 +70,7 @@ export function TireDiagram({
   });
 
   if (isLoading) {
-    return (
-      <div className="space-y-2" role="status" aria-label="Cargando el diagrama de cubiertas">
-        <Skeleton className="h-4 w-32" />
-        <Skeleton className="h-44 w-full" />
-      </div>
-    );
+    return <DiagramLoading />;
   }
 
   if (error) {
@@ -106,15 +117,7 @@ export function TireDiagram({
   }
   const axles: DiagramAxle[] = Array.from(axleMap.values());
 
-  const diagramPositions: DiagramPosition[] = positions.map((p) => ({
-    position_number: p.position_number,
-    axle_number: p.axle_number,
-    side: p.side as 'LEFT' | 'RIGHT' | 'SPARE',
-    tire_id: p.tire_id,
-    tire_serial: p.tire?.serial_number,
-    tire_brand: p.tire?.brand?.name,
-    tire_size: p.effective_tire_size ?? p.tire?.tire_type?.size ?? undefined,
-  }));
+  const diagramPositions: DiagramPosition[] = positions.map(toDiagramPosition);
 
   function handlePositionClick(positionNumber: number) {
     const pos = positions?.find((p) => p.position_number === positionNumber);
@@ -122,7 +125,7 @@ export function TireDiagram({
   }
 
   return (
-    <TireDiagramRenderer
+    <TireDiagramIso
       axles={axles}
       positions={diagramPositions}
       interactive

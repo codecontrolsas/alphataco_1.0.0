@@ -5,6 +5,7 @@ import type { DataTableSearchParams } from '@/shared/components/common/DataTable
 import { SectionErrorBoundary } from '@/shared/components/common/SectionErrorBoundary';
 import { Suspense } from 'react';
 import { getTireStatusCounts, getTiresPaginated } from './actions/tire-list.server';
+import { CatalogoViewSwitch } from './components/CatalogoViewSwitch';
 import { TireStatusMetricsSection } from './components/TireStatusMetricsSection';
 import _TiresDataTable from './components/_TiresDataTable';
 import { TireStatusMetricsSkeleton } from './fallback/TireStatusMetricsSkeleton';
@@ -53,20 +54,22 @@ export default async function TiresList({ searchParams, permissionsMap }: TiresL
         </Suspense>
       </SectionErrorBoundary>
 
-      <Card>
-        <CardContent className="pt-6">
-          <_TiresDataTable
-            data={data}
-            totalRows={total}
-            searchParams={tableParams}
-            tableId={TABLE_ID}
-            paramNamespace={PARAM_NAMESPACE}
-            permissionsMap={permissionsMap}
-            initialColumnVisibility={preferences.columnVisibility ?? {}}
-            initialFilterVisibility={preferences.filterVisibility ?? {}}
-          />
-        </CardContent>
-      </Card>
+      <CatalogoViewSwitch paramNamespace={PARAM_NAMESPACE}>
+        <Card>
+          <CardContent className="pt-6">
+            <_TiresDataTable
+              data={data}
+              totalRows={total}
+              searchParams={tableParams}
+              tableId={TABLE_ID}
+              paramNamespace={PARAM_NAMESPACE}
+              permissionsMap={permissionsMap}
+              initialColumnVisibility={preferences.columnVisibility ?? {}}
+              initialFilterVisibility={preferences.filterVisibility ?? {}}
+            />
+          </CardContent>
+        </Card>
+      </CatalogoViewSwitch>
     </div>
   );
 }
