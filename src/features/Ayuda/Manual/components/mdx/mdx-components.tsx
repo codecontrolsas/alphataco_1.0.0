@@ -4,6 +4,7 @@ import Link from 'next/link';
 import type { ComponentPropsWithoutRef, ReactNode } from 'react';
 import type { MdxComponentName } from '../../catalog/mdx-vocabulary';
 import { Callout } from './Callout';
+import { Figure } from './Figure';
 import { Flow } from './Flow';
 import { FlowStep } from './FlowStep';
 import { GuideLink } from './GuideLink';
@@ -27,6 +28,7 @@ const vocabulary = {
   States,
   State,
   Kbd,
+  Figure,
 } satisfies Record<MdxComponentName, (props: never) => ReactNode>;
 
 /*
@@ -90,7 +92,10 @@ const prose: MDXComponents = {
   pre: ({ className, ...props }: ComponentPropsWithoutRef<'pre'>) => (
     <pre
       {...props}
-      className={cn('mt-4 overflow-x-auto border bg-muted p-4 text-sm first:mt-0 [&>code]:bg-transparent [&>code]:p-0', className)}
+      className={cn(
+        'mt-4 overflow-x-auto border bg-muted p-4 text-sm first:mt-0 [&>code]:bg-transparent [&>code]:p-0',
+        className
+      )}
     />
   ),
   blockquote: ({ className, ...props }: ComponentPropsWithoutRef<'blockquote'>) => (

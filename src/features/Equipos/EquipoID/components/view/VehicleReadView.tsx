@@ -3,7 +3,7 @@ import { getCostCenterOptions } from '@/features/Empresa/General/actions/cost-ce
 import { EquipmentBreadcrumb } from '@/features/Equipos/components/EquipmentBreadcrumb';
 import { createTabVisibilityChecker } from '@/features/Permissions/lib/tab-visibility';
 import { RecordSectionsServer } from '@/features/TabsManager/RecordSectionsServer';
-import { Boxes, ClipboardCheck, FileText, QrCode, Truck, Wrench } from 'lucide-react';
+import { Boxes, ClipboardCheck, FileText, LayoutDashboard, QrCode, Truck, Wrench } from 'lucide-react';
 import { Suspense } from 'react';
 import { VehicleHeader } from '../vehicle-header';
 import { VehicleAssignmentView, VehicleBasicDataView } from './VehicleDataView';
@@ -34,6 +34,7 @@ interface VehicleReadViewProps {
   hierarchicalPositionsPromise: Promise<Array<{ id: string; name: string }>>;
   searchParams: Record<string, string | string[] | undefined>;
   permissions: Record<string, boolean>;
+  summaryComponent: React.ReactNode;
   documentsComponent: React.ReactNode;
   checklistsComponent: React.ReactNode;
   operationsComponent: React.ReactNode;
@@ -54,6 +55,7 @@ export function VehicleReadView({
   hierarchicalPositionsPromise,
   searchParams,
   permissions,
+  summaryComponent,
   documentsComponent,
   checklistsComponent,
   operationsComponent,
@@ -76,10 +78,17 @@ export function VehicleReadView({
         paramName="tab"
         searchParams={searchParams}
         permissions={permissions}
-        defaultSection="equipo"
+        defaultSection="resumen"
         preserveParams={['action', 'id', 'type']}
         ariaLabel="Secciones del equipo"
         sections={[
+          {
+            value: 'resumen',
+            label: 'Resumen',
+            description: 'Estado del equipo de un vistazo',
+            icon: <LayoutDashboard aria-hidden="true" />,
+            content: summaryComponent,
+          },
           {
             value: 'equipo',
             aliases: ['basicData', 'assignmentData'],

@@ -7,6 +7,7 @@ import {
   gomeriaExportTooLargeMessage,
 } from '@/features/Mantenimiento/Gomeria/shared/list-query';
 import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { getBelowMinimumMaterials } from '@/features/Warehouses/lib/stock-levels';
 import type { Prisma } from '@/generated/prisma/client';
 import type { TireStatus, TireTreadType } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
@@ -189,6 +190,73 @@ export async function getTireStatusCounts() {
     throw new Error('Error al obtener los totales de cubiertas');
   }
 }
+
+// ============================================================================
+// ESTANTERÍA (conteo por medida y estado)
+// ============================================================================
+
+/**
+ * Datos de la estantería isométrica: cubiertas por medida (`tire_types.size`) y estado, más lo que falta para
+ * el mínimo de stock de cada medida. Mismo universo que el listado sin filtros. Tres consultas fijas, sin N+1:
+ * conteo agrupado, medidas de esos tipos y (solo si hay materiales bajo mínimo) el vínculo material -> medida.
+ * El faltante usa la regla única de Almacenes (`getBelowMinimumMaterials`): saldo total menor al mínimo.
+ */
+export async function getTireRackData() {
+  const companyId = await requireGomeriaPermission('catalogo_cubiertas', 'view');
+
+  try {
+    const [grouped, below] = await Promise.all([
+      prisma.tires.groupBy({
+        by: ['tire_type_id', 'status'],
+        where: buildWhereClause(parseListState({}), companyId),
+        _count: true,
+      }),
+      getBelowMinimumMaterials(companyId),
+    ]);
+
+    const links =
+      below.length > 0
+        ? await prisma.tire_materials.findMany({
+            where: { company_id: companyId, material_id: { in: below.map((m) => m.id) } },
+            select: { material_id: true, tire_type: { select: { size: true } } },
+          })
+        : [];
+    const typeIds = [...new Set(grouped.map((g) => g.tire_type_id))];
+    const types =
+      typeIds.length > 0
+        ? await prisma.tire_types.findMany({ where: { id: { in: typeIds } }, select: { id: true, size: true } })
+        : [];
+
+    const sizeByType = new Map(types.map((t) => [t.id, t.size]));
+    const shelves = new Map<string, { size: string; counts: Partial<Record<TireStatus, number>>; shortage: number }>();
+    const shelfOf = (size: string) => {
+      let shelf = shelves.get(size);
+      if (!shelf) shelves.set(size, (shelf = { size, counts: {}, shortage: 0 }));
+      return shelf;
+    };
+
+    for (const row of grouped) {
+      const size = sizeByType.get(row.tire_type_id);
+      if (!size) continue;
+      const shelf = shelfOf(size);
+      shelf.counts[row.status] = (shelf.counts[row.status] ?? 0) + row._count;
+    }
+
+    const sizeByMaterial = new Map(links.map((l) => [l.material_id, l.tire_type.size]));
+    for (const material of below) {
+      const size = sizeByMaterial.get(material.id);
+      if (!size) continue;
+      shelfOf(size).shortage += Math.max(0, Math.ceil(Number(material.minStock) - Number(material.total)));
+    }
+
+    return [...shelves.values()].sort((a, b) => a.size.localeCompare(b.size, 'es', { numeric: true }));
+  } catch (error) {
+    logger.error('Error fetching tire rack data', { data: { error } });
+    throw new Error('Error al obtener la estantería de cubiertas');
+  }
+}
+
+export type TireRackData = Awaited<ReturnType<typeof getTireRackData>>;
 
 // ============================================================================
 // COST (view_prices)

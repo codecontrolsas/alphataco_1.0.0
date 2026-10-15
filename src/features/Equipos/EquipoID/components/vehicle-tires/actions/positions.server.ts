@@ -2,6 +2,7 @@
 
 import { ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { toGomeriaActionError } from '@/features/Mantenimiento/Gomeria/shared/action-error';
+import { withLastPressure } from '@/features/Mantenimiento/Gomeria/shared/last-tire-pressure.server';
 import { resolveVehicleTireTemplateId } from '@/features/Mantenimiento/Gomeria/shared/resolve-template';
 import { Logger } from '@/lib/logger';
 import { requireServerAuthProfile } from '@/shared/actions/auth.actions';
@@ -55,10 +56,13 @@ async function fetchVehicleTirePositions(vehicleId: string) {
 
   const overrideMap = new Map(overrides.map((o) => [o.axle_number, o.tire_size]));
 
-  return positions.map((pos) => ({
-    ...pos,
-    effective_tire_size: overrideMap.get(pos.axle_number) ?? pos.template_axle?.tire_size ?? null,
-  }));
+  // Última presión medida de cada cubierta montada: una sola consulta agregada (sin N+1).
+  return withLastPressure(
+    positions.map((pos) => ({
+      ...pos,
+      effective_tire_size: overrideMap.get(pos.axle_number) ?? pos.template_axle?.tire_size ?? null,
+    }))
+  );
 }
 
 export async function getVehicleTirePositionsWithDetails(vehicleId: string) {

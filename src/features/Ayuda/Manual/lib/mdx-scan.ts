@@ -17,6 +17,8 @@ export type ScannedBody = {
   guideLinks: { slug: string; anchor?: string }[];
   /** `<OpenScreen to="slug" />`. */
   screenLinks: string[];
+  /** `<Figure name="x" … />`: `name` literal de cada figura (null si no está escrito como cadena literal). */
+  figures: { name: string | null; hasCaption: boolean }[];
   /** Componentes JSX usados (`<Callout`, `<Steps`…). */
   components: string[];
   /** Cuerpo sin sintaxis, para buscar. Mantiene los títulos para poder ubicar el fragmento. */
@@ -36,18 +38,20 @@ function headingText(raw: string): string {
 }
 
 function plain(markdown: string): string {
-  return markdown
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\{[^}]*\}/g, ' ')
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    // Los marcadores de énfasis se borran (no se reemplazan por espacio: "**Borrador**:" quedaba
-    // "Borrador :" en los fragmentos de búsqueda); los de bloque sí separan palabras.
-    .replace(/[*_`~]/g, '')
-    .replace(/^\s*[-+]\s+/gm, ' ')
-    .replace(/[#>|]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return (
+    markdown
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\{[^}]*\}/g, ' ')
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      // Los marcadores de énfasis se borran (no se reemplazan por espacio: "**Borrador**:" quedaba
+      // "Borrador :" en los fragmentos de búsqueda); los de bloque sí separan palabras.
+      .replace(/[*_`~]/g, '')
+      .replace(/^\s*[-+]\s+/gm, ' ')
+      .replace(/[#>|]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
 }
 
 export function scanBody(body: string): ScannedBody {
@@ -77,18 +81,19 @@ export function scanBody(body: string): ScannedBody {
     anchor: m[2],
   }));
   const screenLinks = [...withoutCode.matchAll(/<OpenScreen\b[^>]*\bto="([^"]+)"/g)].map((m) => m[1]);
+  const figures = [...withoutCode.matchAll(/<Figure\b([^>]*?)\/?>/g)].map((m) => ({
+    name: /\bname="([^"]+)"/.exec(m[1])?.[1] ?? null,
+    hasCaption: /\bcaption="[^"]+"/.test(m[1]),
+  }));
   const components = [...new Set([...withoutCode.matchAll(/<([A-Z][A-Za-z0-9]*)\b/g)].map((m) => m[1]))];
 
   const nonEmpty = sections.filter((s) => s.text || s.heading);
   const words = nonEmpty.reduce((acc, s) => acc + (s.text ? s.text.split(' ').length : 0), 0);
 
-  return { toc, guideLinks, screenLinks, components, sections: nonEmpty, words };
+  return { toc, guideLinks, screenLinks, figures, components, sections: nonEmpty, words };
 }
 
 /** Minúsculas y sin acentos: "Certificación" y "certificacion" tienen que encontrarse igual. */
 export function normalize(text: string): string {
-  return text
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase();
+  return text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 }

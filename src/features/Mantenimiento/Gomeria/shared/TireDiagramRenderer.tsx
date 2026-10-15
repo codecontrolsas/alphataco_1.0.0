@@ -2,12 +2,12 @@
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { Check, CircleDashed, Circle } from 'lucide-react';
+import { Check, Circle, CircleDashed } from 'lucide-react';
 import type { ComputedPosition, DiagramAxle, DiagramPosition } from './tire-diagram-utils';
-import { calculatePositions } from './tire-diagram-utils';
+import { calculatePositions, describePosition } from './tire-diagram-utils';
 
 // Re-export types and utils from the shared (server-safe) module
-export { calculatePositions } from './tire-diagram-utils';
+export { calculatePositions, describePosition, describePositionNumber } from './tire-diagram-utils';
 export type { ComputedPosition, DiagramAxle, DiagramPosition } from './tire-diagram-utils';
 
 export interface TireDiagramHitch {
@@ -31,22 +31,6 @@ export interface TireDiagramRendererProps {
   cabinLabel?: string;
   /** Extremo de conexión con otro vehículo. */
   hitch?: TireDiagramHitch;
-}
-
-// ─── Helpers de texto ──────────────────────────────────────────────────────
-
-/** "Posición 3 · Eje 2 · izquierda exterior" (o "Posición 9 · Auxilio"). */
-export function describePosition(position: ComputedPosition): string {
-  if (position.side === 'SPARE') return `Posición ${position.position_number} · Auxilio`;
-  const side = position.side === 'LEFT' ? 'izquierda' : 'derecha';
-  const role = position.dual_role === 'INNER' ? ' interior' : position.dual_role === 'OUTER' ? ' exterior' : '';
-  return `Posición ${position.position_number} · Eje ${position.axle_number} · ${side}${role}`;
-}
-
-/** Descripción de una posición por número, a partir de los ejes del vehículo. */
-export function describePositionNumber(positionNumber: number, axles: DiagramAxle[]): string {
-  const found = calculatePositions(axles).find((p) => p.position_number === positionNumber);
-  return found ? describePosition(found) : `Posición ${positionNumber}`;
 }
 
 // ─── Internal helpers ──────────────────────────────────────────────────────
@@ -119,7 +103,15 @@ interface TireDrumProps {
   circular?: boolean;
 }
 
-function TireDrum({ position, interactive, highlighted, selected, onClick, compact = false, circular = false }: TireDrumProps) {
+function TireDrum({
+  position,
+  interactive,
+  highlighted,
+  selected,
+  onClick,
+  compact = false,
+  circular = false,
+}: TireDrumProps) {
   const state: PositionState = highlighted ? 'done' : position.tire_id !== null ? 'tire' : 'empty';
   const colors = stateClasses[state];
 
@@ -140,7 +132,9 @@ function TireDrum({ position, interactive, highlighted, selected, onClick, compa
 
   const focusClass =
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
-  const interactiveClass = interactive ? cn('cursor-pointer hover:ring-2 hover:ring-primary/50 transition-shadow', focusClass) : '';
+  const interactiveClass = interactive
+    ? cn('cursor-pointer hover:ring-2 hover:ring-primary/50 transition-shadow', focusClass)
+    : '';
   const selectedClass = selected ? 'ring-2 ring-ring ring-offset-2 ring-offset-background' : '';
 
   const serialSuffix = position.tire_serial ? position.tire_serial.slice(-4) : null;
@@ -166,7 +160,10 @@ function TireDrum({ position, interactive, highlighted, selected, onClick, compa
   ) : (
     <>
       <span className={cn('h-full w-2 rounded-l-lg border-2 border-r-0', colors.cap)} aria-hidden="true" />
-      <span className={cn('flex h-full w-11 flex-col items-center justify-center border-y-2 font-mono', colors.body)} aria-hidden="true">
+      <span
+        className={cn('flex h-full w-11 flex-col items-center justify-center border-y-2 font-mono', colors.body)}
+        aria-hidden="true"
+      >
         <span className="flex items-center gap-0.5 leading-none">
           <span className={cn('font-bold', compact ? 'text-[10px]' : 'text-xs')}>{position.position_number}</span>
           <StateGlyph state={state} className="size-2.5" />
@@ -178,7 +175,14 @@ function TireDrum({ position, interactive, highlighted, selected, onClick, compa
   );
 
   const content = interactive ? (
-    <button type="button" data-position={position.position_number} onClick={onClick} aria-label={ariaLabel} aria-pressed={selected} className={wrapperClass}>
+    <button
+      type="button"
+      data-position={position.position_number}
+      onClick={onClick}
+      aria-label={ariaLabel}
+      aria-pressed={selected}
+      className={wrapperClass}
+    >
       {inner}
     </button>
   ) : (
@@ -277,7 +281,9 @@ function SpareAxleColumn({
 }: SpareAxleColumnProps) {
   return (
     <div className="flex flex-col items-center gap-0">
-      <span className="mb-1 whitespace-nowrap text-[10px] font-medium text-muted-foreground">Eje {axle.axle_number}</span>
+      <span className="mb-1 whitespace-nowrap text-[10px] font-medium text-muted-foreground">
+        Eje {axle.axle_number}
+      </span>
       <div className="flex flex-1 flex-col items-center justify-center py-2">
         <TireDrum
           position={sparePosition}
@@ -366,20 +372,35 @@ export function TireDiagramRenderer({
         {/* Leyenda: ícono + texto, nunca solo color */}
         <ul className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
           <li className="flex items-center gap-1">
-            <span className={cn('inline-flex h-4 w-6 items-center justify-center rounded-sm border-2', stateClasses.tire.body)}>
+            <span
+              className={cn(
+                'inline-flex h-4 w-6 items-center justify-center rounded-sm border-2',
+                stateClasses.tire.body
+              )}
+            >
               <StateGlyph state="tire" className="size-2.5" />
             </span>
             Con cubierta
           </li>
           <li className="flex items-center gap-1">
-            <span className={cn('inline-flex h-4 w-6 items-center justify-center rounded-sm border-2', stateClasses.empty.body)}>
+            <span
+              className={cn(
+                'inline-flex h-4 w-6 items-center justify-center rounded-sm border-2',
+                stateClasses.empty.body
+              )}
+            >
               <StateGlyph state="empty" className="size-2.5" />
             </span>
             Sin cubierta
           </li>
           {highlightedPositions.length > 0 && (
             <li className="flex items-center gap-1">
-              <span className={cn('inline-flex h-4 w-6 items-center justify-center rounded-sm border-2', stateClasses.done.body)}>
+              <span
+                className={cn(
+                  'inline-flex h-4 w-6 items-center justify-center rounded-sm border-2',
+                  stateClasses.done.body
+                )}
+              >
                 <StateGlyph state="done" className="size-2.5" />
               </span>
               Intervenida

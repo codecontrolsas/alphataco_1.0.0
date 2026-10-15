@@ -23,6 +23,8 @@ export type MaintenanceResourceKind = 'vehicles' | 'other_equipment';
 
 type MaintenanceClient = Prisma.TransactionClient | typeof prisma;
 
+/** Estados terminales de `maintenance_orders` (ver `Mantenimiento/lib/order-status.ts`). */
+export const TERMINAL_ORDER_STATUSES = ['completed', 'rejected'];
 const OPEN_WORK_ORDER_STATUSES = ['pending', 'in_progress', 'paused'] as const;
 
 export interface PendingMaintenanceResult {

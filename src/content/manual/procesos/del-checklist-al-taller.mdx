@@ -8,12 +8,24 @@ updated: 2026-10-08
 Cuando un chofer o un supervisor encuentra algo mal en un equipo, el sistema lo lleva paso a paso hasta el taller y de vuelta a la calle: el **checklist** registra la falla, la **solicitud** la pone a consideración de un supervisor, el **pedido** la programa en el taller, las **órdenes de trabajo** la resuelven y el cierre devuelve el equipo a **Operativo**. Mientras tanto, la condición del equipo se refleja en los partes diarios y en el Dashboard.
 
 <Flow title="Recorrido de una falla">
-  <FlowStep title="Checklist" module="Formularios" to="formularios">Se inspecciona el equipo. Cada ítem en **M** genera un desvío.</FlowStep>
-  <FlowStep title="Solicitud" module="Mantenimiento" to="equipos-con-desvios">Los desvíos se registran en una solicitud para un supervisor.</FlowStep>
-  <FlowStep title="Validación" module="Mantenimiento" tone="info" to="validar-solicitudes">El supervisor aprueba o rechaza cada ítem.</FlowStep>
-  <FlowStep title="Programación" module="Mantenimiento" to="taller">El taller le pone fecha y registra el ingreso.</FlowStep>
-  <FlowStep title="Taller" module="Mantenimiento" tone="warning" to="vista-taller">Se trabaja por sectores con órdenes de trabajo.</FlowStep>
-  <FlowStep title="Cierre" module="Mantenimiento" tone="success" to="taller">El jefe de taller cierra y el equipo vuelve a Operativo.</FlowStep>
+  <FlowStep title="Checklist" module="Formularios" to="formularios">
+    Se inspecciona el equipo. Cada ítem en **M** genera un desvío.
+  </FlowStep>
+  <FlowStep title="Solicitud" module="Mantenimiento" to="equipos-con-desvios">
+    Los desvíos se registran en una solicitud para un supervisor.
+  </FlowStep>
+  <FlowStep title="Validación" module="Mantenimiento" tone="info" to="validar-solicitudes">
+    El supervisor aprueba o rechaza cada ítem.
+  </FlowStep>
+  <FlowStep title="Programación" module="Mantenimiento" to="taller">
+    El taller le pone fecha y registra el ingreso.
+  </FlowStep>
+  <FlowStep title="Taller" module="Mantenimiento" tone="warning" to="vista-taller">
+    Se trabaja por sectores con órdenes de trabajo.
+  </FlowStep>
+  <FlowStep title="Cierre" module="Mantenimiento" tone="success" to="taller">
+    El jefe de taller cierra y el equipo vuelve a Operativo.
+  </FlowStep>
 </Flow>
 
 ## Paso 1: el checklist detecta la falla
@@ -32,7 +44,10 @@ Si el checklist incluye un enganche (acoplado), los desvíos de esa parte quedan
 En el modal **Registrar Desvíos** se elige el **Supervisor de Turno** que va a revisar y, opcionalmente, se agrega un comentario a cada desvío. Al confirmar, los desvíos se agregan a una **solicitud de mantenimiento** para ese supervisor. El mensaje dice cuántos desvíos se registraron y en cuántas solicitudes.
 
 <Callout type="warning" title="Si se cierra el modal sin registrar">
-Los desvíos no se pierden: quedan en <GuideLink to="equipos-con-desvios">Mantenimiento → Equipos con Desvíos</GuideLink>, que lista los equipos que tienen desvíos sin solicitud. Desde ahí, **Resolver Desvíos** abre el mismo registro. Mientras un equipo figure en esa lista, nadie del taller se enteró de la falla.
+  Los desvíos no se pierden: quedan en{' '}
+  <GuideLink to="equipos-con-desvios">Mantenimiento → Equipos con Desvíos</GuideLink>, que lista los equipos que tienen
+  desvíos sin solicitud. Desde ahí, **Resolver Desvíos** abre el mismo registro. Mientras un equipo figure en esa lista,
+  nadie del taller se enteró de la falla.
 </Callout>
 
 ### La otra entrada: Nuevo Pedido
@@ -52,10 +67,21 @@ El asistente pregunta **¿Eres el supervisor de este pedido?**. Esa respuesta ca
 
 En <GuideLink to="validar-solicitudes">Mantenimiento → Operaciones → Validar Solicitud</GuideLink> el supervisor ve las solicitudes nuevas. En **Validar Solicitud de Mantenimiento** decide **ítem por ítem**: cada uno queda **Aprobado** o **Rechazado**, y no se puede guardar mientras quede alguno sin decidir ("Todos los items deben ser aprobados o rechazados"). Los rechazados llevan motivo. Si se aprueba algo, hay que escribir una descripción de lo que se aprueba y qué hay que hacer (mínimo 15 caracteres): **el taller usa ese texto para planificar el trabajo**.
 
+<Figure
+  name="validacion-solicitud"
+  caption="Cada ítem de la solicitud sale de la tolva sin decidir. En la estación de decisión el empujador saca los rechazados a su bandeja, con su motivo, y los aprobados siguen derecho hasta la carpeta del pedido que recibe el taller."
+/>
+
 <States title="Estados de una solicitud">
-  <State name="Pendiente de aprobación" tone="warning" next="Aprobada, Rechazada">Espera la decisión del supervisor.</State>
-  <State name="Aprobada" tone="success">Al menos un ítem aprobado: se genera el **pedido** para el taller con esos ítems.</State>
-  <State name="Rechazada" tone="danger">Todos los ítems rechazados. No llega al taller.</State>
+  <State name="Pendiente de aprobación" tone="warning" next="Aprobada, Rechazada">
+    Espera la decisión del supervisor.
+  </State>
+  <State name="Aprobada" tone="success">
+    Al menos un ítem aprobado: se genera el **pedido** para el taller con esos ítems.
+  </State>
+  <State name="Rechazada" tone="danger">
+    Todos los ítems rechazados. No llega al taller.
+  </State>
 </States>
 
 ## Paso 4: el pedido recorre el taller
@@ -67,16 +93,35 @@ El taller trabaja en <GuideLink to="taller">Mantenimiento → Taller</GuideLink>
 3. **En Taller**: los equipos activos. Se reparten los trabajos por **sector** y se generan las **órdenes de trabajo** (OT), que los operarios ejecutan desde su <GuideLink to="panel-del-operario">panel</GuideLink>. Los trabajos de un taller externo se registran como OT externas. La <GuideLink to="vista-taller">Vista Taller</GuideLink> muestra lo mismo agrupado por sector. Si hacen falta **repuestos**, el operario (desde su OT) o el taller (desde el detalle de la orden) hacen un **pedido de materiales** al almacén, imputado a la orden (ver <GuideLink to="pedidos-de-materiales">Pedidos de materiales</GuideLink>).
 4. **Aprobaciones**: lo que necesita la autorización del jefe de taller (tareas a aprobar, reasignaciones de sector y pedidos con todas sus OT terminadas).
 
+<Figure
+  name="taller-circuito"
+  caption="Las cuatro pestañas del taller como cuatro estaciones en fila: los pedidos esperan en la bandeja de Por programar, pasan la barrera en Por ingresar, el equipo sube al elevador en En taller (ahí queda No operativo) y el cierre se firma en Aprobaciones."
+/>
+
 Del lado de Operaciones, el paso **Seguimiento** muestra los equipos pendientes de ingreso y los que están en el taller.
 
 <States title="Estados de un pedido de mantenimiento">
-  <State name="Pendiente de programación" tone="warning" next="Fecha confirmada, Rechazado">Aprobado, sin fecha. Se ve en **Por Programar**.</State>
-  <State name="Fecha confirmada" tone="info" next="En Taller, Pendiente de programación">Tiene fecha de recepción. Se ve en **Por Ingresar**.</State>
-  <State name="En Taller" tone="warning" next="Pend. Validación Taller, Rechazada por Taller">El equipo está adentro y no operativo.</State>
-  <State name="Pend. Validación Taller" tone="info" next="Completada, En Taller">Todas las OT quedaron cerradas. Espera el cierre del jefe de taller, que también puede devolverlo al taller.</State>
-  <State name="Rechazada por Taller" tone="danger" next="En Taller">El taller rechazó todos los ítems.</State>
-  <State name="Completada" tone="success">Cerrada por el jefe de taller.</State>
-  <State name="Rechazado" tone="danger">El taller lo rechazó antes de programarlo.</State>
+  <State name="Pendiente de programación" tone="warning" next="Fecha confirmada, Rechazado">
+    Aprobado, sin fecha. Se ve en **Por Programar**.
+  </State>
+  <State name="Fecha confirmada" tone="info" next="En Taller, Pendiente de programación">
+    Tiene fecha de recepción. Se ve en **Por Ingresar**.
+  </State>
+  <State name="En Taller" tone="warning" next="Pend. Validación Taller, Rechazada por Taller">
+    El equipo está adentro y no operativo.
+  </State>
+  <State name="Pend. Validación Taller" tone="info" next="Completada, En Taller">
+    Todas las OT quedaron cerradas. Espera el cierre del jefe de taller, que también puede devolverlo al taller.
+  </State>
+  <State name="Rechazada por Taller" tone="danger" next="En Taller">
+    El taller rechazó todos los ítems.
+  </State>
+  <State name="Completada" tone="success">
+    Cerrada por el jefe de taller.
+  </State>
+  <State name="Rechazado" tone="danger">
+    El taller lo rechazó antes de programarlo.
+  </State>
 </States>
 
 ## Paso 5: el cierre y la vuelta a la calle
@@ -88,13 +133,13 @@ Cuando todas las OT de un pedido están **Completada** o **Completada Parcial**,
 
 ## Qué cambia en el resto del sistema
 
-| Momento | Efecto automático |
-|---|---|
-| Se guarda un checklist con ítems en M | Se crean los desvíos del equipo; si no se registran, el equipo aparece en **Equipos con Desvíos**. |
-| Se guarda un checklist con kilometraje mayor | Se actualiza el kilometraje del equipo. |
-| Se aprueba una solicitud | Se crea el pedido en **Por Programar**. |
-| Se aprueba la entrada a taller | El equipo pasa a **No operativo** y se actualiza su kilometraje/horómetro. |
-| Se cierra el último pedido del equipo | El equipo vuelve a **Operativo**. |
+| Momento                                      | Efecto automático                                                                                  |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Se guarda un checklist con ítems en M        | Se crean los desvíos del equipo; si no se registran, el equipo aparece en **Equipos con Desvíos**. |
+| Se guarda un checklist con kilometraje mayor | Se actualiza el kilometraje del equipo.                                                            |
+| Se aprueba una solicitud                     | Se crea el pedido en **Por Programar**.                                                            |
+| Se aprueba la entrada a taller               | El equipo pasa a **No operativo** y se actualiza su kilometraje/horómetro.                         |
+| Se cierra el último pedido del equipo        | El equipo vuelve a **Operativo**.                                                                  |
 
 La **condición del equipo** se usa en otros dos lugares:
 
@@ -123,5 +168,6 @@ Cada paso es una pestaña con su permiso: **Formularios** para completar checkli
 **"No me deja ingresar el kilometraje"**: no puede ser menor al último registrado del equipo.
 
 <Callout type="danger" title="Lo que no tiene vuelta atrás">
-Una solicitud aprobada o rechazada ya no se vuelve a validar, y un pedido **Rechazado** o **Completada** no se reabre: si el equipo vuelve a fallar, se inicia un pedido nuevo.
+  Una solicitud aprobada o rechazada ya no se vuelve a validar, y un pedido **Rechazado** o **Completada** no se reabre:
+  si el equipo vuelve a fallar, se inicia un pedido nuevo.
 </Callout>

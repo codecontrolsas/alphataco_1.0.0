@@ -14,6 +14,7 @@ export const MDX_COMPONENT_NAMES = [
   'States',
   'State',
   'Kbd',
+  'Figure',
 ] as const;
 
 export type MdxComponentName = (typeof MDX_COMPONENT_NAMES)[number];
