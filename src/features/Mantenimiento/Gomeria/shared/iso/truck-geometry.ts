@@ -348,7 +348,15 @@ export function buildTruckSvg({
   }
 
   // ── Una posición (rueda de eje horizontal o auxilio acostado).
-  function wheelGroup(cp: ComputedPosition, F: unknown): string {
+  /** Número de la posición, sobre la banda de rodamiento (se ve en todas, también en la rueda interior de un dual). */
+  function badgeOf(cp: ComputedPosition, F: unknown): string {
+    const hub = G.pointOf(F, cp.side === 'SPARE' ? TIRE_W + 1.4 : TIRE_W / 2, 0, 0);
+    const [bx, by] = at(cp.side === 'SPARE' ? hub : [hub[0], hub[1], hub[2] + TIRE_R + 0.5]);
+    return `<g aria-hidden="true" pointer-events="none"><circle cx="${bx}" cy="${by}" r="8.2" style="fill:var(--anatomy-paper);stroke:var(--anatomy-hi);stroke-width:.9"/><text x="${bx}" y="${by}" text-anchor="middle" dominant-baseline="central" style="fill:var(--anatomy-hi);font:600 9.5px var(--anatomy-mono);font-variant-numeric:tabular-nums">${cp.position_number}</text></g>`;
+  }
+
+  /** `inlineBadge: false` deja el número para la capa superior (las ruedas del lado lejano quedan detrás del chasis). */
+  function wheelGroup(cp: ComputedPosition, F: unknown, inlineBadge = true): string {
     const data = dataByPosition.get(cp.position_number);
     // Sin datos de posiciones = vista previa de la configuración: ruedas normales, sin estado.
     const empty = !preview && (!data || data.tire_id === null);
@@ -359,17 +367,13 @@ export function buildTruckSvg({
       isSelected ? ', seleccionada' : ''
     }`;
     const attrs = interactive ? `role="button" aria-pressed="${isSelected}"` : `role="img"`;
-    // Número de la posición: sobre la banda de rodamiento (se ve en todas, también en la rueda interior de un dual).
-    const hub = G.pointOf(F, cp.side === 'SPARE' ? TIRE_W + 1.4 : TIRE_W / 2, 0, 0);
-    const [bx, by] = at(cp.side === 'SPARE' ? hub : [hub[0], hub[1], hub[2] + TIRE_R + 0.5]);
-    const badge = `<g aria-hidden="true" pointer-events="none"><circle cx="${bx}" cy="${by}" r="8.2" style="fill:var(--anatomy-paper);stroke:var(--anatomy-hi);stroke-width:.9"/><text x="${bx}" y="${by}" text-anchor="middle" dominant-baseline="central" style="fill:var(--anatomy-hi);font:600 9.5px var(--anatomy-mono);font-variant-numeric:tabular-nums">${cp.position_number}</text></g>`;
     return `<g data-iso-id="${wheelIdPrefix}${cp.position_number}" tabindex="0" ${attrs} aria-label="${esc(aria)}">${tire(
       F,
       tone,
       empty,
       isSelected || selectAllWheels,
       highlightedSet.has(cp.position_number)
-    )}${badge}</g>`;
+    )}${inlineBadge ? badgeOf(cp, F) : ''}</g>`;
   }
 
   // ── Ruedas de los ejes: siempre con el eje hacia +y, así la cara visible es la que mira a la cámara.
@@ -700,10 +704,14 @@ export function buildTruckSvg({
     height: TRUCK_VIEW_HEIGHT,
     label: aria,
     body: [
-      farWheels.map((w) => wheelGroup(w.cp, w.F)).join(''),
-      chassis(),
+      farWheels.map((w) => wheelGroup(w.cp, w.F, false)).join(''),
+      // La estructura queda semitransparente: deja ver las ruedas del lado lejano que tapa. Con zonas del
+      // gemelo (contornos de estado) se baja menos, para que los colores se sigan leyendo.
+      `<g style="opacity:${zones ? 0.8 : 0.58}">${chassis()}</g>`,
       spareCradles.join(''),
       nearWheels.map((w) => wheelGroup(w.cp, w.F)).join(''),
+      // Números de las ruedas lejanas, por encima de todo.
+      farWheels.map((w) => badgeOf(w.cp, w.F)).join(''),
     ],
   });
   // El SVG de la skill viene como `img`, que oculta a los hijos para lectores de pantalla: las
