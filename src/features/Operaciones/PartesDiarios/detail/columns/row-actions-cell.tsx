@@ -3,10 +3,13 @@
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { Eye, History, Pencil, Trash2, UserCog, type LucideIcon } from 'lucide-react';
+import { Eye, FileText, History, Pencil, Trash2, UserCog, type LucideIcon } from 'lucide-react';
 import moment from 'moment';
 import type { DailyReportDetailRow } from '../types';
 import type { Permissions, RowActionHandlers } from './types';
+
+/** Estados de la línea en los que Operaciones puede gestionar sus remitos. */
+const REMIT_STATUSES = new Set<string>(['ejecutado', 'en_certificacion']);
 
 // ============================================================================
 // ROW ACTIONS CELL
@@ -30,6 +33,9 @@ export function RowActionsCell({
   // Asignar recursos: misma elegibilidad que editar, pero gobernada por su propio permiso
   const canAssignResources =
     permissions.canAssignResources && row.status !== 'en_certificacion' && (row.status !== 'ejecutado' || isToday);
+  // Remitos: con la línea ya prestada (ejecutada) o mientras Comercial la certifica. No depende de la
+  // fecha: el remito suele llegar días después del servicio.
+  const canManageRemitos = permissions.canUpdate && REMIT_STATUSES.has(row.status);
   // Eliminar: solo si fecha hoy, futura, o status sin_recursos_asignados
   const canDelete = permissions.canDelete && (isToday || isFutureDate || row.status === 'sin_recursos_asignados');
 
@@ -49,6 +55,10 @@ export function RowActionsCell({
             onClick={() => handlers.onAssignResources(row)}
             className="text-brand-ink hover:text-brand-ink"
           />
+        )}
+
+        {canManageRemitos && (
+          <RowAction label="Remitos" icon={FileText} onClick={() => handlers.onManageRemitos(row)} />
         )}
 
         <RowAction label="Historial" icon={History} onClick={() => handlers.onHistory(row)} />

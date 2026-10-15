@@ -1,5 +1,6 @@
 'use server';
 
+import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
   buildDateRangeFiltersWhere,
@@ -11,6 +12,7 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
+import { REMIT_NUMBERS_SELECT, remitNumberContainsWhere } from '@/features/Operaciones/PartesDiarios/remitManager/lib/remit-numbers';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { buildTodayReportWhere } from '../lib/dashboard-dates';
 import { groupServicesByClient, summarizeServicesByType } from '../lib/indicators';
@@ -77,8 +79,8 @@ export type ServicesDetailByClientData = Awaited<ReturnType<typeof getServicesDe
 // Detalle de servicios — DataTable server-side
 // ─────────────────────────────────────────────────────────────────────────────
 
-const VALID_SORT_FIELDS = new Set(['status', 'type_service', 'created_at', 'description', 'remit_number']);
-const TEXT_COLUMNS = ['description', 'remit_number'];
+const VALID_SORT_FIELDS = new Set(['status', 'type_service', 'created_at', 'description']);
+const TEXT_COLUMNS = ['description'];
 const DATE_COLUMNS = ['created_at'];
 
 const SERVICES_DETAIL_SELECT = {
@@ -86,7 +88,7 @@ const SERVICES_DETAIL_SELECT = {
   status: true,
   type_service: true,
   description: true,
-  remit_number: true,
+  remitos: REMIT_NUMBERS_SELECT,
   created_at: true,
   customers: { select: { id: true, name: true } },
 } as const;
@@ -96,16 +98,33 @@ function buildServicesDetailWhere(companyId: string, targetDate: string, state: 
   const filtersWhere = buildFiltersWhere(
     state.filters,
     { customer: 'customer_id' },
-    { exclude: [...TEXT_COLUMNS, ...DATE_COLUMNS.flatMap((column) => [`${column}_from`, `${column}_to`])] }
+    {
+      exclude: [
+        ...TEXT_COLUMNS,
+        'remit_number',
+        ...DATE_COLUMNS.flatMap((column) => [`${column}_from`, `${column}_to`]),
+      ],
+    }
   );
+
+  // Los remitos viven en la tabla `remitos` (1:N): búsqueda y filtro con `some`
+  const search = buildSearchWhere(state.search, ['description']);
+  const remitFilter = state.filters['remit_number']?.[0];
+
+  // Búsqueda y filtro de remito van en el AND, para no pisar (ni ser pisados por) los OR/AND de los filtros
+  const extraConditions: Prisma.dailyreportrowsWhereInput[] = [
+    ...(state.search ? [{ OR: [...(search.OR ?? []), remitNumberContainsWhere(state.search)] }] : []),
+    ...(remitFilter ? [remitNumberContainsWhere(remitFilter)] : []),
+  ];
+  const filtersAnd = (filtersWhere as { AND?: Prisma.dailyreportrowsWhereInput[] }).AND ?? [];
 
   return {
     customer_id: { not: null },
     ...buildTodayReportWhere(companyId, targetDate),
-    ...buildSearchWhere(state.search, ['description', 'remit_number']),
     ...filtersWhere,
     ...buildTextFiltersWhere(state.filters, TEXT_COLUMNS),
     ...buildDateRangeFiltersWhere(state.filters, DATE_COLUMNS),
+    ...(extraConditions.length > 0 ? { AND: [...filtersAnd, ...extraConditions] } : {}),
   };
 }
 

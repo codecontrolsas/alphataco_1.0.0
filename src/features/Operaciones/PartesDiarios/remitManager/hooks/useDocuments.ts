@@ -12,7 +12,7 @@ import {
   uploadDocumentToRemito,
 } from '../actions/remitos.server';
 import { ALLOWED_FILE_TYPES, MAX_FILE_SIZE } from '../types';
-import { remitoQueryKeys } from './useRemitos';
+import { invalidateRemitConsumers } from './useRemitos';
 
 export const documentQueryKeys = {
   all: ['documents'] as const,
@@ -38,7 +38,7 @@ export function useDocumentUrl(documentPath: string) {
   });
 }
 
-export function useUploadDocument(dailyReportRowId: string, customerName?: string) {
+export function useUploadDocument(dailyReportRowId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -46,12 +46,10 @@ export function useUploadDocument(dailyReportRowId: string, customerName?: strin
       // El archivo viaja en un FormData: una Server Action no recibe `File` suelto.
       const formData = new FormData();
       formData.append('file', file);
-      return uploadDocumentToRemito(remitId, formData, customerName);
+      return uploadDocumentToRemito(remitId, formData);
     },
     onSuccess: (newDocument) => {
-      queryClient.invalidateQueries({
-        queryKey: remitoQueryKeys.byRowId(dailyReportRowId),
-      });
+      invalidateRemitConsumers(queryClient, dailyReportRowId);
       queryClient.invalidateQueries({
         queryKey: documentQueryKeys.available(dailyReportRowId),
       });
@@ -63,19 +61,17 @@ export function useUploadDocument(dailyReportRowId: string, customerName?: strin
   });
 }
 
-export function useReplaceDocument(dailyReportRowId: string, customerName?: string) {
+export function useReplaceDocument(dailyReportRowId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ documentId, newFile }: { documentId: string; newFile: File }) => {
       const formData = new FormData();
       formData.append('file', newFile);
-      return replaceDocument(documentId, formData, customerName);
+      return replaceDocument(documentId, formData);
     },
     onSuccess: (updatedDocument) => {
-      queryClient.invalidateQueries({
-        queryKey: remitoQueryKeys.byRowId(dailyReportRowId),
-      });
+      invalidateRemitConsumers(queryClient, dailyReportRowId);
       toast.success(`Documento ${updatedDocument.document_name} reemplazado`);
     },
     onError: (error: Error) => {
@@ -90,9 +86,7 @@ export function useDeleteDocument(dailyReportRowId: string) {
   return useMutation({
     mutationFn: (documentId: string) => deleteRemitDocument(documentId),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: remitoQueryKeys.byRowId(dailyReportRowId),
-      });
+      invalidateRemitConsumers(queryClient, dailyReportRowId);
       queryClient.invalidateQueries({
         queryKey: documentQueryKeys.available(dailyReportRowId),
       });
@@ -118,9 +112,7 @@ export function useLinkDocument(dailyReportRowId: string) {
       documentName: string;
     }) => linkExistingDocument(remitId, documentPath, documentName),
     onSuccess: (linkedDocument) => {
-      queryClient.invalidateQueries({
-        queryKey: remitoQueryKeys.byRowId(dailyReportRowId),
-      });
+      invalidateRemitConsumers(queryClient, dailyReportRowId);
       toast.success(`Documento ${linkedDocument.document_name} vinculado`);
     },
     onError: (error: Error) => {

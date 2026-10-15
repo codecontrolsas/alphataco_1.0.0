@@ -140,7 +140,9 @@ export function DailyReportRowFormRefactored() {
           equipment: equipmentIds,
           equipos_cliente: customerEquipmentIds,
           status: selectedRow.status || '',
-          remit_number: selectedRow.remit_number || '',
+          // El campo AGREGA un remito al pasar a certificación: arranca vacío. Los que la línea ya tiene
+          // se ven y se gestionan desde "Gestionar Remitos" (precargarlos los volvería a crear unidos por coma).
+          remit_number: '',
           observations: selectedRow.description || '', // Cargar description en observations
           sector_service_id: selectedRow.data_to_clone?.sector_service_id || '',
           areas_service_id: selectedRow.data_to_clone?.areas_service_id || '',

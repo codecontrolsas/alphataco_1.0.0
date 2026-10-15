@@ -268,106 +268,36 @@ export const EnhancedComercialReportTable: React.FC<EnhancedComercialReportTable
         },
       },
       {
+        // Remitos de la línea: vienen siempre como lista desde la tabla `remitos` (fuente única)
         id: 'remit_number',
-        accessorKey: 'remit_number',
-        // Usar accessorFn para que getFacetedUniqueValues pueda contar cada remito individualmente
-        accessorFn: (row) => {
-          const remitNumbers = row.remit_numbers || [];
-          if (remitNumbers.length > 0) {
-            // Devolver una cadena separada por comas para que TanStack pueda procesarla
-            return remitNumbers.join(',');
-          }
-          return row.remit_number || '';
-        },
+        accessorFn: (row) => (row.remit_numbers ?? []).join(','),
         header: ({ column, table }) => <DataTableColumnHeader column={column} table={table} title="N° de Remito" />,
         cell: ({ row }) => {
-          // Obtener remitos desde el array o desde el string concatenado
-          const remitNumbers = row.original.remit_numbers || [];
-          const remitNumberString = row.original.remit_number || '';
-
-          // Si hay array de remitos, usarlo (preferido)
-          if (remitNumbers && remitNumbers.length > 0) {
-            return (
-              <div className="flex flex-wrap gap-1">
-                {remitNumbers.map((remitNum: string, index: number) => (
-                  <Badge key={index} variant="outline" className="rounded-sm">
-                    {remitNum}
-                  </Badge>
-                ))}
-              </div>
-            );
-          }
-
-          // Si hay string concatenado, mostrarlo directamente
-          if (remitNumberString) {
-            // Si tiene comas, separar y mostrar como badges
-            if (remitNumberString.includes(',')) {
-              const remitos = remitNumberString
-                .split(',')
-                .map((r: string) => r.trim())
-                .filter(Boolean);
-              return (
-                <div className="flex flex-wrap gap-1">
-                  {remitos.map((remitNum: string, index: number) => (
-                    <Badge key={index} variant="outline" className="rounded-sm">
-                      {remitNum}
-                    </Badge>
-                  ))}
-                </div>
-              );
-            }
-            // Si es un solo remito, mostrarlo como badge
-            return (
-              <Badge variant="outline" className="rounded-sm">
-                {remitNumberString}
-              </Badge>
-            );
-          }
-
-          return <span>-</span>;
+          const remitNumbers = row.original.remit_numbers ?? [];
+          if (remitNumbers.length === 0) return <span className="text-muted-foreground">-</span>;
+          return (
+            <div className="flex flex-wrap gap-1">
+              {remitNumbers.map((remitNum: string) => (
+                <Badge key={remitNum} variant="outline" className="font-mono tabular-nums">
+                  {remitNum}
+                </Badge>
+              ))}
+            </div>
+          );
         },
-        filterFn: (row, id, value) => {
+        filterFn: (row, _id, value) => {
           if (!value || (Array.isArray(value) && value.length === 0)) return true;
+          const remitNumbers: string[] = row.original.remit_numbers ?? [];
 
-          // Si es un array (filtro select), buscar si alguno de los valores seleccionados coincide
-          if (Array.isArray(value)) {
-            const remitNumbers = row.original.remit_numbers || [];
+          // Filtro de opciones: alguno de los remitos de la línea está entre los elegidos
+          if (Array.isArray(value)) return remitNumbers.some((remitNum) => value.includes(remitNum));
 
-            // Si hay array de remitos, buscar coincidencias
-            if (remitNumbers.length > 0) {
-              return remitNumbers.some((remitNum: string) => value.includes(remitNum));
-            }
-
-            // Buscar en el string concatenado (fallback)
-            const remitNumberString = row.original.remit_number || '';
-            if (remitNumberString) {
-              const remitos = remitNumberString
-                .split(',')
-                .map((r: string) => r.trim())
-                .filter(Boolean);
-              return remitos.some((remitNum: string) => value.includes(remitNum));
-            }
-
-            return false;
-          }
-
-          // Compatibilidad con búsqueda de texto (por si acaso)
+          // Búsqueda de texto
           const searchTerm = String(value).toLowerCase().trim();
-          const remitNumbers = row.original.remit_numbers || [];
-          if (remitNumbers.length > 0) {
-            return remitNumbers.some((remitNum: string) => String(remitNum).toLowerCase().includes(searchTerm));
-          }
-          const remit = row.original.remit_number || '';
-          return String(remit).toLowerCase().includes(searchTerm);
+          return remitNumbers.some((remitNum) => remitNum.toLowerCase().includes(searchTerm));
         },
         exportHeader: 'N° de Remito',
-        exportFormatter: (value, row) => {
-          const remitNumbers = row.remit_numbers || [];
-          if (remitNumbers.length > 0) {
-            return remitNumbers.join(', ');
-          }
-          return row.remit_number || '';
-        },
+        exportFormatter: (_value, row) => (row.remit_numbers ?? []).join(', '),
       },
       {
         id: 'status',

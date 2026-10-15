@@ -14,6 +14,7 @@ import { AlertTriangle, Building2, ExternalLink, FileText, Mail, Phone, User, Wr
 import moment from 'moment';
 import Link from 'next/link';
 import { getDailyReportRowDetail } from '../form-data.server';
+import { remitNumbersOf } from '../../remitManager/lib/remit-numbers';
 
 // ============================================================================
 // PROPS
@@ -94,6 +95,7 @@ export function ServiceDetailDialog({ open, onOpenChange, rowId }: Props) {
   if (!rowId) return null;
 
   const statusLabel = row?.status ? dailyReportRowStatusLabels[row.status] ?? row.status : null;
+  const remitNumbers = row ? remitNumbersOf(row) : [];
   const statusVariant = row?.status ? dailyReportRowStatusBadges[row.status] ?? 'default' : 'default';
   const typeServiceLabel = row?.type_service
     ? dailyReportTypeServiceLabels[row.type_service] ?? row.type_service
@@ -179,7 +181,13 @@ export function ServiceDetailDialog({ open, onOpenChange, rowId }: Props) {
               <Field label="Tipo servicio">
                 {typeServiceLabel ? <Badge variant="outline">{typeServiceLabel}</Badge> : <EmptyValue />}
               </Field>
-              <Field label="Nro Remito">{row.remit_number ?? <EmptyValue />}</Field>
+              <Field label="Remitos">
+                {remitNumbers.length > 0 ? (
+                  <span className="font-mono tabular-nums">{remitNumbers.join(', ')}</span>
+                ) : (
+                  <EmptyValue />
+                )}
+              </Field>
             </div>
 
             {/* Descripción */}

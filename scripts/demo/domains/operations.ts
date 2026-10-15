@@ -274,7 +274,8 @@ export async function seedOperations(
               rel.rigs.push({ daily_report_row_id: rowId, customer_equipment_id: demoId('rig', `${customer.key}:${pick(faker, customer.rigs).name}`) });
             }
             const isTrip = item.unit === 4 || item.unit === 5 || item.unit === 8;
-            const remitNumber = status === 'ejecutado' && isTrip ? await addRemit(ctx, ++remitSeq, customer, contract, item, rowId, offset, quantity, rel) : null;
+            // El remito vive solo en la tabla `remitos` (addRemit lo crea con su documento)
+            if (status === 'ejecutado' && isTrip) await addRemit(ctx, ++remitSeq, customer, contract, item, rowId, offset, quantity, rel);
 
             rows.push({
               id: rowId,
@@ -291,7 +292,6 @@ export async function seedOperations(
               shift_12h: shift,
               sector_service_id: demoId('service_sector', `${contract.key}:${sector}`),
               areas_service_id: demoId('service_area', `${contract.key}:${area}`),
-              remit_number: remitNumber,
               cancel_reason: status === 'cancelado' ? pick(faker, CANCEL_REASONS) : null,
               type_service: typeService,
               completed_day: status === 'ejecutado' ? true : null,

@@ -21,6 +21,8 @@ export type RowActionHandlers = {
   onAssignResources: (row: DailyReportDetailRow) => void;
   onHistory: (row: DailyReportDetailRow) => void;
   onDelete: (row: DailyReportDetailRow) => void;
+  /** Abre el gestor de remitos de la línea (mismo gestor que usa Comercial). */
+  onManageRemitos: (row: DailyReportDetailRow) => void;
 };
 
 // ============================================================================

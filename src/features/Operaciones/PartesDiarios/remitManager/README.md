@@ -1,193 +1,89 @@
-# Remit Manager
+# Gestor de remitos
 
-Sistema de gestión de múltiples remitos y documentos por línea de parte diario.
+Remitos y documentos de cada línea del parte diario (`dailyreportrows`). Una línea puede tener varios
+remitos y cada remito varios documentos (PDF o imagen).
 
-## 🚀 Uso Rápido
+## Una sola fuente
 
-```tsx
-import { RemitosManagerModal } from '@/features/Operaciones/PartesDiarios/remitManager';
+El remito de una línea vive **solo** en la tabla `remitos` (+ `remito_documents` para los archivos).
+La columna vieja `dailyreportrows.remit_number` se eliminó en la migración
+`20261019100000_unify_remitos_source` (que copió sus valores a `remitos`).
 
-function MyComponent() {
-  const [isOpen, setIsOpen] = useState(false);
+- Toda lectura, filtro o búsqueda de remitos usa `lib/remit-numbers.ts`:
+  - `REMIT_NUMBERS_SELECT`: el `select` de los números de la línea, en orden de carga.
+  - `remitNumbersOf(row)`: los números como `string[]`.
+  - `remitNumberContainsWhere(term)`: "algún remito de la línea contiene `term`".
+- Toda escritura pasa por `actions/remitos.server.ts`. Ningún formulario escribe el remito por su cuenta
+  (el formulario de Comercial llama a `createRemito`).
 
-  return (
-    <>
-      <Button onClick={() => setIsOpen(true)}>Gestionar Remitos</Button>
+Consumidores de lectura: detalle del parte en Operaciones (`detail/lib/row-query.ts`,
+`detail/form-data.server.ts`) y Comercial / Certificación (`Certificacion/actions/queries.server.ts`).
+`Dashboard/Principal/actions/services.server.ts` también busca y filtra por remito, pero ninguna pantalla
+del Dashboard lo muestra hoy.
 
-      <RemitosManagerModal
-        dailyReportRowId="uuid-here"
-        customerName="Cliente Ejemplo"
-        isOpen={isOpen}
-        onClose={() => setIsOpen(false)}
-      />
-    </>
-  );
-}
-```
+## Dónde se usa el gestor
 
-## 📦 Estructura
+`RemitosManagerModal` se abre desde dos pantallas, con el mismo componente:
 
-```
-remitManager/
-├── actions/
-│   └── actionsClient.ts       # CRUD operations
-├── hooks/
-│   ├── useRemitos.ts          # Remitos queries & mutations
-│   └── useDocuments.ts        # Documents queries & mutations
-├── types/
-│   └── index.ts               # TypeScript types
-├── components/
-│   ├── RemitosManagerModal.tsx
-│   ├── AddRemitDialog.tsx
-│   ├── RemitTab.tsx
-│   ├── DocumentUploadArea.tsx
-│   └── DocumentViewer.tsx
-└── index.ts                   # Public exports
-```
+| Pantalla | Acción | Cuándo aparece |
+|---|---|---|
+| Operaciones → detalle del parte | **Remitos** (`detail/columns/row-actions-cell.tsx`) | Línea **Ejecutada** o **En certificación**, con `operaciones:detalle-parte-diario:update` |
+| Comercial → Partes Diarios | **Gestionar Remitos** (`Certificacion/components/EnhancedComercialReportTable.tsx`) | Línea **En certificación**, con `comercial:daily_reports:update` |
 
-## 🔧 API
-
-### Componentes
-
-#### RemitosManagerModal
-
-Modal principal para gestionar remitos.
-
-**Props:**
-
-- `dailyReportRowId: string` - ID de la línea del parte diario
-- `customerName?: string` - Nombre del cliente (opcional)
-- `isOpen: boolean` - Estado del modal
-- `onClose: () => void` - Callback al cerrar
-
-### Hooks
-
-#### useRemitos(dailyReportRowId)
-
-Hook para gestionar remitos.
+La regla de estado vive en la UI de cada pantalla. El servidor exige el permiso **Editar** de cualquiera
+de las dos (`assertCanWriteRemitos`), y no exige estado: Comercial también crea el primer remito al dar
+de alta una línea ("Crear Línea"), cuando todavía puede estar "Sin recursos". Por eso `createRemito`
+acepta además **Crear** en `comercial:daily_reports`.
 
 ```tsx
-const { data: remitos, isLoading, error } = useRemitos(rowId);
-const createRemito = useCreateRemito(rowId);
-const updateRemito = useUpdateRemitoNumber(rowId);
-const deleteRemito = useDeleteRemito(rowId);
+<RemitosManagerModal dailyReportRowId={row.id} customerName={row.customers?.name} isOpen onClose={close} />
 ```
 
-#### useDocuments(dailyReportRowId)
+Props: `dailyReportRowId` (la línea, no el parte), `customerName` (opcional, solo se muestra en el
+encabezado), `isOpen`, `onClose`.
 
-Hook para gestionar documentos.
+## Server actions (`actions/remitos.server.ts`)
 
-```tsx
-const uploadDocument = useUploadDocument(rowId, customerName);
-const deleteDocument = useDeleteDocument(rowId);
-const downloadDocument = useDownloadDocument();
-```
+| Acción | Qué hace |
+|---|---|
+| `createRemito(rowId, number)` | Alta de remito. El número no se repite dentro de la línea. |
+| `uploadDocumentToRemito(remitId, formData)` | Valida tipo y tamaño en el servidor, sube el archivo al bucket `daily-reports` (carpeta del cliente de la línea, resuelta en el servidor) y crea el documento. Si falla la BD, borra el archivo subido. |
+| `linkExistingRemito(sourceRemitId, targetRowId)` | Copia el remito a otra línea **del mismo cliente** (`is_linked = true`) con referencias a los MISMOS archivos. `getAvailableRemitosForLinking` ya trae solo candidatos de ese cliente. |
+| `updateRemitoNumber`, `replaceDocument`, `linkExistingDocument` | **Sin pantalla todavía** (sus hooks existen pero ningún componente los usa). Cambiar el número, reemplazar el archivo y agregar un archivo ya subido de la empresa, con las mismas validaciones. |
+| `deleteRemitDocument(documentId)` / `deleteRemito(remitId)` | Bajas. Los archivos se borran del storage solo si quedaron huérfanos (`removeUnreferencedFiles`): un remito vinculado comparte archivos con el original. |
+| `unlinkRemito(remitId)` | Quita una copia vinculada; nunca toca los archivos. |
 
-### Acciones
+Todas validan el perímetro de empresa (`dailyreport.company_id`) y lanzan `Error` con mensaje en español.
+Las escrituras corren en `withSessionActor`, así el historial guarda quién hizo cada cambio.
 
-Todas las acciones están en `actions/actionsClient.ts`:
+## Historial
 
-- `getRemitosWithDocumentsClient(rowId)`
-- `createRemitoClient(rowId, remitNumber)`
-- `uploadDocumentToRemitoClient(remitId, file, customerName?)`
-- `deleteDocumentClient(documentId)`
-- `deleteRemitoClient(remitId)`
-- `downloadDocumentClient(documentPath, documentName)`
-- `getDocumentUrlClient(documentPath)`
+Los triggers `tr_remitos_history` y `tr_remito_documents_history` (`prisma/sql/daily-report.sql`) escriben
+en `dailyreportrows_history` con `related_table` `remitos` / `remito_documents`:
 
-### Tipos
+- `LINK` / `UNLINK`: alta y baja de un remito (`changed_data.remito_numero`, `vinculado`) o de un documento
+  (`documento_nombre`).
+- `UPDATE`: cambio de número (`changed_fields.remit_number` con `old` / `new`). Hoy solo se alcanza por
+  `updateRemitoNumber`, que no tiene pantalla.
 
-```tsx
-import type {
-  RemitoWithDocuments,
-  RemitDocument,
-  RemitosManagerProps,
-} from '@/features/Operaciones/PartesDiarios/remitManager';
-```
+Los documentos que caen por cascada al borrar el remito no generan bajas propias. Lo cubre
+`prisma/tests/10_remitos.sql`.
 
-## 📝 Ejemplos
+## Refresco de pantallas
 
-### Crear un remito
+Cada mutación llama a `invalidateRemitConsumers` (`hooks/useRemitos.ts`), que invalida el gestor y todo lo
+que muestra remitos: el detalle del parte de Operaciones, el detalle y el historial de la línea, la tabla
+de Comercial y la lista de remitos para vincular.
 
-```tsx
-const createRemito = useCreateRemito(dailyReportRowId);
+## Archivos
 
-await createRemito.mutateAsync('12345');
-```
+- Tipos y tamaños permitidos (PDF, JPG, PNG, WebP, hasta 10 MB): `types/index.ts`. Se validan en el
+  cliente (`useFileValidation`) y otra vez en el servidor (`requireValidFile`); la extensión sale del tipo.
+- Ver y descargar: `getRemitDocumentUrl` / `getRemitDocumentDownloadUrl`. La ruta `/api/files/...`
+  revalida la empresa con `storage-perimeter.ts` a partir de `remito_documents`.
 
-### Subir un documento
+## Manual de uso
 
-```tsx
-const uploadDocument = useUploadDocument(dailyReportRowId, customerName);
-
-await uploadDocument.mutateAsync({
-  remitId: 'uuid',
-  file: selectedFile,
-});
-```
-
-### Eliminar un documento
-
-```tsx
-const deleteDocument = useDeleteDocument(dailyReportRowId);
-
-await deleteDocument.mutateAsync(documentId);
-```
-
-## 🎨 Características
-
-- ✅ Múltiples remitos por línea
-- ✅ Múltiples documentos por remito
-- ✅ Subir archivos (PDF, JPG, PNG, WebP)
-- ✅ Validación de archivos (max 10MB)
-- ✅ Descargar documentos
-- ✅ Eliminar con confirmación
-- ✅ Reemplazar documentos
-- ✅ Vincular documentos existentes
-- ✅ Visualización en tabs
-- ✅ Estadísticas en tiempo real
-- ✅ Toast notifications
-- ✅ Optimistic updates
-
-## 🗄️ Base de Datos
-
-### Tablas
-
-**remitos**
-
-- `id` - UUID primary key
-- `daily_report_row_id` - FK a dailyreportrows
-- `remit_number` - Número del remito
-- `created_at`, `updated_at` - Timestamps
-
-**remito_documents**
-
-- `id` - UUID primary key
-- `remit_id` - FK a remitos
-- `document_path` - Path en Supabase Storage
-- `document_name` - Nombre original del archivo
-- `created_at`, `updated_at` - Timestamps
-
-### Migraciones
-
-1. `20250118_create_remitos_tables.sql` - Crear tablas
-2. `20250118_migrate_remitos_data.sql` - Migrar datos
-
-## 🔒 Seguridad
-
-- RLS habilitado en ambas tablas
-- Políticas para usuarios autenticados
-- Validación de tipos de archivo
-- Validación de tamaño de archivo (max 10MB)
-
-## 📚 Convenciones
-
-Este feature sigue las convenciones de TypeScript del proyecto:
-
-- ✅ Tipado con `Awaited<ReturnType<typeof function>>`
-- ✅ `useQuery` para fetching client-side
-- ✅ `useMutation` para operaciones CRUD
-- ✅ Acciones separadas en `actionsClient.ts`
-- ✅ Estructura de features aislada
-
-Ver: `.kiro/steering/typescript-conventions.md`
+- `src/content/manual/operaciones/detalle-del-parte.mdx` → "Remitos de una línea" (paso a paso).
+- `src/content/manual/comercial/partes-diarios-comercial.mdx` → "Gestionar remitos".
+- `src/content/manual/procesos/del-pedido-a-la-factura.mdx`.

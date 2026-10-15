@@ -8,11 +8,11 @@ import React from 'react';
 import { useFileValidation, useUploadDocument } from '../hooks/useDocuments';
 import { DocumentUploadAreaProps } from '../types';
 
-export function DocumentUploadArea({ remitId, dailyReportRowId, customerName }: DocumentUploadAreaProps) {
+export function DocumentUploadArea({ remitId, dailyReportRowId }: DocumentUploadAreaProps) {
   const [file, setFile] = React.useState<File | null>(null);
   const [error, setError] = React.useState('');
 
-  const uploadDocument = useUploadDocument(dailyReportRowId, customerName);
+  const uploadDocument = useUploadDocument(dailyReportRowId);
   const { validateFile } = useFileValidation();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {

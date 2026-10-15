@@ -31,19 +31,19 @@ export function AddRemitDialog({
       return;
     }
 
-    if (existingNumbers.includes(remitNumber)) {
+    if (existingNumbers.includes(remitNumber.trim())) {
       setError('Ya existe un remito con este número');
       return;
     }
 
     try {
-      const newRemito = await createRemito.mutateAsync(remitNumber);
+      const newRemito = await createRemito.mutateAsync(remitNumber.trim());
       if (onRemitoCreated) {
         onRemitoCreated(newRemito.id);
       }
       handleClose();
     } catch (err) {
-      setError('Error al crear el remito');
+      setError(err instanceof Error && err.message ? err.message : 'Error al crear el remito');
     }
   };
 
@@ -58,12 +58,12 @@ export function AddRemitDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader className="pb-4 border-b">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <FileText className="h-5 w-5 text-primary" />
+            <div className="bg-muted text-muted-foreground rounded-lg p-2">
+              <FileText className="size-5" aria-hidden="true" />
             </div>
             <div>
-              <DialogTitle className="text-xl">Agregar Nuevo Remito</DialogTitle>
-              <p className="text-sm text-muted-foreground mt-1">Complete los datos para crear un nuevo remito</p>
+              <DialogTitle className="text-xl">Agregar remito</DialogTitle>
+              <p className="text-muted-foreground mt-1 text-sm">El número del remito que respalda este servicio.</p>
             </div>
           </div>
         </DialogHeader>
@@ -71,7 +71,7 @@ export function AddRemitDialog({
         <form onSubmit={handleSubmit} className="space-y-5 pt-2">
           <div className="space-y-3">
             <Label htmlFor="remitNumber" className="text-sm font-semibold">
-              Número de Remito <span className="text-red-500">*</span>
+              Número de remito <span className="text-destructive">*</span>
             </Label>
             <Input
               id="remitNumber"
@@ -80,9 +80,9 @@ export function AddRemitDialog({
               placeholder="Ej: 12345 o ABC-001"
               autoFocus
               disabled={createRemito.isPending}
-              className="text-base h-11"
+              className="h-11 font-mono text-base tabular-nums"
             />
-            <p className="text-xs text-muted-foreground">Ingrese un número único que identifique este remito</p>
+            <p className="text-muted-foreground text-xs">No puede repetirse dentro de la misma línea.</p>
           </div>
 
           {error && (
@@ -92,11 +92,9 @@ export function AddRemitDialog({
             </Alert>
           )}
 
-          <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-900">
-            <Info className="h-4 w-4 text-blue-600" />
-            <AlertDescription className="text-sm text-blue-800 dark:text-blue-200">
-              Podrá agregar y gestionar documentos después de crear el remito.
-            </AlertDescription>
+          <Alert variant="info">
+            <Info />
+            <AlertDescription>Los documentos se suben después de crear el remito.</AlertDescription>
           </Alert>
 
           <DialogFooter className="gap-2 sm:gap-0 pt-4 border-t">
@@ -111,11 +109,13 @@ export function AddRemitDialog({
             </Button>
             <Button
               type="submit"
+              variant="brand"
               disabled={createRemito.isPending || !remitNumber.trim()}
+              aria-busy={createRemito.isPending}
               className="flex-1 sm:flex-none"
             >
-              {createRemito.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Crear Remito
+              {createRemito.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+              Crear remito
             </Button>
           </DialogFooter>
         </form>

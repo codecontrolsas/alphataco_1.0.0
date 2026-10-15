@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
-import { FileText, Link2, Search } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { AlertTriangle, FileText, Link2, Search } from 'lucide-react';
+import moment from 'moment';
+import 'moment/locale/es';
 import React from 'react';
 
 import { useAvailableRemitosForLinking, useLinkExistingRemito } from '../hooks/useRemitos';
@@ -35,20 +36,19 @@ export function LinkRemitoDialog({ dailyReportRowId, isOpen, onClose, onRemitoLi
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  // Resetear búsqueda al cerrar
-  React.useEffect(() => {
-    if (!isOpen) {
-      setSearchInput('');
-      setDebouncedSearch('');
-    }
-  }, [isOpen]);
+  // Al cerrar se limpia la búsqueda (en el handler, no en un efecto)
+  const handleClose = () => {
+    setSearchInput('');
+    setDebouncedSearch('');
+    onClose();
+  };
 
   const handleLink = async (sourceRemitId: string) => {
     try {
       const newRemito = await linkRemito.mutateAsync(sourceRemitId);
       if (newRemito) {
         onRemitoLinked?.(newRemito.id);
-        onClose();
+        handleClose();
       }
     } catch (error) {
       // El error ya se maneja en el hook con toast
@@ -56,15 +56,16 @@ export function LinkRemitoDialog({ dailyReportRowId, isOpen, onClose, onRemitoLi
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+      <DialogContent className="flex max-h-[80vh] flex-col sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Link2 className="h-5 w-5" />
-            Vincular Remito Existente
+            Vincular remito existente
           </DialogTitle>
           <DialogDescription>
-            Seleccione un remito de otra línea para vincularlo a esta línea del parte diario
+            Para un remito que cubre varias líneas: se suma a esta con los mismos documentos, sin volver a subirlos. Solo
+            se vinculan remitos del mismo cliente.
           </DialogDescription>
         </DialogHeader>
 
@@ -112,24 +113,21 @@ export function LinkRemitoDialog({ dailyReportRowId, isOpen, onClose, onRemitoLi
                   return (
                     <div
                       key={remito.id}
-                      className={`border rounded-lg p-4 transition-colors ${
-                        isSameCustomer
-                          ? 'hover:bg-muted/50'
-                          : 'border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-950/20'
-                      }`}
+                      className={cn(
+                        'rounded-lg border p-4 transition-colors',
+                        isSameCustomer ? 'hover:bg-muted/50' : 'border-danger/30 bg-danger-subtle/40'
+                      )}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 space-y-2">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="font-semibold text-lg">{remito.remit_number}</h4>
-                            <Badge variant="secondary" className="text-xs">
-                              <FileText className="h-3 w-3 mr-1" />
+                            <h4 className="font-mono text-lg font-semibold tabular-nums">{remito.remit_number}</h4>
+                            <Badge variant="secondary">
+                              <FileText aria-hidden="true" />
                               {docCount} {docCount === 1 ? 'documento' : 'documentos'}
                             </Badge>
                             {!isSameCustomer && (
-                              <Badge variant="destructive" className="text-xs">
-                                Cliente diferente
-                              </Badge>
+                              <Badge variant="destructive">Cliente diferente</Badge>
                             )}
                           </div>
 
@@ -141,20 +139,28 @@ export function LinkRemitoDialog({ dailyReportRowId, isOpen, onClose, onRemitoLi
 
                           {reportDate && (
                             <p className="text-xs text-muted-foreground">
-                              Parte diario: {format(new Date(reportDate), "d 'de' MMMM, yyyy", { locale: es })}
+                              Parte diario:{' '}
+                              <span className="font-mono tabular-nums">{moment.utc(reportDate).format('DD/MM/YYYY')}</span>
                             </p>
                           )}
 
                           {!isSameCustomer && (
-                            <p className="text-xs text-red-600 dark:text-red-400 font-medium">
-                              ⚠️ Este remito pertenece a un registro con otro cliente
+                            <p className="text-danger-subtle-foreground flex items-center gap-1 text-xs font-medium">
+                              <AlertTriangle className="size-3.5" aria-hidden="true" />
+                              Pertenece a una línea de otro cliente: no se puede vincular.
                             </p>
                           )}
                         </div>
 
                         {isSameCustomer && (
-                          <Button onClick={() => handleLink(remito.id)} disabled={linkRemito.isPending} size="sm">
-                            <Link2 className="h-4 w-4 mr-2" />
+                          <Button
+                            type="button"
+                            variant="brand"
+                            onClick={() => handleLink(remito.id)}
+                            disabled={linkRemito.isPending}
+                            size="sm"
+                          >
+                            <Link2 className="mr-2 size-4" />
                             Vincular
                           </Button>
                         )}

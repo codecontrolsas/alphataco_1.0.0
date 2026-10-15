@@ -2,6 +2,7 @@
 
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
+import { remitNumberContainsWhere } from '@/features/Operaciones/PartesDiarios/remitManager/lib/remit-numbers';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import moment from 'moment';
 
@@ -43,7 +44,6 @@ const ROW_SELECT = {
   document_path: true,
   sector_service_id: true,
   areas_service_id: true,
-  remit_number: true,
   cancel_reason: true,
   type_service: true,
   completed_day: true,
@@ -153,14 +153,7 @@ export async function getFilteredDailyReportRows(filters: ReportFilters = {}) {
           : {}),
         ...(filters.areas?.length ? { service_areas: { area_id: { in: filters.areas } } } : {}),
         ...(filters.sectors?.length ? { service_sectors: { sector_id: { in: filters.sectors } } } : {}),
-        ...(filters.remitNumber
-          ? {
-              OR: [
-                { remitos: { some: { remit_number: { contains: filters.remitNumber.trim(), mode: 'insensitive' } } } },
-                { remit_number: { contains: filters.remitNumber.trim(), mode: 'insensitive' } },
-              ],
-            }
-          : {}),
+        ...(filters.remitNumber ? remitNumberContainsWhere(filters.remitNumber) : {}),
       },
       select: ROW_SELECT,
       orderBy: { dailyreport: { date: 'desc' } },
@@ -206,8 +199,8 @@ export async function getFilteredDailyReportRows(filters: ReportFilters = {}) {
         customer_equipment,
         area: row.service_areas?.areas_cliente?.nombre ?? '',
         sector: row.service_sectors?.sectors?.name ?? '',
-        /** Todos los remitos separados por coma (el campo `remit_number` quedó deprecado). */
-        remit_number: remit_numbers.length > 0 ? remit_numbers.join(', ') : row.remit_number || '',
+        /** Todos los remitos de la línea separados por coma (fuente: tabla `remitos`). */
+        remit_number: remit_numbers.join(', '),
         remit_numbers,
         remitos: remitos_list,
         employees_references: row.dailyreportemployeerelations.map((rel) => rel.employees),

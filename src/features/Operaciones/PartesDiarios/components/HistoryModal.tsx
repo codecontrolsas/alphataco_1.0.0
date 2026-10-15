@@ -483,6 +483,35 @@ export default function HistoryModal({
                                 </div>
                               )}
 
+                            {(item.actionType === 'LINK' || item.actionType === 'UNLINK') &&
+                              (item.changes[0]?.type === 'remit_relation' ||
+                                item.changes[0]?.type === 'remit_document_relation') && (
+                                <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                                  <h4 className="font-medium text-sm mb-3 text-slate-700 dark:text-slate-300">
+                                    {item.changes[0].type === 'remit_relation'
+                                      ? item.actionType === 'LINK'
+                                        ? 'Remito cargado:'
+                                        : 'Remito quitado:'
+                                      : item.actionType === 'LINK'
+                                        ? 'Documento agregado al remito:'
+                                        : 'Documento quitado del remito:'}
+                                  </h4>
+                                  <div className="bg-white dark:bg-slate-900 p-3 rounded-md border border-slate-200 dark:border-slate-700 flex flex-col gap-1">
+                                    {item.changes[0].type === 'remit_document_relation' && (
+                                      <span className="font-medium text-sm">
+                                        {String(item.changes[0].remit?.documentName ?? 'Documento')}
+                                      </span>
+                                    )}
+                                    <span className="text-sm">
+                                      Remito{' '}
+                                      <span className="font-mono tabular-nums">
+                                        {String(item.changes[0].remit?.number ?? '-')}
+                                      </span>
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+
                             {item.actionType === 'UPDATE' && (
                               <div className="space-y-3">
                                 {item.changes.map((change, changeIndex) => (

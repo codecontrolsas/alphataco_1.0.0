@@ -962,7 +962,6 @@ model dailyreportrows {
   document_path                            String?
   sector_service_id                        String?                                    @db.Uuid
   areas_service_id                         String?                                    @db.Uuid
-  remit_number                             String?                                    @unique
   cancel_reason                            String?
   type_service                             daily_report_type_enum?
   completed_day                            Boolean?

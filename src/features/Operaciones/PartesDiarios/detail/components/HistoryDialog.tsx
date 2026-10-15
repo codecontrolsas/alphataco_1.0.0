@@ -14,6 +14,7 @@ import {
   Clock,
   Computer,
   ExternalLink,
+  FileText,
   History,
   Info,
   LinkIcon,
@@ -158,7 +159,14 @@ function getValueDisplay(value: unknown, field: string): string {
 // HELPERS — Determine relation type from raw DB data
 // ============================================================================
 
-type RelationType = 'employee' | 'vehicle' | 'other_equipment' | 'customer_equipment' | 'unknown';
+type RelationType =
+  | 'employee'
+  | 'vehicle'
+  | 'other_equipment'
+  | 'customer_equipment'
+  | 'remito'
+  | 'remito_document'
+  | 'unknown';
 
 function getRelationType(entry: DailyReportHistoryEntry): RelationType {
   const table = entry.related_table;
@@ -170,6 +178,8 @@ function getRelationType(entry: DailyReportHistoryEntry): RelationType {
     return 'vehicle';
   }
   if (table === 'dailyreport_customer_equipment_relations') return 'customer_equipment';
+  if (table === 'remitos') return 'remito';
+  if (table === 'remito_documents') return 'remito_document';
   return 'unknown';
 }
 
@@ -183,6 +193,10 @@ function getRelationBadgeLabel(relType: RelationType): string {
       return 'Otro Equipo';
     case 'customer_equipment':
       return 'Equipo Cliente';
+    case 'remito':
+      return 'Remito';
+    case 'remito_document':
+      return 'Documento de remito';
     default:
       return 'Recurso';
   }
@@ -196,6 +210,9 @@ function getRelationIcon(relType: RelationType) {
       return <Truck className="h-3 w-3 mr-1" />;
     case 'other_equipment':
       return <Wrench className="h-3 w-3 mr-1" />;
+    case 'remito':
+    case 'remito_document':
+      return <FileText className="h-3 w-3 mr-1" />;
     default:
       return null;
   }
@@ -493,6 +510,41 @@ function HistoryEntryItem({ entry, isLast }: { entry: DailyReportHistoryEntry; i
                   </h4>
                   <div className="bg-white dark:bg-slate-900 p-3 rounded-md border">
                     <span className="font-medium text-sm">{(changedData.equipo_cliente_nombre as string) ?? '—'}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* ── LINK/UNLINK: remito (alta o baja) ───────────────────── */}
+              {(actionType === 'LINK' || actionType === 'UNLINK') && relationType === 'remito' && (
+                <div className="p-4 rounded-lg border bg-slate-50 dark:bg-slate-800">
+                  <h4 className="font-medium text-sm mb-3 text-slate-700 dark:text-slate-300">
+                    {actionType === 'LINK'
+                      ? changedData.vinculado
+                        ? 'Remito vinculado desde otra línea:'
+                        : 'Remito cargado:'
+                      : changedData.vinculado
+                        ? 'Remito desvinculado:'
+                        : 'Remito eliminado:'}
+                  </h4>
+                  <div className="bg-white dark:bg-slate-900 p-3 rounded-md border">
+                    <span className="font-mono font-medium text-sm tabular-nums">
+                      {(changedData.remito_numero as string) ?? '—'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* ── LINK/UNLINK: documento de un remito ─────────────────── */}
+              {(actionType === 'LINK' || actionType === 'UNLINK') && relationType === 'remito_document' && (
+                <div className="p-4 rounded-lg border bg-slate-50 dark:bg-slate-800">
+                  <h4 className="font-medium text-sm mb-3 text-slate-700 dark:text-slate-300">
+                    {actionType === 'LINK' ? 'Documento agregado al remito:' : 'Documento quitado del remito:'}
+                  </h4>
+                  <div className="bg-white dark:bg-slate-900 p-3 rounded-md border flex flex-col gap-1">
+                    <span className="font-medium text-sm">{(changedData.documento_nombre as string) ?? '—'}</span>
+                    <span className="text-xs text-muted-foreground">
+                      Remito <span className="font-mono tabular-nums">{(changedData.remito_numero as string) ?? '—'}</span>
+                    </span>
                   </div>
                 </div>
               )}

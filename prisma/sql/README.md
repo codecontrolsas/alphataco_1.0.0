@@ -15,7 +15,7 @@ nullif(current_setting('app.user_id', true), '')::uuid
 | Usa `app_current_user_id()` | Columna que llena |
 | --- | --- |
 | `log_maintenance_order_activity`, `log_work_order_activity` | `maintenance_activity_log.performed_by` (FK a `profile.id`) |
-| `log_dailyreport_changes`, `log_customer_equipment_relations_changes`, `log_employee_relations_changes`, `log_equipment_relations_changes` | `dailyreportrows_history.changed_by` (FK a `profile.credential_id`) |
+| `log_dailyreport_changes`, `log_customer_equipment_relations_changes`, `log_employee_relations_changes`, `log_equipment_relations_changes`, `log_remito_changes`, `log_remito_document_changes` | `dailyreportrows_history.changed_by` (FK a `profile.credential_id`) |
 | `controlar_alertas_documentos_single_employee` / `_vehicle` | `documents_employees.user_id` / `documents_equipment.user_id` de las alertas creadas |
 | DEFAULT de columna (en `schema.prisma`) | `diagrams_logs.modified_by`, `vehicles.user_id` |
 

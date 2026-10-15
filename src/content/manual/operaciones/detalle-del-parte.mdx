@@ -1,19 +1,23 @@
 ---
 title: Detalle del parte
 summary: Trabajá el parte de un día línea por línea: asigná personal y equipos, marcá lo ejecutado, reprogramá, cloná a otras fechas y corregí los desvíos.
-keywords: parte diario, línea, asignar recursos, chofer, ayudante, ejecutado, reprogramar, clonar, desvío, remito, historial
-updated: 2026-10-07
+keywords: parte diario, línea, asignar recursos, chofer, ayudante, ejecutado, reprogramar, clonar, desvío, remito, remitos, documento de remito, historial
+updated: 2026-10-15
 ---
 
 El detalle del parte es donde Operaciones organiza el día: cada **línea** es un servicio para un cliente, y a cada línea se le asignan las personas y los equipos que lo van a prestar. A medida que el día avanza, las líneas se marcan como ejecutadas, canceladas o reprogramadas. El sistema controla además que los recursos asignados estén en condiciones (que la persona trabaje ese día, que el equipo esté operativo, que ambos estén afectados a ese cliente) y marca como **desvío** lo que no cierra.
 
 <OpenScreen to="partes-diarios" label="Abrir Partes Diarios" />
 
-Para llegar, entrá a **Operaciones → Partes Diarios** y hacé clic en **Ver** en el parte del día que quieras. Arriba se ve **Parte diario**, su estado (Abierto, Cerrado completo o Cerrado incompleto) y la **Fecha**.
+Para llegar, entrá a **Operaciones → Partes Diarios** y hacé clic en la fecha (o en **Ver**) del parte que quieras. Arriba se ve **Volver**, el título **Parte del** con la fecha, el día de la semana y el estado del parte (Abierto, Cerrado completo o Cerrado incompleto).
 
 ## Qué ves en la pantalla
 
-Arriba de la tabla están los botones **Crear** (agregar una línea) y **Clonar Registros**. Cuando seleccionás líneas, aparece además **Editar** con la cantidad seleccionada, y **Clonar Registros** pasa a decir **Clonar** con esa cantidad.
+Debajo del título hay una franja con cuatro números del parte: **Registros** (todas las líneas), **Ejecutados**, **Pendientes** y **Sin recursos**. Pendientes y Sin recursos se pintan cuando son más que cero. Se actualizan solos cuando creás, editás, clonás o eliminás líneas.
+
+Más abajo, **Referencias de colores** se despliega con un clic y explica los colores de las filas y de las etiquetas de personal y equipos (ver **Colores de las filas** y **Desvíos de recursos**).
+
+En la barra de la tabla están los botones **Clonar Registros** y **Crear registro** (agregar una línea). Cuando seleccionás líneas, aparece además **Editar** con la cantidad seleccionada, y **Clonar Registros** pasa a decir **Clonar** con esa cantidad.
 
 Cada fila de la tabla es una línea del parte:
 
@@ -29,18 +33,18 @@ Cada fila de la tabla es una línea del parte:
 | **Jornada** / **Hora Inicio** / **Hora Fin** | Duración del servicio (los horarios están ocultos al principio). |
 | **Estado** | El estado de la línea (ver más abajo). |
 | **Descripción** | Las observaciones de la línea. |
-| **Nro Remito** | El remito del servicio, cuando ya se cargó. |
+| **Remitos** | Los números de remito de la línea. Una línea puede tener varios (ver **Remitos de una línea**). |
 | **Completado Día** / **Completado Noche** | En jornadas de 24 horas, si cada turno se completó. |
-| Acciones | Ver detalle, Editar, Asignar recursos, Historial y Eliminar. |
+| Acciones | Ver detalle, Editar, Asignar recursos, Remitos, Historial y Eliminar. |
 
 Cada persona y cada equipo se muestra como una etiqueta. El color de la etiqueta indica si tiene un desvío; al pasar el mouse se ve el motivo (los detalles están en la sección **Desvíos de recursos**, más abajo).
 
-**Colores de las filas.**
+**Colores de las filas.** También están en **Referencias de colores**, arriba de la tabla.
 
 - **Fondo azul**: la línea fue modificada desde Comercial (por ejemplo, pasada a En certificación).
 - **Fondo amarillo**: la línea se cargó después de la fecha del parte, es decir, se agregó tarde.
 
-**Filtros.** Hay un filtro por cada dato: **Estado**, **Cliente**, **Servicio**, **Ítem**, **Sector**, **Área**, **Tipo Servicio**, **Jornada**, **Descripción**, **Nro Remito**, **Completado Día**, **Completado Noche**, **Empleados**, **Equipos** y **Equipo cliente**. De entrada se ven **Estado**, **Cliente** y **Jornada**. El buscador es **Buscar por descripción, remito, cliente, servicio...**
+**Filtros.** Hay un filtro por cada dato: **Estado**, **Cliente**, **Servicio**, **Ítem**, **Sector**, **Área**, **Tipo Servicio**, **Jornada**, **Descripción**, **Remitos**, **Completado Día**, **Completado Noche**, **Empleados**, **Equipos** y **Equipo cliente**. De entrada se ven **Estado**, **Cliente** y **Jornada**. El buscador es **Buscar por descripción, remito, cliente, servicio...** y encuentra la línea por cualquiera de sus remitos. La columna **Remitos** no se puede ordenar, porque una línea puede tener más de uno.
 
 **Exportar.** **Excel** descarga todas las líneas que coinciden con los filtros, con los estados y el tipo de servicio en texto, los turnos completados como Sí/No y una columna por rol (chofer y ayudante de día y de noche).
 
@@ -48,10 +52,10 @@ Cada persona y cada equipo se muestra como una etiqueta. El color de la etiqueta
 
 <States title="Ciclo de vida de una línea del parte">
   <State name="Sin recursos" tone="danger" next="Pendiente, Cancelado, Reprogramado">La línea todavía no tiene el personal o los equipos que necesita. Es como nacen las líneas que vienen de un pedido confirmado.</State>
-  <State name="Pendiente" tone="warning" next="Ejecutado, Cancelado, Reprogramado">Ya tiene recursos asignados y espera que se preste el servicio. El paso desde Sin recursos es automático.</State>
+  <State name="Pendiente" tone="default" next="Ejecutado, Cancelado, Reprogramado">Ya tiene recursos asignados y espera que se preste el servicio. El paso desde Sin recursos es automático.</State>
   <State name="Ejecutado" tone="success" next="En certificación">El servicio se prestó. En jornadas de 24 horas se llega al completar los dos turnos.</State>
-  <State name="Reprogramado" tone="default">El servicio se pasó a otra fecha. Esta línea queda como constancia y se crea una copia en el parte de la fecha nueva.</State>
-  <State name="Cancelado" tone="danger">El servicio no se presta, con un motivo obligatorio (se ve al pasar el mouse por el estado).</State>
+  <State name="Reprogramado" tone="warning">El servicio se pasó a otra fecha. Esta línea queda como constancia y se crea una copia en el parte de la fecha nueva.</State>
+  <State name="Cancelado" tone="default">El servicio no se presta, con un motivo obligatorio (se ve al pasar el mouse por el estado).</State>
   <State name="En certificación" tone="info">Comercial la tomó para certificarla. Ya no se edita desde Operaciones.</State>
 </States>
 
@@ -63,10 +67,10 @@ Cada persona y cada equipo se muestra como una etiqueta. El color de la etiqueta
 
 <Steps>
   <Step title="Abrí el formulario">
-    Hacé clic en **Crear**. Se abre **Agregar Fila del Parte Diario**. Si el botón está gris con el aviso **El parte está cerrado y no es el día de hoy**, ese parte ya no admite líneas nuevas.
+    Hacé clic en **Crear registro**. Se abre **Agregar fila del parte diario**, dividido en cuatro secciones: **Cliente y servicio**, **Personal**, **Equipos** y **Estado y horario**. Si el botón está gris con el aviso **El parte está cerrado y no es el día de hoy**, ese parte ya no admite líneas nuevas.
   </Step>
   <Step title="Elegí el servicio">
-    En **Datos del Cliente** elegí **Cliente**, **Servicio** e **Ítem** (obligatorios, cada uno se habilita después del anterior). **Sector del Cliente (Opcional)**, **Área del Cliente (Opcional)** y **Equipos del Cliente** (hasta 2) completan dónde se presta.
+    En **Cliente y servicio** elegí **Cliente**, **Servicio** e **Ítem** (obligatorios, cada uno se habilita después del anterior). **Sector del Cliente (Opcional)**, **Área del Cliente (Opcional)** y **Equipos del Cliente** (hasta 2) completan dónde se presta.
   </Step>
   <Step title="Elegí la jornada">
     **Jornada** es obligatoria: Jornada 8 horas, Jornada 12 horas, Jornada 24 horas o Por horario. Con **Por horario** son obligatorios **Hora de inicio** y **Hora de fin**.
@@ -86,7 +90,7 @@ Cada persona y cada equipo se muestra como una etiqueta. El color de la etiqueta
 
 Hay dos caminos:
 
-- **Asignar recursos** (el ícono de la persona con engranaje): abre **Asignar Recursos**, donde **solo** se puede cargar personal y equipos. El resto de la línea se ve pero está bloqueado. Es la acción pensada para el supervisor de operaciones, y tiene su propio permiso.
+- **Asignar recursos** (el ícono de la persona con engranaje): abre **Asignar recursos**, donde **solo** se puede cargar personal y equipos. El resto de la línea se ve pero está bloqueado. Es la acción pensada para el supervisor de operaciones, y tiene su propio permiso.
 - **Editar** (el lápiz): abre la línea completa, recursos incluidos.
 
 ### Personal
@@ -130,9 +134,10 @@ Abrí la línea con **Editar**. En **Estado** podés elegir:
 |---|---|
 | **Ver detalle** | Siempre. |
 | **Historial** | Siempre. |
-| **Editar** / **Asignar recursos** | Siempre que la línea no esté **En certificación** ni **Ejecutada**. Una línea ejecutada solo se puede corregir el mismo día del parte. |
+| **Remitos** | Cuando la línea está **Ejecutada** o **En certificación**, en cualquier fecha (el remito suele llegar días después del servicio). |
+| **Editar** / **Asignar recursos** | Siempre que la línea no esté **En certificación**. Si está **Ejecutada**, solo el mismo día del parte. |
 | **Eliminar** | Si el parte es de hoy o de una fecha futura, o si la línea está **Sin recursos**. En partes de días pasados no se borran líneas que ya tuvieron recursos. |
-| **Crear** | Si el parte está **Abierto** o es el de hoy. |
+| **Crear registro** | Si el parte está **Abierto** o es el de hoy. |
 
 <Callout type="warning" title="Eliminar una línea que vino de un pedido">
 Si la línea vino de un pedido confirmado, al eliminarla el pedido vuelve a **Pendiente** en el Gestor de pedidos, y el aviso lo dice: **Registro eliminado. El pedido PED-… volvió a estado Pendiente.** Eliminar la línea no se puede deshacer.
@@ -188,13 +193,43 @@ Las copias son líneas nuevas e independientes: no conservan el vínculo con el 
 Si alguna de las líneas ya se había clonado a una de esas fechas, el sistema te avisa antes de duplicar y muestra cuáles son, fecha por fecha. Podés **Volver a la selección**, **Excluir duplicados y clonar el resto** (lo más habitual) o **Clonar igualmente**.
 </Callout>
 
-## Detalle, remitos e historial de una línea
+## Remitos de una línea
 
-**Ver detalle** (el ojo) abre **Detalle del Servicio** con todos los datos de la línea: cliente, servicio, ítem y su descripción, sector, área, jornada, turno, horarios, estado, tipo de servicio, **Nro Remito**, descripción, el personal y los equipos asignados, y, si vino de un pedido, **Pedido vinculado:** con su número.
+El remito es el comprobante que firma el cliente al recibir el servicio. Cada línea puede tener **uno o varios remitos**, y cada remito, **uno o varios documentos** (el remito escaneado o una foto). Los remitos viven en un solo lugar: lo que cargues acá se ve igual en la pantalla de partes diarios de Comercial, y lo que cargue Comercial se ve acá.
 
-**Remitos y adjuntos.** El número de remito y los documentos del remito los carga Comercial cuando certifica el servicio, desde su propia pantalla de partes diarios. En el detalle del parte de Operaciones el remito se ve (columna **Nro Remito** y el detalle de la línea) y se puede filtrar, pero no se carga. Ver <GuideLink to="partes-diarios-comercial">Partes diarios en Comercial</GuideLink>.
+Se gestionan con la acción **Remitos** (el ícono de documento) de cada línea. Aparece cuando la línea está **Ejecutada** o **En certificación** y tenés permiso de **Editar** en el detalle del parte.
 
-**Historial** (el reloj) abre **Historial de Cambios**: cada creación, actualización, vinculación o desvinculación de recursos y eliminación de la línea, con la fecha, quién lo hizo, qué campos cambiaron (valor anterior y nuevo) y el **Motivo:** cuando hubo una reasignación. Los cambios que hizo el sistema solo (por ejemplo, el paso automático de Sin recursos a Pendiente o el cierre nocturno) figuran como hechos por **El Sistema** (al pasar el mouse dice **Cambio realizado automáticamente**).
+<Steps>
+  <Step title="Abrí los remitos de la línea">
+    Hacé clic en **Remitos**. Se abre **Remitos de la línea**, con el cliente y la cantidad de remitos y documentos que tiene.
+  </Step>
+  <Step title="Cargá el número">
+    Hacé clic en **Nuevo remito** (o **Agregar remito** si la línea todavía no tiene ninguno), escribí el **Número de remito** y hacé clic en **Crear remito**. El número no se puede repetir dentro de la misma línea.
+  </Step>
+  <Step title="Subí el documento">
+    En la pestaña del remito, hacé clic en **Subir documento**, elegí el archivo (PDF, JPG, PNG o WebP, hasta 10 MB) y hacé clic en **Subir Documento**. Un remito sin documentos se marca **Sin documentos**.
+  </Step>
+</Steps>
+
+**Un remito que cubre varias líneas.** Si el mismo remito respalda más de una línea del mismo cliente, cargalo una vez y en las demás usá **Vincular remito existente**: buscás el número, hacés clic en **Vincular** y la línea suma ese remito con los mismos documentos, sin volver a subirlos. Solo se ofrecen remitos de líneas del **mismo cliente** (sin buscar, los últimos 10 cargados). En la pestaña, un remito vinculado lleva la etiqueta **Vinculado**.
+
+**Quitar un remito o un documento.**
+
+- En un remito vinculado, **Desvincular** lo saca solo de esta línea. El original y sus documentos quedan donde se cargaron.
+- En un remito propio, **Eliminar** lo borra con sus documentos. Si estaba vinculado a otras líneas, esas copias y sus archivos se conservan.
+- El tacho de cada documento lo quita del remito, con confirmación.
+
+Cada alta y cada baja de un remito o de un documento queda registrada en el **Historial** de la línea, con quién la hizo.
+
+<Callout type="info" title="El remito no es requisito para cerrar el parte">
+Una línea ejecutada sin remito cuenta igual para el cierre del parte. El remito es el respaldo que necesita Comercial para certificar y facturar.
+</Callout>
+
+## Detalle e historial de una línea
+
+**Ver detalle** (el ojo) abre **Detalle del Servicio** con todos los datos de la línea: cliente, servicio, ítem y su descripción, sector, área, jornada, turno, horarios, estado, tipo de servicio, **Remitos**, descripción, el personal y los equipos asignados, y, si vino de un pedido, **Pedido vinculado:** con su número.
+
+**Historial** (el reloj) abre **Historial de Cambios**: cada creación, actualización, vinculación o desvinculación de recursos, cada remito y documento cargado o quitado, y la eliminación de la línea, con la fecha, quién lo hizo, qué campos cambiaron (valor anterior y nuevo) y el **Motivo:** cuando hubo una reasignación. Los cambios que hizo el sistema solo (por ejemplo, el paso automático de Sin recursos a Pendiente o el cierre nocturno) figuran como hechos por **El Sistema** (al pasar el mouse dice **Cambio realizado automáticamente**).
 
 ## Desvíos de recursos
 
@@ -236,6 +271,7 @@ Cuando el servicio ya se ejecutó, Comercial lo toma desde su pantalla de partes
 
 - La línea muestra el estado **En certificación** y el fondo azul de "modificada desde Comercial".
 - Desaparecen **Editar** y **Asignar recursos**: los datos ya están en manos de Comercial.
+- Sigue disponible **Remitos**, para completar el remito o sus documentos mientras Comercial certifica.
 - Para el cierre del parte cuenta como una línea resuelta.
 
 Si hay que corregir algo de una línea en certificación, hay que pedírselo a Comercial. El circuito completo está en <GuideLink to="del-pedido-a-la-factura">Del pedido a la factura</GuideLink> y en <GuideLink to="certificaciones">Certificaciones</GuideLink>.
@@ -245,7 +281,7 @@ Si hay que corregir algo de una línea en certificación, hay que pedírselo a C
 - **Gestor de pedidos**: los pedidos confirmados llegan acá como líneas Sin recursos. Eliminar una de esas líneas devuelve el pedido a Pendiente. Ver <GuideLink to="gestor-de-pedidos">Gestor de pedidos</GuideLink>.
 - **Diagramas y afectaciones**: lo que se carga en los diagramas de los empleados y en las afectaciones a clientes (de empleados y equipos) es lo que decide si hay desvío. Ver <GuideLink to="diagramas">Diagramas</GuideLink>.
 - **Mantenimiento**: la condición de cada equipo (operativo, en reparación…) la mueve el circuito de mantenimiento, y se refleja acá en los desvíos.
-- **Comercial**: certifica las líneas ejecutadas, carga los remitos y factura. Ver <GuideLink to="partes-diarios-comercial">Partes diarios en Comercial</GuideLink>.
+- **Comercial**: certifica las líneas ejecutadas y factura. Los remitos son los mismos en las dos pantallas: los puede cargar Operaciones al ejecutar la línea o Comercial al certificarla. Ver <GuideLink to="partes-diarios-comercial">Partes diarios en Comercial</GuideLink>.
 - **Cierre del parte**: el estado de cada línea define si el parte cierra completo o incompleto. Ver <GuideLink to="partes-diarios">Partes diarios</GuideLink>.
 
 ## Permisos
@@ -253,7 +289,8 @@ Si hay que corregir algo de una línea en certificación, hay que pedírselo a C
 | Para… | Hace falta (en Detalle de Parte Diario) |
 |---|---|
 | Entrar al detalle, ver líneas, historial y exportar | **Ver** |
-| **Crear**, **Editar**, edición masiva y **Clonar Registros** | **Editar** |
+| **Crear registro**, **Editar**, edición masiva y **Clonar Registros** | **Editar** |
+| **Remitos** (cargar, vincular y quitar remitos y documentos) | **Editar** |
 | **Asignar recursos** | **Asignar recursos** |
 | **Eliminar** líneas | **Eliminar** |
 
@@ -271,6 +308,10 @@ La línea está Sin recursos, o el parte es de mañana en adelante: no se puede 
 
 <Callout type="info" title="Me pide Motivo de reasignación">
 Sacaste o cambiaste una persona o un equipo que ya estaba asignado. Escribí el motivo (por ejemplo "chofer enfermo"): queda en el historial.
+</Callout>
+
+<Callout type="info" title="No veo la acción Remitos">
+Aparece solo en líneas **Ejecutadas** o **En certificación**, y hace falta **Editar** en Detalle de Parte Diario. En una línea pendiente todavía no hay servicio que remitir.
 </Callout>
 
 <Callout type="tip" title="Antes de clonar, revisá los desvíos">

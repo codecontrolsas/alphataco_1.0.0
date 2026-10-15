@@ -1,8 +1,8 @@
 ---
 title: Del pedido a la factura
 summary: El circuito comercial completo: el pedido del cliente, el parte diario que lo ejecuta, la certificación que lo valoriza y la factura electrónica.
-keywords: pedido, preparte, parte diario, certificación, factura, ARCA, CAE, nota de crédito, precio, contrato
-updated: 2026-10-07
+keywords: pedido, preparte, parte diario, remito, certificación, factura, ARCA, CAE, nota de crédito, precio, contrato
+updated: 2026-10-15
 ---
 
 Todo trabajo que se le cobra a un cliente recorre el mismo camino: entra como **pedido**, se ejecuta como **línea del parte diario**, se valoriza en una **certificación** y se cobra con una **factura**. Cada paso lo hace un área distinta en una pantalla distinta, y cada uno se apoya en lo que dejó el anterior. Esta guía explica el recorrido completo, qué cambia solo y dónde se suele trabar.
@@ -82,6 +82,7 @@ Lo que hace cada uno en esta etapa:
 - **Asignar recursos** (permiso **Asignar Recursos**): se eligen empleados y equipos para la línea. Si el ítem tiene **Necesita Personal** se ve la sección de empleados; si no, aparece "… no requiere personal". Al guardar con recursos, la línea pasa de **Sin recursos asignados** a **Pendiente**.
 - **Marcar como Ejecutado**: exige al menos un empleado o equipo ("Debe seleccionar al menos un empleado o equipo cuando el estado es "Ejecutado"") y no se puede hacer en partes de fechas futuras.
 - **Cambiar recursos de una línea ya asignada**: pide un **motivo de reasignación**, que queda en el historial de la línea.
+- **Remitos**: con la línea **Ejecutada**, Operaciones puede cargar el remito del servicio (número y documento) desde la acción **Remitos** del detalle. Ver <GuideLink to="detalle-del-parte#remitos-de-una-línea">Remitos de una línea</GuideLink>.
 - **Desvíos**: mientras cargás, cada empleado o equipo asignado muestra si tiene algún desvío (asignado en varias filas, no afectado al cliente, sin diagrama, día no laboral, equipo no operativo…). No bloquean la carga, pero se informan. Ver <GuideLink to="diagramas-afectaciones-y-desvios">Diagramas, afectaciones y desvíos</GuideLink>.
 
 ### El cierre del parte
@@ -91,7 +92,7 @@ El parte se cierra solo. **Todas las noches, a las 00:30**, el sistema revisa lo
 - Si todas sus líneas están **Ejecutado**, **Reprogramado**, **Cancelado** o **En certificación** (o el parte no tiene líneas), queda **Cerrado completo**.
 - Si alguna línea sigue **Pendiente** o **Sin recursos asignados**, queda **Cerrado incompleto**.
 
-Un parte **Cerrado incompleto** se vuelve a revisar cada noche: si completás las líneas que faltaban, a la noche siguiente pasa a **Cerrado completo**. El remito no es requisito para el cierre. La misma pasada nocturna pasa a **Pendiente** las líneas que estaban **Sin recursos asignados** y ya tienen algún recurso.
+Un parte **Cerrado incompleto** se vuelve a revisar cada noche: si completás las líneas que faltaban, a la noche siguiente pasa a **Cerrado completo**. El remito no es requisito para el cierre (se puede cargar después, desde Operaciones o desde Comercial). La misma pasada nocturna pasa a **Pendiente** las líneas que estaban **Sin recursos asignados** y ya tienen algún recurso.
 
 ## Paso 3: la certificación (Comercial)
 
@@ -100,6 +101,8 @@ La certificación es el documento que valoriza lo trabajado: **un cliente, un co
 ### Revisar los partes desde Comercial
 
 En <GuideLink to="partes-diarios-comercial">Comercial → Partes Diarios</GuideLink> el área comercial ve todas las líneas de los partes. Seleccionando líneas **Ejecutado** y usando **Enviar a certificación**, pasan a **En certificación**: quedan bloqueadas para Operaciones, así nadie las cambia mientras se certifican. Las líneas que no estaban en **Ejecutado** se saltean y el mensaje lo dice ("… no estaban en estado "ejecutado"").
+
+Los remitos que falten se completan con **Gestionar Remitos** en las líneas **En certificación**. Son los mismos remitos que carga Operaciones: hay un solo registro por línea, y se ve igual en las dos pantallas.
 
 <Callout type="info" title="No es obligatorio pasar las líneas a En certificación">
 La certificación toma las líneas **Ejecutado** y las **En certificación** del período. Pasarlas antes a En certificación sirve para congelarlas del lado de Operaciones, no para que entren en la certificación.

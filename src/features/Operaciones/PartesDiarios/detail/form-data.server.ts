@@ -3,6 +3,7 @@
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { REMIT_NUMBERS_SELECT } from '../remitManager/lib/remit-numbers';
 
 const logger = new Logger('features/Operaciones/PartesDiarios/detail/form-data');
 
@@ -115,7 +116,6 @@ export async function getDailyReportRowForForm(rowId: string) {
         document_path: true,
         sector_service_id: true,
         areas_service_id: true,
-        remit_number: true,
         cancel_reason: true,
         type_service: true,
         completed_day: true,
@@ -332,7 +332,7 @@ export async function getDailyReportRowDetail(rowId: string) {
         shift_12h: true,
         start_time: true,
         end_time: true,
-        remit_number: true,
+        remitos: REMIT_NUMBERS_SELECT,
         cancel_reason: true,
         type_service: true,
         completed_day: true,

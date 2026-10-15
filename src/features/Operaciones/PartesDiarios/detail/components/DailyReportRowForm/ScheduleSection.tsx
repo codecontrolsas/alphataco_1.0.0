@@ -55,12 +55,7 @@ export function ScheduleSection({
             <FormItem>
               <FormLabel>Estado</FormLabel>
               <Select
-                onValueChange={(value) => {
-                  field.onChange(value);
-                  if (value !== 'ejecutado') {
-                    form.setValue('remit_number', '');
-                  }
-                }}
+                onValueChange={field.onChange}
                 defaultValue={field.value}
               >
                 <FormControl>

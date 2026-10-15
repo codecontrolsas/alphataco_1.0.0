@@ -30,7 +30,14 @@ export interface DailyReportRowHistoryRecord {
  * y la UI elige qué leer según `type`.
  */
 export interface ProcessedHistoryChange {
-  type?: 'equipment_relation' | 'employee_relation' | 'other_equipment_relation' | 'vehicle_relation' | 'full_record';
+  type?:
+    | 'equipment_relation'
+    | 'employee_relation'
+    | 'other_equipment_relation'
+    | 'vehicle_relation'
+    | 'remit_relation'
+    | 'remit_document_relation'
+    | 'full_record';
   action?: 'added' | 'removed';
   field?: string;
   fieldName?: string;
@@ -42,6 +49,8 @@ export interface ProcessedHistoryChange {
   employee?: { id?: HistoryValue; name?: HistoryValue };
   equipment?: { id?: HistoryValue; name?: HistoryValue; identifier?: HistoryValue };
   vehicle?: { id?: HistoryValue; domain?: HistoryValue; internNumber?: HistoryValue };
+  /** Remito de la línea (tabla `remitos`) y, para documentos, el archivo agregado o quitado. */
+  remit?: { number?: HistoryValue; linked?: HistoryValue; documentName?: HistoryValue };
   otherEquipment?: {
     id?: HistoryValue;
     internNumber?: HistoryValue;

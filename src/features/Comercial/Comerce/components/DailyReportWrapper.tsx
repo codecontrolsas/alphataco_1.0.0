@@ -426,20 +426,8 @@ export default function DailyReportWrapper() {
         type: 'select' as const,
         options: Array.from(
           new Set(
-            formattedData.flatMap((d) => {
-              // Obtener remitos del array remit_numbers si existe, o del string remit_number
-              if (d.remit_numbers && d.remit_numbers.length > 0) {
-                return d.remit_numbers.filter(Boolean);
-              }
-              if (d.remit_number) {
-                // Si es string, separar por comas
-                return d.remit_number
-                  .split(',')
-                  .map((r: string) => r.trim())
-                  .filter(Boolean);
-              }
-              return [];
-            })
+            // Los remitos vienen siempre como lista desde la tabla `remitos` (fuente única)
+            formattedData.flatMap((d) => d.remit_numbers ?? [])
           )
         )
           .sort()

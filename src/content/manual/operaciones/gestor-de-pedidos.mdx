@@ -2,7 +2,7 @@
 title: Gestor de pedidos
 summary: Registrá los pedidos de servicio de tus clientes, confirmalos para mandarlos al parte diario y seguí su estado hasta que se ejecutan.
 keywords: pedido, preparte, solicitud, cliente, contrato, ítem, confirmar, reprogramar, vencido, sujeto a disponibilidad, informe
-updated: 2026-10-07
+updated: 2026-10-15
 ---
 
 El Gestor de Pedidos es la puerta de entrada de todo el trabajo operativo. Cada vez que un cliente pide un servicio (por teléfono, por mail, por orden de compra), Operaciones lo carga acá como **pedido**. Mientras el pedido está pendiente es solo una intención; cuando se **confirma**, el sistema lo convierte en una línea del parte diario de su fecha, y a partir de ahí se le asignan personal y equipos, se ejecuta y, más adelante, Comercial lo certifica y lo factura.
@@ -26,19 +26,20 @@ Por ejemplo: si un cliente pide 2 equipos de un ítem del 1 al 3 del mes, al gua
 
 ## Qué ves en la pantalla
 
-Arriba están el título **Gestión de Pedidos** y los botones **Generar Informe** y **Nuevo Pedido**.
+Arriba hay una fila de tarjetas con el conteo de pedidos: **Todos**, **Pendientes**, **Vencidos**, **Reprogramados**, **Confirmados**, **Rechazados** y **Cancelados**. Las que piden atención se destacan: **Pendientes** (esperan confirmación), **Vencidos** y **Reprogramados**. Hacé clic en una tarjeta para filtrar la tabla por ese estado; volvé a hacer clic, o tocá **Todos**, para quitar el filtro.
 
-Debajo hay una fila de tarjetas con el conteo de pedidos: **Todos**, **Pendientes**, **Reprogramados**, **Confirmados**, **Cancelados**, **Rechazados** y **Vencidos**. Hacé clic en una tarjeta para filtrar la tabla por ese estado; **Todos** quita el filtro.
+Los botones **Generar informe** y **Nuevo pedido** están en la barra de la tabla, junto al buscador. En el celular, cada pedido se ve como una tarjeta con los mismos datos.
 
 La tabla muestra un pedido por fila. Estas son sus columnas:
 
 | Columna | Qué muestra |
 |---|---|
-| **Fecha de solicitud** | Cuándo lo pidió el cliente. |
-| **Fecha de ejecución** | Para qué día es el servicio. Vacía si está sujeto a disponibilidad. |
-| **N° pedido** | El número compartido por todos los pedidos cargados juntos. |
+| **N° pedido** | El número compartido por todos los pedidos cargados juntos. Al hacer clic se abre el detalle. |
+| **Pedido** | El cliente y, debajo, el contrato y el ítem. |
 | **Estado** | Pendiente, Confirmado, Reprogramado, Cancelado, Rechazado o Vencido. |
-| **Cliente** / **Contrato** | Para quién y bajo qué contrato. |
+| **Fecha de ejecución** | Para qué día es el servicio. Si está sujeto a disponibilidad dice **Pendiente de fecha**. |
+| **Fecha de solicitud** | Cuándo lo pidió el cliente. |
+| **Cliente** / **Contrato** | Para quién y bajo qué contrato (ocultas al principio: ya se ven en **Pedido**). |
 | **Sector (cliente)** / **Área (cliente)** / **Equipo cliente** | Dónde se presta el servicio dentro del cliente. |
 | **Ítem** / **Cantidad** | Qué servicio del contrato se pidió. |
 | **Tipo** | Mensual, Adicional o Adicional Permanente. |
@@ -50,7 +51,7 @@ La tabla muestra un pedido por fila. Estas son sus columnas:
 | **Imagen** | El documento adjunto (orden, mail escaneado). Se abre en una vista previa. |
 | **Acciones** | Ver detalle, Editar, Eliminar y Confirmar pedido. |
 
-Algunas columnas (por ejemplo sector, área y los "… por") están ocultas al principio: activalas desde **Columnas**.
+Algunas columnas (por ejemplo cliente, contrato, ítem, sector, área y los "… por") están ocultas al principio: activalas desde **Columnas**.
 
 **Filtros.** Hay un filtro por cada columna: rango de fechas para las dos fechas, listas para estado, cliente, contrato, sector, área, equipo, ítem, tipo, jornada y los "… por", y texto libre para el resto. De entrada se ven **Fecha de solicitud**, **Estado** y **Cliente**; el resto se activa con **Filtros**. El buscador general (**Buscar por pedido, solicitante, observación o motivo...**) busca en esos cuatro campos a la vez.
 
@@ -60,7 +61,7 @@ Algunas columnas (por ejemplo sector, área y los "… por") están ocultas al p
 
 <Steps>
   <Step title="Abrí el formulario">
-    Hacé clic en **Nuevo Pedido**. Se abre un panel a la derecha.
+    Hacé clic en **Nuevo pedido**. Se abre un panel a la derecha, dividido en **Cliente y contrato**, **Ubicación**, **Ítems** y **Adjunto**. Los botones para guardar quedan fijos abajo.
   </Step>
   <Step title="Elegí cliente y contrato">
     **Cliente** y **Contrato** son obligatorios. El contrato se habilita después de elegir el cliente y solo muestra los contratos de ese cliente.
@@ -72,7 +73,7 @@ Algunas columnas (por ejemplo sector, área y los "… por") están ocultas al p
     **Sector del Cliente** es opcional. **Área del Cliente** es obligatoria. **Equipos del Cliente** es opcional y admite un solo equipo. Las tres listas salen de lo que tiene cargado el contrato elegido: si dice **Sin áreas disponibles para este contrato**, hay que cargarlas primero en el contrato.
   </Step>
   <Step title="Cargá los ítems">
-    En **Item** elegí uno de los ítems del contrato y su **Cantidad**. Al elegirlo aparecen sus campos propios (se explican en la sección siguiente). Para pedir otro ítem en el mismo pedido usá **Agregar ítem**; para sacar uno, el ícono de papelera.
+    En **Ítem** elegí uno de los ítems del contrato y su **Cantidad**. Al elegirlo aparecen sus campos propios (se explican en la sección siguiente). Para pedir otro ítem en el mismo pedido usá **Agregar ítem**; para sacar uno, el ícono de papelera.
   </Step>
   <Step title="Adjuntá el documento (opcional)">
     En **Documento adjunto (Imagen o PDF)** podés subir la orden o el mail del cliente. Queda vinculado a todos los pedidos de ese número.
@@ -198,11 +199,11 @@ Al reprogramar, el pedido original queda en **Reprogramado** y el sistema crea o
 
 ## Ver el detalle y el historial de un pedido
 
-El ícono del ojo (**Ver detalle**) abre **Detalle del Preparte**: los datos del cliente y del servicio, los horarios, el solicitante, el documento adjunto, el motivo y el autor de cada cambio de estado, y al final el **Historial de Cambios** (por ejemplo los cambios de ítem con su motivo, o la vuelta a pendiente cuando se borró su línea del parte).
+El ícono del ojo (**Ver detalle**), o el **N° pedido**, abre el detalle del pedido con su número como título: los datos del cliente y del servicio, los horarios, el solicitante, el documento adjunto, el motivo y el autor de cada cambio de estado, y al final el **Historial de cambios** (por ejemplo los cambios de ítem con su motivo, o la vuelta a pendiente cuando se borró su línea del parte).
 
 ## Cómo generar el informe de pedidos
 
-**Generar Informe** descarga un Excel con un resumen y el detalle de los pedidos.
+**Generar informe** descarga un Excel con un resumen y el detalle de los pedidos.
 
 <Steps>
   <Step title="Elegí el período">
@@ -231,7 +232,7 @@ El ícono del ojo (**Ver detalle**) abre **Detalle del Preparte**: los datos del
 | Para… | Hace falta |
 |---|---|
 | Ver la pestaña, el detalle de los pedidos y generar el informe | **Ver** en Gestor de Pedidos |
-| Usar **Nuevo Pedido** | **Crear** |
+| Usar **Nuevo pedido** | **Crear** |
 | Editar, cambiar estado (individual o masivo), confirmar y seleccionar filas | **Editar** |
 | Eliminar un pedido pendiente | **Eliminar** |
 

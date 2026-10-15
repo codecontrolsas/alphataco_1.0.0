@@ -405,6 +405,26 @@ export async function getDailyReportRowHistory(dailyReportId: string): Promise<P
 
           entry.message = `${userName} ${action} el vehículo: ${vehicleName}`;
         }
+      } else if (relationType === 'remitos') {
+        const remitNumber = relationData?.remito_numero || 'sin número';
+
+        entry.changes.push({
+          type: 'remit_relation',
+          action: record.action_type === 'LINK' ? 'added' : 'removed',
+          remit: { number: relationData?.remito_numero, linked: relationData?.vinculado },
+        });
+
+        entry.message = `${userName} ${action} el remito: ${remitNumber}`;
+      } else if (relationType === 'remito_documents') {
+        const documentName = relationData?.documento_nombre || 'Documento';
+
+        entry.changes.push({
+          type: 'remit_document_relation',
+          action: record.action_type === 'LINK' ? 'added' : 'removed',
+          remit: { number: relationData?.remito_numero, documentName: relationData?.documento_nombre },
+        });
+
+        entry.message = `${userName} ${action} el documento ${documentName} del remito ${relationData?.remito_numero ?? ''}`.trim();
       }
     } else if (record.action_type === 'CREATE') {
       // Traducir los nombres de los campos para los registros CREATE

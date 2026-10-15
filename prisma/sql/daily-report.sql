@@ -770,11 +770,6 @@ END IF;
                 jsonb_build_object('old', OLD.areas_service_id, 'new', NEW.areas_service_id));
         END IF;
         
-        IF NEW.remit_number IS DISTINCT FROM OLD.remit_number THEN
-            changed_fields := jsonb_set(changed_fields, '{remit_number}', 
-                jsonb_build_object('old', OLD.remit_number, 'new', NEW.remit_number));
-        END IF;
-        
         IF NEW.cancel_reason IS DISTINCT FROM OLD.cancel_reason THEN
             changed_fields := jsonb_set(changed_fields, '{cancel_reason}', 
                 jsonb_build_object('old', OLD.cancel_reason, 'new', NEW.cancel_reason));
@@ -992,3 +987,125 @@ CREATE TRIGGER tr_dailyreportrows_history_before_delete BEFORE DELETE ON public.
 -- trigger tr_dailyreportrows_history_before_update ON dailyreportrows (origen: supabase/migrations/20251103211302_initial_structure.sql)
 DROP TRIGGER IF EXISTS tr_dailyreportrows_history_before_update ON public.dailyreportrows;
 CREATE TRIGGER tr_dailyreportrows_history_before_update BEFORE UPDATE ON public.dailyreportrows FOR EACH ROW EXECUTE FUNCTION public.log_dailyreport_changes();
+
+-- function log_remito_changes (remitos: fuente única del remito de una línea)
+-- Registra en el historial de la línea el alta (LINK), la baja (UNLINK) y el cambio de número
+-- (UPDATE) de cada remito. Mismo mecanismo que las relaciones de empleados y equipos.
+CREATE OR REPLACE FUNCTION public.log_remito_changes()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    user_id UUID;
+    parent_exists BOOLEAN;
+BEGIN
+    -- Actor de la transaccion (app.user_id via withActor); NULL si no hay usuario
+    user_id := public.app_current_user_id();
+
+    IF TG_OP = 'INSERT' THEN
+        BEGIN
+            INSERT INTO dailyreportrows_history (
+                daily_report_row_id, related_table, related_id, action_type,
+                changed_fields, changed_data, changed_by
+            ) VALUES (
+                NEW.daily_report_row_id, 'remitos', NEW.id, 'LINK',
+                '{}'::JSONB,
+                jsonb_build_object('remito_numero', NEW.remit_number, 'vinculado', NEW.is_linked),
+                user_id
+            );
+        EXCEPTION WHEN foreign_key_violation THEN
+            NULL;
+        END;
+
+    ELSIF TG_OP = 'UPDATE' THEN
+        IF NEW.remit_number IS DISTINCT FROM OLD.remit_number THEN
+            BEGIN
+                INSERT INTO dailyreportrows_history (
+                    daily_report_row_id, related_table, related_id, action_type,
+                    changed_fields, changed_data, changed_by
+                ) VALUES (
+                    NEW.daily_report_row_id, 'remitos', NEW.id, 'UPDATE',
+                    jsonb_build_object('remit_number', jsonb_build_object('old', OLD.remit_number, 'new', NEW.remit_number)),
+                    jsonb_build_object('remito_numero', NEW.remit_number, 'vinculado', NEW.is_linked),
+                    user_id
+                );
+            EXCEPTION WHEN foreign_key_violation THEN
+                NULL;
+            END;
+        END IF;
+
+    ELSIF TG_OP = 'DELETE' THEN
+        -- Si la línea se está borrando (cascada), no hay historial donde escribir
+        SELECT EXISTS (SELECT 1 FROM dailyreportrows WHERE id = OLD.daily_report_row_id) INTO parent_exists;
+        IF parent_exists THEN
+            BEGIN
+                INSERT INTO dailyreportrows_history (
+                    daily_report_row_id, related_table, related_id, action_type,
+                    changed_fields, changed_data, changed_by
+                ) VALUES (
+                    OLD.daily_report_row_id, 'remitos', OLD.id, 'UNLINK',
+                    '{}'::JSONB,
+                    jsonb_build_object('remito_numero', OLD.remit_number, 'vinculado', OLD.is_linked),
+                    user_id
+                );
+            EXCEPTION WHEN foreign_key_violation THEN
+                NULL;
+            END;
+        END IF;
+    END IF;
+
+    RETURN COALESCE(NEW, OLD);
+END;
+$function$;
+
+-- function log_remito_document_changes
+-- Registra en el historial de la línea el alta (LINK) y la baja (UNLINK) de cada documento de un remito.
+CREATE OR REPLACE FUNCTION public.log_remito_document_changes()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    user_id UUID;
+    v_row_id UUID;
+    v_remit_number TEXT;
+BEGIN
+    user_id := public.app_current_user_id();
+
+    -- Si el remito ya no existe (se borró y los documentos caen por cascada), su baja ya quedó registrada
+    SELECT r.daily_report_row_id, r.remit_number INTO v_row_id, v_remit_number
+    FROM remitos r
+    WHERE r.id = COALESCE(NEW.remit_id, OLD.remit_id);
+
+    IF v_row_id IS NULL THEN
+        RETURN COALESCE(NEW, OLD);
+    END IF;
+
+    BEGIN
+        INSERT INTO dailyreportrows_history (
+            daily_report_row_id, related_table, related_id, action_type,
+            changed_fields, changed_data, changed_by
+        ) VALUES (
+            v_row_id, 'remito_documents', COALESCE(NEW.id, OLD.id),
+            CASE WHEN TG_OP = 'INSERT' THEN 'LINK' ELSE 'UNLINK' END,
+            '{}'::JSONB,
+            jsonb_build_object(
+                'remito_numero', v_remit_number,
+                'documento_nombre', COALESCE(NEW.document_name, OLD.document_name)
+            ),
+            user_id
+        );
+    EXCEPTION WHEN foreign_key_violation THEN
+        NULL;
+    END;
+
+    RETURN COALESCE(NEW, OLD);
+END;
+$function$;
+
+-- trigger tr_remitos_history ON remitos
+DROP TRIGGER IF EXISTS tr_remitos_history ON public.remitos;
+CREATE TRIGGER tr_remitos_history AFTER INSERT OR DELETE OR UPDATE OF remit_number ON public.remitos FOR EACH ROW EXECUTE FUNCTION public.log_remito_changes();
+
+-- trigger tr_remito_documents_history ON remito_documents
+DROP TRIGGER IF EXISTS tr_remito_documents_history ON public.remito_documents;
+CREATE TRIGGER tr_remito_documents_history AFTER INSERT OR DELETE ON public.remito_documents FOR EACH ROW EXECUTE FUNCTION public.log_remito_document_changes();

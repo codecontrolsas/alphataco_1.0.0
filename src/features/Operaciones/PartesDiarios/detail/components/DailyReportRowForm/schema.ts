@@ -34,7 +34,6 @@ export const dailyReportRowSchema = z
     document_path: z.string().optional(),
     sector_service_id: z.string().optional(),
     areas_service_id: z.string().optional(),
-    remit_number: z.string().optional(),
     cancel_reason: z.string().optional(),
     reprogram_date: z.date().optional(),
     reasigment_reason: z.string().optional(),

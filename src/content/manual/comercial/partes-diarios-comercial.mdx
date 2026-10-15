@@ -1,8 +1,8 @@
 ---
 title: Partes diarios (Comercial)
 summary: La vista comercial de los partes diarios: buscá lo trabajado por cliente, contrato o fecha, corregí líneas y pasalas en masa a En certificación.
-keywords: parte diario, comercial, línea, en certificación, ejecutado, remito, certificar, filtros, jornada
-updated: 2026-10-07
+keywords: parte diario, comercial, línea, en certificación, ejecutado, remito, remitos, gestionar remitos, certificar, filtros, jornada
+updated: 2026-10-15
 ---
 
 Operaciones carga día a día qué se hizo para cada cliente en los partes diarios. Esta solapa es la mirada comercial sobre esas mismas líneas: sirve para revisar lo trabajado, corregir lo que haga falta una vez cerrado el parte y marcar qué está listo para certificar. La usa el área comercial o de administración que prepara las certificaciones.
@@ -40,7 +40,7 @@ Sin filtros la búsqueda trae todas las líneas de la empresa. Para trabajar una
 | **Cliente**, **Servicio**, **Ítem**, **Descripción Ítem** | A quién, bajo qué contrato y qué ítem. |
 | **Equipo Cliente**, **Área**, **Sector** | Dónde se trabajó. |
 | **Tipo de Servicio** | Mensual, Adicional o Adicional Permanente. |
-| **N° de Remito** | El o los remitos de la línea. |
+| **N° de Remito** | El o los remitos de la línea. Son los mismos que se ven en Operaciones. |
 | **Estado** | El estado de la línea. |
 | **Empleados**, **Equipo Empresa** | Los recursos asignados. |
 | **Jornada**, **Descripción** | Duración y observaciones. |
@@ -50,7 +50,7 @@ Dentro de la tabla tenés además filtros por columna y un buscador **Buscar en 
 - **Amarillo**: la línea se creó después del día del parte (se agregó una vez pasado ese día).
 - **Azul**: la línea fue modificada desde Comercial.
 
-Cada fila tiene, según su estado y tus permisos, **Editar**, **Ver detalles**, **Ver historial** y, en las líneas **En certificación**, **Gestionar Remitos**.
+Cada fila tiene, según su estado y tus permisos, **Editar**, **Ver detalles**, **Ver historial** y, en las líneas **En certificación**, **Gestionar Remitos** (ver más abajo).
 
 ## Pasar líneas a En certificación
 
@@ -78,7 +78,7 @@ Cuando el trabajo está **Ejecutado** y revisado, se marca **En certificación**
 </States>
 
 <Callout type="warning" title="Qué bloquea En certificación en Operaciones">
-Una línea **En certificación** ya no se puede editar ni reasignar recursos desde el parte diario de Operaciones. Tampoco se edita desde esta solapa con **Editar** (el botón no aparece): desde Comercial solo queda **Gestionar Remitos**. Pasala a En certificación cuando esté realmente revisada.
+Una línea **En certificación** ya no se puede editar ni reasignar recursos desde el parte diario de Operaciones. Tampoco se edita desde esta solapa con **Editar** (el botón no aparece): desde Comercial solo queda **Gestionar Remitos**, y desde Operaciones, **Remitos**. Pasala a En certificación cuando esté realmente revisada.
 </Callout>
 
 ## Corregir una línea
@@ -88,7 +88,7 @@ Una línea **En certificación** ya no se puede editar ni reasignar recursos des
     Hacé clic en **Editar** en la fila. Si el parte de ese día todavía está abierto, el botón está deshabilitado y avisa **El parte esta abierto, debe editarse desde Operaciones**: mientras Operaciones lo está cargando, las correcciones se hacen allá.
   </Step>
   <Step title="Corregí">
-    Se abre el panel **Editar Parte Diario** con los datos del cliente, servicio, ítem, sector, área, equipos del cliente, tipo de servicio, fecha y **Jornada** (8, 12 o 24 horas, o **Por horario** con hora de inicio y fin), empleados, equipos de la empresa, **Estado**, **Número de Remito** y **Observaciones**.
+    Se abre el panel **Editar Parte Diario** con los datos del cliente, servicio, ítem, sector, área, equipos del cliente, tipo de servicio, fecha y **Jornada** (8, 12 o 24 horas, o **Por horario** con hora de inicio y fin), empleados, equipos de la empresa, **Estado** y **Observaciones**. Si pasás la línea a **En certificación**, aparece **Número de Remito**: lo que escribas se **agrega** como un remito nuevo de la línea. Arranca vacío aunque la línea ya tenga remitos; esos se ven y se corrigen con **Gestionar Remitos**.
   </Step>
   <Step title="Guardá">
     Hacé clic en **Actualizar**. Vas a ver **Parte diario actualizado exitosamente.** y la fila queda pintada de azul.
@@ -103,12 +103,25 @@ Para registrar un trabajo que no se cargó en el parte (por ejemplo, un adiciona
 
 <Steps>
   <Step title="Completá la línea">
-    Se abre **Crear Línea de Parte Diario**. Elegí **Cliente**, **Servicio**, **Ítem** y, si corresponde, **Sector del Cliente**, **Área del Cliente** y **Equipos de Cliente (Máx. 2)**. Cargá la **Fecha del Parte Diario** (obligatoria), la **Jornada**, los **Empleados** y **Equipos Empresa**, y opcionalmente el **Número de Remito** y **Observaciones**.
+    Se abre **Crear Línea de Parte Diario**. Elegí **Cliente**, **Servicio**, **Ítem** y, si corresponde, **Sector del Cliente**, **Área del Cliente** y **Equipos de Cliente (Máx. 2)**. Cargá la **Fecha del Parte Diario** (obligatoria), la **Jornada**, los **Empleados** y **Equipos Empresa**, y opcionalmente el **Número de Remito** (se crea como el primer remito de la línea) y **Observaciones**.
   </Step>
   <Step title="Creá">
     Hacé clic en **Crear**. Si no existe el parte de esa fecha, se crea. La línea nace en **En certificación**, salvo que al ítem le falten los recursos que requiere: en ese caso queda en **Sin recursos asignados**.
   </Step>
 </Steps>
+
+## Gestionar remitos
+
+Los remitos de una línea viven en un solo lugar: los que cargás acá se ven en el detalle del parte de Operaciones, y los que carga Operaciones se ven acá, en la columna **N° de Remito**. Desde esta solapa se gestionan con **Gestionar Remitos** (el ícono de documento), que aparece en las líneas **En certificación**. Operaciones tiene la misma herramienta en las líneas **Ejecutadas** o **En certificación** de su detalle del parte, así que el remito lo puede cargar quien lo tenga primero.
+
+Desde **Gestionar Remitos** podés:
+
+- **Nuevo remito**: cargar un número de remito. No se puede repetir dentro de la misma línea.
+- **Subir documento**: adjuntar a cada remito el escaneo o la foto (PDF, JPG, PNG o WebP, hasta 10 MB).
+- **Vincular remito existente**: sumar a esta línea un remito que ya está cargado en otra línea **del mismo cliente**, con sus documentos, sin volver a subirlos.
+- **Desvincular** un remito vinculado, o **Eliminar** uno propio con sus documentos. Los archivos que comparte con otras líneas vinculadas se conservan.
+
+El paso a paso está en <GuideLink to="detalle-del-parte#remitos-de-una-línea">Remitos de una línea</GuideLink>. Cada movimiento de remitos y documentos queda en **Ver historial**.
 
 ## Cómo se conecta con el resto del sistema
 

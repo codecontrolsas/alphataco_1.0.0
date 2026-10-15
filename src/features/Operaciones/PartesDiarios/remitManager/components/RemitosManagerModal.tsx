@@ -24,11 +24,8 @@ export function RemitosManagerModal({ dailyReportRowId, customerName, isOpen, on
 
   const stats = useRemitosStats(dailyReportRowId);
 
-  React.useEffect(() => {
-    if (remitos.length > 0 && !activeTabId) {
-      setActiveTabId(remitos[0].id);
-    }
-  }, [remitos, activeTabId]);
+  // Pestaña visible: la elegida si sigue existiendo (pudo borrarse); si no, la primera
+  const currentTabId = remitos.some((remito) => remito.id === activeTabId) ? activeTabId : (remitos[0]?.id ?? null);
 
   const handleRemitoCreated = (newRemitoId: string) => {
     setActiveTabId(newRemitoId);
@@ -52,15 +49,15 @@ export function RemitosManagerModal({ dailyReportRowId, customerName, isOpen, on
   return (
     <>
       <Dialog open={isOpen} onOpenChange={handleClose}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col gap-0 p-0">
+        <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
           <DialogHeader className="flex-shrink-0 px-6 py-5 border-b ">
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg">
-                  <Package className="h-5 w-5 text-primary" />
+                <div className="bg-muted text-muted-foreground rounded-lg p-2">
+                  <Package className="size-5" aria-hidden="true" />
                 </div>
                 <div>
-                  <DialogTitle className="text-xl font-semibold text-balance">Gestión de Remitos</DialogTitle>
+                  <DialogTitle className="text-xl font-semibold text-balance">Remitos de la línea</DialogTitle>
                   {customerName && (
                     <p className="text-sm text-muted-foreground mt-0.5">
                       Cliente: <span className="font-medium text-foreground">{customerName}</span>
@@ -69,16 +66,16 @@ export function RemitosManagerModal({ dailyReportRowId, customerName, isOpen, on
                 </div>
               </div>
 
-              <div className="flex gap-3 pr-6">
-                <div className="px-4 py-2 bg-background rounded-lg border shadow-sm">
-                  <div className="text-xs text-muted-foreground">Remitos</div>
-                  <div className="text-2xl font-bold text-primary">{stats.totalRemitos}</div>
+              <dl className="flex gap-3 sm:pr-6">
+                <div className="bg-card rounded-lg border px-4 py-2">
+                  <dt className="text-muted-foreground text-xs">Remitos</dt>
+                  <dd className="font-mono text-2xl font-semibold tabular-nums">{stats.totalRemitos}</dd>
                 </div>
-                <div className="px-4 py-2 bg-background rounded-lg border shadow-sm">
-                  <div className="text-xs text-muted-foreground">Documentos</div>
-                  <div className="text-2xl font-bold text-green-600">{stats.totalDocuments}</div>
+                <div className="bg-card rounded-lg border px-4 py-2">
+                  <dt className="text-muted-foreground text-xs">Documentos</dt>
+                  <dd className="font-mono text-2xl font-semibold tabular-nums">{stats.totalDocuments}</dd>
                 </div>
-              </div>
+              </dl>
             </div>
           </DialogHeader>
 
@@ -102,30 +99,36 @@ export function RemitosManagerModal({ dailyReportRowId, customerName, isOpen, on
                   <div>
                     <h3 className="text-xl font-semibold mb-2 text-balance">No hay remitos registrados</h3>
                     <p className="text-sm text-muted-foreground text-balance">
-                      Comience agregando un remito para gestionar los documentos de esta línea del parte diario.
+                      Agregá el remito del servicio (número y documentos) o vinculá uno que ya esté cargado en otra línea del mismo cliente.
                     </p>
                   </div>
-                  <Button onClick={() => setIsAddingRemito(true)} size="lg">
-                    <Plus className="h-5 w-5 mr-2" />
-                    Agregar Primer Remito
-                  </Button>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button type="button" variant="brand" onClick={() => setIsAddingRemito(true)}>
+                      <Plus className="mr-2 size-4" />
+                      Agregar remito
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => setIsLinkingRemito(true)}>
+                      <Link2 className="mr-2 size-4" />
+                      Vincular remito existente
+                    </Button>
+                  </div>
                 </div>
               </div>
             ) : (
               <>
-                <div className="flex-shrink-0 mb-4 flex gap-2">
-                  <Button onClick={() => setIsAddingRemito(true)} size="default">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Nuevo Remito
+                <div className="mb-4 flex flex-shrink-0 flex-wrap gap-2">
+                  <Button type="button" variant="brand" size="sm" onClick={() => setIsAddingRemito(true)}>
+                    <Plus className="mr-2 size-4" />
+                    Nuevo remito
                   </Button>
-                  <Button onClick={() => setIsLinkingRemito(true)} size="default" variant="outline">
-                    <Link2 className="h-4 w-4 mr-2" />
-                    Vincular Remito Existente
+                  <Button type="button" variant="outline" size="sm" onClick={() => setIsLinkingRemito(true)}>
+                    <Link2 className="mr-2 size-4" />
+                    Vincular remito existente
                   </Button>
                 </div>
 
                 <Tabs
-                  value={activeTabId || remitos[0]?.id}
+                  value={currentTabId ?? undefined}
                   onValueChange={setActiveTabId}
                   className="flex-1 flex flex-col overflow-hidden"
                 >
@@ -140,17 +143,19 @@ export function RemitosManagerModal({ dailyReportRowId, customerName, isOpen, on
                           value={remito.id}
                           className="flex items-center gap-2 px-4 py-2.5 data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all"
                         >
-                          {isLinked ? <Link2 className="h-4 w-4 text-blue-600" /> : <FileText className="h-4 w-4" />}
-                          <span className="font-medium">{remito.remit_number}</span>
+                          {isLinked ? (
+                            <Link2 className="text-info-subtle-foreground size-4" aria-hidden="true" />
+                          ) : (
+                            <FileText className="size-4" aria-hidden="true" />
+                          )}
+                          <span className="font-mono font-medium tabular-nums">{remito.remit_number}</span>
                           {remito.remito_documents.length > 0 && (
                             <Badge variant="secondary" className="text-xs h-5 px-2">
                               {remito.remito_documents.length}
                             </Badge>
                           )}
                           {isLinked && (
-                            <Badge variant="outline" className="text-xs h-5 px-2 border-blue-600 text-blue-600">
-                              Vinculado
-                            </Badge>
+                            <Badge variant="info">Vinculado</Badge>
                           )}
                         </TabsTrigger>
                       );
@@ -162,7 +167,7 @@ export function RemitosManagerModal({ dailyReportRowId, customerName, isOpen, on
                       <TabsContent key={remito.id} value={remito.id} className="h-full m-0">
                         <RemitTab
                           remito={remito}
-                          isActive={activeTabId === remito.id}
+                          isActive={currentTabId === remito.id}
                           onActivate={() => setActiveTabId(remito.id)}
                           customerName={customerName}
                           dailyReportRowId={dailyReportRowId}
