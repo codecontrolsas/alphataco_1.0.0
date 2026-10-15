@@ -8,7 +8,7 @@ import { CheckCircle2, ChevronDown, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { testArcaConnection } from '../../actions/arca-credentials.server';
-import type { ConnectionCheck } from '../../actions/fiscal-data.server';
+import type { ConnectionCheck } from '../../lib/fiscal-data-overview.server';
 import type { ARCA_ENVIRONMENTS } from '../../schemas/fiscal-data';
 import { CopyTextButton } from './CopyTextButton';
 

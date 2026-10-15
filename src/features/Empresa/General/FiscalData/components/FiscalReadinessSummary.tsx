@@ -2,7 +2,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { AlertTriangle, CheckCircle2, CircleDashed, FlaskConical, Landmark, XCircle } from 'lucide-react';
-import type { FiscalDataOverview } from '../actions/fiscal-data.server';
+import type { FiscalDataOverview } from '../lib/fiscal-data-overview.server';
 import { daysUntil } from '../lib/readiness';
 import { ENVIRONMENT_LABELS } from '../schemas/fiscal-data';
 import { joinList } from '../utils/format';

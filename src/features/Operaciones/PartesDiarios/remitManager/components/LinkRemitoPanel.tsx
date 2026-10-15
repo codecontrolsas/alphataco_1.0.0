@@ -9,6 +9,7 @@ import moment from 'moment';
 import 'moment/locale/es';
 import React from 'react';
 
+import { useDebounce } from '@/shared/hooks/useDebounce';
 import { useAvailableRemitosForLinking, useLinkExistingRemito } from '../hooks/useRemitos';
 
 interface LinkRemitoPanelProps {
@@ -20,24 +21,14 @@ interface LinkRemitoPanelProps {
 /** Vinculación de un remito existente dentro del gestor (panel en línea, sin modal encima del modal). */
 export function LinkRemitoPanel({ dailyReportRowId, onClose, onRemitoLinked }: LinkRemitoPanelProps) {
   const [searchInput, setSearchInput] = React.useState('');
-  const [debouncedSearch, setDebouncedSearch] = React.useState('');
+  const debouncedSearch = useDebounce(searchInput, 500);
 
   const { data: availableRemitos = [], isLoading } = useAvailableRemitosForLinking(dailyReportRowId, debouncedSearch);
   const linkRemito = useLinkExistingRemito(dailyReportRowId);
 
-  // Debounce del input de búsqueda
-  React.useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchInput);
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [searchInput]);
-
-  // Cierra y resetea la búsqueda (sin efecto: el reseteo vive en el punto de origen).
+  // Cierra y resetea la búsqueda (el reseteo vive en el punto de origen).
   const handleClose = () => {
     setSearchInput('');
-    setDebouncedSearch('');
     onClose();
   };
 
@@ -96,7 +87,7 @@ export function LinkRemitoPanel({ dailyReportRowId, onClose, onRemitoLinked }: L
             </div>
           </div>
         ) : (
-          <div className="flex-1 min-h-0 overflow-auto ">
+          <div className="flex-1 min-h-0 overflow-auto">
             <div className="space-y-3 pr-4">
               {!searchInput && (
                 <p className="text-xs text-muted-foreground mb-3 px-1">Mostrando los últimos 10 remitos creados</p>

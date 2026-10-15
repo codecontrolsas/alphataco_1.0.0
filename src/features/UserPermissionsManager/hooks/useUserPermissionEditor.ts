@@ -5,13 +5,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { toast } from 'sonner';
 import {
+  applyUserPermissionChanges,
   cleanAllUserPermissionsAndRoles,
   cleanUserCustomPermissions,
   getAllRolePermissions,
   getUserPermissionsForUserServer,
   getUserRolesServer,
-  removeUserPermissionServer,
-  setUserPermissionServer,
   type AllRolePermissionsMap,
   type UserPermissionsData,
   type UserRolesData,
@@ -51,7 +50,7 @@ interface UseUserPermissionEditorArgs {
 /**
  * Estado del editor de permisos de un usuario: qué tiene efectivamente, qué le dan sus roles
  * y qué ajustes personales tiene. Cada cambio se guarda al instante con
- * `setUserPermissionServer` / `removeUserPermissionServer`, como siempre.
+ * `applyUserPermissionChanges` (todas las escrituras de un cambio en una sola transacción).
  *
  * `get_user_permissions` devuelve solo lo concedido, así que un ajuste que QUITA un permiso del
  * rol se reconoce porque el rol lo da y el usuario no lo tiene.
@@ -129,14 +128,14 @@ export function useUserPermissionEditor({
 
   const writeMutation = useMutation({
     mutationFn: async (ops: UserPermissionOp[]) => {
-      await Promise.all(
-        ops.map((op) => {
-          const { tabId, actionId } = pairFromKey(op.key);
-          return op.kind === 'set'
-            ? setUserPermissionServer(userId, tabId, actionId, op.isGranted)
-            : removeUserPermissionServer(userId, tabId, actionId);
-        })
-      );
+      const set: Array<{ tab_id: string; action_id: string; is_granted: boolean }> = [];
+      const remove: Array<{ tab_id: string; action_id: string }> = [];
+      for (const op of ops) {
+        const { tabId, actionId } = pairFromKey(op.key);
+        if (op.kind === 'set') set.push({ tab_id: tabId, action_id: actionId, is_granted: op.isGranted });
+        else remove.push({ tab_id: tabId, action_id: actionId });
+      }
+      await applyUserPermissionChanges(userId, { set, remove });
       return ops.length;
     },
     onSettled: invalidateUserPermissions,

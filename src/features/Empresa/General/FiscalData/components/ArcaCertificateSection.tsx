@@ -7,7 +7,7 @@ import { formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argent
 import { AlertTriangle, MonitorPlay, ShieldCheck, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import { flushSync } from 'react-dom';
-import type { FiscalDataOverview } from '../actions/fiscal-data.server';
+import type { FiscalDataOverview } from '../lib/fiscal-data-overview.server';
 import { certificateState, daysUntil, type CertificateState } from '../lib/readiness';
 import { ARCA_ENVIRONMENTS, ENVIRONMENT_LABELS } from '../schemas/fiscal-data';
 import { FiscalSection } from './FiscalSection';

@@ -1,5 +1,6 @@
 'use server';
 
+import { buildPermissionIndex, permissionKey } from '@/features/UserPermissionsManager/lib/permission-rules';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';
@@ -7,8 +8,16 @@ import { callFunction } from '@/shared/lib/sql';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import moment from 'moment';
 import { z } from 'zod';
+import {
+  assertNoNewActionsWithoutView,
+  assertNoOverlap,
+  assertPairsInCatalog,
+  roleUpdateSchema,
+  userPermissionChangesSchema,
+  type UserPermissionChanges,
+} from '../lib/permission-write-validation';
 import { findTabDef } from '../lib/permissions-map-utils';
-import { resolveActionCopy, TAB_DESCRIPTIONS } from '../permission-catalog';
+import { TAB_DESCRIPTIONS, resolveActionCopy } from '../permission-catalog';
 import { PERMISSIONS } from '../permissions-map';
 import { userPermissionRowSchema } from './permissions.schemas';
 import { checkPermissionServer } from './permissions.server';
@@ -363,7 +372,7 @@ export async function createRoleWithPermissions(data: {
  * en la petición no significa nada, nunca se borra "lo que no vino". El borrado queda acotado
  * a los pares de `remove`. Devuelve los conteos reales de altas y bajas.
  */
-export async function updateRoleWithPermissions(data: {
+export async function updateRoleWithPermissions(input: {
   id: number;
   name: string;
   description?: string;
@@ -375,6 +384,10 @@ export async function updateRoleWithPermissions(data: {
 }) {
   await assertCanManageRoles();
 
+  const parsed = roleUpdateSchema.safeParse(input);
+  if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? 'Datos del rol inválidos');
+  const data = parsed.data;
+
   logger.debug('Actualizando rol con permisos', {
     data: {
       id: data.id,
@@ -383,6 +396,11 @@ export async function updateRoleWithPermissions(data: {
       remove: data.permissions.remove.length,
     },
   });
+
+  // El catálogo (mapa + tablas tabs/actions) se resuelve en una sola consulta, fuera de la transacción.
+  const index = buildPermissionIndex(await getModulesWithTabsServer());
+  assertPairsInCatalog(index, data.permissions.add);
+  assertNoOverlap(data.permissions.add, data.permissions.remove);
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -405,6 +423,18 @@ export async function updateRoleWithPermissions(data: {
           intern: true,
         },
       });
+
+      // Conjunto final = lo guardado hoy + altas - bajas. Si queda una acción sin su "Ver", se
+      // lanza y la transacción entera (incluido el update del rol) se deshace.
+      const baselineRows = await tx.role_permissions.findMany({
+        where: { role_id: updatedRole.id },
+        select: { tab_id: true, action_id: true },
+      });
+      const before = new Set(baselineRows.map((row) => permissionKey(row.tab_id, row.action_id)));
+      const after = new Set(before);
+      for (const perm of data.permissions.remove) after.delete(permissionKey(perm.tab_id, perm.action_id));
+      for (const perm of data.permissions.add) after.add(permissionKey(perm.tab_id, perm.action_id));
+      assertNoNewActionsWithoutView(index, before, after);
 
       let removed = 0;
       if (data.permissions.remove.length > 0) {
@@ -666,67 +696,103 @@ export async function getUserDetailById(shareUserId: string) {
 export type UserDetailData = Awaited<ReturnType<typeof getUserDetailById>>;
 
 /**
- * Establece (upsert) un permiso custom de usuario EN la empresa activa (Task 13b: el permiso
- * custom se otorga en una empresa, no en todas las del usuario).
+ * Aplica de una vez los ajustes personales de permisos de un usuario EN la empresa activa:
+ * `set` concede/quita (upsert de `is_granted`) y `remove` vuelve a heredar del rol. Todo en una
+ * transacción: o se aplica completo o no cambia nada. Rechaza pares fuera del catálogo y que el
+ * acceso efectivo resultante deje una acción sin el "Ver" de su pestaña.
  */
-export async function setUserPermissionServer(userId: string, tabId: string, actionId: string, isGranted: boolean) {
+export async function applyUserPermissionChanges(userId: string, changes: UserPermissionChanges) {
   await assertCanManageUserDetail();
 
-  logger.debug('Seteando permiso de usuario', { data: { userId, tabId, actionId, isGranted } });
+  const parsedUserId = z.string().uuid().safeParse(userId);
+  const parsed = userPermissionChangesSchema.safeParse(changes);
+  if (!parsedUserId.success || !parsed.success) throw new Error('Datos de permisos inválidos');
+  const { set, remove } = parsed.data;
+
+  logger.debug('Aplicando ajustes de permisos de usuario', {
+    data: { userId, set: set.length, remove: remove.length },
+  });
 
   const [assignedBy, companyId] = await Promise.all([getSessionUserId(), getActiveCompanyId()]);
 
-  try {
-    await prisma.user_permissions.upsert({
-      where: {
-        user_id_tab_id_action_id_company_id: {
-          user_id: userId,
-          tab_id: tabId,
-          action_id: actionId,
-          company_id: companyId,
-        },
-      },
-      create: {
-        user_id: userId,
-        tab_id: tabId,
-        action_id: actionId,
-        company_id: companyId,
-        is_granted: isGranted,
-        assigned_by: assignedBy,
-      },
-      update: {
-        is_granted: isGranted,
-        assigned_by: assignedBy,
-        updated_at: moment().toDate(),
-      },
-    });
-
-    return { success: true };
-  } catch (error) {
-    logger.error('Error al setear permiso de usuario', { data: { error, userId, tabId, actionId } });
-    throw error;
-  }
-}
-
-/**
- * Remueve un permiso custom de usuario EN la empresa activa (los de otras empresas no son
- * asunto de esta pantalla).
- */
-export async function removeUserPermissionServer(userId: string, tabId: string, actionId: string) {
-  await assertCanManageUserDetail();
-
-  logger.debug('Removiendo permiso de usuario', { data: { userId, tabId, actionId } });
-
-  const companyId = await getActiveCompanyId();
+  const index = buildPermissionIndex(await getModulesWithTabsServer());
+  assertPairsInCatalog(index, set);
+  assertNoOverlap(set, remove);
 
   try {
-    await prisma.user_permissions.deleteMany({
-      where: { user_id: userId, tab_id: tabId, action_id: actionId, company_id: companyId },
-    });
+    return await prisma.$transaction(async (tx) => {
+      const [userRoleRows, customRows] = await Promise.all([
+        tx.user_roles.findMany({
+          where: { user_id: userId, company_id: companyId, roles: { is_active: true } },
+          select: { role_id: true },
+        }),
+        tx.user_permissions.findMany({
+          where: { user_id: userId, company_id: companyId },
+          select: { tab_id: true, action_id: true, is_granted: true },
+        }),
+      ]);
+      const rolePairs = await tx.role_permissions.findMany({
+        where: { role_id: { in: userRoleRows.map((row) => row.role_id) } },
+        select: { tab_id: true, action_id: true },
+      });
 
-    return { success: true };
+      // Acceso efectivo: lo que dan los roles activos, con los ajustes personales por encima.
+      const fromRoles = new Set(rolePairs.map((row) => permissionKey(row.tab_id, row.action_id)));
+      const effectiveOf = (custom: Map<string, boolean>) => {
+        const effective = new Set(fromRoles);
+        for (const [key, granted] of custom) {
+          if (granted) effective.add(key);
+          else effective.delete(key);
+        }
+        return effective;
+      };
+
+      const customBefore = new Map(
+        customRows.map((row) => [permissionKey(row.tab_id, row.action_id), row.is_granted !== false] as const)
+      );
+      const customAfter = new Map(customBefore);
+      for (const perm of remove) customAfter.delete(permissionKey(perm.tab_id, perm.action_id));
+      for (const perm of set) customAfter.set(permissionKey(perm.tab_id, perm.action_id), perm.is_granted);
+      assertNoNewActionsWithoutView(index, effectiveOf(customBefore), effectiveOf(customAfter));
+
+      let removed = 0;
+      if (remove.length > 0) {
+        const deleted = await tx.user_permissions.deleteMany({
+          where: {
+            user_id: userId,
+            company_id: companyId,
+            OR: remove.map((perm) => ({ tab_id: perm.tab_id, action_id: perm.action_id })),
+          },
+        });
+        removed = deleted.count;
+      }
+
+      for (const perm of set) {
+        await tx.user_permissions.upsert({
+          where: {
+            user_id_tab_id_action_id_company_id: {
+              user_id: userId,
+              tab_id: perm.tab_id,
+              action_id: perm.action_id,
+              company_id: companyId,
+            },
+          },
+          create: {
+            user_id: userId,
+            tab_id: perm.tab_id,
+            action_id: perm.action_id,
+            company_id: companyId,
+            is_granted: perm.is_granted,
+            assigned_by: assignedBy,
+          },
+          update: { is_granted: perm.is_granted, assigned_by: assignedBy, updated_at: moment().toDate() },
+        });
+      }
+
+      return { set: set.length, removed };
+    });
   } catch (error) {
-    logger.error('Error al remover permiso de usuario', { data: { error, userId, tabId, actionId } });
+    logger.error('Error al aplicar ajustes de permisos de usuario', { data: { error, userId } });
     throw error;
   }
 }

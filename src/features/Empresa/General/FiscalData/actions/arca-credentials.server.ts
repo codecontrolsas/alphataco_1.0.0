@@ -28,8 +28,8 @@ import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
+import type { ConnectionCheck } from '../lib/fiscal-data-overview.server';
 import { ENVIRONMENT_LABELS, certificateAliasSchema } from '../schemas/fiscal-data';
-import type { ConnectionCheck } from './fiscal-data.server';
 
 const logger = new Logger('features/Empresa/General/FiscalData/arca-credentials');
 

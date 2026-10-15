@@ -1,15 +1,21 @@
 'use server';
 
 import { errorMessage, fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
+import { getFiscalDataOverview } from '@/features/Empresa/General/FiscalData/lib/fiscal-data-overview.server';
 import { checkPermissionServer } from '@/features/Permissions';
 import { Logger } from '@/lib/logger';
-import { isArcaMockMode, getArcaGateway } from '@/shared/lib/arca/server/gateway';
+import { getArcaGateway, isArcaMockMode } from '@/shared/lib/arca/server/gateway';
 import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
 import { after } from 'next/server';
-import { getFiscalDataOverview } from '@/features/Empresa/General/FiscalData/actions/fiscal-data.server';
-import { issueInvoice, reconcileInvoice, validateLoadedInvoice, type EmissionOutcome, type ReconcileOutcome } from '../lib/emission.server';
+import {
+  issueInvoice,
+  reconcileInvoice,
+  validateLoadedInvoice,
+  type EmissionOutcome,
+  type ReconcileOutcome,
+} from '../lib/emission.server';
 import { loadInvoice } from '../lib/invoice-context.server';
 import { canIssue } from '../lib/invoice-state-machine';
 import { cbteLabel, formatVoucherNumber } from '../lib/invoice-type';
@@ -97,7 +103,8 @@ export async function issueInvoiceAction(id: string): Promise<ActionResult<Emiss
     if (outcome.status === 'autorizada') {
       after(async () => {
         const result = await renderAndStoreInvoicePdf(id, companyId);
-        if ('error' in result) logger.error('No se generó el PDF tras autorizar', { data: { id, error: result.error } });
+        if ('error' in result)
+          logger.error('No se generó el PDF tras autorizar', { data: { id, error: result.error } });
       });
     }
     revalidatePath(COMERCIAL_PATH);

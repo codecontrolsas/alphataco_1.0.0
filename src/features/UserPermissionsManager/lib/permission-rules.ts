@@ -183,3 +183,19 @@ export function diffPermissionSets(before: ReadonlySet<string>, after: ReadonlyS
   for (const key of before) if (!after.has(key)) removed.push(key);
   return { added, removed };
 }
+
+/**
+ * Claves de acciones concedidas cuya pestaña tiene "Ver" en el catálogo pero no lo tiene concedido.
+ * Es la regla "toda acción exige el Ver de su pestaña" en forma de comprobación (el servidor la usa
+ * para rechazar guardados; el editor la cumple por cascada).
+ */
+export function findActionsWithoutView(granted: ReadonlySet<string>, index: PermissionIndex): string[] {
+  const orphans: string[] = [];
+  for (const key of granted) {
+    if (!index.allKeys.has(key)) continue;
+    if (index.slugByKey.get(key) === 'view') continue;
+    const viewKey = viewKeyOf(index, pairFromKey(key).tabId);
+    if (viewKey && !granted.has(viewKey)) orphans.push(key);
+  }
+  return orphans;
+}

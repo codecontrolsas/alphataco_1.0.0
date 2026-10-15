@@ -1,4 +1,4 @@
-import { getFiscalDataOverview } from '@/features/Empresa/General/FiscalData/actions/fiscal-data.server';
+import { getFiscalDataOverview } from '@/features/Empresa/General/FiscalData/lib/fiscal-data-overview.server';
 import { daysUntil } from '@/features/Empresa/General/FiscalData/lib/readiness';
 import { ENVIRONMENT_LABELS } from '@/features/Empresa/General/FiscalData/schemas/fiscal-data';
 import { joinList } from '@/features/Empresa/General/FiscalData/utils/format';

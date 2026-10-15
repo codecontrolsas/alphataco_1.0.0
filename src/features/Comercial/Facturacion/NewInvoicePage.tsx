@@ -1,4 +1,4 @@
-import { getFiscalDataOverview } from '@/features/Empresa/General/FiscalData/actions/fiscal-data.server';
+import { getFiscalDataOverview } from '@/features/Empresa/General/FiscalData/lib/fiscal-data-overview.server';
 import { joinList } from '@/features/Empresa/General/FiscalData/utils/format';
 import { getUserPermissionsMapServer } from '@/features/Permissions';
 import { ArrowLeft, CircleDashed, FilePlus2, FileSpreadsheet, Lock } from 'lucide-react';
