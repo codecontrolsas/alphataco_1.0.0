@@ -24,6 +24,7 @@ export {
 
 // Server Actions — CRUD de roles/permisos (Prisma)
 export {
+  applyUserPermissionChanges,
   assignRoleToUserServer,
   createRoleWithPermissions,
   deleteRoleServer,
@@ -34,8 +35,6 @@ export {
   getUserRolesServer,
   getUsersForRoleAssignment,
   removeRoleFromUserServer,
-  removeUserPermissionServer,
-  setUserPermissionServer,
   updateRoleWithPermissions,
 } from './actions/roles.server';
 

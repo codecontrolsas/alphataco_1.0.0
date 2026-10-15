@@ -1,37 +1,28 @@
-import { statusLabels as maintenanceOrderStatusLabels } from '@/features/Mantenimiento/MaintenanceOrders/table/columns';
-import { WORK_ORDER_STATUS_LABELS } from '@/features/Mantenimiento/shared/work-order-types';
+import {
+  LEGACY_HISTORY_LABELS,
+  getStatusUi,
+  type StatusEntity,
+} from '@/features/Mantenimiento/lib/status-presentation';
 import { AlertTriangle, ArrowRight, ArrowUpDown, Calendar, CheckCircle, Clock, FileText, GitBranch, Hash, Layers, LogIn, Package, Pause, Play, Plus, Settings, Trash2, Undo2, User, Wrench, XCircle } from 'lucide-react';
 
-/**
- * Estados que no cubren los mappers existentes del modulo: son los del tramo previo
- * del circuito (solicitud y planificacion de fecha). El resto se reutiliza de
- * `statusLabels` de la tabla de pedidos y de `WORK_ORDER_STATUS_LABELS`, para no
- * mantener dos mapeos distintos del mismo estado.
- */
-const extraStatusLabels: Record<string, string> = {
-  pending_scheduling: 'Pendiente de programación',
-  date_confirmed: 'Fecha confirmada',
-  date_rejected: 'Fecha rechazada',
-  pending_approval: 'Pendiente de aprobación',
-  approved: 'Aprobada',
-  rejected: 'Rechazada',
-};
+/** Orden de búsqueda cuando el estado no está en la entidad pedida (el log mezcla pedidos, OTs y solicitudes). */
+const ENTITY_FALLBACK_ORDER: readonly StatusEntity[] = ['order', 'request', 'workOrder', 'repair'];
 
 /**
- * Mapeo unico de estados a español: pedidos + ordenes de trabajo + solicitudes.
- * Ningun estado debe mostrarse en crudo en el historial (el cliente reporto ver
- * "pending_workshop_validation" sin traducir).
+ * Etiqueta en español de un estado del historial. `entity` indica a qué entidad pertenece el log
+ * (`maintenance_order_id` → 'order', `work_order_id` → 'workOrder', `maintenance_request_id` → 'request'):
+ * así `rejected` o `completed` se leen según la entidad y no según qué mapa gane. Sin `entity` (firma
+ * anterior) se asume 'order' y se cae a las demás entidades y a los estados históricos.
+ * Ningún estado debe mostrarse en crudo en el historial.
  */
-const statusLabels: Record<string, string> = {
-  ...maintenanceOrderStatusLabels,
-  ...WORK_ORDER_STATUS_LABELS,
-  ...extraStatusLabels,
-};
-
-// Función para obtener el label en español de un status
-export function getStatusLabel(status: string | null): string {
+export function getStatusLabel(status: string | null, entity: StatusEntity = 'order'): string {
   if (!status) return '';
-  return statusLabels[status] || status;
+  const candidates = [entity, ...ENTITY_FALLBACK_ORDER.filter((candidate) => candidate !== entity)];
+  for (const candidate of candidates) {
+    const ui = getStatusUi(candidate, status);
+    if (ui.label !== status) return ui.label;
+  }
+  return LEGACY_HISTORY_LABELS[status] ?? status;
 }
 
 // Mapeo de action_type a configuración visual

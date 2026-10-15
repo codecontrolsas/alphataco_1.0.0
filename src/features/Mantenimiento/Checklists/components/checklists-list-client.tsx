@@ -44,7 +44,7 @@ export default function ChecklistsListClient({
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-dvh bg-background flex flex-col">
       <MaintenanceHeader
         title="Checklists"
         showBack
@@ -62,43 +62,46 @@ export default function ChecklistsListClient({
         {checklists.length > 0 ? (
           <div className="space-y-3">
             {checklists.map((checklist) => (
-              <Card
-                key={checklist.id}
-                className="cursor-pointer hover:bg-accent/50 transition-colors active:scale-[0.99]"
-                onClick={() => handleSelectChecklist(checklist.id)}
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-start gap-3 min-w-0 flex-1">
-                      <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                        <ClipboardList className="h-5 w-5 text-primary" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold text-foreground truncate">
-                          {(checklist.form && typeof checklist.form === 'object' && 'description' in checklist.form
-                            ? checklist.form.description
-                            : null) || checklist.name}
-                        </h3>
-                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                          {checklist.form &&
-                            typeof checklist.form === 'object' &&
-                            'frequency' in checklist.form &&
-                            checklist.form.frequency && (
-                              <Badge variant="secondary" className="text-xs">
-                                {checklist.form.frequency}
-                              </Badge>
-                            )}
-                          <span className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {formatDate(checklist.created_at)}
-                          </span>
+              <Card key={checklist.id} className="transition-colors hover:bg-accent/50 active:scale-[0.99]">
+                {/* El botón ocupa toda la tarjeta: objetivo táctil grande y alcanzable con teclado */}
+                <button
+                  type="button"
+                  onClick={() => handleSelectChecklist(checklist.id)}
+                  className="block w-full rounded-xl text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  <CardContent className="p-4">
+                    <div className="flex min-h-12 items-center justify-between gap-3">
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                          <ClipboardList aria-hidden="true" className="h-5 w-5 text-primary" />
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1">{checklist.name}</p>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-semibold text-foreground text-base text-pretty">
+                            {(checklist.form && typeof checklist.form === 'object' && 'description' in checklist.form
+                              ? checklist.form.description
+                              : null) || checklist.name}
+                          </h3>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            {checklist.form &&
+                              typeof checklist.form === 'object' &&
+                              'frequency' in checklist.form &&
+                              checklist.form.frequency && (
+                                <Badge variant="secondary" className="text-xs">
+                                  {checklist.form.frequency}
+                                </Badge>
+                              )}
+                            <span className="text-sm text-muted-foreground flex items-center gap-1 tabular-nums">
+                              <Calendar aria-hidden="true" className="h-3 w-3" />
+                              {formatDate(checklist.created_at)}
+                            </span>
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-1">{checklist.name}</p>
+                        </div>
                       </div>
+                      <ChevronRight aria-hidden="true" className="h-5 w-5 text-muted-foreground shrink-0" />
                     </div>
-                    <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
-                  </div>
-                </CardContent>
+                  </CardContent>
+                </button>
               </Card>
             ))}
           </div>

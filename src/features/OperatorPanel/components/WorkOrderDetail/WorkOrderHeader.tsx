@@ -4,6 +4,7 @@ import type { BadgeProps } from '@/components/ui/badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { MaintenanceStatusPill } from '@/features/Mantenimiento/shared/components/MaintenanceStatusPill';
 import {
   getResourceKindLabel,
   getResourceLabel,
@@ -15,26 +16,10 @@ import Link from 'next/link';
 
 type BadgeVariant = NonNullable<BadgeProps['variant']>;
 
-const statusVariants: Record<string, BadgeVariant> = {
-  pending: 'secondary',
-  in_progress: 'default',
-  paused: 'warning',
-  completed: 'success',
-  completed_partial: 'success',
-};
-
-const statusLabels: Record<string, string> = {
-  pending: 'Pendiente',
-  in_progress: 'En Progreso',
-  paused: 'Pausada',
-  completed: 'Completada',
-  completed_partial: 'Completada Parcial',
-};
-
 const priorityVariants: Record<string, BadgeVariant> = {
   urgent: 'destructive',
   high: 'warning',
-  medium: 'default',
+  medium: 'info',
   low: 'secondary',
 };
 
@@ -153,48 +138,50 @@ export function WorkOrderHeader({
       <div className="p-4 sm:p-5 space-y-3.5">
         {/* Row 1: Back + Title + Start */}
         <div className="flex items-center gap-3">
-          <Link href="/operator/dashboard">
-            <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0 rounded-xl">
-              <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
+          <Link href="/operator/dashboard" aria-label="Volver a las órdenes de trabajo">
+            <Button type="button" variant="ghost" size="icon" className="size-11 flex-shrink-0 rounded-xl" tabIndex={-1}>
+              <ArrowLeft aria-hidden="true" className="h-5 w-5" />
             </Button>
           </Link>
           <div className="flex-1 min-w-0">
             <h1 className="text-lg font-bold truncate sm:text-xl tracking-tight">{orderNumber}</h1>
-            <p className="text-xs text-muted-foreground font-mono">{maintenanceOrderNumber}</p>
+            <p className="text-sm text-muted-foreground font-mono">OM {maintenanceOrderNumber}</p>
           </div>
           {status === 'pending' && (
-            <Button onClick={onStart} disabled={isStarting} size="default" className="gap-2 h-10 sm:h-11 rounded-xl">
-              <Play className="h-4 w-4" />
+            <Button type="button" onClick={onStart} disabled={isStarting} size="default" className="gap-2 h-11 rounded-xl">
+              <Play aria-hidden="true" className="h-4 w-4" />
               <span className="hidden sm:inline">Iniciar OT</span>
               <span className="sm:hidden">Iniciar</span>
             </Button>
           )}
           {status === 'in_progress' && onPause && (
             <Button
+              type="button"
               onClick={onPause}
               disabled={isPausing}
               variant="outline"
               size="default"
-              className="gap-2 h-10 sm:h-11 rounded-xl"
+              className="gap-2 h-11 rounded-xl"
             >
-              <Pause className="h-4 w-4" />
+              <Pause aria-hidden="true" className="h-4 w-4" />
               <span className="hidden sm:inline">Pausar OT</span>
               <span className="sm:hidden">Pausar</span>
             </Button>
           )}
           {status === 'paused' && onResume && (
             <Button
+              type="button"
               onClick={onResume}
               disabled={isResuming || isBlockedByOtherSector}
               size="default"
-              className="gap-2 h-10 sm:h-11 rounded-xl"
+              className="gap-2 h-11 rounded-xl"
               title={
                 isBlockedByOtherSector
                   ? `Bloqueada: ${blockedBySectorName || 'otro sector'} tiene una OT en progreso`
                   : undefined
               }
             >
-              <Play className="h-4 w-4" />
+              <Play aria-hidden="true" className="h-4 w-4" />
               <span className="hidden sm:inline">{isBlockedByOtherSector ? 'Bloqueada' : 'Reanudar OT'}</span>
               <span className="sm:hidden">{isBlockedByOtherSector ? 'Bloqueada' : 'Reanudar'}</span>
             </Button>
@@ -203,7 +190,7 @@ export function WorkOrderHeader({
 
         {/* Blocked banner */}
         {status === 'paused' && isBlockedByOtherSector && (
-          <div className="flex items-center gap-2.5 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive">
+          <div role="status" className="flex items-center gap-2.5 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive">
             <Lock className="h-4 w-4 shrink-0" />
             <p className="text-sm font-medium">
               No se puede reanudar: el sector <span className="font-bold">{blockedBySectorName || 'otro sector'}</span>{' '}
@@ -214,7 +201,7 @@ export function WorkOrderHeader({
 
         {/* Paused banner */}
         {status === 'paused' && !isBlockedByOtherSector && (
-          <div className="flex items-center gap-2.5 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400">
+          <div className="flex items-center gap-2.5 p-3 rounded-lg bg-warn-subtle border border-warn/30 text-warn-subtle-foreground">
             <Pause className="h-4 w-4 shrink-0" />
             <p className="text-sm font-medium">Orden de trabajo pausada. Reanude para poder completar tareas.</p>
           </div>
@@ -223,7 +210,7 @@ export function WorkOrderHeader({
         {/* Row 2: barra de identificacion del recurso (vehiculo o equipamiento) */}
         {resourceFields.length > 0 && (
           <div className="flex items-center gap-3 text-sm bg-muted/50 rounded-lg px-3.5 py-2.5 overflow-x-auto">
-            <Badge variant="outline" className="text-[11px] px-2 py-0.5 flex-shrink-0">
+            <Badge variant="outline" className="text-xs px-2 py-0.5 flex-shrink-0">
               {resource ? getResourceKindLabel(resource) : ''}
             </Badge>
             {resourceFields.map((field, index) => (
@@ -240,31 +227,34 @@ export function WorkOrderHeader({
 
         {/* Row 3: Badges */}
         <div className="flex flex-wrap items-center gap-1.5">
-          <Badge variant={statusVariants[status] || 'default'} className="text-[11px] px-2 py-0.5">
-            {statusLabels[status] || status}
-          </Badge>
+          <MaintenanceStatusPill entity="workOrder" status={status} size="sm" />
           {priority && (
-            <Badge variant={priorityVariants[priority] || 'default'} className="text-[11px] px-2 py-0.5">
+            <Badge variant={priorityVariants[priority] || 'default'} className="text-xs px-2 py-0.5">
               {priorityLabels[priority] || priority}
             </Badge>
           )}
           {plannedStartDate && (
-            <Badge variant="outline" className="text-[11px] px-2 py-0.5 gap-1">
-              <Calendar className="h-3 w-3" />
-              {moment(plannedStartDate).format('DD/MM/YYYY')}
+            <Badge variant="outline" className="text-xs px-2 py-0.5 gap-1 tabular-nums">
+              <Calendar aria-hidden="true" className="h-3 w-3" />
+              {/* @db.Date: medianoche UTC; moment.utc evita que el día se corra en hora argentina */}
+              {moment.utc(plannedStartDate).format('DD/MM/YYYY')}
             </Badge>
           )}
         </div>
 
         {/* Row 4: Progress */}
         <div className="space-y-1.5">
-          <div className="flex justify-between text-xs">
+          <div className="flex justify-between text-sm">
             <span className="text-muted-foreground font-medium">Progreso</span>
             <span className="font-bold tabular-nums">
               {completedCount}/{totalCount} tareas
             </span>
           </div>
-          <Progress value={progressPercentage} className="h-2" />
+          <Progress
+            value={progressPercentage}
+            className="h-2"
+            aria-label={`Progreso de la orden de trabajo: ${completedCount} de ${totalCount} tareas`}
+          />
         </div>
       </div>
     </div>

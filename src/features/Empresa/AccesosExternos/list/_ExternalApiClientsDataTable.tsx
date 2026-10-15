@@ -7,15 +7,15 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import type { LucideIcon } from 'lucide-react';
 import { CircleOff } from 'lucide-react';
-import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
 import {
   getAllExternalApiClientsForExport,
   getExternalApiClientsPaginated,
   getExternalApiClientsSingleFacet,
-  type ExternalApiClientListItem,
 } from './actions.server';
 import {
   HIDDEN_COLUMNS_BY_DEFAULT,
@@ -23,6 +23,7 @@ import {
   externalApiClientStatusLabels,
   getColumns,
 } from './columns';
+import type { ExternalApiClientListItem } from './lib/clients-types';
 
 // ============================================================================
 // TYPES
@@ -189,7 +190,7 @@ export function _ExternalApiClientsDataTable({
       emptyMessage="Todavía no hay accesos externos creados."
       data-testid="external-api-clients-table"
       exportConfig={{
-        fetchAllData: () => getAllExternalApiClientsForExport(currentParams),
+        fetchAllData: async () => unwrapExportResult(await getAllExternalApiClientsForExport(currentParams)),
         options: {
           filename: 'accesos-externos',
           title: 'Listado de Accesos Externos',
@@ -197,8 +198,8 @@ export function _ExternalApiClientsDataTable({
         },
         formatters: {
           status: (val) => externalApiClientStatusLabels[val as string] ?? String(val ?? ''),
-          last_used_at: (val) => (val ? moment(val as string).format('DD/MM/YYYY HH:mm') : 'Nunca'),
-          created_at: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
+          last_used_at: (val) => (val ? formatArgentinaDateTime(val as string | Date) : 'Nunca'),
+          created_at: (val) => (val ? formatArgentinaDay(val as string | Date) : ''),
         },
       }}
     />

@@ -19,6 +19,7 @@ import { RepairGroupBadge } from '@/features/Mantenimiento/shared/components/Rep
 import { RepairItemPhotos } from '@/features/Mantenimiento/shared/components/RepairItemPhotos';
 import { PREVENTIVE_TYPES, type PreventiveType } from '@/features/Mantenimiento/shared/preventive-maintenance';
 import { getRepairItemGroupName, getRepairItemImages } from '@/features/Mantenimiento/shared/repair-item-label';
+import { AddItemInlineForm } from '../AddItemInlineForm';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import { AlertTriangle, Ban, MessageSquare, Pencil, Plus, RotateCcw, Trash2, Wrench } from 'lucide-react';
 import { useState } from 'react';
@@ -30,7 +31,7 @@ interface Step1TasksProps {
   order: OrderManagementItem;
   localItems: LocalItem[];
   repairTypes: Array<{ id: string; name: string }>;
-  onAddItem: () => void;
+  onAddItem: (description: string, repairTypeIds: string[]) => void;
   onDeleteItem: (itemId: string) => void;
   onRejectItem?: (itemId: string, reason: string) => void;
   onRestoreItem?: (itemId: string) => void;
@@ -54,6 +55,7 @@ export function Step1Tasks({
   const [editingCommentItemId, setEditingCommentItemId] = useState<string | null>(null);
   const [rejectDialogItemId, setRejectDialogItemId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [addFormOpen, setAddFormOpen] = useState(false);
 
   const regularItems = localItems.filter((item) => !item.is_diagnostico && !item._deleted && !item._rejected);
   const rejectedItems = localItems.filter((item) => !item.is_diagnostico && !item._deleted && item._rejected);
@@ -78,16 +80,37 @@ export function Step1Tasks({
           </p>
         </div>
         <PermissionGuard module="mantenimiento" tab="gestion_ordenes" action="create">
-          <Button type="button" variant="outline" size="sm" onClick={onAddItem}>
-            <Plus className="h-4 w-4 mr-1" />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-expanded={addFormOpen}
+            aria-controls="add-item-inline"
+            onClick={() => setAddFormOpen((prev) => !prev)}
+          >
+            <Plus className="h-4 w-4 mr-1" aria-hidden="true" />
             Agregar reparación
           </Button>
         </PermissionGuard>
       </div>
 
+      {/* Agregar ítem inline: sin modal encima del wizard */}
+      {addFormOpen && (
+        <PermissionGuard module="mantenimiento" tab="gestion_ordenes" action="create">
+          <section id="add-item-inline" aria-label="Agregar reparación" className="rounded-lg border bg-muted/20 p-4">
+            <h4 className="mb-3 text-sm font-medium">Agregar reparación</h4>
+            <AddItemInlineForm
+              repairTypes={repairTypes}
+              onAdd={onAddItem}
+              onClose={() => setAddFormOpen(false)}
+            />
+          </section>
+        </PermissionGuard>
+      )}
+
       {/* Warning: items sin repair type */}
       {itemsWithoutRepairType.length > 0 && (
-        <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400">
+        <div className="flex items-center gap-2 p-2.5 rounded-lg bg-warn-subtle border border-warn/30 text-warn-subtle-foreground">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span className="text-xs">
             {itemsWithoutRepairType.length} desvío(s) sin tipo de reparación asignado. Asigne al menos uno para
@@ -148,7 +171,7 @@ export function Step1Tasks({
                 key={item.id}
                 className={`group relative flex flex-col p-3 border rounded-lg transition-colors hover:bg-muted/30 ${
                   item._isTemp
-                    ? 'border-dashed border-blue-300 bg-blue-50/30 dark:bg-blue-950/20'
+                    ? 'border-dashed border-info/30 bg-info-subtle/30'
                     : hasWorkOrder
                       ? 'border-l-4 border-l-emerald-500'
                       : repairTypeNames.length === 0
@@ -161,7 +184,7 @@ export function Step1Tasks({
                     {/* Status + Repair type badges */}
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {item._isTemp && (
-                        <Badge variant="outline" className="text-[10px] text-blue-600 border-blue-300 px-1.5 py-0">
+                        <Badge variant="outline" className="text-[10px] text-info border-info/30 px-1.5 py-0">
                           Nuevo
                         </Badge>
                       )}
@@ -247,9 +270,10 @@ export function Step1Tasks({
                         <Button type="button"
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6 text-destructive/60 hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="h-6 w-6 text-destructive/60 hover:text-destructive md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
                           onClick={() => onDeleteItem(item.id)}
                           title="Eliminar item"
+                          aria-label="Eliminar item"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -282,10 +306,10 @@ export function Step1Tasks({
                         </div>
                       </div>
                     ) : hasChiefComment ? (
-                      <div className="flex items-start gap-2 p-2 rounded border bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-sm">
-                        <MessageSquare className="h-3.5 w-3.5 mt-0.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <div className="flex items-start gap-2 p-2 rounded border bg-ok-subtle border-ok/30 text-sm">
+                        <MessageSquare className="h-3.5 w-3.5 mt-0.5 text-ok shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <span className="font-semibold text-emerald-900 dark:text-emerald-100 text-xs">
+                          <span className="font-semibold text-ok-subtle-foreground text-xs">
                             Mi comentario
                           </span>
                           <p className="mt-0.5 text-sm italic">{item.workshop_chief_comment}</p>
@@ -293,8 +317,9 @@ export function Step1Tasks({
                         <Button type="button"
                           variant="ghost"
                           size="icon"
-                          className="h-5 w-5 shrink-0 text-emerald-600 hover:text-emerald-800"
+                          className="h-5 w-5 shrink-0 text-ok hover:text-ok-subtle-foreground"
                           onClick={() => setEditingCommentItemId(item.id)}
+                          aria-label="Editar mi comentario"
                         >
                           <Pencil className="h-3 w-3" />
                         </Button>

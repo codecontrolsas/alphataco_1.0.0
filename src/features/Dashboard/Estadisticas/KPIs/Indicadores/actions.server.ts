@@ -1,7 +1,7 @@
 'use server';
 
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   buildDateRangeFiltersWhere,
   buildFiltersWhere,
@@ -12,9 +12,21 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 
 const logger = new Logger('KPIs/Indicadores/actions.server');
+
+/** Tope de filas de una exportación. */
+const EXPORT_MAX_ROWS = 10_000;
+
+/** Lectura de Indicadores: exige `view` en Configuración › KPIs › Indicadores (las escrituras ya exigen create/update). */
+async function assertCanViewIndicators() {
+  if (!(await checkPermissionServer('configuracion', 'indicadores', 'view'))) {
+    throw new Error('No tenés permiso para ver los indicadores');
+  }
+}
 
 // ============================================================================
 // CONSTANTS
@@ -116,6 +128,7 @@ function buildWhereClause(companyId: string, state: ReturnType<typeof parseSearc
 // ============================================================================
 
 export async function getKpisPaginated(searchParams: DataTableSearchParams) {
+  await assertCanViewIndicators();
   const companyId = await getActiveCompanyId();
 
   try {
@@ -156,23 +169,34 @@ export async function getKpisPaginated(searchParams: DataTableSearchParams) {
 // EXPORT QUERY (todos los datos, sin paginación)
 // ============================================================================
 
-export async function getAllKpisForExport(searchParams: DataTableSearchParams) {
-  const companyId = await getActiveCompanyId();
+export async function getAllKpisForExport(searchParams: DataTableSearchParams): Promise<ExportResult<KpiListItem[]>> {
+  if (!(await checkPermissionServer('configuracion', 'indicadores', 'view'))) {
+    return { ok: false, message: 'No tenés permiso para exportar los indicadores' };
+  }
 
   try {
+    const companyId = await getActiveCompanyId();
     const state = parseSearchParams(searchParams);
     const where = buildWhereClause(companyId, state);
 
+    // Una fila de más para detectar que se superó el tope sin traer todo.
     const data = await prisma.kpis.findMany({
       orderBy: [{ is_active: 'desc' }, { code: 'asc' }],
       where,
       select: KPI_SELECT,
+      take: EXPORT_MAX_ROWS + 1,
     });
 
-    return data;
+    if (data.length > EXPORT_MAX_ROWS) {
+      return {
+        ok: false,
+        message: `La exportación supera el máximo de ${EXPORT_MAX_ROWS.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`,
+      };
+    }
+    return { ok: true, data };
   } catch (error) {
     logger.error('Error al exportar KPIs', { data: { error } });
-    throw new Error('Error al exportar los KPIs');
+    return { ok: false, message: 'No se pudo exportar la lista. Intente nuevamente.' };
   }
 }
 
@@ -191,6 +215,7 @@ export async function getKpisSingleFacet(
   counts: Map<string, number>;
   resolvedOptions?: Array<{ id: string; name: string | null }>;
 } | null> {
+  await assertCanViewIndicators();
   const companyId = await getActiveCompanyId();
   const baseWhere = { company_id: companyId };
 

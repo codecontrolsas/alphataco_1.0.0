@@ -2,11 +2,9 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { confirmSupportTicket } from '../actions/support-confirm';
-import { MY_TICKETS_QUERY_KEY } from './useMyTickets';
-import { MY_TICKETS_PAGE_QUERY_KEY } from './useMyTicketsPage';
-import { ticketDetailKey } from './useTicketDetail';
-import { MY_TICKETS_WITH_UNREAD_QUERY_KEY } from './queryKeys';
+import { MY_TICKETS_PAGE_QUERY_KEY, MY_TICKETS_QUERY_KEY, MY_TICKETS_WITH_UNREAD_QUERY_KEY } from './queryKeys';
 import { APPROVER_TICKETS_QUERY_KEY } from './useApproverTickets';
+import { ticketDetailKey } from './useTicketDetail';
 
 /**
  * "Sí, quedó resuelto". Mismo patrón de invalidación que la solicitud de

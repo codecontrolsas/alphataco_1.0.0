@@ -7,9 +7,9 @@ export function EmployeeTableSkeleton() {
       <CardContent className="pt-6">
         <div className="space-y-4">
           {/* Toolbar skeleton */}
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex gap-2">
-              <Skeleton className="h-9 w-64" />
+              <Skeleton className="h-9 w-full max-w-64" />
               <Skeleton className="h-9 w-24" />
               <Skeleton className="h-9 w-24" />
             </div>

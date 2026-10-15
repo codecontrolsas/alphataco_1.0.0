@@ -1,5 +1,5 @@
-import { Card, CardContent } from '@/components/ui/card';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
+import { CatalogTableSurface } from '@/shared/components/common/CatalogFormSheet';
 import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { getDiagramReportsPaginated } from './actions.server';
@@ -34,17 +34,15 @@ export async function DiagramReportsList({ searchParams }: DiagramReportsListPro
   ]);
 
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <_DiagramReportsDataTable
-          data={data}
-          totalRows={total}
-          searchParams={tableParams}
-          tableId={TABLE_ID}
-          initialColumnVisibility={preferences.columnVisibility ?? {}}
-          initialFilterVisibility={preferences.filterVisibility ?? {}}
-        />
-      </CardContent>
-    </Card>
+    <CatalogTableSurface>
+      <_DiagramReportsDataTable
+        data={data}
+        totalRows={total}
+        searchParams={tableParams}
+        tableId={TABLE_ID}
+        initialColumnVisibility={preferences.columnVisibility ?? {}}
+        initialFilterVisibility={preferences.filterVisibility ?? {}}
+      />
+    </CatalogTableSurface>
   );
 }

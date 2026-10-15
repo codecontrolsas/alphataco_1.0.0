@@ -2,6 +2,12 @@
 
 **IDIOMA**: SIEMPRE comunicarte, planificar, comentar y documentar en **espanol**.
 
+> **REDISEÑO EN CURSO — leer `docs/rediseno/README.md` primero.** El objetivo es que alphataco (fork de GH Gestión) NO se parezca a GH:
+> rediseño estructural completo + refactor + responsive, módulo por módulo. El modelo de trabajo (skill `/dev`, comando `/rediseno`,
+> reglas del usuario, agentes, verificación, trampas) está en `docs/rediseno/` y `.claude/commands/`. **Superpowers está prohibido**
+> (ignorar la tabla "Skills (Superpowers)" de más abajo): usar `/dev`. No commitear sin pedido explícito; commits de una línea sin
+> atribución a IA; sin tests nuevos hasta el OK del usuario.
+
 ## Project Overview
 
 Sistema de gestion integral para Grupo Horizonte (GH). Administra empleados, equipos, documentacion, operaciones (partes diarios), mantenimiento de vehiculos, formularios, y modulo comercial. Multi-empresa con RLS en Supabase.
@@ -217,6 +223,8 @@ WHERE r.slug IN ('admin', 'administrador', 'full-access-provisional')
 **Y SOLO esos 3.** Los roles custom de la empresa (`roles.slug IS NULL`: "Usuario de RR.HH.", "Usuario Control Documental", "Administrador Operaciones", etc.) NO se cargan por migración aunque sean los que más usuarios tienen — se asignan **manualmente** desde el editor de permisos. Si al revisar una tab nueva ves que los roles operativos no la tienen, eso es lo esperado, no un bug de la migración.
 
 Para que la asignación manual funcione, la tab DEBE estar declarada en `permissions-map.ts` con sus `allowedActions`: el editor arma las acciones cruzando `allowedActions` con la tabla `actions`, y una tab ausente del mapa se muestra sin ninguna acción tildeable.
+
+**Excepción — claves NUEVAS que derivan de una existente** (ej. `send` que antes cubría `update`): el usuario decidió que la migración las copie también a TODO rol (incluidos los custom) y a todo ajuste de usuario que ya tenía la clave más cercana, para que nadie pierda una capacidad sin aviso. Ref. `20261022100000_permission_missing_keys`.
 
 ### Legajo: columna separada en DataTables
 
@@ -611,6 +619,12 @@ Aunque el usuario haya pedido antes "testeos para certificar", cuando dice _"los
 ### Un archivo de acciones importado desde un `'use client'` DEBE llevar `'use server'`
 
 Al reescribir `multi-upload-data.server.ts` se perdió la directiva `'use server'`. `tsc` no se entera, pero `next build` falla con 34 errores _"You're importing a component that needs server-only"_ porque el componente cliente (`NewDocumentMulti`) arrastra al bundle del navegador todo lo que importa el archivo (auth, mail, Prisma). Regla: toda server action consumida por un componente cliente vive en un archivo con `'use server'` en la primera línea; los helpers `server-only` (permisos, scopes) solo los importan archivos de servidor. Tras tocar o mover acciones, correr `npx next build` y no confiar solo en `tsc`.
+
+### Dependencias sin uso: se quitan sin preguntar
+
+Si al refactorizar una dependencia de `package.json` queda sin ningún importador (verificado con grep en `src/` y `scripts/`),
+se desinstala directamente (`npm uninstall <pkg> @types/<pkg>`) y se informa en el reporte. Pregunté antes de quitar `react-modal`
+y el usuario respondió: _"borrarla, eso ni se pregunta"_. Tocar el lockfile por una baja de dependencia muerta no es una decisión del usuario.
 
 ---
 

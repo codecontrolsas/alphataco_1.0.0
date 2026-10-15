@@ -1,7 +1,6 @@
-import { Card, CardDescription, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import type { DocumentTypeInfo } from '@/features/Documentacion/DetalleDocumento/actions/document-detail.server';
 import { expiryLabel, uploadedAtLabel } from '@/features/Documentacion/DetalleDocumento/lib/document-detail';
+import { DetailFacts, type DetailFact } from './DetailFacts';
 
 interface DocumentTypeCardProps {
   documentType: DocumentTypeInfo | null;
@@ -12,7 +11,7 @@ interface DocumentTypeCardProps {
   period: string | null;
 }
 
-/** Tab "Documento" del detalle: datos del tipo de documento y del archivo cargado. */
+/** Sección "Documento" de la ficha: datos del tipo de documento y del archivo cargado. */
 export function DocumentTypeCard({
   documentType,
   isCompanyDocument,
@@ -20,72 +19,36 @@ export function DocumentTypeCard({
   createdAt,
   period,
 }: DocumentTypeCardProps) {
-  return (
-    <Card>
-      <div className="p-3">
-        <CardTitle className="pb-3">
-          {isCompanyDocument ? 'Datos del documento de empresa' : 'Datos del documento que se le solicita al empleado'}
-        </CardTitle>
+  const facts: DetailFact[] = [
+    { label: 'Obligatoriedad', value: documentType?.mandatory ? 'Es mandatorio' : 'No es mandatorio' },
+  ];
+  if (!isCompanyDocument) {
+    facts.push({
+      label: 'Multirecurso',
+      value: documentType?.multiresource ? 'Es multirecurso' : 'No es multirecurso',
+    });
+  }
+  facts.push(
+    { label: 'Vencimiento', value: expiryLabel(documentType?.explired, validity) },
+    { label: 'Aplica a', value: documentType?.applies },
+    { label: 'Carga', value: uploadedAtLabel(createdAt) }
+  );
+  if (period) facts.push({ label: 'Período', value: period });
+  if (documentType?.special) {
+    facts.push({
+      label: 'Consideraciones especiales',
+      value: documentType.description,
+      wide: true,
+    });
+  }
 
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableCell>
-                <CardTitle className="pb-3">{documentType?.name}</CardTitle>
-              </TableCell>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow>
-              <TableCell>
-                <CardDescription>{documentType?.mandatory ? 'Es mandatorio' : 'No es mandatorio'}</CardDescription>
-              </TableCell>
-            </TableRow>
-            {!isCompanyDocument && (
-              <TableRow>
-                <TableCell>
-                  <CardDescription>
-                    {documentType?.multiresource ? 'Es multirecurso' : 'No es multirecurso'}
-                  </CardDescription>
-                </TableCell>
-              </TableRow>
-            )}
-            <TableRow>
-              <TableCell>
-                <CardDescription>{expiryLabel(documentType?.explired, validity)}</CardDescription>
-              </TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell>
-                <CardDescription>Documento aplica a {documentType?.applies}</CardDescription>
-              </TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell>
-                <CardDescription>{uploadedAtLabel(createdAt)}</CardDescription>
-              </TableCell>
-            </TableRow>
-            {period && (
-              <TableRow>
-                <TableCell>
-                  <CardDescription>
-                    <span className="font-bold">Período:</span> {period}
-                  </CardDescription>
-                </TableCell>
-              </TableRow>
-            )}
-            {documentType?.special && (
-              <TableRow>
-                <TableCell>
-                  <CardDescription>
-                    Este documento tiene consideraciones especiales a tener en cuenta ({documentType.description})
-                  </CardDescription>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-    </Card>
+  return (
+    <DetailFacts
+      title={documentType?.name ?? 'Documento'}
+      description={
+        isCompanyDocument ? 'Datos del documento de empresa' : 'Datos del documento que se le solicita al recurso'
+      }
+      facts={facts}
+    />
   );
 }

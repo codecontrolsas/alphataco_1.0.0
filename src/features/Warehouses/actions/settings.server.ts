@@ -13,20 +13,30 @@ import { normalizeDecimal } from '../schemas/stock-movement';
 
 const logger = new Logger('features/Warehouses/settings');
 
-/** Monto maximo de salida directa de la empresa (`null` = sin limite). */
+/**
+ * Monto maximo de salida directa de la empresa (`null` = sin limite). Es un importe: solo se devuelve con
+ * `stock:view_prices`; sin ese permiso `amountVisible` es false y el monto llega `null` (no confundir con "sin limite").
+ */
 export async function getDirectExitSettings() {
   if (!(await checkPermissionServer('almacenes', 'config-almacen', 'view'))) return null;
+  if (!(await checkPermissionServer('almacenes', 'stock', 'view_prices'))) {
+    return { directExitMaxAmount: null, amountVisible: false };
+  }
   const companyId = await getActiveCompanyId();
   const row = await prisma.warehouse_settings.findUnique({
     where: { company_id: companyId },
     select: { direct_exit_max_amount: true },
   });
-  return { directExitMaxAmount: row?.direct_exit_max_amount?.toFixed(2) ?? null };
+  return { directExitMaxAmount: row?.direct_exit_max_amount?.toFixed(2) ?? null, amountVisible: true };
 }
 
 export async function updateDirectExitLimitAction(values: DirectExitLimitFormValues): Promise<ActionResult> {
   if (!(await checkPermissionServer('almacenes', 'config-almacen', 'update'))) {
     return fail('No tenés permiso para cambiar la configuración de Almacenes');
+  }
+  // No se edita a ciegas un importe que el usuario no puede ver.
+  if (!(await checkPermissionServer('almacenes', 'stock', 'view_prices'))) {
+    return fail('No tenés permiso para ver ni cambiar importes');
   }
   const parsed = directExitLimitSchema.safeParse(values);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos');

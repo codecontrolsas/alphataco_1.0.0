@@ -14,7 +14,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
-import { createManualInvoiceDraft } from '../../actions/invoice-drafts.server';
+import { createManualInvoiceDraft } from '../../actions/invoice-drafts-create.server';
 import { manualInvoiceSchema, type ManualInvoiceInput } from '../../schemas/invoice';
 import { INVOICING_TAB_HREF, customerHref, formatCuitText, invoiceHref } from '../../utils/invoice-links';
 
@@ -71,7 +71,9 @@ export function ManualInvoiceForm({ customers }: { customers: Customer[] }) {
     return (
       <div className="flex flex-col items-start gap-2 border px-6 py-8">
         <p className="font-medium">No hay clientes activos.</p>
-        <p className="text-muted-foreground text-sm">Dá de alta un cliente en Comercial → Clientes para poder facturarle.</p>
+        <p className="text-muted-foreground text-sm">
+          Dá de alta un cliente en Comercial → Clientes para poder facturarle.
+        </p>
       </div>
     );
   }
@@ -110,7 +112,7 @@ export function ManualInvoiceForm({ customers }: { customers: Customer[] }) {
         {missingFiscalData && customer && (
           <div
             role="note"
-            className="flex items-start gap-3 border border-amber-500/50 bg-amber-500/5 px-4 py-3 text-sm text-amber-800 dark:text-amber-300"
+            className="flex items-start gap-3 border border-warn/35 bg-warn-subtle px-4 py-3 text-sm text-warn-subtle-foreground"
           >
             <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
             <p className="min-w-0 flex-1 text-pretty">

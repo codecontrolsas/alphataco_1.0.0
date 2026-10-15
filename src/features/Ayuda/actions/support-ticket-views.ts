@@ -1,7 +1,8 @@
 'use server';
 
-import { prisma } from '@/shared/lib/prisma';
 import { Logger } from '@/lib/logger';
+import { prisma } from '@/shared/lib/prisma';
+import { canSupportTickets } from '../lib/access.server';
 import { getReporterEmail } from './getReporterEmail';
 import { getSupportTicketById } from './support-tickets';
 
@@ -13,6 +14,7 @@ const logger = new Logger('features/Ayuda/support-ticket-views');
  * Idempotente: si ya existía una view, la actualiza.
  */
 export async function markSupportTicketAsRead(taskappTicketId: number): Promise<void> {
+  if (!(await canSupportTickets())) return;
   try {
     const reporter = await getReporterEmail();
     if (!reporter) {

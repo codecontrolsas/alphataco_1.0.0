@@ -4,10 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { ORDER_STATUS_FILTER_ORDER, ORDER_STATUS_UI } from '@/features/Mantenimiento/lib/status-presentation';
 import { DataTable, type DataTableFacetedFilterConfig } from '@/shared/components/common/DataTable';
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { AlertTriangle, CheckCircle2, Clock, Play, Wrench, XCircle } from 'lucide-react';
+import { AlertTriangle, Wrench } from 'lucide-react';
 import { useMemo } from 'react';
 import {
   getMaintenanceOrdersForOtherEquipment,
@@ -42,16 +43,11 @@ export function OtherEquipmentMaintenanceTable({ equipmentId, initialData }: Oth
   const columns = useMemo(() => getOtherEquipmentMaintenanceColumns() as ColumnDef<MaintenanceOrderRecord>[], []);
 
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(() => {
-    const statusOptions = [
-      { value: 'pending_scheduling', label: 'Por programar', icon: Clock },
-      { value: 'date_confirmed', label: 'Pendiente de ingreso a taller', icon: Clock },
-      { value: 'in_workshop', label: 'En taller', icon: Play },
-      { value: 'pending_workshop_validation', label: 'Pend. validación taller', icon: Clock },
-      { value: 'pending_operations_validation', label: 'Pend. validación operaciones', icon: Clock },
-      { value: 'operations_rejected', label: 'Rechazada por operaciones', icon: XCircle },
-      { value: 'workshop_rejected', label: 'Rechazada por taller', icon: XCircle },
-      { value: 'completed', label: 'Completada', icon: CheckCircle2 },
-    ];
+    const statusOptions = ORDER_STATUS_FILTER_ORDER.map((value) => ({
+      value,
+      label: ORDER_STATUS_UI[value].label,
+      icon: ORDER_STATUS_UI[value].icon,
+    }));
     // Solo se ofrecen los estados presentes: un filtro con opciones que siempre
     // dan cero es ruido en el historial de un único equipamiento.
     const present = new Set(rows.map((r) => r.status).filter(Boolean));

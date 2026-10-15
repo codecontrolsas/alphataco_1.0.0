@@ -1,9 +1,9 @@
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { getUserPermissionsMapServer } from '@/features/Permissions';
-import { ArrowLeft } from 'lucide-react';
-import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { RecordHeader } from '@/shared/components/common/RecordHeader';
+import { argentinaDate } from '@/shared/lib/argentina-time';
+import { ExpiredSupplierDocumentsAlert } from '../components/ExpiredSupplierDocumentsAlert';
+import { PurchasesPageShell } from '../components/PurchasesPageShell';
 import {
   getSupplierDocumentNameSuggestions,
   getSupplierFormLookups,
@@ -21,19 +21,7 @@ import { getSupplierAccount } from '../actions/supplier-account.server';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SupplierAccountView } from './components/SupplierAccountView';
 
-function Shell({ children }: { children: ReactNode }) {
-  return (
-    <div className="mx-auto max-w-5xl space-y-4">
-      <Button asChild variant="ghost" size="sm" className="-ml-2">
-        <Link href="/dashboard/purchases?tab=proveedores">
-          <ArrowLeft className="mr-1 h-4 w-4" />
-          Proveedores
-        </Link>
-      </Button>
-      {children}
-    </div>
-  );
-}
+const SUPPLIERS_BACK = { href: '/dashboard/purchases?tab=proveedores', label: 'Proveedores' };
 
 const EMPTY: SupplierFormValues = {
   name: '',
@@ -55,10 +43,10 @@ const EMPTY: SupplierFormValues = {
 export async function NewSupplierPage() {
   const { categories } = await getSupplierFormLookups();
   return (
-    <Shell>
+    <PurchasesPageShell back={SUPPLIERS_BACK}>
       <h1 className="text-2xl font-semibold">Nuevo proveedor</h1>
       <SupplierForm supplierId={null} defaultValues={EMPTY} categories={categories} />
-    </Shell>
+    </PurchasesPageShell>
   );
 }
 
@@ -104,18 +92,27 @@ export async function SupplierDetailPage({ supplier }: { supplier: SupplierDetai
     ...supplier.categories.filter((c) => !categories.some((active) => active.id === c.id)),
   ];
 
+  const today = argentinaDate();
+  const expiredDocuments = supplier.documents
+    .filter((d) => !d.replaced_by_id && d.expiresAt !== null && d.expiresAt < today)
+    .map((d) => ({ id: d.id, name: d.name, expiresAt: d.expiresAt as string }));
+
   return (
-    <Shell>
-      <div className="flex flex-wrap items-center gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">{supplier.name}</h1>
-          <p className="text-sm text-muted-foreground tabular-nums">
-            CUIT {formatCuit(supplier.cuit)}
-            {supplier.trade_name ? ` · ${supplier.trade_name}` : ''}
-          </p>
-        </div>
-        {!supplier.is_active && <Badge variant="outline">Inactivo</Badge>}
-        <div className="ml-auto">
+    <PurchasesPageShell back={SUPPLIERS_BACK}>
+      <RecordHeader
+        identity={
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-semibold break-words">{supplier.name}</h1>
+              <p className="text-sm text-muted-foreground tabular-nums">
+                CUIT {formatCuit(supplier.cuit)}
+                {supplier.trade_name ? ` · ${supplier.trade_name}` : ''}
+              </p>
+            </div>
+            {!supplier.is_active && <Badge variant="secondary">Inactivo</Badge>}
+          </div>
+        }
+        actions={
           <SupplierStatusActions
             supplierId={supplier.id}
             name={supplier.name}
@@ -123,8 +120,9 @@ export async function SupplierDetailPage({ supplier }: { supplier: SupplierDetai
             canDelete={canDelete}
             canUpdate={canUpdate}
           />
-        </div>
-      </div>
+        }
+      />
+      <ExpiredSupplierDocumentsAlert supplierId={supplier.id} documents={expiredDocuments} />
       <Tabs defaultValue="datos" className="space-y-4">
         <TabsList>
           <TabsTrigger value="datos">Datos</TabsTrigger>
@@ -153,6 +151,6 @@ export async function SupplierDetailPage({ supplier }: { supplier: SupplierDetai
           </TabsContent>
         )}
       </Tabs>
-    </Shell>
+    </PurchasesPageShell>
   );
 }

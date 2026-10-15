@@ -6,7 +6,7 @@ const item: ServiceItemFormSource = {
   item_description: 'Mano de obra',
   code_item: 'HH-01',
   item_number: '12',
-  item_price: 1500.5,
+  item_price: '1500.5',
   item_measure_units: 3,
   vat_rate_id: 5,
   is_active: true,
@@ -21,7 +21,7 @@ describe('toServiceItemFormValues', () => {
       item_description: 'Mano de obra',
       code_item: 'HH-01',
       item_number: '12',
-      item_price: 1500.5,
+      item_price: '1500.5',
       item_measure_units: '3',
       vat_rate_id: '5',
       is_active: true,
@@ -39,9 +39,9 @@ describe('toServiceItemFormValues', () => {
   });
 
   it('aplica los overrides encima del item', () => {
-    const values = toServiceItemFormValues(item, { is_active: false, item_price: 10 });
+    const values = toServiceItemFormValues(item, { is_active: false, item_price: '10' });
     expect(values.is_active).toBe(false);
-    expect(values.item_price).toBe(10);
+    expect(values.item_price).toBe('10');
     expect(values.item_name).toBe('Hora hombre');
   });
 

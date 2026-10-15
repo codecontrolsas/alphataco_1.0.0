@@ -2,38 +2,32 @@
 
 import type { DataTableFilterOption, DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable';
 import { DataTable } from '@/shared/components/common/DataTable';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { conditionLabels, otherEquipmentStatusLabels } from '@/shared/utils/mappers';
 import { useQuery } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
-import { AlertTriangle, CheckCircle2, CircleOff, Settings2, Wrench, XCircle } from 'lucide-react';
+import { CircleOff } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
-import type { VehicleByOwnerListItem } from './actions.server';
+import { activeStatusLabel, buildActiveFacetResult } from '../../lib/active-status';
+import {
+  VEHICLE_HIDDEN_COLUMNS_BY_DEFAULT,
+  conditionIcons,
+  getVehicleByOwnerColumns,
+  statusIcons,
+} from './equipmentByOwnerColumns';
+import type { VehicleByOwnerListItem } from './lib/owners-types';
 import {
   getAllVehiclesByOwnerForExport,
   getVehicleByOwnerSingleFacet,
   getVehiclesByOwnerPaginated,
-} from './actions.server';
-import { VEHICLE_HIDDEN_COLUMNS_BY_DEFAULT, getVehicleByOwnerColumns } from './equipmentByOwnerColumns';
+} from './vehicles-by-owner.server';
 
 // ============================================================================
-// ICON MAPS — LucideIcon type
+// ICON MAPS — los mismos íconos que muestran las celdas de la tabla
 // ============================================================================
 
-const CONDITION_ICONS: Record<string, LucideIcon> = {
-  operativo: CheckCircle2,
-  no_operativo: XCircle,
-  en_reparacion: Wrench,
-  operativo_condicionado: AlertTriangle,
-  en_preparacion: Settings2,
-};
-
-const STATUS_ICONS: Record<string, LucideIcon> = {
-  Avalado: CheckCircle2,
-  No_avalado: XCircle,
-  Incompleto: XCircle,
-  Completo: CheckCircle2,
-  Completo_con_doc_vencida: AlertTriangle,
-};
+const CONDITION_ICONS: Record<string, LucideIcon> = conditionIcons;
+const STATUS_ICONS: Record<string, LucideIcon> = statusIcons;
 
 // ============================================================================
 // PROPS
@@ -128,6 +122,8 @@ export function _VehiclesByOwnerDataTable({
             );
             return { ...result, options: optionsWithNull };
           }
+          case 'is_active':
+            return buildActiveFacetResult(result.counts);
           default:
             return result;
         }
@@ -248,7 +244,7 @@ export function _VehiclesByOwnerDataTable({
       initialColumnVisibility={mergedColumnVisibility}
       initialFilterVisibility={mergedFilterVisibility}
       exportConfig={{
-        fetchAllData: () => getAllVehiclesByOwnerForExport(ownerId, currentParams),
+        fetchAllData: async () => unwrapExportResult(await getAllVehiclesByOwnerForExport(ownerId, currentParams)),
         options: {
           filename: `equipos-${ownerName.toLowerCase().replace(/\s+/g, '-')}`,
           sheetName: 'Equipos por Titular',
@@ -261,7 +257,7 @@ export function _VehiclesByOwnerDataTable({
           model_vehicles: (val: unknown) => (val as { name: string } | null)?.name ?? '-',
           condition: (val: unknown) => (val ? conditionLabels[val as string] ?? String(val) : '-'),
           status: (val: unknown) => (val ? otherEquipmentStatusLabels[val as string] ?? String(val) : '-'),
-          is_active: (val: unknown) => (val === true ? 'Activo' : val === false ? 'Inactivo' : 'Sin asignar'),
+          is_active: (val: unknown) => activeStatusLabel(val),
           contractor_equipment: (val: unknown) => {
             if (!Array.isArray(val)) return 'Sin afectar';
             const names = (val as Array<{ customers: { name: string } | null }>)

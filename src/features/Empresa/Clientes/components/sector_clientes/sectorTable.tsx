@@ -1,11 +1,12 @@
 'use client';
 
-import { createFilterOptions } from '@/features/Employees/Empleados/components/utils/utils';
-import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
-import { BaseDataTable } from '@/shared/components/data-table/base/data-table';
-import { DataTableColumnHeader } from '@/shared/components/data-table/base/data-table-column-header';
-import type { ColumnDef, VisibilityState } from '@tanstack/react-table';
-import Cookies from 'js-cookie';
+import {
+  DataTable,
+  DataTableColumnHeader,
+  inMemoryTextFilterFn,
+  type DataTableFacetedFilterConfig,
+} from '@/shared/components/common/DataTable';
+import type { ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
 import type { SectorRow } from '../../actions/sectors.server';
 import { SectorFormDialog } from './SectorFormDialog';
@@ -14,32 +15,40 @@ interface SectorTableProps {
   contractorSectors: SectorRow[];
   /** Cliente de la ficha: se le pasa al diálogo de edición para no volver a preguntarlo. */
   customerId: string;
+  canEdit: boolean;
+  initialColumnVisibility: Record<string, boolean>;
+  initialFilterVisibility: Record<string, boolean>;
 }
 
-function includesValue(value: unknown, filter: unknown): boolean {
-  return Array.isArray(filter) && filter.includes(value);
-}
+const TABLE_ID = 'customer-sectors';
 
 export function getSectorColumns(customerId: string, canEdit: boolean): ColumnDef<SectorRow>[] {
   const columns: ColumnDef<SectorRow>[] = [
     {
-      id: 'Nombre',
+      id: 'name',
       accessorFn: (row) => row.sectors.name,
+      meta: { title: 'Nombre' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
-      filterFn: (row, id, value) => includesValue(row.getValue(id), value),
+      cell: ({ row }) => <span className="font-medium">{row.original.sectors.name}</span>,
+      filterFn: inMemoryTextFilterFn,
     },
     {
-      id: 'Descripción',
+      id: 'descripcion_corta',
       accessorFn: (row) => row.sectors.descripcion_corta ?? '',
+      meta: { title: 'Descripción' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción" />,
-      filterFn: (row, id, value) => includesValue(row.getValue(id), value),
+      cell: ({ row }) => row.original.sectors.descripcion_corta || <span className="text-muted-foreground">-</span>,
+      filterFn: inMemoryTextFilterFn,
     },
   ];
 
   if (canEdit) {
     columns.push({
-      id: 'Acciones',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Acciones" />,
+      id: 'actions',
+      meta: { title: 'Acciones', excludeFromExport: true },
+      enableSorting: false,
+      enableHiding: false,
+      header: () => <span className="sr-only">Acciones</span>,
       cell: ({ row }) => (
         <SectorFormDialog customerId={customerId} sector={row.original} triggerLabel="Editar" triggerVariant="link" />
       ),
@@ -49,45 +58,50 @@ export function getSectorColumns(customerId: string, canEdit: boolean): ColumnDe
   return columns;
 }
 
-function readCookieJson<T>(name: string, fallback: T): T {
-  const raw = Cookies.get(name);
-  if (!raw) return fallback;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function SectorTable({ contractorSectors, customerId }: SectorTableProps) {
-  const { hasPermission } = usePermissions();
-  const canEdit = hasPermission('comercial', 'sectores-cliente', 'update');
-
-  const savedVisibility = readCookieJson<VisibilityState>('comercial-sector-table', {});
-  const savedFilters = readCookieJson<string[]>('comercial-sector-table-filters', []);
-
+/**
+ * Sectores del cliente: un catálogo chico por cliente que llega completo desde el servidor, así que
+ * ordena, filtra y pagina en memoria (`inMemory`).
+ */
+function SectorTable({
+  contractorSectors,
+  customerId,
+  canEdit,
+  initialColumnVisibility,
+  initialFilterVisibility,
+}: SectorTableProps) {
   const columns = useMemo(() => getSectorColumns(customerId, canEdit), [customerId, canEdit]);
 
-  const filterOptions = useMemo(
-    () => ({ names: createFilterOptions(contractorSectors, (sector) => sector.sectors.name) }),
-    [contractorSectors]
+  const facetedFilters = useMemo<DataTableFacetedFilterConfig[]>(
+    () => [
+      { columnId: 'name', title: 'Nombre', type: 'text', placeholder: 'Buscar por nombre...' },
+      { columnId: 'descripcion_corta', title: 'Descripción', type: 'text', placeholder: 'Buscar por descripción...' },
+    ],
+    []
   );
 
   return (
-    <div className="p-4 pt-0">
-      <BaseDataTable
-        columns={columns}
-        data={contractorSectors}
-        savedVisibility={savedVisibility}
-        tableId="comercial-sector-table"
-        toolbarOptions={{
-          initialVisibleFilters: savedFilters,
-          filterableColumns: [
-            { columnId: 'Nombre', title: 'Nombre', options: filterOptions.names },
-          ],
-        }}
-      />
-    </div>
+    <DataTable
+      columns={columns}
+      data={contractorSectors}
+      totalRows={contractorSectors.length}
+      searchParams={{}}
+      inMemory
+      mobileCards
+      tableId={TABLE_ID}
+      paramNamespace={TABLE_ID}
+      facetedFilters={facetedFilters}
+      initialColumnVisibility={initialColumnVisibility}
+      initialFilterVisibility={initialFilterVisibility}
+      searchPlaceholder="Buscar por nombre o descripción"
+      showSearch
+      showFilterToggle
+      emptyMessage="Este cliente no tiene sectores cargados"
+      data-testid="customer-sectors-table"
+      exportConfig={{
+        fetchAllData: async () => contractorSectors,
+        options: { filename: 'sectores-cliente', title: 'Sectores del cliente', sheetName: 'Sectores' },
+      }}
+    />
   );
 }
 

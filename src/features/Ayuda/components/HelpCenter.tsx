@@ -2,18 +2,17 @@
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import type { Ticket, TicketWithUnread } from '@/shared/lib/taskapp/types';
 import { HelpCircle, Loader2, Plus, RefreshCcw } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { Ticket, TicketWithUnread } from '@/shared/lib/taskapp/types';
+import { useCallback, useMemo, useState } from 'react';
 import { BUCKET_LABEL, bucketFor, type TicketBucket } from '../constants/ticket-copy';
 import { useMyTicketsWithUnread } from '../hooks/useMyTicketsWithUnread';
 import { ApproverAllTickets } from './ApproverAllTickets';
 import { ApproverInbox } from './ApproverInbox';
 import { MyTicketsList } from './MyTicketsList';
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from './Tabs';
-
 
 const TicketDetailSheet = dynamic(() => import('./detail/TicketDetailSheet'), { ssr: false });
 
@@ -60,18 +59,11 @@ const TAB_TRIGGER_CLASS =
 interface Props {
   initialTickets: TicketWithUnread[];
   initialTicket: Ticket | null;
-  initialTicketId: number | null;
   currentUserEmail: string;
   currentUserName: string;
 }
 
-export function HelpCenter({
-  initialTickets,
-  initialTicket,
-  initialTicketId,
-  currentUserEmail,
-  currentUserName,
-}: Props) {
+export function HelpCenter({ initialTickets, initialTicket, currentUserEmail, currentUserName }: Props) {
   const searchParams = useSearchParams();
 
   // Una sola lectura de los tickets del usuario para toda la pantalla.
@@ -79,13 +71,7 @@ export function HelpCenter({
   // no leídos) y el cliente volvía a pedir la página 1 apenas hidrataba. Con
   // tres pestañas hacen falta los totales de cada una igual, así que la lista
   // completa alcanza y sobra — y es una llamada menos por carga.
-  const {
-    data: tickets = [],
-    isLoading,
-    isFetching,
-    isError,
-    refetch,
-  } = useMyTicketsWithUnread(initialTickets);
+  const { data: tickets = [], isLoading, isFetching, isError, refetch } = useMyTicketsWithUnread(initialTickets);
 
   // null = el usuario todavia no eligio pestaña; manda la derivada de los datos.
   const [pickedTab, setPickedTab] = useState<TicketBucket | null>(null);
@@ -108,52 +94,28 @@ export function HelpCenter({
   // frame antes de arreglarla, y ademas es set-state-in-effect.
   const tab: TicketBucket =
     pickedTab ??
-    (byBucket.review.length > 0 || tickets.length === 0
-      ? 'review'
-      : byBucket.active.length > 0
-        ? 'active'
-        : 'closed');
+    (byBucket.review.length > 0 || tickets.length === 0 ? 'review' : byBucket.active.length > 0 ? 'active' : 'closed');
   const setTab = setPickedTab;
 
   // ── Sheet de detalle (conversación completa) ──────────────────────────────
-  const getInitialId = (): number | null => {
-    const param = searchParams.get('ticket');
-    if (!param) return initialTicketId;
-    const n = Number(param);
-    return Number.isFinite(n) ? n : null;
-  };
-
-  const [activeTicketId, setActiveTicketId] = useState<number | null>(getInitialId);
-
-  // Sincronizar SOLO si la URL cambia por afuera (back/forward del browser).
-  useEffect(() => {
-    const param = searchParams.get('ticket');
-    const n = param ? Number(param) : null;
-    const fromUrl = n != null && Number.isFinite(n) ? n : null;
-    if (fromUrl !== activeTicketId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setActiveTicketId(fromUrl);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  // El ticket abierto se DERIVA de la URL (`?ticket=`): `handleSelect`/`handleClose` escriben la URL con
+  // `history.replaceState` (Next la refleja en `useSearchParams`) y el back/forward del navegador también
+  // la cambia, así que no hace falta copiarla a un estado ni sincronizarla con un efecto.
+  const ticketParam = searchParams.get('ticket');
+  const parsedTicketId = ticketParam ? Number(ticketParam) : null;
+  const activeTicketId = parsedTicketId != null && Number.isFinite(parsedTicketId) ? parsedTicketId : null;
 
   const handleSelect = useCallback((id: number) => {
-    setActiveTicketId(id);
     const params = new URLSearchParams(window.location.search);
     params.set('ticket', String(id));
     window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
   }, []);
 
   const handleClose = useCallback(() => {
-    setActiveTicketId(null);
     const params = new URLSearchParams(window.location.search);
     params.delete('ticket');
     const qs = params.toString();
-    window.history.replaceState(
-      null,
-      '',
-      qs ? `${window.location.pathname}?${qs}` : window.location.pathname
-    );
+    window.history.replaceState(null, '', qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
   }, []);
 
   // El formulario es un panel fijo en escritorio; en teléfono ocuparía la
@@ -184,9 +146,7 @@ export function HelpCenter({
             <HelpCircle aria-hidden className="size-[18px]" strokeWidth={2} />
           </span>
           <div className="min-w-0">
-            <h1 className="text-pretty text-xl font-semibold leading-tight tracking-tight">
-              Centro de Ayuda
-            </h1>
+            <h1 className="text-pretty text-xl font-semibold leading-tight tracking-tight">Centro de Ayuda</h1>
             <p className="mt-0.5 text-sm text-muted-foreground">
               Reportá un problema y seguí el estado de tus solicitudes.
             </p>
@@ -267,10 +227,7 @@ export function HelpCenter({
                 pestaña activa y adentro se recorre con las flechas. El nombre
                 accesible tiene que decir qué se filtra, porque las etiquetas
                 sueltas («Cerrados») no alcanzan fuera de contexto. */}
-            <TabsList
-              label="Filtrar mis tickets por estado"
-              className="flex w-full justify-start gap-1"
-            >
+            <TabsList label="Filtrar mis tickets por estado" className="flex w-full justify-start gap-1">
               {BUCKETS.map((b) => (
                 <TabsTrigger key={b} value={b} className={TAB_TRIGGER_CLASS}>
                   {BUCKET_LABEL[b]}

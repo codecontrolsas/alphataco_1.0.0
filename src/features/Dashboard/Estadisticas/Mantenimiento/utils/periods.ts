@@ -1,3 +1,5 @@
+import { argentinaDayStart } from '@/features/Dashboard/Principal/lib/dashboard-dates';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import moment from 'moment';
 import 'moment/locale/es';
 
@@ -22,12 +24,13 @@ export const PERIOD_ANCHOR_FORMAT = 'YYYY-MM-DD';
 
 /** Ancla de hoy — punto de partida por defecto de los selectores. */
 export function todayAnchor(): string {
-  return moment().format(PERIOD_ANCHOR_FORMAT);
+  // Hoy en hora argentina: ni el servidor (UTC) ni el navegador deciden el día
+  return argentinaDate();
 }
 
 function parseAnchor(anchor: string): moment.Moment {
   const parsed = moment(anchor, PERIOD_ANCHOR_FORMAT, true);
-  return parsed.isValid() ? parsed : moment();
+  return parsed.isValid() ? parsed : moment(argentinaDate(), PERIOD_ANCHOR_FORMAT);
 }
 
 /**
@@ -43,6 +46,19 @@ export function resolvePeriodRange(
   return { start, end: start.clone().add(1, granularity) };
 }
 
+/**
+ * Mismo rango semiabierto pero como INSTANTES, para cortar columnas `timestamptz`
+ * (`created_at`, `completed_at`): las 00:00 hora argentina del primer y del último día.
+ * `resolvePeriodRange` sigue devolviendo fechas calendario (para `@db.Date` y etiquetas).
+ */
+export function resolvePeriodInstants(granularity: PeriodGranularity, anchor: string): { start: Date; end: Date } {
+  const { start, end } = resolvePeriodRange(granularity, anchor);
+  return {
+    start: argentinaDayStart(start.format(PERIOD_ANCHOR_FORMAT)),
+    end: argentinaDayStart(end.format(PERIOD_ANCHOR_FORMAT)),
+  };
+}
+
 /** Mueve el ancla `delta` períodos (negativo = atrás) manteniendo la granularidad. */
 export function shiftAnchor(granularity: PeriodGranularity, anchor: string, delta: number): string {
   return parseAnchor(anchor).startOf(granularity).add(delta, granularity).format(PERIOD_ANCHOR_FORMAT);
@@ -51,7 +67,7 @@ export function shiftAnchor(granularity: PeriodGranularity, anchor: string, delt
 /** `true` si el período siguiente al del ancla todavía no empezó. */
 export function isLastNavigablePeriod(granularity: PeriodGranularity, anchor: string): boolean {
   const { end } = resolvePeriodRange(granularity, anchor);
-  return !end.isSameOrBefore(moment(), 'day');
+  return !end.isSameOrBefore(moment(argentinaDate(), PERIOD_ANCHOR_FORMAT), 'day');
 }
 
 function capitalize(value: string): string {

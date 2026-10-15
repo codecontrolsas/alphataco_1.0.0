@@ -7,6 +7,7 @@ import {
   type DataTableSearchParams,
   type FacetResult,
 } from '@/shared/components/common/DataTable';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Banknote, Users } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { formatInCurrency } from '../../../lib/currency-format';
@@ -116,7 +117,7 @@ export function _ReceivablesDataTable({
 
   const exportConfig: DataTableExportConfig<ReceivableListItem> = useMemo(
     () => ({
-      fetchAllData: () => getAllReceivablesForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllReceivablesForExport(currentParams)),
       options: { filename: 'a-cobrar', title: 'A cobrar', sheetName: 'A cobrar' },
       formatters: {
         issue_date: (value) => formatValueDate(value as string),

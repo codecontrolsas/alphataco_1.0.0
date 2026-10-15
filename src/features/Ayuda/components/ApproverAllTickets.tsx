@@ -58,9 +58,7 @@ export function ApproverAllTickets({ onSelect }: Props) {
             {total}
           </Badge>
         </CardTitle>
-        <CardDescription>
-          Vista de aprobador: reportes de todos los usuarios y quién los generó.
-        </CardDescription>
+        <CardDescription>Vista de aprobador: reportes de todos los usuarios y quién los generó.</CardDescription>
       </CardHeader>
       <PageFetchBar active={isPlaceholderData} />
       <CardContent className="divide-y p-0">
@@ -73,49 +71,47 @@ export function ApproverAllTickets({ onSelect }: Props) {
             isPlaceholderData ? 'pointer-events-none opacity-50 saturate-50' : ''
           }`}
         >
-        {tickets.map((ticket) => {
-          const status = statusFor(ticket.status?.slug);
-          const { cleanTitle, categoryLabel } = parseCategoryFromTitle(ticket.title);
-          const reporterLabel =
-            ticket.reporter_name && ticket.reporter_name.trim() !== ''
-              ? ticket.reporter_name
-              : (ticket.reporter_email ?? 'Desconocido');
+          {tickets.map((ticket) => {
+            const status = statusFor(ticket.status?.slug);
+            const { cleanTitle, categoryLabel } = parseCategoryFromTitle(ticket.title);
+            const reporterLabel =
+              ticket.reporter_name && ticket.reporter_name.trim() !== ''
+                ? ticket.reporter_name
+                : ticket.reporter_email ?? 'Desconocido';
 
-          return (
-            <button
-              key={ticket.id}
-              type="button"
-              onClick={() => onSelect?.(ticket.id)}
-              className="flex w-full cursor-pointer flex-wrap items-center justify-between gap-3 px-6 py-3.5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <div className="min-w-0 flex-1 space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className={`inline-flex h-2 w-2 shrink-0 rounded-full ${status.dotClass}`} />
-                  <p className="truncate text-sm font-medium">
-                    TKT-{ticket.id} · {cleanTitle}
-                  </p>
+            return (
+              <button
+                key={ticket.id}
+                type="button"
+                onClick={() => onSelect?.(ticket.id)}
+                className="flex w-full cursor-pointer flex-wrap items-center justify-between gap-3 px-6 py-3.5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-flex h-2 w-2 shrink-0 rounded-full ${status.dotClass}`} />
+                    <p className="truncate text-sm font-medium">
+                      TKT-{ticket.id} · {cleanTitle}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      <User className="h-3 w-3" />
+                      {reporterLabel}
+                    </span>
+                    {categoryLabel && <span>{categoryLabel}</span>}
+                    <span className="inline-flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {moment(ticket.created_at).locale('es').fromNow()}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-1">
-                    <User className="h-3 w-3" />
-                    {reporterLabel}
-                  </span>
-                  {categoryLabel && <span>{categoryLabel}</span>}
-                  <span className="inline-flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    {moment(ticket.created_at).locale('es').fromNow()}
-                  </span>
+                <div className="flex shrink-0 items-center gap-2">
+                  <TicketPriorityBadge slug={ticket.priority} />
+                  <Badge variant={status.badgeVariant}>{status.label}</Badge>
                 </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <TicketPriorityBadge slug={ticket.priority} />
-                <Badge variant="outline" className={`border-transparent ${status.badgeClass}`}>
-                  {status.label}
-                </Badge>
-              </div>
-            </button>
-          );
-        })}
+              </button>
+            );
+          })}
         </div>
 
         {showPagination && (

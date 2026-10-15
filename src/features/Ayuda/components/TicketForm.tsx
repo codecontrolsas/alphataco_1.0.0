@@ -2,14 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
@@ -130,9 +123,7 @@ export function TicketForm() {
             </span>
             Reportar un problema
           </CardTitle>
-          <CardDescription className="text-xs">
-            Contanos qué pasó y vamos a ocuparnos.
-          </CardDescription>
+          <CardDescription className="text-xs">Contanos qué pasó y vamos a ocuparnos.</CardDescription>
         </CardHeader>
 
         <CardContent className="grid gap-5 px-4 py-5">
@@ -218,11 +209,7 @@ export function TicketForm() {
                 <FormItem>
                   <FormLabel className={LABEL_CLASS}>Prioridad</FormLabel>
                   <FormControl>
-                    <TicketPrioritySelect
-                      value={field.value}
-                      onChange={field.onChange}
-                      disabled={isSubmitting}
-                    />
+                    <TicketPrioritySelect value={field.value} onChange={field.onChange} disabled={isSubmitting} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -255,7 +242,7 @@ export function TicketForm() {
                   <FormLabel className={LABEL_CLASS}>Descripción</FormLabel>
                   <span
                     className={`text-[11px] tabular-nums ${
-                      descriptionLen > 4500 ? 'text-amber-600' : 'text-muted-foreground'
+                      descriptionLen > 4500 ? 'text-warn-subtle-foreground' : 'text-muted-foreground'
                     }`}
                   >
                     {descriptionLen}/5000
@@ -287,11 +274,7 @@ export function TicketForm() {
 
         <CardFooter className="justify-end border-t px-4 py-3.5 [.border-t]:pt-3.5">
           <Button type="submit" disabled={isSubmitting} className="gap-2">
-            {isSubmitting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
+            {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             {isSubmitting ? 'Enviando…' : 'Enviar reporte'}
           </Button>
         </CardFooter>

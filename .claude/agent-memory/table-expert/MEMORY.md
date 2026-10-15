@@ -10,3 +10,7 @@
 - [Columnas virtuales derivadas de relacion 1:N](virtual-relation-columns.md) — conteo + ultimo registro sin tocar schema (ticket 685, Equipos/Vehicles)
 - [Rediseño Documentacion](documentacion-redesign.md) — celdas/acciones/tarjetas compartidas de las listas de documentos y tipos
 - [Tipos de Reparación / Grupos (inMemory, deltas M:M)](tipos-reparaciones-inmemory.md) — DataTable inMemory, baseline desde la base, sin `delete` en el mapa
+- [Mantenimiento: En Taller v2](mantenimiento-en-taller-v2.md) — filtro virtual attention, métricas = where del listado, wizard por contexto
+- [Taller: Por Programar/Por Ingresar + pipeline](mantenimiento-taller-redesign.md) — attention virtual, namespace vs tableId -v2, summary del pipeline
+- [Clientes (lista, afectados, in-memory)](clientes-tables.md) — cuit bigint via raw, cleanFacetFilters, AssignmentDialog protege bajas, prefs sin cache
+- [Dashboard Principal: diálogos](dashboard-principal-dialogs.md) — where de diálogos (orden de spreads), export ExportResult, legajo exacto

@@ -13,8 +13,8 @@ import {
   cancelSupplierInvoice,
   checkSupplierInvoiceInArca,
   rejectSupplierInvoice,
-  type SupplierInvoiceDetail,
 } from '../../actions/invoices.server';
+import type { SupplierInvoiceDetail } from '../../lib/invoice-query-types';
 import { ConfirmAction } from '../../components/ConfirmAction';
 import { invalidatePurchases } from '../../lib/invalidate';
 

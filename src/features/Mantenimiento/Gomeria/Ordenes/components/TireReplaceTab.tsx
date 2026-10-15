@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { TabsContent } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { TireReturnWarehouseSelect } from '@/features/Mantenimiento/Gomeria/shared/TireReturnWarehouseSelect';
 import { TireReplacePicker } from './TireReplacePicker';
@@ -15,7 +14,7 @@ export function ReplaceTab({ actions, vehicleId }: { actions: TirePositionAction
   const { oldDest, needsWarehouse, returnWarehouse, effectiveWarehouseId, discardComment } = replace;
 
   return (
-    <TabsContent value="replace" className="space-y-3 pt-2">
+    <div className="space-y-3 pt-2">
       <div>
         <Label className="text-xs mb-1 block">Cubierta nueva</Label>
         <TireReplacePicker vehicleId={vehicleId} selectedTireId={replace.newTire?.id} onSelect={replace.setNewTire} />
@@ -61,9 +60,7 @@ export function ReplaceTab({ actions, vehicleId }: { actions: TirePositionAction
       {(oldDest === 'DISCARD' || oldDest === 'REPAIR') && (
         <div
           className={`space-y-2 rounded-md border p-3 ${
-            oldDest === 'DISCARD'
-              ? 'border-destructive/30 bg-destructive/5'
-              : 'border-yellow-500/30 bg-yellow-50/50 dark:bg-yellow-950/20'
+            oldDest === 'DISCARD' ? 'border-destructive/30 bg-destructive/5' : 'border-warn/30 bg-warn-subtle/50'
           }`}
         >
           <div className="space-y-1">
@@ -145,6 +142,6 @@ export function ReplaceTab({ actions, vehicleId }: { actions: TirePositionAction
       >
         {isUploading ? 'Subiendo foto...' : replace.mutation.isPending ? 'Registrando...' : 'Registrar reemplazo'}
       </Button>
-    </TabsContent>
+    </div>
   );
 }

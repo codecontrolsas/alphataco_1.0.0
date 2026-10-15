@@ -44,10 +44,10 @@ export default function CityInput({ provinces, defaultProvince, defaultCity }: P
 
   return (
     <>
-      <div>
+      <div className="min-w-0 space-y-1.5">
         <Label htmlFor="province_id">Seleccione una provincia</Label>
         <Select value={selectedProvince} onValueChange={handleProvinceChange} name="province_id">
-          <SelectTrigger id="province_id" name="province_id" className="max-w-[350px]  w-[300px]">
+          <SelectTrigger id="province_id" name="province_id" className="w-full">
             <SelectValue placeholder="Seleccionar Provincia" />
           </SelectTrigger>
           <SelectContent>
@@ -59,12 +59,12 @@ export default function CityInput({ provinces, defaultProvince, defaultCity }: P
           </SelectContent>
         </Select>
 
-        <CardDescription id="province_id_error" className="max-w-[300px]" />
+        <CardDescription id="province_id_error" />
       </div>
-      <div>
+      <div className="min-w-0 space-y-1.5">
         <Label htmlFor="city">Seleccione una ciudad</Label>
         <Select value={selectedCity} onValueChange={setSelectedCity} name="city" disabled={!selectedProvince}>
-          <SelectTrigger id="city" name="city" className="max-w-[350px] w-[300px]">
+          <SelectTrigger id="city" name="city" className="w-full">
             <SelectValue placeholder={isLoading ? 'Cargando ciudades...' : 'Seleccionar Ciudad'} />
           </SelectTrigger>
           <SelectContent>
@@ -75,7 +75,7 @@ export default function CityInput({ provinces, defaultProvince, defaultCity }: P
             ))}
           </SelectContent>
         </Select>
-        <CardDescription id="city_error" className="max-w-[300px]" />
+        <CardDescription id="city_error" />
       </div>
     </>
   );

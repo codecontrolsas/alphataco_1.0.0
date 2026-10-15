@@ -3,29 +3,24 @@
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { StackedCell } from '@/shared/components/common/StackedCell';
+import { formatArgentinaDay, formatDateAr } from '@/shared/lib/argentina-time';
 import { CBTE_TYPES, isCbteTypeId } from '@/shared/lib/arca/catalogs';
 import type { ColumnDef } from '@tanstack/react-table';
-import moment from 'moment';
 import Link from 'next/link';
 import { ARCA_CHECK_LABELS, SUPPLIER_INVOICE_STATUS_LABELS } from '../../lib/invoice-status';
 import { SupplierInvoiceStatusBadge } from '../components/SupplierInvoiceStatusBadge';
 import type { SupplierInvoiceListItem } from './actions.server';
-
-export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['supplier_cuit', 'vat_period', 'due_date', 'created_at'];
-
-/** Tipos de comprobante que se cargan en la etapa 4 (los habilitados del catalogo). */
-export const INVOICE_CBTE_TYPE_IDS = [1, 2, 3, 6, 7, 8, 11, 12, 13] as const;
+import { NO_ARCA_CHECK_LABEL, NO_ORDER_LABEL } from './constants';
 
 export const cbteTypeLabel = (id: number) => (isCbteTypeId(id) ? CBTE_TYPES[id].label : String(id));
-
-export const NO_ARCA_CHECK_LABEL = 'Sin constatar';
-export const NO_ORDER_LABEL = 'Sin OC';
 
 const arcaLabel = (value: SupplierInvoiceListItem['arca_check_result']) =>
   value ? ARCA_CHECK_LABELS[value] : NO_ARCA_CHECK_LABEL;
 
-/** Columnas DATE (sin hora): se leen en UTC para no correr un dia. */
-const formatDateOnly = (value: Date | string | null) => (value ? moment.utc(value).format('DD/MM/YYYY') : '-');
+/** Columnas DATE (sin hora): llegan como medianoche UTC, se leen como fecha para no correr un día. */
+const formatDateOnly = (value: Date | string | null) =>
+  value ? formatDateAr(new Date(value).toISOString().slice(0, 10)) : '-';
 
 export function getColumns(): ColumnDef<SupplierInvoiceListItem>[] {
   return [
@@ -37,9 +32,14 @@ export function getColumns(): ColumnDef<SupplierInvoiceListItem>[] {
       cell: ({ row }) => (
         <Link
           href={`/dashboard/purchases/invoices/${row.original.id}`}
-          className="font-mono text-sm font-medium text-blue-600 hover:underline"
+          className="block text-brand-ink hover:underline"
+          aria-label={`Ver ${row.original.label}`}
         >
-          {row.original.label}
+          <StackedCell
+            mono
+            primary={row.original.voucher_number}
+            secondary={cbteTypeLabel(row.original.cbte_type)}
+          />
         </Link>
       ),
     },
@@ -64,11 +64,8 @@ export function getColumns(): ColumnDef<SupplierInvoiceListItem>[] {
       meta: { title: 'Proveedor' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Proveedor" />,
       cell: ({ row }) => (
-        <Link
-          href={`/dashboard/purchases/suppliers/${row.original.supplier.id}`}
-          className="text-blue-600 hover:underline"
-        >
-          {row.original.supplier.name}
+        <Link href={`/dashboard/purchases/suppliers/${row.original.supplier.id}`} className="block hover:underline">
+          <StackedCell primary={row.original.supplier.name} secondary={`CUIT ${row.original.supplier.cuit}`} />
         </Link>
       ),
       filterFn: (row, _id, value: string[]) => value.includes(row.original.supplier.id),
@@ -145,7 +142,7 @@ export function getColumns(): ColumnDef<SupplierInvoiceListItem>[] {
               <Link
                 key={o.id}
                 href={`/dashboard/purchases/orders/${o.id}`}
-                className="font-mono text-sm text-blue-600 hover:underline"
+                className="font-mono text-sm text-brand-ink hover:underline"
               >
                 {o.number}
               </Link>
@@ -163,7 +160,7 @@ export function getColumns(): ColumnDef<SupplierInvoiceListItem>[] {
       accessorFn: (row) => row.creator.name,
       meta: { title: 'Cargó' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Cargó" />,
-      cell: ({ row }) => <span>{row.original.creator.name}</span>,
+      cell: ({ row }) => <StackedCell primary={row.original.creator.name} />,
       filterFn: (row, _id, value: string[]) => value.includes(row.original.creator.id),
     },
     {
@@ -171,9 +168,7 @@ export function getColumns(): ColumnDef<SupplierInvoiceListItem>[] {
       accessorKey: 'created_at',
       meta: { title: 'Fecha de alta' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de alta" />,
-      cell: ({ row }) => (
-        <span>{row.original.created_at ? moment(row.original.created_at).format('DD/MM/YYYY') : '-'}</span>
-      ),
+      cell: ({ row }) => <span>{row.original.created_at ? formatArgentinaDay(row.original.created_at) : '-'}</span>,
     },
   ];
 }

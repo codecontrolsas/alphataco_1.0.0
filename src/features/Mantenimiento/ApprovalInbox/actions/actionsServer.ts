@@ -343,6 +343,89 @@ export async function getOrdersPendingValidation() {
 export type ValidationOrdersData = Awaited<ReturnType<typeof getOrdersPendingValidation>>;
 export type ValidationOrderItem = ValidationOrdersData[number];
 
+/**
+ * Tipos de log que devuelven una orden al taller (D-1): el jefe de taller la devolvió entera o rechazó
+ * ítems puntuales. Ambos dejan la orden en `in_workshop`.
+ */
+const RETURN_LOG_ACTIONS = [ACTIVITY_LOG.WORKSHOP_RETURNED_ORDER, ACTIVITY_LOG.WORKSHOP_ITEM_REJECTED] as const;
+
+/** Tope defensivo de filas: es una lista informativa, no una tabla paginada. */
+const RETURNED_ORDERS_LIMIT = 200;
+
+/**
+ * Órdenes devueltas al taller (D-1). Informativa: no suma al contador del paso Aprobaciones.
+ *
+ * Una orden `in_workshop` cuenta como devuelta si el ÚLTIMO log que cambió su estado es uno de
+ * `RETURN_LOG_ACTIONS`. Así el ciclo devuelta → reenviada → abierta otra vez no la deja colgada:
+ * cualquier cambio de estado posterior (ingreso, validación) la saca de la lista.
+ * Sin `'use cache'`: tiene que reflejar la bandeja tras cada acción.
+ */
+export async function getReturnedOrders() {
+  const companyId = await requireApprovalsAccess('view');
+  const hiddenTypeIds = await getHiddenEquipmentTypeIds();
+  const equipmentCondition = visibleEquipmentTypeCondition(hiddenTypeIds);
+
+  logger.debug('Obteniendo ordenes devueltas al taller');
+
+  try {
+    const orders = await prisma.maintenance_orders.findMany({
+      where: {
+        status: 'in_workshop',
+        company_id: companyId,
+        maintenance_activity_log: { some: { action_type: { in: [...RETURN_LOG_ACTIONS] } } },
+        ...(equipmentCondition ? { AND: [equipmentCondition] } : {}),
+      },
+      orderBy: { updated_at: 'desc' },
+      select: {
+        id: true,
+        order_number: true,
+        description: true,
+        rejection_reason: true,
+        vehicles: { select: { id: true, domain: true, intern_number: true, serie: true } },
+        other_equipment: { select: { id: true, serial_number: true, intern_number: true } },
+        // Último log que cambió el estado de la orden (para saber si la última transición fue la devolución).
+        maintenance_activity_log: {
+          where: { new_status: { not: null } },
+          orderBy: { performed_at: 'desc' },
+          take: 1,
+          select: {
+            action_type: true,
+            performed_at: true,
+            rejection_reason: true,
+            notes: true,
+            profile: { select: { id: true, fullname: true } },
+          },
+        },
+      },
+    });
+
+    const returned = orders.flatMap((order) => {
+      const lastLog = order.maintenance_activity_log[0];
+      if (!lastLog || !(RETURN_LOG_ACTIONS as readonly string[]).includes(lastLog.action_type)) return [];
+      const { maintenance_activity_log: _logs, ...rest } = order;
+      return [
+        {
+          ...rest,
+          returnedAt: lastLog.performed_at,
+          returnedBy: lastLog.profile?.fullname ?? null,
+          returnKind:
+            lastLog.action_type === ACTIVITY_LOG.WORKSHOP_ITEM_REJECTED
+              ? ('items_rejected' as const)
+              : ('order' as const),
+          returnReason: lastLog.rejection_reason ?? lastLog.notes ?? order.rejection_reason ?? null,
+        },
+      ];
+    });
+    return returned.slice(0, RETURNED_ORDERS_LIMIT);
+  } catch (error) {
+    logger.error('Error al obtener ordenes devueltas al taller', { data: { error } });
+    throw error;
+  }
+}
+
+export type ReturnedOrdersData = Awaited<ReturnType<typeof getReturnedOrders>>;
+export type ReturnedOrderData = ReturnedOrdersData[number];
+
 // =============================================================================
 // MUTATIONS
 // =============================================================================

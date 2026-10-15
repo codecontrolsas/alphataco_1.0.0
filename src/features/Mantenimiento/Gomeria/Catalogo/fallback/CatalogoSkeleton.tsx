@@ -1,8 +1,10 @@
 import { Skeleton } from '@/components/ui/skeleton';
+import { TireStatusMetricsSkeleton } from './TireStatusMetricsSkeleton';
 
 export function CatalogoSkeleton() {
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" aria-busy="true">
+      <TireStatusMetricsSkeleton />
       <div className="flex items-center justify-between">
         <Skeleton className="h-10 w-64" />
         <Skeleton className="h-10 w-32" />

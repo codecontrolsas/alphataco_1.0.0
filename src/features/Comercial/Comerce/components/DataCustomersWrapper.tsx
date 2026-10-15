@@ -1,12 +1,10 @@
 import { Card } from '@/components/ui/card';
-import { fetchAllProvinces } from '@/features/Comercial/actions/location-actions';
-import { getAreasWithProvinces } from '@/features/Empresa/Clientes/actions/areas.server';
-import { getCustomers } from '@/features/Empresa/Clientes/actions/customers.server';
-import { getMeasureUnits } from '@/features/Empresa/Clientes/actions/measure-units.server';
-import { getSectors } from '@/features/Empresa/Clientes/actions/sectors.server';
-import { getCustomerServices } from '@/features/Empresa/Clientes/actions/services.server';
 import { CustomersPanel } from '@/features/Empresa/Clientes/components/CustomersPanel';
+import { CustomersTableSkeleton } from '@/features/Empresa/Clientes/fallback/CustomersTableSkeleton';
+import { CustomersList } from '@/features/Empresa/Clientes/list/CustomersList';
+import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { cookies } from 'next/headers';
+import { Suspense } from 'react';
 
 function readCookieJson<T>(raw: string | undefined, fallback: T): T {
   if (!raw) return fallback;
@@ -17,41 +15,33 @@ function readCookieJson<T>(raw: string | undefined, fallback: T): T {
   }
 }
 
-export default async function DataCustomersWrapper() {
-  const cookiesStore = await cookies();
+interface DataCustomersWrapperProps {
+  searchParams: DataTableSearchParams;
+  permissions: Record<string, boolean>;
+}
 
-  // Las actions ya acotan a la empresa activa (getActiveCompanyId + withCompany).
-  const [customers, areas, sectors, services, measureUnits, provinces] = await Promise.all([
-    getCustomers(),
-    getAreasWithProvinces(),
-    getSectors(),
-    getCustomerServices(),
-    getMeasureUnits(),
-    fetchAllProvinces(),
-  ]);
+/**
+ * Pestaña "Clientes": solo el listado paginado viaja desde el servidor. La ficha de un cliente pide sus
+ * propios datos (áreas, sectores, contratos, empleados, equipos) al abrir cada pestaña.
+ */
+export default async function DataCustomersWrapper({ searchParams, permissions }: DataCustomersWrapperProps) {
+  const cookiesStore = await cookies();
 
   return (
     <Card className="p-6">
       <CustomersPanel
-        customers={customers}
-        services={services}
-        areas={areas}
-        sectors={sectors}
-        measureUnits={measureUnits}
-        provinces={provinces}
-        listVisibility={readCookieJson(cookiesStore.get('customers-table')?.value, {})}
-        listFilters={readCookieJson(cookiesStore.get('customers-table-filters')?.value, [])}
-        preferences={{
-          employeesVisibility: readCookieJson(cookiesStore.get('employees-table')?.value, {}),
-          equipmentVisibility: readCookieJson(cookiesStore.get('equipment-table-equipment')?.value, {}),
-          equipmentFilters: readCookieJson(cookiesStore.get('equipment-table-equipment-filters')?.value, []),
+        permissionsMap={permissions}
+        contractsPreferences={{
           servicesFilters: readCookieJson(cookiesStore.get('services-table-filters')?.value, []),
           servicesVisibility: readCookieJson(cookiesStore.get('services-table')?.value, {}),
           serviceItemsFilters: readCookieJson(cookiesStore.get('service-items-table-filters')?.value, []),
           serviceItemsVisibility: readCookieJson(cookiesStore.get('service-items-table')?.value, {}),
-          areasFilters: readCookieJson(cookiesStore.get('areaTable-filters')?.value, []),
         }}
-      />
+      >
+        <Suspense fallback={<CustomersTableSkeleton />}>
+          <CustomersList searchParams={searchParams} permissionsMap={permissions} />
+        </Suspense>
+      </CustomersPanel>
     </Card>
   );
 }

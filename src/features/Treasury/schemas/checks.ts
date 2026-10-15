@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { AMOUNT_SCALE, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { isValidCuit } from '@/features/Empresa/General/lib/company-form';
-import { DATE_RE, isPositiveAmount } from './shared';
+import { DATE_RE, isCalendarDay, isPositiveAmount } from './shared';
 
 /**
  * Cheques de terceros (spec Tesorería etapa 3a). Módulo SIN directiva: lo usan los formularios y
@@ -9,7 +9,7 @@ import { DATE_RE, isPositiveAmount } from './shared';
  * el servidor.
  */
 
-const dateField = z.string().trim().regex(DATE_RE, 'Fecha inválida');
+const dateField = z.string().trim().regex(DATE_RE, 'Fecha inválida').refine(isCalendarDay, 'Fecha inválida');
 const nonNegativeAmount = z
   .string()
   .trim()

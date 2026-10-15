@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { cache } from 'react';
 import { getOwnCheckDetail } from '../actions/own-checks.server';
-import { NoPermission } from '../fallback/NoPermission';
+import { StateBlock } from '@/shared/components/common/StateBlock';
 import { OWN_CHECK_KIND_LABELS } from '../lib/own-check-transitions';
 import { OwnCheckDetailView } from './components/OwnCheckDetailView';
 
@@ -20,25 +20,20 @@ export async function ownCheckPageTitle(id: string): Promise<string> {
 /** `/dashboard/treasury/own-checks/[id]`: datos, historial, deuda y acciones del cheque propio (spec Tesorería etapa 3b §4.3). */
 export async function OwnCheckPage({ id }: { id: string }) {
   const [detail, permissions] = await Promise.all([loadOwnCheckDetail(id), getUserPermissionsMapServer()]);
-  if (permissions['tesoreria:cheques-propios:view'] !== true) return <NoPermission />;
+  if (permissions['tesoreria:cheques-propios:view'] !== true) return <StateBlock variant="noperm" title="No tenés permiso para ver esta información" />;
   if (!detail) notFound();
   const can = {
     update: permissions['tesoreria:cheques-propios:update'] === true,
     delete: permissions['tesoreria:cheques-propios:delete'] === true,
   };
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/dashboard/treasury?tab=cheques-propios">
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Cheques propios
-          </Link>
-        </Button>
-        <h1 className="text-xl font-semibold">
-          {OWN_CHECK_KIND_LABELS[detail.kind]} propio Nº {detail.number} · {detail.account.name}
-        </h1>
-      </div>
+    <div className="mx-auto max-w-5xl space-y-4">
+      <Button asChild variant="ghost" size="sm" className="-ml-2">
+        <Link href="/dashboard/treasury?tab=cheques-propios">
+          <ArrowLeft className="mr-1 h-4 w-4" aria-hidden="true" />
+          Cheques propios
+        </Link>
+      </Button>
       <OwnCheckDetailView detail={detail} can={can} />
     </div>
   );

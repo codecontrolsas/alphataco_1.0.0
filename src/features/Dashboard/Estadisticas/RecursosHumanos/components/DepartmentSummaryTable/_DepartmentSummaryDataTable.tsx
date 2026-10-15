@@ -5,6 +5,7 @@ import { DataTable, type DataTableFacetedFilterConfig } from '@/shared/component
 import { ColumnDef } from '@tanstack/react-table';
 import { useMemo, useState } from 'react';
 import { DepartmentAbsenceSummaryItem } from '../../actions.server';
+import { formatAbsencePercent } from '../../lib/absence-level';
 import { _EmployeeAbsenceDataTable } from '../EmployeeAbsenceTable/_EmployeeAbsenceDataTable';
 import { getDepartmentSummaryColumns } from './columns';
 
@@ -39,6 +40,9 @@ export function _DepartmentSummaryDataTable({ data }: Props) {
         type: 'text',
         placeholder: 'Buscar sector...',
       },
+      { columnId: 'dotacion', title: 'Dotación', type: 'text', placeholder: 'Buscar dotación...' },
+      { columnId: 'ausentes', title: 'Ausentes', type: 'text', placeholder: 'Buscar ausentes...' },
+      { columnId: 'porcentaje', title: '% Ausentismo', type: 'text', placeholder: 'Buscar porcentaje...' },
     ],
     []
   );
@@ -52,7 +56,7 @@ export function _DepartmentSummaryDataTable({ data }: Props) {
         title: 'Resumen de Ausentismo por Sector',
       },
       formatters: {
-        porcentaje: (val: unknown) => `${(val as number).toFixed(2)}%`,
+        porcentaje: (val: unknown) => (val == null ? '' : formatAbsencePercent(val as number)),
       },
     }),
     [castedData]

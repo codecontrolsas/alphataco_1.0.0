@@ -1,12 +1,12 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import ClothingCatalogTabContent from '@/features/Clothing/ClothingCatalogTabContent';
 import CovenantTreeFileWrapper from '@/features/Empresa/CCT/components/CovenantTreeFileWrapper';
 import ContractTypeList from '@/features/Empresa/RRHH/ContractTypes/ContractTypeList';
 import { ContractTypeTableSkeleton } from '@/features/Empresa/RRHH/ContractTypes/fallback/ContractTypeTableSkeleton';
 import DiagramTypeList from '@/features/Empresa/RRHH/DiagramTypes/DiagramTypeList';
 import { DiagramTypeTableSkeleton } from '@/features/Empresa/RRHH/DiagramTypes/fallback/DiagramTypeTableSkeleton';
-import { TabsManagerServer } from '@/features/TabsManager';
-import { Award, Briefcase, Calendar, FileText, Layers, ScrollText, Shirt } from 'lucide-react';
+import { createTabVisibilityChecker } from '@/features/Permissions/lib/tab-visibility';
+import { ViewManagerServer } from '@/features/TabsManager';
+import { CatalogTableSurface } from '@/shared/components/common/CatalogFormSheet';
 import { Suspense } from 'react';
 import AptitudesList from './AptitudesTecnicas/AptitudesList';
 import { AptitudesTableSkeleton } from './AptitudesTecnicas/fallback/AptitudesTableSkeleton';
@@ -23,182 +23,125 @@ export default function RrhhTabContent({
   searchParams: { [key: string]: string | string[] | undefined };
   permissions: Record<string, boolean>;
 }) {
+  // Cada bloque de una vista fusionada se renderiza solo si su pestaña es visible
+  const isTabVisible = createTabVisibilityChecker(permissions);
+  const canSee = (tabSlug: string) => isTabVisible('configuracion', tabSlug);
+
   return (
-    <div>
-      <TabsManagerServer
-        paramName="subtab"
-        searchParams={searchParams}
-        defaultTab="listado"
-        permissions={permissions}
-        tabs={[
-          {
-            value: 'listado',
-            label: (
-              <span className="flex items-center gap-2">
-                <Layers className="h-4 w-4" />
-                Tipos de Diagramas
-              </span>
-            ),
-            moduleSlug: 'configuracion',
-            tabSlug: 'listado',
-            content: (
-              <Card>
-                <CardHeader className="bg-surface dark:bg-muted/50 border-b-2">
-                  <CardTitle>Tipos de Diagramas</CardTitle>
-                  <CardDescription>Gestión de tipos de diagramas</CardDescription>
-                </CardHeader>
-                <CardContent className="pt-6">
-                  <Suspense fallback={<WorkDiagramTableSkeleton />}>
-                    <WorkDiagramList searchParams={searchParams} permissions={permissions} />
-                  </Suspense>
-                </CardContent>
-              </Card>
-            ),
-          },
-          {
-            value: 'diagrams',
-            label: (
-              <span className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                Tipos de Novedades
-              </span>
-            ),
-            moduleSlug: 'configuracion',
-            tabSlug: 'diagrams',
-            content: (
-              <Card>
-                <CardHeader className="bg-surface dark:bg-muted/50 border-b-2">
-                  <CardTitle>Tipos de Novedades</CardTitle>
-                  <CardDescription>Gestión de tipos de novedades</CardDescription>
-                </CardHeader>
-                <CardContent className="pt-6">
-                  <Suspense fallback={<DiagramTypeTableSkeleton />}>
-                    <DiagramTypeList searchParams={searchParams} permissions={permissions} />
-                  </Suspense>
-                </CardContent>
-              </Card>
-            ),
-          },
-          {
-            value: 'convenios',
-            label: (
-              <span className="flex items-center gap-2">
-                <ScrollText className="h-4 w-4" />
-                CCT
-              </span>
-            ),
-            moduleSlug: 'configuracion',
-            tabSlug: 'convenios',
-            content: (
-              <Card>
-                <CardHeader className="bg-surface dark:bg-muted/50 border-b-2">
-                  <CardTitle>Convenios Colectivos de Trabajo</CardTitle>
-                  <CardDescription>Gestión de CCT</CardDescription>
-                </CardHeader>
-                <CardContent className="pt-6">
-                  <Suspense fallback={<CctSubtabSkeleton />}>
-                    <CovenantTreeFileWrapper />
-                  </Suspense>
-                </CardContent>
-              </Card>
-            ),
-          },
-          {
-            value: 'contract-types',
-            label: (
-              <span className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                Tipos de Contrato
-              </span>
-            ),
-            moduleSlug: 'configuracion',
-            tabSlug: 'contract-types',
-            content: (
-              <Card>
-                <CardHeader className="bg-surface dark:bg-muted/50 border-b-2">
-                  <CardTitle>Tipos de Contrato</CardTitle>
-                  <CardDescription>Gestión de tipos de contrato</CardDescription>
-                </CardHeader>
-                <CardContent className="pt-6">
-                  <Suspense fallback={<ContractTypeTableSkeleton />}>
-                    <ContractTypeList searchParams={searchParams} permissions={permissions} />
-                  </Suspense>
-                </CardContent>
-              </Card>
-            ),
-          },
-          {
-            value: 'positions',
-            label: (
-              <span className="flex items-center gap-2">
-                <Briefcase className="h-4 w-4" />
-                Puestos
-              </span>
-            ),
-            moduleSlug: 'configuracion',
-            tabSlug: 'positions',
-            content: (
-              <Card>
-                <CardHeader className="bg-surface dark:bg-muted/50 border-b-2">
-                  <CardTitle>Puestos</CardTitle>
-                  <CardDescription>Gestión de puestos de trabajo</CardDescription>
-                </CardHeader>
-                <CardContent className="pt-6">
+    <ViewManagerServer
+      paramName="subtab"
+      searchParams={searchParams}
+      defaultView="positions"
+      permissions={permissions}
+      preserveParams={['tab']}
+      layout="rail"
+      ariaLabel="Personal"
+      views={[
+        {
+          value: 'positions',
+          label: 'Puestos, aptitudes y contratos',
+          description: 'Puestos de trabajo, aptitudes técnicas del personal y modalidades de contratación',
+          aliases: ['aptitudes', 'contract-types'],
+          visibleWhenAny: [
+            { moduleSlug: 'configuracion', tabSlug: 'positions' },
+            { moduleSlug: 'configuracion', tabSlug: 'aptitudes' },
+            { moduleSlug: 'configuracion', tabSlug: 'contract-types' },
+          ],
+          content: (
+            <div className="flex min-w-0 flex-col gap-6">
+              {canSee('positions') ? (
+                <CatalogTableSurface
+                  id="positions"
+                  title="Puestos"
+                  description="Puestos de trabajo que se asignan al personal"
+                >
                   <Suspense fallback={<PositionsTableSkeleton />}>
                     <PositionsList searchParams={searchParams} permissions={permissions} />
                   </Suspense>
-                </CardContent>
-              </Card>
-            ),
-          },
-          {
-            value: 'aptitudes',
-            label: (
-              <span className="flex items-center gap-2">
-                <Award className="h-4 w-4" />
-                APT
-              </span>
-            ),
-            moduleSlug: 'configuracion',
-            tabSlug: 'aptitudes',
-            content: (
-              <Card>
-                <CardHeader className="bg-surface dark:bg-muted/50 border-b-2">
-                  <CardTitle>Aptitudes Técnicas</CardTitle>
-                  <CardDescription>Gestión de aptitudes técnicas</CardDescription>
-                </CardHeader>
-                <CardContent className="pt-6">
+                </CatalogTableSurface>
+              ) : null}
+              {canSee('aptitudes') ? (
+                <CatalogTableSurface
+                  id="aptitudes"
+                  title="Aptitudes técnicas"
+                  description="Aptitudes técnicas que puede tener el personal"
+                >
                   <Suspense fallback={<AptitudesTableSkeleton />}>
                     <AptitudesList searchParams={searchParams} permissions={permissions} />
                   </Suspense>
-                </CardContent>
-              </Card>
-            ),
-          },
-          {
-            value: 'items-maestro',
-            label: (
-              <span className="flex items-center gap-2">
-                <Shirt className="h-4 w-4" />
-                Artículos
-              </span>
-            ),
-            moduleSlug: 'configuracion',
-            tabSlug: 'listado_maestro_articulos',
-            content: (
-              <Card>
-                <CardHeader className="bg-surface dark:bg-muted/50 border-b-2">
-                  <CardTitle>Listado Maestro de Artículos</CardTitle>
-                  <CardDescription>Gestión del catálogo de indumentaria y EPP</CardDescription>
-                </CardHeader>
-                <CardContent className="pt-6">
-                  <ClothingCatalogTabContent searchParams={searchParams} permissions={permissions} />
-                </CardContent>
-              </Card>
-            ),
-          },
-        ]}
-      />
-    </div>
+                </CatalogTableSurface>
+              ) : null}
+              {canSee('contract-types') ? (
+                <CatalogTableSurface
+                  id="contract-types"
+                  title="Tipos de contrato"
+                  description="Modalidades de contratación del personal"
+                >
+                  <Suspense fallback={<ContractTypeTableSkeleton />}>
+                    <ContractTypeList searchParams={searchParams} permissions={permissions} />
+                  </Suspense>
+                </CatalogTableSurface>
+              ) : null}
+            </div>
+          ),
+        },
+        {
+          value: 'listado',
+          label: 'Diagramas y novedades',
+          description: 'Diagramas de trabajo (esquemas de francos y días trabajados) y los tipos de novedad que usan',
+          aliases: ['diagrams'],
+          visibleWhenAny: [
+            { moduleSlug: 'configuracion', tabSlug: 'listado' },
+            { moduleSlug: 'configuracion', tabSlug: 'diagrams' },
+          ],
+          content: (
+            <div className="flex min-w-0 flex-col gap-6">
+              {canSee('listado') ? (
+                <CatalogTableSurface
+                  id="listado"
+                  title="Diagramas de trabajo"
+                  description="Esquemas de francos y días trabajados"
+                >
+                  <Suspense fallback={<WorkDiagramTableSkeleton />}>
+                    <WorkDiagramList searchParams={searchParams} permissions={permissions} />
+                  </Suspense>
+                </CatalogTableSurface>
+              ) : null}
+              {canSee('diagrams') ? (
+                <CatalogTableSurface
+                  id="diagrams"
+                  title="Tipos de novedad"
+                  description="Tipos de novedad que se registran sobre el personal"
+                >
+                  <Suspense fallback={<DiagramTypeTableSkeleton />}>
+                    <DiagramTypeList searchParams={searchParams} permissions={permissions} />
+                  </Suspense>
+                </CatalogTableSurface>
+              ) : null}
+            </div>
+          ),
+        },
+        {
+          value: 'convenios',
+          label: 'Convenios colectivos',
+          description: 'Convenios colectivos de trabajo (CCT) y sus categorías',
+          moduleSlug: 'configuracion',
+          tabSlug: 'convenios',
+          content: (
+            <Suspense fallback={<CctSubtabSkeleton />}>
+              <CovenantTreeFileWrapper />
+            </Suspense>
+          ),
+        },
+        {
+          value: 'items-maestro',
+          label: 'Indumentaria y EPP',
+          description: 'Catálogo maestro de indumentaria y elementos de protección personal',
+          moduleSlug: 'configuracion',
+          tabSlug: 'listado_maestro_articulos',
+          content: <ClothingCatalogTabContent searchParams={searchParams} permissions={permissions} />,
+        },
+      ]}
+    />
   );
 }

@@ -3,19 +3,19 @@
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
+import { formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { AlertTriangle, MonitorPlay, ShieldCheck, XCircle } from 'lucide-react';
-import moment from 'moment';
 import { useState } from 'react';
 import { flushSync } from 'react-dom';
-import type { FiscalDataOverview } from '../actions/fiscal-data.server';
+import type { FiscalDataOverview } from '../lib/fiscal-data-overview.server';
 import { certificateState, daysUntil, type CertificateState } from '../lib/readiness';
 import { ARCA_ENVIRONMENTS, ENVIRONMENT_LABELS } from '../schemas/fiscal-data';
+import { FiscalSection } from './FiscalSection';
 import { ArcaPortalInstructions } from './certificate/ArcaPortalInstructions';
 import { CertificateUploadStep } from './certificate/CertificateUploadStep';
 import { CertificateWizardStep, type StepStatus } from './certificate/CertificateWizardStep';
 import { ConnectionTestStep } from './certificate/ConnectionTestStep';
 import { CsrRequestForm, PendingCsrSummary } from './certificate/CsrRequestStep';
-import { FiscalSection } from './FiscalSection';
 
 type ArcaEnvironment = (typeof ARCA_ENVIRONMENTS)[number];
 type Certificates = FiscalDataOverview['certificates'];
@@ -152,7 +152,8 @@ function CertificateWizard({
   const currentStep = ([1, 2, 3, 4] as const).find((step) => statuses[step] === 'current') ?? 4;
 
   const state = certificateState({ hasPending: pending !== null, active }, new Date(nowIso));
-  const defaultAlias = pending?.alias ?? active?.alias ?? `alphataco-${environment === 'homologacion' ? 'homo' : 'prod'}`;
+  const defaultAlias =
+    pending?.alias ?? active?.alias ?? `alphataco-${environment === 'homologacion' ? 'homo' : 'prod'}`;
 
   // "Renovar certificado": abre el paso 1 y lleva el foco al alias.
   const startRenewal = () => {
@@ -162,7 +163,9 @@ function CertificateWizard({
 
   return (
     <div className="flex flex-col gap-4">
-      {active && <CertificateStatus state={state} active={active} envLabel={envLabel} nowIso={nowIso} onRenew={startRenewal} />}
+      {active && (
+        <CertificateStatus state={state} active={active} envLabel={envLabel} nowIso={nowIso} onRenew={startRenewal} />
+      )}
 
       <p className="text-muted-foreground text-sm md:hidden">
         Paso {currentStep} de {TOTAL_STEPS}: {STEP_TITLES[currentStep - 1]}
@@ -213,7 +216,9 @@ function CertificateWizard({
           headingId={headingId(2)}
           status={statuses[2]}
           lockedHint="Disponible después del paso 1."
-          summary={statuses[2] === 'done' ? <p className="text-muted-foreground text-sm">Hecho en el portal de ARCA.</p> : null}
+          summary={
+            statuses[2] === 'done' ? <p className="text-muted-foreground text-sm">Hecho en el portal de ARCA.</p> : null
+          }
           collapsedLabel="Ver instrucciones"
           expandedLabel="Ocultar instrucciones"
         >
@@ -280,14 +285,14 @@ function ActiveCertificateCard({ active }: { active: ActiveCertificate }) {
         <dt className="text-muted-foreground">Vigencia</dt>
         <dd className="tabular-nums">
           {active.notBefore
-            ? `Válido del ${moment(active.notBefore).format('DD/MM/YYYY')} al ${moment(active.notAfter).format('DD/MM/YYYY')}`
-            : `Válido hasta el ${moment(active.notAfter).format('DD/MM/YYYY')}`}
+            ? `Válido del ${formatArgentinaDay(active.notBefore)} al ${formatArgentinaDay(active.notAfter)}`
+            : `Válido hasta el ${formatArgentinaDay(active.notAfter)}`}
         </dd>
       </div>
       {active.activatedAt && (
         <div>
           <dt className="text-muted-foreground">Cargado</dt>
-          <dd className="tabular-nums">{moment(active.activatedAt).format('DD/MM/YYYY HH:mm')}</dd>
+          <dd className="tabular-nums">{formatArgentinaDateTime(active.activatedAt)}</dd>
         </div>
       )}
     </dl>
@@ -297,8 +302,8 @@ function ActiveCertificateCard({ active }: { active: ActiveCertificate }) {
 /** Contenedor del aviso de estado según la vigencia. Clases completas (Tailwind v4). */
 const STATUS_BOX_STYLES: Record<'ok' | 'expiring' | 'expired', string> = {
   ok: 'border-border',
-  expiring: 'border-amber-500/50 bg-amber-500/5 text-amber-800 dark:text-amber-300',
-  expired: 'border-destructive/40 bg-destructive/5 text-destructive',
+  expiring: 'border-warn/40 bg-warn-subtle text-warn-subtle-foreground',
+  expired: 'border-danger/40 bg-danger-subtle text-danger-subtle-foreground',
 };
 
 /** Estado del certificado vigente, siempre arriba del asistente cuando hay uno cargado. */
@@ -316,7 +321,7 @@ function CertificateStatus({
   onRenew: () => void;
 }) {
   const days = daysUntil(active.notAfter, new Date(nowIso));
-  const expiry = moment(active.notAfter).format('DD/MM/YYYY');
+  const expiry = formatArgentinaDay(active.notAfter);
   const tone = state === 'expired' ? 'expired' : state === 'expiring' ? 'expiring' : 'ok';
   const Icon = tone === 'expired' ? XCircle : tone === 'expiring' ? AlertTriangle : ShieldCheck;
 
@@ -328,12 +333,15 @@ function CertificateStatus({
   const lastTest =
     active.lastTestAt === null
       ? 'Todavía no probaste la conexión.'
-      : `Última prueba: ${moment(active.lastTestAt).format('DD/MM/YYYY HH:mm')}, ${active.lastTestOk ? 'correcta' : 'con errores'}.`;
+      : `Última prueba: ${formatArgentinaDateTime(active.lastTestAt)}, ${active.lastTestOk ? 'correcta' : 'con errores'}.`;
 
   return (
     <div
       role="note"
-      className={cn('flex flex-col gap-3 border px-4 py-3 text-sm sm:flex-row sm:items-center', STATUS_BOX_STYLES[tone])}
+      className={cn(
+        'flex flex-col gap-3 border px-4 py-3 text-sm sm:flex-row sm:items-center',
+        STATUS_BOX_STYLES[tone]
+      )}
     >
       <Icon className="size-4 shrink-0" aria-hidden />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">

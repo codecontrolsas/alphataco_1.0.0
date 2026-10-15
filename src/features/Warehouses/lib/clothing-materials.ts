@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { Prisma } from '@/generated/prisma/client';
-import { clothingMaterialCode, clothingMaterialName } from './clothing-material-code';
+import { clothingMaterialBaseCode, clothingMaterialCode, clothingMaterialName } from './clothing-material-code';
 
 /**
  * Materiales de stock de la ropa (Almacenes etapa 5): uno por combinacion articulo + marca +
@@ -83,8 +83,26 @@ export async function syncClothingMaterials(tx: Tx, companyId: string, scope: Cl
   const missing = combos.filter((c) => !linked.has(comboKey(c)));
   if (missing.length > 0) {
     const { categoryId, unitId } = await ensureCategoryAndUnit(tx, companyId);
+    // Solo los codigos que pueden chocar: el base de cada combinacion faltante o ese base con sufijo -2, -3...
+    const bases = [
+      ...new Set(
+        missing.map((c) =>
+          clothingMaterialBaseCode({
+            itemCode: c.clothing_items.code,
+            itemName: c.clothing_items.name,
+            brandName: c.clothing_brands.name,
+            sizeName: c.clothing_sizes.name,
+          })
+        )
+      ),
+    ];
     const taken = new Set(
-      (await tx.materials.findMany({ where: { company_id: companyId }, select: { code: true } })).map((m) => m.code)
+      (
+        await tx.materials.findMany({
+          where: { company_id: companyId, OR: bases.map((base) => ({ code: { startsWith: base } })) },
+          select: { code: true },
+        })
+      ).map((m) => m.code)
     );
     for (const c of missing) {
       const combination = {

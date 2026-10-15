@@ -57,7 +57,7 @@ export function RepairTypeCombobox({
               <>
                 <span className="truncate">{selected.name}</span>
                 {selected.autorizable && (
-                  <Badge variant="warning" className="shrink-0 px-1.5 py-0 text-[10px]">
+                  <Badge variant="warning" className="shrink-0 px-1.5 py-0 text-xs">
                     Autorizable
                   </Badge>
                 )}
@@ -88,7 +88,7 @@ export function RepairTypeCombobox({
                   <span className="flex items-center gap-2">
                     {rt.name}
                     {rt.autorizable && (
-                      <Badge variant="warning" className="px-1.5 py-0 text-[10px]">
+                      <Badge variant="warning" className="px-1.5 py-0 text-xs">
                         Autorizable
                       </Badge>
                     )}

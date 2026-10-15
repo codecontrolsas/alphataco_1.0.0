@@ -4,15 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import {
-  AlertTriangle,
-  CheckCircle2,
-  PackageCheck,
-  Truck,
-  Wrench,
-  XCircle,
-  type LucideIcon,
-} from 'lucide-react';
+import { AlertTriangle, CheckCircle2, PackageCheck, Truck, Wrench, XCircle, type LucideIcon } from 'lucide-react';
 import type { MaintenanceVehicle, VehicleStatus } from '../types';
 
 interface EquipmentRowProps {
@@ -35,16 +27,16 @@ const STATUS_VISUALS: Record<VehicleStatus, StatusVisual> = {
   operativo: {
     label: 'Operativo',
     Icon: CheckCircle2,
-    chip: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900',
-    border: 'border-l-emerald-500',
-    iconColor: 'text-emerald-600 dark:text-emerald-400',
+    chip: 'bg-[color-mix(in_oklab,var(--dash-ok)_12%,transparent)] text-foreground border-[color-mix(in_oklab,var(--dash-ok)_40%,transparent)]',
+    border: 'border-l-[var(--dash-ok)]',
+    iconColor: 'text-[var(--dash-ok)]',
   },
   operativo_condicionado: {
     label: 'Op. condicionado',
     Icon: AlertTriangle,
-    chip: 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900',
-    border: 'border-l-amber-500',
-    iconColor: 'text-amber-600 dark:text-amber-400',
+    chip: 'bg-[color-mix(in_oklab,var(--dash-warn)_12%,transparent)] text-foreground border-[color-mix(in_oklab,var(--dash-warn)_40%,transparent)]',
+    border: 'border-l-[var(--dash-warn)]',
+    iconColor: 'text-[var(--dash-warn)]',
   },
   en_preparacion: {
     label: 'En preparación',
@@ -56,9 +48,9 @@ const STATUS_VISUALS: Record<VehicleStatus, StatusVisual> = {
   no_operativo: {
     label: 'No operativo',
     Icon: XCircle,
-    chip: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-900',
-    border: 'border-l-rose-500',
-    iconColor: 'text-rose-600 dark:text-rose-400',
+    chip: 'bg-[color-mix(in_oklab,var(--dash-danger)_12%,transparent)] text-foreground border-[color-mix(in_oklab,var(--dash-danger)_40%,transparent)]',
+    border: 'border-l-[var(--dash-danger)]',
+    iconColor: 'text-[var(--dash-danger)]',
   },
   en_reparacion: {
     label: 'En reparación',
@@ -74,19 +66,15 @@ const STATUS_VISUALS: Record<VehicleStatus, StatusVisual> = {
  * usamos gris porque la "no utilizacion" no es un problema de uso sino de
  * disponibilidad — no tiene sentido mostrar un rojo de "bajo uso".
  */
-function getProgressIndicatorClass(
-  workedDays: number,
-  daysElapsed: number,
-  status: VehicleStatus
-): string {
+function getProgressIndicatorClass(workedDays: number, daysElapsed: number, status: VehicleStatus): string {
   if (daysElapsed === 0) return '[&>[data-slot=progress-indicator]]:bg-muted-foreground/30';
   if (status !== 'operativo' && status !== 'operativo_condicionado') {
     return '[&>[data-slot=progress-indicator]]:bg-muted-foreground/40';
   }
   const ratio = workedDays / daysElapsed;
-  if (ratio >= 0.7) return '[&>[data-slot=progress-indicator]]:bg-emerald-500';
-  if (ratio >= 0.3) return '[&>[data-slot=progress-indicator]]:bg-amber-500';
-  return '[&>[data-slot=progress-indicator]]:bg-rose-500';
+  if (ratio >= 0.7) return '[&>[data-slot=progress-indicator]]:bg-[var(--dash-ok)]';
+  if (ratio >= 0.3) return '[&>[data-slot=progress-indicator]]:bg-[var(--dash-warn)]';
+  return '[&>[data-slot=progress-indicator]]:bg-[var(--dash-danger)]';
 }
 
 export function EquipmentRow({ vehicle, daysElapsed }: EquipmentRowProps) {
@@ -131,7 +119,7 @@ export function EquipmentRow({ vehicle, daysElapsed }: EquipmentRowProps) {
                 <TooltipTrigger asChild>
                   <Badge
                     variant="outline"
-                    className="text-[10px] font-normal py-0 px-1.5 gap-1 border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400 cursor-default"
+                    className="text-[10px] font-normal py-0 px-1.5 gap-1 border-[color-mix(in_oklab,var(--dash-warn)_40%,transparent)] bg-[color-mix(in_oklab,var(--dash-warn)_12%,transparent)] text-foreground cursor-default"
                   >
                     <Wrench className="h-2.5 w-2.5" />
                     {workflows.total}
@@ -167,7 +155,7 @@ export function EquipmentRow({ vehicle, daysElapsed }: EquipmentRowProps) {
         </div>
 
         {/* Status chip — slot dedicado, ancho fijo para alinear verticalmente entre filas */}
-        <div className="hidden md:flex w-[170px] shrink-0 justify-center">
+        <div className="hidden @2xl:flex w-[170px] shrink-0 justify-center">
           <span
             className={cn(
               'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium',
@@ -180,14 +168,11 @@ export function EquipmentRow({ vehicle, daysElapsed }: EquipmentRowProps) {
         </div>
 
         {/* Mobile: solo el icono coloreado en una caja minima (el chip completo no entra) */}
-        <div className="md:hidden shrink-0">
+        <div className="@2xl:hidden shrink-0">
           <Tooltip>
             <TooltipTrigger asChild>
               <span
-                className={cn(
-                  'inline-flex h-7 w-7 items-center justify-center rounded-full border',
-                  visual.chip
-                )}
+                className={cn('inline-flex h-7 w-7 items-center justify-center rounded-full border', visual.chip)}
                 aria-label={visual.label}
               >
                 <StatusIcon className={cn('h-3.5 w-3.5', visual.iconColor)} />
@@ -198,8 +183,12 @@ export function EquipmentRow({ vehicle, daysElapsed }: EquipmentRowProps) {
         </div>
 
         {/* Progress bar */}
-        <div className="hidden sm:flex items-center gap-2 w-[180px] shrink-0">
-          <Progress value={ratio} className={cn('h-2', indicatorClass)} />
+        <div className="hidden @xl:flex items-center gap-2 w-[180px] shrink-0">
+          <Progress
+            value={ratio}
+            className={cn('h-2', indicatorClass)}
+            aria-label={`Días trabajados de ${displayName}: ${Math.min(vehicle.workedDays, daysElapsed)} de ${daysElapsed}`}
+          />
         </div>
 
         {/* Days count */}

@@ -9,7 +9,10 @@ import _TemplatesDataTable from './components/_TemplatesDataTable';
 // CONSTANTS
 // ============================================================================
 
-const TABLE_ID = 'tire-templates';
+/** Clave de las preferencias guardadas (columnas y filtros visibles). `-v2`: el diseño nuevo parte de cero. */
+const TABLE_ID = 'tire-templates-v2';
+/** Prefijo de los params de la URL: no cambia con el rediseño para que los enlaces guardados sigan abriendo. */
+const PARAM_NAMESPACE = 'tire-templates';
 
 // ============================================================================
 // TYPES
@@ -26,7 +29,7 @@ interface TemplatesListProps {
 
 export default async function TemplatesList({ searchParams, permissionsMap }: TemplatesListProps) {
   // Extract only the params for this table (strip namespace prefix)
-  const tableParams = stripPrefixFromSearchParams(searchParams as DataTableSearchParams, TABLE_ID);
+  const tableParams = stripPrefixFromSearchParams(searchParams as DataTableSearchParams, PARAM_NAMESPACE);
 
   // Facets are loaded lazy (on-demand when each popover opens) — not in SSR
   const [{ data, total }, preferences] = await Promise.all([
@@ -42,6 +45,7 @@ export default async function TemplatesList({ searchParams, permissionsMap }: Te
           totalRows={total}
           searchParams={tableParams}
           tableId={TABLE_ID}
+          paramNamespace={PARAM_NAMESPACE}
           permissionsMap={permissionsMap}
           initialColumnVisibility={preferences.columnVisibility ?? {}}
           initialFilterVisibility={preferences.filterVisibility ?? {}}

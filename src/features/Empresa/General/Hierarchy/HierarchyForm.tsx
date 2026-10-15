@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { useCatalogSheetBusy, useCatalogSheetClose } from '@/shared/components/common/CatalogFormSheet';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
@@ -33,6 +34,8 @@ function HierarchyForm() {
   const editingHierarchy = useHierarchyStore((state) => state.hierarchy);
   const setHierarchy = useHierarchyStore((state) => state.setHierarchy);
   const queryClient = useQueryClient();
+  const closeSheet = useCatalogSheetClose();
+  const setBusy = useCatalogSheetBusy();
 
   const isEditing = !!editingHierarchy;
 
@@ -68,6 +71,7 @@ function HierarchyForm() {
   const resetForm = () => {
     setHierarchy(null);
     form.reset({ id: undefined, name: '', is_active: true });
+    closeSheet();
   };
 
   const invalidateTable = () => {
@@ -77,6 +81,7 @@ function HierarchyForm() {
   // ── Submit handlers ────────────────────────────────────────────────────────
 
   const handleCreate = async (values: HierarchyFormValues) => {
+    setBusy(true);
     toast.promise(createHierarchyPrisma({ name: values.name, is_active: values.is_active }), {
       loading: 'Creando sector...',
       success: () => {
@@ -84,12 +89,16 @@ function HierarchyForm() {
         resetForm();
         return 'Sector creado correctamente';
       },
-      error: 'Error al crear el sector',
+      error: () => {
+        setBusy(false);
+        return 'Error al crear el sector';
+      },
     });
   };
 
   const handleUpdate = async (values: HierarchyFormValues) => {
     if (!values.id) return;
+    setBusy(true);
     toast.promise(updateHierarchyPrisma({ id: values.id, name: values.name, is_active: values.is_active }), {
       loading: 'Actualizando sector...',
       success: () => {
@@ -97,7 +106,10 @@ function HierarchyForm() {
         resetForm();
         return 'Sector actualizado correctamente';
       },
-      error: 'Error al actualizar el sector',
+      error: () => {
+        setBusy(false);
+        return 'Error al actualizar el sector';
+      },
     });
   };
 
@@ -113,9 +125,7 @@ function HierarchyForm() {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 py-4 px-2">
-        <h2 className="text-xl font-bold mb-4">{isEditing ? 'Editar Sector' : 'Crear Sector'}</h2>
-
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
         <FormField
           control={form.control}
           name="name"
@@ -123,7 +133,7 @@ function HierarchyForm() {
             <FormItem>
               <FormLabel>Nombre del Sector</FormLabel>
               <FormControl>
-                <Input type="text" {...field} className="input w-full max-w-[400px]" placeholder="Nombre del sector" />
+                <Input type="text" {...field} className="input w-full" placeholder="Nombre del sector" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -171,11 +181,9 @@ function HierarchyForm() {
                 ? 'Actualizar'
                 : 'Crear'}
           </Button>
-          {isEditing && (
-            <Button type="button" onClick={resetForm} variant="outline">
-              Cancelar
-            </Button>
-          )}
+          <Button type="button" onClick={resetForm} variant="outline">
+            Cancelar
+          </Button>
         </div>
       </form>
     </Form>

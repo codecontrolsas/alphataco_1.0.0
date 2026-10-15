@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  NO_DIAGRAM_ID,
   aggregateDiagramIndicators,
   aggregateEquipmentIndicators,
   groupServicesByClient,
   isNotOperative,
-  NO_DIAGRAM_ID,
   percentage,
   summarizeFleet,
   summarizeServicesByType,
@@ -50,7 +50,14 @@ describe('aggregateEquipmentIndicators', () => {
     );
 
     expect(result).toEqual([
-      { type_name: 'Tractor', type_color: null, available_units: 1, used_units: 0, not_available_units: 1 },
+      {
+        type_name: 'Tractor',
+        type_color: null,
+        available_units: 1,
+        used_units: 0,
+        not_available_units: 1,
+        cancelled_units: 0,
+      },
     ]);
   });
 
@@ -84,8 +91,22 @@ describe('aggregateEquipmentIndicators', () => {
 describe('summarizeFleet', () => {
   it('suma operativos y no disponibles de todos los tipos', () => {
     const totals = summarizeFleet([
-      { type_name: 'A', type_color: null, available_units: 3, used_units: 1, not_available_units: 1 },
-      { type_name: 'B', type_color: null, available_units: 2, used_units: 0, not_available_units: 4 },
+      {
+        type_name: 'A',
+        type_color: null,
+        available_units: 3,
+        used_units: 1,
+        not_available_units: 1,
+        cancelled_units: 0,
+      },
+      {
+        type_name: 'B',
+        type_color: null,
+        available_units: 2,
+        used_units: 0,
+        not_available_units: 4,
+        cancelled_units: 0,
+      },
     ]);
 
     expect(totals).toEqual({ operative: 5, notAvailable: 5, total: 10 });
@@ -161,14 +182,15 @@ describe('summarizeServicesByType', () => {
     ]);
   });
 
-  it('descarta los grupos sin tipo pero los cuenta en el total', () => {
+  it('agrupa los servicios sin tipo en «sin_tipo» y los cuenta en el total', () => {
     const result = summarizeServicesByType([
       { type_service: 'mensual', _count: { id: 1 } },
       { type_service: null, _count: { id: 1 } },
     ]);
 
-    expect(result).toHaveLength(1);
+    expect(result).toHaveLength(2);
     expect(result[0].percentage).toBe(50);
+    expect(result[1]).toMatchObject({ type_service: 'sin_tipo', service_count: 1 });
   });
 });
 
@@ -197,8 +219,10 @@ describe('groupServicesByClient', () => {
     expect(result[0].status_distribution).toEqual([{ status: 'sin_estado', count: 2 }]);
   });
 
-  it('descarta las filas sin cliente', () => {
-    expect(groupServicesByClient([serviceRow(null, 'mensual', 'pendiente')])).toEqual([]);
+  it('agrupa las filas sin cliente en «Sin cliente»', () => {
+    expect(groupServicesByClient([serviceRow(null, 'mensual', 'pendiente')])).toMatchObject([
+      { client_name: 'Sin cliente', total_count: 1 },
+    ]);
   });
 
   it('ordena por total descendente', () => {

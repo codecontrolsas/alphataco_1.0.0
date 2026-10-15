@@ -225,21 +225,23 @@ export function WorkOrderDetail({ initialData }: { initialData: OperatorWorkOrde
       </div>
 
       {/* Footer - floating action bar */}
-      <div className="flex-none border-t bg-card p-3 sm:p-4">
+      <div className="flex-none border-t bg-card p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4">
         <div className="flex gap-2">
           <Button
+            type="button"
             onClick={() => setAddTaskOpen(true)}
             variant="outline"
-            className="flex-1 h-11 gap-2"
+            className="flex-1 h-12 gap-2 text-base"
             disabled={data.status !== 'in_progress'}
           >
             <Plus className="h-4 w-4" />
             Agregar Tarea
           </Button>
           <Button
+            type="button"
             onClick={() => setCloseWoOpen(true)}
             variant="default"
-            className="flex-1 h-11 gap-2"
+            className="flex-1 h-12 gap-2 text-base"
             disabled={data.status !== 'in_progress'}
           >
             <CheckCircle2 className="h-4 w-4" />

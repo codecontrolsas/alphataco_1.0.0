@@ -83,9 +83,11 @@ export function DataTableToolbar<TData>({
   const hasSecondaryFilters = secondaryFilters.length > 0;
 
   return (
-    <div className="space-y-2">
+    // `@container`: la fila decide su layout por el ancho de la propia tabla, no de la ventana,
+    // asi una tabla dentro de una tarjeta angosta (o un panel lateral) no desborda la pagina.
+    <div className="@container/toolbar space-y-2">
       {/* Fila principal: busqueda + filtros facetados + acciones */}
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-2 @2xl/toolbar:flex-row @2xl/toolbar:items-center @2xl/toolbar:justify-between">
         <div className="flex flex-1 flex-wrap items-center gap-2">
           {/* Input de busqueda */}
           {showSearch && (
@@ -158,7 +160,7 @@ export function DataTableToolbar<TData>({
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
+        <div className="flex flex-wrap items-center gap-2 @2xl/toolbar:shrink-0">
           {exportActions}
 
           {showFilterToggle && tableId && facetedFilters.length > 0 && onFilterVisibilityChange && (

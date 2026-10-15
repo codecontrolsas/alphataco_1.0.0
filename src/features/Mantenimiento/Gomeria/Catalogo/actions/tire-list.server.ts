@@ -8,7 +8,7 @@ import {
 } from '@/features/Mantenimiento/Gomeria/shared/list-query';
 import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import type { Prisma } from '@/generated/prisma/client';
-import type { TireTreadType } from '@/generated/prisma/enums';
+import type { TireStatus, TireTreadType } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
 import {
   buildDateRangeFiltersWhere,
@@ -56,7 +56,7 @@ const TIRE_SELECT = {
   brand: { select: { id: true, name: true } },
   tire_type: { select: { id: true, name: true, size: true, tread_type: true } },
   vehicle_tire_positions: {
-    select: { vehicle: { select: { id: true, domain: true } } },
+    select: { axle_number: true, side: true, vehicle: { select: { id: true, domain: true } } },
     take: 1,
   },
   /** Unidad de stock (Almacenes etapa 6): null = cubierta sin stock. */
@@ -164,6 +164,30 @@ function buildWhereClause(state: ListState, companyId: string) {
     buildDateRangeFiltersWhere(state.filters, DATE_RANGE_COLUMNS),
     ...buildRelationFilters(state.filters)
   );
+}
+
+// ============================================================================
+// STATUS COUNTS (tarjetas de métricas)
+// ============================================================================
+
+/**
+ * Cubiertas por estado para las tarjetas del catálogo. Mismo universo que el listado sin filtros (empresa
+ * activa y cubiertas activas, el perímetro de `buildWhereClause`) en una sola consulta agrupada.
+ */
+export async function getTireStatusCounts() {
+  const companyId = await requireGomeriaPermission('catalogo_cubiertas', 'view');
+
+  try {
+    const rows = await prisma.tires.groupBy({
+      by: ['status'],
+      where: buildWhereClause(parseListState({}), companyId),
+      _count: true,
+    });
+    return Object.fromEntries(rows.map((row) => [row.status, row._count])) as Partial<Record<TireStatus, number>>;
+  } catch (error) {
+    logger.error('Error fetching tire status counts', { data: { error } });
+    throw new Error('Error al obtener los totales de cubiertas');
+  }
 }
 
 // ============================================================================

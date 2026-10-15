@@ -1,7 +1,9 @@
 'use client';
 
 import { DataTable, type DataTableFacetedFilterConfig } from '@/shared/components/common/DataTable';
+import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { ColumnDef } from '@tanstack/react-table';
+import { CircleOff } from 'lucide-react';
 import { useMemo } from 'react';
 import { EmployeeAbsence } from '../../actions.server';
 import { employeeAbsenceColumns } from './columns';
@@ -16,29 +18,36 @@ interface Props {
   tableId?: string;
 }
 
+// Opciones de un filtro facetado: los valores presentes, más «Sin asignar» si alguna fila no lo tiene.
+function buildOptions(data: EmployeeAbsence[], pick: (row: EmployeeAbsence) => string) {
+  const unique = Array.from(new Set(data.map(pick).filter(Boolean))).sort();
+  const options = unique.map((value) => ({ value, label: value }));
+  return data.some((row) => !pick(row))
+    ? [...options, { value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
+    : options;
+}
+
+// Se muestran 3 filtros; el resto se activa desde el selector de filtros.
+const INITIAL_FILTER_VISIBILITY = {
+  legajo: true,
+  nombre: true,
+  motivo: true,
+  tarea: false,
+  linea: false,
+  turno: false,
+  desde: false,
+  hasta: false,
+  diasCaidos: false,
+  observaciones: false,
+};
+
 export function _EmployeeAbsenceDataTable({ data, title: _title, tableId = 'employee-absence' }: Props) {
   const castedData = data as EmployeeAbsenceRecord[];
-  // Para tablas client-side puras (datos por prop), los filtros faceted se calculan
-  // desde los datos disponibles en memoria usando useMemo.
-  const tareaOptions = useMemo(() => {
-    const unique = Array.from(new Set(data.map((d) => d.tarea).filter(Boolean)));
-    return unique.sort().map((v) => ({ value: v, label: v }));
-  }, [data]);
-
-  const lineaOptions = useMemo(() => {
-    const unique = Array.from(new Set(data.map((d) => d.linea).filter(Boolean)));
-    return unique.sort().map((v) => ({ value: v, label: v }));
-  }, [data]);
-
-  const turnoOptions = useMemo(() => {
-    const unique = Array.from(new Set(data.map((d) => d.turno).filter(Boolean)));
-    return unique.sort().map((v) => ({ value: v, label: v }));
-  }, [data]);
-
-  const motivoOptions = useMemo(() => {
-    const unique = Array.from(new Set(data.map((d) => d.motivo).filter(Boolean)));
-    return unique.sort().map((v) => ({ value: v, label: v }));
-  }, [data]);
+  // Tabla de datos por prop: las opciones de los filtros facetados salen de las filas en memoria.
+  const tareaOptions = useMemo(() => buildOptions(data, (d) => d.tarea), [data]);
+  const lineaOptions = useMemo(() => buildOptions(data, (d) => d.linea), [data]);
+  const turnoOptions = useMemo(() => buildOptions(data, (d) => d.turno), [data]);
+  const motivoOptions = useMemo(() => buildOptions(data, (d) => d.motivo), [data]);
 
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
     () => [
@@ -75,6 +84,24 @@ export function _EmployeeAbsenceDataTable({ data, title: _title, tableId = 'empl
         options: motivoOptions,
       },
       {
+        columnId: 'desde',
+        title: 'Desde',
+        type: 'text',
+        placeholder: 'Buscar fecha (DD/MM/AAAA)...',
+      },
+      {
+        columnId: 'hasta',
+        title: 'Hasta',
+        type: 'text',
+        placeholder: 'Buscar fecha (DD/MM/AAAA)...',
+      },
+      {
+        columnId: 'diasCaidos',
+        title: 'Días Caídos',
+        type: 'text',
+        placeholder: 'Buscar días caídos...',
+      },
+      {
         columnId: 'observaciones',
         title: 'Observaciones',
         type: 'text',
@@ -92,6 +119,9 @@ export function _EmployeeAbsenceDataTable({ data, title: _title, tableId = 'empl
         sheetName: 'Ausencias',
         title: 'Detalle de Ausencias por Empleado',
       },
+      formatters: {
+        diasCaidos: (val: unknown) => (val == null || val === '' ? null : Number(val)),
+      },
     }),
     [castedData]
   );
@@ -105,7 +135,8 @@ export function _EmployeeAbsenceDataTable({ data, title: _title, tableId = 'empl
       searchPlaceholder="Buscar por legajo o nombre..."
       showSearch
       showFilterToggle
-      emptyMessage="No hay ausencias registradas."
+      initialFilterVisibility={INITIAL_FILTER_VISIBILITY}
+      emptyMessage="No se encontraron ausencias."
       exportConfig={exportConfig}
       tableId={tableId}
       paramNamespace={tableId}

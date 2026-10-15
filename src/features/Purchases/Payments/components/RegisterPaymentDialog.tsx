@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
+import { formatDateAr } from '@/shared/lib/argentina-time';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Banknote, Plus, Trash2 } from 'lucide-react';
@@ -17,7 +18,8 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
-import { getPortfolioChecksForPayment, registerPayment } from '../../actions/payment-orders.server';
+import { getPortfolioChecksForPayment } from '../../actions/payment-queries.server';
+import { registerPayment } from '../../actions/payment-register.server';
 import { getCheckbooksForPayment } from '@/features/Treasury/actions/own-checks.server';
 import type { TreasuryAccountRow } from '@/features/Treasury/actions/accounts.server';
 import { invalidatePurchases } from '../../lib/invalidate';
@@ -31,7 +33,7 @@ import {
 
 type Payment = RegisterPaymentFormValues['payments'][number];
 
-const dmy = (value: string) => moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY');
+const dmy = (value: string) => formatDateAr(value);
 
 const logger = new Logger('Purchases/RegisterPaymentDialog');
 
@@ -84,13 +86,13 @@ export function RegisterPaymentDialog({
   });
   const payments = useFieldArray({ control: form.control, name: 'payments' });
   const watched = useWatch({ control: form.control, name: 'payments' });
-  const { data: portfolioChecks, isLoading: loadingChecks } = useQuery({
+  const { data: portfolioChecks, isLoading: loadingChecks, isError: checksError } = useQuery({
     queryKey: ['purchases-portfolio-checks', orderId],
     queryFn: () => getPortfolioChecksForPayment(),
     enabled: open,
     staleTime: 0,
   });
-  const { data: checkbooks, isLoading: loadingCheckbooks } = useQuery({
+  const { data: checkbooks, isLoading: loadingCheckbooks, isError: checkbooksError } = useQuery({
     queryKey: ['purchases-checkbooks', orderId],
     queryFn: () => getCheckbooksForPayment(),
     enabled: open,
@@ -247,7 +249,8 @@ export function RegisterPaymentDialog({
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  {(portfolioChecks ?? []).length === 0 && (
+                                  {checksError && <p className="px-2 py-1.5 text-sm text-danger-subtle-foreground">No se pudo cargar la cartera</p>}
+                                  {!checksError && (portfolioChecks ?? []).length === 0 && (
                                     <p className="px-2 py-1.5 text-sm text-muted-foreground">No hay cheques en cartera</p>
                                   )}
                                   {(portfolioChecks ?? [])
@@ -277,7 +280,8 @@ export function RegisterPaymentDialog({
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  {(checkbooks ?? []).length === 0 && (
+                                  {checkbooksError && <p className="px-2 py-1.5 text-sm text-danger-subtle-foreground">No se pudieron cargar las chequeras</p>}
+                                  {!checkbooksError && (checkbooks ?? []).length === 0 && (
                                     <p className="px-2 py-1.5 text-sm text-muted-foreground">No hay chequeras con números libres: cargala en Tesorería → Cheques propios</p>
                                   )}
                                   {(checkbooks ?? []).map((c) => (
@@ -420,7 +424,7 @@ export function RegisterPaymentDialog({
                 </Button>
                 <p
                   role="status"
-                  className={`text-sm tabular-nums ${diff === BigInt(0) ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-400'}`}
+                  className={`text-sm tabular-nums ${diff === BigInt(0) ? 'text-ok-subtle-foreground' : 'text-warn-subtle-foreground'}`}
                 >
                   Medios {formatMoney(money(sum))} de {formatMoney(netTotal)}
                   {diff !== BigInt(0) && ` · ${diff > BigInt(0) ? 'faltan' : 'sobran'} ${formatMoney(money(diff > BigInt(0) ? diff : -diff))}`}

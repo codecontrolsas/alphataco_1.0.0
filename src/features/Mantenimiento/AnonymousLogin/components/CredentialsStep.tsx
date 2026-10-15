@@ -5,7 +5,7 @@ import { CardDescription } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Clipboard } from 'lucide-react';
+import { Clipboard, Loader2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { buildCredentialsSchema, type CredentialsValues, type MaintenanceLoginType } from '../utils/login-schemas';
@@ -29,7 +29,7 @@ export function CredentialsStep({ loginType, onSubmit }: CredentialsStepProps) {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <CardDescription className="text-center text-gray-700 mb-4">
+        <CardDescription className="mb-4 text-center text-base text-foreground">
           {loginType === 'empleado'
             ? 'Ingrese su CUIL para acceder al sistema de mantenimiento.'
             : 'Ingrese sus credenciales para acceder al sistema de mantenimiento.'}
@@ -43,7 +43,13 @@ export function CredentialsStep({ loginType, onSubmit }: CredentialsStepProps) {
                 <FormItem>
                   <FormLabel>Cuil</FormLabel>
                   <FormControl>
-                    <Input placeholder="Ingrese su Cuil" {...field} />
+                    <Input
+                      placeholder="Ingrese su Cuil"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      className="h-12 text-base tabular-nums"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -59,7 +65,14 @@ export function CredentialsStep({ loginType, onSubmit }: CredentialsStepProps) {
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder="Ingrese su correo" {...field} />
+                    <Input
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                      placeholder="Ingrese su correo"
+                      className="h-12 text-base"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -72,7 +85,13 @@ export function CredentialsStep({ loginType, onSubmit }: CredentialsStepProps) {
                 <FormItem>
                   <FormLabel>Contraseña</FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder="Ingrese su contraseña" {...field} />
+                    <Input
+                      type="password"
+                      autoComplete="current-password"
+                      placeholder="Ingrese su contraseña"
+                      className="h-12 text-base"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -80,8 +99,13 @@ export function CredentialsStep({ loginType, onSubmit }: CredentialsStepProps) {
             />
           </>
         )}
-        <Button type="submit" className="w-full  text-white" disabled={form.formState.isSubmitting}>
-          <Clipboard className="mr-2 h-4 w-4" /> Acceder al Sistema
+        <Button type="submit" className="h-12 w-full text-base" disabled={form.formState.isSubmitting}>
+          {form.formState.isSubmitting ? (
+            <Loader2 aria-hidden="true" className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Clipboard aria-hidden="true" className="mr-2 h-4 w-4" />
+          )}
+          {form.formState.isSubmitting ? 'Ingresando…' : 'Acceder al Sistema'}
         </Button>
       </form>
     </Form>

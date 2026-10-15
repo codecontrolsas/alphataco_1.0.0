@@ -33,8 +33,8 @@ export function DiagnosticoCard({
     <Card
       className={`border-2 transition-colors ${
         isCompleted
-          ? 'border-green-400/60 bg-green-50/40 dark:bg-green-950/20'
-          : 'border-amber-400/60 bg-amber-50/40 dark:bg-amber-950/20'
+          ? 'border-ok/60 bg-ok-subtle '
+          : 'border-warn/60 bg-warn-subtle '
       }`}
     >
       <CardContent className="p-4 sm:p-5">
@@ -56,9 +56,9 @@ export function DiagnosticoCard({
                 }`}
               >
                 {isCompleted ? (
-                  <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
+                  <CheckCircle2 className="h-5 w-5 text-ok-subtle-foreground flex-shrink-0" />
                 ) : (
-                  <Stethoscope className="h-5 w-5 text-amber-600 flex-shrink-0" />
+                  <Stethoscope className="h-5 w-5 text-warn-subtle-foreground flex-shrink-0" />
                 )}
                 DIAGNOSTICO
               </label>

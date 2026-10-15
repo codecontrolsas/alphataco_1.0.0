@@ -11,9 +11,10 @@ import {
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { AlarmClock, CalendarClock, CalendarOff, CircleOff, FileText, Banknote, Truck, type LucideIcon } from 'lucide-react';
-import moment from 'moment';
+import { formatDateAr } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useRouter } from 'next/navigation';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PURCHASES_QUERY_KEYS } from '../../../lib/query-keys';
 import {
   getAllDueInvoicesForExport,
@@ -21,14 +22,14 @@ import {
   getDueInvoicesPaginated,
   type DueInvoiceListItem,
 } from '../actions.server';
+import { cbteTypeLabel, getColumns } from '../columns';
 import {
   DAYS_FILTER_LABELS,
+  DAYS_VALUES,
   DUE_CBTE_TYPE_IDS,
   HIDDEN_COLUMNS_BY_DEFAULT,
   NO_ORDER_LABEL,
-  cbteTypeLabel,
-  getColumns,
-} from '../columns';
+} from '../constants';
 
 interface Props {
   data: DueInvoiceListItem[];
@@ -37,6 +38,8 @@ interface Props {
   tableId: string;
   /** `permissions['compras:pagos:create']`: muestra "Armar orden de pago". */
   canCreate?: boolean;
+  /** Banda de atención resuelta en el servidor; se muestra sobre la tabla. */
+  topSlot?: ReactNode;
   initialColumnVisibility?: Record<string, boolean>;
   initialFilterVisibility?: Record<string, boolean>;
 }
@@ -45,14 +48,15 @@ const DEFAULT_VISIBLE_FILTERS = ['supplier', 'days', 'due_date'];
 
 const EMPTY_FACET: FacetResult = { options: [], counts: new Map() };
 
-const DAYS_VALUES = ['overdue', 'upcoming', 'none'] as const;
 const daysIcons: Record<(typeof DAYS_VALUES)[number], LucideIcon> = {
   overdue: AlarmClock,
   upcoming: CalendarClock,
   none: CalendarOff,
 };
 
-const dateOnly = (value: unknown) => (value ? moment.utc(value as string | Date).format('DD/MM/YYYY') : '');
+/** Columnas DATE (sin hora): medianoche UTC, se leen como fecha para no correr un día. */
+const dateOnly = (value: unknown) =>
+  value ? formatDateAr(new Date(value as string | Date).toISOString().slice(0, 10)) : '';
 const money = (value: unknown) => formatMoney(value as string);
 
 export function _DueInvoicesDataTable({
@@ -61,6 +65,7 @@ export function _DueInvoicesDataTable({
   searchParams,
   tableId,
   canCreate = false,
+  topSlot,
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
@@ -164,7 +169,7 @@ export function _DueInvoicesDataTable({
 
   const exportConfig: DataTableExportConfig<DueInvoiceListItem> = useMemo(
     () => ({
-      fetchAllData: () => getAllDueInvoicesForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllDueInvoicesForExport(currentParams)),
       options: { filename: 'vencimientos', title: 'Vencimientos', sheetName: 'Vencimientos' },
       formatters: {
         issue_date: dateOnly,
@@ -195,29 +200,32 @@ export function _DueInvoicesDataTable({
   ) : undefined;
 
   return (
-    <DataTable
-      columns={columns}
-      data={data}
-      totalRows={totalRows}
-      searchParams={searchParams}
-      tableId={tableId}
-      paramNamespace={tableId}
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={mergedColumnVisibility}
-      initialFilterVisibility={mergedFilterVisibility}
-      showFilterToggle
-      enableRowSelection
-      showRowSelection
-      onRowSelectionChange={handleSelectionRows}
-      onRowSelectionIdsChange={setSelectedIds}
-      toolbarActions={toolbarActions}
-      queryFn={tableQueryFn}
-      queryKey={[...PURCHASES_QUERY_KEYS.dueInvoices]}
-      onStateChange={handleStateChange}
-      searchPlaceholder="Buscar por comprobante o proveedor"
-      emptyMessage="No hay comprobantes pendientes de pago"
-      exportConfig={exportConfig}
-      data-testid="due-invoices-table"
-    />
+    <div className="space-y-4">
+      {topSlot}
+      <DataTable
+        columns={columns}
+        data={data}
+        totalRows={totalRows}
+        searchParams={searchParams}
+        tableId={tableId}
+        paramNamespace={tableId}
+        facetedFilters={facetedFilters}
+        initialColumnVisibility={mergedColumnVisibility}
+        initialFilterVisibility={mergedFilterVisibility}
+        showFilterToggle
+        enableRowSelection
+        showRowSelection
+        onRowSelectionChange={handleSelectionRows}
+        onRowSelectionIdsChange={setSelectedIds}
+        toolbarActions={toolbarActions}
+        queryFn={tableQueryFn}
+        queryKey={[...PURCHASES_QUERY_KEYS.dueInvoices]}
+        onStateChange={handleStateChange}
+        searchPlaceholder="Buscar por comprobante o proveedor"
+        emptyMessage="No hay comprobantes pendientes de pago"
+        exportConfig={exportConfig}
+        data-testid="due-invoices-table"
+      />
+    </div>
   );
 }

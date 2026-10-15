@@ -5,6 +5,7 @@ import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { configPermissionError, requireConfigTabPermission } from '../../lib/config-access.server';
 import { covenantScope, guildReadScope, guildWriteScope } from '../lib/cct-scope';
 import type { CctMutationResult } from './types';
 
@@ -30,6 +31,7 @@ function normalizeName(name: string): string {
  * del convenio ya acotado, no necesita filtro propio.
  */
 export async function getGuildsWithCovenants() {
+  await requireConfigTabPermission('convenios', 'view');
   try {
     const companyId = await getActiveCompanyId();
     return await prisma.guild.findMany({
@@ -57,6 +59,9 @@ export async function getGuildsWithCovenants() {
 
 /** Alta de sindicato para la empresa activa. Rechaza el duplicado por nombre (ticket 616). */
 export async function createGuild(input: { name: string }): Promise<CctMutationResult> {
+  const denied = await configPermissionError('convenios', 'create');
+  if (denied) return { ok: false, error: denied };
+
   const parsed = guildInputSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Datos inválidos' };

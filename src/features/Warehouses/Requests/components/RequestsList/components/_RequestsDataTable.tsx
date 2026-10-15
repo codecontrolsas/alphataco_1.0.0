@@ -8,9 +8,11 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { CircleOff, User } from 'lucide-react';
-import moment from 'moment';
-import { useCallback, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { DESTINATION_TYPE_LABELS, REQUEST_STATUS_LABELS } from '../../../../lib/labels';
 import { WAREHOUSE_QUERY_KEYS } from '../../../../lib/query-keys';
 import { MATERIAL_REQUEST_STATUSES, type MaterialRequestStatus } from '../../../../lib/request-state-machine';
@@ -25,11 +27,18 @@ import {
 import { requestStatusIcons } from '../../RequestStatusBadge';
 import { HIDDEN_COLUMNS_BY_DEFAULT, getColumns } from '../columns';
 
+// El detalle solo se necesita al abrirlo: no entra en el bundle de la lista.
+const RequestDetailSheet = dynamic(() => import('../../RequestDetailSheet').then((m) => m.RequestDetailSheet), {
+  ssr: false,
+});
+
 interface Props {
   data: RequestListItem[];
   totalRows: number;
   searchParams: DataTableSearchParams;
   tableId: string;
+  /** Banda de atencion resuelta en el servidor; se muestra sobre la tabla. */
+  topSlot?: ReactNode;
   permissionsMap: Record<string, boolean>;
   initialColumnVisibility?: Record<string, boolean>;
   initialFilterVisibility?: Record<string, boolean>;
@@ -44,6 +53,7 @@ export function _RequestsDataTable({
   totalRows,
   searchParams,
   tableId,
+  topSlot,
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
@@ -51,7 +61,14 @@ export function _RequestsDataTable({
   const handleStateChange = useCallback((params: DataTableSearchParams) => setCurrentParams(params), []);
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getRequestsPaginated(params), []);
 
-  const columns = useMemo(() => getColumns(), []);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const openDetail = useCallback((id: string) => {
+    setDetailId(id);
+    setDetailOpen(true);
+  }, []);
+
+  const columns = useMemo(() => getColumns({ onOpenDetail: openDetail }), [openDetail]);
 
   const mergedColumnVisibility = useMemo(() => {
     const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((c) => [c, false]));
@@ -138,37 +155,42 @@ export function _RequestsDataTable({
 
   const exportConfig: DataTableExportConfig<RequestListItem> = useMemo(
     () => ({
-      fetchAllData: () => getAllRequestsForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllRequestsForExport(currentParams)),
       options: { filename: 'pedidos-materiales', title: 'Pedidos de materiales', sheetName: 'Pedidos' },
       formatters: {
         status: (value) => REQUEST_STATUS_LABELS[value as MaterialRequestStatus] ?? String(value),
         destination_type: (value) =>
           value ? (DESTINATION_TYPE_LABELS[value as StockDestinationTypeValue] ?? String(value)) : '',
-        created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : ''),
+        created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : ''),
       },
     }),
     [currentParams]
   );
 
   return (
-    <DataTable
-      columns={columns}
-      data={data}
-      totalRows={totalRows}
-      searchParams={searchParams}
-      tableId={tableId}
-      paramNamespace={tableId}
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={mergedColumnVisibility}
-      initialFilterVisibility={mergedFilterVisibility}
-      showFilterToggle
-      queryFn={tableQueryFn}
-      queryKey={[...WAREHOUSE_QUERY_KEYS.requests]}
-      onStateChange={handleStateChange}
-      searchPlaceholder="Buscar por número o notas"
-      emptyMessage="No hay pedidos"
-      exportConfig={exportConfig}
-      data-testid="warehouse-requests-table"
-    />
+    <div className="space-y-4">
+      {topSlot}
+      <DataTable
+        columns={columns}
+        data={data}
+        totalRows={totalRows}
+        searchParams={searchParams}
+        tableId={tableId}
+        paramNamespace={tableId}
+        facetedFilters={facetedFilters}
+        initialColumnVisibility={mergedColumnVisibility}
+        initialFilterVisibility={mergedFilterVisibility}
+        showFilterToggle
+        queryFn={tableQueryFn}
+        queryKey={[...WAREHOUSE_QUERY_KEYS.requests]}
+        onStateChange={handleStateChange}
+        searchPlaceholder="Buscar por número o notas"
+        emptyMessage="No hay pedidos"
+        exportConfig={exportConfig}
+        data-testid="warehouse-requests-table"
+      />
+
+      {detailId ? <RequestDetailSheet requestId={detailId} open={detailOpen} onOpenChange={setDetailOpen} /> : null}
+    </div>
   );
 }

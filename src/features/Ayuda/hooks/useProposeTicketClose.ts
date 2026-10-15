@@ -1,13 +1,11 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { CloseProposalTarget, TicketWithUnread } from '@/shared/lib/taskapp/types';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { proposeSupportTicketClose } from '../actions/support-close-proposal';
-import { MY_TICKETS_QUERY_KEY } from './useMyTickets';
-import { MY_TICKETS_PAGE_QUERY_KEY } from './useMyTicketsPage';
-import { ticketDetailKey } from './useTicketDetail';
-import { MY_TICKETS_WITH_UNREAD_QUERY_KEY } from './queryKeys';
+import { MY_TICKETS_PAGE_QUERY_KEY, MY_TICKETS_QUERY_KEY, MY_TICKETS_WITH_UNREAD_QUERY_KEY } from './queryKeys';
 import { APPROVER_TICKETS_QUERY_KEY } from './useApproverTickets';
+import { ticketDetailKey } from './useTicketDetail';
 import { ticketTimelineKey } from './useTicketTimeline';
 
 /**

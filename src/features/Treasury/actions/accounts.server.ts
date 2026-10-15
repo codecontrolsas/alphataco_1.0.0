@@ -1,8 +1,8 @@
 'use server';
 
+import { AMOUNT_SCALE, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { checkPermissionServer } from '@/features/Permissions';
-import { AMOUNT_SCALE, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { withActor } from '@/shared/lib/actor';
@@ -11,6 +11,7 @@ import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { NO_PERMISSION, UUID_RE, firstIssue, toTreasuryActionError } from '../lib/action-errors';
 import { ZERO_INDICATORS, getAccountIndicators } from '../lib/balances';
 import { createMovement } from '../lib/movements';
+import { TreasuryError } from '../lib/treasury-errors';
 import { treasuryAccountFormSchema, type TreasuryAccountFormValues } from '../schemas/accounts';
 import { SESSION_EXPIRED, TRANSACTION_OPTIONS, localToday, revalidateTreasury } from './shared';
 
@@ -76,14 +77,18 @@ const orNull = (value: string) => (value.trim() ? value.trim() : null);
 
 async function findDuplicate(companyId: string, name: string, exceptId?: string) {
   return prisma.treasury_accounts.findFirst({
-    where: { company_id: companyId, name: { equals: name, mode: 'insensitive' }, ...(exceptId ? { id: { not: exceptId } } : {}) },
+    where: {
+      company_id: companyId,
+      name: { equals: name, mode: 'insensitive' },
+      ...(exceptId ? { id: { not: exceptId } } : {}),
+    },
     select: { name: true },
   });
 }
 
 /** Alta de cuenta o caja, con su saldo inicial opcional en la misma transacción. */
 export async function createTreasuryAccount(values: TreasuryAccountFormValues): Promise<ActionResult<{ id: string }>> {
-  if (!(await checkPermissionServer('tesoreria', 'config-tesoreria', 'update'))) return fail(NO_PERMISSION);
+  if (!(await checkPermissionServer('tesoreria', 'config-tesoreria', 'create'))) return fail(NO_PERMISSION);
   const parsed = treasuryAccountFormSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
   const profile = await getServerAuthProfile();
@@ -141,7 +146,10 @@ export async function updateTreasuryAccount(id: string, values: TreasuryAccountF
     const existing = await findDuplicate(companyId, v.name, id);
     if (existing) return fail(duplicate(existing.name));
     // Una cartera de cheques no pasa a ser cuenta de plata ni al revés: sus movimientos son de cheques.
-    const current = await prisma.treasury_accounts.findFirst({ where: { id, company_id: companyId }, select: { kind: true } });
+    const current = await prisma.treasury_accounts.findFirst({
+      where: { id, company_id: companyId },
+      select: { kind: true },
+    });
     if (current && current.kind !== v.kind && (current.kind === 'CHECK_PORTFOLIO' || v.kind === 'CHECK_PORTFOLIO')) {
       return fail('Una cartera de cheques no cambia de tipo: creá una cuenta nueva');
     }
@@ -170,17 +178,34 @@ export async function updateTreasuryAccount(id: string, values: TreasuryAccountF
 export async function setTreasuryAccountActive(id: string, isActive: boolean): Promise<ActionResult> {
   if (!(await checkPermissionServer('tesoreria', 'config-tesoreria', 'update'))) return fail(NO_PERMISSION);
   if (!UUID_RE.test(id)) return fail(NOT_FOUND);
+  const profile = await getServerAuthProfile();
+  if (!profile) return fail(SESSION_EXPIRED);
   const companyId = await getActiveCompanyId();
   try {
-    // Un cheque propio emitido se debita contra su cuenta (etapa 3b): con la cuenta inactiva no se podría confirmar.
-    if (!isActive) {
-      const issued = await prisma.own_checks.count({ where: { account_id: id, company_id: companyId, status: 'ISSUED' } });
-      if (issued > 0) {
-        return fail(`La cuenta tiene ${issued} ${issued === 1 ? 'cheque emitido' : 'cheques emitidos'} sin debitar: confirmá su débito o registrá el rechazo antes de desactivarla`);
-      }
-    }
-    const { count } = await prisma.treasury_accounts.updateMany({ where: { id, company_id: companyId }, data: { is_active: isActive } });
-    if (count === 0) return fail(NOT_FOUND);
+    await withActor(
+      profile.credentialId,
+      async (tx) => {
+        // Bloquea la cuenta antes de contar: así la emisión de un cheque (que toma la misma fila) no se cuela entre el conteo y el update.
+        const locked = await tx.$queryRaw<{ id: string }[]>`
+          SELECT id FROM treasury_accounts WHERE id = ${id}::uuid AND company_id = ${companyId}::uuid FOR UPDATE
+        `;
+        if (locked.length === 0) throw new TreasuryError(NOT_FOUND);
+        // Un cheque propio emitido se debita contra su cuenta (etapa 3b): con la cuenta inactiva no se podría confirmar.
+        if (!isActive) {
+          const issued = await tx.own_checks.count({
+            where: { account_id: id, company_id: companyId, status: 'ISSUED' },
+          });
+          if (issued > 0) {
+            throw new TreasuryError(
+              `La cuenta tiene ${issued} ${issued === 1 ? 'cheque emitido' : 'cheques emitidos'} sin debitar: confirmá su débito o registrá el rechazo antes de desactivarla`
+            );
+          }
+        }
+        await tx.treasury_accounts.update({ where: { id }, data: { is_active: isActive } });
+      },
+      prisma,
+      TRANSACTION_OPTIONS
+    );
     revalidateTreasury();
     return ok(null);
   } catch (error) {
@@ -190,17 +215,30 @@ export async function setTreasuryAccountActive(id: string, isActive: boolean): P
 
 /** Solo una cuenta sin movimientos (ni anulados) ni pagos de Compras se borra; si no, se desactiva. */
 export async function deleteTreasuryAccount(id: string): Promise<ActionResult> {
-  if (!(await checkPermissionServer('tesoreria', 'config-tesoreria', 'update'))) return fail(NO_PERMISSION);
+  if (!(await checkPermissionServer('tesoreria', 'config-tesoreria', 'delete'))) return fail(NO_PERMISSION);
   if (!UUID_RE.test(id)) return fail(NOT_FOUND);
   const companyId = await getActiveCompanyId();
   try {
     const account = await prisma.treasury_accounts.findFirst({
       where: { id, company_id: companyId },
-      select: { _count: { select: { movements: true, payments: true, transfers_from: true, transfers_to: true, checkbooks: true, own_checks: true, statements: true } } },
+      select: {
+        _count: {
+          select: {
+            movements: true,
+            payments: true,
+            transfers_from: true,
+            transfers_to: true,
+            checkbooks: true,
+            own_checks: true,
+            statements: true,
+          },
+        },
+      },
     });
     if (!account) return fail(NOT_FOUND);
     const c = account._count;
-    if (c.movements + c.payments + c.transfers_from + c.transfers_to + c.checkbooks + c.own_checks + c.statements > 0) return fail('La cuenta tiene movimientos: desactivala');
+    if (c.movements + c.payments + c.transfers_from + c.transfers_to + c.checkbooks + c.own_checks + c.statements > 0)
+      return fail('La cuenta tiene movimientos: desactivala');
     await prisma.treasury_accounts.delete({ where: { id } });
     revalidateTreasury();
     return ok(null);

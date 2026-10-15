@@ -12,6 +12,7 @@ import {
   updateServiceItem,
   type ServiceItemRow,
 } from '@/features/Empresa/Clientes/actions/service-items.server';
+import { formatItemPrice } from '@/features/Empresa/Clientes/lib/format-price';
 import { toServiceItemFormValues, toggledActiveState } from '@/features/Empresa/Clientes/lib/service-item-form';
 import type { ServiceItemFormValues } from '@/features/Empresa/Clientes/schemas/service-item';
 import { Logger } from '@/lib/logger';
@@ -81,6 +82,7 @@ export function ServiceItemsSection({ customerServiceId }: ServiceItemsSectionPr
         return;
       }
       await queryClient.invalidateQueries({ queryKey: itemsQueryKey });
+      queryClient.invalidateQueries({ queryKey: ['comercial', 'customer'] });
       toast.success(successMessage);
       setIsModalOpen(false);
     } catch (error) {
@@ -174,7 +176,7 @@ export function ServiceItemsSection({ customerServiceId }: ServiceItemsSectionPr
                         {item.measure_units?.unit}
                       </TableCell>
                       <TableCell className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                        ${item.item_price}
+                        {formatItemPrice(item.item_price)}
                       </TableCell>
                       <TableCell className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
                         {item.customer_services?.customers?.name}
@@ -216,8 +218,8 @@ export function ServiceItemsSection({ customerServiceId }: ServiceItemsSectionPr
             </label>
             <Input
               type="text"
-              value={editingService.item_price}
-              onChange={(e) => setEditingService({ ...editingService, item_price: Number(e.target.value) })}
+              value={editingService.item_price ?? ''}
+              onChange={(e) => setEditingService({ ...editingService, item_price: e.target.value })}
               className="w-full p-2 mb-2 border border-gray-300 dark:border-gray-700 rounded"
             />
             <label htmlFor="unit_of_measure" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -253,10 +255,10 @@ export function ServiceItemsSection({ customerServiceId }: ServiceItemsSectionPr
               </Button>
               <Button
                 onClick={handleDeactivateItem}
-                variant={(editingService.is_active ?? true) ? 'destructive' : 'success'}
+                variant={editingService.is_active ?? true ? 'destructive' : 'success'}
                 disabled={isSaving}
               >
-                {(editingService.is_active ?? true) ? 'Dar de Baja' : 'Dar de Alta'}
+                {editingService.is_active ?? true ? 'Dar de Baja' : 'Dar de Alta'}
               </Button>
             </div>
           </div>

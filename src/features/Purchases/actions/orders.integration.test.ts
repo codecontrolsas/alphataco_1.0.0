@@ -235,7 +235,7 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
   });
 
   it('ciclo: OC directa, avance de la solicitud, aprobar, rechazar, editar y anular', async () => {
-    const actions = await import('./orders.server');
+    const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([10, 4]);
 
     const created = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '6')]), { submit: false }));
@@ -281,7 +281,7 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
   });
 
   it('totales calculados en el servidor', async () => {
-    const actions = await import('./orders.server');
+    const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([3, 2]);
     const created = expectOk(
       await actions.createPurchaseOrder(
@@ -296,7 +296,7 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
   });
 
   it('cantidades con coma y miles; precio con 5 decimales rechazado con mensaje', async () => {
-    const actions = await import('./orders.server');
+    const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([2000]);
     const created = expectOk(
       await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1.234,5')]), { submit: false })
@@ -309,7 +309,7 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
   });
 
   it('no pedir de mas: secuencial y con dos renglones sobre la misma linea', async () => {
-    const actions = await import('./orders.server');
+    const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([10]);
     expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '6')]), { submit: false }));
 
@@ -327,7 +327,7 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
   });
 
   it('editar un borrador sin cambios con la solicitud ya pedida por ese borrador', async () => {
-    const actions = await import('./orders.server');
+    const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([5]);
     const created = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '5')]), { submit: false }));
     expect(await requestStatus(req.id)).toBe('ORDERED');
@@ -336,7 +336,7 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
   });
 
   it('concurrencia: dos OC a la vez sobre la misma linea no piden de mas', async () => {
-    const actions = await import('./orders.server');
+    const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([10]);
     const results = await Promise.all([
       actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '6')]), { submit: false }),
@@ -350,7 +350,7 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
   });
 
   it('cerrar una solicitud: deja de ofrecerse; anular su OC no la reabre', async () => {
-    const actions = await import('./orders.server');
+    const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const requests = await import('./requests.server');
     const req = await approvedRequest([10]);
     const created = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '4')]), { submit: false }));
@@ -374,7 +374,7 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
   });
 
   it('perimetro y permisos', async () => {
-    const actions = await import('./orders.server');
+    const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([10]);
     const foreign = await approvedRequest([10], OTHER_COMPANY);
 
@@ -401,7 +401,7 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
   });
 
   it('el mail de la decision que falla no deshace la aprobacion', async () => {
-    const actions = await import('./orders.server');
+    const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([1]);
     const created = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')]), { submit: true }));
     state.decisionMailFails = true;
@@ -410,7 +410,7 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
   });
 
   it('envio al proveedor: con mail OK queda enviada con el PDF; si el mail falla sigue aprobada', async () => {
-    const actions = await import('./orders.server');
+    const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([2]);
     const draft = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')]), { submit: true }));
     expect(expectFail(await actions.sendPurchaseOrder(draft.id, { to: ['ventas@lubricantes.test'], message: '' }))).toContain(
@@ -439,7 +439,7 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
   }, 30_000);
 
   it('marcar como enviada y PDF en borrador', async () => {
-    const actions = await import('./orders.server');
+    const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([1]);
     const created = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')]), { submit: true }));
     expectOk(await actions.approvePurchaseOrder(created.id));
@@ -454,7 +454,7 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
   }, 30_000);
 
   it('detalle: avisos de documentos vencidos y destinatarios', async () => {
-    const actions = await import('./orders.server');
+    const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([1]);
     const created = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')]), { submit: false }));
     const detail = await actions.getPurchaseOrderDetail(created.id);
@@ -466,7 +466,7 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
   // ── Revision final ─────────────────────────────────────────────────────────
 
   it('I-1: dos ediciones cruzadas de borradores no se bloquean ni dejan mal el avance', async () => {
-    const actions = await import('./orders.server');
+    const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const r1 = await approvedRequest([10]);
     const r2 = await approvedRequest([10]);
     const o1 = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(r2.lineIds[0], '5')]), { submit: false }));
@@ -493,7 +493,7 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
   }, 60_000);
 
   it('I-2: precios e importes fuera de rango dan un mensaje, no un error de base', async () => {
-    const actions = await import('./orders.server');
+    const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([1000]);
     expect(
       expectFail(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1', { unitPrice: '100000000000' })]), { submit: false }))
@@ -504,7 +504,7 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
   });
 
   it('M-1: al editar con el plazo vacio se toma el del proveedor', async () => {
-    const actions = await import('./orders.server');
+    const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([1]);
     const created = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')], { paymentTermDays: '10' }), { submit: false }));
     expectOk(await actions.updatePurchaseOrderDraft(created.id, orderForm([orderLine(req.lineIds[0], '1')])));
@@ -512,7 +512,7 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
   });
 
   it('M-2: crear y enviar a aprobacion exige tambien Editar', async () => {
-    const actions = await import('./orders.server');
+    const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([1]);
     state.denied.add('compras:ordenes:update');
     expect(expectFail(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')]), { submit: true }))).toBe(
@@ -522,7 +522,7 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
   });
 
   it('M-4: si se cambia el precio cotizado, la linea deja de figurar como de la cotizacion', async () => {
-    const actions = await import('./orders.server');
+    const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const quotes = await import('./quotes.server');
     const req = await approvedRequest([2]);
     const { quotes: [quote] } = expectOk(await quotes.requestQuotes({ requestLineIds: req.lineIds, supplierIds: [SUPPLIER], notes: '' }));
@@ -554,7 +554,7 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
   });
 
   it('M-5: un borrador sobre una solicitud cerrada no puede pedir mas de lo que ya tenia', async () => {
-    const actions = await import('./orders.server');
+    const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const requests = await import('./requests.server');
     const req = await approvedRequest([10]);
     const created = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '4')]), { submit: false }));
@@ -564,7 +564,7 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
   });
 
   it('M-7: si la OC se anula mientras sale el mail, se avisa en vez de decir enviada', async () => {
-    const actions = await import('./orders.server');
+    const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([1]);
     const created = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')]), { submit: true }));
     expectOk(await actions.approvePurchaseOrder(created.id));
@@ -581,7 +581,7 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
   // ── Etapa 3 ────────────────────────────────────────────────────────────────
 
   it('cerrar una OC enviada sin recibir devuelve lo pedido a la solicitud', async () => {
-    const actions = await import('./orders.server');
+    const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([10]);
     const draft = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '10')]), { submit: true }));
     expect(expectFail(await actions.closePurchaseOrder(draft.id, 'No llega'))).toContain('ya fue');

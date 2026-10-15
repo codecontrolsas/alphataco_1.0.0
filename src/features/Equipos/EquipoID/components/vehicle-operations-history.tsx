@@ -1,40 +1,46 @@
-'use client';
-
-import { TabsManagerClientSide } from '@/features/TabsManager/TabsManagerClientSide';
+import { getUserPermissionsMapServer } from '@/features/Permissions';
+import { ViewManagerServer } from '@/features/TabsManager';
 import { _EquipmentOrdersDataTable } from './equipment-orders/_EquipmentOrdersDataTable';
 import { VehicleRejectedRequestsTable } from './rejected-requests/VehicleRejectedRequestsTable';
 
 interface VehicleOperationsHistoryProps {
   equipmentId: string;
+  searchParams: Record<string, string | string[] | undefined>;
 }
 
 /**
- * Tab "Historial de Mantenimiento" del legajo del equipo.
- *
- * Se divide en dos sub-tabs:
+ * Sección "Mantenimiento" de la ficha del equipo, con dos vistas (`?mant_subtab=`):
  * - Órdenes de Mantenimiento: el trabajo que efectivamente se ejecutó o está en curso.
  * - Solicitudes Rechazadas: lo que se pidió y no se aprobó. Estas solicitudes no
  *   generan orden, y se quitaron del paso "Validar Solicitud" de Operaciones, así
  *   que este es el único lugar del sistema donde quedan registradas.
  *
- * Las sub-tabs no declaran moduleSlug/tabSlug: heredan la protección de la tab padre
+ * Las vistas no declaran moduleSlug/tabSlug: heredan la protección de la sección padre
  * (`equipos` / `historial-mantenimiento-equipo`), que es también el permiso que exigen las
  * Server Actions de ambas tablas.
  */
-export function VehicleOperationsHistory({ equipmentId }: VehicleOperationsHistoryProps) {
+export async function VehicleOperationsHistory({ equipmentId, searchParams }: VehicleOperationsHistoryProps) {
+  const permissions = await getUserPermissionsMapServer();
+
   return (
-    <TabsManagerClientSide
+    <ViewManagerServer
       paramName="mant_subtab"
-      defaultTab="orders"
-      tabs={[
+      searchParams={searchParams}
+      defaultView="orders"
+      permissions={permissions}
+      preserveParams={['action', 'id', 'type', 'tab']}
+      ariaLabel="Tipo de registro de mantenimiento"
+      views={[
         {
           value: 'orders',
-          label: 'Órdenes de Mantenimiento',
+          label: 'Órdenes',
+          description: 'Trabajo ejecutado o en curso',
           content: <_EquipmentOrdersDataTable equipmentId={equipmentId} />,
         },
         {
           value: 'rejected',
-          label: 'Solicitudes Rechazadas',
+          label: 'Solicitudes rechazadas',
+          description: 'Pedidos que no se aprobaron',
           content: <VehicleRejectedRequestsTable equipmentId={equipmentId} />,
         },
       ]}

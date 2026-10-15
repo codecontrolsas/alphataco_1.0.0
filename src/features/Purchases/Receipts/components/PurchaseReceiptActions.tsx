@@ -1,11 +1,14 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { Ban } from 'lucide-react';
 import { cancelPurchaseReceipt, type PurchaseReceiptDetail } from '../../actions/receipts.server';
 import { ConfirmAction } from '../../components/ConfirmAction';
+import { invalidateWarehouseAfterReceipt } from '../lib/invalidate-warehouse';
 
 /** Anular la recepcion: anula su entrada a Almacenes y la OC complementaria si no se aprobo. */
 export function PurchaseReceiptActions({ receipt }: { receipt: PurchaseReceiptDetail }) {
+  const queryClient = useQueryClient();
   if (!receipt.can.cancel) return null;
   return (
     <ConfirmAction
@@ -20,7 +23,12 @@ export function PurchaseReceiptActions({ receipt }: { receipt: PurchaseReceiptDe
       confirmLabel="Anular recepción"
       successMessage={`Recepción ${receipt.number} anulada`}
       motive={{ label: 'Motivo', placeholder: 'Obligatorio', required: true }}
-      run={(notes) => cancelPurchaseReceipt(receipt.id, notes)}
+      run={async (notes) => {
+        const result = await cancelPurchaseReceipt(receipt.id, notes);
+        // La anulación devuelve el stock a Almacenes: sus tablas (client-side mode) también se refrescan.
+        if (result.ok) invalidateWarehouseAfterReceipt(queryClient);
+        return result;
+      }}
     />
   );
 }

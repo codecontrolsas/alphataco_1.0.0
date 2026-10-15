@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type { ColumnDef } from '@tanstack/react-table';
+import { ActiveStatusBadge } from '../../components/ActiveStatusBadge';
 import type { AptitudTecnicaListItem } from './actions.server';
 
 // ============================================================================
@@ -42,11 +43,16 @@ export function getColumns(
       // filterFn no necesario para filtros type: 'text'
     },
 
-    // ── Puestos (M:M — virtual, sin filtro de servidor) ────────────────────
+    // ── Puestos (M:M) ───────────────────────────────────────────────────────
     {
       id: 'puestos',
       meta: { title: 'Puestos' },
-      enableSorting: false, // columna virtual — no sortable en BD
+      enableSorting: false, // M:M — no sortable en BD
+      filterFn: (row, _id, value: string[]) => {
+        const puestos = row.original.aptitudes_tecnicas_puestos ?? [];
+        if (puestos.length === 0) return value.includes(NULL_FILTER_VALUE);
+        return puestos.some((p) => value.includes(p.puesto_id));
+      },
       accessorFn: (row) => {
         // Para export: concatenar nombres de puestos
         const puestos = row.aptitudes_tecnicas_puestos ?? [];
@@ -97,13 +103,7 @@ export function getColumns(
       accessorKey: 'is_active',
       meta: { title: 'Estado' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
-      cell: ({ row }) => {
-        const val = row.original.is_active;
-        if (val === null || val === undefined) {
-          return <Badge variant="default">Sin asignar</Badge>;
-        }
-        return <Badge variant={val ? 'success' : 'secondary'}>{val ? 'Activo' : 'Inactivo'}</Badge>;
-      },
+      cell: ({ row }) => <ActiveStatusBadge value={row.original.is_active} />,
       filterFn: (row, id, value: string[]) => {
         const val = row.getValue(id);
         if (val === null || val === undefined) return value.includes(NULL_FILTER_VALUE);
@@ -123,7 +123,9 @@ export function getColumns(
               <Button
                 size="sm"
                 variant="link"
-                className="hover:text-blue-400 p-0 h-auto"
+                type="button"
+                className="h-auto p-0"
+                aria-label={`Editar ${row.original.nombre}`}
                 onClick={() => onEdit(row.original)}
               >
                 Editar

@@ -9,14 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2, RotateCcw } from 'lucide-react';
@@ -29,11 +22,7 @@ import { useRequestTicketReopen } from '../../hooks/useRequestTicketReopen';
 import { TicketAttachmentInput } from '../TicketAttachmentInput';
 
 const schema = z.object({
-  reason: z
-    .string()
-    .trim()
-    .min(20, 'Contanos un poco más, mínimo 20 caracteres')
-    .max(2000, 'Máximo 2000 caracteres'),
+  reason: z.string().trim().min(20, 'Contanos un poco más, mínimo 20 caracteres').max(2000, 'Máximo 2000 caracteres'),
   attachments: z.array(z.instanceof(File)).max(3),
 });
 
@@ -86,12 +75,11 @@ export function TicketReopenRequestDialog({ ticketId, open, onOpenChange }: Prop
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <RotateCcw className="h-4 w-4 text-emerald-600" />
+            <RotateCcw className="h-4 w-4 text-ok-subtle-foreground" />
             Solicitar reapertura del ticket
           </DialogTitle>
           <DialogDescription>
-            Explicale al equipo por qué necesitás retomar este ticket. Si tenés capturas o
-            archivos que ayuden, sumalos.
+            Explicale al equipo por qué necesitás retomar este ticket. Si tenés capturas o archivos que ayuden, sumalos.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -124,23 +112,14 @@ export function TicketReopenRequestDialog({ ticketId, open, onOpenChange }: Prop
                 <FormItem>
                   <FormLabel className="text-sm">Adjuntos (opcional)</FormLabel>
                   <FormControl>
-                    <TicketAttachmentInput
-                      files={field.value ?? []}
-                      onChange={field.onChange}
-                      disabled={isBusy}
-                    />
+                    <TicketAttachmentInput files={field.value ?? []} onChange={field.onChange} disabled={isBusy} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={isBusy}
-              >
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isBusy}>
                 Cancelar
               </Button>
               <Button type="submit" disabled={isBusy}>

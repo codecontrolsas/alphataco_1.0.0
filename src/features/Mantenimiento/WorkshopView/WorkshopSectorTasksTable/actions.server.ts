@@ -1,6 +1,7 @@
 'use server';
 
 import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
   NULL_FILTER_VALUE,
@@ -92,17 +93,40 @@ const SECTOR_WORK_ORDERS_SELECT = {
   started_at: true,
   created_at: true,
   // Ticket 596: la OT puede ser de un vehiculo O de un equipamiento
-  vehicles: { select: { id: true, domain: true, serie: true, intern_number: true } },
-  other_equipment: { select: { id: true, serial_number: true, intern_number: true } },
-  // Cantidad de tareas de la OT (la columna que pidió el ticket 678)
-  _count: { select: { maintenance_order_items: true } },
-  // OM de la que salieron las tareas — en la práctica siempre una sola
-  maintenance_order_items: {
+  // El subtipo (o el tipo) es la segunda línea de la celda "Equipo".
+  vehicles: {
     select: {
-      maintenance_orders: { select: { id: true, order_number: true, status: true } },
+      id: true,
+      domain: true,
+      serie: true,
+      intern_number: true,
+      sub_type: { select: { name: true } },
+      type_vehicles_typeTotype: { select: { name: true } },
     },
   },
-};
+  other_equipment: {
+    select: {
+      id: true,
+      serial_number: true,
+      intern_number: true,
+      sub_type: { select: { name: true } },
+      type: { select: { name: true } },
+    },
+  },
+  // Cantidad de tareas de la OT (la columna que pidió el ticket 678)
+  _count: { select: { maintenance_order_items: true } },
+  // OM de la que salieron las tareas — en la práctica siempre una sola. Además de cada tarea salen:
+  // si es crítica y el estado de sus trabajos de reparación (de ahí el avance "2/4" de la columna Tareas).
+  maintenance_order_items: {
+    select: {
+      is_critical: true,
+      maintenance_orders: { select: { id: true, order_number: true, status: true } },
+      work_order_items: {
+        select: { work_order_id: true, work_order_item_repairs: { select: { status: true } } },
+      },
+    },
+  },
+} as const;
 
 // ============================================================================
 // INTERNAL HELPERS
@@ -114,25 +138,23 @@ const SECTOR_WORK_ORDERS_SELECT = {
  * Las OM se deduplican: una OT puede tener varias tareas y todas apuntan a la
  * misma OM, así que sin deduplicar la celda repetiría el mismo número N veces.
  */
-function mapWorkOrderRow(row: {
-  id: string;
-  order_number: string;
-  status: string;
-  planned_start_date: Date;
-  planned_end_date: Date;
-  started_at: Date | null;
-  created_at: Date | null;
-  vehicles: { id: string; domain: string | null; serie: string | null; intern_number: string | null } | null;
-  other_equipment: { id: string; serial_number: string | null; intern_number: string | null } | null;
-  _count: { maintenance_order_items: number };
-  maintenance_order_items: Array<{
-    maintenance_orders: { id: string; order_number: string | null; status: string };
-  }>;
-}) {
+function mapWorkOrderRow(row: Prisma.work_ordersGetPayload<{ select: typeof SECTOR_WORK_ORDERS_SELECT }>) {
   const ordersById = new Map<string, { id: string; order_number: string | null; status: string }>();
+  let completedTaskCount = 0;
+  let hasCriticalTask = false;
   for (const item of row.maintenance_order_items) {
     if (item.maintenance_orders) ordersById.set(item.maintenance_orders.id, item.maintenance_orders);
+    if (item.is_critical) hasCriticalTask = true;
+    // Una tarea está completa cuando todos SUS trabajos de reparación de ESTA OT lo están (ver `deriveTaskStatus`).
+    const repairStatuses = item.work_order_items
+      .filter((woItem) => woItem.work_order_id === row.id)
+      .flatMap((woItem) => woItem.work_order_item_repairs.map((repair) => repair.status));
+    if (deriveTaskStatus(repairStatuses) === 'completed') completedTaskCount += 1;
   }
+  // Segunda línea de la celda "Equipo": subtipo del vehículo o del equipamiento (o su tipo si no tiene subtipo).
+  const resourceSubtitle = row.other_equipment
+    ? (row.other_equipment.sub_type?.name ?? row.other_equipment.type?.name ?? null)
+    : (row.vehicles?.sub_type?.name ?? row.vehicles?.type_vehicles_typeTotype?.name ?? null);
 
   return {
     id: row.id,
@@ -147,6 +169,9 @@ function mapWorkOrderRow(row: {
     vehicles: row.vehicles,
     other_equipment: row.other_equipment,
     taskCount: row._count.maintenance_order_items,
+    completedTaskCount,
+    hasCriticalTask,
+    resourceSubtitle,
     maintenanceOrders: Array.from(ordersById.values()),
   };
 }

@@ -1,7 +1,7 @@
 'use server';
 
 import JSZip from 'jszip';
-import moment from 'moment';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { AMOUNT_SCALE, formatScaled, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { checkPermissionServer } from '@/features/Permissions';
@@ -147,7 +147,7 @@ export async function getPurchasesVatBookPeriods(): Promise<string[]> {
     by: ['vat_period'],
     where: { company_id: companyId, status: { not: 'CANCELLED' } },
   });
-  const current = moment().format('YYYY-MM');
+  const current = argentinaDate().slice(0, 7);
   return [...new Set([current, ...rows.map((r) => r.vat_period)])].sort().reverse();
 }
 

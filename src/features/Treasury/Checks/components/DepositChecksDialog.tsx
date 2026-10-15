@@ -15,18 +15,19 @@ import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
-import { depositChecks, type CheckOperationFormData } from '../../actions/checks.server';
+import { depositChecks } from '../../actions/checks.server';
+import type { CheckOperationFormData } from '../../lib/check-types';
 import { minCreditDate } from '../../lib/checks-dates';
 import { formatInCurrency } from '../../lib/currency-format';
 import { invalidateTreasury } from '../../lib/invalidate';
 import { depositSchema, type DepositValues } from '../../schemas/checks';
 import { CheckOperationShell } from './CheckOperationShell';
+import { formatDay } from '../../lib/dates';
 
 const logger = new Logger('Treasury/DepositChecksDialog');
 
 const toDate = (value: string) => (value ? moment(value, 'YYYY-MM-DD').toDate() : undefined);
 const fromDate = (value: Date | undefined) => (value ? moment(value).format('YYYY-MM-DD') : '');
-const dmy = (value: string) => moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY');
 
 interface DepositChecksDialogProps {
   open: boolean;
@@ -155,7 +156,7 @@ function DepositForm({ data, onClose, onDone }: { data: CheckOperationFormData; 
                   Nº {c.number} · {c.bank}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {c.drawerName} · pago {dmy(c.paymentDate)} · <span className="tabular-nums">{formatInCurrency(c.amount, 'ARS')}</span>
+                  {c.drawerName} · pago {formatDay(c.paymentDate)} · <span className="tabular-nums">{formatInCurrency(c.amount, 'ARS')}</span>
                 </p>
               </div>
               <FormField

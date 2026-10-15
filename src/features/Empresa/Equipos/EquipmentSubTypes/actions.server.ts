@@ -10,27 +10,36 @@ import {
   parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
+import { fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
+import { equipmentSubTypeCreateSchema } from '../../lib/catalog-input-schemas';
 import {
-  catalogAccessError,
-  catalogReadScope,
-  catalogWriteScope,
-  resolveCatalogAccess,
-} from '../lib/catalog-scope';
+  CATALOG_EXPORT_MAX_ROWS,
+  buildIsActiveWhere,
+  catalogExportFailure,
+  catalogTooLargeMessage,
+} from '../../lib/catalog-table.server';
+import { requireAnyView, requireConfigTabPermission, type ViewerTab } from '../../lib/config-access.server';
 import { assertChecklistTemplatesOwned, assertCompatibleItemsReadable } from '../lib/catalog-guards';
-import {
-  canHaveCompatibleItems,
-  parseCompatibleItemKeys,
-  typeIdsWithoutSubTypes,
-} from '../lib/hitch-compatibility';
+import { catalogAccessError, catalogReadScope, catalogWriteScope, resolveCatalogAccess } from '../lib/catalog-scope';
+import { canHaveCompatibleItems, parseCompatibleItemKeys, typeIdsWithoutSubTypes } from '../lib/hitch-compatibility';
+import { equipmentSubTypeUpdateInputSchema, type EquipmentSubTypeUpdateInput } from './lib/subtype-update-input';
 
 // ============================================================================
 // LOGGER
 // ============================================================================
 
 const logger = new Logger('features/Empresa/Equipos/EquipmentSubTypes');
+
+/** El selector de checklists lo usan los formularios de Tipos y de Subtipos de equipo. */
+const EQUIPMENT_CATALOG_FORM_TABS: readonly ViewerTab[] = [
+  ['configuracion', 'tipos'],
+  ['configuracion', 'subtipos'],
+];
 
 // ============================================================================
 // VALID SORT FIELDS — solo campos reales de BD
@@ -47,71 +56,58 @@ const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Record<string, unknow
 // WHERE BUILDER — DRY helper compartido por paginated, export y facets
 // ============================================================================
 
-function buildWhereClause(state: ReturnType<typeof parseSearchParams>) {
-  const searchWhere = buildSearchWhere(state.search, ['name']);
+/** Claves de filtro que esta tabla realmente usa; el resto de la URL se descarta antes de armar el where. */
+const ALLOWED_FILTER_KEYS = new Set(['is_active', 'type', 'name', ...dateRangeKeys(['created_at'])]);
 
-  // is_active es booleano nullable — manejo manual
-  const isActiveValues = state.filters['is_active'];
-  const isActiveFilter: Record<string, unknown> = {};
-  if (isActiveValues?.length === 1) {
-    if (isActiveValues[0] === NULL_FILTER_VALUE) {
-      isActiveFilter.is_active = null;
-    } else {
-      isActiveFilter.is_active = isActiveValues[0] === 'true';
-    }
-  } else if (isActiveValues && isActiveValues.length > 1) {
-    const conditions: Array<{ is_active: boolean | null }> = [];
-    for (const v of isActiveValues) {
-      if (v === NULL_FILTER_VALUE) conditions.push({ is_active: null });
-      else conditions.push({ is_active: v === 'true' });
-    }
-    isActiveFilter.OR = conditions;
-  }
+function parseState(searchParams: DataTableSearchParams | undefined) {
+  return sanitizeFilters(parseSearchParams(searchParams ?? {}), ALLOWED_FILTER_KEYS);
+}
 
-  // Filtro FK type (UUID) — viene en state.filters['type']
-  const typeValues = state.filters['type'];
-  const typeFilter: Record<string, unknown> = {};
-  if (typeValues?.length) {
-    const realValues = typeValues.filter((v) => v !== NULL_FILTER_VALUE);
-    const hasNull = typeValues.includes(NULL_FILTER_VALUE);
+/** `where` del filtro facetado de tipo de unidad (FK UUID nullable). */
+function buildTypeWhere(values: string[] | undefined): Record<string, unknown> {
+  if (!values?.length) return {};
+  const realValues = values.filter((v) => v !== NULL_FILTER_VALUE);
+  const hasNull = values.includes(NULL_FILTER_VALUE);
 
-    if (hasNull && realValues.length > 0) {
-      typeFilter.OR = [{ type: { in: realValues } }, { type: null }];
-    } else if (hasNull) {
-      typeFilter.type = null;
-    } else if (realValues.length === 1) {
-      typeFilter.type = realValues[0];
-    } else {
-      typeFilter.type = { in: realValues };
-    }
-  }
+  if (hasNull && realValues.length > 0) return { OR: [{ type: { in: realValues } }, { type: null }] };
+  if (hasNull) return { type: null };
+  return { type: realValues.length === 1 ? realValues[0] : { in: realValues } };
+}
 
-  // Filtros de texto libre por columna
-  const textFiltersWhere = buildTextFiltersWhere(state.filters, ['name']);
-
-  // Filtros de rango de fecha
-  const dateFiltersWhere = buildDateRangeFiltersWhere(state.filters, ['created_at']);
-
+/** Mismo where para lista, export y facets. Los filtros con OR van en AND para que no se pisen. */
+function buildWhereClause(state: ReturnType<typeof parseState>, companyId: string) {
   return {
-    ...searchWhere,
-    ...isActiveFilter,
-    ...typeFilter,
-    ...textFiltersWhere,
-    ...dateFiltersWhere,
+    AND: [
+      buildSearchWhere(state.search, ['name']),
+      buildIsActiveWhere(state.filters['is_active']),
+      buildTypeWhere(state.filters['type']),
+      buildTextFiltersWhere(state.filters, ['name']),
+      buildDateRangeFiltersWhere(state.filters, ['created_at']),
+      catalogReadScope(companyId),
+    ],
   };
 }
+
+const LIST_SELECT = {
+  id: true,
+  name: true,
+  is_active: true,
+  created_at: true,
+  type: true,
+  type_sub_type_typeTotype: { select: { id: true, name: true } },
+} as const;
 
 // ============================================================================
 // QUERY PAGINADA
 // ============================================================================
 
 export async function getEquipmentSubTypesPaginated(searchParams: DataTableSearchParams) {
+  await requireConfigTabPermission('subtipos', 'view');
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseState(searchParams);
     const { skip, take } = stateToPrismaParams(state);
 
-    // `buildWhereClause` puede traer su propio `OR`: se combinan con AND para no pisarse.
-    const where = { AND: [buildWhereClause(state), catalogReadScope(await getActiveCompanyId())] };
+    const where = buildWhereClause(state, await getActiveCompanyId());
 
     // Resolución de multi-sort
     const resolvedSorts: Array<Record<string, unknown>> = [];
@@ -131,16 +127,7 @@ export async function getEquipmentSubTypesPaginated(searchParams: DataTableSearc
         take,
         orderBy: safeOrderBy,
         where,
-        select: {
-          id: true,
-          name: true,
-          is_active: true,
-          created_at: true,
-          type: true,
-          type_sub_type_typeTotype: {
-            select: { id: true, name: true },
-          },
-        },
+        select: LIST_SELECT,
       }),
       prisma.sub_type.count({ where }),
     ]);
@@ -156,11 +143,13 @@ export async function getEquipmentSubTypesPaginated(searchParams: DataTableSearc
 // EXPORT COMPLETO — sin skip/take, mismos filtros
 // ============================================================================
 
-export async function getAllEquipmentSubTypesForExport(searchParams: DataTableSearchParams) {
+export async function getAllEquipmentSubTypesForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<EquipmentSubTypeListItem[]>> {
+  await requireConfigTabPermission('subtipos', 'view');
   try {
-    const state = parseSearchParams(searchParams);
-    // `buildWhereClause` puede traer su propio `OR`: se combinan con AND para no pisarse.
-    const where = { AND: [buildWhereClause(state), catalogReadScope(await getActiveCompanyId())] };
+    const state = parseState(searchParams);
+    const where = buildWhereClause(state, await getActiveCompanyId());
 
     const resolvedSorts: Array<Record<string, unknown>> = [];
     for (const s of state.sorting) {
@@ -170,25 +159,24 @@ export async function getAllEquipmentSubTypesForExport(searchParams: DataTableSe
         resolvedSorts.push(FK_SORT_MAP[s.id](s.desc ? 'desc' : 'asc'));
       }
     }
-    const safeOrderBy = [{ is_active: 'desc' as const }, ...resolvedSorts, { name: 'asc' as const }];
+    const safeOrderBy = [
+      { is_active: 'desc' as const },
+      ...resolvedSorts,
+      { name: 'asc' as const },
+      { id: 'asc' as const },
+    ];
 
-    return await prisma.sub_type.findMany({
-      where,
-      orderBy: safeOrderBy,
-      select: {
-        id: true,
-        name: true,
-        is_active: true,
-        created_at: true,
-        type: true,
-        type_sub_type_typeTotype: {
-          select: { id: true, name: true },
-        },
-      },
+    const rows = await fetchExportRowsInBatches({
+      maxRows: CATALOG_EXPORT_MAX_ROWS,
+      listIds: (take) => prisma.sub_type.findMany({ where, orderBy: safeOrderBy, select: { id: true }, take }),
+      fetchByIds: (ids) =>
+        prisma.sub_type.findMany({ where: { AND: [where, { id: { in: ids } }] }, select: LIST_SELECT }),
+      tooLargeMessage: catalogTooLargeMessage('subtipos'),
     });
+    return { ok: true, data: rows };
   } catch (error) {
     logger.error('Error al exportar subtipos de equipos', { data: { error } });
-    throw new Error('No se pudo exportar la lista. Intente nuevamente.');
+    return catalogExportFailure(error, 'la lista de subtipos');
   }
 }
 
@@ -204,8 +192,9 @@ export async function getEquipmentSubTypeSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
 ): Promise<FacetResult | null> {
+  await requireConfigTabPermission('subtipos', 'view');
   try {
-    const state = searchParams ? parseSearchParams(searchParams) : parseSearchParams({});
+    const state = parseState(searchParams);
 
     // crossWhere: aplica todos los filtros EXCEPTO el de la columna propia
     const crossState = {
@@ -214,7 +203,7 @@ export async function getEquipmentSubTypeSingleFacet(
     };
     delete crossState.filters[columnId];
 
-    const crossWhere = { AND: [buildWhereClause(crossState), catalogReadScope(await getActiveCompanyId())] };
+    const crossWhere = buildWhereClause(crossState, await getActiveCompanyId());
 
     switch (columnId) {
       case 'is_active': {
@@ -295,6 +284,7 @@ export async function getEquipmentSubTypeSingleFacet(
  * Reemplaza a FetchTypeOfVehicles (Supabase) sin company_id filter.
  */
 export async function getActiveEquipmentTypes() {
+  await requireConfigTabPermission('subtipos', 'view');
   try {
     const companyId = await getActiveCompanyId();
     const data = await prisma.type.findMany({
@@ -314,6 +304,7 @@ export async function getActiveEquipmentTypes() {
  * Reemplaza a useActiveChecklists (supabaseBrowser).
  */
 export async function getActiveChecklistsForSubType() {
+  await requireAnyView(EQUIPMENT_CATALOG_FORM_TABS);
   try {
     const companyId = await getActiveCompanyId();
     const data = await prisma.checklist_templates.findMany({
@@ -333,6 +324,7 @@ export async function getActiveChecklistsForSubType() {
  * Reemplaza a useSubTypeChecklists (supabaseBrowser).
  */
 export async function getChecklistIdsForSubType(subTypeId: string): Promise<string[]> {
+  await requireConfigTabPermission('subtipos', 'view');
   try {
     const data = await prisma.checklist_template_sub_types.findMany({
       where: { sub_type_id: subTypeId },
@@ -350,6 +342,7 @@ export async function getChecklistIdsForSubType(subTypeId: string): Promise<stri
  * Reemplaza a getCompatibleItemsForSubType (Supabase).
  */
 export async function getCompatibleItemsForSubTypePrisma(subTypeId: string) {
+  await requireConfigTabPermission('subtipos', 'view');
   try {
     const data = await prisma.sub_type_compatible_items.findMany({
       where: { sub_type_id: subTypeId },
@@ -374,7 +367,10 @@ export async function getCompatibleItemsForSubTypePrisma(subTypeId: string) {
  * tienen ningún subtipo cargado se ofrecen enteros (si no, quedarían sin forma de elegirse).
  */
 export async function getAvailableCompatibleItems(parentTypeId: string) {
-  const empty = { subTypes: [] as { id: string; name: string; type: string | null }[], types: [] as { id: string; name: string }[] };
+  const empty = {
+    subTypes: [] as { id: string; name: string; type: string | null }[],
+    types: [] as { id: string; name: string }[],
+  };
   try {
     const companyId = await getActiveCompanyId();
 
@@ -457,6 +453,8 @@ async function validateSubTypeInput(companyId: string, input: EquipmentSubTypeIn
 }
 
 export async function createEquipmentSubType(input: EquipmentSubTypeInput) {
+  await requireConfigTabPermission('subtipos', 'create');
+  input = equipmentSubTypeCreateSchema.parse(input);
   try {
     const companyId = await getActiveCompanyId();
     const compatibleItems = await validateSubTypeInput(companyId, input);
@@ -503,7 +501,13 @@ export async function createEquipmentSubType(input: EquipmentSubTypeInput) {
   }
 }
 
-export async function updateEquipmentSubType(input: EquipmentSubTypeInput & { id: string }) {
+/**
+ * Actualiza el subtipo y sus relaciones M:M con altas/bajas explícitas (`compatibleItems`,
+ * `checklists`), todo en una transacción. El `deleteMany` queda acotado a lo que se pide quitar.
+ */
+export async function updateEquipmentSubType(rawInput: EquipmentSubTypeUpdateInput) {
+  await requireConfigTabPermission('subtipos', 'update');
+  const input = equipmentSubTypeUpdateInputSchema.parse(rawInput);
   try {
     const companyId = await getActiveCompanyId();
 
@@ -516,7 +520,16 @@ export async function updateEquipmentSubType(input: EquipmentSubTypeInput & { id
     const accessError = catalogAccessError(access, 'El subtipo de unidad no existe');
     if (accessError) throw new Error(accessError);
 
-    const compatibleItems = await validateSubTypeInput(companyId, input);
+    // El saneo de claves corre en el servidor; solo las altas se validan contra la empresa.
+    const itemsToAdd = parseCompatibleItemKeys(input.compatibleItems.add);
+    const itemsToRemove = parseCompatibleItemKeys(input.compatibleItems.remove);
+    const checklistsToAdd = Array.from(new Set(input.checklists.add));
+    const checklistsToRemove = Array.from(new Set(input.checklists.remove));
+    await Promise.all([
+      assertParentTypeReadable(companyId, input.type_id),
+      assertChecklistTemplatesOwned(companyId, checklistsToAdd),
+      assertCompatibleItemsReadable(companyId, itemsToAdd),
+    ]);
 
     const updated = await prisma.$transaction(async (tx) => {
       const subType = await tx.sub_type.update({
@@ -525,11 +538,17 @@ export async function updateEquipmentSubType(input: EquipmentSubTypeInput & { id
         select: { id: true, name: true, is_active: true, type: true },
       });
 
-      // Items compatibles y checklists se reemplazan enteros: el form manda siempre el conjunto.
-      await tx.sub_type_compatible_items.deleteMany({ where: { sub_type_id: input.id } });
-      if (compatibleItems.length > 0) {
+      if (itemsToRemove.length > 0) {
+        await tx.sub_type_compatible_items.deleteMany({
+          where: {
+            sub_type_id: input.id,
+            OR: itemsToRemove.map((item) => ({ compatible_item_id: item.id, item_type: item.type })),
+          },
+        });
+      }
+      if (itemsToAdd.length > 0) {
         await tx.sub_type_compatible_items.createMany({
-          data: compatibleItems.map((item) => ({
+          data: itemsToAdd.map((item) => ({
             sub_type_id: input.id,
             compatible_item_id: item.id,
             item_type: item.type,
@@ -538,10 +557,14 @@ export async function updateEquipmentSubType(input: EquipmentSubTypeInput & { id
         });
       }
 
-      await tx.checklist_template_sub_types.deleteMany({ where: { sub_type_id: input.id } });
-      if (input.checklist_ids.length > 0) {
+      if (checklistsToRemove.length > 0) {
+        await tx.checklist_template_sub_types.deleteMany({
+          where: { sub_type_id: input.id, template_id: { in: checklistsToRemove } },
+        });
+      }
+      if (checklistsToAdd.length > 0) {
         await tx.checklist_template_sub_types.createMany({
-          data: input.checklist_ids.map((template_id) => ({ sub_type_id: input.id, template_id })),
+          data: checklistsToAdd.map((template_id) => ({ sub_type_id: input.id, template_id })),
           skipDuplicates: true,
         });
       }

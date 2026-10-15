@@ -1,19 +1,23 @@
-import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+
+/** Una tarjeta de KPI en carga, con las proporciones de `MetricCard`. */
+export function KpiCardSkeleton() {
+  return (
+    <div className="bg-card flex flex-col justify-between gap-3 rounded-xl border p-5" aria-hidden="true">
+      <Skeleton className="h-4 w-24" />
+      <div className="space-y-2">
+        <Skeleton className="h-8 w-16" />
+        <Skeleton className="h-4 w-32" />
+      </div>
+    </div>
+  );
+}
 
 export function KpiCardsSkeleton() {
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+    <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       {[1, 2, 3, 4, 5, 6].map((i) => (
-        <Card key={i}>
-          <CardContent className="flex items-center gap-4 p-4">
-            <Skeleton className="h-10 w-10 rounded-lg" />
-            <div className="space-y-2">
-              <Skeleton className="h-7 w-16" />
-              <Skeleton className="h-3 w-24" />
-            </div>
-          </CardContent>
-        </Card>
+        <KpiCardSkeleton key={i} />
       ))}
     </div>
   );

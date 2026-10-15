@@ -1,6 +1,6 @@
-import { getPaymentOrderDetail } from '@/features/Purchases/actions/payment-orders.server';
-import { getTreasuryAccounts } from '@/features/Treasury/actions/accounts.server';
 import { PaymentOrderPage } from '@/features/Purchases/Payments/PaymentPages';
+import { getPaymentOrderDetail } from '@/features/Purchases/actions/payment-queries.server';
+import { getTreasuryAccounts } from '@/features/Treasury/actions/accounts.server';
 import { notFound } from 'next/navigation';
 import { cache } from 'react';
 

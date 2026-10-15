@@ -21,8 +21,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Logger } from '@/lib/logger';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import moment from 'moment';
 import { History } from 'lucide-react';
+import moment from 'moment';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -51,13 +51,15 @@ interface PriceRevisionsDialogProps {
   serviceItemId: string;
   itemName: string;
   /** Precio vigente según el ítem. Es el mismo que la revisión marcada vigente. */
-  currentPrice: number;
+  currentPrice: string | null;
   canUpdatePrices: boolean;
   /** Para refrescar la tabla de ítems: el precio vigente se muestra ahí. */
   onSaved?: () => void;
 }
 
-function formatPrice(value: number | string): string {
+function formatPrice(value: number | string | null): string {
+  // Sin `view_prices` el servidor no envía importes.
+  if (value === null) return '—';
   return new Intl.NumberFormat('es-AR', {
     style: 'currency',
     currency: 'ARS',
@@ -111,6 +113,7 @@ export function PriceRevisionsDialog({
       form.reset({ price: '', validFrom: new Date(), reason: '' });
       queryClient.invalidateQueries({ queryKey: ['price-revisions', serviceItemId] });
       queryClient.invalidateQueries({ queryKey: ['service-items'] });
+      queryClient.invalidateQueries({ queryKey: ['comercial', 'customer'] });
       onSaved?.();
     } catch (error) {
       // La action puede rechazar (no devolver `ok: false`): sin este catch el usuario no ve nada.
@@ -167,7 +170,7 @@ export function PriceRevisionsDialog({
                 {revisions.map((revision) => (
                   <TableRow key={revision.id}>
                     <TableCell className="whitespace-nowrap">
-                      {moment(revision.valid_from).format('DD/MM/YYYY')}
+                      {moment.utc(revision.valid_from).format('DD/MM/YYYY')}
                       {revision.is_current && (
                         <Badge variant="success" className="ml-2">
                           Vigente

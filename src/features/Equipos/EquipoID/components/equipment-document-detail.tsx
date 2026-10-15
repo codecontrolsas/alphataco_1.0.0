@@ -3,68 +3,52 @@ import { MonthlyEquipmentDocumentsSkeleton } from '@/features/Documentacion/Docu
 import { EquipmentPermanentDocumentsList } from '@/features/Documentacion/DocumentosEquipos/Permanentes/EquipmentPermanentDocumentsList';
 import { EquipmentPermanentDocumentsSkeleton } from '@/features/Documentacion/DocumentosEquipos/Permanentes/fallback/EquipmentPermanentDocumentsSkeleton';
 import { getUserPermissionsMapServer } from '@/features/Permissions';
-import { TabsManagerServer } from '@/features/TabsManager';
-import { Calendar, FileArchive } from 'lucide-react';
+import { ViewManagerServer } from '@/features/TabsManager';
 import { Suspense } from 'react';
-
-// ============================================================================
-// TYPES
-// ============================================================================
 
 interface EquipmentDocumentDetailProps {
   equipmentId: string;
   searchParams: Record<string, string | string[] | undefined>;
 }
 
-// ============================================================================
-// SERVER COMPONENT
-// ============================================================================
-
+/**
+ * Documentación del equipo dentro de su ficha: permanentes o mensuales (`?subtab=`), sin perder la
+ * ficha ni la sección (`action`, `id`, `type`, `tab`) al cambiar de vista.
+ */
 export async function EquipmentDocumentDetail({ equipmentId, searchParams }: EquipmentDocumentDetailProps) {
-  // Obtener permisos (usa cache del layout, sin query adicional)
   const permissions = await getUserPermissionsMapServer();
 
   return (
-    <TabsManagerServer
+    <ViewManagerServer
       paramName="subtab"
       searchParams={searchParams}
-      defaultTab="permanentes"
+      defaultView="permanentes"
       permissions={permissions}
-      tabs={[
+      preserveParams={['action', 'id', 'type', 'tab']}
+      ariaLabel="Tipo de documentación"
+      views={[
         {
           value: 'permanentes',
-          label: (
-            <span className="flex items-center gap-2">
-              <FileArchive className="h-4 w-4" />
-              Documentos Permanentes
-            </span>
-          ),
+          label: 'Permanentes',
+          description: 'Documentos de presentación única',
           moduleSlug: 'documentacion',
           tabSlug: 'docs-equipos-permanentes',
           content: (
-            <div>
-              <Suspense fallback={<EquipmentPermanentDocumentsSkeleton />}>
-                <EquipmentPermanentDocumentsList searchParams={searchParams} equipmentId={equipmentId} />
-              </Suspense>
-            </div>
+            <Suspense fallback={<EquipmentPermanentDocumentsSkeleton />}>
+              <EquipmentPermanentDocumentsList searchParams={searchParams} equipmentId={equipmentId} />
+            </Suspense>
           ),
         },
         {
           value: 'mensuales',
-          label: (
-            <span className="flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              Documentos Mensuales
-            </span>
-          ),
+          label: 'Mensuales',
+          description: 'Documentos que se presentan por período',
           moduleSlug: 'documentacion',
           tabSlug: 'docs-equipos-mensuales',
           content: (
-            <div>
-              <Suspense fallback={<MonthlyEquipmentDocumentsSkeleton />}>
-                <MonthlyEquipmentDocumentsList searchParams={searchParams} equipmentId={equipmentId} />
-              </Suspense>
-            </div>
+            <Suspense fallback={<MonthlyEquipmentDocumentsSkeleton />}>
+              <MonthlyEquipmentDocumentsList searchParams={searchParams} equipmentId={equipmentId} />
+            </Suspense>
           ),
         },
       ]}

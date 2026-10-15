@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { MAX_CHECKBOOK_SIZE, normalizeCheckNumber } from '../lib/own-check-transitions';
-import { DATE_RE } from './shared';
+import { DATE_RE, isCalendarDay } from './shared';
 
 /**
  * Cheques propios y chequeras (spec Tesorería etapa 3b). Módulo SIN directiva: lo usan los
@@ -8,7 +8,7 @@ import { DATE_RE } from './shared';
  * valida el servidor.
  */
 
-const dateField = z.string().trim().regex(DATE_RE, 'Fecha inválida');
+const dateField = z.string().trim().regex(DATE_RE, 'Fecha inválida').refine(isCalendarDay, 'Fecha inválida');
 const checkNumber = z.string().refine((value) => normalizeCheckNumber(value) !== null, 'Número inválido');
 
 export const ownCheckReasonSchema = z.string().trim().min(1, 'Indicá el motivo').max(300, 'Máximo 300 caracteres');

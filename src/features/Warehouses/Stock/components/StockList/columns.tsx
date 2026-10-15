@@ -1,18 +1,27 @@
 'use client';
 
-import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type { ColumnDef } from '@tanstack/react-table';
-import { AlertTriangle, CheckCircle2, type LucideIcon } from 'lucide-react';
-import moment from 'moment';
+import { argentinaDate, formatDateAr } from '@/shared/lib/argentina-time';
 import Link from 'next/link';
+import { WarehouseStatusBadge } from '../../../components/WarehouseStatusBadge';
+import { classifyBatch, dateColumnToYmd } from '../../../lib/batch-expiry';
 import { formatMoney, formatQuantity, formatUnitCost } from '../../../lib/format';
+import { STOCK_LEVEL_UI } from '../../../lib/status-presentation';
 import type { StockListItem } from './actions.server';
 
-/** Iconos de "Bajo mínimo" (celda y filtro usan los mismos). */
-export const belowMinIcons: Record<'true' | 'false', LucideIcon> = { true: AlertTriangle, false: CheckCircle2 };
+/**
+ * Nivel de stock del material en el filtro y el export: `true` = bajo mínimo, `false` = en stock. La tabla
+ * solo lista saldos con cantidad > 0, así que "Agotado" no aparece acá (vive en Materiales).
+ */
+export const stockLevelByBelowMin = { true: STOCK_LEVEL_UI.BELOW_MIN, false: STOCK_LEVEL_UI.OK } as const;
+
+/** Vencimiento de un `@db.Date` (medianoche UTC) como `DD/MM/YYYY`, sin correr el día. */
+export function formatBatchExpiry(value: string | Date | null | undefined): string {
+  if (!value) return '';
+  return formatDateAr(dateColumnToYmd(new Date(value)));
+}
 
 export const HIDDEN_COLUMNS_BY_DEFAULT = ['category'];
 
@@ -21,6 +30,7 @@ interface StockColumnsOptions {
 }
 
 export function getColumns({ canViewPrices }: StockColumnsOptions): ColumnDef<StockListItem>[] {
+  const today = argentinaDate();
   const columns: ColumnDef<StockListItem>[] = [
     {
       id: 'code',
@@ -37,7 +47,7 @@ export function getColumns({ canViewPrices }: StockColumnsOptions): ColumnDef<St
       cell: ({ row }) => (
         <Link
           href={`/dashboard/warehouse/materials/${row.original.material.id}`}
-          className="font-medium text-blue-600 hover:underline"
+          className="text-brand-ink font-medium hover:underline focus-visible:ring-ring/50 rounded-sm outline-none focus-visible:ring-[3px]"
         >
           {row.original.material.name}
         </Link>
@@ -83,8 +93,15 @@ export function getColumns({ canViewPrices }: StockColumnsOptions): ColumnDef<St
       header: ({ column }) => <DataTableColumnHeader column={column} title="Vencimiento" />,
       cell: ({ row }) => {
         const exp = row.original.batch?.expires_at;
-        // @db.Date llega como medianoche UTC: se formatea en UTC para no correr un dia
-        return <span>{exp ? moment.utc(exp).format('DD/MM/YYYY') : '-'}</span>;
+        if (!exp) return <span>-</span>;
+        const ymd = dateColumnToYmd(new Date(exp));
+        const status = classifyBatch(ymd, today);
+        return (
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="tabular-nums">{formatDateAr(ymd)}</span>
+            {status !== 'OK' && <WarehouseStatusBadge entity="batchExpiry" status={status} size="sm" />}
+          </span>
+        );
       },
     },
     {
@@ -105,19 +122,13 @@ export function getColumns({ canViewPrices }: StockColumnsOptions): ColumnDef<St
     {
       id: 'below_min',
       accessorFn: (row) => row.below_min,
-      meta: { title: 'Bajo mínimo' },
+      meta: { title: 'Nivel de stock' },
       // Calculado (suma de todos los saldos del material vs min_stock): no ordenable.
       enableSorting: false,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Bajo mínimo" />,
-      cell: ({ row }) => {
-        const Icon = belowMinIcons[String(row.original.below_min) as 'true' | 'false'];
-        return (
-          <Badge variant={row.original.below_min ? 'destructive' : 'outline'} className={cn('gap-1')}>
-            <Icon className="h-3 w-3" />
-            {row.original.below_min ? 'Sí' : 'No'}
-          </Badge>
-        );
-      },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Nivel de stock" />,
+      cell: ({ row }) => (
+        <WarehouseStatusBadge entity="stockLevel" status={row.original.below_min ? 'BELOW_MIN' : 'OK'} size="sm" />
+      ),
       filterFn: (row, _id, value: string[]) => value.includes(String(row.original.below_min)),
     },
   ];

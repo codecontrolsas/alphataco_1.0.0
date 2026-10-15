@@ -1,12 +1,12 @@
 'use server';
 
-import moment from 'moment';
 import { revalidatePath } from 'next/cache';
 import { checkPermissionServer } from '@/features/Permissions';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { withActor } from '@/shared/lib/actor';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { toActionError } from '../lib/action-errors';
@@ -201,7 +201,7 @@ function tireServiceItemInfo(
 ) {
   if (!item) return null;
   return {
-    date: moment(item.service_order.service_date).format('DD/MM/YYYY'),
+    date: formatArgentinaDay(item.service_order.service_date),
     vehicle: item.vehicle.domain || item.vehicle.intern_number || 'equipo',
     position: item.position_number,
     open: item.service_order.status === 'OPEN',

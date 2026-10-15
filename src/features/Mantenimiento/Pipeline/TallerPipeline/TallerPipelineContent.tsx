@@ -2,13 +2,15 @@ import { Suspense } from 'react';
 
 import { PipelineLayout, type PipelineStepEntry } from '../components/PipelineLayout';
 import type { PipelineStep } from '../types';
-import { getTallerPipelineCounts } from './actions/pipeline-counts.server';
+import { getTallerPipelineSummary } from './actions/pipeline-summary.server';
+import { getTallerSummaryCached } from '../../lib/section-counts';
 
 import { ApprovalInboxSkeleton, ApprovalInboxTabContent } from '@/features/Mantenimiento/ApprovalInbox';
 import { MaintenanceOrdersSkeleton, MaintenanceOrdersTabContent } from '@/features/Mantenimiento/MaintenanceOrders';
 import { ConfirmadosTabContent } from '@/features/Mantenimiento/PedidosMantenimiento/Confirmados/ConfirmadosTabContent';
 import { PendientesTabContent } from '@/features/Mantenimiento/PedidosMantenimiento/Pendientes/PendientesTabContent';
-import { PendientesTableSkeleton } from '@/features/Mantenimiento/PedidosMantenimiento/fallback';
+import { ConfirmadosTableSkeleton, PendientesTableSkeleton } from '@/features/Mantenimiento/PedidosMantenimiento/fallback';
+import { StateBlock } from '@/shared/components/common/StateBlock';
 
 const PARAM_NAME = 'taller_step';
 const DEFAULT_STEP = 'schedule';
@@ -63,16 +65,12 @@ export async function TallerPipelineContent({ searchParams, permissions }: Talle
 
   if (visibleSteps.length === 0) {
     return (
-      <div className="flex items-center justify-center p-8 text-center">
-        <div className="space-y-2">
-          <p className="text-muted-foreground font-medium">Sin acceso</p>
-          <p className="text-muted-foreground text-sm">No tenés permisos para ver ningún paso de Taller.</p>
-        </div>
-      </div>
+      <StateBlock variant="noperm" title="Sin acceso" description="No tenés permisos para ver ningún paso de Taller." />
     );
   }
 
-  const counts = await getTallerPipelineCounts();
+  // Contadores y atención por paso. Nunca rechaza: un paso que falla queda en `null` y la cabecera muestra "—".
+  const summary = await getTallerSummaryCached();
 
   const rawStep = searchParams[PARAM_NAME];
   const initialStep =
@@ -93,7 +91,7 @@ export async function TallerPipelineContent({ searchParams, permissions }: Talle
     {
       id: 'confirmed',
       content: (
-        <Suspense fallback={<PendientesTableSkeleton />}>
+        <Suspense fallback={<ConfirmadosTableSkeleton />}>
           <ConfirmadosTabContent searchParams={searchParams} />
         </Suspense>
       ),
@@ -122,7 +120,11 @@ export async function TallerPipelineContent({ searchParams, permissions }: Talle
   return (
     <PipelineLayout
       steps={visibleSteps}
-      counts={counts}
+      summaryQuery={{
+        queryKey: ['maintenance', 'pipeline', 'taller'],
+        queryFn: getTallerPipelineSummary,
+        initialData: summary,
+      }}
       initialStep={initialStep}
       paramName={PARAM_NAME}
       stepContents={stepContents}

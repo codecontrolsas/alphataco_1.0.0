@@ -34,6 +34,8 @@ export const MAINTENANCE_ORDERS_SELECT = {
       assigned_sector_id: true,
       sector_sequence_order: true,
       is_diagnostico: true,
+      // Estado `rejected` del recorrido por sectores (un ítem rechazado no cuenta como trabajo)
+      is_rejected: true,
       is_critical: true,
       description: true,
       // Ticket 592: fotos que cargo el supervisor al pedir la reparacion

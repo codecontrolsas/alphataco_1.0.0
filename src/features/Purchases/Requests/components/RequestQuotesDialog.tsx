@@ -19,7 +19,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { requestQuotes } from '../../actions/quotes.server';
-import type { PurchaseRequestDetail } from '../../actions/requests.server';
+import type { PurchaseRequestDetail } from '../../lib/request-query-types';
 import { searchSupplierOptions } from '../../actions/suppliers.server';
 import { invalidatePurchases } from '../../lib/invalidate';
 import { requestQuotesSchema, type RequestQuotesValues } from '../../schemas/quotes';

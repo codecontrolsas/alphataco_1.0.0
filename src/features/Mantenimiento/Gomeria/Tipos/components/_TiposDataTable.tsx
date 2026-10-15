@@ -20,10 +20,10 @@ import {
   type DataTableSearchParams,
   type FacetResult,
 } from '@/shared/components/common/DataTable';
-import { useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
+import { useQueryClient } from '@tanstack/react-query';
+import { Check, Plus, X, type LucideIcon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { toggleTireTypeActive } from '../actions/actions.server';
@@ -120,13 +120,21 @@ export default function _TiposDataTable({
   }, [initialFilterVisibility]);
 
   // ─── fetchFacet factories ─────────────────────────────────────────────────
-  const makeEnumFetchFacet = useCallback((columnId: string, enumValues: string[], labels: Record<string, string>) => {
-    return async (params: DataTableSearchParams): Promise<FacetResult> => {
-      const result = await getTireTypeSingleFacet(columnId, params);
-      if (!result) return { options: [], counts: new Map() };
-      return buildEnumFacetResult(enumValues, labels, undefined, result.counts);
-    };
-  }, []);
+  const makeEnumFetchFacet = useCallback(
+    (
+      columnId: string,
+      enumValues: string[],
+      labels: Record<string, string>,
+      icons?: Record<string, LucideIcon | undefined>
+    ) => {
+      return async (params: DataTableSearchParams): Promise<FacetResult> => {
+        const result = await getTireTypeSingleFacet(columnId, params);
+        if (!result) return { options: [], counts: new Map() };
+        return buildEnumFacetResult(enumValues, labels, icons, result.counts);
+      };
+    },
+    []
+  );
 
   // ─── Faceted filters ──────────────────────────────────────────────────────
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
@@ -142,10 +150,15 @@ export default function _TiposDataTable({
       {
         columnId: 'is_active',
         title: 'Estado',
-        fetchFacet: makeEnumFetchFacet('is_active', ['true', 'false'], {
-          true: 'Activo',
-          false: 'Inactivo',
-        }),
+        fetchFacet: makeEnumFetchFacet(
+          'is_active',
+          ['true', 'false'],
+          {
+            true: 'Activo',
+            false: 'Inactivo',
+          },
+          { true: Check, false: X }
+        ),
       },
 
       // ── name (text filter) ─────────────────────────────────────────────────
@@ -221,7 +234,8 @@ export default function _TiposDataTable({
         queryFn={tableQueryFn}
         queryKey={QUERY_KEY}
         onStateChange={handleStateChange}
-        emptyMessage="No hay tipos registrados"
+        mobileCards
+        emptyMessage="No hay tipos de cubierta para mostrar. Si hay filtros aplicados, quitalos; si no, se muestran al crear el primer tipo."
         searchPlaceholder="Buscar por nombre o medida..."
         exportConfig={{
           fetchAllData: async () => unwrapExportResult(await getTireTypesForExport(currentParams)),

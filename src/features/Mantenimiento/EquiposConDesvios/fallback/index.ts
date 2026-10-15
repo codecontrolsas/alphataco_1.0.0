@@ -1,1 +1,1 @@
-export { EquipmentsWithDeviationsSkeleton } from './EquipmentsWithDeviationsSkeleton';
+export { DeviationMetricsSkeleton, EquipmentsWithDeviationsSkeleton } from './EquipmentsWithDeviationsSkeleton';

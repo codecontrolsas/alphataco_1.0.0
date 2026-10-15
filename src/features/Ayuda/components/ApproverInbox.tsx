@@ -3,16 +3,16 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import type { Ticket } from '@/shared/lib/taskapp/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { Clock, Loader2, ShieldCheck, Tag, User } from 'lucide-react';
 import moment from 'moment';
 import 'moment/locale/es';
 import { toast } from 'sonner';
-import type { Ticket } from '@/shared/lib/taskapp/types';
 import { parseCategoryFromTitle } from '../constants/categories';
 import { ApproverInboxSkeleton } from '../fallback/ApproverInboxSkeleton';
 import { useApproveTicket } from '../hooks/useApproveTicket';
-import { usePendingApproverTickets, APPROVER_TICKETS_QUERY_KEY } from '../hooks/useApproverTickets';
+import { APPROVER_TICKETS_QUERY_KEY, usePendingApproverTickets } from '../hooks/useApproverTickets';
 import { useRejectTicket } from '../hooks/useRejectTicket';
 import { TicketPriorityBadge } from './TicketPriorityBadge';
 
@@ -38,15 +38,13 @@ export function ApproverInbox({ onSelect }: Props) {
     <Card className="overflow-hidden border-l-4 border-l-yellow-500">
       <CardHeader className="border-b">
         <CardTitle className="flex items-center gap-2">
-          <ShieldCheck className="h-5 w-5 text-yellow-600" />
+          <ShieldCheck className="h-5 w-5 text-warn-subtle-foreground" />
           Pendientes de tu aprobación
           <Badge variant="secondary" className="font-medium">
             {pending.length}
           </Badge>
         </CardTitle>
-        <CardDescription>
-          Aprobá o rechazá estos tickets para que el equipo pueda avanzar.
-        </CardDescription>
+        <CardDescription>Aprobá o rechazá estos tickets para que el equipo pueda avanzar.</CardDescription>
       </CardHeader>
       <CardContent className="divide-y p-0">
         {pending.map((ticket) => (
@@ -96,7 +94,7 @@ function ApproverRow({ ticket, onSelect }: { ticket: Ticket; onSelect?: (id: num
   const reporterLabel =
     ticket.reporter_name && ticket.reporter_name.trim() !== ''
       ? ticket.reporter_name
-      : (ticket.reporter_email ?? 'Desconocido');
+      : ticket.reporter_email ?? 'Desconocido';
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
@@ -106,14 +104,12 @@ function ApproverRow({ ticket, onSelect }: { ticket: Ticket; onSelect?: (id: num
         className="min-w-0 flex-1 cursor-pointer space-y-1.5 rounded-md text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <div className="flex items-center gap-2">
-          <span className="inline-flex h-2 w-2 shrink-0 rounded-full bg-yellow-500" />
+          <span className="inline-flex h-2 w-2 shrink-0 rounded-full bg-warn" />
           <p className="truncate text-sm font-semibold">
             TKT-{ticket.id} · {cleanTitle}
           </p>
         </div>
-        {ticket.description && (
-          <p className="line-clamp-1 text-xs text-muted-foreground">{ticket.description}</p>
-        )}
+        {ticket.description && <p className="line-clamp-1 text-xs text-muted-foreground">{ticket.description}</p>}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1">
             <User className="h-3 w-3" />
@@ -130,7 +126,7 @@ function ApproverRow({ ticket, onSelect }: { ticket: Ticket; onSelect?: (id: num
             {moment(ticket.created_at).locale('es').fromNow()}
           </span>
           {ticket.estimated_hours != null && (
-            <span className="inline-flex items-center gap-1 font-medium text-amber-700 dark:text-amber-400">
+            <span className="inline-flex items-center gap-1 font-medium text-warn-subtle-foreground">
               <Clock className="h-3 w-3" />
               {ticket.estimated_hours} h valorizadas
             </span>

@@ -1,25 +1,20 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { formatMoney, formatQuantity } from '@/features/Warehouses/lib/format';
+import { formatQuantity } from '@/features/Warehouses/lib/format';
 import { DESTINATION_TYPE_LABELS } from '@/features/Warehouses/lib/labels';
-import moment from 'moment';
+import { Field, FieldGrid } from '@/shared/components/common/FieldGrid';
+import { RecordHeader } from '@/shared/components/common/RecordHeader';
+import { SectionCard } from '@/shared/components/common/SectionCard';
+import { formatDateAr } from '@/shared/lib/argentina-time';
 import Link from 'next/link';
-import type { RequestQuoteComparison } from '../../actions/quotes.server';
-import type { PurchaseRequestDetail } from '../../actions/requests.server';
-import { HistoryCard } from '../../components/HistoryCard';
 import { PurchaseOrderStatusBadge } from '../../Orders/components/PurchaseOrderStatusBadge';
-import { QuoteComparison } from './QuoteComparison';
+import { HistoryCard } from '../../components/HistoryCard';
+import { PriceText } from '../../components/PriceText';
+import type { RequestQuoteComparison } from '../../lib/quote-query-types';
+import type { PurchaseRequestDetail } from '../../lib/request-query-types';
 import { PurchaseRequestActions } from './PurchaseRequestActions';
 import { PurchaseRequestStatusBadge } from './PurchaseRequestStatusBadge';
+import { QuoteComparison } from './QuoteComparison';
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="text-sm">{children}</dd>
-    </div>
-  );
-}
 /** Estados en los que se muestra el avance por linea (pedido en OC y falta). */
 const WITH_PROGRESS = new Set(['APPROVED', 'PARTIALLY_ORDERED', 'ORDERED', 'CLOSED']);
 
@@ -38,47 +33,51 @@ export function PurchaseRequestDetailView({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="font-mono text-2xl font-semibold">{request.number}</h1>
-        <PurchaseRequestStatusBadge status={request.status} />
-        <div className="ml-auto">
-          <PurchaseRequestActions request={request} />
-        </div>
-      </div>
+      <RecordHeader
+        identity={
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="font-mono text-2xl font-semibold">{request.number}</h1>
+            <PurchaseRequestStatusBadge status={request.status} />
+          </div>
+        }
+        actions={<PurchaseRequestActions request={request} />}
+      />
 
-      <Card>
-        <CardContent className="pt-6">
-          <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Pedida por">{request.requester ?? '—'}</Field>
-            <Field label={request.destinationType ? `Se imputa a (${DESTINATION_TYPE_LABELS[request.destinationType]})` : 'Se imputa a'}>
-              {request.destinationType ? (request.destination ?? '—') : 'Para stock'}
+      <SectionCard title="Datos de la solicitud">
+        <FieldGrid>
+          <Field label="Pedida por">{request.requester ?? '—'}</Field>
+          <Field
+            label={
+              request.destinationType
+                ? `Se imputa a (${DESTINATION_TYPE_LABELS[request.destinationType]})`
+                : 'Se imputa a'
+            }
+          >
+            {request.destinationType ? request.destination ?? '—' : 'Para stock'}
+          </Field>
+          <Field label="Se necesita para">{request.neededBy ? formatDateAr(request.neededBy) : 'Sin fecha'}</Field>
+          {request.materialRequest && (
+            <Field label="Pedido de Almacenes">
+              <Link
+                href={`/dashboard/warehouse/requests/${request.materialRequest.id}`}
+                className="font-mono underline"
+              >
+                {request.materialRequest.number}
+              </Link>
             </Field>
-            <Field label="Se necesita para">
-              {request.neededBy ? moment(request.neededBy, 'YYYY-MM-DD').format('DD/MM/YYYY') : 'Sin fecha'}
-            </Field>
-            {request.materialRequest && (
-              <Field label="Pedido de Almacenes">
-                <Link href={`/dashboard/warehouse/requests/${request.materialRequest.id}`} className="font-mono underline">
-                  {request.materialRequest.number}
-                </Link>
+          )}
+          {request.notes && (
+            <div className="sm:col-span-2 xl:col-span-3">
+              <Field label="Para qué se necesita">
+                <span className="whitespace-pre-wrap">{request.notes}</span>
               </Field>
-            )}
-            {request.notes && (
-              <div className="sm:col-span-2 lg:col-span-4">
-                <Field label="Para qué se necesita">
-                  <span className="whitespace-pre-wrap">{request.notes}</span>
-                </Field>
-              </div>
-            )}
-          </dl>
-        </CardContent>
-      </Card>
+            </div>
+          )}
+        </FieldGrid>
+      </SectionCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Qué se compra</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <SectionCard title="Qué se compra" flush>
+        <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -98,7 +97,8 @@ export function PurchaseRequestDetailView({
                   <TableCell>
                     {line.material ? (
                       <span>
-                        <span className="font-mono text-xs text-muted-foreground">{line.material.code}</span> {line.material.name}
+                        <span className="font-mono text-xs text-muted-foreground">{line.material.code}</span>{' '}
+                        {line.material.name}
                       </span>
                     ) : (
                       <span>{line.description}</span>
@@ -119,7 +119,10 @@ export function PurchaseRequestDetailView({
                   )}
                   <TableCell>
                     {line.suggestedSupplier ? (
-                      <Link href={`/dashboard/purchases/suppliers/${line.suggestedSupplier.id}`} className="hover:underline">
+                      <Link
+                        href={`/dashboard/purchases/suppliers/${line.suggestedSupplier.id}`}
+                        className="hover:underline"
+                      >
                         {line.suggestedSupplier.name}
                       </Link>
                     ) : (
@@ -131,31 +134,26 @@ export function PurchaseRequestDetailView({
               ))}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+        </div>
+      </SectionCard>
 
       {comparison && showProgress && <QuoteComparison comparison={comparison} />}
 
       {request.orders.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Órdenes de compra</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="divide-y">
-              {request.orders.map((order) => (
-                <li key={order.id} className="flex flex-wrap items-center gap-3 py-2 text-sm">
-                  <Link href={`/dashboard/purchases/orders/${order.id}`} className="font-mono underline">
-                    {order.number}
-                  </Link>
-                  <PurchaseOrderStatusBadge status={order.status} />
-                  <span>{order.supplierName}</span>
-                  <span className="ml-auto tabular-nums">{formatMoney(order.total)}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
+        <SectionCard title="Órdenes de compra">
+          <ul className="divide-y">
+            {request.orders.map((order) => (
+              <li key={order.id} className="flex flex-wrap items-center gap-3 py-2 text-sm first:pt-0 last:pb-0">
+                <Link href={`/dashboard/purchases/orders/${order.id}`} className="font-mono underline">
+                  {order.number}
+                </Link>
+                <PurchaseOrderStatusBadge status={order.status} />
+                <span>{order.supplierName}</span>
+                <PriceText value={order.total} canViewPrices={request.canViewPrices} className="ml-auto" />
+              </li>
+            ))}
+          </ul>
+        </SectionCard>
       )}
 
       <HistoryCard history={request.history} />

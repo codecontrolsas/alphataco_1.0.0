@@ -1,11 +1,11 @@
 'use client';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
-import moment from 'moment';
+import { ActiveStatusBadge } from '../../components/ActiveStatusBadge';
 import type { EquipmentBrandListItem } from './actions.server';
 
 // ============================================================================
@@ -28,7 +28,9 @@ type Permissions = {
 
 export function getColumns(
   permissions: Permissions,
-  onEdit: (item: EquipmentBrandListItem) => void
+  onEdit: (item: EquipmentBrandListItem) => void,
+  /** Acción de fila "Ver modelos": filtra la tabla relacionada. Si no se pasa, la acción no se muestra. */
+  onViewRelated?: (item: EquipmentBrandListItem) => void
 ): ColumnDef<EquipmentBrandListItem>[] {
   const canUpdate = permissions.hasPermission('configuracion', 'marcas', 'update');
 
@@ -47,13 +49,7 @@ export function getColumns(
       accessorKey: 'is_active',
       meta: { title: 'Estado' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
-      cell: ({ row }) => {
-        const val = row.original.is_active;
-        if (val === null || val === undefined) {
-          return <Badge variant="default">Sin asignar</Badge>;
-        }
-        return <Badge variant={val ? 'success' : 'secondary'}>{val ? 'Activo' : 'Inactivo'}</Badge>;
-      },
+      cell: ({ row }) => <ActiveStatusBadge value={row.original.is_active} />,
       filterFn: (row, id, value: string[]) => {
         const val = row.getValue(id);
         if (val === null || val === undefined) return value.includes(NULL_FILTER_VALUE);
@@ -68,12 +64,12 @@ export function getColumns(
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de creación" />,
       cell: ({ row }) => {
         const val = row.original.created_at;
-        return <span>{val ? moment(val).format('DD/MM/YYYY') : '-'}</span>;
+        return <span>{val ? formatArgentinaDay(val) : '-'}</span>;
       },
     },
 
     // ── Acciones ─────────────────────────────────────────────────────────────
-    ...(canUpdate
+    ...(canUpdate || onViewRelated
       ? ([
           {
             id: 'actions',
@@ -81,14 +77,32 @@ export function getColumns(
             enableSorting: false,
             enableHiding: false,
             cell: ({ row }) => (
-              <Button
-                size="sm"
-                variant="link"
-                className="hover:text-blue-400 p-0 h-auto"
-                onClick={() => onEdit(row.original)}
-              >
-                Editar
-              </Button>
+              <div className="flex items-center gap-3">
+                {canUpdate ? (
+                  <Button
+                    size="sm"
+                    variant="link"
+                    type="button"
+                    className="h-auto p-0"
+                    aria-label={`Editar ${row.original.name ?? 'marca'}`}
+                    onClick={() => onEdit(row.original)}
+                  >
+                    Editar
+                  </Button>
+                ) : null}
+                {onViewRelated ? (
+                  <Button
+                    size="sm"
+                    variant="link"
+                    type="button"
+                    className="h-auto p-0"
+                    aria-label={`Ver modelos de ${row.original.name ?? 'marca'}`}
+                    onClick={() => onViewRelated(row.original)}
+                  >
+                    Ver modelos
+                  </Button>
+                ) : null}
+              </div>
             ),
           },
         ] as ColumnDef<EquipmentBrandListItem>[])

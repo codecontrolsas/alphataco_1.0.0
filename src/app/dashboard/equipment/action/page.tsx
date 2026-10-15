@@ -1,18 +1,16 @@
 import type { getVehicleById } from '@/features/Equipos/EquipoID/lib/actions/vehicle-actions';
 import { getVehicleByIdCached } from '@/features/Equipos/EquipoID/lib/get-vehicle';
-import { VehicleHeaderSkeleton } from '@/features/Equipos/EquipoID/skeletons/vehicle-header-skeleton';
 import { notFound, redirect } from 'next/navigation';
-import { Suspense } from 'react';
 
 import { getCostCenterOptions } from '@/features/Empresa/General/actions/cost-centers.server';
 import { fetchAllContractorForVehicles } from '@/features/Equipos/EquipoID/actions/customer-catalog-actions';
 import { EquipmentDocumentDetail } from '@/features/Equipos/EquipoID/components/equipment-document-detail';
 import { VehicleChecklistsTabContent } from '@/features/Equipos/EquipoID/components/vehicle-checklists-tab-content';
 import { VehicleForm } from '@/features/Equipos/EquipoID/components/vehicle-form';
-import { VehicleHeader } from '@/features/Equipos/EquipoID/components/vehicle-header';
 import { VehicleOperationsHistory } from '@/features/Equipos/EquipoID/components/vehicle-operations-history';
 import VehicleQr from '@/features/Equipos/EquipoID/components/vehicle-qr';
 import { VehicleTiresTab } from '@/features/Equipos/EquipoID/components/vehicle-tires/vehicle-tires-tab';
+import { VehicleReadView } from '@/features/Equipos/EquipoID/components/view/VehicleReadView';
 import {
   getHierarchicalPositions,
   getModelsByBrand,
@@ -34,9 +32,8 @@ import {
 } from '@/features/Equipos/OtherEquipment/actions/actionsServer';
 import { OtherEquipmentCertifications } from '@/features/Equipos/OtherEquipment/components/OtherEquipmentCertifications';
 import { OtherEquipmentForm } from '@/features/Equipos/OtherEquipment/components/OtherEquipmentForm';
-import { OtherEquipmentHeader } from '@/features/Equipos/OtherEquipment/components/OtherEquipmentHeader';
 import { OtherEquipmentQr } from '@/features/Equipos/OtherEquipment/components/OtherEquipmentQr';
-import { OtherEquipmentHeaderSkeleton } from '@/features/Equipos/OtherEquipment/fallback/OtherEquipmentHeaderSkeleton';
+import { OtherEquipmentReadView } from '@/features/Equipos/OtherEquipment/components/view/OtherEquipmentReadView';
 
 const logger = new Logger('VehiclePage');
 
@@ -101,6 +98,29 @@ export default async function VehiclePage({ searchParams }: VehiclePageProps) {
       }
     }
 
+    const qrComponent =
+      equipment?.id && equipment.type?.generates_qr ? (
+        <OtherEquipmentQr
+          equipmentId={equipment.id}
+          equipmentLabel={equipment.serial_number || equipment.intern_number || equipment.id}
+        />
+      ) : null;
+
+    // Lectura: ficha con secciones. Edición y alta: formulario completo en una página.
+    if (actualMode === 'view' && equipment) {
+      return (
+        <OtherEquipmentReadView
+          equipment={equipment}
+          searchParams={resolvedSearchParams}
+          permissions={otherPermissions}
+          certificationsComponent={
+            <OtherEquipmentCertifications equipmentId={equipment.id} initialData={certificationsData} />
+          }
+          qrComponent={qrComponent}
+        />
+      );
+    }
+
     // Catálogos compartidos con vehículos
     const brandsPromise = getVehicleBrands();
     const typesPromise = getVehicleTypes('other_equipment');
@@ -114,18 +134,11 @@ export default async function VehiclePage({ searchParams }: VehiclePageProps) {
 
     return (
       <div className="space-y-6">
-        {/* La cabecera es de la ficha en lectura; edición y alta traen su propio título. */}
-        {actualMode === 'view' && equipment && (
-          <Suspense fallback={<OtherEquipmentHeaderSkeleton />}>
-            <OtherEquipmentHeader equipment={equipment} />
-          </Suspense>
-        )}
-
         {/* key ligada al id: fuerza re-montaje al navegar entre equipos para que RHF reinicialice los defaultValues */}
         <OtherEquipmentForm
           key={equipment?.id ?? 'new'}
           equipmentId={equipment?.id}
-          mode={actualMode as 'view' | 'edit' | 'new'}
+          mode={actualMode as 'edit' | 'new'}
           equipment={equipment}
           brandsPromise={brandsPromise}
           modelsPromise={modelsPromise}
@@ -136,19 +149,6 @@ export default async function VehiclePage({ searchParams }: VehiclePageProps) {
           costCentersPromise={costCentersPromise}
           hierarchicalPositionsPromise={hierarchicalPositionsPromise}
           vehiclesPromise={vehiclesPromise}
-          certificationsComponent={
-            equipment?.id ? (
-              <OtherEquipmentCertifications equipmentId={equipment.id} initialData={certificationsData} />
-            ) : null
-          }
-          qrComponent={
-            equipment?.id && equipment.type?.generates_qr ? (
-              <OtherEquipmentQr
-                equipmentId={equipment.id}
-                equipmentLabel={equipment.serial_number || equipment.intern_number || equipment.id}
-              />
-            ) : null
-          }
         />
       </div>
     );
@@ -190,21 +190,33 @@ export default async function VehiclePage({ searchParams }: VehiclePageProps) {
       ? (await hierarchicalPositionsPromise).find((position) => position.id === vehicle.sector)?.name
       : undefined;
 
+  // Lectura: ficha con secciones. Edición y alta: formulario completo en una página.
+  if (actualMode === 'view' && vehicle) {
+    return (
+      <VehicleReadView
+        vehicle={vehicle}
+        sectorName={sectorName}
+        hierarchicalPositionsPromise={hierarchicalPositionsPromise}
+        searchParams={resolvedSearchParams}
+        permissions={permissions}
+        documentsComponent={<EquipmentDocumentDetail equipmentId={vehicle.id} searchParams={resolvedSearchParams} />}
+        checklistsComponent={<VehicleChecklistsTabContent equipmentId={vehicle.id} />}
+        operationsComponent={<VehicleOperationsHistory equipmentId={vehicle.id} searchParams={resolvedSearchParams} />}
+        tiresComponent={
+          <VehicleTiresTab vehicleId={vehicle.id} permissionsMap={permissions} searchParams={resolvedSearchParams} />
+        }
+        qrComponent={<VehicleQr vehicle={vehicle} />}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* La cabecera es de la ficha en lectura; edición y alta traen su propio título. */}
-      {actualMode === 'view' && vehicle && (
-        <Suspense fallback={<VehicleHeaderSkeleton />}>
-          <VehicleHeader vehicle={vehicle} sectorName={sectorName} />
-        </Suspense>
-      )}
-
-      {/* Vehicle Form */}
       {/* key ligada al id: fuerza re-montaje al navegar entre equipos para que RHF reinicialice los defaultValues */}
       <VehicleForm
         key={vehicle?.id ?? 'new'}
         vehicleId={vehicle?.id}
-        mode={actualMode}
+        mode={actualMode as 'edit' | 'new'}
         vehicle={vehicle}
         contractorsPromise={prefetch(fetchAllContractorForVehicles())}
         costCentersPromise={prefetch(getCostCenterOptions())}
@@ -215,17 +227,6 @@ export default async function VehiclePage({ searchParams }: VehiclePageProps) {
         modelsPromise={prefetch(getModelsByBrand(vehicle?.brand_vehicles?.id ?? 0))}
         typesOfVehiclesPromise={prefetch(getTypesOfVehicles())}
         hierarchicalPositionsPromise={hierarchicalPositionsPromise}
-        documentsComponent={
-          <EquipmentDocumentDetail equipmentId={vehicle?.id || ''} searchParams={resolvedSearchParams} />
-        }
-        qrComponent={<VehicleQr vehicle={vehicle} />}
-        checklistsComponent={<VehicleChecklistsTabContent equipmentId={vehicle?.id || ''} />}
-        operationsComponent={<VehicleOperationsHistory equipmentId={vehicle?.id || ''} />}
-        tiresComponent={
-          vehicle?.id ? (
-            <VehicleTiresTab vehicleId={vehicle.id} permissionsMap={permissions} searchParams={resolvedSearchParams} />
-          ) : undefined
-        }
       />
     </div>
   );

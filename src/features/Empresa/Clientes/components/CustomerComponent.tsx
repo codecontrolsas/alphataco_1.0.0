@@ -1,30 +1,20 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import type { ProvinceOption } from './area_clientes/AreaFormDialog';
 import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { useLoggedUserStore } from '@/shared/store/loggedUser';
-import type { VisibilityState } from '@tanstack/react-table';
-import moment from 'moment';
 import { useRouter } from 'next/navigation';
-import type { AreaRow } from '../actions/areas.server';
-import type { MeasureUnitRow } from '../actions/measure-units.server';
-import type { SectorRow } from '../actions/sectors.server';
-import type { CustomerServiceRow } from '../actions/services.server';
 import type { CustomerRow } from '../lib/serializers';
 import { CustomerDetail, type CustomerDetailPreferences } from './CustomerDetail/CustomerDetail';
 import { CustomerForm } from './CustomerForm';
 
 interface CustomerComponentProps {
   customer: CustomerRow | null;
-  services: CustomerServiceRow[];
-  areas: AreaRow[];
-  sectors: SectorRow[];
-  measureUnits: MeasureUnitRow[];
-  provinces: ProvinceOption[];
-  savedFilters: string[];
-  savedVisibility: VisibilityState;
+  /** Permisos del usuario cargados en el servidor (`modulo:tab:accion`). */
+  permissionsMap: Record<string, boolean>;
+  contractsPreferences: CustomerDetailPreferences;
 }
 
 /** Invitados (usuarios compartidos con rol Invitado) asociados al cliente. */
@@ -56,7 +46,7 @@ function CustomerGuests({ customerId }: { customerId: string }) {
                   <TableCell>
                     <Badge variant="default">{user.role}</Badge>
                   </TableCell>
-                  <TableCell>{moment(user.created_at).format('DD/MM/YYYY')}</TableCell>
+                  <TableCell>{formatArgentinaDay(user.created_at)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -71,16 +61,7 @@ function CustomerGuests({ customerId }: { customerId: string }) {
  * Página `/dashboard/configuration/customers/action`: alta de cliente (sin `id`) o
  * ficha completa (con `id`), reutilizando `CustomerDetail`.
  */
-export default function CustomerComponent({
-  customer,
-  services,
-  areas,
-  sectors,
-  measureUnits,
-  provinces,
-  savedFilters,
-  savedVisibility,
-}: CustomerComponentProps) {
+export default function CustomerComponent({ customer, permissionsMap, contractsPreferences }: CustomerComponentProps) {
   const router = useRouter();
 
   if (!customer) {
@@ -95,27 +76,13 @@ export default function CustomerComponent({
     );
   }
 
-  const preferences: CustomerDetailPreferences = {
-    employeesVisibility: {},
-    equipmentVisibility: savedVisibility,
-    equipmentFilters: savedFilters,
-    servicesFilters: [],
-    servicesVisibility: {},
-    serviceItemsFilters: [],
-    serviceItemsVisibility: {},
-    areasFilters: [],
-  };
-
   return (
     <section className="md:mx-7 mt-8">
       <CustomerDetail
-        customer={customer}
-        services={services}
-        areas={areas}
-        sectors={sectors}
-        measureUnits={measureUnits}
-      provinces={provinces}
-        preferences={preferences}
+        customerId={customer.id}
+        initialCustomer={customer}
+        permissionsMap={permissionsMap}
+        contractsPreferences={contractsPreferences}
         onClose={() => router.push('/dashboard/configuration')}
       />
       <CustomerGuests customerId={customer.id} />

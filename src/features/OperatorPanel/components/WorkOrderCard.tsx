@@ -2,6 +2,8 @@
 
 import type { BadgeProps } from '@/components/ui/badge';
 import { Badge } from '@/components/ui/badge';
+import { MaintenanceStatusPill } from '@/features/Mantenimiento/shared/components/MaintenanceStatusPill';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { Progress } from '@/components/ui/progress';
 import {
   getResourceInternNumber,
@@ -19,18 +21,10 @@ interface WorkOrderCardProps {
 }
 
 const priorityConfig: Record<string, { label: string; variant: NonNullable<BadgeProps['variant']>; border: string }> = {
-  urgent: { label: 'Urgente', variant: 'destructive', border: 'border-l-red-500' },
-  high: { label: 'Alta', variant: 'warning', border: 'border-l-amber-500' },
-  medium: { label: 'Media', variant: 'default', border: 'border-l-blue-500' },
-  low: { label: 'Baja', variant: 'secondary', border: 'border-l-slate-400' },
-};
-
-const statusConfig: Record<string, { label: string; variant: NonNullable<BadgeProps['variant']> }> = {
-  pending: { label: 'Pendiente', variant: 'secondary' },
-  in_progress: { label: 'En Progreso', variant: 'default' },
-  paused: { label: 'Pausado', variant: 'warning' },
-  completed: { label: 'Completado', variant: 'success' },
-  completed_partial: { label: 'Parcial', variant: 'warning' },
+  urgent: { label: 'Urgente', variant: 'destructive', border: 'border-l-danger' },
+  high: { label: 'Alta', variant: 'warning', border: 'border-l-warn' },
+  medium: { label: 'Media', variant: 'info', border: 'border-l-info' },
+  low: { label: 'Baja', variant: 'secondary', border: 'border-l-pending' },
 };
 
 export function WorkOrderCard({ workOrder }: WorkOrderCardProps) {
@@ -38,7 +32,7 @@ export function WorkOrderCard({ workOrder }: WorkOrderCardProps) {
   const isBlocked = workOrder.is_blocked;
   const isCompleted = workOrder.status === 'completed' || workOrder.status === 'completed_partial';
 
-  const handleClick = () => {
+  const handleOpen = () => {
     if (isBlocked) return;
     router.push(`/operator/work-order/${workOrder.id}`);
   };
@@ -71,100 +65,117 @@ export function WorkOrderCard({ workOrder }: WorkOrderCardProps) {
   const priority = workOrder.priority || 'medium';
   const priorityData = priorityConfig[priority] || priorityConfig.medium;
   const status = workOrder.status || 'pending';
-  const statusData = statusConfig[status] || statusConfig.pending;
+  const blockedLabel = `Esperando ${workOrder.blocked_by_sector || 'sector anterior'}`;
 
   // Truncate OT number for display
   const shortOtNumber = workOrder.order_number?.replace(/^OT-/, '') || workOrder.order_number;
 
   return (
-    <div
+    <article
+      aria-label={`OT ${shortOtNumber} · ${resourceLabel}`}
       className={`relative rounded-xl border border-l-4 bg-card shadow-sm transition-all duration-200 ${priorityData.border} ${
         isBlocked
-          ? 'cursor-not-allowed'
+          ? ''
           : isCompleted
-            ? 'cursor-pointer hover:shadow-md'
-            : 'cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm'
+            ? 'hover:shadow-md'
+            : 'hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm'
       } ${isCompleted ? 'opacity-60' : ''}`}
-      onClick={handleClick}
     >
-      {/* Blocked overlay */}
+      {/* Bloqueada: el texto del estado queda en el DOM (no solo el color ni el candado) */}
       {isBlocked && (
-        <div className="absolute inset-0 bg-background/70 rounded-xl flex items-center justify-center z-10">
-          <div className="flex items-center gap-2 bg-muted px-4 py-2.5 rounded-full border shadow-sm">
-            <Lock className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium text-muted-foreground">
-              Esperando {workOrder.blocked_by_sector || 'sector anterior'}
-            </span>
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-background/70">
+          <div className="flex items-center gap-2 rounded-full border bg-muted px-4 py-2.5 shadow-sm">
+            <Lock aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium text-muted-foreground">{blockedLabel}</span>
           </div>
         </div>
       )}
 
       <div className="p-4 sm:p-5">
-        {/* Row 1: Vehicle + Chevron */}
+        {/* Row 1: recurso + chevron. El botón del título se estira sobre toda la tarjeta (un solo objetivo táctil) */}
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="flex items-baseline gap-2 flex-wrap">
-              <h3 className="text-xl font-bold tracking-tight">{resourceLabel}</h3>
+              <h3 className="text-xl font-bold tracking-tight font-mono">
+                {isBlocked ? (
+                  resourceLabel
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleOpen}
+                    className="text-left outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:ring-[3px] focus-visible:after:ring-ring/50"
+                  >
+                    {resourceLabel}
+                    <span className="sr-only">
+                      {' '}
+                      — abrir orden de trabajo {shortOtNumber}
+                    </span>
+                  </button>
+                )}
+              </h3>
               {internNumber && <span className="text-sm font-medium text-muted-foreground">{internNumber}</span>}
               {resourceKindLabel && (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                <Badge variant="outline" className="text-xs px-1.5 py-0">
                   {resourceKindLabel}
                 </Badge>
               )}
             </div>
-            {resourceSubType && <p className="text-xs text-muted-foreground mt-0.5 font-medium">{resourceSubType}</p>}
-            <p className="text-xs text-muted-foreground mt-0.5 font-mono truncate">
+            {resourceSubType && <p className="text-sm text-muted-foreground mt-0.5 font-medium">{resourceSubType}</p>}
+            <p className="text-sm text-muted-foreground mt-0.5 font-mono truncate">
               OT {shortOtNumber} · OM {omNumber}
             </p>
           </div>
           {!isBlocked && !isCompleted && (
-            <ChevronRight className="h-5 w-5 text-muted-foreground/50 flex-shrink-0 mt-1" />
+            <ChevronRight aria-hidden="true" className="h-5 w-5 text-muted-foreground/50 flex-shrink-0 mt-1" />
           )}
         </div>
 
-        {/* Row 2: Badges */}
+        {/* Row 2: estado, prioridad y diagnóstico (todos con texto, no solo color) */}
         <div className="flex items-center gap-1.5 flex-wrap mt-3">
-          <Badge variant={statusData.variant} className="text-[11px] px-2 py-0.5">
-            {statusData.label}
-          </Badge>
-          <Badge variant={priorityData.variant} className="text-[11px] px-2 py-0.5">
+          <MaintenanceStatusPill entity="workOrder" status={status} size="sm" />
+          <Badge variant={priorityData.variant} className="text-xs px-2 py-0.5">
             {priorityData.label}
           </Badge>
           {hasPendingDiagnostico && !isBlocked && (
-            <Badge variant="warning" className="gap-1 text-[11px] px-2 py-0.5">
-              <Stethoscope className="h-3 w-3" />
+            <Badge variant="warning" className="gap-1 text-xs px-2 py-0.5">
+              <Stethoscope aria-hidden="true" className="h-3 w-3" />
               Diagnostico
             </Badge>
           )}
         </div>
 
-        {/* Row 3: Progress */}
+        {/* Row 3: progreso, con números */}
         <div className="mt-3.5">
-          <div className="flex items-center justify-between text-xs mb-1.5">
+          <div className="flex items-center justify-between text-sm mb-1.5">
             <span className="text-muted-foreground font-medium">Progreso</span>
             <span className="font-bold tabular-nums text-foreground">
               {completedRepairs.length}/{totalRepairs}
+              <span className="sr-only"> tareas completadas</span>
             </span>
           </div>
-          <Progress value={progress} className="h-2" />
+          <Progress
+            value={progress}
+            className="h-2"
+            aria-label={`Progreso de la OT ${shortOtNumber}: ${completedRepairs.length} de ${totalRepairs} tareas`}
+          />
         </div>
 
-        {/* Row 4: Dates */}
-        <div className="flex items-center gap-3 flex-wrap mt-2.5 text-xs text-muted-foreground">
+        {/* Row 4: fechas (hora argentina) */}
+        <div className="flex items-center gap-3 flex-wrap mt-2.5 text-sm text-muted-foreground tabular-nums">
           {workOrder.created_at && (
             <div className="flex items-center gap-1.5">
-              <Clock className="h-3 w-3" />
-              <span>Creada: {moment(workOrder.created_at).format('DD/MM/YYYY')}</span>
+              <Clock aria-hidden="true" className="h-3 w-3" />
+              <span>Creada: {formatArgentinaDay(workOrder.created_at)}</span>
             </div>
           )}
           {workOrder.planned_start_date && (
             <div className="flex items-center gap-1.5">
-              <Clock className="h-3 w-3" />
-              <span>Programada: {moment(workOrder.planned_start_date).format('DD/MM/YYYY')}</span>
+              <Clock aria-hidden="true" className="h-3 w-3" />
+              <span>Programada: {moment.utc(workOrder.planned_start_date).format('DD/MM/YYYY')}</span>
             </div>
           )}
         </div>
       </div>
-    </div>
+    </article>
   );
 }

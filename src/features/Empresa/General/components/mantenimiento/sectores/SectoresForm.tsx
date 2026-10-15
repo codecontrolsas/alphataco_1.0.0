@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { useCatalogSheetBusy, useCatalogSheetClose } from '@/shared/components/common/CatalogFormSheet';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
@@ -35,6 +36,8 @@ function SectoresForm({ internalWorkshops }: SectoresFormProps) {
   const editingSector = useSectoresStore((state) => state.sector);
   const setSector = useSectoresStore((state) => state.setSector);
   const router = useRouter();
+  const closeSheet = useCatalogSheetClose();
+  const setBusy = useCatalogSheetBusy();
 
   const [isEditing, setIsEditing] = useState(!!editingSector);
 
@@ -64,11 +67,12 @@ function SectoresForm({ internalWorkshops }: SectoresFormProps) {
       });
       setIsEditing(true);
     } else {
-      resetForm();
+      resetValues();
     }
   }, [editingSector, reset]);
 
   const onSubmit = async (values: SectoresFormValues) => {
+    setBusy(true);
     await toast
       .promise(
         async () => {
@@ -86,11 +90,12 @@ function SectoresForm({ internalWorkshops }: SectoresFormProps) {
         {
           loading: 'Creando sector...',
           success: () => {
-            router.refresh();
             resetForm();
+            router.refresh();
             return 'Sector creado correctamente';
           },
           error: (error) => {
+            setBusy(false);
             // El mensaje del servidor (ej: sector duplicado) tiene que llegar al usuario
             return error instanceof Error ? error.message : 'Error al crear el sector';
           },
@@ -103,6 +108,7 @@ function SectoresForm({ internalWorkshops }: SectoresFormProps) {
   };
 
   const onUpdate = async (values: SectoresFormValues) => {
+    setBusy(true);
     await toast
       .promise(
         async () => {
@@ -118,11 +124,12 @@ function SectoresForm({ internalWorkshops }: SectoresFormProps) {
         {
           loading: 'Actualizando sector...',
           success: () => {
-            router.refresh();
             resetForm();
+            router.refresh();
             return 'Sector actualizado correctamente';
           },
           error: () => {
+            setBusy(false);
             return 'Error al actualizar el sector';
           },
         }
@@ -141,7 +148,7 @@ function SectoresForm({ internalWorkshops }: SectoresFormProps) {
     }
   };
 
-  const resetForm = () => {
+  const resetValues = () => {
     reset({
       id: '',
       name: '',
@@ -154,15 +161,19 @@ function SectoresForm({ internalWorkshops }: SectoresFormProps) {
     setSector(null);
   };
 
+  // Éxito / cancelar: limpia el form y cierra el Sheet (antes del router.refresh()).
+  const resetForm = () => {
+    resetValues();
+    closeSheet();
+  };
+
   const handleCancel = () => {
     resetForm();
   };
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 py-4 px-2">
-        <h2 className="text-xl font-bold mb-4">{isEditing ? 'Editar Sector' : 'Crear Sector'}</h2>
-
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
         {/* Taller */}
         <FormField
           control={form.control}
@@ -261,7 +272,7 @@ function SectoresForm({ internalWorkshops }: SectoresFormProps) {
                 <RadioGroup
                   onValueChange={(value) => field.onChange(value === 'true')}
                   value={field.value ? 'true' : 'false'}
-                  className="flex space-x-4"
+                  className="flex flex-wrap gap-4"
                 >
                   <FormItem className="flex items-center space-x-2 space-y-0">
                     <FormControl>
@@ -287,11 +298,9 @@ function SectoresForm({ internalWorkshops }: SectoresFormProps) {
           <Button type="submit" variant="brand" disabled={form.formState.isSubmitting}>
             {isEditing ? 'Actualizar' : 'Crear'}
           </Button>
-          {isEditing && (
-            <Button type="button" onClick={handleCancel} variant="outline">
-              Cancelar
-            </Button>
-          )}
+          <Button type="button" onClick={handleCancel} variant="outline">
+            Cancelar
+          </Button>
         </div>
       </form>
     </Form>

@@ -4,6 +4,7 @@ import { Logger } from '@/lib/logger';
 import { callFunction } from '@/shared/lib/sql';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { z } from 'zod';
+import { assertCanViewKpiCharts } from '../lib/kpi-permissions.server';
 
 const logger = new Logger('features/Dashboard/KPIs/Graficos');
 
@@ -44,6 +45,7 @@ export interface KpiChartPoint {
  * un parámetro del cliente.
  */
 export async function getKpiChartData(kpiCode: KpiCode, fromDate: Date, toDate: Date): Promise<KpiChartPoint[]> {
+  await assertCanViewKpiCharts();
   try {
     const companyId = await getActiveCompanyId();
 

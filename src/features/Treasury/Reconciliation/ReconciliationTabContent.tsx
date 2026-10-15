@@ -1,5 +1,5 @@
 import { getReconciliationAccounts, getReconciliationData } from '../actions/reconciliation.server';
-import { NoPermission } from '../fallback/NoPermission';
+import { StateBlock } from '@/shared/components/common/StateBlock';
 import { ReconciliationView } from './components/ReconciliationView';
 
 /**
@@ -13,7 +13,7 @@ export default async function ReconciliationTabContent({
   searchParams: Record<string, string | string[] | undefined>;
   permissions: Record<string, boolean>;
 }) {
-  if (permissions['tesoreria:conciliacion:view'] !== true) return <NoPermission />;
+  if (permissions['tesoreria:conciliacion:view'] !== true) return <StateBlock variant="noperm" title="No tenés permiso para ver esta información" />;
   const accounts = await getReconciliationAccounts();
   if (accounts.length === 0) {
     return <p className="text-sm text-muted-foreground">No hay cuentas bancarias. Creá una en Tesorería → Configuración para conciliar su extracto.</p>;
@@ -21,7 +21,7 @@ export default async function ReconciliationTabContent({
   const requested = typeof searchParams.cuenta === 'string' ? searchParams.cuenta : null;
   const accountId = accounts.find((a) => a.id === requested)?.id ?? accounts[0]!.id;
   const data = await getReconciliationData(accountId);
-  if (!data) return <NoPermission />;
+  if (!data) return <StateBlock variant="error" title="No se pudo cargar la información" description="Actualizá la pantalla para intentarlo de nuevo." />;
   const can = {
     import: permissions['tesoreria:conciliacion:create'] === true,
     update: permissions['tesoreria:conciliacion:update'] === true,

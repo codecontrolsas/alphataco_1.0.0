@@ -2,7 +2,7 @@ import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { _EquipmentOwnerDataTable } from './_EquipmentOwnerDataTable';
-import { getEquipmentOwnersPaginated } from './actions.server';
+import { getEquipmentOwnersPaginated } from './owners.server';
 
 // ============================================================================
 // TABLE ID

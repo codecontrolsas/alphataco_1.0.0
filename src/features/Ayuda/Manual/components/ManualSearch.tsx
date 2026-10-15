@@ -52,7 +52,7 @@ export function ManualSearch({ size = 'default' }: { size?: 'default' | 'lg' }) 
     placeholderData: keepPreviousData,
   });
 
-  const results = enabled ? (data ?? []) : [];
+  const results = enabled ? data ?? [] : [];
   const showPanel = enabled && input.trim().length >= MIN_QUERY;
   const pending = isFetching || input.trim() !== query;
 
@@ -124,7 +124,10 @@ export function ManualSearch({ size = 'default' }: { size?: 'default' | 'lg' }) 
 
   return (
     <div className="w-full">
-      <label htmlFor={`${baseId}-input`} className={large ? 'sr-only' : 'mb-1.5 block text-xs font-medium text-muted-foreground'}>
+      <label
+        htmlFor={`${baseId}-input`}
+        className={large ? 'sr-only' : 'mb-1.5 block text-xs font-medium text-muted-foreground'}
+      >
         Buscar en el manual
       </label>
       <div
@@ -134,7 +137,10 @@ export function ManualSearch({ size = 'default' }: { size?: 'default' | 'lg' }) 
         )}
       >
         {pending && showPanel ? (
-          <Loader2 aria-hidden className="size-4 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" />
+          <Loader2
+            aria-hidden
+            className="size-4 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
+          />
         ) : (
           <Search aria-hidden className="size-4 shrink-0 text-muted-foreground" />
         )}
@@ -170,7 +176,8 @@ export function ManualSearch({ size = 'default' }: { size?: 'default' | 'lg' }) 
         )}
       </div>
       <p id={`${baseId}-hint`} className="sr-only">
-        Escribí al menos dos letras. Usá las flechas para recorrer los resultados y Enter para abrir uno. Atajo: tecla barra.
+        Escribí al menos dos letras. Usá las flechas para recorrer los resultados y Enter para abrir uno. Atajo: tecla
+        barra.
       </p>
 
       {/* La región de estado existe siempre: una que se monta y desmonta no se anuncia. */}
@@ -224,10 +231,12 @@ export function ManualSearch({ size = 'default' }: { size?: 'default' | 'lg' }) 
                   {result.sectionTitle}
                   {result.heading ? ` › ${result.heading}` : ''}
                 </span>
-                <span className={cn('mt-1 block text-sm text-muted-foreground', large ? 'line-clamp-2' : 'line-clamp-3')}>
+                <span
+                  className={cn('mt-1 block text-sm text-muted-foreground', large ? 'line-clamp-2' : 'line-clamp-3')}
+                >
                   {result.snippet.map((part, partIndex) =>
                     part.match ? (
-                      <mark key={partIndex} className="bg-yellow-200 text-foreground dark:bg-yellow-900">
+                      <mark key={partIndex} className="bg-warn-subtle text-foreground">
                         {part.text}
                       </mark>
                     ) : (

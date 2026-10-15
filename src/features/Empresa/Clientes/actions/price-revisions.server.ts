@@ -1,14 +1,16 @@
 'use server';
 
-import { Prisma } from '@/generated/prisma/client';
 import { checkPermissionServer } from '@/features/Permissions';
+import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
+import { fromDateOnly } from '@/shared/lib/date-only';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
 import { errorMessage, fail, ok, type ActionResult } from '../lib/action-result';
 import { writePriceRevision } from '../lib/price-revision-writer';
+import { requireComercialPermission } from '../lib/require-permission.server';
 
 const logger = new Logger('features/Empresa/Clientes/price-revisions');
 
@@ -37,6 +39,10 @@ async function assertItemOwned(serviceItemId: string, companyId: string) {
 }
 
 export async function getPriceRevisions(serviceItemId: string) {
+  const viewError = await requireComercialPermission('items-contrato', 'view');
+  if (viewError) throw new Error(viewError);
+  // Sin `view_prices` el historial no expone ningún importe (viajan `null`).
+  const canViewPrices = (await requireComercialPermission('items-contrato', 'view_prices')) === null;
   const companyId = await getActiveCompanyId();
 
   try {
@@ -63,8 +69,8 @@ export async function getPriceRevisions(serviceItemId: string) {
     // Decimal(15,4). El componente sólo los formatea, nunca hace aritmética con ellos.
     return rows.map((row) => ({
       ...row,
-      price: row.price.toString(),
-      previous_price: row.previous_price === null ? null : row.previous_price.toString(),
+      price: canViewPrices ? row.price.toString() : null,
+      previous_price: canViewPrices && row.previous_price !== null ? row.previous_price.toString() : null,
     }));
   } catch (error) {
     logger.error('Error al obtener el historial de precios', { data: { error, serviceItemId } });
@@ -102,8 +108,15 @@ export async function applyPriceRevision(input: ApplyPriceRevisionInput): Promis
   }
   if (!price.isFinite() || price.isNegative()) return fail('El precio no puede ser negativo');
 
-  const validFrom = new Date(input.validFrom);
-  if (Number.isNaN(validFrom.getTime())) return fail('La fecha de vigencia no es válida');
+  // `valid_from` es @db.Date: 'YYYY-MM-DD' estricto, a medianoche UTC.
+  let parsedFrom: Date | null = null;
+  try {
+    parsedFrom = fromDateOnly(input.validFrom);
+  } catch {
+    parsedFrom = null;
+  }
+  if (!parsedFrom) return fail('La fecha de vigencia no es válida');
+  const validFrom: Date = parsedFrom;
 
   try {
     const item = await assertItemOwned(input.serviceItemId, companyId);

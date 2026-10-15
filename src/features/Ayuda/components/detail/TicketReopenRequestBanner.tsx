@@ -21,14 +21,13 @@ export function TicketReopenRequestBanner({ ticket, currentUserEmail }: Props) {
 
   if (ticket.reopen_status === 'pending' && ticket.reopen_requested_at) {
     return (
-      <div className="border-b bg-amber-50 dark:bg-amber-950/40 p-4">
+      <div className="border-b bg-warn-subtle p-4">
         <div className="flex items-start gap-3">
-          <Clock className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+          <Clock className="mt-0.5 h-5 w-5 shrink-0 text-warn-subtle-foreground" />
           <div>
             <p className="text-sm font-medium">Solicitud de reapertura enviada</p>
             <p className="text-xs text-muted-foreground">
-              {moment(ticket.reopen_requested_at).locale('es').fromNow()} — un agente la va a
-              revisar y te avisamos.
+              {moment(ticket.reopen_requested_at).locale('es').fromNow()} — un agente la va a revisar y te avisamos.
             </p>
           </div>
         </div>

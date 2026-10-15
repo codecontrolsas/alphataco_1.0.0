@@ -2,6 +2,7 @@
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import {
   Select,
@@ -13,13 +14,15 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Logger } from '@/lib/logger';
+import { useCatalogSheetBusy, useCatalogSheetClose } from '@/shared/components/common/CatalogFormSheet';
+import DependencyValidationModal, { DependencyConfig } from '@/shared/components/modal/DependencyValidationModal';
 import {
   fetchDependenciesForValue,
   fetchReplacementOptions,
   reassignDependencies,
 } from '@/shared/components/modal/dependency-utils';
-import DependencyValidationModal, { DependencyConfig } from '@/shared/components/modal/DependencyValidationModal';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -27,6 +30,7 @@ import { toast } from 'sonner';
 import * as z from 'zod';
 import {
   createWorkDiagramPrisma,
+  getWorkDiagramActiveNoveltyIds,
   updateWorkDiagramPrisma,
   type DiagramTypeItem,
   type WorkDiagramListItem,
@@ -42,7 +46,6 @@ const WorkDiagramSchema = z.object({
   active_working_days: z.number().int().min(0, {
     message: 'Active days must be a positive number.',
   }),
-  active_novelty: z.array(z.string()).optional(),
   inactive_working_days: z.number().int().min(0, {
     message: 'Inactive days must be a positive number.',
   }),
@@ -55,7 +58,7 @@ interface WorkDiagramFormProps {
   diagram?: WorkDiagramListItem | null;
   mode: 'create' | 'edit';
   diagramsTypes?: DiagramTypeItem[] | null;
-  setMode: React.Dispatch<React.SetStateAction<'create' | 'edit'>>;
+  setMode: (mode: 'create' | 'edit') => void;
 }
 
 export default function WorkDiagramForm({ diagramsTypes, diagram, mode, setMode }: WorkDiagramFormProps) {
@@ -86,12 +89,36 @@ export default function WorkDiagramForm({ diagramsTypes, diagram, mode, setMode 
       is_active: diagram?.is_active ?? true,
       active_working_days: diagram?.active_working_days || 0,
       inactive_working_days: diagram?.inactive_working_days || 0,
-      active_novelty: diagram?.work_diagram_active_novelties?.map((n) => n.diagram_type.id) ?? [],
       inactive_novelty: diagram?.inactive_novelty ?? '',
     },
   });
   const { reset } = form;
+
+  // ── Novedades activas (M:M): baseline leído del servidor al abrir el form ───
+  // La selección es `null` hasta que el usuario toca el combo; mientras tanto se muestra el baseline.
+  const [noveltySelection, setNoveltySelection] = useState<string[] | null>(null);
+  const isEditMode = mode === 'edit' && !!diagram;
+  const baselineQuery = useQuery({
+    queryKey: ['work-diagram-active-novelty-ids', diagram?.id],
+    queryFn: () => getWorkDiagramActiveNoveltyIds(diagram!.id),
+    enabled: isEditMode,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+  });
+  const baseline = useMemo(() => (isEditMode ? baselineQuery.data ?? null : []), [isEditMode, baselineQuery.data]);
+  const baselineReady = baseline !== null;
+  const selectedNovelties = noveltySelection ?? baseline ?? [];
+  const noveltyDelta = useMemo(() => {
+    const base = baseline ?? [];
+    return {
+      add: selectedNovelties.filter((id) => !base.includes(id)),
+      remove: base.filter((id) => !selectedNovelties.includes(id)),
+    };
+  }, [baseline, selectedNovelties]);
   const router = useRouter();
+  const closeSheet = useCatalogSheetClose();
+  const setBusy = useCatalogSheetBusy();
   const fixedOptions =
     diagramsTypes
       ?.filter((opt) => opt.work_active)
@@ -116,56 +143,54 @@ export default function WorkDiagramForm({ diagramsTypes, diagram, mode, setMode 
     return data;
   };
 
-  const handleDependencyConfirm = async (action: 'force' | 'replace', replacementValue?: string) => {
+  const handleDependencyConfirm = (action: 'force' | 'replace', replacementValue?: string): void => {
+    void handleDependencyConfirmAsync(action, replacementValue);
+  };
+
+  const handleDependencyConfirmAsync = async (action: 'force' | 'replace', replacementValue?: string) => {
     setShowDependencyModal(false);
 
     if (!diagram) return;
 
-    // Confirmación sin reemplazo: solo desactivar el registro
+    setBusy(true);
+    // 'force': solo desactivar el registro, sin reasignar los empleados.
     if (action === 'force') {
-      const values = form.getValues();
-      await onUpdate(values);
+      performUpdate(form.getValues());
       return;
     }
 
-    // Reemplazo masivo y luego desactivar
-    if (action === 'replace') {
-      try {
-        await reassignDependencies({
-          targetTable: 'employees',
-          targetColumn: dependencyConfigs[0].targetColumn,
-          sourceTable: 'work_diagram',
-          fromValue: diagram.id,
-          toValue: replacementValue && replacementValue !== '__NULL__' ? replacementValue : null,
-        });
-
-        // Ahora sí, desactivar el registro actual
-        const values = form.getValues();
-        await onUpdate(values);
-      } catch (err) {
-        logger.error('Error al reemplazar referencias', { data: { error: err } });
-        toast.error('No se pudieron reemplazar las referencias');
-      }
+    // 'replace': reasignar los empleados y recién después desactivar el registro.
+    try {
+      await reassignDependencies({
+        targetTable: 'employees',
+        targetColumn: dependencyConfigs[0].targetColumn,
+        sourceTable: 'work_diagram',
+        fromValue: diagram.id,
+        toValue: replacementValue && replacementValue !== '__NULL__' ? replacementValue : null,
+      });
+      performUpdate(form.getValues());
+    } catch (err) {
+      logger.error('Error al reemplazar referencias', { data: { error: err } });
+      setBusy(false);
+      toast.error('No se pudieron reemplazar las referencias');
     }
   };
 
   useEffect(() => {
     if (diagram) {
-      // Extraer los IDs de las novedades activas
-      const activeNoveltyIds = diagram.work_diagram_active_novelties?.map((n) => n.diagram_type.id) ?? [];
-
       form.reset({
         name: diagram.name ?? '',
         is_active: diagram.is_active ?? true,
         active_working_days: diagram.active_working_days ?? 0,
         inactive_working_days: diagram.inactive_working_days ?? 0,
-        active_novelty: activeNoveltyIds,
         inactive_novelty: diagram.inactive_novelty ?? '',
       });
     }
+    setNoveltySelection(null);
   }, [diagram]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onSubmit = async (values: z.infer<typeof WorkDiagramSchema>) => {
+    setBusy(true);
     toast.promise(
       async () => {
         await createWorkDiagramPrisma({
@@ -173,90 +198,79 @@ export default function WorkDiagramForm({ diagramsTypes, diagram, mode, setMode 
           is_active: values.is_active,
           active_working_days: values.active_working_days,
           inactive_working_days: values.inactive_working_days,
-          active_novelty: values.active_novelty || [],
+          active_novelty: selectedNovelties,
           inactive_novelty: values.inactive_novelty || '',
         });
       },
       {
         loading: 'Creando diagrama...',
         success: () => {
-          router.refresh();
           reset();
+          closeSheet();
+          router.refresh();
           return 'Diagrama creado correctamente';
         },
-        error: () => 'Error al crear el diagrama',
+        error: () => {
+          setBusy(false);
+          return 'Error al crear el diagrama';
+        },
       }
     );
   };
-  const onUpdate = async (values: z.infer<typeof WorkDiagramSchema>) => {
-    if (mode === 'edit' && diagram) {
-      const prevActive = !!diagram.is_active;
-      const nextActive = values.is_active;
-
-      // Si se intenta cambiar a inactivo y el valor es diferente, abrir modal de dependencias
-      if (prevActive && !nextActive) {
-        //Awaite del fetch de dependencias
-        const data = await fetchDependencies(dependencyConfigs[0], diagram.id);
-
-        if (data.data.length) {
-          setShowDependencyModal(true);
-          return; // No ejecutar update aún, el modal decidirá
-        }
-      }
-      toast.promise(
-        async () => {
-          if (!diagram?.id) {
-            toast.error('No diagram ID found');
-            return;
-          }
-          await updateWorkDiagramPrisma({
-            id: diagram?.id,
-            name: values.name,
-            is_active: values.is_active,
-            active_working_days: values.active_working_days,
-            inactive_working_days: values.inactive_working_days,
-            active_novelty: values.active_novelty || [],
-            inactive_novelty: values.inactive_novelty || '',
-          });
-        },
-        {
-          loading: 'Actualizando diagrama...',
-          success: () => {
-            router.refresh();
-            reset();
-            return 'Diagrama actualizado correctamente';
-          },
-          error: () => 'Error al actualizar el diagrama',
-        }
-      );
-    } else {
-      toast.promise(
-        async () => {
-          if (!diagram?.id) {
-            toast.error('No diagram ID found');
-            return;
-          }
-          await updateWorkDiagramPrisma({
-            id: diagram?.id,
-            name: values.name,
-            is_active: values.is_active,
-            active_working_days: values.active_working_days,
-            inactive_working_days: values.inactive_working_days,
-            active_novelty: values.active_novelty || [],
-            inactive_novelty: values.inactive_novelty || '',
-          });
-        },
-        {
-          loading: 'Actualizando diagrama...',
-          success: () => {
-            router.refresh();
-            reset();
-            return 'Diagrama actualizado correctamente';
-          },
-          error: () => 'Error al actualizar el diagrama',
-        }
-      );
+  const performUpdate = (values: z.infer<typeof WorkDiagramSchema>) => {
+    if (!diagram?.id) {
+      setBusy(false);
+      toast.error('No se encontró el diagrama a actualizar');
+      return;
     }
+    setBusy(true);
+    toast.promise(
+      updateWorkDiagramPrisma({
+        id: diagram.id,
+        name: values.name,
+        is_active: values.is_active,
+        active_working_days: values.active_working_days,
+        inactive_working_days: values.inactive_working_days,
+        active_novelty: noveltyDelta,
+        inactive_novelty: values.inactive_novelty || '',
+      }),
+      {
+        loading: 'Actualizando diagrama...',
+        success: (result) => {
+          reset();
+          setNoveltySelection(null);
+          closeSheet();
+          router.refresh();
+          return `Diagrama actualizado. Novedades activas: ${result.added} agregadas, ${result.removed} quitadas.`;
+        },
+        error: () => {
+          setBusy(false);
+          return 'Error al actualizar el diagrama';
+        },
+      }
+    );
+  };
+
+  const onUpdate = async (values: z.infer<typeof WorkDiagramSchema>) => {
+    if (!diagram || !baselineReady) return;
+    // Si se intenta pasar a inactivo, verificar dependencias antes de escribir.
+    if (diagram.is_active && !values.is_active) {
+      setBusy(true);
+      try {
+        const data = await fetchDependencies(dependencyConfigs[0], diagram.id);
+        if (data.data.length) {
+          setBusy(false);
+          setShowDependencyModal(true);
+          return; // El modal decide: reasignar o forzar.
+        }
+      } catch (err) {
+        logger.error('Error al verificar dependencias del diagrama', { data: { error: err } });
+        setBusy(false);
+        toast.error('No se pudo verificar si el diagrama está en uso');
+        return;
+      }
+    }
+    performUpdate(values);
   };
   const onCancel = () => {
     form.reset({
@@ -264,21 +278,16 @@ export default function WorkDiagramForm({ diagramsTypes, diagram, mode, setMode 
       is_active: false,
       active_working_days: 0,
       inactive_working_days: 0,
-      active_novelty: [],
       inactive_novelty: '',
     });
+    setNoveltySelection(null);
     setMode('create');
   };
 
   return (
     <div className="w-full">
       <Form {...form}>
-        <form
-          onSubmit={form.handleSubmit(mode === 'edit' ? onUpdate : onSubmit)}
-          className="space-y-4 py-4 px-2 max-w-md"
-        >
-          <h2 className="text-xl font-bold mb-4">{mode === 'edit' ? 'Editar Diagrama' : 'Crear Diagrama'}</h2>
-
+        <form onSubmit={form.handleSubmit(mode === 'edit' ? onUpdate : onSubmit)} className="space-y-4">
           {/* Nombre */}
           <FormField
             control={form.control}
@@ -361,25 +370,31 @@ export default function WorkDiagramForm({ diagramsTypes, diagram, mode, setMode 
           </div>
 
           {/* Novedad activa (multi-select) */}
-          <FormField
-            control={form.control}
-            name="active_novelty"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Novedad activa</FormLabel>
-                <FormControl>
-                  <MultiSelectCombobox
-                    options={fixedOptions}
-                    selectedValues={Array.isArray(field.value) ? field.value : []}
-                    onChange={(selected) => field.onChange(selected)}
-                    placeholder="Seleccionar novedades"
-                    emptyMessage="No hay novedades disponibles"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+          <div className="space-y-2">
+            <Label>Novedad activa</Label>
+            <MultiSelectCombobox
+              options={fixedOptions}
+              selectedValues={selectedNovelties}
+              onChange={setNoveltySelection}
+              placeholder={baselineReady ? 'Seleccionar novedades' : 'Cargando novedades del diagrama...'}
+              emptyMessage="No hay novedades disponibles"
+              disabled={!baselineReady}
+            />
+            {baselineQuery.isError && (
+              <p role="alert" className="text-sm text-danger">
+                No se pudieron cargar las novedades actuales del diagrama; no se puede guardar.
+              </p>
             )}
-          />
+            {isEditMode && baselineReady && (
+              <p role="status" className="text-sm text-muted-foreground tabular-nums">
+                {baseline?.length ?? 0} {(baseline?.length ?? 0) === 1 ? 'novedad actual' : 'novedades actuales'}. Se
+                agregan {noveltyDelta.add.length}.{' '}
+                <span className={noveltyDelta.remove.length > 0 ? 'text-danger' : undefined}>
+                  Se quitan {noveltyDelta.remove.length}.
+                </span>
+              </p>
+            )}
+          </div>
 
           {/* Novedad inactiva (select simple) */}
           <FormField
@@ -413,7 +428,11 @@ export default function WorkDiagramForm({ diagramsTypes, diagram, mode, setMode 
           />
 
           <div className="flex gap-2 mt-6">
-            <Button type="submit" variant="brand" disabled={form.formState.isSubmitting}>
+            <Button
+              type="submit"
+              variant="brand"
+              disabled={form.formState.isSubmitting || (mode === 'edit' && !baselineReady)}
+            >
               {form.formState.isSubmitting
                 ? mode === 'edit'
                   ? 'Actualizando...'
@@ -422,11 +441,9 @@ export default function WorkDiagramForm({ diagramsTypes, diagram, mode, setMode 
                   ? 'Actualizar'
                   : 'Crear'}
             </Button>
-            {mode === 'edit' && (
-              <Button type="button" variant="outline" onClick={onCancel}>
-                Cancelar
-              </Button>
-            )}
+            <Button type="button" variant="outline" onClick={onCancel}>
+              Cancelar
+            </Button>
           </div>
         </form>
 
@@ -440,7 +457,7 @@ export default function WorkDiagramForm({ diagramsTypes, diagram, mode, setMode 
             recordName={diagram.name || ''}
             dependencies={dependencyConfigs}
             title="Confirmar desactivación"
-            description="Este tipo de contrato está siendo utilizado por otros registros. Debe resolver estas referencias antes de desactivarlo."
+            description="Este diagrama de trabajo está siendo utilizado por otros registros. Debe resolver estas referencias antes de desactivarlo."
             fetchDependencies={fetchDependencies}
             fetchReplacementOptions={fetchReplacementOptions}
           />

@@ -28,7 +28,12 @@ interface TireReplacePickerProps {
 export function TireReplacePicker({ vehicleId, onSelect, selectedTireId }: TireReplacePickerProps) {
   const [search, setSearch] = useState('');
 
-  const { data: tires = [], isLoading } = useQuery({
+  const {
+    data: tires = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ['available-tires', vehicleId],
     queryFn: () => getAvailableTiresForVehicle(vehicleId),
     staleTime: 30 * 1000,
@@ -52,9 +57,22 @@ export function TireReplacePicker({ vehicleId, onSelect, selectedTireId }: TireR
     );
   }
 
+  // Un fallo de carga nunca se presenta como "no hay cubiertas".
+  if (isError) {
+    return (
+      <div role="alert" className="space-y-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
+        <p className="text-destructive">No se pudieron cargar las cubiertas disponibles.</p>
+        <button type="button" className="text-xs underline underline-offset-2" onClick={() => void refetch()}>
+          Reintentar
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2">
       <Input
+        aria-label="Buscar cubierta por serie, marca o medida"
         placeholder="Buscar por serie, marca o medida..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
@@ -100,6 +118,7 @@ function TirePickerRow({ tire, selected, onSelect }: TirePickerRowProps) {
   return (
     <button
       type="button"
+      aria-pressed={selected}
       onClick={() => onSelect(tire)}
       className={cn(
         'flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition-colors hover:bg-muted',
@@ -154,7 +173,7 @@ function TirePickerRow({ tire, selected, onSelect }: TirePickerRowProps) {
           </p>
         )}
       </div>
-      {selected && <CheckCircle2 className="ml-2 h-4 w-4 shrink-0 text-primary" />}
+      {selected && <CheckCircle2 className="ml-2 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />}
     </button>
   );
 }

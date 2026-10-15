@@ -15,13 +15,15 @@ import { DEFAULT_VAT_RATE_ID, VAT_RATE_LABELS, VAT_RATES } from '@/shared/lib/ar
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ClipboardCheck } from 'lucide-react';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { recordPurchaseQuoteResponse, uploadPurchaseQuoteAttachment, type PurchaseQuoteDetail } from '../../actions/quotes.server';
+import { recordPurchaseQuoteResponse, uploadPurchaseQuoteAttachment } from '../../actions/quotes.server';
+import type { PurchaseQuoteDetail } from '../../lib/quote-query-types';
 import { invalidatePurchases } from '../../lib/invalidate';
 import { trimDecimals } from '../../lib/quantity-format';
 import { QUOTE_ATTACHMENT_MAX_BYTES, QUOTE_ATTACHMENT_TYPES, quoteResponseSchema } from '../../schemas/quotes';
@@ -44,7 +46,7 @@ type DialogValues = z.infer<typeof dialogSchema>;
 
 function defaults(quote: PurchaseQuoteDetail): DialogValues {
   return {
-    receivedAt: quote.receivedAt ?? moment().format('YYYY-MM-DD'),
+    receivedAt: quote.receivedAt ?? argentinaDate(),
     validUntil: quote.validUntil ?? '',
     deliveryDays: quote.deliveryDays === null ? '' : String(quote.deliveryDays),
     supplierNotes: quote.supplierNotes ?? '',

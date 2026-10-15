@@ -15,14 +15,18 @@ import { prisma } from '@/shared/lib/prisma';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
+import { isPendingAttentionKey } from '../constants';
 import {
   ORDER_LIST_EXPORT_MAX_ROWS,
+  PENDING_LIST_DEFAULT_STATUS,
   assembleOrdersWhere,
   descriptionTextCondition,
   getResourceFacet,
   orderListExportTooLargeMessage,
+  pendingAttentionCondition,
   resolveOrderListScope,
   resourceIdsCondition,
+  resourceOrderBy,
   resourceSearchCondition,
   scopeConditions,
 } from '../lib/order-list-shared';
@@ -31,7 +35,15 @@ const logger = new Logger('PedidosMantenimiento/Pendientes');
 
 // ── Campos válidos para ordenamiento ──────────────────────────────────────────
 // Solo campos REALES de la tabla maintenance_orders
-const VALID_SORT_FIELDS = new Set(['status', 'created_at', 'scheduled_date', 'order_number', 'source']);
+const VALID_SORT_FIELDS = new Set([
+  'status',
+  'created_at',
+  'scheduled_date',
+  'order_number',
+  'source',
+  // Columna resuelta via resourceOrderBy (vehículo o equipamiento)
+  'vehicle',
+]);
 
 // ── Columnas de texto con filtro individual ────────────────────────────────────
 const TEXT_COLUMNS = ['order_number'];
@@ -48,6 +60,8 @@ const ALLOWED_FILTERS = new Set([
   'source',
   'vehicle',
   'description',
+  // Filtro virtual de las tarjetas de métricas (no es una columna): ver `pendingAttentionCondition`
+  'attention',
   ...TEXT_COLUMNS,
   ...dateRangeKeys(DATE_COLUMNS),
 ]);
@@ -61,6 +75,9 @@ const PENDING_ORDER_SELECT = {
   status: true,
   created_at: true,
   scheduled_date: true,
+  // Marca "Fecha Rechazada" de la columna Estado: la fecha propuesta no se aprobó y el pedido volvió a programarse
+  date_rejected_at: true,
+  date_rejection_reason: true,
   source: true,
   preventive_type: true,
   order_number: true,
@@ -115,19 +132,22 @@ async function buildWhereClause(
     ? { status: { in: statusValues } }
     : allStatuses
       ? { status: { in: PENDING_STATUSES } }
-      : { status: 'pending_scheduling' };
+      : { status: PENDING_LIST_DEFAULT_STATUS };
 
   // Columnas simples (origen). `status`, `vehicle` y `description` se resuelven a mano.
   const filtersWhere = buildFiltersWhere(
     filters,
     { source: 'source' },
-    { exclude: ['status', 'vehicle', 'description', ...TEXT_COLUMNS, ...dateRangeKeys(DATE_COLUMNS)] }
+    { exclude: ['status', 'vehicle', 'description', 'attention', ...TEXT_COLUMNS, ...dateRangeKeys(DATE_COLUMNS)] }
   );
 
   const extra: Record<string, unknown>[] = [statusCondition];
   if (state.search) extra.push(resourceSearchCondition(state.search));
   if (filters.vehicle?.length) extra.push(resourceIdsCondition(filters.vehicle));
   if (filters.description?.[0]) extra.push(descriptionTextCondition(filters.description[0]));
+  // Atención (virtual): la MISMA condición que cuenta la tarjeta de métricas
+  const attention = filters.attention?.[0];
+  if (isPendingAttentionKey(attention)) extra.push(pendingAttentionCondition(attention));
 
   return assembleOrdersWhere({
     scope: scopeConditions(scope),
@@ -158,7 +178,8 @@ export async function getPendingOrdersPaginated(searchParams: DataTableSearchPar
     for (const s of state.sorting) {
       if (VALID_SORT_FIELDS.has(s.id)) {
         const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-        resolvedSorts.push({ [s.id]: dir });
+        if (s.id === 'vehicle') resolvedSorts.push(...resourceOrderBy(dir));
+        else resolvedSorts.push({ [s.id]: dir });
       }
     }
     // El usuario espera ver primero lo ultimo que cargo: dentro de cada status,

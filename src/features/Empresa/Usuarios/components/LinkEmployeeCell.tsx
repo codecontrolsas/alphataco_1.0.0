@@ -19,7 +19,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link2, Loader2, Search, Unlink, UserCheck, UserPlus, UserX } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
-import { searchEmployeesForLink } from '../actions.server';
+import { searchEmployeesForLink } from '../lookups.server';
 import { linkEmployeeToProfile } from '../mutations.server';
 import { COMPANY_USERS_QUERY_KEY } from '../table/UserStatusCell';
 
@@ -114,7 +114,7 @@ export function LinkEmployeeCell({ profileId, employee }: LinkEmployeeCellProps)
   if (employee) {
     return (
       <div className="flex items-center gap-2">
-        <UserCheck className="h-3.5 w-3.5 text-green-600 shrink-0" />
+        <UserCheck className="h-3.5 w-3.5 text-ok shrink-0" />
         <span className="text-sm font-medium truncate">
           {employee.lastname} {employee.firstname}
         </span>

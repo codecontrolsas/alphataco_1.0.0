@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { useCatalogSheetBusy, useCatalogSheetClose } from '@/shared/components/common/CatalogFormSheet';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
@@ -33,6 +34,8 @@ function CostCenterForm() {
   const editingCostCenter = useCostCenterStore((state) => state.costCenter);
   const setCostCenter = useCostCenterStore((state) => state.setCostCenter);
   const queryClient = useQueryClient();
+  const closeSheet = useCatalogSheetClose();
+  const setBusy = useCatalogSheetBusy();
 
   const isEditing = !!editingCostCenter;
 
@@ -68,6 +71,7 @@ function CostCenterForm() {
   const resetForm = () => {
     setCostCenter(null);
     form.reset({ id: undefined, name: '', is_active: true });
+    closeSheet();
   };
 
   const invalidateTable = () => {
@@ -77,6 +81,7 @@ function CostCenterForm() {
   // ── Submit handlers ────────────────────────────────────────────────────────
 
   const handleCreate = async (values: CostCenterFormValues) => {
+    setBusy(true);
     toast.promise(createCostCenterPrisma({ name: values.name, is_active: values.is_active }), {
       loading: 'Creando centro de costo...',
       success: () => {
@@ -84,12 +89,16 @@ function CostCenterForm() {
         resetForm();
         return 'Centro de costo creado correctamente';
       },
-      error: 'Error al crear el centro de costo',
+      error: () => {
+        setBusy(false);
+        return 'Error al crear el centro de costo';
+      },
     });
   };
 
   const handleUpdate = async (values: CostCenterFormValues) => {
     if (!values.id) return;
+    setBusy(true);
     toast.promise(updateCostCenterPrisma({ id: values.id, name: values.name, is_active: values.is_active }), {
       loading: 'Actualizando centro de costo...',
       success: () => {
@@ -97,7 +106,10 @@ function CostCenterForm() {
         resetForm();
         return 'Centro de costo actualizado correctamente';
       },
-      error: 'Error al actualizar el centro de costo',
+      error: () => {
+        setBusy(false);
+        return 'Error al actualizar el centro de costo';
+      },
     });
   };
 
@@ -113,9 +125,7 @@ function CostCenterForm() {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 py-4 px-2">
-        <h2 className="text-xl font-bold mb-4">{isEditing ? 'Editar Centro de Costo' : 'Crear Centro de Costo'}</h2>
-
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
         <FormField
           control={form.control}
           name="name"
@@ -123,12 +133,7 @@ function CostCenterForm() {
             <FormItem>
               <FormLabel>Nombre del Centro de Costo</FormLabel>
               <FormControl>
-                <Input
-                  type="text"
-                  {...field}
-                  className="input w-full max-w-[400px]"
-                  placeholder="Nombre del centro de costo"
-                />
+                <Input type="text" {...field} className="input w-full" placeholder="Nombre del centro de costo" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -176,11 +181,9 @@ function CostCenterForm() {
                 ? 'Actualizar'
                 : 'Crear'}
           </Button>
-          {isEditing && (
-            <Button type="button" onClick={resetForm} variant="outline">
-              Cancelar
-            </Button>
-          )}
+          <Button type="button" onClick={resetForm} variant="outline">
+            Cancelar
+          </Button>
         </div>
       </form>
     </Form>

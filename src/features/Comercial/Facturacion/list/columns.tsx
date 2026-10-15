@@ -9,22 +9,14 @@ import { CertificationAmount } from '@/features/Comercial/Certificaciones/compon
 import type { arca_environment } from '@/generated/prisma/enums';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { CBTE_TYPES, isCbteTypeId } from '@/shared/lib/arca/catalogs';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { LucideIcon } from 'lucide-react';
-import {
-  Check,
-  Eye,
-  FileMinus,
-  FilePlus,
-  FileText,
-  FlaskConical,
-  ShieldCheck,
-  X,
-} from 'lucide-react';
+import { Check, Eye, FileMinus, FilePlus, FileText, FlaskConical, ShieldCheck, X } from 'lucide-react';
 import moment from 'moment';
 import Link from 'next/link';
-import { INVOICE_STATUS_LABELS } from '../lib/invoice-state-machine';
 import { INVOICE_STATUS_ICONS, InvoiceStatusBadge } from '../components/InvoiceStatusBadge';
+import { INVOICE_STATUS_LABELS } from '../lib/invoice-state-machine';
 import type { InvoiceListItem } from './actions.server';
 
 // ============================================================================
@@ -32,7 +24,14 @@ import type { InvoiceListItem } from './actions.server';
 // ============================================================================
 
 /** Columnas secundarias: ocultas por defecto. */
-export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['cuit', 'currency', 'simulated', 'cae', 'cae_due_date', 'created_at'];
+export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = [
+  'cuit',
+  'currency',
+  'simulated',
+  'cae',
+  'cae_due_date',
+  'created_at',
+];
 
 export { ENVIRONMENT_LABELS };
 
@@ -53,7 +52,6 @@ export function cbteTypeIcon(cbteType: number): LucideIcon {
 }
 
 export const simulatedIcons: Record<'true' | 'false', LucideIcon> = { true: Check, false: X };
-
 
 // ============================================================================
 // COLUMNS
@@ -221,7 +219,7 @@ export function getInvoiceColumns(canViewPrices: boolean): ColumnDef<InvoiceList
       accessorFn: (row) => row.createdAt,
       meta: { title: 'Fecha de creación' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de creación" />,
-      cell: ({ row }) => <span className="tabular-nums">{moment(row.original.createdAt).format('DD/MM/YYYY')}</span>,
+      cell: ({ row }) => <span className="tabular-nums">{formatArgentinaDay(row.original.createdAt)}</span>,
     },
     {
       id: 'actions',

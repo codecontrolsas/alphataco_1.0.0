@@ -58,6 +58,8 @@ export async function readStatementFile(file: File): Promise<RawRows> {
 export function cellText(cell: RawCell, decimalSeparator: DecimalSeparator): string {
   if (cell instanceof Date) return Number.isNaN(cell.getTime()) ? '' : cell.toISOString().slice(0, 10);
   if (typeof cell === 'number') {
+    // Solo texto para el perfil de importación: el parseo a importe lo hace `parseScaled` (bigint) en el paso siguiente.
+    // El redondeo a 2 decimales evita ruido de punto flotante de Excel (p. ej. 0.1 + 0.2) antes de convertir a texto.
     const fixed = Math.round(cell * 100) / 100;
     return String(fixed).replace('.', decimalSeparator);
   }

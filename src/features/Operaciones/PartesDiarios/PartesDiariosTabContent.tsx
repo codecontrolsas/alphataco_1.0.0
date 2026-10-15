@@ -25,14 +25,7 @@ export default async function PartesDiariosTabContent({ searchParams = {} }: Pro
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-1">
-          <p className="text-muted-foreground text-sm">
-            Un parte por día con las líneas de servicio a ejecutar y los recursos asignados.
-          </p>
-        </div>
-        {canCreate && <NewDailyReportDialog />}
-      </div>
+      <div className="flex flex-wrap items-start justify-end gap-4">{canCreate && <NewDailyReportDialog />}</div>
 
       <Suspense fallback={<DailyReportTableSkeleton />}>
         <DailyReportList searchParams={searchParams} permissionsMap={permissionsMap} />

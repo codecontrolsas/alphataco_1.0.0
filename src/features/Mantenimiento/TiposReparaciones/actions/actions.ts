@@ -1,12 +1,12 @@
 'use server';
 
 import { Prisma } from '@/generated/prisma/client';
-import { z } from 'zod';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { failureMessage, requireConfigPermission } from '../lib/access';
+import { z } from 'zod';
+import { ConfigPermissionError, failureMessage, requireConfigPermission } from '../lib/access';
 import {
   idDeltaSchema,
   typeOfRepairInputSchema,
@@ -35,6 +35,33 @@ export async function fetchAllTypesOfRepairs() {
   } catch (error) {
     logger.error('Error al obtener los tipos de reparación', { data: { error } });
     return [];
+  }
+}
+
+/**
+ * Tipos de reparación para la pantalla de configuración. Exige `view` y NO oculta el fallo:
+ * devuelve `forbidden`/`error` para que la vista muestre "sin permiso" o "error" en lugar de una
+ * lista vacía (que se leería como "no hay tipos cargados").
+ *
+ * `fetchAllTypesOfRepairs` queda como catálogo para otros flujos (asistente de órdenes), que no
+ * dependen del permiso de configuración.
+ */
+export async function fetchRepairTypesForConfig() {
+  try {
+    await requireConfigPermission('type_of_repair', 'view');
+    const companyId = await getActiveCompanyId();
+
+    const types = await prisma.types_of_repairs.findMany({
+      where: withCompany({}, companyId),
+      orderBy: { created_at: 'desc' },
+    });
+    return { types, forbidden: false, error: null };
+  } catch (error) {
+    if (error instanceof ConfigPermissionError) {
+      return { types: [], forbidden: true, error: error.message };
+    }
+    logger.error('Error al obtener los tipos de reparación para configuración', { data: { error } });
+    return { types: [], forbidden: false, error: 'No se pudieron cargar los tipos de reparación' };
   }
 }
 
@@ -132,16 +159,43 @@ export async function updateTypeOfRepair(rawBody: Partial<TypeOfRepairInput>, id
   }
 }
 
-/** Elimina un tipo de reparación de la empresa activa. */
+function isForeignKeyViolation(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2003';
+}
+
+/** Cantidad de ítems de solicitudes, órdenes y reparaciones que referencian el tipo. */
+async function countRepairTypeUsage(repairTypeId: string): Promise<number> {
+  const [requestItems, orderItems, repairs] = await Promise.all([
+    prisma.maintenance_request_items.count({ where: { repair_type_id: repairTypeId } }),
+    prisma.maintenance_order_items.count({ where: { repair_type_id: repairTypeId } }),
+    prisma.work_order_item_repairs.count({ where: { repair_type_id: repairTypeId } }),
+  ]);
+  return requestItems + orderItems + repairs;
+}
+
+/** Elimina un tipo de reparación de la empresa activa. Si está en uso, la FK lo impide y se informa cuántos lo usan. */
 export async function deleteTypeOfRepair(id: string) {
   try {
     await requireConfigPermission('type_of_repair', 'delete');
     uuidSchema.parse(id);
     const companyId = await getActiveCompanyId();
 
-    const { count } = await prisma.types_of_repairs.deleteMany({
-      where: withCompany({ id }, companyId),
-    });
+    let count: number;
+    try {
+      ({ count } = await prisma.types_of_repairs.deleteMany({
+        where: withCompany({ id }, companyId),
+      }));
+    } catch (deleteError) {
+      // P2003: el tipo lo referencian solicitudes, órdenes o reparaciones (la FK impide borrarlo).
+      if (isForeignKeyViolation(deleteError)) {
+        const inUse = await countRepairTypeUsage(id);
+        return {
+          ok: false,
+          error: `El tipo está en uso por ${inUse} ${inUse === 1 ? 'solicitud u orden' : 'solicitudes u órdenes'}; desactivalo en su lugar.`,
+        } as const;
+      }
+      throw deleteError;
+    }
 
     return count > 0
       ? ({ ok: true } as const)

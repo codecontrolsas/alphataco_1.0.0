@@ -1,13 +1,12 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { RowActionsMenu, type RowAction } from '@/features/Mantenimiento/Gomeria/shared/RowActionsMenu';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Pencil, PowerOff } from 'lucide-react';
+import { Check, Pencil, Power, PowerOff, X } from 'lucide-react';
 import type { TireBrandListItem } from '../actions/brand-list.server';
 
 // ============================================================================
@@ -67,7 +66,8 @@ export function getColumns(
       id: 'is_active',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
       cell: ({ row }) => (
-        <Badge variant={row.original.is_active ? 'success' : 'outline'}>
+        <Badge variant={row.original.is_active ? 'success' : 'secondary'}>
+          {row.original.is_active ? <Check aria-hidden="true" /> : <X aria-hidden="true" />}
           {row.original.is_active ? 'Activa' : 'Inactiva'}
         </Badge>
       ),
@@ -103,51 +103,30 @@ export function getColumns(
       meta: { title: 'Creado' },
     },
 
-    // ── Actions ─────────────────────────────────────────────────────────────
-    {
-      id: 'actions',
-      header: () => null,
-      cell: ({ row }) => (
-        <TooltipProvider delayDuration={200}>
-          <div className="flex items-center gap-1">
-            {canUpdate && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => onEdit(row.original)}
-                    aria-label="Editar marca"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Editar</TooltipContent>
-              </Tooltip>
-            )}
-            {canUpdate && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => onToggle(row.original)}
-                    aria-label={row.original.is_active ? 'Desactivar marca' : 'Activar marca'}
-                  >
-                    <PowerOff className="h-3.5 w-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{row.original.is_active ? 'Desactivar' : 'Activar'}</TooltipContent>
-              </Tooltip>
-            )}
-          </div>
-        </TooltipProvider>
-      ),
-      enableSorting: false,
-      enableHiding: false,
-      meta: { excludeFromExport: true, title: '' },
-    },
+    // ── Actions: menú ⋯ (editar y activar/desactivar = update) ──────────────
+    ...(canUpdate
+      ? [
+          {
+            id: 'actions',
+            header: () => null,
+            cell: ({ row }: { row: import('@tanstack/react-table').Row<TireBrandListItem> }) => {
+              const item = row.original;
+              const actions: RowAction[] = [
+                { key: 'edit', label: 'Editar', icon: Pencil, onSelect: () => onEdit(item) },
+                {
+                  key: 'toggle',
+                  label: item.is_active ? 'Desactivar' : 'Activar',
+                  icon: item.is_active ? PowerOff : Power,
+                  onSelect: () => onToggle(item),
+                },
+              ];
+              return <RowActionsMenu label={`Acciones de marca ${item.name}`} actions={actions} />;
+            },
+            enableSorting: false,
+            enableHiding: false,
+            meta: { excludeFromExport: true, title: '' },
+          } satisfies ColumnDef<TireBrandListItem>,
+        ]
+      : []),
   ];
 }

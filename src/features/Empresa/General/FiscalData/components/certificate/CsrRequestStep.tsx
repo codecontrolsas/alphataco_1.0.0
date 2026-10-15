@@ -14,9 +14,9 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from '@/components/ui/input';
 import { LoadingSwap } from '@/components/ui/loading-swap';
 import { formatCuit } from '@/features/Documentacion/DetalleDocumento/lib/document-detail';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Download, KeyRound } from 'lucide-react';
-import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
@@ -73,16 +73,19 @@ export function PendingCsrSummary({
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm text-pretty">
-        Solicitud generada el{' '}
-        <span className="tabular-nums">{moment(pending.createdAt).format('DD/MM/YYYY HH:mm')}</span> con el alias{' '}
-        <code className="bg-muted px-1 font-mono text-xs">{pending.alias}</code>.
+        Solicitud generada el <span className="tabular-nums">{formatArgentinaDateTime(pending.createdAt)}</span> con el
+        alias <code className="bg-muted px-1 font-mono text-xs">{pending.alias}</code>.
       </p>
       <div className="flex flex-wrap gap-2">
         <Button type="button" variant="outline" size="sm" onClick={() => downloadCsr(pending.csrPem)}>
           <Download aria-hidden />
           Descargar solicitud (.csr)
         </Button>
-        <CopyTextButton value={pending.csrPem} label="Copiar solicitud" successMessage="Solicitud copiada al portapapeles." />
+        <CopyTextButton
+          value={pending.csrPem}
+          label="Copiar solicitud"
+          successMessage="Solicitud copiada al portapapeles."
+        />
         <Button
           type="button"
           variant="ghost"
@@ -189,9 +192,15 @@ export function CsrRequestForm({
       </p>
 
       {!secretsKeyConfigured && (
-        <div role="note" className="text-destructive flex items-start gap-3 border border-destructive/30 px-4 py-3 text-sm">
+        <div
+          role="note"
+          className="text-destructive flex items-start gap-3 border border-destructive/30 px-4 py-3 text-sm"
+        >
           <KeyRound className="mt-0.5 size-4 shrink-0" aria-hidden />
-          <p>Falta configurar la clave de cifrado del servidor (FISCAL_SECRETS_KEY). Pedíselo al administrador del sistema.</p>
+          <p>
+            Falta configurar la clave de cifrado del servidor (FISCAL_SECRETS_KEY). Pedíselo al administrador del
+            sistema.
+          </p>
         </div>
       )}
 

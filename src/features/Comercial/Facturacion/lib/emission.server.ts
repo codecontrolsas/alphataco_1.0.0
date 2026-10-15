@@ -1,15 +1,15 @@
-import 'server-only';
-import { getFiscalDataOverview } from '@/features/Empresa/General/FiscalData/actions/fiscal-data.server';
+import { getFiscalDataOverview } from '@/features/Empresa/General/FiscalData/lib/fiscal-data-overview.server';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
+import { cbteTypesOfKind } from '@/shared/lib/arca/catalogs';
 import { argentinaDateOnly, fromArcaDate, toArcaDate } from '@/shared/lib/arca/dates';
 import { ArcaConfigError, ArcaError, ArcaServiceError, type ArcaMessage } from '@/shared/lib/arca/errors';
 import { getArcaGateway, isArcaMockMode, type ArcaGateway } from '@/shared/lib/arca/server/gateway';
-import { cbteTypesOfKind } from '@/shared/lib/arca/catalogs';
 import { withLease } from '@/shared/lib/arca/server/leases';
 import type { CaeRequest } from '@/shared/lib/arca/wsfe';
 import { toDateOnly } from '@/shared/lib/date-only';
 import { prisma } from '@/shared/lib/prisma';
+import 'server-only';
 import {
   buildIssuerSnapshot,
   buildReceiverSnapshot,
@@ -19,10 +19,10 @@ import {
   type LoadedInvoice,
 } from './invoice-context.server';
 import { amountOf, compareAmounts } from './invoice-math';
-import { canIssue, STALE_EMITTING_MS } from './invoice-state-machine';
-import { parseIssuerSnapshot } from './snapshots';
+import { STALE_EMITTING_MS, canIssue } from './invoice-state-machine';
 import { formatVoucherLabel, kindOf, letterOf, resolveLetter, type LetterResult } from './invoice-type';
 import { validateInvoiceForIssue, type IssueProblem } from './invoice-validation';
+import { parseIssuerSnapshot } from './snapshots';
 
 /**
  * Emisión de comprobantes ante ARCA. Reglas que no se negocian:
@@ -73,7 +73,9 @@ export async function validateLoadedInvoice(invoice: LoadedInvoice): Promise<Inv
             : 'Misma letra que el comprobante original.',
         };
   const credit =
-    kind === 'credit_note' && invoice.associated_invoice_id ? await creditableRemaining(invoice.associated_invoice_id, invoice.id) : null;
+    kind === 'credit_note' && invoice.associated_invoice_id
+      ? await creditableRemaining(invoice.associated_invoice_id, invoice.id)
+      : null;
 
   const problems = validateInvoiceForIssue({
     kind,
@@ -153,7 +155,11 @@ function buildCaeRequest(invoice: LoadedInvoice, number: number, exchangeRate: s
               },
             ]
           : undefined,
-      vatBreakdown: invoice.vat_breakdown.map((v) => ({ id: v.vat_rate_id, base: v.base_amount.toFixed(2), amount: v.vat_amount.toFixed(2) })),
+      vatBreakdown: invoice.vat_breakdown.map((v) => ({
+        id: v.vat_rate_id,
+        base: v.base_amount.toFixed(2),
+        amount: v.vat_amount.toFixed(2),
+      })),
     },
   };
 }
@@ -195,7 +201,9 @@ export async function applyAuthorization(
         });
         // El CAE ya existe: no se deshace. Se marca para revisión si algo no cuadra.
         if (count !== ids.length) {
-          logger.error('Certificaciones que no estaban confirmadas al facturar', { data: { invoiceId: invoice.id, ids, count } });
+          logger.error('Certificaciones que no estaban confirmadas al facturar', {
+            data: { invoiceId: invoice.id, ids, count },
+          });
         }
       }
     }
@@ -240,11 +248,21 @@ async function backToEditable(invoiceId: string, status: 'borrador' | 'rechazada
  * Emite un comprobante. Devuelve qué pasó con números reales (para que la UI no mienta). Puede
  * tardar: hasta dos llamadas a ARCA más el lease.
  */
-export async function issueInvoice(invoiceId: string, companyId: string, userId: string | null): Promise<EmissionOutcome> {
+export async function issueInvoice(
+  invoiceId: string,
+  companyId: string,
+  userId: string | null
+): Promise<EmissionOutcome> {
   const invoice = await loadInvoice(invoiceId, companyId);
   if (!invoice) return { status: 'error', message: 'Comprobante no encontrado' };
   if (!canIssue(invoice.status)) {
-    return { status: 'error', message: invoice.status === 'autorizada' ? 'El comprobante ya está autorizado.' : 'El comprobante se está emitiendo o está pendiente en ARCA: consultá su estado.' };
+    return {
+      status: 'error',
+      message:
+        invoice.status === 'autorizada'
+          ? 'El comprobante ya está autorizado.'
+          : 'El comprobante se está emitiendo o está pendiente en ARCA: consultá su estado.',
+    };
   }
 
   const { problems } = await validateLoadedInvoice(invoice);
@@ -271,7 +289,8 @@ export async function issueInvoice(invoiceId: string, companyId: string, userId:
     if (blocking) {
       return {
         status: 'error',
-        message: 'Hay otro comprobante de este punto de venta y tipo pendiente de confirmar en ARCA. Consultá su estado antes de emitir otro.',
+        message:
+          'Hay otro comprobante de este punto de venta y tipo pendiente de confirmar en ARCA. Consultá su estado antes de emitir otro.',
       };
     }
 
@@ -316,9 +335,13 @@ export async function issueInvoice(invoiceId: string, companyId: string, userId:
       return 'ok' as const;
     });
     if (claimed === 'exceeds') {
-      return { status: 'error', message: 'La nota de crédito supera el saldo del comprobante original (otra nota se emitió mientras tanto).' };
+      return {
+        status: 'error',
+        message: 'La nota de crédito supera el saldo del comprobante original (otra nota se emitió mientras tanto).',
+      };
     }
-    if (claimed === 'changed') return { status: 'error', message: 'El comprobante cambió de estado mientras tanto. Actualizá la pantalla.' };
+    if (claimed === 'changed')
+      return { status: 'error', message: 'El comprobante cambió de estado mientras tanto. Actualizá la pantalla.' };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       return { status: 'error', message: 'Alguna certificación ya está facturada en otro comprobante.' };
@@ -331,7 +354,11 @@ export async function issueInvoice(invoiceId: string, companyId: string, userId:
   try {
     return await withLease(
       lockKey,
-      { ttlMs: 120_000, waitMs: 20_000, busyMessage: 'Se está emitiendo otro comprobante de este punto de venta. Probá en unos segundos.' },
+      {
+        ttlMs: 120_000,
+        waitMs: 20_000,
+        busyMessage: 'Se está emitiendo otro comprobante de este punto de venta. Probá en unos segundos.',
+      },
       async () => {
         let gateway: ArcaGateway;
         try {
@@ -387,22 +414,33 @@ export async function issueInvoice(invoiceId: string, companyId: string, userId:
             return {
               status: 'pendiente',
               number,
-              message: 'ARCA no respondió. El comprobante puede haberse autorizado: consultá su estado antes de hacer otra cosa.',
+              message:
+                'ARCA no respondió. El comprobante puede haberse autorizado: consultá su estado antes de hacer otra cosa.',
             } as const;
           }
 
           if (result.result === 'A' && result.cae && result.caeDueDate) {
             try {
               const authorizedInvoice = (await loadInvoice(invoiceId, companyId))!;
-              await applyAuthorization(authorizedInvoice, { cae: result.cae, caeDueDate: result.caeDueDate, observations: result.observations }, number);
+              await applyAuthorization(
+                authorizedInvoice,
+                { cae: result.cae, caeDueDate: result.caeDueDate, observations: result.observations },
+                number
+              );
             } catch (error) {
               // ARCA YA autorizó: no se puede volver atrás. Queda pendiente y la consulta adopta el CAE.
-              logger.error('CAE obtenido pero no se pudo guardar: queda pendiente', { data: { invoiceId, number, error } });
-              await prisma.invoices.updateMany({ where: { id: invoiceId, status: 'emitiendo' }, data: { status: 'pendiente' } });
+              logger.error('CAE obtenido pero no se pudo guardar: queda pendiente', {
+                data: { invoiceId, number, error },
+              });
+              await prisma.invoices.updateMany({
+                where: { id: invoiceId, status: 'emitiendo' },
+                data: { status: 'pendiente' },
+              });
               return {
                 status: 'pendiente',
                 number,
-                message: 'ARCA autorizó el comprobante pero no se pudo guardar el resultado. Consultá su estado para completarlo.',
+                message:
+                  'ARCA autorizó el comprobante pero no se pudo guardar el resultado. Consultá su estado para completarlo.',
               } as const;
             }
             logger.info('Comprobante autorizado', { data: { invoiceId, number, simulated } });
@@ -426,9 +464,14 @@ export async function issueInvoice(invoiceId: string, companyId: string, userId:
     );
   } catch (error) {
     // Si el lease no se pudo tomar, el comprobante sigue `emitiendo` sin número: volverlo.
-    const current = await prisma.invoices.findUnique({ where: { id: invoiceId }, select: { status: true, number: true } });
-    if (current?.status === 'emitiendo' && current.number === null) await backToEditable(invoiceId, previousStatus, null);
-    if (error instanceof ArcaError || error instanceof ArcaConfigError) return { status: 'error', message: error.message };
+    const current = await prisma.invoices.findUnique({
+      where: { id: invoiceId },
+      select: { status: true, number: true },
+    });
+    if (current?.status === 'emitiendo' && current.number === null)
+      await backToEditable(invoiceId, previousStatus, null);
+    if (error instanceof ArcaError || error instanceof ArcaConfigError)
+      return { status: 'error', message: error.message };
     throw error;
   }
 }
@@ -449,7 +492,8 @@ export async function reconcileInvoice(invoiceId: string, companyId: string): Pr
   const invoice = await loadInvoice(invoiceId, companyId);
   if (!invoice) return { status: 'error', message: 'Comprobante no encontrado' };
   const lastActivity = invoice.sent_at ?? invoice.claimed_at;
-  const stale = invoice.status === 'emitiendo' && (!lastActivity || Date.now() - lastActivity.getTime() > STALE_EMITTING_MS);
+  const stale =
+    invoice.status === 'emitiendo' && (!lastActivity || Date.now() - lastActivity.getTime() > STALE_EMITTING_MS);
   if (invoice.status !== 'pendiente' && !stale) {
     return { status: 'error', message: 'Solo se consulta un comprobante pendiente en ARCA.' };
   }
@@ -471,7 +515,11 @@ export async function reconcileInvoice(invoiceId: string, companyId: string): Pr
         found.total !== undefined &&
         compareAmounts(Number(found.total).toFixed(2), invoice.total.toFixed(2)) === 0;
       if (matches) {
-        await applyAuthorization(invoice, { cae: found.cae!, caeDueDate: found.caeDueDate!, observations: found.observations }, invoice.number);
+        await applyAuthorization(
+          invoice,
+          { cae: found.cae!, caeDueDate: found.caeDueDate!, observations: found.observations },
+          invoice.number
+        );
         return { status: 'autorizada', cae: found.cae!, number: invoice.number };
       }
       await prisma.invoices.update({
@@ -487,7 +535,10 @@ export async function reconcileInvoice(invoiceId: string, companyId: string): Pr
     const last = await gateway.lastAuthorized(invoice.sales_point.number, invoice.cbte_type);
     if (last < invoice.number) {
       await backToEditable(invoiceId, 'borrador', null);
-      return { status: 'borrador', message: 'ARCA confirma que no se autorizó: el comprobante volvió a borrador y se puede emitir de nuevo.' };
+      return {
+        status: 'borrador',
+        message: 'ARCA confirma que no se autorizó: el comprobante volvió a borrador y se puede emitir de nuevo.',
+      };
     }
     return { status: 'pendiente', message: 'ARCA todavía no informa el comprobante. Probá de nuevo en unos minutos.' };
   } catch (error) {

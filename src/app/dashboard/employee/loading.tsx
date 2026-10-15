@@ -4,29 +4,23 @@ import { Skeleton } from '@/components/ui/skeleton';
 export default function Loading() {
   return (
     <div className="space-y-6">
-      {/* 5 tabs */}
-      <div className="flex gap-1 border-b">
-        <Skeleton className="h-10 w-28 rounded-none" />
-        <Skeleton className="h-10 w-44 rounded-none" />
-        <Skeleton className="h-10 w-28 rounded-none" />
-        <Skeleton className="h-10 w-40 rounded-none" />
-        <Skeleton className="h-10 w-16 rounded-none" />
+      {/* Cabecera de la sección */}
+      <div className="space-y-2">
+        <Skeleton className="h-8 w-40" />
+        <Skeleton className="h-4 w-72 max-w-full" />
       </div>
 
-      {/* 2 subtabs */}
-      <div className="flex gap-1 border-b">
-        <Skeleton className="h-9 w-40 rounded-none" />
-        <Skeleton className="h-9 w-40 rounded-none" />
-      </div>
+      {/* Selector de vista */}
+      <Skeleton className="h-10 w-full sm:w-80" />
 
       {/* Employee DataTable in Card */}
       <Card>
         <CardContent className="pt-6">
           <div className="space-y-4">
             {/* Toolbar */}
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex gap-2">
-                <Skeleton className="h-9 w-64" />
+                <Skeleton className="h-9 w-full max-w-64" />
                 <Skeleton className="h-9 w-24" />
                 <Skeleton className="h-9 w-24" />
               </div>

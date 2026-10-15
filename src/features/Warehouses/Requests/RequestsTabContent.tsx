@@ -3,7 +3,7 @@ import type { DataTableSearchParams } from '@/shared/components/common/DataTable
 import { Plus } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense } from 'react';
-import { NoPermission } from '../fallback/NoPermission';
+import { StateBlock } from '@/shared/components/common/StateBlock';
 import { canWarehouse, type PermissionsMap } from '../lib/permissions';
 import { RequestsList } from './components/RequestsList/RequestsList';
 import { RequestsTableSkeleton } from './components/RequestsList/fallback/RequestsTableSkeleton';
@@ -16,7 +16,7 @@ export default async function RequestsTabContent({
   searchParams: DataTableSearchParams;
   permissions: PermissionsMap;
 }) {
-  if (!canWarehouse(permissions, 'pedidos', 'view')) return <NoPermission />;
+  if (!canWarehouse(permissions, 'pedidos', 'view')) return <StateBlock variant="noperm" title="No tenés permiso para ver esta información." />;
 
   return (
     <div className="space-y-4">

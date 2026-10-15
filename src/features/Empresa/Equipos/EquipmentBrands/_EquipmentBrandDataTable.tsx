@@ -1,16 +1,22 @@
 'use client';
 
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import {
+  CatalogCreateButton,
+  CatalogFormSheet,
+  CatalogTableSurface,
+  useCatalogSheet,
+} from '@/shared/components/common/CatalogFormSheet';
 import {
   DataTable,
+  useDataTableFilter,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
   type FacetResult,
 } from '@/shared/components/common/DataTable';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { Check, CircleOff, X } from 'lucide-react';
-import moment from 'moment';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useCallback, useMemo, useState } from 'react';
+import { activeStatusLabel, buildActiveFacetResult } from '../../lib/active-status';
 import EquipmentBrandForm from './EquipmentBrandForm';
 import {
   getAllEquipmentBrandsForExport,
@@ -20,6 +26,12 @@ import {
 } from './actions.server';
 import { HIDDEN_COLUMNS_BY_DEFAULT, getColumns } from './columns';
 import { useEquipmentBrandStore } from './store/equipmentBrand.store';
+
+/** Lleva la vista al bloque de la tabla relacionada (respeta `prefers-reduced-motion`). */
+function scrollToBlock(id: string) {
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.getElementById(id)?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+}
 
 // ============================================================================
 // TYPES
@@ -58,17 +70,31 @@ export default function _EquipmentBrandDataTable({
     [permissionsMap]
   );
 
-  const canCreateOrUpdate =
-    permissions.hasPermission('configuracion', 'marcas', 'create') ||
-    permissions.hasPermission('configuracion', 'marcas', 'update');
+  const canCreate = permissions.hasPermission('configuracion', 'marcas', 'create');
+  const canUpdate = permissions.hasPermission('configuracion', 'marcas', 'update');
 
-  // ── Store de edición ─────────────────────────────────────────────────────
+  // ── Sheet de alta/edición (el form sigue leyendo el store de edición) ─────
   const setEquipmentBrand = useEquipmentBrandStore((state) => state.setEquipmentBrand);
-  const handleEdit = useCallback(
+  const handleClearStore = useCallback(() => setEquipmentBrand(null), [setEquipmentBrand]);
+  const sheet = useCatalogSheet<EquipmentBrandListItem>({
+    canCreate,
+    canUpdate,
+    onOpenEdit: setEquipmentBrand,
+    onOpenCreate: handleClearStore,
+    onClosed: handleClearStore,
+  });
+  const handleEdit = sheet.openEdit;
+
+  // ── "Ver modelos": fija el filtro de marca de la tabla de modelos (mismo bloque agrupado) ──
+  // 'equipment-models' = tableId de EquipmentModelList (namespace de la URL de esa tabla).
+  const [, setModelBrandFilter] = useDataTableFilter('equipment-models', 'brand');
+  const canViewModels = permissions.hasPermission('configuracion', 'modelos', 'view');
+  const handleViewModels = useCallback(
     (item: EquipmentBrandListItem) => {
-      setEquipmentBrand(item);
+      setModelBrandFilter(String(item.id));
+      scrollToBlock('modelos');
     },
-    [setEquipmentBrand]
+    [setModelBrandFilter]
   );
 
   // ── Client-side navigation mode ──────────────────────────────────────────
@@ -81,7 +107,10 @@ export default function _EquipmentBrandDataTable({
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getEquipmentBrandsPaginated(params), []);
 
   // ── Columns ───────────────────────────────────────────────────────────────
-  const columns = useMemo(() => getColumns(permissions, handleEdit), [permissions, handleEdit]);
+  const columns = useMemo(
+    () => getColumns(permissions, handleEdit, canViewModels ? handleViewModels : undefined),
+    [permissions, handleEdit, canViewModels, handleViewModels]
+  );
 
   // ── Column visibility ─────────────────────────────────────────────────────
   const mergedColumnVisibility = useMemo(() => {
@@ -106,14 +135,7 @@ export default function _EquipmentBrandDataTable({
   const fetchIsActiveFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
     const result = await getEquipmentBrandSingleFacet('is_active', params);
     if (!result) return { options: [], counts: new Map() };
-    const options = [
-      { value: 'true', label: 'Activo', icon: Check },
-      { value: 'false', label: 'Inactivo', icon: X },
-      ...(result.counts.has(NULL_FILTER_VALUE)
-        ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-        : []),
-    ];
-    return { options, counts: result.counts };
+    return buildActiveFacetResult(result.counts);
   }, []);
 
   // ── Faceted filters ───────────────────────────────────────────────────────
@@ -154,6 +176,7 @@ export default function _EquipmentBrandDataTable({
       queryFn={tableQueryFn}
       queryKey={['equipment-brands']}
       onStateChange={handleStateChange}
+      toolbarActions={<CatalogCreateButton sheet={sheet} label="Nueva marca" />}
       tableId={tableId}
       paramNamespace={tableId}
       facetedFilters={facetedFilters}
@@ -163,42 +186,31 @@ export default function _EquipmentBrandDataTable({
       searchPlaceholder="Buscar marcas de equipos..."
       emptyMessage="No se encontraron marcas de equipos"
       exportConfig={{
-        fetchAllData: () => getAllEquipmentBrandsForExport(currentParams),
+        fetchAllData: async () => unwrapExportResult(await getAllEquipmentBrandsForExport(currentParams)),
         options: {
           filename: 'marcas-de-equipos',
           sheetName: 'Marcas de Equipos',
           title: 'Marcas de Equipos',
         },
         formatters: {
-          is_active: (value) => {
-            if (value === null || value === undefined) return 'Sin asignar';
-            return value ? 'Activo' : 'Inactivo';
-          },
-          created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
+          is_active: (value) => activeStatusLabel(value),
+          created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
         },
       }}
     />
   );
 
-  // Si no tiene permisos de crear/editar, mostrar solo la tabla
-  if (!canCreateOrUpdate) {
-    return table;
-  }
-
-  // Con permisos: layout resizable con formulario a la izquierda y tabla a la derecha
   return (
-    <div className="w-full">
-      <ResizablePanelGroup className="min-h-[400px]" direction="horizontal">
-        <ResizablePanel defaultSize={30}>
-          <div className="overflow-auto h-full pr-2">
-            <EquipmentBrandForm />
-          </div>
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={70}>
-          <div className="overflow-auto h-full pl-2">{table}</div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    </div>
+    <>
+      <CatalogTableSurface>{table}</CatalogTableSurface>
+      <CatalogFormSheet
+        sheet={sheet}
+        getKey={(brand) => brand.id}
+        title={{ create: 'Nueva marca', edit: 'Editar marca' }}
+        size="md"
+      >
+        {() => <EquipmentBrandForm />}
+      </CatalogFormSheet>
+    </>
   );
 }

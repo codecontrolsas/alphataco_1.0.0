@@ -4,11 +4,13 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Barcode, Check, Hash, Layers, X, type LucideIcon } from 'lucide-react';
-import moment from 'moment';
 import Link from 'next/link';
+import { WarehouseStatusBadge } from '../../../components/WarehouseStatusBadge';
 import { TRACKING_TYPE_LABELS } from '../../../lib/labels';
+import { STOCK_LEVEL_UI } from '../../../lib/status-presentation';
 import type { MaterialTrackingTypeValue } from '../../../schemas/stock-movement';
 import { MaterialRowActions } from '../MaterialRowActions';
 import type { MaterialListItem } from './actions.server';
@@ -19,6 +21,8 @@ export const trackingIcons: Record<MaterialTrackingTypeValue, LucideIcon> = {
   SERIAL: Barcode,
   BATCH: Layers,
 };
+/** Filtro `below_min`: 'true' = bajo mínimo (agotados incluidos), 'false' = el resto. */
+export const stockLevelByBelowMin = { true: STOCK_LEVEL_UI.BELOW_MIN, false: STOCK_LEVEL_UI.OK } as const;
 export const boolIcons: Record<'true' | 'false', LucideIcon> = { true: Check, false: X };
 
 export const HIDDEN_COLUMNS_BY_DEFAULT = ['description', 'created_at'];
@@ -49,7 +53,7 @@ export function getColumns({ canUpdate, canDelete }: MaterialPermissions): Colum
       cell: ({ row }) => (
         <Link
           href={`/dashboard/warehouse/materials/${row.original.id}`}
-          className={cn('font-medium text-blue-600 hover:underline', dim(row.original))}
+          className={cn('font-medium text-brand-ink hover:underline', dim(row.original))}
         >
           {row.original.name}
         </Link>
@@ -122,6 +126,20 @@ export function getColumns({ canUpdate, canDelete }: MaterialPermissions): Colum
       cell: ({ row }) => <span className={cn('tabular-nums', dim(row.original))}>{row.original.min_stock ?? '-'}</span>,
     },
     {
+      id: 'below_min',
+      accessorFn: (row) => row.stock_level ?? '',
+      meta: { title: 'Nivel de stock' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Nivel de stock" />,
+      enableSorting: false,
+      cell: ({ row }) =>
+        row.original.stock_level ? (
+          <WarehouseStatusBadge entity="stockLevel" status={row.original.stock_level} size="sm" />
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        ),
+      filterFn: (row, _id, value: string[]) => value.includes(String(row.original.below_min)),
+    },
+    {
       id: 'is_active',
       accessorKey: 'is_active',
       meta: { title: 'Estado' },
@@ -142,7 +160,7 @@ export function getColumns({ canUpdate, canDelete }: MaterialPermissions): Colum
       accessorKey: 'created_at',
       meta: { title: 'Creado' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Creado" />,
-      cell: ({ row }) => <span>{moment(row.original.created_at).format('DD/MM/YYYY')}</span>,
+      cell: ({ row }) => <span className="tabular-nums">{formatArgentinaDay(row.original.created_at)}</span>,
     },
     {
       id: 'actions',

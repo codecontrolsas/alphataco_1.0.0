@@ -1,18 +1,14 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import {
-  tireServiceOrderStatusBadges,
-  tireServiceOrderStatusLabels,
-} from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
+import { RowActionsMenu, type RowAction } from '@/features/Mantenimiento/Gomeria/shared/RowActionsMenu';
+import { TireServiceOrderStatusPill } from '@/features/Mantenimiento/Gomeria/shared/TireStatusPills';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Ban, CircleOff, Eye, Lock, Play } from 'lucide-react';
-import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ServiceOrderListItem } from '../actions/service-order-list.server';
 
 // ============================================================================
@@ -22,6 +18,17 @@ import type { ServiceOrderListItem } from '../actions/service-order-list.server'
 type Permissions = {
   hasPermission: (module: string, tab: string, action: string) => boolean;
 };
+
+/** Columnas que arrancan ocultas en el diseño nuevo (`-v2`); las preferencias guardadas ganan sobre esta lista. */
+export const SERVICE_ORDER_HIDDEN_COLUMNS_BY_DEFAULT: Record<string, boolean> = {
+  created_at: false,
+};
+
+/** "U-133 · Tractocamión 6x4": número interno y subtipo debajo del dominio. */
+function vehicleSubtitle(vehicle: { intern_number: string | null; sub_type: { name: string } | null } | null) {
+  if (!vehicle) return null;
+  return [vehicle.intern_number, vehicle.sub_type?.name].filter(Boolean).join(' · ') || null;
+}
 
 // ============================================================================
 // COLUMNS
@@ -60,18 +67,7 @@ export function getColumns(
       meta: { excludeFromExport: true, title: '' },
     },
 
-    // --- Service Date ---
-    {
-      id: 'service_date',
-      accessorKey: 'service_date',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha" />,
-      cell: ({ row }) => (
-        <div>{row.original.service_date ? formatArgentinaDay(row.original.service_date) : '-'}</div>
-      ),
-      meta: { title: 'Fecha' },
-    },
-
-    // --- Vehicle ---
+    // --- Vehicle (compuesta: dominio + interno y subtipo; abre el detalle) ---
     {
       id: 'vehicle_id',
       accessorFn: (row) => row.vehicle?.domain ?? '',
@@ -79,13 +75,23 @@ export function getColumns(
       cell: ({ row }) => {
         const vehicle = row.original.vehicle;
         if (!vehicle?.domain) return <div className="text-muted-foreground">-</div>;
+        const subtitle = vehicleSubtitle(vehicle);
+        const content = (
+          <span className="flex flex-col items-start gap-0.5">
+            <span className="font-mono text-sm font-semibold">{vehicle.domain}</span>
+            {subtitle ? <span className="text-muted-foreground text-xs">{subtitle}</span> : null}
+          </span>
+        );
+        if (!onViewDetail) return content;
         return (
-          <div className="flex flex-col gap-0.5">
-            <Badge variant="outline">{vehicle.domain}</Badge>
-            {vehicle.sub_type?.name && (
-              <span className="text-[10px] text-muted-foreground">{vehicle.sub_type.name}</span>
-            )}
-          </div>
+          <button
+            type="button"
+            onClick={() => onViewDetail(row.original)}
+            aria-label={`Ver detalle de la orden de ${vehicle.domain}`}
+            className="focus-visible:ring-ring/50 rounded-sm text-left outline-none hover:underline focus-visible:ring-[3px]"
+          >
+            {content}
+          </button>
         );
       },
       filterFn: (row, _id, value: string[]) => {
@@ -94,6 +100,33 @@ export function getColumns(
         return value.includes(id);
       },
       meta: { title: 'Vehículo' },
+    },
+
+    // --- Service Date ---
+    {
+      id: 'service_date',
+      accessorKey: 'service_date',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha" />,
+      cell: ({ row }) => (
+        <div className="font-mono text-sm tabular-nums">
+          {row.original.service_date ? formatArgentinaDateTime(row.original.service_date) : '-'}
+        </div>
+      ),
+      meta: { title: 'Fecha' },
+    },
+
+    // --- Status ---
+    {
+      id: 'status',
+      accessorKey: 'status',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      cell: ({ row }) => <TireServiceOrderStatusPill status={row.original.status} />,
+      filterFn: (row, id, value: string[]) => {
+        const val = row.getValue(id) as string | null;
+        if (val == null) return value.includes(NULL_FILTER_VALUE);
+        return value.includes(val);
+      },
+      meta: { title: 'Estado' },
     },
 
     // --- Trailer ---
@@ -105,17 +138,16 @@ export function getColumns(
         const trailer = row.original.trailer;
         if (!trailer?.domain)
           return (
-            <div className="inline-flex items-center gap-1 text-muted-foreground">
-              <CircleOff className="h-3 w-3" />
+            <div className="text-muted-foreground inline-flex items-center gap-1">
+              <CircleOff className="h-3 w-3" aria-hidden="true" />
               Sin asignar
             </div>
           );
+        const subtitle = vehicleSubtitle(trailer);
         return (
           <div className="flex flex-col gap-0.5">
-            <Badge variant="outline">{trailer.domain}</Badge>
-            {trailer.sub_type?.name && (
-              <span className="text-[10px] text-muted-foreground">{trailer.sub_type.name}</span>
-            )}
+            <span className="font-mono text-sm font-semibold">{trailer.domain}</span>
+            {subtitle ? <span className="text-muted-foreground text-xs">{subtitle}</span> : null}
           </div>
         );
       },
@@ -135,7 +167,7 @@ export function getColumns(
       cell: ({ row }) => {
         const km = row.original.kilometer;
         if (!km) return <div className="text-muted-foreground">-</div>;
-        return <div className="font-mono text-sm">{km}</div>;
+        return <div className="font-mono text-sm tabular-nums">{km}</div>;
       },
       meta: { title: 'Kilómetros' },
     },
@@ -151,27 +183,6 @@ export function getColumns(
       },
       enableSorting: false,
       meta: { title: 'Intervenciones' },
-    },
-
-    // --- Status ---
-    {
-      id: 'status',
-      accessorKey: 'status',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
-      cell: ({ row }) => {
-        const status = row.original.status;
-        return (
-          <Badge variant={tireServiceOrderStatusBadges[status] ?? 'default'}>
-            {tireServiceOrderStatusLabels[status] ?? status}
-          </Badge>
-        );
-      },
-      filterFn: (row, id, value: string[]) => {
-        const val = row.getValue(id) as string | null;
-        if (val == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(val);
-      },
-      meta: { title: 'Estado' },
     },
 
     // --- Created By ---
@@ -191,93 +202,49 @@ export function getColumns(
       meta: { title: 'Creado por' },
     },
 
-    // --- Created At ---
+    // --- Created At (atómica, oculta por defecto) ---
     {
       id: 'created_at',
       accessorKey: 'created_at',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Creado" />,
       cell: ({ row }) => (
-        <div>{row.original.created_at ? formatArgentinaDay(row.original.created_at) : '-'}</div>
+        <div className="font-mono text-sm tabular-nums">
+          {row.original.created_at ? formatArgentinaDateTime(row.original.created_at) : '-'}
+        </div>
       ),
       meta: { title: 'Creado' },
     },
 
-    // --- Actions ---
+    // --- Actions: menú ⋯ (ver = view; continuar/finalizar = update; anular = delete, solo en abiertas) ---
     {
       id: 'actions',
       cell: ({ row }: { row: import('@tanstack/react-table').Row<ServiceOrderListItem> }) => {
-        const isOpen = row.original.status === 'OPEN';
+        const order = row.original;
+        const isOpen = order.status === 'OPEN';
+        const actions: RowAction[] = [];
+        if (onViewDetail)
+          actions.push({ key: 'detail', label: 'Ver detalle', icon: Eye, onSelect: () => onViewDetail(order) });
+        if (isOpen && canUpdate && onContinue) {
+          actions.push({
+            key: 'continue',
+            label: 'Continuar intervenciones',
+            icon: Play,
+            onSelect: () => onContinue(order),
+          });
+        }
+        if (isOpen && canUpdate)
+          actions.push({ key: 'close', label: 'Finalizar orden', icon: Lock, onSelect: () => onClose(order) });
+        if (isOpen && canDelete) {
+          actions.push({
+            key: 'cancel',
+            label: 'Anular orden',
+            icon: Ban,
+            destructive: true,
+            onSelect: () => onCancel(order),
+          });
+        }
         return (
-          <TooltipProvider delayDuration={200}>
-            <div className="flex items-center gap-1">
-              {onViewDetail && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => onViewDetail(row.original)}
-                      aria-label="Ver detalle"
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Ver detalle</TooltipContent>
-                </Tooltip>
-              )}
-              {isOpen && canUpdate && (
-                <>
-                  {onContinue && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-green-600 hover:text-green-700"
-                          onClick={() => onContinue(row.original)}
-                          aria-label="Continuar intervenciones"
-                        >
-                          <Play className="h-3.5 w-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Continuar intervenciones</TooltipContent>
-                    </Tooltip>
-                  )}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => onClose(row.original)}
-                        aria-label="Finalizar orden"
-                      >
-                        <Lock className="h-3.5 w-3.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Finalizar orden</TooltipContent>
-                  </Tooltip>
-                </>
-              )}
-              {isOpen && canDelete && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive hover:text-destructive"
-                      onClick={() => onCancel(row.original)}
-                      aria-label="Anular orden"
-                    >
-                      <Ban className="h-3.5 w-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Anular orden</TooltipContent>
-                </Tooltip>
-              )}
-            </div>
-          </TooltipProvider>
+          <RowActionsMenu label={`Acciones de la orden de ${order.vehicle?.domain ?? 'gomería'}`} actions={actions} />
         );
       },
       enableSorting: false,

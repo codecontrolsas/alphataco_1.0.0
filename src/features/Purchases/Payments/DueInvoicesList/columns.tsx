@@ -1,32 +1,16 @@
-'use client';
-
 import { Checkbox } from '@/components/ui/checkbox';
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { StackedCell } from '@/shared/components/common/StackedCell';
+import { formatDateAr } from '@/shared/lib/argentina-time';
 import { CBTE_TYPES, isCbteTypeId } from '@/shared/lib/arca/catalogs';
 import type { ColumnDef } from '@tanstack/react-table';
-import moment from 'moment';
 import Link from 'next/link';
 import type { DueInvoiceListItem } from './actions.server';
-
-export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['issue_date'];
-
-/** Tipos de comprobante a pagar: facturas, ND y NC habilitadas del catalogo. */
-export const DUE_CBTE_TYPE_IDS = [1, 2, 3, 6, 7, 8, 11, 12, 13] as const;
-
-export const CHECK_DEBT_TYPE_LABEL = 'Cheque rechazado';
+import { CHECK_DEBT_TYPE_LABEL, NO_DUE_DATE_LABEL, NO_ORDER_LABEL } from './constants';
 
 export const cbteTypeLabel = (id: number | null) => (id == null ? CHECK_DEBT_TYPE_LABEL : isCbteTypeId(id) ? CBTE_TYPES[id].label : String(id));
-
-export const NO_ORDER_LABEL = 'Sin orden';
-export const NO_DUE_DATE_LABEL = 'Sin vencimiento';
-
-export const DAYS_FILTER_LABELS = {
-  overdue: 'Vencido',
-  upcoming: 'A vencer',
-  none: NO_DUE_DATE_LABEL,
-} as const;
 
 /** Texto de la columna "Días": "Vencido hace 3 días", "Vence hoy", "Vence en 5 días". */
 export function daysLabel(days: number | null): string {
@@ -36,8 +20,9 @@ export function daysLabel(days: number | null): string {
   return `Vence en ${days} ${days === 1 ? 'día' : 'días'}`;
 }
 
-/** Columnas DATE (sin hora): se leen en UTC para no correr un dia. */
-const formatDateOnly = (value: Date | string | null) => (value ? moment.utc(value).format('DD/MM/YYYY') : '-');
+/** Columnas DATE (sin hora): llegan como medianoche UTC, se leen como fecha para no correr un día. */
+const formatDateOnly = (value: Date | string | null) =>
+  value ? formatDateAr(new Date(value).toISOString().slice(0, 10)) : '-';
 
 export function getColumns(): ColumnDef<DueInvoiceListItem>[] {
   return [
@@ -67,11 +52,8 @@ export function getColumns(): ColumnDef<DueInvoiceListItem>[] {
       meta: { title: 'Proveedor' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Proveedor" />,
       cell: ({ row }) => (
-        <Link
-          href={`/dashboard/purchases/suppliers/${row.original.supplier.id}`}
-          className="text-blue-600 hover:underline"
-        >
-          {row.original.supplier.name}
+        <Link href={`/dashboard/purchases/suppliers/${row.original.supplier.id}`} className="block hover:underline">
+          <StackedCell primary={row.original.supplier.name} secondary={`CUIT ${row.original.supplier.cuit}`} />
         </Link>
       ),
       filterFn: (row, _id, value: string[]) => value.includes(row.original.supplier.id),
@@ -88,9 +70,14 @@ export function getColumns(): ColumnDef<DueInvoiceListItem>[] {
               ? `/dashboard/treasury/checks/${row.original.id}`
               : `/dashboard/purchases/invoices/${row.original.id}`
           }
-          className="font-mono text-sm font-medium text-blue-600 hover:underline"
+          className="block text-brand-ink hover:underline"
+          aria-label={`Ver ${row.original.label}`}
         >
-          {row.original.label}
+          <StackedCell
+            mono
+            primary={row.original.voucher_number}
+            secondary={row.original.kind === 'CHECK' ? null : cbteTypeLabel(row.original.cbte_type)}
+          />
         </Link>
       ),
     },
@@ -125,7 +112,7 @@ export function getColumns(): ColumnDef<DueInvoiceListItem>[] {
         const days = row.original.days_to_due;
         if (days == null) return <span className="text-muted-foreground">{NO_DUE_DATE_LABEL}</span>;
         return (
-          <span className={days < 0 ? 'font-medium text-red-600 dark:text-red-400' : undefined}>{daysLabel(days)}</span>
+          <span className={days < 0 ? 'font-medium text-danger-subtle-foreground' : undefined}>{daysLabel(days)}</span>
         );
       },
       filterFn: (row, _id, value: string[]) => {
@@ -164,7 +151,7 @@ export function getColumns(): ColumnDef<DueInvoiceListItem>[] {
               <Link
                 key={o.id}
                 href={`/dashboard/purchases/payments/${o.id}`}
-                className="font-mono text-sm text-blue-600 hover:underline"
+                className="font-mono text-sm text-brand-ink hover:underline"
               >
                 {o.number}
               </Link>

@@ -9,13 +9,20 @@ import {
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { CBTE_TYPES, type CbteTypeId } from '@/shared/lib/arca/catalogs';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { formatAmountText } from '@/shared/utils/amount-text';
 import { CircleOff } from 'lucide-react';
 import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
 import { INVOICE_STATUS_LABELS } from '../lib/invoice-state-machine';
 import { cbteLabel } from '../lib/invoice-type';
-import { getInvoiceSingleFacet, getInvoicesForExport, getInvoicesPaginated, type InvoiceListItem } from './actions.server';
+import {
+  getInvoiceSingleFacet,
+  getInvoicesForExport,
+  getInvoicesPaginated,
+  type InvoiceListItem,
+} from './actions.server';
 import {
   ENVIRONMENT_LABELS,
   HIDDEN_COLUMNS_BY_DEFAULT,
@@ -112,19 +119,20 @@ export default function _InvoicesDataTable({
   );
 
   const makeFkFetchFacet = useCallback(
-    (columnId: string) => async (params: DataTableSearchParams): Promise<FacetResult> => {
-      const result = await getInvoiceSingleFacet(columnId, params);
-      if (!result) return { options: [], counts: new Map() };
-      return {
-        options: [
-          ...(result.resolvedOptions?.map((o) => ({ value: o.id, label: o.name ?? '' })) ?? []),
-          ...(result.counts.has(NULL_FILTER_VALUE)
-            ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-            : []),
-        ],
-        counts: result.counts,
-      };
-    },
+    (columnId: string) =>
+      async (params: DataTableSearchParams): Promise<FacetResult> => {
+        const result = await getInvoiceSingleFacet(columnId, params);
+        if (!result) return { options: [], counts: new Map() };
+        return {
+          options: [
+            ...(result.resolvedOptions?.map((o) => ({ value: o.id, label: o.name ?? '' })) ?? []),
+            ...(result.counts.has(NULL_FILTER_VALUE)
+              ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
+              : []),
+          ],
+          counts: result.counts,
+        };
+      },
     []
   );
 
@@ -218,7 +226,7 @@ export default function _InvoicesDataTable({
       emptyMessage="Todavía no hay comprobantes. Creá uno con “Nueva factura”."
       data-testid="invoices-table"
       exportConfig={{
-        fetchAllData: () => getInvoicesForExport(currentParams),
+        fetchAllData: async () => unwrapExportResult(await getInvoicesForExport(currentParams)),
         options: {
           filename: 'comprobantes',
           sheetName: 'Comprobantes',
@@ -227,7 +235,7 @@ export default function _InvoicesDataTable({
         formatters: {
           issue_date: (value) => (value ? moment(value as string, 'YYYY-MM-DD').format('DD/MM/YYYY') : '-'),
           cae_due_date: (value) => (value ? moment(value as string, 'YYYY-MM-DD').format('DD/MM/YYYY') : '-'),
-          created_at: (value) => (value ? moment(value as string).format('DD/MM/YYYY HH:mm') : '-'),
+          created_at: (value) => (value ? formatArgentinaDateTime(value as string) : '-'),
           cbte_type: (_value, row) => row.cbteLabel,
           status: (_value, row) => INVOICE_STATUS_LABELS[row.status],
           environment: (_value, row) => ENVIRONMENT_LABELS[row.environment],

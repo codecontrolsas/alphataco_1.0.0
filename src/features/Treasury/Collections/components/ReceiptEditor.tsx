@@ -29,14 +29,9 @@ import { useState } from 'react';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 import { searchCollectionCustomers } from '../../actions/customer-statement.server';
-import {
-  confirmReceipt,
-  deleteReceiptDraft,
-  findDuplicateReceiptChecks,
-  getReceiptFormData,
-  saveReceiptDraft,
-  type ReceiptFormData,
-} from '../../actions/receipts.server';
+import { findDuplicateReceiptChecks, getReceiptFormData } from '../../actions/receipt-reads.server';
+import { confirmReceipt, deleteReceiptDraft, saveReceiptDraft } from '../../actions/receipts.server';
+import type { ReceiptFormData } from '../../lib/receipt-types';
 import { attachWithholdingCertificate } from '../../actions/withholdings.server';
 import { invalidateTreasury } from '../../lib/invalidate';
 import { TREASURY_QUERY_KEYS } from '../../lib/query-keys';
@@ -78,6 +73,7 @@ export function ReceiptEditor({
   const [customerLabel, setCustomerLabel] = useState<string | null>(initialData.customer?.label ?? null);
   const [certificates, setCertificates] = useState<PendingCertificates>({});
   const [confirming, setConfirming] = useState(false);
+  const [navigating, setNavigating] = useState(false);
   const [deleting, setDeleting] = useState(false);
   /** Cheques del recibo que ya están vigentes en una cartera (aviso al confirmar, no bloquea). */
   const [duplicates, setDuplicates] = useState<{ id: string; number: string; bank: string; status: string }[]>([]);
@@ -144,7 +140,10 @@ export function ReceiptEditor({
       await afterWrite(saved.withholdingIds);
       toast.success('Borrador guardado', { description: preview.closes ? 'Cierra: ya se puede confirmar.' : preview.closing });
       // Una ruta nueva ya trae datos frescos: refrescar encima cancela la navegación.
-      if (!receiptId) router.replace(`/dashboard/treasury/receipts/${saved.id}`);
+      if (!receiptId) {
+        setNavigating(true);
+        router.replace(`/dashboard/treasury/receipts/${saved.id}`);
+      }
       else router.refresh();
     },
     onError: (error) => {
@@ -160,7 +159,10 @@ export function ReceiptEditor({
       await afterWrite(confirmed.withholdingIds);
       toast.success(`Recibo ${confirmed.number} confirmado`);
       if (receiptId) router.refresh();
-      else router.push(`/dashboard/treasury/receipts/${confirmed.id}`);
+      else {
+        setNavigating(true);
+        router.push(`/dashboard/treasury/receipts/${confirmed.id}`);
+      }
     },
     onError: (error) => {
       setConfirming(false);
@@ -174,12 +176,14 @@ export function ReceiptEditor({
     onSuccess: () => {
       toast.success('Borrador borrado');
       invalidateTreasury(queryClient);
+      setNavigating(true);
       router.push('/dashboard/treasury?tab=cobranzas&view=receipts');
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : 'No se pudo borrar el borrador'),
   });
 
-  const busy = save.isPending || confirm.isPending || remove.isPending;
+  // `isPending` vuelve a false antes de que termine la navegación: sin esto un segundo clic crea otro recibo.
+  const busy = save.isPending || confirm.isPending || remove.isPending || navigating;
 
   const askConfirm = async () => {
     if (!(await form.trigger())) return;
@@ -366,7 +370,7 @@ export function ReceiptEditor({
             </AlertDialogDescription>
           </AlertDialogHeader>
           {duplicates.length > 0 && (
-            <div role="alert" className="rounded-md border border-red-600 p-3 text-sm text-red-700 dark:border-red-400 dark:text-red-400">
+            <div role="alert" className="rounded-md border border-danger p-3 text-sm text-danger">
               <p className="font-medium">Ya hay cheques vigentes con el mismo banco, número y CUIT:</p>
               <ul className="mt-1 list-disc pl-5">
                 {duplicates.map((d) => (

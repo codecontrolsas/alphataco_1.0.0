@@ -2,11 +2,12 @@
 
 import { Badge } from '@/components/ui/badge';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { StackedCell } from '@/shared/components/common/StackedCell';
+import { formatArgentinaDay, formatDateAr } from '@/shared/lib/argentina-time';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { destinationTypeIcons } from '@/features/Warehouses/Movements/components/MovementsList/columns';
 import { DESTINATION_TYPE_LABELS } from '@/features/Warehouses/lib/labels';
 import type { ColumnDef } from '@tanstack/react-table';
-import moment from 'moment';
 import Link from 'next/link';
 import { PurchaseRequestStatusBadge } from '../components/PurchaseRequestStatusBadge';
 import type { PurchaseRequestListItem } from './actions.server';
@@ -23,7 +24,7 @@ export function getColumns(): ColumnDef<PurchaseRequestListItem>[] {
       cell: ({ row }) => (
         <Link
           href={`/dashboard/purchases/requests/${row.original.id}`}
-          className="font-mono text-sm font-medium text-blue-600 hover:underline"
+          className="font-mono text-sm font-medium text-brand-ink hover:underline"
         >
           {row.original.number}
         </Link>
@@ -34,14 +35,14 @@ export function getColumns(): ColumnDef<PurchaseRequestListItem>[] {
       accessorKey: 'created_at',
       meta: { title: 'Fecha' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha" />,
-      cell: ({ row }) => <span>{moment(row.original.created_at).format('DD/MM/YYYY')}</span>,
+      cell: ({ row }) => <span>{formatArgentinaDay(row.original.created_at)}</span>,
     },
     {
       id: 'requester',
       accessorFn: (row) => row.requester.name,
       meta: { title: 'Solicitante' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Solicitante" />,
-      cell: ({ row }) => <span>{row.original.requester.name}</span>,
+      cell: ({ row }) => <StackedCell primary={row.original.requester.name} secondary={row.original.requester.email} />,
       filterFn: (row, _id, value: string[]) => value.includes(row.original.requester.id),
     },
     {
@@ -74,7 +75,7 @@ export function getColumns(): ColumnDef<PurchaseRequestListItem>[] {
       // Calculado desde varias relaciones (empleado/equipo/orden/cliente): no ordenable.
       enableSorting: false,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Destino" />,
-      cell: ({ row }) => <span>{row.original.destination ?? '-'}</span>,
+      cell: ({ row }) => <StackedCell primary={row.original.destination ?? '-'} maxWidthClass="max-w-[260px]" />,
     },
     {
       id: 'status',
@@ -109,7 +110,7 @@ export function getColumns(): ColumnDef<PurchaseRequestListItem>[] {
       meta: { title: 'Se necesita para' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Se necesita para" />,
       cell: ({ row }) => (
-        <span>{row.original.needed_by ? moment.utc(row.original.needed_by).format('DD/MM/YYYY') : '-'}</span>
+        <span>{row.original.needed_by ? formatDateAr(new Date(row.original.needed_by).toISOString().slice(0, 10)) : '-'}</span>
       ),
     },
     {
@@ -123,7 +124,7 @@ export function getColumns(): ColumnDef<PurchaseRequestListItem>[] {
         return (
           <Link
             href={`/dashboard/warehouse/requests/${origin.id}`}
-            className="font-mono text-sm text-blue-600 hover:underline"
+            className="font-mono text-sm text-brand-ink hover:underline"
           >
             {origin.number}
           </Link>

@@ -19,10 +19,11 @@ import { formatInCurrency } from '../../lib/currency-format';
 import { invalidateTreasury } from '../../lib/invalidate';
 import { treasuryToday } from '../../lib/today';
 import { debitOwnChecksSchema, type DebitOwnChecksValues } from '../../schemas/own-checks';
+import { formatDay } from '../../lib/dates';
 
 const logger = new Logger('Treasury/DebitOwnChecksDialog');
 
-const dmy = (value: string | null) => (value ? moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY') : '—');
+const dmy = (value: string | null) => formatDay(value) || '—';
 
 export type DebitableOwnCheck = { id: string; number: string; amount: string; paymentDate: string | null; accountName: string };
 

@@ -11,7 +11,9 @@ import { getActiveCompanyId, NoActiveCompanyError } from '@/shared/lib/tenant';
  * Talleres (`workshops`) y sectores de taller (`workshop_sectors`) de la empresa activa.
  * Ambas tablas tienen `company_id`: toda lectura va con `withCompany` y toda escritura verifica
  * que la fila (y el taller padre de un sector) pertenezca a la empresa activa.
- * Las mutaciones exigen `empresa.talleres.*` / `empresa.sectores_taller.*`.
+ * Las mutaciones exigen `configuracion.talleres.*` / `configuracion.sectores_taller.*`; las listas completas
+ * (`fetchAllWorkshops`, `fetchAllWorkshopSectors`) exigen `view` de su tab, y el selector de talleres internos
+ * (`fetchInternalWorkshops`, solo lo usa Sectores de taller) exige `view` de esa tab.
  *
  * `employee_workshop_sectors` (empleados por sector) no se toca acá: sus altas/bajas viven en
  * `Employees/EmpleadoID` (altas/bajas explícitas por id).
@@ -30,7 +32,10 @@ async function activeCompanyOrNull(): Promise<string | null> {
   }
 }
 
-async function assertPermission(tab: 'talleres' | 'sectores_taller', action: 'create' | 'update'): Promise<void> {
+async function assertPermission(
+  tab: 'talleres' | 'sectores_taller',
+  action: 'view' | 'create' | 'update'
+): Promise<void> {
   if (!(await checkPermissionServer('configuracion', tab, action))) {
     throw new Error('No tenés permiso para realizar esta acción');
   }
@@ -76,13 +81,16 @@ function serializeWorkshop(row: WorkshopDbRow) {
 
 export type Workshop = ReturnType<typeof serializeWorkshop>;
 
-const sectorInclude = { workshops: { select: { id: true, name: true, type: true } } } satisfies Prisma.workshop_sectorsInclude;
+const sectorInclude = {
+  workshops: { select: { id: true, name: true, type: true } },
+} satisfies Prisma.workshop_sectorsInclude;
 
 export type WorkshopSector = Prisma.workshop_sectorsGetPayload<{ include: typeof sectorInclude }>;
 
 // ─── Talleres ───────────────────────────────────────────────────────────────
 
 export async function fetchAllWorkshops(): Promise<Workshop[]> {
+  await assertPermission('talleres', 'view');
   const companyId = await activeCompanyOrNull();
   if (!companyId) return [];
   try {
@@ -98,24 +106,9 @@ export async function fetchAllWorkshops(): Promise<Workshop[]> {
   }
 }
 
-export async function fetchActiveWorkshops(): Promise<Workshop[]> {
-  const companyId = await activeCompanyOrNull();
-  if (!companyId) return [];
-  try {
-    const rows = await prisma.workshops.findMany({
-      where: withCompany({ is_active: true }, companyId),
-      select: workshopSelect,
-      orderBy: { name: 'asc' },
-    });
-    return rows.map(serializeWorkshop);
-  } catch (error) {
-    logger.error('Error al obtener talleres activos', { data: { error, companyId } });
-    return [];
-  }
-}
-
-/** Talleres internos activos (`{ id, name }`) para el selector de sectores. */
+/** Talleres internos activos (`{ id, name }`) para el selector de sectores. Sin permiso, lanza (no devuelve []). */
 export async function fetchInternalWorkshops() {
+  await assertPermission('sectores_taller', 'view');
   const companyId = await activeCompanyOrNull();
   if (!companyId) return [];
   try {
@@ -199,6 +192,7 @@ export async function updateWorkshop(workshop: WorkshopInput & { id: string }): 
 // ─── Sectores de taller ─────────────────────────────────────────────────────
 
 export async function fetchAllWorkshopSectors(): Promise<WorkshopSector[]> {
+  await assertPermission('sectores_taller', 'view');
   const companyId = await activeCompanyOrNull();
   if (!companyId) return [];
   try {
@@ -213,21 +207,6 @@ export async function fetchAllWorkshopSectors(): Promise<WorkshopSector[]> {
   }
 }
 
-export async function fetchSectorsByWorkshop(workshopId: string): Promise<WorkshopSector[]> {
-  const companyId = await activeCompanyOrNull();
-  if (!companyId) return [];
-  try {
-    return await prisma.workshop_sectors.findMany({
-      where: withCompany({ workshop_id: workshopId }, companyId),
-      include: sectorInclude,
-      orderBy: { name: 'asc' },
-    });
-  } catch (error) {
-    logger.error('Error al obtener sectores del taller', { data: { error, workshopId, companyId } });
-    return [];
-  }
-}
-
 export interface WorkshopSectorInput {
   name: string;
   description?: string | null;
@@ -238,7 +217,10 @@ export interface WorkshopSectorInput {
 
 /** El taller padre tiene que ser de la empresa activa: si no, no se escribe nada. */
 async function assertWorkshopOwned(workshopId: string, companyId: string): Promise<void> {
-  const owned = await prisma.workshops.findFirst({ where: { id: workshopId, company_id: companyId }, select: { id: true } });
+  const owned = await prisma.workshops.findFirst({
+    where: { id: workshopId, company_id: companyId },
+    select: { id: true },
+  });
   if (!owned) throw new Error('El taller no pertenece a la empresa activa');
 }
 

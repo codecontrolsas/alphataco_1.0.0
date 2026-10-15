@@ -2,30 +2,70 @@
 
 import {
   DataTable,
+  type DataTableExportConfig,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
+  type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { formSourceLabels } from '@/shared/utils/mappers';
 import { useQuery } from '@tanstack/react-query';
-import { CheckCircle2, CircleOff, ClipboardCheck, FileText, XCircle } from 'lucide-react';
-import moment from 'moment';
-import { useMemo } from 'react';
-import { getAllFormsForExport, getFormsFacets, type FormsListItem } from '../actions.server';
-import { HIDDEN_COLUMNS_BY_DEFAULT, getColumns } from '../columns';
+import { CheckCircle2, CircleOff, XCircle } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
+import {
+  getAllFormsForExport,
+  getFormsPaginated,
+  getFormsSingleFacet,
+  getFormsUnionCoverage,
+  type FormListItem,
+} from '../actions.server';
+import { HIDDEN_COLUMNS_BY_DEFAULT, formSourceIcons, getColumns } from '../columns';
 
 // ============================================================================
 // PROPS
 // ============================================================================
 
 interface Props {
-  data: FormsListItem[];
+  data: FormListItem[];
   totalRows: number;
   searchParams: DataTableSearchParams;
   tableId: string;
   permissionsMap: Record<string, boolean>;
   initialColumnVisibility: Record<string, boolean>;
   initialFilterVisibility: Record<string, boolean>;
+}
+
+const DEFAULT_VISIBLE_FILTERS = ['is_active', 'source', 'created_at'];
+
+const SOURCES = ['checklist_template', 'custom_form'] as const;
+
+const EMPTY_FACET: FacetResult = { options: [], counts: new Map() };
+
+// ─── fetchFacet lazy por columna (estables: viven fuera del componente) ───────
+async function fetchIsActiveFacet(params: DataTableSearchParams): Promise<FacetResult> {
+  const result = await getFormsSingleFacet('is_active', params);
+  if (!result) return EMPTY_FACET;
+  return {
+    options: [
+      { value: 'true', label: 'Activo', icon: CheckCircle2 },
+      { value: 'false', label: 'Inactivo', icon: XCircle },
+      ...(result.counts.has(NULL_FILTER_VALUE)
+        ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
+        : []),
+    ],
+    counts: result.counts,
+  };
+}
+
+async function fetchSourceFacet(params: DataTableSearchParams): Promise<FacetResult> {
+  const result = await getFormsSingleFacet('source', params);
+  if (!result) return EMPTY_FACET;
+  return {
+    options: SOURCES.map((value) => ({ value, label: formSourceLabels[value], icon: formSourceIcons[value] })),
+    counts: result.counts,
+  };
 }
 
 // ============================================================================
@@ -41,7 +81,7 @@ export function _FormsDataTable({
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
-  // Helper de permisos desde el map serializable del servidor
+  // Helper de permisos desde el map serializable del servidor (sin re-fetch en el cliente)
   const permissions = useMemo(
     () => ({
       hasPermission: (module: string, tab: string, action: string) =>
@@ -50,134 +90,105 @@ export function _FormsDataTable({
     [permissionsMap]
   );
 
-  // Extraer solo los params relevantes para facets (sin page/sort/pageSize)
-  const facetParams = useMemo(() => {
-    const { page, pageSize, sort, sortBy, sortOrder, ...rest } = searchParams;
-    return rest as DataTableSearchParams;
-  }, [searchParams]);
+  // Client-side mode: filtros, orden y paginación sin re-renderizar la página
+  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
+  const handleStateChange = useCallback((params: DataTableSearchParams) => setCurrentParams(params), []);
+  const tableQueryFn = useCallback((params: DataTableSearchParams) => getFormsPaginated(params), []);
 
-  // Facets
-  const { data: facets, isFetching: isFetchingFacets } = useQuery({
-    queryKey: ['forms-list-facets', facetParams],
-    queryFn: () => getFormsFacets(facetParams),
-    staleTime: 5 * 60 * 1000,
+  // La unión de las dos fuentes se arma en memoria con tope por fuente: si los filtros dejan más filas que
+  // el tope, se avisa con el conteo real en vez de truncar en silencio.
+  const { data: coverage } = useQuery({
+    queryKey: ['forms-list', 'coverage', currentParams],
+    queryFn: () => getFormsUnionCoverage(currentParams),
+    staleTime: 30 * 1000,
   });
+  const isTruncated = coverage != null && coverage.shown < coverage.total;
 
-  // Columnas ocultas por defecto
   const mergedColumnVisibility = useMemo(() => {
     const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((col) => [col, false]));
     return { ...defaults, ...initialColumnVisibility };
   }, [initialColumnVisibility]);
 
-  // Filtros visibles por defecto — máximo 3
-  const DEFAULT_VISIBLE_FILTERS = ['is_active', 'source', 'created_at'];
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
-      return initialFilterVisibility;
-    }
-    const allFilterIds = ['is_active', 'source', 'name', 'description', 'code', 'created_at'];
-    return Object.fromEntries(allFilterIds.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
-  }, [initialFilterVisibility]);
-
-  // ─── Filtros facetados ──────────────────────────────────────────────────────
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
     () => [
-      // Estado activo/inactivo (faceted, con iconos)
-      {
-        columnId: 'is_active',
-        title: 'Estado',
-        options: [
-          { value: 'true', label: 'Activo', icon: CheckCircle2 },
-          { value: 'false', label: 'Inactivo', icon: XCircle },
-          ...(facets?.is_active?.has(NULL_FILTER_VALUE)
-            ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-            : []),
-        ],
-        externalCounts: facets?.is_active,
-      },
-
-      // Tipo / Fuente (faceted, con iconos de tipo)
-      {
-        columnId: 'source',
-        title: 'Tipo',
-        options: [
-          { value: 'checklist_template', label: formSourceLabels['checklist_template'], icon: ClipboardCheck },
-          { value: 'custom_form', label: formSourceLabels['custom_form'], icon: FileText },
-        ],
-        externalCounts: facets?.source,
-      },
-
-      // Nombre (filtro de texto)
-      {
-        columnId: 'name',
-        title: 'Nombre',
-        type: 'text' as const,
-        placeholder: 'Filtrar por nombre...',
-      },
-
-      // Descripción (filtro de texto)
+      { columnId: 'is_active', title: 'Estado', fetchFacet: fetchIsActiveFacet },
+      { columnId: 'source', title: 'Tipo', fetchFacet: fetchSourceFacet },
+      { columnId: 'name', title: 'Nombre', type: 'text' as const, placeholder: 'Filtrar por nombre...' },
       {
         columnId: 'description',
         title: 'Descripción',
         type: 'text' as const,
         placeholder: 'Filtrar por descripción...',
       },
-
-      // Código (filtro de texto)
-      {
-        columnId: 'code',
-        title: 'Código',
-        type: 'text' as const,
-        placeholder: 'Filtrar por código...',
-      },
-
-      // Fecha de creación (dateRange)
-      {
-        columnId: 'created_at',
-        title: 'Fecha de creación',
-        type: 'dateRange' as const,
-      },
+      { columnId: 'code', title: 'Código', type: 'text' as const, placeholder: 'Filtrar por código...' },
+      { columnId: 'created_at', title: 'Fecha de creación', type: 'dateRange' as const },
     ],
-    [facets]
+    []
   );
 
-  // ─── Columnas ────────────────────────────────────────────────────────────────
+  // Filtros visibles por defecto — máximo 3 (las preferencias guardadas tienen prioridad)
+  const mergedFilterVisibility = useMemo(() => {
+    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
+      return initialFilterVisibility;
+    }
+    return Object.fromEntries(facetedFilters.map((f) => [f.columnId, DEFAULT_VISIBLE_FILTERS.includes(f.columnId)]));
+  }, [initialFilterVisibility, facetedFilters]);
+
   const columns = useMemo(() => getColumns(permissions), [permissions]);
 
-  // ─── Render ──────────────────────────────────────────────────────────────────
+  const exportConfig: DataTableExportConfig<FormListItem> = useMemo(
+    () => ({
+      fetchAllData: async () => unwrapExportResult(await getAllFormsForExport(currentParams)),
+      options: {
+        filename: 'formularios',
+        title: 'Listado de Formularios',
+        sheetName: 'Formularios',
+      },
+      formatters: {
+        is_active: (val) => (val == null ? 'Sin asignar' : val ? 'Activo' : 'Inactivo'),
+        source: (val) => formSourceLabels[val as string] ?? String(val ?? ''),
+        created_at: (val) => (val ? formatArgentinaDay(val as string | Date) : ''),
+        total_responses: (val) => String(val ?? 0),
+        code: (val) => String(val ?? ''),
+        description: (val) => String(val ?? ''),
+      },
+    }),
+    [currentParams]
+  );
+
   return (
-    <DataTable
-      columns={columns}
-      data={data}
-      totalRows={totalRows}
-      searchParams={searchParams}
-      searchPlaceholder="Buscar formularios por nombre o descripción..."
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={mergedColumnVisibility}
-      initialFilterVisibility={mergedFilterVisibility}
-      tableId={tableId}
-      paramNamespace={tableId}
-      showFilterToggle={true}
-      isFetchingFacets={isFetchingFacets}
-      emptyMessage="No hay formularios registrados"
-      data-testid="forms-table"
-      exportConfig={{
-        fetchAllData: () => getAllFormsForExport(searchParams),
-        options: {
-          filename: 'formularios',
-          title: 'Listado de Formularios',
-          sheetName: 'Formularios',
-        },
-        formatters: {
-          is_active: (val) => (val ? 'Activo' : 'Inactivo'),
-          source: (val) => formSourceLabels[val as string] ?? String(val ?? ''),
-          created_at: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
-          total_responses: (val) => String(val ?? 0),
-          code: (val) => String(val ?? ''),
-          description: (val) => String(val ?? ''),
-          frequency: (val) => String(val ?? ''),
-        },
-      }}
-    />
+    <div className="space-y-3">
+      <p
+        role="status"
+        className={
+          isTruncated
+            ? 'text-warn-subtle-foreground bg-warn-subtle border-warn/35 rounded-lg border px-3 py-2 text-sm'
+            : 'sr-only'
+        }
+      >
+        {isTruncated && coverage
+          ? `Se listan los ${coverage.shown.toLocaleString('es-AR')} formularios más recientes de ${coverage.total.toLocaleString('es-AR')}. La búsqueda y los filtros acotan el resto.`
+          : ''}
+      </p>
+      <DataTable
+        columns={columns}
+        data={data}
+        totalRows={totalRows}
+        searchParams={searchParams}
+        queryFn={tableQueryFn}
+        queryKey={['forms-list']}
+        onStateChange={handleStateChange}
+        searchPlaceholder="Buscar formularios por nombre, descripción o código..."
+        facetedFilters={facetedFilters}
+        initialColumnVisibility={mergedColumnVisibility}
+        initialFilterVisibility={mergedFilterVisibility}
+        tableId={tableId}
+        paramNamespace={tableId}
+        showFilterToggle={true}
+        emptyMessage="No hay formularios registrados"
+        data-testid="forms-table"
+        exportConfig={exportConfig}
+      />
+    </div>
   );
 }

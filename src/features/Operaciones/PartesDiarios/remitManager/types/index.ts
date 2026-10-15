@@ -1,5 +1,8 @@
 // Re-exportar tipos de las acciones
-import type { RemitDocument as RemitDocumentType, RemitoWithDocuments as RemitoWithDocumentsType } from '../actions/remitos.server';
+import type {
+  RemitDocument as RemitDocumentType,
+  RemitoWithDocuments as RemitoWithDocumentsType,
+} from '../actions/remitos.server';
 
 export type {
   AvailableDocument,
@@ -25,9 +28,8 @@ export interface RemitTabProps {
   dailyReportRowId: string;
 }
 
-export interface AddRemitDialogProps {
+export interface AddRemitFormProps {
   dailyReportRowId: string;
-  isOpen: boolean;
   onClose: () => void;
   existingNumbers: string[];
   onRemitoCreated?: (remitoId: string) => void;

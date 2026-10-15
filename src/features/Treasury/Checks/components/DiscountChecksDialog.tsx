@@ -15,18 +15,19 @@ import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
-import { discountChecks, type CheckOperationFormData } from '../../actions/checks.server';
+import { discountChecks } from '../../actions/checks.server';
+import type { CheckOperationFormData } from '../../lib/check-types';
 import { discountError, discountNet } from '../../lib/check-discount';
 import { formatInCurrency } from '../../lib/currency-format';
 import { invalidateTreasury } from '../../lib/invalidate';
 import { discountSchema, type DiscountValues } from '../../schemas/checks';
 import { CheckOperationShell } from './CheckOperationShell';
+import { formatDay } from '../../lib/dates';
 
 const logger = new Logger('Treasury/DiscountChecksDialog');
 
 const cents = (value: string) => parseScaled(value === '' ? '0' : value, AMOUNT_SCALE);
 const pesos = (value: bigint) => formatInCurrency(formatScaled(value, AMOUNT_SCALE), 'ARS');
-const dmy = (value: string) => moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY');
 
 interface DiscountChecksDialogProps {
   open: boolean;
@@ -172,7 +173,7 @@ function DiscountForm({ data, onClose, onDone }: { data: CheckOperationFormData;
           {data.checks.map((c) => (
             <li key={c.id} className="flex items-center justify-between gap-2 px-3 py-2">
               <span className="min-w-0">
-                Nº {c.number} · {c.bank} <span className="text-xs text-muted-foreground">· pago {dmy(c.paymentDate)}</span>
+                Nº {c.number} · {c.bank} <span className="text-xs text-muted-foreground">· pago {formatDay(c.paymentDate)}</span>
               </span>
               <span className="tabular-nums">{formatInCurrency(c.amount, 'ARS')}</span>
             </li>

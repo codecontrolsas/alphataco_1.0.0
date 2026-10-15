@@ -1,7 +1,7 @@
 'use server';
 
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
-import { AMOUNT_SCALE, formatScaled, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
+import { AMOUNT_SCALE, amountOf, formatScaled, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { checkPermissionServer } from '@/features/Permissions';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
@@ -32,6 +32,7 @@ import {
   type StatementProfileValues,
 } from '../schemas/reconciliation';
 import { SESSION_EXPIRED, TRANSACTION_OPTIONS, localToday, revalidateTreasury } from './shared';
+import { isoDay } from '../lib/dates';
 
 /**
  * Conciliación bancaria (spec Tesorería etapa 4 §3): importar extractos, conciliar (automática y a
@@ -44,7 +45,6 @@ const logger = new Logger('features/Treasury/reconciliation');
 const LINE_NOT_FOUND = 'La línea no existe';
 /** Máximo de líneas y de movimientos que muestra el panel (el resumen suma todos). */
 const LINES_LIMIT = 500;
-const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 const addDays = (iso: string, days: number) => {
   const d = new Date(`${iso}T00:00:00.000Z`);
   d.setUTCDate(d.getUTCDate() + days);
@@ -300,7 +300,7 @@ export async function debitCheckFromLine(values: DebitCheckLineValues): Promise<
         if (line.date > localToday()) throw new TreasuryError('La fecha de la línea es futura');
         const check = (await lockOwnChecks(tx, companyId, [parsed.data.checkId])).get(parsed.data.checkId)!;
         if (check.accountId !== line.accountId) throw new TreasuryError('El cheque es de otra cuenta');
-        if (Number(check.amount) !== -Number(line.amount)) throw new TreasuryError('El cheque no tiene el importe de la línea');
+        if (amountOf(check.amount ?? '0') !== -amountOf(line.amount)) throw new TreasuryError('El cheque no tiene el importe de la línea');
         const { movementId } = await debitOwnCheck(tx, { check, date: line.date, companyId, userId: profile.id });
         await setLineStatus(tx, line.id, 'MATCHED', { userId: profile.id, movementId });
       },

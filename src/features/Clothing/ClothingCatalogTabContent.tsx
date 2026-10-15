@@ -1,5 +1,4 @@
-import { TabsManagerServer } from '@/features/TabsManager';
-import { BarChart3, Package, Ruler, Tag } from 'lucide-react';
+import { ViewManagerServer } from '@/features/TabsManager';
 import ClothingBrandsTabContent from './ClothingBrands/ClothingBrandsTabContent';
 import ClothingItemsTabContent from './ClothingItems/ClothingItemsTabContent';
 import ClothingReportsTabContent from './ClothingReports/ClothingReportsTabContent';
@@ -12,56 +11,43 @@ interface Props {
 
 export default async function ClothingCatalogTabContent({ searchParams, permissions }: Props) {
   return (
-    <TabsManagerServer
+    <ViewManagerServer
       paramName="clothing-tab"
       searchParams={searchParams}
-      defaultTab="articulos"
+      defaultView="articulos"
       permissions={permissions}
-      tabs={[
+      preserveParams={['tab', 'subtab']}
+      layout="menu"
+      ariaLabel="Indumentaria y EPP"
+      views={[
         {
           value: 'articulos',
-          label: (
-            <span className="flex items-center gap-2">
-              <Package className="h-4 w-4" />
-              Artículos
-            </span>
-          ),
+          label: 'Artículos',
+          description: 'Artículos de indumentaria y EPP del catálogo',
           moduleSlug: 'configuracion',
           tabSlug: 'articulos_indumentaria',
           content: <ClothingItemsTabContent searchParams={searchParams} permissions={permissions} />,
         },
         {
           value: 'marcas',
-          label: (
-            <span className="flex items-center gap-2">
-              <Tag className="h-4 w-4" />
-              Marcas
-            </span>
-          ),
+          label: 'Marcas',
+          description: 'Marcas de los artículos de indumentaria',
           moduleSlug: 'configuracion',
           tabSlug: 'marcas_indumentaria',
           content: <ClothingBrandsTabContent searchParams={searchParams} permissions={permissions} />,
         },
         {
           value: 'talles',
-          label: (
-            <span className="flex items-center gap-2">
-              <Ruler className="h-4 w-4" />
-              Talles
-            </span>
-          ),
+          label: 'Talles',
+          description: 'Talles disponibles para los artículos',
           moduleSlug: 'configuracion',
           tabSlug: 'talles_indumentaria',
           content: <ClothingSizesTabContent searchParams={searchParams} permissions={permissions} />,
         },
         {
           value: 'reportes',
-          label: (
-            <span className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4" />
-              Reportes
-            </span>
-          ),
+          label: 'Reportes',
+          description: 'Reportes de entregas y stock de indumentaria',
           moduleSlug: 'configuracion',
           tabSlug: 'reportes_indumentaria',
           content: <ClothingReportsTabContent searchParams={searchParams} />,

@@ -24,11 +24,11 @@ import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 import {
   createPaymentOrder,
-  getPaymentOrderFormData,
   previewPaymentOrder,
   updatePaymentOrder,
-  type PaymentOrderFormData,
 } from '../../actions/payment-orders.server';
+import { getPaymentOrderFormData } from '../../actions/payment-queries.server';
+import type { PaymentOrderFormData } from '../../lib/payment-query-types';
 import { searchSupplierOptions } from '../../actions/suppliers.server';
 import { invalidatePurchases } from '../../lib/invalidate';
 import { paymentOrderFormSchema, type PaymentOrderFormValues } from '../../schemas/payment-orders';

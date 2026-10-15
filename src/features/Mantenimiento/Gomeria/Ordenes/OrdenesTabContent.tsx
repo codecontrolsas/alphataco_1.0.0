@@ -1,4 +1,5 @@
 import { getUserPermissionsMapServer } from '@/features/Permissions';
+import { SectionErrorBoundary } from '@/shared/components/common/SectionErrorBoundary';
 import { Suspense } from 'react';
 import ServiceOrdersList from './ServiceOrdersList';
 import { OrdenesSkeleton } from './fallback/OrdenesSkeleton';
@@ -11,8 +12,10 @@ export default async function OrdenesTabContent({
   const permissionsMap = await getUserPermissionsMapServer();
 
   return (
-    <Suspense fallback={<OrdenesSkeleton />}>
-      <ServiceOrdersList searchParams={searchParams} permissionsMap={permissionsMap} />
-    </Suspense>
+    <SectionErrorBoundary title="No se pudieron cargar las órdenes de gomería">
+      <Suspense fallback={<OrdenesSkeleton />}>
+        <ServiceOrdersList searchParams={searchParams} permissionsMap={permissionsMap} />
+      </Suspense>
+    </SectionErrorBoundary>
   );
 }

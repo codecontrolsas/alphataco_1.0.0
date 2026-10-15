@@ -1,6 +1,6 @@
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { Suspense } from 'react';
-import { NoPermission } from '../fallback/NoPermission';
+import { StateBlock } from '@/shared/components/common/StateBlock';
 import { ReceiptsList } from './ReceiptsList/ReceiptsList';
 import { ReceiptsTableSkeleton } from './ReceiptsList/fallback/ReceiptsTableSkeleton';
 
@@ -15,7 +15,7 @@ export default async function ReceiptsTabContent({
   searchParams: DataTableSearchParams;
   permissions: Record<string, boolean>;
 }) {
-  if (permissions['compras:recepciones:view'] !== true) return <NoPermission />;
+  if (permissions['compras:recepciones:view'] !== true) return <StateBlock variant="noperm" title="No tenés permiso para ver esta información" />;
 
   return (
     <div className="space-y-4">

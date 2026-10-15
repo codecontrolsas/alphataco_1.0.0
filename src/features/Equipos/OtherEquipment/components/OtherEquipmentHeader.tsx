@@ -4,13 +4,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { OtherEquipmentDetail } from '@/features/Equipos/OtherEquipment/actions/actionsServer';
 import { EquipmentConditionControl } from '@/features/Equipos/components/EquipmentConditionControl';
+import { EquipmentStatusActions } from '@/features/Equipos/components/EquipmentStatusActions';
 import { PermissionGuard } from '@/features/Permissions';
 import { RecordHeader } from '@/shared/components/common/RecordHeader';
 import { terminationReasonEquipmentLabels } from '@/shared/utils/mappers';
-import { ArrowLeft, Package, Pencil } from 'lucide-react';
+import { Package, Pencil } from 'lucide-react';
 import moment from 'moment';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { OtherEquipmentQuickActions } from './OtherEquipmentQuickActions';
 
 function EquipmentIdentity({ equipment }: { equipment: OtherEquipmentDetail }) {
   const name = [equipment.brand_vehicles?.name, equipment.model_vehicles?.name].filter(Boolean).join(' ');
@@ -112,12 +112,7 @@ export function OtherEquipmentHeader({ equipment }: { equipment: OtherEquipmentD
   };
 
   return (
-    <div className="space-y-6">
-      <Button variant="ghost" size="sm" onClick={() => router.back()} className="-ml-2">
-        <ArrowLeft />
-        Volver
-      </Button>
-
+    <div className="space-y-4">
       <RecordHeader
         identity={<EquipmentIdentity equipment={equipment} />}
         actions={
@@ -126,7 +121,7 @@ export function OtherEquipmentHeader({ equipment }: { equipment: OtherEquipmentD
               <Pencil />
               Editar
             </Button>
-            <OtherEquipmentQuickActions equipmentId={equipment.id} isActive={equipment.is_active ?? false} />
+            <EquipmentStatusActions kind="other" equipmentId={equipment.id} isActive={equipment.is_active ?? false} />
           </PermissionGuard>
         }
       />

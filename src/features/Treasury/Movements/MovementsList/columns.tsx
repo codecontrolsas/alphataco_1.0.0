@@ -1,13 +1,13 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
+import { StackedCell } from '@/shared/components/common/StackedCell';
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ArrowLeftRight, Ban, CheckCheck, CheckCircle2, HandCoins, Pencil, PiggyBank, Truck, WalletCards, type LucideIcon, ScrollText } from 'lucide-react';
-import moment from 'moment';
-import { formatArgentinaDay } from '../../lib/today';
+import { ArrowLeftRight, HandCoins, Pencil, PiggyBank, ScrollText, Truck, WalletCards, type LucideIcon } from 'lucide-react';
+import { formatArgentinaDateTime } from '../../lib/today';
 import Link from 'next/link';
 import type { TreasuryAccountRow } from '../../actions/accounts.server';
 import type { TreasuryConceptRow } from '../../actions/concepts.server';
@@ -15,6 +15,10 @@ import { TREASURY_MOVEMENT_KIND_LABELS } from '../../schemas/movements';
 import { MovementRowActions } from '../components/MovementRowActions';
 import type { TreasuryMovementListItem } from './actions.server';
 import { MOVEMENT_STATE_LABELS } from './constants';
+import { AccountCell } from '../../components/AccountCell';
+import { TreasuryStatusBadge } from '../../components/TreasuryStatusBadge';
+import { formatDay } from '../../lib/dates';
+import { MOVEMENT_STATE_UI } from '../../lib/status-presentation';
 
 export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['created_at', 'cancel_reason'];
 
@@ -32,15 +36,8 @@ export const movementKindIcons: Record<MovementKind, LucideIcon> = {
   OWN_CHECK: ScrollText,
 };
 
-export const movementStateIcons: Record<keyof typeof MOVEMENT_STATE_LABELS, LucideIcon> = {
-  ACTIVE: CheckCircle2,
-  CANCELLED: Ban,
-  RECONCILED: CheckCheck,
-};
-
 /** Fecha valor (YYYY-MM-DD, sin hora): se formatea tal cual para no correr un dia. */
-export const formatValueDate = (value: string | null | undefined) =>
-  value ? moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY') : '-';
+export const formatValueDate = (value: string | null | undefined) => formatDay(value) || '-';
 
 const isIncome = (amount: string) => !amount.startsWith('-');
 const absAmount = (amount: string) => (amount.startsWith('-') ? amount.slice(1) : amount);
@@ -65,7 +62,7 @@ export function getColumns({ canUpdate, accounts, concepts }: ColumnsOptions): C
       accessorFn: (row) => row.account.name,
       meta: { title: 'Cuenta' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Cuenta" />,
-      cell: ({ row }) => <span className="font-medium">{row.original.account.name}</span>,
+      cell: ({ row }) => <AccountCell account={row.original.account} />,
       filterFn: (row, _id, value: string[]) => value.includes(row.original.account.id),
     },
     {
@@ -114,54 +111,74 @@ export function getColumns({ canUpdate, accounts, concepts }: ColumnsOptions): C
       header: ({ column }) => <DataTableColumnHeader column={column} title="Origen" />,
       cell: ({ row }) => {
         const { paymentOrder, transfer, customerReceipt, checkOperation, ownCheck } = row.original;
+        const linkClass = 'text-brand-ink hover:underline';
         if (ownCheck) {
           return (
-            <Link
-              href={`/dashboard/treasury/own-checks/${ownCheck.id}`}
-              className="font-mono text-sm font-medium text-blue-600 hover:underline"
-            >
-              Ch. Nº {ownCheck.number}
-            </Link>
+            <StackedCell
+              mono
+              primary={
+                <Link href={`/dashboard/treasury/own-checks/${ownCheck.id}`} className={linkClass}>
+                  Ch. Nº {ownCheck.number}
+                </Link>
+              }
+              secondary="Cheque propio"
+            />
           );
         }
         if (paymentOrder) {
           return (
-            <Link
-              href={`/dashboard/purchases/payments/${paymentOrder.id}`}
-              className="font-mono text-sm font-medium text-blue-600 hover:underline"
-            >
-              {paymentOrder.number}
-            </Link>
+            <StackedCell
+              mono
+              primary={
+                <Link href={`/dashboard/purchases/payments/${paymentOrder.id}`} className={linkClass}>
+                  {paymentOrder.number}
+                </Link>
+              }
+              secondary="Orden de pago"
+            />
           );
         }
         if (customerReceipt) {
           return (
-            <Link
-              href={`/dashboard/treasury/receipts/${customerReceipt.id}`}
-              className="font-mono text-sm font-medium text-blue-600 hover:underline"
-            >
-              {customerReceipt.number ?? 'Recibo'}
-            </Link>
+            <StackedCell
+              mono
+              primary={
+                <Link href={`/dashboard/treasury/receipts/${customerReceipt.id}`} className={linkClass}>
+                  {customerReceipt.number ?? 'Recibo'}
+                </Link>
+              }
+              secondary="Recibo de cobranza"
+            />
           );
         }
         if (checkOperation) {
-          const label = <span className="font-mono text-sm font-medium">{checkOperation.number}</span>;
-          return checkOperation.checkId ? (
-            <Link href={`/dashboard/treasury/checks/${checkOperation.checkId}`} className="text-blue-600 hover:underline">
-              {label}
-            </Link>
-          ) : (
-            label
+          return (
+            <StackedCell
+              mono
+              primary={
+                checkOperation.checkId ? (
+                  <Link href={`/dashboard/treasury/checks/${checkOperation.checkId}`} className={linkClass}>
+                    {checkOperation.number}
+                  </Link>
+                ) : (
+                  checkOperation.number
+                )
+              }
+              secondary="Operación de cheques"
+            />
           );
         }
         if (transfer) {
           return (
-            <Link
-              href="/dashboard/treasury?tab=transferencias"
-              className="font-mono text-sm font-medium text-blue-600 hover:underline"
-            >
-              {transfer.number}
-            </Link>
+            <StackedCell
+              mono
+              primary={
+                <Link href="/dashboard/treasury?tab=transferencias" className={linkClass}>
+                  {transfer.number}
+                </Link>
+              }
+              secondary="Transferencia"
+            />
           );
         }
         return <span className="text-muted-foreground">-</span>;
@@ -178,7 +195,7 @@ export function getColumns({ canUpdate, accounts, concepts }: ColumnsOptions): C
             className={
               row.original.cancelled
                 ? 'tabular-nums text-muted-foreground line-through'
-                : 'tabular-nums text-emerald-600'
+                : 'tabular-nums text-ok'
             }
           >
             {formatMoney(row.original.amount)}
@@ -196,7 +213,7 @@ export function getColumns({ canUpdate, accounts, concepts }: ColumnsOptions): C
             className={
               row.original.cancelled
                 ? 'tabular-nums text-muted-foreground line-through'
-                : 'tabular-nums text-red-600'
+                : 'tabular-nums text-destructive'
             }
           >
             {formatMoney(absAmount(row.original.amount))}
@@ -216,19 +233,14 @@ export function getColumns({ canUpdate, accounts, concepts }: ColumnsOptions): C
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
       cell: ({ row }) => {
         const key = row.original.cancelled ? 'CANCELLED' : 'ACTIVE';
-        const Icon = movementStateIcons[key];
         return (
           <div className="space-y-1">
-            <Badge variant={row.original.cancelled ? 'secondary' : 'outline'} className="gap-1 whitespace-nowrap">
-              <Icon className="h-3 w-3" />
-              {MOVEMENT_STATE_LABELS[key]}
-            </Badge>
-            {!row.original.cancelled && row.original.reconciled && (
-              <Badge variant="outline" className="ml-1 gap-1 whitespace-nowrap" title="Conciliado con el extracto">
-                <CheckCheck className="h-3 w-3" />
-                Conciliado
-              </Badge>
-            )}
+            <div className="flex flex-wrap items-center gap-1">
+              <TreasuryStatusBadge ui={MOVEMENT_STATE_UI[key]} />
+              {!row.original.cancelled && row.original.reconciled && (
+                <TreasuryStatusBadge ui={MOVEMENT_STATE_UI.RECONCILED} title="Conciliado con el extracto" />
+              )}
+            </div>
             {row.original.cancelled && row.original.cancel_reason && (
               <p className="max-w-xs text-xs text-muted-foreground">{row.original.cancel_reason}</p>
             )}
@@ -255,7 +267,7 @@ export function getColumns({ canUpdate, accounts, concepts }: ColumnsOptions): C
       accessorKey: 'created_at',
       meta: { title: 'Fecha de alta' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de alta" />,
-      cell: ({ row }) => <span>{formatArgentinaDay(row.original.created_at)}</span>,
+      cell: ({ row }) => <span className="tabular-nums">{formatArgentinaDateTime(row.original.created_at)}</span>,
     },
   ];
 

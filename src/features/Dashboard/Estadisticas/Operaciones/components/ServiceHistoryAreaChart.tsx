@@ -1,6 +1,7 @@
 'use client';
 
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, type ChartConfig } from '@/components/ui/chart';
+import { categoricalColorVar } from '@/features/Dashboard/shared/charts/ChartColorVars';
 import { Area, AreaChart, CartesianGrid, Line, LineChart, XAxis } from 'recharts';
 import { CostCenterChartTooltip } from './CostCenterChartTooltip';
 import type { ChartDataPoint } from './CustomChartTooltip';
@@ -9,11 +10,11 @@ import { CustomChartTooltip } from './CustomChartTooltip';
 const chartConfig = {
   mensual: {
     label: 'Mensual',
-    color: 'oklch(0.78 0.145 70)',
+    color: categoricalColorVar(5),
   },
   adicional: {
     label: 'Adicional',
-    color: 'oklch(0.70 0.10 185)',
+    color: categoricalColorVar(1),
   },
 } satisfies ChartConfig;
 

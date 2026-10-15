@@ -2,10 +2,12 @@
 
 import { generateClientCredentials, hashSecret } from '@/features/ExternalApi/lib/hash';
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { getSessionUserId } from '@/shared/lib/session';
+import { requireServerAuthProfile } from '@/shared/actions/auth.actions';
 import { prisma } from '@/shared/lib/prisma';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { requireConfigTabPermission } from '../lib/config-access.server';
 import { createExternalApiClientSchema, type CreateExternalApiClientValues } from './schemas';
+import type { CreatedExternalApiClient } from './types';
 
 const logger = new Logger('features/Empresa/AccesosExternos');
 
@@ -33,11 +35,13 @@ const CLIENT_SELECT = {
   revoker: { select: { id: true, fullname: true } },
 } as const;
 
-async function getCurrentProfileId(): Promise<string | null> {
-  return getSessionUserId();
+/** `created_by`/`revoked_by` apuntan a `profile.id`, no al id de la credencial de sesión. */
+async function getCurrentProfileId(): Promise<string> {
+  return (await requireServerAuthProfile()).id;
 }
 
 export async function getExternalApiClients() {
+  await requireConfigTabPermission('accesos-externos', 'view');
   const companyId = await getActiveCompanyId();
   if (!companyId) return [];
 
@@ -53,19 +57,10 @@ export async function getExternalApiClients() {
   }
 }
 
-export type ExternalApiClientListItem = Awaited<ReturnType<typeof getExternalApiClients>>[number];
-
-export type CreatedExternalApiClient = {
-  id: string;
-  name: string;
-  clientId: string;
-  /** Se muestra una unica vez: no vuelve a estar disponible */
-  secret: string;
-};
-
 export async function createExternalApiClient(
   values: CreateExternalApiClientValues
 ): Promise<CreatedExternalApiClient> {
+  await requireConfigTabPermission('accesos-externos', 'create');
   const parsed = createExternalApiClientSchema.parse(values);
 
   const companyId = await getActiveCompanyId();
@@ -104,6 +99,7 @@ export async function createExternalApiClient(
  * cambiar la contrasena, no toda su configuracion.
  */
 export async function rotateExternalApiClientSecret(id: string): Promise<CreatedExternalApiClient> {
+  await requireConfigTabPermission('accesos-externos', 'update');
   const companyId = await getActiveCompanyId();
   if (!companyId) throw new Error('No se pudo determinar la empresa actual');
 
@@ -139,6 +135,7 @@ export async function rotateExternalApiClientSecret(id: string): Promise<Created
  * integrarse, se emite una credencial nueva y queda el rastro de las dos.
  */
 export async function revokeExternalApiClient(id: string): Promise<void> {
+  await requireConfigTabPermission('accesos-externos', 'delete');
   const companyId = await getActiveCompanyId();
   if (!companyId) throw new Error('No se pudo determinar la empresa actual');
 

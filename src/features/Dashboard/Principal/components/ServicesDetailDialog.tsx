@@ -2,25 +2,45 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
 import { CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { statusColorVar } from '@/features/Dashboard/shared/charts/ChartColorVars';
 import { cn } from '@/lib/utils';
+import { StateBlock } from '@/shared/components/common/StateBlock';
 import { useQuery } from '@tanstack/react-query';
 import { toPng } from 'html-to-image';
-import { CalendarIcon, Download, Loader2 } from 'lucide-react';
+import { Download, Loader2 } from 'lucide-react';
 import moment from 'moment';
 import 'moment/locale/es';
 import { useCallback, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
+import { toast } from 'sonner';
 import { getServicesDetailByClient } from '../actions/services.server';
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Hoy en hora argentina (`YYYY-MM-DD`), calculado en el servidor: el navegador puede estar en otra zona. */
+  initialDate: string;
+}
+
+/** `YYYY-MM-DD` → Date local a medianoche (no pasa por UTC, así el día no se corre). */
+function isoToLocalDate(iso: string): Date {
+  const [year, month, day] = iso.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+/** Punto de color + cifra: el significado lo da el encabezado de la columna, no sólo el color. */
+function CountBadge({ count, color, strong }: { count: number; color: string; strong?: boolean }) {
+  return (
+    <Badge variant="outline" className={cn('gap-1.5 tabular-nums', strong && 'font-bold')}>
+      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
+      {count}
+    </Badge>
+  );
 }
 
 const formatStatus = (status: string) =>
@@ -29,26 +49,32 @@ const formatStatus = (status: string) =>
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join(' ');
 
-export default function ServicesDetailDialog({ open, onOpenChange }: Props) {
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+export default function ServicesDetailDialog({ open, onOpenChange, initialDate }: Props) {
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(() => isoToLocalDate(initialDate));
   const [isExporting, setIsExporting] = useState(false);
   const captureRef = useRef<HTMLDivElement>(null);
 
-  const dateString = moment(selectedDate).format('YYYY-MM-DD');
+  // Sin fecha válida (campo vacío o a medio escribir) no se consulta.
+  const dateString = selectedDate ? moment(selectedDate).format('YYYY-MM-DD') : null;
+  const longDate = selectedDate ? moment(selectedDate).locale('es').format('DD [de] MMMM [de] YYYY') : null;
 
-  const { data: servicesDetail, isLoading } = useQuery({
+  const {
+    data: servicesDetail,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ['services-detail-by-client', dateString],
-    queryFn: () => getServicesDetailByClient(dateString),
-    enabled: open,
+    queryFn: () => getServicesDetailByClient(dateString ?? undefined),
+    enabled: open && dateString !== null,
   });
 
   const totalMensual = servicesDetail?.reduce((sum, c) => sum + c.mensual_count, 0) ?? 0;
   const totalAdicional = servicesDetail?.reduce((sum, c) => sum + c.adicional_count, 0) ?? 0;
-  const grandTotal = totalMensual + totalAdicional;
+  const grandTotal = servicesDetail?.reduce((sum, c) => sum + c.total_count, 0) ?? 0;
 
   const handleExportImage = useCallback(async () => {
-    if (!captureRef.current) return;
+    if (!captureRef.current || !dateString) return;
 
     // Use flushSync to force React to re-render synchronously BEFORE we
     // capture. The JSX conditionally removes overflow classes when isExporting
@@ -68,7 +94,8 @@ export default function ServicesDetailDialog({ open, onOpenChange }: Props) {
       const fullHeight = node.scrollHeight + pad * 2;
 
       const dataUrl = await toPng(node, {
-        backgroundColor: '#ffffff',
+        // Mismo fondo que la pantalla: en modo oscuro un fondo blanco fijo dejaría el texto claro ilegible.
+        backgroundColor: getComputedStyle(document.body).backgroundColor,
         pixelRatio: 2,
         width: fullWidth,
         height: fullHeight,
@@ -78,60 +105,45 @@ export default function ServicesDetailDialog({ open, onOpenChange }: Props) {
         },
       });
 
-      const formattedDate = moment(selectedDate).format('YYYY-MM-DD');
-      const filename = `servicios-por-cliente-${formattedDate}-${grandTotal}-servicios.png`;
+      const filename = `servicios-por-cliente-${dateString}-${grandTotal}-servicios.png`;
 
       const link = document.createElement('a');
       link.download = filename;
       link.href = dataUrl;
       link.click();
     } catch {
-      // Silently fail — user can retry
+      toast.error('No se pudo generar la imagen. Intente nuevamente.');
     } finally {
       setIsExporting(false);
     }
-  }, [selectedDate, grandTotal]);
+  }, [dateString, grandTotal]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn('sm:max-w-4xl', !isExporting && 'max-h-[80vh] overflow-y-auto')}>
+      <DialogContent
+        data-dashboard-colors=""
+        className={cn('sm:max-w-4xl', !isExporting && 'max-h-[80vh] overflow-y-auto')}
+      >
         <DialogHeader>
           <DialogTitle>Detalle de servicios por cliente</DialogTitle>
           <DialogDescription>Distribución detallada de servicios mensuales y adicionales por cliente</DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-end justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-muted-foreground">Fecha:</span>
-            <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    'w-[220px] justify-start text-left font-normal',
-                    !selectedDate && 'text-muted-foreground'
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {moment(selectedDate).locale('es').format('DD [de] MMMM [de] YYYY')}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={(date) => {
-                    if (date) {
-                      setSelectedDate(date);
-                      setIsCalendarOpen(false);
-                    }
-                  }}
-                />
-              </PopoverContent>
-            </Popover>
+            <label htmlFor="services-detail-date" className="text-sm font-medium text-muted-foreground">
+              Fecha:
+            </label>
+            <EnhancedDatePicker
+              id="services-detail-date"
+              date={selectedDate}
+              setDate={setSelectedDate}
+              className="w-[200px]"
+            />
           </div>
 
           <Button
+            type="button"
             variant="outline"
             size="sm"
             onClick={handleExportImage}
@@ -157,11 +169,25 @@ export default function ServicesDetailDialog({ open, onOpenChange }: Props) {
           </div>
 
           {/* Date header for the image export */}
-          <div className="mb-3 text-sm font-medium text-muted-foreground">
-            Fecha: {moment(selectedDate).locale('es').format('DD [de] MMMM [de] YYYY')}
-          </div>
+          <div className="mb-3 text-sm font-medium text-muted-foreground">Fecha: {longDate ?? '—'}</div>
 
-          {isLoading ? (
+          {dateString === null ? (
+            <StateBlock
+              variant="empty"
+              title="Elegí una fecha válida"
+              description="Escribila como DD/MM/AAAA o abrí el calendario."
+            />
+          ) : isError ? (
+            <StateBlock
+              variant="error"
+              title="No se pudo cargar el detalle de servicios"
+              action={
+                <Button type="button" variant="outline" onClick={() => refetch()}>
+                  Reintentar
+                </Button>
+              }
+            />
+          ) : isLoading ? (
             <CardContent className="p-0">
               <div className="space-y-3">
                 <div className="grid grid-cols-5 gap-4 pb-2 border-b">
@@ -204,20 +230,10 @@ export default function ServicesDetailDialog({ open, onOpenChange }: Props) {
                         <TableRow key={index}>
                           <TableCell className="font-medium">{client.client_name}</TableCell>
                           <TableCell className="text-center">
-                            <Badge
-                              variant="secondary"
-                              className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                            >
-                              {client.mensual_count}
-                            </Badge>
+                            <CountBadge count={client.mensual_count} color={statusColorVar('operational')} />
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge
-                              variant="secondary"
-                              className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
-                            >
-                              {client.adicional_count}
-                            </Badge>
+                            <CountBadge count={client.adicional_count} color={statusColorVar('inUse')} />
                           </TableCell>
                           <TableCell className="text-center">
                             <Badge variant="default">{client.total_count}</Badge>
@@ -242,33 +258,23 @@ export default function ServicesDetailDialog({ open, onOpenChange }: Props) {
                       <TableRow className="font-semibold border-t-2">
                         <TableCell className="font-bold">TOTAL GENERAL</TableCell>
                         <TableCell className="text-center">
-                          <Badge
-                            variant="secondary"
-                            className="bg-green-200 text-green-900 font-bold dark:bg-green-900/50 dark:text-green-300"
-                          >
-                            {totalMensual}
-                          </Badge>
+                          <CountBadge count={totalMensual} color={statusColorVar('operational')} strong />
                         </TableCell>
                         <TableCell className="text-center">
-                          <Badge
-                            variant="secondary"
-                            className="bg-blue-200 text-blue-900 font-bold dark:bg-blue-900/50 dark:text-blue-300"
-                          >
-                            {totalAdicional}
-                          </Badge>
+                          <CountBadge count={totalAdicional} color={statusColorVar('inUse')} strong />
                         </TableCell>
                         <TableCell className="text-center">
-                          <Badge variant="default" className="bg-gray-700 text-white font-bold">
+                          <Badge variant="default" className="font-bold tabular-nums">
                             {grandTotal}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-center text-muted-foreground">-</TableCell>
+                        <TableCell className="text-center text-muted-foreground">—</TableCell>
                       </TableRow>
                     </>
                   ) : (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center text-muted-foreground">
-                        No hay datos disponibles para esta fecha
+                        No hay servicios con cliente (mensuales o adicionales, pendientes o ejecutados) para esta fecha
                       </TableCell>
                     </TableRow>
                   )}

@@ -2,6 +2,7 @@ import type {
   SectorStatus,
   SectorTimelineItem,
 } from '@/features/Mantenimiento/MaintenanceOrders/components/SectorTimeline';
+import { REPAIR_STATUS_UI, WORK_ORDER_STATUS_UI } from '@/features/Mantenimiento/lib/status-presentation';
 import type { EquipmentOrderDetail } from '../../lib/actions/vehicle-operations-actions';
 import type { BadgeVariant } from '../../lib/order-status';
 
@@ -44,13 +45,14 @@ export const repairStatusBadgeVariants: Record<string, BadgeVariant> = {
 };
 
 export const repairStatusLabels: Record<string, string> = {
-  pending: 'Pendiente',
-  pending_approval: 'Pend. Aprobacion',
-  in_progress: 'En progreso',
-  completed: 'Completado',
-  cancelled: 'Cancelado',
-  rejected: 'Rechazado',
-  reassignment_requested: 'Reasignacion',
+  pending: REPAIR_STATUS_UI.pending.label,
+  pending_approval: REPAIR_STATUS_UI.pending_approval.label,
+  in_progress: REPAIR_STATUS_UI.in_progress.label,
+  completed: REPAIR_STATUS_UI.completed.label,
+  cancelled: REPAIR_STATUS_UI.cancelled.label,
+  rejected: REPAIR_STATUS_UI.rejected.label,
+  reassignment_requested: REPAIR_STATUS_UI.reassignment_requested.label,
+  // `blocked` es presentación de una tarea trabada, no un valor de la columna.
   blocked: 'Bloqueado',
 };
 
@@ -70,13 +72,10 @@ export const sectorStatusLabels: Record<SectorStatus, string> = {
   completed: 'Completado',
 };
 
-export const workOrderStatusLabels: Record<string, string> = {
-  pending: 'Pendiente',
-  in_progress: 'En Progreso',
-  paused: 'Pausada',
-  completed: 'Completada',
-  cancelled: 'Cancelada',
-};
+/** Etiquetas de estado de OT: salen de la fuente única (`status-presentation.ts`). */
+export const workOrderStatusLabels: Record<string, string> = Object.fromEntries(
+  Object.entries(WORK_ORDER_STATUS_UI).map(([status, ui]) => [status, ui.label])
+);
 
 export const workOrderStatusVariants: Record<string, BadgeVariant> = {
   pending: 'outline',

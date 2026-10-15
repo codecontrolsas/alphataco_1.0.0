@@ -10,17 +10,23 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { fetchSupervisorsForChecklist } from '@/features/Checklists/actions/actionsServer';
+import { ActionDialogResource, getActionErrorMessage } from '@/features/Mantenimiento/shared/components/ActionDialogParts';
 import { SearchableSelect } from '@/features/Mantenimiento/shared/components/SearchableSelect';
 import { Logger } from '@/lib/logger';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2 } from 'lucide-react';
+import { Loader2, RefreshCw } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
+import { z } from 'zod';
+import { getResourceCondition } from '../../shared/maintenance-resource';
 import { invalidateAllMaintenanceQueries } from '../../utils/queryInvalidation';
-import type { MaintenanceRequestData } from '../actions/queries.server';
 import { reassignRequestSupervisor } from '../actions/approvals.server';
+import { getResourceLabel } from '../../shared/maintenance-resource';
+import type { MaintenanceRequestData } from '../actions/queries.server';
 
 const logger = new Logger('ReassignSupervisorDialog');
 
@@ -31,20 +37,57 @@ interface ReassignSupervisorDialogProps {
   onSuccess?: () => void;
 }
 
+const reassignSchema = z.object({
+  supervisorId: z.string().min(1, 'Debe seleccionar un supervisor'),
+});
+
+type ReassignValues = z.infer<typeof reassignSchema>;
+
+/**
+ * Reasignación del supervisor de turno de una solicitud.
+ * Permiso: `maintenance_requests:update` (lo exige el servidor y la tabla oculta la acción sin él).
+ */
 export function ReassignSupervisorDialog({ request, open, onOpenChange, onSuccess }: ReassignSupervisorDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {/* El formulario vive dentro de DialogContent: al cerrar se desmonta y vuelve al supervisor actual. */}
+      <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto">
+        <ReassignForm request={request} onOpenChange={onOpenChange} onSuccess={onSuccess} />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ReassignForm({
+  request,
+  onOpenChange,
+  onSuccess,
+}: Pick<ReassignSupervisorDialogProps, 'request' | 'onOpenChange' | 'onSuccess'>) {
   const queryClient = useQueryClient();
+  // Tras el éxito el botón sigue bloqueado mientras el diálogo termina de cerrarse.
+  const [isDone, setIsDone] = useState(false);
 
   // Pre-cargar con el supervisor actual de la solicitud
   const currentSupervisorId = request.supervisor?.id ?? request.supervisor_id ?? undefined;
-  const [selectedSupervisorId, setSelectedSupervisorId] = useState<string | undefined>(currentSupervisorId);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const form = useForm<ReassignValues>({
+    resolver: zodResolver(reassignSchema),
+    mode: 'onChange',
+    defaultValues: { supervisorId: currentSupervisorId ?? '' },
+  });
+  const { isSubmitting, isValid } = form.formState;
 
   // Cargar lista de supervisores disponibles
-  const { data: supervisors, isLoading: isLoadingSupervisors } = useQuery({
+  const {
+    data: supervisors,
+    isLoading: isLoadingSupervisors,
+    isError: isSupervisorsError,
+    refetch: refetchSupervisors,
+    isFetching: isFetchingSupervisors,
+  } = useQuery({
     queryKey: ['supervisors-for-checklist'],
     queryFn: () => fetchSupervisorsForChecklist(),
     staleTime: 5 * 60 * 1000,
-    enabled: open,
   });
 
   // Opciones del combobox con buscador: la lista de supervisores es larga y
@@ -68,43 +111,28 @@ export function ReassignSupervisorDialog({ request, open, onOpenChange, onSucces
     [supervisors]
   );
 
-  const handleConfirm = async () => {
-    if (!selectedSupervisorId) {
-      toast.error('Debe seleccionar un supervisor');
-      return;
-    }
-
-    setIsSubmitting(true);
+  async function onSubmit(values: ReassignValues) {
     try {
-      await reassignRequestSupervisor(request.id, selectedSupervisorId);
+      await reassignRequestSupervisor(request.id, values.supervisorId);
 
+      setIsDone(true);
       toast.success('Supervisor reasignado correctamente');
       invalidateAllMaintenanceQueries(queryClient);
+      queryClient.invalidateQueries({ queryKey: ['datatable-facet'] });
       onOpenChange(false);
       onSuccess?.();
     } catch (error) {
       logger.error('Error al reasignar supervisor', { data: { error, requestId: request.id } });
-      toast.error('Error al reasignar el supervisor');
-    } finally {
-      setIsSubmitting(false);
+      toast.error('Error al reasignar el supervisor', { description: getActionErrorMessage(error) ?? undefined });
     }
-  };
+  }
 
-  const handleOpenChange = (newOpen: boolean) => {
-    if (!isSubmitting) {
-      // Restaurar supervisor actual al cerrar sin confirmar
-      if (!newOpen) {
-        setSelectedSupervisorId(currentSupervisorId);
-      }
-      onOpenChange(newOpen);
-    }
-  };
-
-  const vehicleLabel = request.vehicles?.domain || request.vehicles?.serie || 'Sin identificar';
+  const blocked = isSubmitting || isDone;
+  const vehicleLabel = getResourceLabel(request);
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" noValidate>
         <DialogHeader>
           <DialogTitle>Reasignar Supervisor</DialogTitle>
           <DialogDescription>
@@ -113,47 +141,69 @@ export function ReassignSupervisorDialog({ request, open, onOpenChange, onSucces
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          {/* Supervisor actual */}
-          {request.supervisor?.fullname && (
-            <div className="text-sm text-muted-foreground">
-              Supervisor actual: <span className="font-medium text-foreground">{request.supervisor.fullname}</span>
-            </div>
-          )}
+        <ActionDialogResource row={request} condition={getResourceCondition(request)} />
 
-          {/* Select de supervisores */}
-          <div className="space-y-2">
-            <Label htmlFor="supervisor-select">Nuevo supervisor *</Label>
-            {isLoadingSupervisors ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Cargando supervisores...
-              </div>
-            ) : (
-              <SearchableSelect
-                id="supervisor-select"
-                value={selectedSupervisorId ?? ''}
-                onValueChange={setSelectedSupervisorId}
-                disabled={isSubmitting}
-                options={supervisorOptions}
-                placeholder="Seleccionar supervisor..."
-                searchPlaceholder="Buscar supervisor..."
-                emptyMessage="No hay supervisores disponibles"
-              />
-            )}
+        {/* Supervisor actual */}
+        {request.supervisor?.fullname && (
+          <div className="text-muted-foreground text-sm">
+            Supervisor actual: <span className="text-foreground font-medium">{request.supervisor.fullname}</span>
           </div>
-        </div>
+        )}
+
+        {/* Select de supervisores */}
+        <FormField
+          control={form.control}
+          name="supervisorId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Nuevo supervisor *</FormLabel>
+              {isLoadingSupervisors ? (
+                <div role="status" className="text-muted-foreground flex items-center gap-2 py-2 text-sm">
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  Cargando supervisores...
+                </div>
+              ) : isSupervisorsError ? (
+                <div role="alert" className="flex flex-wrap items-center gap-2 py-2 text-sm">
+                  <span className="text-destructive">No se pudo cargar la lista de supervisores.</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => refetchSupervisors()}
+                    disabled={isFetchingSupervisors}
+                  >
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                    Reintentar
+                  </Button>
+                </div>
+              ) : (
+                <FormControl>
+                  <SearchableSelect
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    disabled={blocked}
+                    options={supervisorOptions}
+                    placeholder="Seleccionar supervisor..."
+                    searchPlaceholder="Buscar supervisor..."
+                    emptyMessage="No hay supervisores disponibles"
+                  />
+                </FormControl>
+              )}
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isSubmitting}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={blocked}>
             Cancelar
           </Button>
-          <Button onClick={handleConfirm} disabled={isSubmitting || !selectedSupervisorId || isLoadingSupervisors}>
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Button type="submit" disabled={blocked || !isValid || isLoadingSupervisors || isSupervisorsError}>
+            {blocked && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
             Confirmar
           </Button>
         </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </form>
+    </Form>
   );
 }

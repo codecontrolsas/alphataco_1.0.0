@@ -10,3 +10,8 @@
  */
 
 export const MY_TICKETS_WITH_UNREAD_QUERY_KEY = ['ayuda', 'my-tickets-with-unread'] as const;
+
+export const MY_TICKETS_QUERY_KEY = ['ayuda', 'my-support-tickets'] as const;
+
+/** Prefijo: invalidarlo refresca todas las páginas de "Mis tickets". */
+export const MY_TICKETS_PAGE_QUERY_KEY = ['ayuda', 'my-tickets-page'] as const;

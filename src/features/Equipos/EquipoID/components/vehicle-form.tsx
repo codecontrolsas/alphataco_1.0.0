@@ -25,13 +25,12 @@ import { invalidateVehicleLists } from '../lib/invalidate-vehicle-lists';
 import { VEHICLE_TYPE_OF_VEHICLE_ID } from '../lib/utils/vehicle-utils';
 import { vehicleFormSchema, type VehicleFormValues } from '../schemas/vehicle';
 import { VehicleEditLayout } from './form/VehicleEditLayout';
-import { VehicleTabs } from './vehicle-tabs';
 
 const logger = new Logger('VehicleForm');
 
 interface VehicleFormProps {
   vehicle?: VehicleById;
-  mode: 'view' | 'edit' | 'new';
+  mode: 'edit' | 'new';
   vehicleId?: string;
   brandsPromise: ReturnType<typeof getVehicleBrands>;
   modelsPromise: ReturnType<typeof getModelsByBrand>;
@@ -39,11 +38,6 @@ interface VehicleFormProps {
   contractorsPromise: ReturnType<typeof fetchAllContractorForVehicles>;
   costCentersPromise: ReturnType<typeof getCostCenterOptions>;
   hierarchicalPositionsPromise: Promise<Array<{ id: string; name: string }>>;
-  documentsComponent?: React.ReactNode;
-  qrComponent?: React.ReactNode;
-  checklistsComponent?: React.ReactNode;
-  operationsComponent?: React.ReactNode;
-  tiresComponent?: React.ReactNode;
   typesPromise: ReturnType<typeof getVehicleTypes>;
   subTypesPromise: ReturnType<typeof getSubTypesByType>;
   ownersPromise: Promise<getVehicleOwnersType>;
@@ -75,7 +69,6 @@ export function VehicleForm({ vehicle, mode, vehicleId, ...otherProps }: Vehicle
   // del resolver es async (consulta si el dominio ya existe), asi que dos clicks seguidos
   // pueden llegar a onSubmit antes de cualquier re-render.
   const submitLockRef = useRef(false);
-  const readOnly = mode === 'view';
   const router = useRouter();
   const queryClient = useQueryClient();
   const pathname = usePathname();
@@ -184,18 +177,6 @@ export function VehicleForm({ vehicle, mode, vehicleId, ...otherProps }: Vehicle
     router.push(`${pathname}?${params.toString()}`);
   };
 
-  // Al editar, el form NO se remonta despues de guardar (la key del padre es el id del
-  // equipo): cuando vuelve a modo lectura la navegacion ya termino y se libera el candado
-  // para que una edicion posterior pueda guardar de nuevo.
-  const [wasReadOnly, setWasReadOnly] = useState(readOnly);
-  if (readOnly !== wasReadOnly) {
-    setWasReadOnly(readOnly);
-    if (readOnly) {
-      submitLockRef.current = false;
-      setIsSubmitting(false);
-    }
-  }
-
   const isBusy = isSubmitting || form.formState.isSubmitting;
 
   const handleCancel = () => {
@@ -208,22 +189,6 @@ export function VehicleForm({ vehicle, mode, vehicleId, ...otherProps }: Vehicle
     router.push(`${pathname}?${params.toString()}`);
     form.reset();
   };
-
-  // Lectura: ficha con pestañas. Edición y alta: formulario completo en una página.
-  if (readOnly && vehicle) {
-    return (
-      <VehicleTabs
-        vehicle={vehicle}
-        costCentersPromise={otherProps.costCentersPromise}
-        hierarchicalPositionsPromise={otherProps.hierarchicalPositionsPromise}
-        documentsComponent={otherProps.documentsComponent}
-        qrComponent={otherProps.qrComponent}
-        checklistsComponent={otherProps.checklistsComponent}
-        operationsComponent={otherProps.operationsComponent}
-        tiresComponent={otherProps.tiresComponent}
-      />
-    );
-  }
 
   return (
     <Form {...form}>

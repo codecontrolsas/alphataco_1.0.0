@@ -7,15 +7,24 @@ import {
   buildDateRangeFiltersWhere,
   buildFiltersWhere,
   buildTextFiltersWhere,
-  NULL_FILTER_VALUE,
   parseSearchParams,
-  stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { toDateOnly } from '@/shared/lib/date-only';
+import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { runFacet, withoutOwnFilter, type FacetConfig } from '@/shared/lib/table-facets';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
+import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { cbteLabel, formatVoucherNumber } from '../lib/invoice-type';
+import {
+  INVOICE_ATTENTION_KEYS,
+  invoiceAttentionWhere,
+  isInvoiceAttentionKey,
+  type InvoiceAttentionKey,
+} from './invoice-attention';
 
 const logger = new Logger('Comercial/Facturacion/list/actions.server');
 
@@ -62,8 +71,24 @@ const FACETED_COLUMN_MAP: Record<string, string> = {
 const MANUAL_FILTER_COLUMNS = ['cbte_type', 'simulated', 'voucher_number', 'cuit', 'total'];
 const TEXT_COLUMNS = ['cae'];
 const DATE_COLUMNS = ['issue_date', 'cae_due_date', 'created_at'];
+/** Filtro virtual de las tarjetas del tablero (ver `invoice-attention.ts`). */
+const ATTENTION_COLUMN = 'attention';
 
-type TableState = ReturnType<typeof parseSearchParams>;
+/** Única lista de claves de URL que filtran: el resto se descarta antes de armar el `where`. */
+const ALLOWED_FILTER_KEYS: ReadonlySet<string> = new Set([
+  ...Object.keys(FACETED_COLUMN_MAP),
+  ...MANUAL_FILTER_COLUMNS,
+  ...TEXT_COLUMNS,
+  ...dateRangeKeys(DATE_COLUMNS),
+  ATTENTION_COLUMN,
+]);
+
+/** Estado de la tabla ya parseado y con solo los filtros permitidos. */
+function parseListState(searchParams: DataTableSearchParams) {
+  return sanitizeFilters(parseSearchParams(searchParams), ALLOWED_FILTER_KEYS);
+}
+
+type TableState = ReturnType<typeof parseListState>;
 
 /** "00003-00000124", "3-124" (punto de venta + número) o "124" (solo número). */
 const VOUCHER_RE = /^\s*(?:(\d{1,5})\s*-\s*)?(\d{1,8})\s*$/;
@@ -72,9 +97,12 @@ const VOUCHER_RE = /^\s*(?:(\d{1,5})\s*-\s*)?(\d{1,8})\s*$/;
 // WHERE
 // ============================================================================
 
-/** WHERE compartido entre la query paginada, el export y las facetas. */
+/**
+ * WHERE compartido entre la query paginada, el export, las facetas y los conteos del tablero. Todo
+ * cuelga de un único `AND` con el perímetro de empresa primero: ningún filtro puede pisarlo.
+ */
 function buildWhereClause(companyId: string, canViewPrices: boolean, state: TableState): Prisma.invoicesWhereInput {
-  const and: Prisma.invoicesWhereInput[] = [];
+  const and: Prisma.invoicesWhereInput[] = [{ company_id: companyId }];
 
   // Búsqueda global: número de comprobante, CAE o cliente
   const search = state.search.trim();
@@ -94,11 +122,17 @@ function buildWhereClause(companyId: string, canViewPrices: boolean, state: Tabl
     and.push({ OR: or });
   }
 
-  const filtersWhere = buildFiltersWhere(state.filters, FACETED_COLUMN_MAP, {
-    exclude: [...MANUAL_FILTER_COLUMNS, ...TEXT_COLUMNS, ...DATE_COLUMNS],
-  });
-  const textFiltersWhere = buildTextFiltersWhere(state.filters, TEXT_COLUMNS);
-  const dateFiltersWhere = buildDateRangeFiltersWhere(state.filters, DATE_COLUMNS);
+  and.push(
+    buildFiltersWhere(state.filters, FACETED_COLUMN_MAP, {
+      exclude: [...MANUAL_FILTER_COLUMNS, ...TEXT_COLUMNS, ...dateRangeKeys(DATE_COLUMNS), ATTENTION_COLUMN],
+    }) as Prisma.invoicesWhereInput
+  );
+  and.push(buildTextFiltersWhere(state.filters, TEXT_COLUMNS) as Prisma.invoicesWhereInput);
+  and.push(buildDateRangeFiltersWhere(state.filters, DATE_COLUMNS) as Prisma.invoicesWhereInput);
+
+  // Tarjetas del tablero: misma condición que el conteo de la tarjeta
+  const attention = state.filters[ATTENTION_COLUMN]?.[0];
+  if (isInvoiceAttentionKey(attention)) and.push(invoiceAttentionWhere(attention, new Date()));
 
   // Tipo de comprobante (Int)
   const cbteTypes = state.filters.cbte_type?.map(Number).filter((n) => !isNaN(n));
@@ -135,16 +169,7 @@ function buildWhereClause(companyId: string, canViewPrices: boolean, state: Tabl
     and.push(/^\d+(\.\d{1,2})?$/.test(normalized) ? { total: normalized } : { id: { in: [] } });
   }
 
-  const filtersAnd = (filtersWhere.AND as Prisma.invoicesWhereInput[] | undefined) ?? [];
-  const { AND: _discarded, ...filtersWithoutAnd } = filtersWhere as Record<string, unknown> & { AND?: unknown };
-
-  return {
-    company_id: companyId,
-    ...(filtersWithoutAnd as Prisma.invoicesWhereInput),
-    ...(textFiltersWhere as Prisma.invoicesWhereInput),
-    ...(dateFiltersWhere as Prisma.invoicesWhereInput),
-    ...(filtersAnd.length + and.length > 0 ? { AND: [...filtersAnd, ...and] } : {}),
-  };
+  return { AND: and };
 }
 
 /** Multi-sort del usuario (solo campos válidos) y, de fondo, fecha de emisión descendente. */
@@ -157,7 +182,12 @@ function buildOrderBy(state: TableState, canViewPrices: boolean): Prisma.invoice
     const mapper = FK_SORT_MAP[s.id];
     resolved.push(mapper ? mapper(dir) : { [s.id]: dir });
   }
-  return [...resolved, { issue_date: 'desc' }, { created_at: 'desc' }] as Prisma.invoicesOrderByWithRelationInput[];
+  return [
+    ...resolved,
+    { issue_date: 'desc' },
+    { created_at: 'desc' },
+    { id: 'asc' },
+  ] as Prisma.invoicesOrderByWithRelationInput[];
 }
 
 // ============================================================================
@@ -222,8 +252,8 @@ async function loadContext() {
 export async function getInvoicesPaginated(searchParams: DataTableSearchParams) {
   try {
     const { companyId, canViewPrices } = await loadContext();
-    const state = parseSearchParams(searchParams);
-    const { skip, take } = stateToPrismaParams(state);
+    const state = parseListState(searchParams);
+    const { skip, take } = clampedPageParams(state);
     const where = buildWhereClause(companyId, canViewPrices, state);
 
     const [rows, total] = await Promise.all([
@@ -248,27 +278,123 @@ export async function getInvoicesPaginated(searchParams: DataTableSearchParams) 
 // EXPORT (sin paginación)
 // ============================================================================
 
-export async function getInvoicesForExport(searchParams: DataTableSearchParams) {
+/** Tope de comprobantes por export: más que esto se pide acotar con filtros. */
+const EXPORT_MAX_INVOICES = 10_000;
+
+export async function getInvoicesForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<InvoiceListItem[]>> {
   try {
     const { companyId, canViewPrices } = await loadContext();
-    const state = parseSearchParams(searchParams);
+    const state = parseListState(searchParams);
     const where = buildWhereClause(companyId, canViewPrices, state);
+    const orderBy = buildOrderBy(state, canViewPrices);
 
-    const rows = await prisma.invoices.findMany({
-      where,
-      orderBy: buildOrderBy(state, canViewPrices),
-      select: INVOICE_SELECT,
+    const rows = await fetchExportRowsInBatches({
+      maxRows: EXPORT_MAX_INVOICES,
+      listIds: (take) => prisma.invoices.findMany({ where, orderBy, select: { id: true }, take }),
+      fetchByIds: (ids) =>
+        prisma.invoices.findMany({ where: { id: { in: ids }, company_id: companyId }, select: INVOICE_SELECT }),
+      tooLargeMessage: (maxRows) =>
+        `Hay más de ${maxRows.toLocaleString('es-AR')} comprobantes con los filtros actuales. Acote la exportación con filtros.`,
     });
-    return rows.map((r) => mapInvoice(r, canViewPrices));
+
+    return { ok: true, data: rows.map((r) => mapInvoice(r, canViewPrices)) };
   } catch (error) {
     logger.error('Error al exportar comprobantes', { data: { error } });
-    throw new Error('No se pudo exportar el listado. Intente nuevamente.');
+    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en producción.
+    const message =
+      error instanceof ExportTooLargeError ? error.message : 'No se pudo exportar el listado. Intente nuevamente.';
+    return { ok: false, message };
   }
 }
 
 // ============================================================================
 // SINGLE FACET (lazy-load, con cross-filter)
 // ============================================================================
+
+type InvoiceFacetWhere = Prisma.invoicesWhereInput;
+
+/** Configuración de cada faceta: columna a agrupar y, si es FK, cómo resolver las etiquetas. */
+function facetConfigs(companyId: string): Record<string, FacetConfig<InvoiceFacetWhere>> {
+  return {
+    cbte_type: {
+      kind: 'direct',
+      group: async (where) =>
+        (await prisma.invoices.groupBy({ by: ['cbte_type'], where, _count: true })).map((r) => ({
+          key: String(r.cbte_type),
+          count: r._count,
+        })),
+    },
+    status: {
+      kind: 'direct',
+      group: async (where) =>
+        (await prisma.invoices.groupBy({ by: ['status'], where, _count: true })).map((r) => ({
+          key: r.status,
+          count: r._count,
+        })),
+    },
+    environment: {
+      kind: 'direct',
+      group: async (where) =>
+        (await prisma.invoices.groupBy({ by: ['environment'], where, _count: true })).map((r) => ({
+          key: r.environment,
+          count: r._count,
+        })),
+    },
+    simulated: {
+      kind: 'direct',
+      group: async (where) =>
+        (await prisma.invoices.groupBy({ by: ['simulated'], where, _count: true })).map((r) => ({
+          key: r.simulated,
+          count: r._count,
+        })),
+    },
+    currency: {
+      kind: 'direct',
+      group: async (where) =>
+        (await prisma.invoices.groupBy({ by: ['currency'], where, _count: true })).map((r) => ({
+          key: r.currency,
+          count: r._count,
+        })),
+    },
+    sales_point: {
+      kind: 'lookup',
+      group: async (where) =>
+        (await prisma.invoices.groupBy({ by: ['sales_point_id'], where, _count: true })).map((r) => ({
+          key: r.sales_point_id,
+          count: r._count,
+        })),
+      lookup: async (ids) => {
+        const rows = await prisma.sales_points.findMany({
+          where: { id: { in: ids }, company_id: companyId },
+          select: { id: true, number: true, name: true },
+        });
+        return new Map(
+          rows.map((o) => [o.id, { value: o.id, label: `${String(o.number).padStart(5, '0')} - ${o.name}` }])
+        );
+      },
+    },
+    customer: {
+      kind: 'lookup',
+      group: async (where) =>
+        (await prisma.invoices.groupBy({ by: ['customer_id'], where, _count: true })).map((r) => ({
+          key: r.customer_id,
+          count: r._count,
+        })),
+      lookup: async (ids) => {
+        const rows = await prisma.customers.findMany({
+          where: { id: { in: ids }, company_id: companyId },
+          select: { id: true, name: true },
+        });
+        return new Map(rows.map((o) => [o.id, { value: o.id, label: o.name }]));
+      },
+    },
+  };
+}
+
+/** Facetas cuyas opciones vienen del servidor (el resto las arma el cliente con sus etiquetas). */
+const SERVER_OPTION_FACETS = new Set(['currency', 'sales_point', 'customer']);
 
 export async function getInvoiceSingleFacet(
   columnId: string,
@@ -279,92 +405,48 @@ export async function getInvoiceSingleFacet(
 } | null> {
   try {
     const { companyId, canViewPrices } = await loadContext();
-    const baseState = parseSearchParams(searchParams ?? {});
+    const config = facetConfigs(companyId)[columnId];
+    if (!config) return null;
 
-    /** WHERE con todos los filtros activos EXCEPTO el de la propia columna. */
-    function crossWhere(excludeColumn: string) {
-      const modified = { ...baseState, filters: { ...baseState.filters } };
-      delete modified.filters[excludeColumn];
-      delete modified.filters[`${excludeColumn}_from`];
-      delete modified.filters[`${excludeColumn}_to`];
-      return buildWhereClause(companyId, canViewPrices, modified);
-    }
+    // Cross-filter: todos los filtros activos EXCEPTO el de la propia columna
+    const baseState = parseListState(searchParams ?? {});
+    const where = buildWhereClause(companyId, canViewPrices, withoutOwnFilter(baseState, columnId));
 
-    function toFacetMap(rows: { key: string | number | boolean | null; count: number }[]) {
-      const map = new Map<string, number>();
-      for (const { key, count } of rows) {
-        const k = key == null ? NULL_FILTER_VALUE : String(key);
-        map.set(k, (map.get(k) ?? 0) + count);
-      }
-      return map;
-    }
-
-    const where = crossWhere(columnId);
-
-    switch (columnId) {
-      case 'cbte_type': {
-        const rows = await prisma.invoices.groupBy({ by: ['cbte_type'], where, _count: true });
-        return { counts: toFacetMap(rows.map((r) => ({ key: r.cbte_type, count: r._count }))) };
-      }
-      case 'status': {
-        const rows = await prisma.invoices.groupBy({ by: ['status'], where, _count: true });
-        return { counts: toFacetMap(rows.map((r) => ({ key: r.status, count: r._count }))) };
-      }
-      case 'environment': {
-        const rows = await prisma.invoices.groupBy({ by: ['environment'], where, _count: true });
-        return { counts: toFacetMap(rows.map((r) => ({ key: r.environment, count: r._count }))) };
-      }
-      case 'simulated': {
-        const rows = await prisma.invoices.groupBy({ by: ['simulated'], where, _count: true });
-        return { counts: toFacetMap(rows.map((r) => ({ key: r.simulated, count: r._count }))) };
-      }
-      case 'currency': {
-        const rows = await prisma.invoices.groupBy({ by: ['currency'], where, _count: true });
-        return {
-          counts: toFacetMap(rows.map((r) => ({ key: r.currency, count: r._count }))),
-          resolvedOptions: rows
-            .map((r) => ({ id: r.currency, name: r.currency }))
-            .sort((a, b) => a.id.localeCompare(b.id)),
-        };
-      }
-      case 'sales_point': {
-        const rows = await prisma.invoices.groupBy({ by: ['sales_point_id'], where, _count: true });
-        const ids = rows.map((r) => r.sales_point_id);
-        const options = ids.length
-          ? await prisma.sales_points.findMany({
-              where: { id: { in: ids } },
-              select: { id: true, number: true, name: true },
-              orderBy: { number: 'asc' },
-            })
-          : [];
-        return {
-          counts: toFacetMap(rows.map((r) => ({ key: r.sales_point_id, count: r._count }))),
-          resolvedOptions: options.map((o) => ({
-            id: o.id,
-            name: `${String(o.number).padStart(5, '0')} - ${o.name}`,
-          })),
-        };
-      }
-      case 'customer': {
-        const rows = await prisma.invoices.groupBy({ by: ['customer_id'], where, _count: true });
-        const ids = rows.map((r) => r.customer_id);
-        const options = ids.length
-          ? await prisma.customers.findMany({
-              where: { id: { in: ids } },
-              select: { id: true, name: true },
-              orderBy: { name: 'asc' },
-            })
-          : [];
-        return {
-          counts: toFacetMap(rows.map((r) => ({ key: r.customer_id, count: r._count }))),
-          resolvedOptions: options,
-        };
-      }
-      default:
-        return null;
-    }
+    const { counts, resolvedOptions } = await runFacet(config, where);
+    return SERVER_OPTION_FACETS.has(columnId)
+      ? { counts, resolvedOptions: resolvedOptions.map((o) => ({ id: o.value, name: o.label })) }
+      : { counts };
   } catch (error) {
     logger.error('Error al obtener facetas de comprobantes', { data: { error, columnId } });
+    return null;
+  }
+}
+
+// ============================================================================
+// TABLERO: conteos de las tarjetas
+// ============================================================================
+
+export type InvoicingMetrics = Record<InvoiceAttentionKey, number>;
+
+/**
+ * Conteos del tablero. Cada uno usa `buildWhereClause` con el filtro virtual `attention` de la tarjeta:
+ * el mismo `where` que el listado, así el número de la tarjeta es el total de la tabla filtrada por ella.
+ * Nunca rechaza: devuelve `null` si no se pudo contar (las tarjetas muestran "—").
+ */
+export async function getInvoicingMetrics(): Promise<InvoicingMetrics | null> {
+  try {
+    const { companyId, canViewPrices } = await loadContext();
+    const base = parseListState({});
+    const counts = await Promise.all(
+      INVOICE_ATTENTION_KEYS.map((key) =>
+        prisma.invoices.count({
+          where: buildWhereClause(companyId, canViewPrices, { ...base, filters: { [ATTENTION_COLUMN]: [key] } }),
+        })
+      )
+    );
+    return Object.fromEntries(INVOICE_ATTENTION_KEYS.map((key, i) => [key, counts[i]])) as InvoicingMetrics;
+  } catch (error) {
+    logger.error('Error al contar los comprobantes del tablero', { data: { error } });
     return null;
   }
 }

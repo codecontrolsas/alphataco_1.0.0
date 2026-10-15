@@ -1,26 +1,26 @@
 'use client';
 
-import { Card } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { SectionCard } from '@/shared/components/common/SectionCard';
+import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import {
-  getUserPermissionsForUserServer,
+  getModulesWithTabsServer,
   type AllRolePermissionsMap,
   type ModulesWithTabsData,
   type RoleWithCount,
   type UserPermissionsData,
   type UserRolesData,
-} from '@/features/UserPermissionsManager/actions.server';
-import { useQuery } from '@tanstack/react-query';
-import { Shield, User } from 'lucide-react';
-import { useState } from 'react';
-import { ModulePermissions, RoleSelector } from './components';
+} from './actions.server';
+import { UserEquipmentTypesSection } from './components/UserEquipmentTypesSection';
+import { PermissionEditor } from './components/permission-editor/PermissionEditor';
+import { AssignedRolesCard } from './components/user-permissions/AssignedRolesCard';
+import { CleanPermissionsDialog } from './components/user-permissions/CleanPermissionsDialog';
+import { useUserPermissionEditor } from './hooks/useUserPermissionEditor';
+import { buildPermissionIndex } from './lib/permission-rules';
 
 interface UserPermissionsManagerProps {
   userId: string;
-  userName?: string;
-  userEmail?: string;
-  canEdit?: boolean;
+  canEdit: boolean;
   initialUserPermissions: UserPermissionsData;
   initialUserRoles: UserRolesData;
   initialRoles: RoleWithCount[];
@@ -28,83 +28,81 @@ interface UserPermissionsManagerProps {
   initialModules: ModulesWithTabsData;
 }
 
+/**
+ * Accesos de un usuario: sus roles y su acceso efectivo (qué puede hacer y de dónde sale,
+ * con los ajustes personales de tres estados). Cada cambio se guarda al instante.
+ */
 export function UserPermissionsManager({
   userId,
-  userName,
-  userEmail,
-  canEdit = true,
+  canEdit,
   initialUserPermissions,
   initialUserRoles,
   initialRoles,
   initialRolePermissions,
   initialModules,
 }: UserPermissionsManagerProps) {
-  const [activeTab, setActiveTab] = useState('user-permissions');
+  const { data: modules } = useQuery({
+    queryKey: ['modules-with-tabs'],
+    queryFn: () => getModulesWithTabsServer(),
+    initialData: initialModules,
+    staleTime: 5 * 60 * 1000,
+  });
+  const index = useMemo(() => buildPermissionIndex(modules), [modules]);
 
-  // useQuery con initialData — no hay loading en el primer render
-  const { data: permissions = initialUserPermissions } = useQuery({
-    queryKey: ['user-permissions', userId],
-    queryFn: () => getUserPermissionsForUserServer(userId),
-    initialData: initialUserPermissions,
-    staleTime: 0,
+  const editor = useUserPermissionEditor({
+    userId,
+    index,
+    disabled: !canEdit,
+    initialPermissions: initialUserPermissions,
+    initialUserRoles,
+    initialRolePermissions,
   });
 
+  const overrideCount = editor.overrides.size;
+
   return (
-    <div>
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="user-permissions">
-            <User className="h-4 w-4 mr-2" />
-            Permisos de Usuario
-          </TabsTrigger>
-        </TabsList>
+    <div className="space-y-4">
+      <AssignedRolesCard
+        userId={userId}
+        disabled={!canEdit}
+        initialRoles={initialRoles}
+        userRoles={editor.userRoles}
+        rolePermissions={editor.rolePermissions}
+      />
 
-        <TabsContent value="user-permissions">
-          <Card className="p-3 space-y-6">
-            <Card className="p-6">
-              <div className="mb-8">
-                <div className="flex items-center gap-3 mb-2">
-                  <Shield className="h-6 w-6 text-primary" />
-                  <h1 className="text-xl font-bold">Gestión de Permisos</h1>
-                </div>
-                <p className="text-muted-foreground">Configura los permisos de acceso para módulos, tabs y acciones</p>
-              </div>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-base font-semibold">Usuario Seleccionado</Label>
-                    <div className="flex items-center gap-2 mt-2">
-                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <User className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <p className="font-medium">{userName || 'Usuario'}</p>
-                        <p className="text-sm text-muted-foreground">{userEmail || userId}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Card>
-
-            <RoleSelector
-              userId={userId}
-              disabled={!canEdit}
-              initialRoles={initialRoles}
-              initialUserRoles={initialUserRoles}
-              initialRolePermissions={initialRolePermissions}
+      <SectionCard
+        title="Acceso efectivo"
+        description={
+          canEdit
+            ? 'Qué puede hacer y de dónde sale. Heredar usa lo de sus roles; Conceder y Quitar son ajustes personales que mandan sobre los roles.'
+            : 'Qué puede hacer y de dónde sale: de sus roles o de un ajuste personal.'
+        }
+        action={
+          canEdit ? (
+            <CleanPermissionsDialog
+              disabled={editor.isSaving}
+              userRoles={editor.userRoles}
+              overrideCount={overrideCount}
+              editor={editor}
             />
-
-            <ModulePermissions
-              userId={userId}
-              permissions={permissions}
-              disabled={!canEdit}
-              initialModules={initialModules}
-              initialUserRoles={initialUserRoles}
-            />
-          </Card>
-        </TabsContent>
-      </Tabs>
+          ) : undefined
+        }
+        flush
+      >
+        <div className="p-3 sm:p-5">
+          <PermissionEditor
+            mode="user"
+            modules={modules}
+            index={index}
+            effective={editor.effective}
+            fromRoles={editor.fromRoles}
+            disabled={!canEdit || editor.isSaving}
+            busy={editor.isSaving}
+            user={editor}
+            moduleAddons={{ mantenimiento: <UserEquipmentTypesSection userId={userId} disabled={!canEdit} /> }}
+          />
+        </div>
+      </SectionCard>
     </div>
   );
 }

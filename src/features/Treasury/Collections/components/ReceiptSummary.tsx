@@ -10,7 +10,7 @@ import type { ReceiptPreview } from '../../lib/receipt-preview';
 export function ReceiptSummary({ preview, detailed = false, empty = false }: { preview: ReceiptPreview; detailed?: boolean; empty?: boolean }) {
   const t = preview.totals;
   const pesos = (value: string) => formatInCurrency(value, 'ARS');
-  const tone = preview.closes ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-400';
+  const tone = preview.closes ? 'text-ok' : 'text-warn';
 
   if (!detailed) {
     return (
@@ -21,7 +21,7 @@ export function ReceiptSummary({ preview, detailed = false, empty = false }: { p
         <span role="status" className={`font-medium ${empty ? 'text-muted-foreground' : tone}`}>
           {empty ? 'Tildá un comprobante o cargá un cobro a cuenta' : preview.closing}
         </span>
-        {preview.missingRates.length > 0 && <span className="text-amber-700 dark:text-amber-400">Falta la cotización del {preview.missingRates.join(' y del ')}</span>}
+        {preview.missingRates.length > 0 && <span className="text-warn">Falta la cotización del {preview.missingRates.join(' y del ')}</span>}
       </div>
     );
   }

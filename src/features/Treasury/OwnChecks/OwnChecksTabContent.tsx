@@ -1,11 +1,12 @@
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { PARAM_SEPARATOR } from '@/shared/components/common/DataTable/helpers';
-import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 import { getCheckbooks, getOwnChecksHeader } from '../actions/own-checks.server';
-import { NoPermission } from '../fallback/NoPermission';
-import { CheckbooksCard } from './components/CheckbooksCard';
-import { OwnChecksHeaderCards } from './components/OwnChecksHeaderCards';
+import { StateBlock } from '@/shared/components/common/StateBlock';
+import { DefaultTableFilter } from '../components/DefaultTableFilter';
+import { withDefaultTableFilter } from '../lib/default-table-filter';
+import { getOwnChecksSectionCount } from '../lib/section-counts';
+import { CheckbooksSection } from './components/CheckbooksSection';
+import { OwnChecksAttentionSection } from './components/OwnChecksAttentionSection';
 import { DEFAULT_STATUS_FILTER } from './OwnChecksList/constants';
 import { OwnChecksList, OWN_CHECKS_TABLE_ID } from './OwnChecksList/OwnChecksList';
 import { OwnChecksTableSkeleton } from './OwnChecksList/fallback/OwnChecksTableSkeleton';
@@ -21,17 +22,14 @@ export default async function OwnChecksTabContent({
   searchParams: DataTableSearchParams;
   permissions: Record<string, boolean>;
 }) {
-  if (permissions['tesoreria:cheques-propios:view'] !== true) return <NoPermission />;
-  // La tabla lee sus filtros de la URL: al entrar sin ninguno, arranca mostrando los cheques Emitidos.
-  const statusKey = `${OWN_CHECKS_TABLE_ID}${PARAM_SEPARATOR}status`;
-  const hasTableParams = Object.keys(searchParams).some((key) => key.startsWith(`${OWN_CHECKS_TABLE_ID}${PARAM_SEPARATOR}`));
-  if (!hasTableParams) {
-    const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(searchParams)) if (typeof value === 'string') params.set(key, value);
-    params.set(statusKey, DEFAULT_STATUS_FILTER);
-    redirect(`/dashboard/treasury?${params.toString()}`);
-  }
-  const [header, checkbooks] = await Promise.all([getOwnChecksHeader(), getCheckbooks()]);
+  if (permissions['tesoreria:cheques-propios:view'] !== true) return <StateBlock variant="noperm" title="No tenés permiso para ver esta información" />;
+  // Sin filtros de la tabla en la URL arranca en "Emitidos": se aplica en la consulta (sin redirect, así no se pierde
+  // ningún parámetro) y `DefaultTableFilter` lo deja escrito en la URL, de donde lee el DataTable.
+  const listParams = withDefaultTableFilter(searchParams, OWN_CHECKS_TABLE_ID, 'status', DEFAULT_STATUS_FILTER);
+  // Las promesas arrancan ya y se resuelven en su propio Suspense: la tabla no espera al encabezado ni a las chequeras.
+  const header = getOwnChecksHeader().catch(() => null);
+  const pendingCount = getOwnChecksSectionCount().catch(() => null);
+  const checkbooks = getCheckbooks().catch(() => null);
   const can = {
     create: permissions['tesoreria:cheques-propios:create'] === true,
     retire: permissions['tesoreria:cheques-propios:delete'] === true,
@@ -42,10 +40,11 @@ export default async function OwnChecksTabContent({
       <p className="text-sm text-muted-foreground">
         Cheques y e-cheqs que emite la empresa al pagar órdenes de pago. Quedan emitidos hasta que confirmás que el banco los debitó.
       </p>
-      {header && <OwnChecksHeaderCards header={header} />}
-      <CheckbooksCard checkbooks={checkbooks} can={can} />
+      <OwnChecksAttentionSection tableId={OWN_CHECKS_TABLE_ID} header={header} pendingCount={pendingCount} />
+      <DefaultTableFilter tableId={OWN_CHECKS_TABLE_ID} columnId="status" value={DEFAULT_STATUS_FILTER} />
+      <CheckbooksSection checkbooks={checkbooks} can={can} />
       <Suspense fallback={<OwnChecksTableSkeleton />}>
-        <OwnChecksList searchParams={searchParams} permissionsMap={permissions} />
+        <OwnChecksList searchParams={listParams} permissionsMap={permissions} />
       </Suspense>
     </div>
   );

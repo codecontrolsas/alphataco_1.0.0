@@ -4,7 +4,7 @@ import { PAYMENT_METHODS } from '@/features/Purchases/schemas/payment-orders';
 import { WITHHOLDING_TAXES } from '@/features/Purchases/schemas/payment-settings';
 import { isValidCuit } from '@/features/Empresa/General/lib/company-form';
 import { RATE_SCALE } from '../lib/receipt-math';
-import { DATE_RE, isPositiveAmount } from './shared';
+import { DATE_RE, isCalendarDay, isPositiveAmount } from './shared';
 
 /**
  * Recibo de cobranza (spec Tesorería etapa 2 §3.1). Módulo SIN directiva: lo usan el editor y
@@ -34,7 +34,7 @@ const isRate = (value: string) => {
 export const receiptFormSchema = z
   .object({
     customerId: z.string().uuid('Elegí el cliente'),
-    date: z.string().trim().regex(DATE_RE, 'Fecha inválida'),
+    date: z.string().trim().regex(DATE_RE, 'Fecha inválida').refine(isCalendarDay, 'Fecha inválida'),
     notes: z.string().trim().max(500, 'Máximo 500 caracteres'),
     rates: z.array(z.object({ currency: z.enum(FOREIGN_CURRENCIES), rate: z.string().trim() })),
     /** Importe en la moneda del comprobante. */
@@ -49,7 +49,7 @@ export const receiptFormSchema = z
         tax: z.enum(WITHHOLDING_TAXES),
         jurisdiction: z.string().trim().max(60, 'Máximo 60 caracteres'),
         certificateNumber: z.string().trim().min(1, 'Indicá el número del certificado').max(40, 'Máximo 40 caracteres'),
-        certificateDate: z.string().trim().regex(DATE_RE, 'Fecha inválida'),
+        certificateDate: z.string().trim().regex(DATE_RE, 'Fecha inválida').refine(isCalendarDay, 'Fecha inválida'),
         amount: z.string().trim(),
       })
     ),
@@ -111,7 +111,9 @@ export const receiptFormSchema = z
         if (!p.checkNumber) issue(['payments', i, 'checkNumber'], 'Indicá el número del cheque');
         if (!p.checkBank) issue(['payments', i, 'checkBank'], 'Indicá el banco');
         if (!DATE_RE.test(p.checkDueOn)) issue(['payments', i, 'checkDueOn'], 'Indicá el vencimiento del cheque');
+        else if (!isCalendarDay(p.checkDueOn)) issue(['payments', i, 'checkDueOn'], 'Fecha inválida');
         if (!DATE_RE.test(p.checkIssueDate ?? '')) issue(['payments', i, 'checkIssueDate'], 'Indicá la fecha de emisión');
+        else if (!isCalendarDay(p.checkIssueDate ?? '')) issue(['payments', i, 'checkIssueDate'], 'Fecha inválida');
         else if (DATE_RE.test(p.checkDueOn) && p.checkDueOn < (p.checkIssueDate ?? '')) {
           issue(['payments', i, 'checkDueOn'], 'La fecha de pago no puede ser anterior a la de emisión');
         }

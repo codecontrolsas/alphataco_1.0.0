@@ -159,9 +159,9 @@ export function TaskList({
     <div className="space-y-3">
       {/* Pending WO banner */}
       {isPending && (
-        <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3.5 flex items-center gap-3">
-          <Play className="h-5 w-5 text-blue-600 flex-shrink-0" />
-          <p className="text-sm text-blue-800 dark:text-blue-200 font-medium">
+        <div className="bg-info-subtle border border-info/30 rounded-lg p-3.5 flex items-center gap-3">
+          <Play className="h-5 w-5 text-info flex-shrink-0" />
+          <p className="text-sm text-info-subtle-foreground font-medium">
             Inicie la Orden de Trabajo antes de completar tareas
           </p>
         </div>
@@ -169,9 +169,9 @@ export function TaskList({
 
       {/* Diagnostico blocking banner */}
       {!isPending && hasDiagnostico && !isDiagnosticoComplete && (
-        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3.5 flex items-center gap-3">
-          <Stethoscope className="h-5 w-5 text-amber-600 flex-shrink-0" />
-          <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
+        <div className="bg-warn-subtle border border-warn/30 rounded-lg p-3.5 flex items-center gap-3">
+          <Stethoscope className="h-5 w-5 text-warn flex-shrink-0" />
+          <p className="text-sm text-warn-subtle-foreground font-medium">
             Complete el DIAGNOSTICO antes de continuar con otras tareas
           </p>
         </div>
@@ -220,7 +220,7 @@ export function TaskList({
         <div key={item.id} className="rounded-lg border border-l-4 border-l-sky-400 bg-card">
           <div className="p-4 sm:p-5 space-y-2">
             <div className="flex items-start gap-2.5">
-              <Info className="h-5 w-5 text-sky-600 flex-shrink-0 mt-0.5" />
+              <Info className="h-5 w-5 text-info flex-shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0 space-y-2">
                 <p className="text-sm font-semibold sm:text-base leading-tight">{item.title}</p>
                 <RepairGroupBadge groupName={item.groupName} />

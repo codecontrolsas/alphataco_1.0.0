@@ -12,7 +12,7 @@ export default async function GraficosTabContent() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,28rem),1fr))] gap-6">
         {KPI_CODES.map((code) => {
           const meta = metadataByCode.get(code);
           return (

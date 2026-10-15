@@ -1,5 +1,6 @@
 'use server';
 
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
@@ -130,6 +131,9 @@ function toFiltersInput(filters: Record<string, unknown> | null | undefined) {
  * Perímetro: el KPI tiene que ser de la empresa activa.
  */
 export async function fetchKPIRevisions(kpi_id: string): Promise<KPIRevision[]> {
+  if (!(await checkPermissionServer('configuracion', 'indicadores', 'view'))) {
+    throw new Error('No tenés permiso para ver los indicadores');
+  }
   try {
     await assertKpiInActiveCompany(kpi_id);
 
@@ -146,11 +150,15 @@ export async function fetchKPIRevisions(kpi_id: string): Promise<KPIRevision[]> 
   }
 }
 
+/** Resultado «sin permiso»: misma forma que un error de la acción, la UI lo muestra en el toast. */
+const FORBIDDEN_RESULT = { data: null, error: { message: 'No tenés permiso para modificar los KPIs' } } as const;
+
 /**
  * Crea un KPI en la empresa activa.
  * El código lo genera la función SQL `generate_kpi_code(company_uuid)` (vía `callScalar`).
  */
 export async function createKPI(input: CreateKPIInput): Promise<{ data: KPI | null; error: unknown }> {
+  if (!(await checkPermissionServer('configuracion', 'kpis', 'create'))) return FORBIDDEN_RESULT;
   try {
     const companyId = await getActiveCompanyId();
 
@@ -195,6 +203,7 @@ const UPDATABLE_FIELDS = [
  * Edita un KPI de la empresa activa (sólo los campos presentes en el input).
  */
 export async function updateKPI(input: UpdateKPIInput): Promise<{ data: KPI | null; error: unknown }> {
+  if (!(await checkPermissionServer('configuracion', 'kpis', 'update'))) return FORBIDDEN_RESULT;
   try {
     await assertKpiInActiveCompany(input.id);
 
@@ -226,6 +235,7 @@ export async function updateKPI(input: UpdateKPIInput): Promise<{ data: KPI | nu
  * después y, si fallaba, el KPI quedaba cambiado sin rastro de quién lo hizo.
  */
 export async function updateKPINumber(input: UpdateKPINumberInput): Promise<{ data: KPI | null; error: unknown }> {
+  if (!(await checkPermissionServer('configuracion', 'kpis', 'update'))) return FORBIDDEN_RESULT;
   try {
     const credentialId = await getSessionUserId();
     if (!credentialId) return { data: null, error: { message: 'User not authenticated' } };

@@ -26,18 +26,18 @@ interface SectorTimelineProps {
 
 const statusColors: Record<SectorStatus, string> = {
   blocked: 'bg-muted border-muted-foreground/30 text-muted-foreground',
-  pending: 'bg-blue-100 border-blue-500 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
-  in_progress: 'bg-yellow-100 border-yellow-500 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300',
-  paused: 'bg-orange-100 border-orange-500 text-orange-700 dark:bg-orange-950 dark:text-orange-300',
-  completed: 'bg-green-100 border-green-500 text-green-700 dark:bg-green-950 dark:text-green-300',
+  pending: 'bg-info-subtle border-info text-info-subtle-foreground',
+  in_progress: 'bg-warn-subtle border-warn text-warn-subtle-foreground',
+  paused: 'bg-danger-subtle border-danger text-danger-subtle-foreground',
+  completed: 'bg-ok-subtle border-ok text-ok-subtle-foreground',
 };
 
 const statusLineColors: Record<SectorStatus, string> = {
   blocked: 'bg-muted-foreground/30',
-  pending: 'bg-blue-300',
-  in_progress: 'bg-yellow-300',
-  paused: 'bg-orange-300',
-  completed: 'bg-green-500',
+  pending: 'bg-info/50',
+  in_progress: 'bg-warn/50',
+  paused: 'bg-danger/50',
+  completed: 'bg-ok',
 };
 
 const statusLabels: Record<SectorStatus, string> = {

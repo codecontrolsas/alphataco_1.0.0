@@ -1,26 +1,16 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import type { ExportResult } from '@/shared/lib/export-result';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { getHiddenEquipmentTypeIds } from '../../utils/equipmentTypeVisibility';
 import { getOrdersPaginatedCached, getOrdersSingleFacetCached, type FacetPayload } from './lib/order-queries';
+import { resolveOrdersScope as resolveScope } from './lib/order-scope';
 import { loadTasksForExport, type MaintenanceOrderTaskExportRow } from './lib/tasks-export';
 
 /**
- * Listado "En Taller". Cada acción exige `view` de `mantenimiento/ordenes_mantenimiento` (la misma tab que
- * muestra la UI) y resuelve la empresa en el servidor; la empresa y los tipos ocultos entran en la clave
- * del cache de las consultas.
+ * Listado "En Taller". Cada acción exige `view` de `mantenimiento/ordenes_mantenimiento` y resuelve la
+ * empresa en el servidor (ver `lib/order-scope`); la empresa y los tipos ocultos entran en la clave del
+ * cache de las consultas.
  */
-const MODULE = 'mantenimiento';
-const TAB = 'ordenes_mantenimiento';
-
-async function resolveScope() {
-  if (!(await checkPermissionServer(MODULE, TAB, 'view'))) return null;
-  const [companyId, hiddenTypeIds] = await Promise.all([getActiveCompanyId(), getHiddenEquipmentTypeIds()]);
-  return { companyId, hiddenTypeIds };
-}
 
 export async function getMaintenanceOrdersPaginated(searchParams: DataTableSearchParams) {
   const scope = await resolveScope();

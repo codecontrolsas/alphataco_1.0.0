@@ -9,7 +9,10 @@ import _MarcasDataTable from './_MarcasDataTable';
 // CONSTANTS
 // ============================================================================
 
-const TABLE_ID = 'tire-brands';
+/** Clave de las preferencias guardadas (columnas y filtros visibles). `-v2`: el diseño nuevo parte de cero. */
+const TABLE_ID = 'tire-brands-v2';
+/** Prefijo de los params de la URL: no cambia con el rediseño para que los enlaces guardados sigan abriendo. */
+const PARAM_NAMESPACE = 'tire-brands';
 
 // ============================================================================
 // TYPES
@@ -26,7 +29,7 @@ interface MarcasListProps {
 
 export default async function MarcasList({ searchParams, permissionsMap }: MarcasListProps) {
   // Extract only the params for this table (strip namespace prefix)
-  const tableParams = stripPrefixFromSearchParams(searchParams as DataTableSearchParams, TABLE_ID);
+  const tableParams = stripPrefixFromSearchParams(searchParams as DataTableSearchParams, PARAM_NAMESPACE);
 
   // Facets are loaded lazy (on-demand when each popover opens) — not in SSR
   const [{ data, total }, preferences] = await Promise.all([

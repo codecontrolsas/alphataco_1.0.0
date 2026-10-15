@@ -1,8 +1,8 @@
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { AlertTriangle, CheckCircle2, CircleDashed, FlaskConical, Landmark, XCircle } from 'lucide-react';
-import moment from 'moment';
-import type { FiscalDataOverview } from '../actions/fiscal-data.server';
+import type { FiscalDataOverview } from '../lib/fiscal-data-overview.server';
 import { daysUntil } from '../lib/readiness';
 import { ENVIRONMENT_LABELS } from '../schemas/fiscal-data';
 import { joinList } from '../utils/format';
@@ -20,9 +20,9 @@ const ITEM_ICONS = {
 
 const ITEM_ICON_STYLES: Record<ItemState, string> = {
   ok: 'text-brand-ink',
-  warning: 'text-amber-600 dark:text-amber-400',
+  warning: 'text-warn-subtle-foreground',
   missing: 'text-muted-foreground',
-  error: 'text-destructive',
+  error: 'text-danger-subtle-foreground',
 };
 
 type ReadinessItem = { key: string; href: string; state: ItemState; text: string };
@@ -70,7 +70,7 @@ export function FiscalReadinessSummary({ overview, nowIso }: { overview: FiscalD
         active.lastTestAt === null
           ? 'Conexión sin probar'
           : active.lastTestOk
-            ? `Conexión probada el ${moment(active.lastTestAt).format('DD/MM/YYYY HH:mm')}`
+            ? `Conexión probada el ${formatArgentinaDateTime(active.lastTestAt)}`
             : 'La última prueba de conexión falló',
     });
   }
@@ -141,7 +141,7 @@ function certificateItem(
       return {
         ...base,
         state: 'ok',
-        text: `Certificado vigente hasta el ${notAfter ? moment(notAfter).format('DD/MM/YYYY') : '—'}`,
+        text: `Certificado vigente hasta el ${notAfter ? formatArgentinaDay(notAfter) : '—'}`,
       };
   }
 }

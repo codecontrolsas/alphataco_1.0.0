@@ -108,7 +108,7 @@ async function quoteStatus(id: string) {
 
 /** Respuesta: precio por linea (en el orden de `requestLineIds`), `null` = no cotiza. */
 async function respond(quoteId: string, requestLineIds: string[], prices: (string | null)[]) {
-  const actions = await import('./quotes.server');
+  const actions = { ...(await import('./quotes.server')), ...(await import('./quote-queries.server')) };
   const lines = await quoteLines(quoteId);
   return actions.recordPurchaseQuoteResponse(quoteId, {
     receivedAt: '2026-10-08',
@@ -172,8 +172,8 @@ describe.skipIf(!RUN)('pedidos de cotizacion (integracion)', () => {
   });
 
   it('pedir a dos proveedores crea un pedido por proveedor con lo que falta', async () => {
-    const actions = await import('./quotes.server');
-    const orders = await import('./orders.server');
+    const actions = { ...(await import('./quotes.server')), ...(await import('./quote-queries.server')) };
+    const orders = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([10, 2]);
     expectOk(
       await orders.createPurchaseOrder(
@@ -201,7 +201,7 @@ describe.skipIf(!RUN)('pedidos de cotizacion (integracion)', () => {
   });
 
   it('enviar por mail: OK queda enviada con PDF; si el mail falla sigue en borrador; marcar como enviada', async () => {
-    const actions = await import('./quotes.server');
+    const actions = { ...(await import('./quotes.server')), ...(await import('./quote-queries.server')) };
     const req = await approvedRequest([3]);
     const { quotes } = expectOk(await actions.requestQuotes({ requestLineIds: req.lineIds, supplierIds: [SUPPLIER_A, SUPPLIER_B], notes: '' }));
 
@@ -226,8 +226,8 @@ describe.skipIf(!RUN)('pedidos de cotizacion (integracion)', () => {
   }, 30_000);
 
   it('respuesta, correccion, comparativo y OC desde la mejor', async () => {
-    const actions = await import('./quotes.server');
-    const orders = await import('./orders.server');
+    const actions = { ...(await import('./quotes.server')), ...(await import('./quote-queries.server')) };
+    const orders = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([10, 1]);
     const { quotes } = expectOk(await actions.requestQuotes({ requestLineIds: req.lineIds, supplierIds: [SUPPLIER_A, SUPPLIER_B], notes: '' }));
     const [qa, qb] = quotes;
@@ -283,7 +283,7 @@ describe.skipIf(!RUN)('pedidos de cotizacion (integracion)', () => {
   });
 
   it('no cotiza, anular y transiciones invalidas', async () => {
-    const actions = await import('./quotes.server');
+    const actions = { ...(await import('./quotes.server')), ...(await import('./quote-queries.server')) };
     const req = await approvedRequest([1]);
     const { quotes } = expectOk(await actions.requestQuotes({ requestLineIds: req.lineIds, supplierIds: [SUPPLIER_A, SUPPLIER_B], notes: '' }));
     expect(expectFail(await actions.declinePurchaseQuote(quotes[0].id))).toContain('ya fue');
@@ -303,7 +303,7 @@ describe.skipIf(!RUN)('pedidos de cotizacion (integracion)', () => {
   });
 
   it('perimetro y permisos', async () => {
-    const actions = await import('./quotes.server');
+    const actions = { ...(await import('./quotes.server')), ...(await import('./quote-queries.server')) };
     const req = await approvedRequest([1]);
     expect(
       expectFail(await actions.requestQuotes({ requestLineIds: req.lineIds, supplierIds: [FOREIGN_SUPPLIER], notes: '' }))

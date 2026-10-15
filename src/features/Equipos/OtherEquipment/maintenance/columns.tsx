@@ -2,11 +2,12 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { ORDER_STATUS_UI, TONE_TO_BADGE, type BadgeVariant } from '@/features/Mantenimiento/lib/status-presentation';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { LucideIcon } from 'lucide-react';
-import { CheckCircle2, Clock, Play, Wrench, XCircle } from 'lucide-react';
+import { Wrench } from 'lucide-react';
 import moment from 'moment';
 import type { OtherEquipmentMaintenanceOrder } from './actions.server';
 
@@ -16,23 +17,17 @@ import type { OtherEquipmentMaintenanceOrder } from './actions.server';
 
 type StatusConfig = {
   label: string;
-  variant: 'default' | 'info' | 'yellow' | 'success' | 'secondary' | 'destructive';
+  variant: BadgeVariant;
   icon: LucideIcon;
 };
 
-/** Mismos labels que el pipeline, para que el legajo no invente vocabulario propio */
-const STATUS_CONFIG: Record<string, StatusConfig> = {
-  pending_scheduling: { label: 'Por programar', variant: 'secondary', icon: Clock },
-  date_confirmed: { label: 'Pendiente de ingreso a taller', variant: 'secondary', icon: Clock },
-  in_workshop: { label: 'En taller', variant: 'info', icon: Play },
-  pending_workshop_validation: { label: 'Pend. validación taller', variant: 'yellow', icon: Clock },
-  pending_operations_validation: { label: 'Pend. validación operaciones', variant: 'yellow', icon: Clock },
-  operations_rejected: { label: 'Rechazada por operaciones', variant: 'destructive', icon: XCircle },
-  workshop_rejected: { label: 'Rechazada por taller', variant: 'destructive', icon: XCircle },
-  // Ticket 676: el taller puede rechazar un pedido desde el paso "Por Programar".
-  rejected: { label: 'Rechazada por taller', variant: 'destructive', icon: XCircle },
-  completed: { label: 'Completada', variant: 'success', icon: CheckCircle2 },
-};
+/** Misma fuente que el resto de Mantenimiento (`lib/status-presentation`): el legajo no inventa vocabulario propio */
+const STATUS_CONFIG: Record<string, StatusConfig> = Object.fromEntries(
+  Object.entries(ORDER_STATUS_UI).map(([status, ui]) => [
+    status,
+    { label: ui.label, variant: TONE_TO_BADGE[ui.tone], icon: ui.icon },
+  ])
+);
 
 const SOURCE_LABELS: Record<string, string> = {
   checklist: 'Checklist',

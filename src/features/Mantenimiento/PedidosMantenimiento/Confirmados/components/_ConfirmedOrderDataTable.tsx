@@ -9,21 +9,34 @@ import {
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { conditionLabels } from '@/shared/utils/mappers';
-import { AlertCircle, CheckCircle2, CircleOff, Settings2, Truck, Wrench, XCircle, type LucideIcon } from 'lucide-react';
+import { CircleOff, Truck } from 'lucide-react';
 import moment from 'moment';
+import dynamic from 'next/dynamic';
 import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { getResourceCondition, getResourceLabel, getResourceInternNumber } from '../../../shared/maintenance-resource';
 import { useCallback, useMemo, useState } from 'react';
-import { EntradaTallerDialog } from '../../components/EntradaTallerDialog';
-import { PedidoDetailDialog } from '../../components/PedidoDetailDialog';
 import {
   getAllConfirmedOrdersForExport,
   getConfirmedOrdersPaginated,
   getConfirmedOrdersSingleFacet,
   type ConfirmedOrderListItem,
 } from '../actions.server';
-import { HIDDEN_COLUMNS_BY_DEFAULT, SOURCE_ICONS, SOURCE_LABELS, getConfirmedOrderColumns } from '../columns';
+import {
+  CONDITION_ICONS,
+  HIDDEN_COLUMNS_BY_DEFAULT,
+  SOURCE_ICONS,
+  SOURCE_LABELS,
+  getConfirmedOrderColumns,
+} from '../columns';
+
+// Los diálogos se abren a demanda: no pesan en la carga inicial de la tabla.
+const PedidoDetailDialog = dynamic(() =>
+  import('../../components/PedidoDetailDialog').then((m) => m.PedidoDetailDialog)
+);
+const EntradaTallerDialog = dynamic(() =>
+  import('../../components/EntradaTallerDialog').then((m) => m.EntradaTallerDialog)
+);
 
 // ============================================================================
 // TYPES
@@ -33,7 +46,10 @@ interface Props {
   data: ConfirmedOrderListItem[];
   totalRows: number;
   searchParams: DataTableSearchParams;
+  /** Clave de las preferencias guardadas de la tabla (`-v2`). */
   tableId: string;
+  /** Prefijo de los parámetros de la URL: el mismo que usa la banda de atención para filtrar. */
+  paramNamespace: string;
   canApproveWorkshopEntry: boolean;
   initialColumnVisibility: Record<string, boolean>;
   initialFilterVisibility: Record<string, boolean>;
@@ -44,14 +60,6 @@ interface Props {
 // ============================================================================
 
 const DEFAULT_VISIBLE_FILTER_IDS = ['vehicle', 'condition', 'scheduled_date'];
-
-const CONDITION_ICONS: Record<string, LucideIcon> = {
-  operativo: CheckCircle2,
-  no_operativo: XCircle,
-  en_reparacion: Wrench,
-  operativo_condicionado: AlertCircle,
-  en_preparacion: Settings2,
-};
 
 // ============================================================================
 // HELPERS — builders para reducir boilerplate en fetchFacet
@@ -110,6 +118,7 @@ export function _ConfirmedOrderDataTable({
   totalRows,
   searchParams,
   tableId,
+  paramNamespace,
   canApproveWorkshopEntry,
   initialColumnVisibility,
   initialFilterVisibility,
@@ -218,9 +227,9 @@ export function _ConfirmedOrderDataTable({
       // Número de pedido (texto libre)
       {
         columnId: 'order_number',
-        title: 'Nro. Pedido',
+        title: 'N° Orden',
         type: 'text' as const,
-        placeholder: 'Buscar por número de pedido...',
+        placeholder: 'Buscar por N° de orden...',
       },
 
       // Descripción del pedido (texto libre)
@@ -330,13 +339,14 @@ export function _ConfirmedOrderDataTable({
         data={data}
         totalRows={totalRows}
         searchParams={searchParams}
-        paramNamespace={tableId}
+        paramNamespace={paramNamespace}
         tableId={tableId}
+        mobileCards
         facetedFilters={facetedFilters}
         exportConfig={exportConfig}
         initialColumnVisibility={mergedColumnVisibility}
         initialFilterVisibility={mergedFilterVisibility}
-        searchPlaceholder="Buscar por dominio, serie, N° interno o N° de pedido..."
+        searchPlaceholder="Buscar por dominio, serie, N° interno o N° de orden…"
         emptyMessage="No hay pedidos confirmados"
         showFilterToggle={true}
         // Client-side navigation: fetch instantáneo vía React Query, sin router.push.

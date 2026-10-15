@@ -6,6 +6,8 @@ import { treasury_movement_kind } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
 import { NULL_FILTER_VALUE, parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
@@ -16,6 +18,7 @@ import {
   safePaging,
   textValue,
 } from '../../lib/filter-values';
+import { isoDay } from '../../lib/dates';
 import { MOVEMENT_STATE_LABELS, OPENING_OPERATION_LABEL } from './constants';
 
 const logger = new Logger('features/Treasury/Movements/MovementsList');
@@ -43,6 +46,9 @@ const SORT_MAP: Record<string, (dir: 'asc' | 'desc') => MovementOrderBy[]> = {
 /** `date` es @db.Date; `created_at` es timestamptz (el dia elegido es el dia argentino). */
 const DATE_COLUMNS = ['date'];
 const TIMESTAMP_COLUMNS = ['created_at'];
+
+/** Tope de filas por export de esta tabla. */
+const EXPORT_LIMIT = 10_000;
 
 const MOVEMENT_KINDS = Object.values(treasury_movement_kind);
 
@@ -152,7 +158,7 @@ const MOVEMENT_SELECT = {
   cancelled_at: true,
   cancel_reason: true,
   statement_line: { select: { id: true } },
-  account: { select: { id: true, name: true } },
+  account: { select: { id: true, name: true, kind: true, bank_name: true } },
   concept: { select: { id: true, name: true } },
   transfer: { select: { id: true, number: true } },
   payment_order_payment: { select: { payment_order: { select: { id: true, number: true } } } },
@@ -170,7 +176,7 @@ function shape(rows: Prisma.treasury_movementsGetPayload<{ select: typeof MOVEME
     return {
       id: r.id,
       // Fecha valor (@db.Date): se toma el dia tal cual, sin correr zona horaria
-      date: r.date.toISOString().slice(0, 10),
+      date: isoDay(r.date),
       amount: r.amount.toString(),
       kind: r.kind,
       description: r.description,
@@ -179,7 +185,7 @@ function shape(rows: Prisma.treasury_movementsGetPayload<{ select: typeof MOVEME
       cancel_reason: r.cancel_reason,
       // Conciliado = ya tiene una linea de extracto bancario asociada
       reconciled: r.statement_line !== null,
-      account: { id: r.account.id, name: r.account.name },
+      account: { id: r.account.id, name: r.account.name, kind: r.account.kind, bankName: r.account.bank_name },
       concept: r.concept ? { id: r.concept.id, name: r.concept.name } : null,
       transfer: r.transfer ? { id: r.transfer.id, number: r.transfer.number } : null,
       paymentOrder: order ? { id: order.id, number: order.number } : null,
@@ -230,22 +236,36 @@ export async function getTreasuryMovementsPaginated(searchParams: DataTableSearc
 // EXPORT (sin paginacion)
 // ============================================================================
 
-export async function getAllTreasuryMovementsForExport(searchParams: DataTableSearchParams) {
+export async function getAllTreasuryMovementsForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<TreasuryMovementListItem[]>> {
   const companyId = await resolveCompanyId();
-  if (!companyId) return [];
+  if (!companyId) return { ok: false, message: 'No tiene permiso para exportar los movimientos.' };
 
   try {
     const state = parseSearchParams(searchParams);
     const where = buildWhereClause(companyId, state);
-    const rows = await prisma.treasury_movements.findMany({
-      where,
-      orderBy: [{ date: 'desc' }, { created_at: 'desc' }],
-      select: MOVEMENT_SELECT,
+    const orderBy: MovementOrderBy[] = [{ date: 'desc' }, { created_at: 'desc' }, { id: 'asc' }];
+
+    const rows = await fetchExportRowsInBatches({
+      maxRows: EXPORT_LIMIT,
+      listIds: (take) => prisma.treasury_movements.findMany({ where, orderBy, select: { id: true }, take }),
+      fetchByIds: (ids) =>
+        prisma.treasury_movements.findMany({ where: { id: { in: ids }, company_id: companyId }, select: MOVEMENT_SELECT }),
+      tooLargeMessage: (maxRows) =>
+        `Hay más de ${maxRows.toLocaleString('es-AR')} movimientos con los filtros actuales. Acote la exportación con filtros.`,
     });
-    return shape(rows);
+    return { ok: true, data: shape(rows) };
   } catch (error) {
     logger.error('Error al exportar movimientos de tesoreria', { data: { error } });
-    throw new Error('No se pudo exportar la lista de movimientos');
+    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
+    return {
+      ok: false,
+      message:
+        error instanceof ExportTooLargeError
+          ? error.message
+          : 'No se pudo exportar la lista de movimientos. Intente nuevamente.',
+    };
   }
 }
 

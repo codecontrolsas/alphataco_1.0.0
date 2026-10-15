@@ -24,7 +24,7 @@ import { Ban, UserCheck } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import type { CompanyUserListItem } from '../actions.server';
+import type { CompanyUserListItem } from '../lib/users-types';
 import { banCompanyUser, unbanCompanyUser } from '../mutations.server';
 
 const logger = new Logger('UserStatusCell');
@@ -149,7 +149,7 @@ export function UserStatusCell({ row, canBan, canReactivate }: UserStatusCellPro
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 gap-1.5 text-green-600 hover:text-green-600 hover:bg-green-600/10"
+          className="h-7 gap-1.5 text-ok hover:text-ok hover:bg-ok-subtle"
           onClick={handleReactivateClick}
         >
           <UserCheck className="h-3.5 w-3.5" />

@@ -2,11 +2,13 @@
 
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { errorMessage, fail, ok, type ActionResult } from '../lib/action-result';
 import { priceChanged, writePriceRevision } from '../lib/price-revision-writer';
+import { requireComercialPermission } from '../lib/require-permission.server';
 import { serviceItemFormSchema, type ServiceItemFormValues } from '../schemas/service-item';
 
 const logger = new Logger('features/Empresa/Clientes/service-items');
@@ -20,14 +22,23 @@ const itemInclude = {
 
 type ItemWithRelations = Prisma.service_itemsGetPayload<{ include: typeof itemInclude }>;
 
-/** `item_price` es `Decimal`: hacia el cliente viaja como number. */
-function serializeItem({ item_price, ...rest }: ItemWithRelations) {
-  return { ...rest, item_price: Number(item_price) };
+/**
+ * `item_price` es `Decimal(15,4)`: hacia el cliente viaja como string para no perder precisión. Sin
+ * `view_prices` viaja `null`: el importe no sale del servidor.
+ */
+function serializeItem({ item_price, ...rest }: ItemWithRelations, canViewPrices: boolean) {
+  return { ...rest, item_price: canViewPrices ? item_price.toString() : null };
 }
 
 export type ServiceItemRow = ReturnType<typeof serializeItem>;
 
+/** Resuelve en el servidor si el usuario ve los importes de los items de contrato. */
+async function canViewItemPrices(): Promise<boolean> {
+  return (await requireComercialPermission('items-contrato', 'view_prices')) === null;
+}
+
 async function findItems(customerServiceId: string, companyId: string, onlyActive: boolean) {
+  const canViewPrices = await canViewItemPrices();
   const rows = await prisma.service_items.findMany({
     where: {
       customer_service_id: customerServiceId,
@@ -37,12 +48,14 @@ async function findItems(customerServiceId: string, companyId: string, onlyActiv
     include: itemInclude,
     orderBy: { item_name: 'asc' },
   });
-  return rows.map(serializeItem);
+  return rows.map((row) => serializeItem(row, canViewPrices));
 }
 
 /** Todos los items (activos e inactivos) de un contrato de la empresa activa. */
 export async function getServiceItemsByContract(customerServiceId: string): Promise<ServiceItemRow[]> {
   if (!customerServiceId) return [];
+  const permissionError = await requireComercialPermission('items-contrato', 'view');
+  if (permissionError) throw new Error(permissionError);
   const companyId = await getActiveCompanyId();
   try {
     return await findItems(customerServiceId, companyId, false);
@@ -92,6 +105,8 @@ export async function createServiceItem(
   const parsed = serviceItemFormSchema.safeParse(input);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos');
 
+  const permissionError = await requireComercialPermission('items-contrato', 'create');
+  if (permissionError) return fail(permissionError);
   const companyId = await getActiveCompanyId();
   try {
     const service = await prisma.customer_services.findFirst({
@@ -102,6 +117,12 @@ export async function createServiceItem(
     if (!service) return fail('Contrato no encontrado');
     const data = toItemData(parsed.data);
     await assertMeasureUnitExists(data.item_measure_units);
+
+    // Fijar un precio inicial es fijar un importe: exige `update_prices`.
+    if (!data.item_price.isZero()) {
+      const priceError = await requireComercialPermission('items-contrato', 'update_prices');
+      if (priceError) return fail(priceError);
+    }
 
     const createdBy = await getSessionUserId();
 
@@ -116,7 +137,7 @@ export async function createServiceItem(
         serviceItemId: item.id,
         price: data.item_price,
         previousPrice: null,
-        validFrom: new Date(),
+        validFrom: new Date(argentinaDate()),
         source: 'manual',
         reason: 'Precio inicial del ítem',
         createdBy,
@@ -140,6 +161,8 @@ export async function updateServiceItem(
   const parsed = serviceItemFormSchema.safeParse(input);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos');
 
+  const permissionError = await requireComercialPermission('items-contrato', 'update');
+  if (permissionError) return fail(permissionError);
   const companyId = await getActiveCompanyId();
   try {
     const data = toItemData(parsed.data);
@@ -154,7 +177,14 @@ export async function updateServiceItem(
     // El form del ítem también puede cambiar el precio. Si se escribiera con el resto de los
     // campos, ese cambio no dejaría revisión y el historial mentiría: pasa por el mismo
     // escritor que el cambio manual y la corrida de una regla.
-    const cambioPrecio = priceChanged(actual.item_price, data.item_price);
+    // Sin `view_prices` el form no conoce el precio vigente (viaja null): el precio entrante se
+    // ignora y se conserva el actual. Con `view_prices`, cambiarlo exige `update_prices`.
+    const canViewPrices = await canViewItemPrices();
+    const cambioPrecio = canViewPrices && priceChanged(actual.item_price, data.item_price);
+    if (cambioPrecio) {
+      const priceError = await requireComercialPermission('items-contrato', 'update_prices');
+      if (priceError) return fail(priceError);
+    }
     const { item_price, ...sinPrecio } = data;
     const createdBy = cambioPrecio ? await getSessionUserId() : null;
 
@@ -165,7 +195,7 @@ export async function updateServiceItem(
           serviceItemId: itemId,
           price: item_price,
           previousPrice: actual.item_price,
-          validFrom: new Date(),
+          validFrom: new Date(argentinaDate()),
           source: 'manual',
           reason: 'Precio editado desde el ítem',
           createdBy,

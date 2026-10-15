@@ -1,14 +1,26 @@
 'use client';
 
+import { Badge } from '@/components/ui/badge';
 import {
   DataTableColumnHeader,
   inMemoryDateSortingFn,
-  inMemoryFacetedFilterFn,
   inMemoryTextFilterFn,
 } from '@/shared/components/common/DataTable';
-import { ColumnDef } from '@tanstack/react-table';
+import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { ColumnDef, Row } from '@tanstack/react-table';
 import Link from 'next/link';
 import { EmployeeAbsence } from '../../actions.server';
+
+/**
+ * Filtro facetado que además entiende «Sin asignar»: las filas con valor vacío (la celda muestra «—»)
+ * coinciden con `NULL_FILTER_VALUE`.
+ */
+function facetedOrUnassignedFilterFn(row: Row<EmployeeAbsence>, columnId: string, filterValue: unknown): boolean {
+  const values = Array.isArray(filterValue) ? filterValue.map(String) : filterValue ? [String(filterValue)] : [];
+  if (values.length === 0) return true;
+  const cell = String(row.getValue(columnId) ?? '');
+  return cell === '' ? values.includes(NULL_FILTER_VALUE) : values.includes(cell);
+}
 
 export const employeeAbsenceColumns: ColumnDef<EmployeeAbsence>[] = [
   {
@@ -46,26 +58,15 @@ export const employeeAbsenceColumns: ColumnDef<EmployeeAbsence>[] = [
     meta: { title: 'Tarea' },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Cargo" />,
     cell: ({ row }) => <span>{row.original.tarea || '—'}</span>,
-    filterFn: inMemoryFacetedFilterFn,
+    filterFn: facetedOrUnassignedFilterFn,
   },
   {
     accessorKey: 'linea',
     id: 'linea',
     meta: { title: 'Línea' },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Sector" />,
-    cell: ({ row }) => {
-      const linea = row.original.linea;
-      const cls =
-        linea === 'LOGISTICA'
-          ? 'bg-blue-100 text-blue-800'
-          : linea === 'SERV ESPECIALES'
-            ? 'bg-purple-100 text-purple-800'
-            : linea === 'ADMINISTRACION'
-              ? 'bg-green-100 text-green-800'
-              : 'bg-gray-100 text-gray-800';
-      return <span className={`px-2 py-1 rounded text-xs ${cls}`}>{linea}</span>;
-    },
-    filterFn: inMemoryFacetedFilterFn,
+    cell: ({ row }) => (row.original.linea ? <Badge variant="outline">{row.original.linea}</Badge> : <span>—</span>),
+    filterFn: facetedOrUnassignedFilterFn,
   },
   {
     accessorKey: 'turno',
@@ -73,7 +74,7 @@ export const employeeAbsenceColumns: ColumnDef<EmployeeAbsence>[] = [
     meta: { title: 'Turno' },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Turno" />,
     cell: ({ row }) => <span>{row.original.turno || '—'}</span>,
-    filterFn: inMemoryFacetedFilterFn,
+    filterFn: facetedOrUnassignedFilterFn,
   },
   {
     accessorKey: 'motivo',
@@ -81,25 +82,27 @@ export const employeeAbsenceColumns: ColumnDef<EmployeeAbsence>[] = [
     meta: { title: 'Motivo' },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Motivo" />,
     cell: ({ row }) => <span>{row.original.motivo || '—'}</span>,
-    filterFn: inMemoryFacetedFilterFn,
+    filterFn: facetedOrUnassignedFilterFn,
   },
   {
     accessorKey: 'desde',
     id: 'desde',
     meta: { title: 'Desde' },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Desde" />,
-    cell: ({ row }) => <span>{row.original.desde}</span>,
+    cell: ({ row }) => <span>{row.original.desde || '—'}</span>,
     enableSorting: true,
     sortingFn: inMemoryDateSortingFn,
+    filterFn: inMemoryTextFilterFn,
   },
   {
     accessorKey: 'hasta',
     id: 'hasta',
     meta: { title: 'Hasta' },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Hasta" />,
-    cell: ({ row }) => <span>{row.original.hasta}</span>,
+    cell: ({ row }) => <span>{row.original.hasta || '—'}</span>,
     enableSorting: true,
     sortingFn: inMemoryDateSortingFn,
+    filterFn: inMemoryTextFilterFn,
   },
   {
     accessorKey: 'diasCaidos',
@@ -108,6 +111,7 @@ export const employeeAbsenceColumns: ColumnDef<EmployeeAbsence>[] = [
     header: ({ column }) => <DataTableColumnHeader column={column} title="Días Caídos" />,
     cell: ({ row }) => <div className="font-medium">{row.original.diasCaidos}</div>,
     enableSorting: true,
+    filterFn: inMemoryTextFilterFn,
   },
   {
     accessorKey: 'observaciones',

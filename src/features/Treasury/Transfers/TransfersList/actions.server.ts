@@ -5,6 +5,8 @@ import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
@@ -15,6 +17,7 @@ import {
   safePaging,
   textValue,
 } from '../../lib/filter-values';
+import { isoDay } from '../../lib/dates';
 
 const logger = new Logger('features/Treasury/Transfers/TransfersList');
 
@@ -39,6 +42,8 @@ const SORT_MAP: Record<string, (dir: 'asc' | 'desc') => TransferOrderBy[]> = {
 const DATE_COLUMNS = ['date'];
 const TIMESTAMP_COLUMNS = ['created_at'];
 
+/** Tope de filas por export de esta tabla. */
+const EXPORT_LIMIT = 10_000;
 
 const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
 
@@ -120,8 +125,8 @@ const TRANSFER_SELECT = {
   created_at: true,
   cancelled_at: true,
   cancel_reason: true,
-  from_account: { select: { id: true, name: true } },
-  to_account: { select: { id: true, name: true } },
+  from_account: { select: { id: true, name: true, kind: true, bank_name: true } },
+  to_account: { select: { id: true, name: true, kind: true, bank_name: true } },
 } as const;
 
 function shape(rows: Prisma.treasury_transfersGetPayload<{ select: typeof TRANSFER_SELECT }>[]) {
@@ -129,14 +134,19 @@ function shape(rows: Prisma.treasury_transfersGetPayload<{ select: typeof TRANSF
     id: r.id,
     number: r.number,
     // Fecha valor (@db.Date): se toma el dia tal cual, sin correr zona horaria
-    date: r.date.toISOString().slice(0, 10),
+    date: isoDay(r.date),
     amount: r.amount.toString(),
     notes: r.notes,
     created_at: r.created_at,
     cancelled: r.cancelled_at != null,
     cancel_reason: r.cancel_reason,
-    from_account: { id: r.from_account.id, name: r.from_account.name },
-    to_account: { id: r.to_account.id, name: r.to_account.name },
+    from_account: {
+      id: r.from_account.id,
+      name: r.from_account.name,
+      kind: r.from_account.kind,
+      bankName: r.from_account.bank_name,
+    },
+    to_account: { id: r.to_account.id, name: r.to_account.name, kind: r.to_account.kind, bankName: r.to_account.bank_name },
   }));
 }
 
@@ -177,22 +187,36 @@ export async function getTreasuryTransfersPaginated(searchParams: DataTableSearc
 // EXPORT (sin paginacion)
 // ============================================================================
 
-export async function getAllTreasuryTransfersForExport(searchParams: DataTableSearchParams) {
+export async function getAllTreasuryTransfersForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<TreasuryTransferListItem[]>> {
   const companyId = await resolveCompanyId();
-  if (!companyId) return [];
+  if (!companyId) return { ok: false, message: 'No tiene permiso para exportar las transferencias.' };
 
   try {
     const state = parseSearchParams(searchParams);
     const where = buildWhereClause(companyId, state);
-    const rows = await prisma.treasury_transfers.findMany({
-      where,
-      orderBy: [{ date: 'desc' }, { number: 'desc' }],
-      select: TRANSFER_SELECT,
+    const orderBy: TransferOrderBy[] = [{ date: 'desc' }, { number: 'desc' }, { id: 'asc' }];
+
+    const rows = await fetchExportRowsInBatches({
+      maxRows: EXPORT_LIMIT,
+      listIds: (take) => prisma.treasury_transfers.findMany({ where, orderBy, select: { id: true }, take }),
+      fetchByIds: (ids) =>
+        prisma.treasury_transfers.findMany({ where: { id: { in: ids }, company_id: companyId }, select: TRANSFER_SELECT }),
+      tooLargeMessage: (maxRows) =>
+        `Hay más de ${maxRows.toLocaleString('es-AR')} transferencias con los filtros actuales. Acote la exportación con filtros.`,
     });
-    return shape(rows);
+    return { ok: true, data: shape(rows) };
   } catch (error) {
     logger.error('Error al exportar transferencias de tesoreria', { data: { error } });
-    throw new Error('No se pudo exportar la lista de transferencias');
+    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
+    return {
+      ok: false,
+      message:
+        error instanceof ExportTooLargeError
+          ? error.message
+          : 'No se pudo exportar la lista de transferencias. Intente nuevamente.',
+    };
   }
 }
 

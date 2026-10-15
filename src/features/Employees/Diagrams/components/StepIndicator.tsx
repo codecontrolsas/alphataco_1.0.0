@@ -1,49 +1,44 @@
-interface Step {
-  label: string;
-  value: string;
-}
+import { cn } from '@/lib/utils';
+import { Check } from 'lucide-react';
 
-const STEPS: Step[] = [
-  { label: 'Formulario', value: 'form' },
+const STEPS = [
+  { label: 'Datos', value: 'form' },
   { label: 'Verificación', value: 'conflicts' },
-  { label: 'Resultados', value: 'results' },
-];
+  { label: 'Resultado', value: 'results' },
+] as const;
 
 interface Props {
-  currentStep: 'form' | 'conflicts' | 'results';
+  currentStep: (typeof STEPS)[number]['value'];
 }
 
+/** Pasos de la carga masiva: barra segmentada con el paso actual resaltado (entra en 390 px). */
 export function StepIndicator({ currentStep }: Props) {
   const currentIndex = STEPS.findIndex((s) => s.value === currentStep);
 
   return (
-    <div className="flex items-center justify-center mb-6">
-      <div className="flex items-center space-x-4">
-        {STEPS.map((step, index) => {
-          const isActive = index === currentIndex;
-          const isCompleted = index < currentIndex;
-          const colorClass = isActive
-            ? 'text-blue-600 font-semibold'
-            : isCompleted
-              ? 'text-green-600'
-              : 'text-gray-400';
-          const bgClass = isActive
-            ? 'bg-blue-100 text-blue-600'
-            : isCompleted
-              ? 'bg-green-100 text-green-600'
-              : 'bg-gray-100 text-gray-400';
-
-          return (
-            <div key={step.value} className="flex items-center space-x-4">
-              {index > 0 && <div className="w-8 h-px bg-gray-300" />}
-              <div className={`flex items-center space-x-2 ${colorClass}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${bgClass}`}>{index + 1}</div>
-                <span>{step.label}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    <ol className="grid grid-cols-3 gap-2" aria-label="Pasos de la carga masiva">
+      {STEPS.map((step, index) => {
+        const isActive = index === currentIndex;
+        const isCompleted = index < currentIndex;
+        return (
+          <li key={step.value} aria-current={isActive ? 'step' : undefined} className="min-w-0 space-y-1.5">
+            <span
+              className={cn('block h-1.5 rounded-full', isActive ? 'bg-brand' : isCompleted ? 'bg-ok' : 'bg-muted')}
+            />
+            <span
+              className={cn(
+                'flex min-w-0 items-center gap-1 text-xs sm:text-sm',
+                isActive ? 'text-foreground font-medium' : 'text-muted-foreground'
+              )}
+            >
+              {isCompleted ? <Check aria-hidden="true" className="text-ok size-3.5 shrink-0" /> : null}
+              <span className="truncate">
+                {index + 1}. {step.label}
+              </span>
+            </span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }

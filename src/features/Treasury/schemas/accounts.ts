@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DATE_RE, isNonZeroAmount } from './shared';
+import { isCalendarDay, isNonZeroAmount } from './shared';
 
 /** Cuentas bancarias y cajas (spec Tesorería etapa 1 §2.1). Módulo SIN directiva. */
 
@@ -21,7 +21,7 @@ export const treasuryAccountFormSchema = z
     if (v.openingAmount && !v.openingDate) {
       ctx.addIssue({ code: 'custom', path: ['openingDate'], message: 'Indicá la fecha del saldo inicial' });
     }
-    if (v.openingDate && !DATE_RE.test(v.openingDate)) ctx.addIssue({ code: 'custom', path: ['openingDate'], message: 'Fecha inválida' });
+    if (v.openingDate && !isCalendarDay(v.openingDate)) ctx.addIssue({ code: 'custom', path: ['openingDate'], message: 'Fecha inválida' });
     if (v.openingDate && !v.openingAmount) {
       ctx.addIssue({ code: 'custom', path: ['openingAmount'], message: 'Indicá el importe del saldo inicial' });
     }

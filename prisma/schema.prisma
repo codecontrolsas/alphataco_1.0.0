@@ -573,6 +573,7 @@ model company {
   maintenance_request_groups    maintenance_request_groups[]
   user_roles                    user_roles[]
   user_permissions              user_permissions[]
+  user_dashboards               user_dashboards[]
   vehicles                      vehicles[]
   work_orders                   work_orders[]
   workshops                     workshops[]
@@ -3176,6 +3177,27 @@ model user_table_preferences {
   @@schema("public")
 }
 
+/// Tableros personales del Dashboard (por usuario y empresa). `layout` es la lista ordenada
+/// `[{ widgetId, size }]` validada por `features/Dashboard/Boards/lib/board-layout.ts`; `template`
+/// marca los tableros creados a partir de un tablero por defecto (alias de los links viejos `?tab=`).
+model user_dashboards {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id String   @db.Uuid
+  user_id    String   @db.Uuid
+  name       String   @db.VarChar(60)
+  position   Int      @default(0)
+  template   String?  @db.VarChar(40)
+  layout     Json     @default("[]")
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  company    company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  user       user     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, company_id, name], map: "user_dashboards_user_company_name_key")
+  @@index([user_id, company_id, position], map: "idx_user_dashboards_user_company_position")
+  @@schema("public")
+}
+
 enum affiliate_status_enum {
   Dentro_de_convenio @map("Dentro de convenio")
   Fuera_de_convenio  @map("Fuera de convenio")
@@ -3709,8 +3731,9 @@ model user {
   banReason           String?   @map("ban_reason")
   banExpires          DateTime? @map("ban_expires") @db.Timestamptz(6)
 
-  accounts account[]
-  sessions session[]
+  accounts   account[]
+  sessions   session[]
+  dashboards user_dashboards[]
 
   @@map("auth_user")
   @@schema("public")

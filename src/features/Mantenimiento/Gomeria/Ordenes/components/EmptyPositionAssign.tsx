@@ -16,7 +16,7 @@ interface EmptyPositionAssignProps {
   position: EnsuredTirePosition;
   serviceOrderId: string;
   vehicleId: string;
-  onActionComplete: () => void;
+  onActionComplete: (summary: string) => void;
   onClose: () => void;
 }
 
@@ -48,7 +48,7 @@ export function EmptyPositionAssign({
       toast.success('Cubierta asignada a la posición');
       void queryClient.invalidateQueries({ queryKey: ['vehicle-tire-positions', vehicleId] });
       void queryClient.invalidateQueries({ queryKey: ['available-tires', vehicleId] });
-      onActionComplete();
+      onActionComplete('Cubierta asignada a la posición');
       onClose();
     },
     onError: (error) => {
@@ -59,11 +59,10 @@ export function EmptyPositionAssign({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">
-        Seleccione la cubierta a instalar en esta posición:
-      </p>
+      <p className="text-sm text-muted-foreground">Seleccione la cubierta a instalar en esta posición:</p>
       <TireReplacePicker vehicleId={vehicleId} selectedTireId={selectedTire?.id} onSelect={setSelectedTire} />
       <Button
+        type="button"
         className="w-full"
         onClick={() => assignMutation.mutate()}
         disabled={!selectedTire || assignMutation.isPending}

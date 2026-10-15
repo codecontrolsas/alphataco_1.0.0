@@ -5,6 +5,8 @@ import { prisma } from '@/shared/lib/prisma';
 import { resourceCompanyCondition, visibleEquipmentTypeCondition } from '../../shared/maintenance-resource';
 import { getHiddenEquipmentTypeIds } from '../../utils/equipmentTypeVisibility';
 import { getSupervisorFilterInfo } from '../../utils/supervisorFilter';
+import { ATTENTION_THRESHOLDS, argentinaTodayAsUtcDate, daysAgo } from '../../lib/attention-thresholds';
+import type { ConfirmedAttentionKey, PendingAttentionKey } from '../constants';
 
 /**
  * Armado de consultas compartido por las listas de pedidos de mantenimiento (Pendientes, Confirmados) y por
@@ -85,6 +87,43 @@ export function assembleOrdersWhere(parts: {
   }
 
   return { AND: and };
+}
+
+// ============================================================================
+// ATENCIÓN (filtro virtual `attention` de Por Programar y Por Ingresar)
+// ============================================================================
+
+/** Estado por defecto de cada lista: el `where` de la tabla sin filtros y el de sus métricas parten de acá. */
+export const PENDING_LIST_DEFAULT_STATUS = 'pending_scheduling';
+export const CONFIRMED_LIST_STATUS = 'date_confirmed';
+
+/**
+ * Condición de cada valor de `attention` en "Por Programar". La usan el listado (filtro virtual) y las métricas:
+ * la tarjeta y el total de la tabla al filtrarla salen de esta misma condición, así que no pueden diferir.
+ * - `overdue`: aprobado hace más de 7 días sin fecha (desde `created_at`, que es la "Fecha Aprobación").
+ * - `date_rejected`: la fecha propuesta fue rechazada y el pedido volvió a programarse.
+ * - `preventive`: nace del programa de mantenimiento (origen efectivo, el mismo que muestra la celda).
+ */
+export function pendingAttentionCondition(key: PendingAttentionKey, now: Date = new Date()): WhereCondition {
+  switch (key) {
+    case 'overdue':
+      return { created_at: { lt: daysAgo(ATTENTION_THRESHOLDS.schedulingPendingDays, now) } };
+    case 'date_rejected':
+      return { date_rejected_at: { not: null } };
+    case 'preventive':
+      return effectiveSourceCondition(['preventive']);
+  }
+}
+
+/**
+ * Condición de cada valor de `attention` en "Por Ingresar".
+ * - `past_date`: la fecha planificada es anterior a hoy (día argentino) y el equipo todavía no ingresó.
+ */
+export function confirmedAttentionCondition(key: ConfirmedAttentionKey): WhereCondition {
+  switch (key) {
+    case 'past_date':
+      return { scheduled_date: { lt: argentinaTodayAsUtcDate() } };
+  }
 }
 
 // ============================================================================

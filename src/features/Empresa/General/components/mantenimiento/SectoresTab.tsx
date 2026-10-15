@@ -1,4 +1,6 @@
-import { cookies } from 'next/headers';
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { getTablePreferences } from '@/shared/actions/table-preferences';
+import { StateBlock } from '@/shared/components/common/StateBlock';
 import { fetchAllWorkshopSectors, fetchInternalWorkshops } from '../../actions/workshops.server';
 import { SectoresTabClient } from './sectores/SectoresTabClient';
 
@@ -6,19 +8,25 @@ import { SectoresTabClient } from './sectores/SectoresTabClient';
  * Sección Sectores de Taller, montable por sí sola. Ver la nota en `TalleresTab`.
  */
 async function SectoresTab() {
-  const cookiesStore = await cookies();
+  if (!(await checkPermissionServer('configuracion', 'sectores_taller', 'view'))) {
+    return (
+      <StateBlock
+        variant="noperm"
+        title="No tenés permiso para ver los sectores de taller"
+        description="Pedile acceso a un administrador."
+      />
+    );
+  }
+
   const workshopSectors = fetchAllWorkshopSectors();
   const internalWorkshops = fetchInternalWorkshops();
-
-  const savedVisibility = cookiesStore.get('sectores-table')?.value;
-  const savedFilter = cookiesStore.get('sectores-table-filters')?.value;
+  const preferences = getTablePreferences('workshop-sectors');
 
   return (
     <SectoresTabClient
       workshopSectors={workshopSectors}
       internalWorkshops={internalWorkshops}
-      savedVisibility={savedVisibility ? JSON.parse(savedVisibility) : {}}
-      savedFilter={savedFilter ? JSON.parse(savedFilter) : []}
+      preferences={preferences}
     />
   );
 }

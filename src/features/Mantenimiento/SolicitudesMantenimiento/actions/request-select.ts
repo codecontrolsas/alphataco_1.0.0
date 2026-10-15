@@ -14,6 +14,7 @@ export const MAINTENANCE_REQUEST_FULL_SELECT = {
   id: true,
   checklist_answer_id: true,
   equipment_id: true,
+  other_equipment_id: true,
   employee_id: true,
   user_id: true,
   status: true,
@@ -40,6 +41,10 @@ export const MAINTENANCE_REQUEST_FULL_SELECT = {
       engine_hours: true,
       condition: true,
     },
+  },
+  // Ticket 596: la solicitud puede ser de un equipamiento; sin esto el detalle mostraba "Sin identificar"
+  other_equipment: {
+    select: { id: true, serial_number: true, intern_number: true, condition: true },
   },
   employees: {
     select: { id: true, firstname: true, lastname: true, file: true },

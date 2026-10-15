@@ -1,8 +1,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Card, CardDescription, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import type { DocumentCompanyInfo } from '@/features/Documentacion/DetalleDocumento/actions/document-detail.server';
 import { dateOnlyLabel, formatCuit } from '@/features/Documentacion/DetalleDocumento/lib/document-detail';
+import { DetailFacts, type DetailFact } from './DetailFacts';
 
 interface CompanyInfoCardProps {
   company: DocumentCompanyInfo | null;
@@ -14,7 +13,7 @@ interface CompanyInfoCardProps {
   showDescription?: boolean;
 }
 
-/** Tab "Empresa" del detalle de documento. */
+/** Sección "Empresa" de la ficha del documento. */
 export function CompanyInfoCard({
   company,
   description,
@@ -22,101 +21,34 @@ export function CompanyInfoCard({
   showDescription = false,
 }: CompanyInfoCardProps) {
   const admissionDate = dateOnlyLabel(dateOfAdmission);
+  const facts: DetailFact[] = [{ label: 'CUIT', value: formatCuit(company?.company_cuit) }];
+  if (company?.address) facts.push({ label: 'Dirección', value: company.address });
+  if (company?.country) facts.push({ label: 'País', value: company.country });
+  if (company?.province_id?.name) facts.push({ label: 'Provincia', value: company.province_id.name });
+  if (company?.contact_phone) facts.push({ label: 'Teléfono de contacto', value: company.contact_phone });
+  if (company?.contact_email) facts.push({ label: 'Email de contacto', value: company.contact_email });
+  if (admissionDate) facts.push({ label: 'Fecha de alta', value: admissionDate });
+  if (showDescription && company?.description)
+    facts.push({ label: 'Descripción', value: company.description, wide: true });
 
   return (
-    <Card>
-      <div className="space-y-3 p-3">
-        <CardDescription>{description}</CardDescription>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableCell className="flex items-center gap-3">
-                <Avatar className="size-24">
-                  <AvatarImage
-                    src={company?.company_logo ?? undefined}
-                    alt="Logo de la empresa"
-                    className="rounded-full object-contain"
-                  />
-                  <AvatarFallback>Logo</AvatarFallback>
-                </Avatar>
-                <CardTitle className="font-bold text-lg">{company?.company_name}</CardTitle>
-              </TableCell>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow>
-              <TableCell>
-                <CardDescription>
-                  <span className="font-bold">CUIT:</span> {formatCuit(company?.company_cuit)}
-                </CardDescription>
-              </TableCell>
-            </TableRow>
-            {company?.address && (
-              <TableRow>
-                <TableCell>
-                  <CardDescription className="capitalize">
-                    <span className="font-bold">Dirección:</span> {company.address}
-                  </CardDescription>
-                </TableCell>
-              </TableRow>
-            )}
-            {company?.country && (
-              <TableRow>
-                <TableCell>
-                  <CardDescription className="capitalize">
-                    <span className="font-bold">País:</span> {company.country}
-                  </CardDescription>
-                </TableCell>
-              </TableRow>
-            )}
-            {company?.province_id?.name && (
-              <TableRow>
-                <TableCell>
-                  <CardDescription className="capitalize">
-                    <span className="font-bold">Provincia:</span> {company.province_id.name}
-                  </CardDescription>
-                </TableCell>
-              </TableRow>
-            )}
-            {company?.contact_phone && (
-              <TableRow>
-                <TableCell>
-                  <CardDescription>
-                    <span className="font-bold">Teléfono de contacto:</span> {company.contact_phone}
-                  </CardDescription>
-                </TableCell>
-              </TableRow>
-            )}
-            {company?.contact_email && (
-              <TableRow>
-                <TableCell>
-                  <CardDescription>
-                    <span className="font-bold">Email de contacto:</span> {company.contact_email}
-                  </CardDescription>
-                </TableCell>
-              </TableRow>
-            )}
-            {admissionDate && (
-              <TableRow>
-                <TableCell>
-                  <CardDescription>
-                    <span className="font-bold">Fecha de alta:</span> {admissionDate}
-                  </CardDescription>
-                </TableCell>
-              </TableRow>
-            )}
-            {showDescription && company?.description && (
-              <TableRow>
-                <TableCell>
-                  <CardDescription className="capitalize">
-                    <span className="font-bold">Descripción:</span> {company.description}
-                  </CardDescription>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-    </Card>
+    <DetailFacts
+      title="Empresa"
+      description={description}
+      facts={facts}
+      lead={
+        <div className="mb-5 flex items-center gap-4">
+          <Avatar className="size-16">
+            <AvatarImage
+              src={company?.company_logo ?? undefined}
+              alt="Logo de la empresa"
+              className="rounded-full object-contain"
+            />
+            <AvatarFallback>Logo</AvatarFallback>
+          </Avatar>
+          <p className="text-lg font-semibold">{company?.company_name}</p>
+        </div>
+      }
+    />
   );
 }

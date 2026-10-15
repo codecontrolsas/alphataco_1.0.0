@@ -26,9 +26,9 @@ import { toast } from 'sonner';
 import {
   createPurchaseRequest,
   createPurchaseRequestFromMaterialRequest,
-  searchPurchaseMaterialOptions,
   updatePurchaseRequestDraft,
 } from '../../actions/requests.server';
+import { searchPurchaseMaterialOptions } from '../../actions/request-queries.server';
 import { searchSupplierOptions } from '../../actions/suppliers.server';
 import {
   emptyPurchaseRequestLine,

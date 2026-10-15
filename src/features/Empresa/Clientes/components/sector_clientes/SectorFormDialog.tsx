@@ -16,11 +16,11 @@ import { PermissionGuard } from '@/features/Permissions/components/PermissionGua
 import { Logger } from '@/lib/logger';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { createSector, updateSector, type SectorRow } from '../../actions/sectors.server';
+import { customerKey } from '../../lib/query-keys';
 import { sectorFormSchema, type SectorFormValues } from '../../schemas/sector';
 
 const logger = new Logger('features/Empresa/Clientes/SectorFormDialog');
@@ -56,7 +56,6 @@ export function SectorFormDialog({
 }: SectorFormDialogProps) {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
-  const router = useRouter();
   const isEditing = !!sector;
 
   const form = useForm<SectorFormValues>({
@@ -66,9 +65,7 @@ export function SectorFormDialog({
 
   const onSubmit = async (values: SectorFormValues) => {
     try {
-      const response = isEditing
-        ? await updateSector({ ...values, id: sector.sector_id })
-        : await createSector(values);
+      const response = isEditing ? await updateSector({ ...values, id: sector.sector_id }) : await createSector(values);
 
       if (!response.ok) {
         toast.error(response.error);
@@ -78,9 +75,10 @@ export function SectorFormDialog({
       toast.success(isEditing ? 'Sector actualizado correctamente' : 'Sector creado correctamente');
       queryClient.invalidateQueries({ queryKey: ['preparte-sectors'] });
       queryClient.invalidateQueries({ queryKey: ['preparte-contratos'] });
+      // La ficha lee por React Query: la pestaña Sectores y los contratos (usan los sectores).
+      queryClient.invalidateQueries({ queryKey: customerKey(customerId) });
       setOpen(false);
       if (!isEditing) form.reset(toFormValues(customerId, null));
-      router.refresh();
     } catch (error) {
       // La action puede rechazar (no devolver `ok: false`): sin este catch el usuario no ve nada.
       logger.error('Error al guardar el sector', { data: { error, sectorId: sector?.sector_id } });

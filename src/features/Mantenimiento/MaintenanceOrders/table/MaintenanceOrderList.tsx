@@ -1,60 +1,49 @@
-import { Card, CardContent } from '@/components/ui/card';
-import type { ExternalWorkshop, WorkshopSector } from '@/features/Mantenimiento/OrderManagement/actions/queries.server';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { InWorkshopMetricsSection } from '../components/InWorkshopMetricsSection';
 import { getMaintenanceOrdersPaginated } from './actions.server';
+import { getInWorkshopMetrics } from './actions/metrics.server';
 import { _MaintenanceOrderDataTable } from './components/_MaintenanceOrderDataTable';
-
-// ============================================================================
-// CONSTANTS
-// ============================================================================
-
-export const TABLE_ID = 'maintenance-orders';
-
-// ============================================================================
-// TYPES
-// ============================================================================
+import { MAINTENANCE_ORDERS_PARAM_NAMESPACE, MAINTENANCE_ORDERS_TABLE_ID } from './constants';
+import { loadWizardData } from './lib/wizard-data';
 
 interface MaintenanceOrderListProps {
   searchParams: Record<string, string | string[] | undefined>;
-  sectors: WorkshopSector[];
-  repairTypes: Array<{ id: string; name: string }>;
-  externalWorkshops: ExternalWorkshop[];
 }
 
 // ============================================================================
 // SERVER COMPONENT
 // ============================================================================
 
-export async function MaintenanceOrderList({
-  searchParams,
-  sectors,
-  repairTypes,
-  externalWorkshops,
-}: MaintenanceOrderListProps) {
-  const tableParams = stripPrefixFromSearchParams(searchParams as DataTableSearchParams, TABLE_ID);
+export async function MaintenanceOrderList({ searchParams }: MaintenanceOrderListProps) {
+  const tableParams = stripPrefixFromSearchParams(searchParams as DataTableSearchParams, MAINTENANCE_ORDERS_PARAM_NAMESPACE);
 
-  const [{ data, total }, preferences] = await Promise.all([
+  // Las tarjetas arrancan antes de esperar la tabla: su Suspense las resuelve sin frenarla.
+  // `getInWorkshopMetrics` nunca rechaza (devuelve `null` si falla), así que no queda sin manejar.
+  const metrics = getInWorkshopMetrics();
+  const attentionParam = tableParams.attention;
+  const serverAttention = typeof attentionParam === 'string' ? attentionParam : null;
+
+  const [{ data, total }, preferences, { sectors, repairTypes, externalWorkshops }] = await Promise.all([
     getMaintenanceOrdersPaginated(tableParams),
-    getTablePreferences(TABLE_ID),
+    getTablePreferences(MAINTENANCE_ORDERS_TABLE_ID),
+    loadWizardData(),
   ]);
 
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <_MaintenanceOrderDataTable
-          data={data}
-          totalRows={total}
-          searchParams={tableParams}
-          tableId={TABLE_ID}
-          initialColumnVisibility={preferences.columnVisibility ?? {}}
-          initialFilterVisibility={preferences.filterVisibility ?? {}}
-          sectors={sectors}
-          repairTypes={repairTypes}
-          externalWorkshops={externalWorkshops}
-        />
-      </CardContent>
-    </Card>
+    <_MaintenanceOrderDataTable
+      data={data}
+      totalRows={total}
+      searchParams={tableParams}
+      tableId={MAINTENANCE_ORDERS_TABLE_ID}
+      paramNamespace={MAINTENANCE_ORDERS_PARAM_NAMESPACE}
+      topSlot={<InWorkshopMetricsSection metrics={metrics} serverAttention={serverAttention} />}
+      initialColumnVisibility={preferences.columnVisibility ?? {}}
+      initialFilterVisibility={preferences.filterVisibility ?? {}}
+      sectors={sectors}
+      repairTypes={repairTypes}
+      externalWorkshops={externalWorkshops}
+    />
   );
 }

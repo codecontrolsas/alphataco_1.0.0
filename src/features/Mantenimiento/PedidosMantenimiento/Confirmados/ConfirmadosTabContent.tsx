@@ -2,12 +2,8 @@ import type { DataTableSearchParams } from '@/shared/components/common/DataTable
 import { ConfirmedOrderList } from './ConfirmedOrderList';
 
 /**
- * Subtab de Pedidos Confirmados
- *
- * Muestra los pedidos de mantenimiento con fecha confirmada (date_confirmed)
- * Listos para aprobar entrada a taller
- *
- * Ordenamiento: de más viejo a más reciente
+ * Paso "Por Ingresar": pedidos con fecha confirmada (`date_confirmed`) a la espera de que el equipo llegue al taller.
+ * Arriba va la banda de atención con los pedidos cuya fecha ya pasó sin registrar el ingreso.
  */
 
 interface ConfirmadosTabContentProps {

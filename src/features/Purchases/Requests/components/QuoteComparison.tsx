@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { formatMoney, formatQuantity, formatUnitCost } from '@/features/Warehouses/lib/format';
+import { formatMoney, formatQuantity } from '@/features/Warehouses/lib/format';
 import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { VAT_RATE_LABELS, isVatRateId } from '@/shared/lib/arca/catalogs';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -11,10 +11,11 @@ import moment from 'moment';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { createPurchaseOrderFromQuote } from '../../actions/orders.server';
-import type { RequestQuoteComparison } from '../../actions/quotes.server';
-import { invalidatePurchases } from '../../lib/invalidate';
 import { PurchaseQuoteStatusBadge } from '../../Quotes/components/PurchaseQuoteStatusBadge';
+import { createPurchaseOrderFromQuote } from '../../actions/orders.server';
+import { PriceText } from '../../components/PriceText';
+import { invalidatePurchases } from '../../lib/invalidate';
+import type { RequestQuoteComparison } from '../../lib/quote-query-types';
 
 function OrderFromQuoteButton({ quoteId, supplierName }: { quoteId: string; supplierName: string }) {
   const router = useRouter();
@@ -23,7 +24,10 @@ function OrderFromQuoteButton({ quoteId, supplierName }: { quoteId: string; supp
     mutationFn: async () => unwrapAction(await createPurchaseOrderFromQuote(quoteId)),
     onSuccess: ({ id, number, skipped }) => {
       toast.success(`Se creó la orden de compra ${number} para ${supplierName}`, {
-        description: skipped > 0 ? `Se omitieron ${skipped} líneas que ya estaban pedidas.` : 'Quedó en borrador: revisala y enviala a aprobación.',
+        description:
+          skipped > 0
+            ? `Se omitieron ${skipped} líneas que ya estaban pedidas.`
+            : 'Quedó en borrador: revisala y enviala a aprobación.',
       });
       invalidatePurchases(queryClient);
       router.push(`/dashboard/purchases/orders/${id}/edit`);
@@ -31,7 +35,14 @@ function OrderFromQuoteButton({ quoteId, supplierName }: { quoteId: string; supp
     onError: (error) => toast.error(error instanceof Error ? error.message : 'No se pudo generar la orden de compra'),
   });
   return (
-    <Button type="button" size="sm" variant="outline" className="w-full" onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      className="w-full"
+      onClick={() => mutation.mutate()}
+      disabled={mutation.isPending}
+    >
       <FilePlus2 className="mr-1 h-4 w-4" />
       {mutation.isPending ? 'Generando…' : 'Generar OC'}
     </Button>
@@ -58,7 +69,11 @@ export function QuoteComparison({ comparison }: { comparison: RequestQuoteCompar
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Cotizaciones</CardTitle>
-        <CardDescription>Precio unitario neto de cada proveedor. Resaltado, el menor de cada línea.</CardDescription>
+        <CardDescription>
+          {comparison.canViewPrices
+            ? 'Precio unitario neto de cada proveedor. Resaltado, el menor de cada línea.'
+            : 'Respuesta de cada proveedor. Los importes no están disponibles con tu permiso.'}
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
@@ -96,7 +111,9 @@ export function QuoteComparison({ comparison }: { comparison: RequestQuoteCompar
                     return (
                       <td
                         key={column.quoteId}
-                        className={best ? 'bg-emerald-50 p-2 tabular-nums dark:bg-emerald-950/40' : 'p-2 tabular-nums'}
+                        className={
+                          best ? 'bg-ok-subtle text-ok-subtle-foreground p-2 tabular-nums' : 'p-2 tabular-nums'
+                        }
                       >
                         {!cell ? (
                           <span className="text-muted-foreground">No incluida</span>
@@ -106,8 +123,8 @@ export function QuoteComparison({ comparison }: { comparison: RequestQuoteCompar
                           <span className="text-muted-foreground">Sin respuesta</span>
                         ) : (
                           <span className="flex items-center gap-1">
-                            {best && <Trophy className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" aria-label="Mejor precio" />}
-                            {formatUnitCost(cell.unitPrice)}
+                            {best && <Trophy className="h-3.5 w-3.5 text-ok" aria-label="Mejor precio" />}
+                            <PriceText value={cell.unitPrice} canViewPrices={comparison.canViewPrices} unit />
                             <span className="text-xs text-muted-foreground">
                               + IVA {isVatRateId(cell.vatRateId) ? VAT_RATE_LABELS[cell.vatRateId] : ''}
                             </span>
@@ -124,7 +141,15 @@ export function QuoteComparison({ comparison }: { comparison: RequestQuoteCompar
                 <td className="p-2 text-xs text-muted-foreground">Total con IVA · plazo · validez</td>
                 {comparison.columns.map((column) => (
                   <td key={column.quoteId} className="space-y-1 p-2 text-xs">
-                    <div className="text-sm font-medium tabular-nums">{column.total ? formatMoney(column.total) : '—'}</div>
+                    <div className="text-sm font-medium tabular-nums">
+                      {!comparison.canViewPrices ? (
+                        <PriceText value={null} canViewPrices={false} />
+                      ) : column.total ? (
+                        formatMoney(column.total)
+                      ) : (
+                        '—'
+                      )}
+                    </div>
                     <div className="text-muted-foreground">
                       {column.deliveryDays !== null ? `Entrega en ${column.deliveryDays} días` : 'Plazo sin informar'}
                     </div>
@@ -133,7 +158,9 @@ export function QuoteComparison({ comparison }: { comparison: RequestQuoteCompar
                         ? `${column.expired ? 'Venció' : 'Válida hasta'} el ${moment(column.validUntil, 'YYYY-MM-DD').format('DD/MM/YYYY')}`
                         : 'Validez sin informar'}
                     </div>
-                    {column.canOrder && <OrderFromQuoteButton quoteId={column.quoteId} supplierName={column.supplierName} />}
+                    {column.canOrder && (
+                      <OrderFromQuoteButton quoteId={column.quoteId} supplierName={column.supplierName} />
+                    )}
                   </td>
                 ))}
               </tr>

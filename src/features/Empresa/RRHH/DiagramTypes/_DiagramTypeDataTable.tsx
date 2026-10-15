@@ -1,6 +1,11 @@
 'use client';
 
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import {
+  CatalogCreateButton,
+  CatalogFormSheet,
+  CatalogTableSurface,
+  useCatalogSheet,
+} from '@/shared/components/common/CatalogFormSheet';
 import {
   DataTable,
   type DataTableFacetedFilterConfig,
@@ -8,9 +13,11 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Check, CircleOff, X } from 'lucide-react';
-import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
+import { activeStatusLabel, buildActiveFacetResult } from '../../lib/active-status';
 import {
   getAllDiagramTypesForExport,
   getDiagramTypeSingleFacet,
@@ -58,18 +65,20 @@ export default function _DiagramTypeDataTable({
     [permissionsMap]
   );
 
-  const canCreateOrUpdate =
-    permissions.hasPermission('configuracion', 'diagrams', 'create') ||
-    permissions.hasPermission('configuracion', 'diagrams', 'update');
+  const canCreate = permissions.hasPermission('configuracion', 'diagrams', 'create');
+  const canUpdate = permissions.hasPermission('configuracion', 'diagrams', 'update');
 
-  // ── Store de edición ─────────────────────────────────────────────────────
+  // ── Sheet de alta/edición (el form sigue leyendo el store de edición) ─────
   const setDiagramType = useDiagramTypeStore((state) => state.setDiagramType);
-  const handleEdit = useCallback(
-    (item: DiagramTypeListItem) => {
-      setDiagramType(item);
-    },
-    [setDiagramType]
-  );
+  const handleClearStore = useCallback(() => setDiagramType(null), [setDiagramType]);
+  const sheet = useCatalogSheet<DiagramTypeListItem>({
+    canCreate,
+    canUpdate,
+    onOpenEdit: setDiagramType,
+    onOpenCreate: handleClearStore,
+    onClosed: handleClearStore,
+  });
+  const handleEdit = sheet.openEdit;
 
   // ── Client-side navigation mode ──────────────────────────────────────────
   const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
@@ -114,9 +123,10 @@ export default function _DiagramTypeDataTable({
   const fetchWorkActiveFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
     const result = await getDiagramTypeSingleFacet('work_active', params);
     if (!result) return { options: [], counts: new Map() };
+    // Mismas etiquetas que la celda de la columna ("Trabajando" / "No trabajando")
     const options = [
-      { value: 'true', label: 'Laboralmente activo', icon: Check },
-      { value: 'false', label: 'No laboralmente activo', icon: X },
+      { value: 'true', label: 'Trabajando', icon: Check },
+      { value: 'false', label: 'No trabajando', icon: X },
       ...(result.counts.has(NULL_FILTER_VALUE)
         ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
         : []),
@@ -127,19 +137,16 @@ export default function _DiagramTypeDataTable({
   const fetchIsActiveFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
     const result = await getDiagramTypeSingleFacet('is_active', params);
     if (!result) return { options: [], counts: new Map() };
-    const options = [
-      { value: 'true', label: 'Activo', icon: Check },
-      { value: 'false', label: 'Inactivo', icon: X },
-    ];
-    return { options, counts: result.counts };
+    return buildActiveFacetResult(result.counts);
   }, []);
 
   const fetchComputesFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
     const result = await getDiagramTypeSingleFacet('computes_absenteeism', params);
     if (!result) return { options: [], counts: new Map() };
+    // Mismas etiquetas que la celda de la columna ("Sí" / "No")
     const options = [
-      { value: 'true', label: 'Computa ausentismo', icon: Check },
-      { value: 'false', label: 'No computa ausentismo', icon: X },
+      { value: 'true', label: 'Sí', icon: Check },
+      { value: 'false', label: 'No', icon: X },
     ];
     return { options, counts: result.counts };
   }, []);
@@ -204,6 +211,7 @@ export default function _DiagramTypeDataTable({
       queryFn={tableQueryFn}
       queryKey={['diagram-types']}
       onStateChange={handleStateChange}
+      toolbarActions={<CatalogCreateButton sheet={sheet} label="Nuevo tipo de novedad" />}
       tableId={tableId}
       paramNamespace={tableId}
       facetedFilters={facetedFilters}
@@ -213,7 +221,7 @@ export default function _DiagramTypeDataTable({
       searchPlaceholder="Buscar tipos de novedades..."
       emptyMessage="No se encontraron tipos de novedades"
       exportConfig={{
-        fetchAllData: () => getAllDiagramTypesForExport(currentParams),
+        fetchAllData: async () => unwrapExportResult(await getAllDiagramTypesForExport(currentParams)),
         options: {
           filename: 'tipos-de-novedades',
           sheetName: 'Tipos de Novedades',
@@ -222,35 +230,27 @@ export default function _DiagramTypeDataTable({
         formatters: {
           work_active: (value) => {
             if (value === null || value === undefined) return 'Sin asignar';
-            return value ? 'Laboralmente activo' : 'No laboralmente activo';
+            return value ? 'Trabajando' : 'No trabajando';
           },
-          is_active: (value) => (value ? 'Activo' : 'Inactivo'),
+          is_active: (value) => activeStatusLabel(value),
           computes_absenteeism: (value) => (value ? 'Sí' : 'No'),
-          created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
+          created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
         },
       }}
     />
   );
 
-  // Si no tiene permisos de crear/editar, mostrar solo la tabla
-  if (!canCreateOrUpdate) {
-    return table;
-  }
-
-  // Con permisos: layout resizable con formulario a la izquierda y tabla a la derecha
   return (
-    <div className="w-full">
-      <ResizablePanelGroup className="min-h-[400px]" direction="horizontal">
-        <ResizablePanel defaultSize={30}>
-          <div className="overflow-auto h-full pr-2">
-            <DiagramTypeForm />
-          </div>
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={70}>
-          <div className="overflow-auto h-full pl-2">{table}</div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    </div>
+    <>
+      <CatalogTableSurface>{table}</CatalogTableSurface>
+      <CatalogFormSheet
+        sheet={sheet}
+        getKey={(diagramType) => diagramType.id}
+        title={{ create: 'Nuevo tipo de novedad', edit: 'Editar tipo de novedad' }}
+        size="lg"
+      >
+        {() => <DiagramTypeForm />}
+      </CatalogFormSheet>
+    </>
   );
 }

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { Logger } from '@/lib/logger';
+import { useCatalogSheetBusy, useCatalogSheetClose } from '@/shared/components/common/CatalogFormSheet';
 import DependencyValidationModal, { DependencyConfig } from '@/shared/components/modal/DependencyValidationModal';
 import {
   fetchDependenciesForValue,
@@ -48,6 +49,8 @@ export default function ContractTypeForm() {
   const editingContractType = useContractTypeStore((state) => state.contractType);
   const setContractType = useContractTypeStore((state) => state.setContractType);
   const queryClient = useQueryClient();
+  const closeSheet = useCatalogSheetClose();
+  const setBusy = useCatalogSheetBusy();
 
   const isEditing = !!editingContractType;
   const [showDependencyModal, setShowDependencyModal] = useState(false);
@@ -116,6 +119,7 @@ export default function ContractTypeForm() {
   const resetForm = () => {
     setContractType(null);
     form.reset({ id: undefined, name: '', description: null, is_active: '' });
+    closeSheet();
   };
 
   const invalidateTable = () => {
@@ -125,6 +129,7 @@ export default function ContractTypeForm() {
   // ── Submit handlers ──────────────────────────────────────────────────────
 
   const handleCreate = async (values: ContractTypeFormValues) => {
+    setBusy(true);
     toast.promise(
       createContractTypePrisma({
         name: values.name,
@@ -137,13 +142,17 @@ export default function ContractTypeForm() {
           resetForm();
           return 'Tipo de contrato creado correctamente';
         },
-        error: 'Error al crear el tipo de contrato',
+        error: () => {
+          setBusy(false);
+          return 'Error al crear el tipo de contrato';
+        },
       }
     );
   };
 
   const handleUpdate = async (values: ContractTypeFormValues) => {
     if (!values.id) return;
+    setBusy(true);
     toast.promise(
       updateContractTypePrisma({
         id: values.id,
@@ -158,7 +167,10 @@ export default function ContractTypeForm() {
           resetForm();
           return 'Tipo de contrato actualizado correctamente';
         },
-        error: 'Error al actualizar el tipo de contrato',
+        error: () => {
+          setBusy(false);
+          return 'Error al actualizar el tipo de contrato';
+        },
       }
     );
   };
@@ -170,9 +182,18 @@ export default function ContractTypeForm() {
 
       // Si se intenta desactivar, verificar dependencias primero
       if (prevActive && !nextActive) {
-        const data = await fetchDependencies(dependencyConfigs[0], editingContractType.id);
-        if (data.data.length) {
-          setShowDependencyModal(true);
+        setBusy(true);
+        try {
+          const data = await fetchDependencies(dependencyConfigs[0], editingContractType.id);
+          if (data.data.length) {
+            setBusy(false);
+            setShowDependencyModal(true);
+            return;
+          }
+        } catch (err) {
+          logger.error('Error al verificar dependencias del tipo de contrato', { data: { err } });
+          setBusy(false);
+          toast.error('No se pudo verificar si el tipo de contrato está en uso');
           return;
         }
       }
@@ -198,6 +219,7 @@ export default function ContractTypeForm() {
     }
 
     if (action === 'replace') {
+      setBusy(true);
       try {
         await reassignDependencies({
           targetTable: 'employees',
@@ -211,6 +233,7 @@ export default function ContractTypeForm() {
         await handleUpdate(values);
       } catch (err) {
         logger.error('Error al reemplazar referencias', { data: { err } });
+        setBusy(false);
         toast.error('No se pudieron reemplazar las referencias');
       }
     }
@@ -220,9 +243,7 @@ export default function ContractTypeForm() {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 py-4 px-2">
-        <h2 className="text-xl font-bold mb-4">{isEditing ? 'Editar Tipo de Contrato' : 'Crear Tipo de Contrato'}</h2>
-
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
         <FormField
           control={form.control}
           name="name"
@@ -230,12 +251,7 @@ export default function ContractTypeForm() {
             <FormItem>
               <FormLabel>Nombre del Tipo de Contrato</FormLabel>
               <FormControl>
-                <Input
-                  type="text"
-                  {...field}
-                  className="input w-full max-w-[400px]"
-                  placeholder="Nombre del tipo de contrato"
-                />
+                <Input type="text" {...field} className="input w-full" placeholder="Nombre del tipo de contrato" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -253,7 +269,7 @@ export default function ContractTypeForm() {
                   {...field}
                   value={field.value ?? ''}
                   onChange={(e) => field.onChange(e.target.value || null)}
-                  className="w-full max-w-[400px]"
+                  className="w-full"
                   placeholder="Descripción del tipo de contrato"
                   rows={4}
                 />
@@ -300,11 +316,9 @@ export default function ContractTypeForm() {
                 ? 'Actualizar'
                 : 'Crear'}
           </Button>
-          {isEditing && (
-            <Button type="button" onClick={resetForm} variant="outline">
-              Cancelar
-            </Button>
-          )}
+          <Button type="button" onClick={resetForm} variant="outline">
+            Cancelar
+          </Button>
         </div>
       </form>
 

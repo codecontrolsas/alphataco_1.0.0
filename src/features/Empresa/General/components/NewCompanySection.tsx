@@ -1,11 +1,11 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Card, CardDescription, CardTitle } from '@/components/ui/card';
 import { getIndustryTypes, hasAnyCompanyMembership } from '@/features/Empresa/General/actions/company.server';
 import CompanyFormFields from '@/features/Empresa/General/components/CompanyFormFields';
 import CreateCompanyButton from '@/features/Empresa/General/components/CreateCompanyButton';
-import { cn } from '@/lib/utils';
 import { getProvinces } from '@/shared/actions/countries.server';
-import { InfoCircledIcon } from '@radix-ui/react-icons';
+import { PageHeader } from '@/shared/components/common/PageHeader';
+import { SectionCard } from '@/shared/components/common/SectionCard';
+import { Info } from 'lucide-react';
 import { connection } from 'next/server';
 
 /**
@@ -28,27 +28,24 @@ export default async function NewCompanySection() {
   ]);
 
   return (
-    <section className={cn('md:mx-7')}>
+    <section className="flex min-w-0 flex-col gap-4">
+      <PageHeader title="Registrar compañía" description="Completá los datos de tu nueva compañía" />
       {!hasCompany && (
-        <Alert variant={'info'} className="w-fit">
-          <AlertTitle className="flex justify-center items-center">
-            <InfoCircledIcon className="inline size-5 mr-2 text-blue-500" />
+        <Alert variant={'info'}>
+          <AlertTitle className="flex items-center gap-2">
+            <Info className="size-4 shrink-0" aria-hidden="true" />
             Parece que no tienes ninguna Compañía registrada.
           </AlertTitle>
           <AlertDescription>Para utilizar la aplicación debes registrar tu compañía</AlertDescription>
         </Alert>
       )}
 
-      <Card className="mt-6 p-8">
-        <CardTitle className="text-4xl mb-3">Registrar Compañía</CardTitle>
-        <CardDescription>Completa este formulario con los datos de tu nueva compañia</CardDescription>
-        <div className="mt-6 rounded-xl flex w-full">
-          <form>
-            <CompanyFormFields provinces={provinces} industryTypes={industryTypes} />
-            <CreateCompanyButton />
-          </form>
-        </div>
-      </Card>
+      <form className="flex flex-col gap-4">
+        <CompanyFormFields provinces={provinces} industryTypes={industryTypes} />
+        <SectionCard title="Logo">
+          <CreateCompanyButton />
+        </SectionCard>
+      </form>
     </section>
   );
 }

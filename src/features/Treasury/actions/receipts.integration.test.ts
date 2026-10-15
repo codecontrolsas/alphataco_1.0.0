@@ -887,7 +887,8 @@ describe.skipIf(!RUN)('cobranzas (integracion)', () => {
     });
 
     it('un borrador cuya factura quedó sin pendiente la sigue mostrando y se puede destildar', async () => {
-      const { getReceiptFormData, saveReceiptDraft } = await import('./receipts.server');
+      const { saveReceiptDraft } = await import('./receipts.server');
+      const { getReceiptFormData } = await import('./receipt-reads.server');
       const invoice = await insertInvoice({ total: '300.00', customerId: CUSTOMER_B });
       const values = form({ invoices: [{ invoiceId: invoice, amount: '300' }] });
       const draft = expectOk(await saveReceiptDraft(null, values));

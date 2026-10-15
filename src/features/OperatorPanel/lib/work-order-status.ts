@@ -9,6 +9,8 @@
  * Módulo puro: NO consulta la base.
  */
 
+import { WORK_ORDER_STATUS_UI } from '@/features/Mantenimiento/lib/status-presentation';
+
 export type OperatorWorkOrderAction = 'start' | 'pause' | 'resume' | 'close';
 
 /** Estados desde los que cada acción es válida. */
@@ -22,9 +24,10 @@ const ALLOWED_FROM: Record<OperatorWorkOrderAction, readonly string[]> = {
 /** Estados en los que la OT ya terminó: no admiten ninguna acción del operario. */
 const CLOSED_STATUSES = ['completed', 'completed_partial'] as const;
 
+// Derivadas de la fuente única de etiquetas: van en minúscula porque se insertan en una oración.
 const CLOSED_LABELS: Record<string, string> = {
-  completed: 'completada',
-  completed_partial: 'completada parcial',
+  completed: WORK_ORDER_STATUS_UI.completed.label.toLowerCase(),
+  completed_partial: WORK_ORDER_STATUS_UI.completed_partial.label.toLowerCase(),
 };
 
 /** Mensaje de cada acción cuando la OT está abierta pero en el estado equivocado. */

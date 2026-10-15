@@ -1,26 +1,21 @@
 'use client';
 
-import { Badge } from '@/components/ui/badge';
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Ban, CheckCircle2, type LucideIcon } from 'lucide-react';
-import moment from 'moment';
-import { formatArgentinaDay } from '../../lib/today';
+import { formatArgentinaDateTime } from '../../lib/today';
+import { AccountCell } from '../../components/AccountCell';
+import { TreasuryStatusBadge } from '../../components/TreasuryStatusBadge';
+import { TRANSFER_STATE_UI } from '../../lib/status-presentation';
 import { TransferRowActions } from '../components/TransferRowActions';
 import type { TreasuryTransferListItem } from './actions.server';
 import { TRANSFER_STATE_LABELS } from './constants';
+import { formatDay } from '../../lib/dates';
 
 export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['cancel_reason', 'created_at'];
 
-export const transferStateIcons: Record<keyof typeof TRANSFER_STATE_LABELS, LucideIcon> = {
-  ACTIVE: CheckCircle2,
-  CANCELLED: Ban,
-};
-
 /** Fecha valor (YYYY-MM-DD, sin hora): se formatea tal cual para no correr un dia. */
-export const formatValueDate = (value: string | null | undefined) =>
-  value ? moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY') : '-';
+export const formatValueDate = (value: string | null | undefined) => formatDay(value) || '-';
 
 export function getColumns({ canUpdate }: { canUpdate: boolean }): ColumnDef<TreasuryTransferListItem>[] {
   const columns: ColumnDef<TreasuryTransferListItem>[] = [
@@ -43,7 +38,7 @@ export function getColumns({ canUpdate }: { canUpdate: boolean }): ColumnDef<Tre
       accessorFn: (row) => row.from_account.name,
       meta: { title: 'Origen' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Origen" />,
-      cell: ({ row }) => <span>{row.original.from_account.name}</span>,
+      cell: ({ row }) => <AccountCell account={row.original.from_account} />,
       filterFn: (row, _id, value: string[]) => value.includes(row.original.from_account.id),
     },
     {
@@ -51,7 +46,7 @@ export function getColumns({ canUpdate }: { canUpdate: boolean }): ColumnDef<Tre
       accessorFn: (row) => row.to_account.name,
       meta: { title: 'Destino' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Destino" />,
-      cell: ({ row }) => <span>{row.original.to_account.name}</span>,
+      cell: ({ row }) => <AccountCell account={row.original.to_account} />,
       filterFn: (row, _id, value: string[]) => value.includes(row.original.to_account.id),
     },
     {
@@ -79,13 +74,9 @@ export function getColumns({ canUpdate }: { canUpdate: boolean }): ColumnDef<Tre
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
       cell: ({ row }) => {
         const key = row.original.cancelled ? 'CANCELLED' : 'ACTIVE';
-        const Icon = transferStateIcons[key];
         return (
           <div className="space-y-1">
-            <Badge variant={row.original.cancelled ? 'secondary' : 'outline'} className="gap-1 whitespace-nowrap">
-              <Icon className="h-3 w-3" />
-              {TRANSFER_STATE_LABELS[key]}
-            </Badge>
+            <TreasuryStatusBadge ui={TRANSFER_STATE_UI[key]} />
             {row.original.cancelled && row.original.cancel_reason && (
               <p className="max-w-xs text-xs text-muted-foreground">{row.original.cancel_reason}</p>
             )}
@@ -108,7 +99,7 @@ export function getColumns({ canUpdate }: { canUpdate: boolean }): ColumnDef<Tre
       accessorKey: 'created_at',
       meta: { title: 'Fecha de alta' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de alta" />,
-      cell: ({ row }) => <span>{formatArgentinaDay(row.original.created_at)}</span>,
+      cell: ({ row }) => <span className="tabular-nums">{formatArgentinaDateTime(row.original.created_at)}</span>,
     },
   ];
 

@@ -14,9 +14,12 @@ import { prisma } from '@/shared/lib/prisma';
 import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
+import { isConfirmedAttentionKey } from '../constants';
 import {
+  CONFIRMED_LIST_STATUS,
   ORDER_LIST_EXPORT_MAX_ROWS,
   assembleOrdersWhere,
+  confirmedAttentionCondition,
   descriptionTextCondition,
   effectiveSourceCondition,
   getResourceConditionFacet,
@@ -65,6 +68,8 @@ const ALLOWED_FILTERS = new Set([
   'condition',
   'source',
   'description',
+  // Filtro virtual de la banda de atención (no es una columna): ver `confirmedAttentionCondition`
+  'attention',
   ...RESOURCE_TEXT_COLUMNS,
   ...TEXT_COLUMNS,
   ...dateRangeKeys(DATE_RANGE_COLUMNS),
@@ -175,13 +180,16 @@ async function buildWhereClause(companyId: string, state: ReturnType<typeof pars
   const scope = await resolveOrderListScope(companyId);
   const filters = sanitizeFilters(state, ALLOWED_FILTERS).filters;
 
-  const extra: Record<string, unknown>[] = [{ status: 'date_confirmed' }];
+  const extra: Record<string, unknown>[] = [{ status: CONFIRMED_LIST_STATUS }];
 
   if (state.search) extra.push(resourceSearchCondition(state.search));
   if (filters.vehicle?.length) extra.push(resourceIdsCondition(filters.vehicle));
   if (filters.condition?.length) extra.push(resourceConditionCondition(filters.condition));
   if (filters.source?.length) extra.push(effectiveSourceCondition(filters.source));
   if (filters.description?.[0]) extra.push(descriptionTextCondition(filters.description[0]));
+  // Atención (virtual): la MISMA condición que cuenta la banda
+  const attention = filters.attention?.[0];
+  if (isConfirmedAttentionKey(attention)) extra.push(confirmedAttentionCondition(attention));
   for (const column of RESOURCE_TEXT_COLUMNS) {
     const term = filters[column]?.[0];
     if (term) extra.push(resourceTextCondition(column, term));

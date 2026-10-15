@@ -33,8 +33,8 @@ export default function ThanksPage() {
 
         <CardContent className="space-y-6">
           <div className="flex flex-col items-center space-y-4">
-            <div className="h-20 w-20 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-              <CheckCircle className="h-12 w-12 text-green-600 dark:text-green-400" />
+            <div className="h-20 w-20 rounded-full bg-ok-subtle flex items-center justify-center">
+              <CheckCircle className="h-12 w-12 text-ok" />
             </div>
             <div className="text-center space-y-2">
               <h2 className="text-2xl font-bold text-foreground">¡Sesión cerrada exitosamente!</h2>
