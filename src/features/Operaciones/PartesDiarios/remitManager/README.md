@@ -38,7 +38,7 @@ remitManager/
 │   └── index.ts               # TypeScript types
 ├── components/
 │   ├── RemitosManagerModal.tsx
-│   ├── AddRemitDialog.tsx
+│   ├── AddRemitForm.tsx
 │   ├── RemitTab.tsx
 │   ├── DocumentUploadArea.tsx
 │   └── DocumentViewer.tsx
@@ -144,7 +144,7 @@ await deleteDocument.mutateAsync(documentId);
 - ✅ Eliminar con confirmación
 - ✅ Reemplazar documentos
 - ✅ Vincular documentos existentes
-- ✅ Visualización en tabs
+- ✅ Selector de remito dentro del gestor (alta y vinculación en el mismo modal)
 - ✅ Estadísticas en tiempo real
 - ✅ Toast notifications
 - ✅ Optimistic updates

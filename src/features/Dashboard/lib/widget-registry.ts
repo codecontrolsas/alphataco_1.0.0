@@ -339,10 +339,6 @@ export function getWidgetDefinition(id: string): WidgetDefinition | undefined {
   return WIDGETS_BY_ID.get(id);
 }
 
-export function isWidgetId(id: string): id is WidgetId {
-  return WIDGETS_BY_ID.has(id);
-}
-
 /** Todas las claves que hay que consultar para resolver la visibilidad del catálogo completo. */
 export const ALL_WIDGET_PERMISSION_KEYS: readonly PermissionKey[] = [
   ...new Set(WIDGETS.flatMap((widget) => widget.requires)),
@@ -431,10 +427,6 @@ export const BOARD_TEMPLATES = [
 ] as const satisfies readonly { key: string; name: string; description: string; widgets: readonly WidgetId[] }[];
 
 export type BoardTemplateKey = (typeof BOARD_TEMPLATES)[number]['key'];
-
-export function getBoardTemplate(key: string) {
-  return BOARD_TEMPLATES.find((template) => template.key === key);
-}
 
 /**
  * Links viejos (`?tab=` / `?subtab=` de las secciones Resumen/Vencimientos/Análisis, que siguen

@@ -10,8 +10,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { cn } from '@/lib/utils';
 import InfoComponent from '@/shared/components/common/InfoComponent';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -26,6 +24,8 @@ import UploadDocumentMultiEquipment from './UploadDocumentMultiEquipment';
  */
 function NewDocumentMulti({ onlyEmployees, onlyEquipment }: { onlyEmployees?: boolean; onlyEquipment?: boolean }) {
   const [open, setOpen] = useState(false);
+  // La carga se abre siempre desde una lista de personal o de equipos: nunca de las dos a la vez.
+  const showEquipment = Boolean(onlyEquipment) && !onlyEmployees;
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['multi-document-upload-data', Boolean(onlyEmployees), Boolean(onlyEquipment)],
@@ -40,8 +40,10 @@ function NewDocumentMulti({ onlyEmployees, onlyEquipment }: { onlyEmployees?: bo
       <AlertDialogTrigger asChild>
         <Button variant="brand">Documento Multirecurso</Button>
       </AlertDialogTrigger>
-      <AlertDialogContent className="w-full">
-        <AlertDialogTitle className="sr-only">Documento multirrecurso</AlertDialogTitle>
+      <AlertDialogContent className="max-h-[90dvh] w-full overflow-y-auto">
+        <AlertDialogTitle>
+          {showEquipment ? 'Documento multirrecurso de equipos' : 'Documento multirrecurso del personal'}
+        </AlertDialogTitle>
         <InfoComponent
           iconSize="lg"
           size="sm"
@@ -64,30 +66,20 @@ function NewDocumentMulti({ onlyEmployees, onlyEquipment }: { onlyEmployees?: bo
             </Button>
           </div>
         )}
-        {data && (
-          <Tabs defaultValue={onlyEmployees ? 'employees' : onlyEquipment ? 'equipment' : 'employees'}>
-            <TabsList
-              className={cn('w-full grid grid-cols-2', onlyEmployees && onlyEquipment ? 'grid-cols-2' : 'grid-cols-1')}
-            >
-              {onlyEmployees && <TabsTrigger value="employees">Empleados</TabsTrigger>}
-              {onlyEquipment && <TabsTrigger value="equipment">Equipos</TabsTrigger>}
-            </TabsList>
-            <TabsContent value="employees">
-              <UploadDocumentMultiEmployee
-                employees={data.employees}
-                allDocumentTypes={data.employeeDocumentTypes}
-                currentCompany={data.currentCompany}
-              />
-            </TabsContent>
-            <TabsContent value="equipment">
-              <UploadDocumentMultiEquipment
-                currentCompany={data.currentCompany}
-                allDocumentTypes={data.equipmentDocumentTypes}
-                equipments={data.equipments}
-              />
-            </TabsContent>
-          </Tabs>
-        )}
+        {data &&
+          (showEquipment ? (
+            <UploadDocumentMultiEquipment
+              currentCompany={data.currentCompany}
+              allDocumentTypes={data.equipmentDocumentTypes}
+              equipments={data.equipments}
+            />
+          ) : (
+            <UploadDocumentMultiEmployee
+              employees={data.employees}
+              allDocumentTypes={data.employeeDocumentTypes}
+              currentCompany={data.currentCompany}
+            />
+          ))}
         <AlertDialogFooter className="hidden">
           <AlertDialogCancel id="close-create-document-modal">Cerrar</AlertDialogCancel>
         </AlertDialogFooter>

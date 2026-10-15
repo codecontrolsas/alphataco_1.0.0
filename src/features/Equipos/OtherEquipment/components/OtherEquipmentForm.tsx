@@ -31,7 +31,6 @@ import {
   otherEquipmentFormSchema,
   type OtherEquipmentFormData,
 } from '../schemas/other-equipment-form';
-import { OtherEquipmentTabs } from './OtherEquipmentTabs';
 import { OtherEquipmentEditLayout } from './form/OtherEquipmentEditLayout';
 
 const logger = new Logger('OtherEquipmentForm');
@@ -86,7 +85,7 @@ export type { OtherEquipmentFormData };
 
 interface OtherEquipmentFormProps {
   equipment?: OtherEquipmentDetail | null;
-  mode: 'view' | 'edit' | 'new';
+  mode: 'edit' | 'new';
   equipmentId?: string;
   brandsPromise: ReturnType<typeof getVehicleBrands>;
   modelsPromise: ReturnType<typeof getModelsByBrand>;
@@ -97,8 +96,6 @@ interface OtherEquipmentFormProps {
   costCentersPromise: ReturnType<typeof getCostCenterOptions>;
   hierarchicalPositionsPromise: Promise<Array<{ id: string; name: string }>>;
   vehiclesPromise: Promise<Array<{ id: string; domain: string | null }>>;
-  certificationsComponent?: React.ReactNode;
-  qrComponent?: React.ReactNode;
 }
 
 // ─── Componente ───────────────────────────────────────────────────────────────
@@ -109,7 +106,6 @@ export function OtherEquipmentForm({ equipment, mode, equipmentId, ...otherProps
   // del resolver es async (consulta duplicados en el servidor), asi que dos clicks
   // seguidos pueden llegar a onSubmit antes de cualquier re-render.
   const submitLockRef = useRef(false);
-  const readOnly = mode === 'view';
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -211,18 +207,6 @@ export function OtherEquipmentForm({ equipment, mode, equipmentId, ...otherProps
     router.push(`${pathname}?${params.toString()}`);
   };
 
-  // Al editar, el form NO se remonta despues de guardar (la key del padre es el id del
-  // equipo): cuando vuelve a modo lectura la navegacion ya termino y se libera el candado
-  // para que una edicion posterior pueda guardar de nuevo.
-  const [wasReadOnly, setWasReadOnly] = useState(readOnly);
-  if (readOnly !== wasReadOnly) {
-    setWasReadOnly(readOnly);
-    if (readOnly) {
-      submitLockRef.current = false;
-      setIsSubmitting(false);
-    }
-  }
-
   const isBusy = isSubmitting || form.formState.isSubmitting;
 
   const handleCancel = () => {
@@ -237,17 +221,6 @@ export function OtherEquipmentForm({ equipment, mode, equipmentId, ...otherProps
     params.set('action', 'view');
     router.push(`${pathname}?${params.toString()}`);
   };
-
-  // Lectura: ficha con pestañas. Edición y alta: formulario completo en una página.
-  if (readOnly && equipment) {
-    return (
-      <OtherEquipmentTabs
-        equipment={equipment}
-        certificationsComponent={otherProps.certificationsComponent}
-        qrComponent={otherProps.qrComponent}
-      />
-    );
-  }
 
   return (
     <Form {...form}>

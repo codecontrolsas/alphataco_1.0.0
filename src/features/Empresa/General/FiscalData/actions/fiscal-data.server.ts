@@ -1,7 +1,8 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
 import { errorMessage, fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
+import { requireAnyView } from '@/features/Empresa/lib/config-access.server';
+import { checkPermissionServer } from '@/features/Permissions';
 import type { arca_environment } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
 import { isProductionAllowed } from '@/shared/lib/arca/endpoints';
@@ -44,6 +45,11 @@ function isConnectionChecks(value: unknown): value is ConnectionCheck[] {
  * emitir comparten una sola consulta.
  */
 export const getFiscalDataOverview = cache(async () => {
+  // Lo consumen Datos fiscales (Configuración) y Facturación (Comercial): basta ver cualquiera. Sin permiso lanza.
+  await requireAnyView([
+    ['configuracion', 'datos-fiscales'],
+    ['comercial', 'facturacion'],
+  ]);
   const companyId = await getActiveCompanyId();
 
   try {
@@ -103,7 +109,9 @@ export const getFiscalDataOverview = cache(async () => {
                   lastTestChecks: isConnectionChecks(active.last_test_result) ? active.last_test_result : [],
                 }
               : null,
-            pending: pending ? { alias: pending.alias, createdAt: pending.created_at.toISOString(), csrPem: pending.csr_pem } : null,
+            pending: pending
+              ? { alias: pending.alias, createdAt: pending.created_at.toISOString(), csrPem: pending.csr_pem }
+              : null,
           },
         ];
       })

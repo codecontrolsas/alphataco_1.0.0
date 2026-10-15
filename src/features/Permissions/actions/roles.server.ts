@@ -5,6 +5,7 @@ import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';
 import { callFunction } from '@/shared/lib/sql';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import moment from 'moment';
 import { z } from 'zod';
 import { findTabDef } from '../lib/permissions-map-utils';
 import { resolveActionCopy, TAB_DESCRIPTIONS } from '../permission-catalog';
@@ -391,7 +392,7 @@ export async function updateRoleWithPermissions(data: {
           name: data.name,
           description: data.description ?? null,
           color: data.color ?? null,
-          updated_at: new Date(),
+          updated_at: moment().toDate(),
         },
         select: {
           id: true,
@@ -696,7 +697,7 @@ export async function setUserPermissionServer(userId: string, tabId: string, act
       update: {
         is_granted: isGranted,
         assigned_by: assignedBy,
-        updated_at: new Date(),
+        updated_at: moment().toDate(),
       },
     });
 

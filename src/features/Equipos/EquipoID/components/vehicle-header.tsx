@@ -4,19 +4,19 @@ import type { VehicleById } from '@/app/dashboard/equipment/action/page';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EquipmentConditionControl } from '@/features/Equipos/components/EquipmentConditionControl';
+import { EquipmentStatusActions } from '@/features/Equipos/components/EquipmentStatusActions';
 import { PermissionGuard } from '@/features/Permissions';
 import { RecordHeader } from '@/shared/components/common/RecordHeader';
 import { reasonForTerminationLabels } from '@/shared/utils/mappers';
-import { ArrowLeft, Pencil, Truck } from 'lucide-react';
+import { Pencil, Truck } from 'lucide-react';
 import moment from 'moment';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { VehicleQuickActions } from './vehicle-quick-actions';
 
 type Vehicle = NonNullable<VehicleById>;
 
 function VehicleIdentity({ vehicle }: { vehicle: Vehicle }) {
   const name = [vehicle.brand_vehicles?.name, vehicle.model_vehicles?.name].filter(Boolean).join(' ');
-  const details = [vehicle.type?.name, vehicle.year, vehicle.intern_number].filter(Boolean).join(' · ');
+  const details = [vehicle.type?.name, vehicle.year].filter(Boolean).join(' · ');
 
   return (
     <div className="flex min-w-0 items-center gap-5">
@@ -29,6 +29,11 @@ function VehicleIdentity({ vehicle }: { vehicle: Vehicle }) {
       </div>
 
       <div className="min-w-0 space-y-1.5">
+        {vehicle.intern_number && (
+          <p className="text-muted-foreground font-mono text-sm tabular-nums">
+            Interno <span className="text-foreground font-semibold">{vehicle.intern_number}</span>
+          </p>
+        )}
         <h1 className="flex flex-wrap items-center gap-x-3 gap-y-1">
           {vehicle.domain && (
             <span className="border-foreground bg-card rounded-md border-2 px-2.5 font-mono text-xl font-semibold tracking-wider">
@@ -37,7 +42,7 @@ function VehicleIdentity({ vehicle }: { vehicle: Vehicle }) {
           )}
           <span className="text-xl font-semibold tracking-tight">{name || 'Equipo sin marca'}</span>
         </h1>
-        <p className="text-muted-foreground">{details}</p>
+        {details && <p className="text-muted-foreground">{details}</p>}
         <div className="flex flex-wrap items-center gap-2 pt-1">
           <EquipmentConditionControl
             equipmentId={vehicle.id}
@@ -107,12 +112,7 @@ export function VehicleHeader({ vehicle, sectorName }: { vehicle: VehicleById; s
   };
 
   return (
-    <div className="space-y-6">
-      <Button variant="ghost" size="sm" onClick={() => router.back()} className="-ml-2">
-        <ArrowLeft />
-        Volver
-      </Button>
-
+    <div className="space-y-4">
       <RecordHeader
         identity={<VehicleIdentity vehicle={vehicle} />}
         actions={
@@ -122,7 +122,7 @@ export function VehicleHeader({ vehicle, sectorName }: { vehicle: VehicleById; s
                 <Pencil />
                 Editar
               </Button>
-              <VehicleQuickActions equipmentId={vehicle.id} isActive={vehicle.is_active ?? undefined} />
+              <EquipmentStatusActions kind="vehicle" equipmentId={vehicle.id} isActive={vehicle.is_active ?? false} />
             </PermissionGuard>
           </>
         }

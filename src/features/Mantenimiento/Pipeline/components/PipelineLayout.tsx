@@ -43,7 +43,7 @@ interface PipelineLayoutProps {
 /**
  * Client component que gestiona la navegación del pipeline.
  *
- * Patrón idéntico a TabsManagerClient:
+ * Patrón:
  * - Paso inicial leído del servidor (searchParams)
  * - Estado local (useState) para cambios instantáneos
  * - replaceState para actualizar la URL sin navegación Next.js
@@ -60,7 +60,7 @@ export function PipelineLayout({ steps, summaryQuery, initialStep, paramName, st
     staleTime: SUMMARY_STALE_TIME_MS,
   });
   // Leer la URL actual al montar (fuente de verdad), no el prop del servidor que puede
-  // estar stale si el componente se desmontó/remontó por cambio de tab (Radix TabsContent).
+  // estar stale si el componente se desmontó/remontó por cambio de sección.
   const [activeStep, setActiveStep] = useState(() => {
     if (typeof window !== 'undefined') {
       const urlStep = new URLSearchParams(window.location.search).get(paramName);
@@ -100,9 +100,7 @@ export function PipelineLayout({ steps, summaryQuery, initialStep, paramName, st
   );
 
   return (
-    // pt-4: los pasos quedaban pegados a la barra de tabs (Radix no deja gap
-    // entre TabsList y TabsContent). El pt-4 respeta el mismo ritmo que el
-    // gap-4 del TabsManager en el resto del dashboard.
+    // pt-4: separa los pasos del encabezado de la sección.
     <div className="pt-4 space-y-6">
       <PipelineSteps
         steps={steps}
