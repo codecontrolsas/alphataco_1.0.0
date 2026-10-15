@@ -13,6 +13,7 @@ import {
   type DiagramAxle,
   type DiagramPosition,
 } from '../tire-diagram-utils';
+import { inferTemplateLayout } from './axle-layout';
 import {
   PRESSURE_OK_DELTA_PSI,
   PRESSURE_TARGET_PSI,
@@ -28,6 +29,7 @@ import {
   toneForLayer,
   type TireLayer,
   type TireTone,
+  type TruckBody,
 } from './truck-geometry';
 
 export interface TireDiagramIsoProps {
@@ -45,6 +47,10 @@ export interface TireDiagramIsoProps {
   cabinLabel?: string;
   /** Extremo de conexión con otro vehículo. */
   hitch?: TireDiagramHitch;
+  /** Silueta de la carrocería (por defecto, camión / semirremolque). */
+  body?: TruckBody;
+  /** Separación entre ejes consecutivos, de adelante hacia atrás (ver `inferTemplateLayout`). */
+  axleGaps?: number[];
   /** Capa de color controlada. Sin esto, la figura elige sola (primera capa con datos) y la cambia el selector. */
   layer?: TireLayer | null;
   onLayerChange?: (layer: TireLayer) => void;
@@ -178,6 +184,8 @@ export function TireDiagramIso({
   label,
   cabinLabel,
   hitch,
+  body,
+  axleGaps,
   layer: controlledLayer,
   onLayerChange,
 }: TireDiagramIsoProps) {
@@ -198,6 +206,12 @@ export function TireDiagramIso({
 
   const selectedId = interactive ? selectedPosition : pinnedId;
 
+  // Sin cabina, enganche ni carrocería indicados (ficha del equipo, vista previa), la forma sale de los ejes.
+  const inferred = useMemo(
+    () => (cabinLabel === undefined && hitch === undefined && body === undefined ? inferTemplateLayout(axles) : null),
+    [axles, cabinLabel, hitch, body]
+  );
+
   const svg = useMemo(
     () =>
       buildTruckSvg({
@@ -206,12 +220,27 @@ export function TireDiagramIso({
         layer,
         selected: selectedId,
         highlighted: highlightedPositions,
-        cabinLabel,
-        hitch,
+        cabinLabel: cabinLabel ?? inferred?.cabinLabel,
+        hitch: hitch ?? inferred?.hitch,
         interactive,
         label,
+        body: body ?? inferred?.body,
+        axleGaps,
       }),
-    [axles, positions, layer, selectedId, highlightedPositions, cabinLabel, hitch, interactive, label]
+    [
+      axles,
+      positions,
+      layer,
+      selectedId,
+      highlightedPositions,
+      cabinLabel,
+      hitch,
+      interactive,
+      label,
+      body,
+      axleGaps,
+      inferred,
+    ]
   );
 
   // Al redibujar el SVG (cambia la selección) el nodo enfocado se reemplaza: se devuelve el foco al mismo id.
