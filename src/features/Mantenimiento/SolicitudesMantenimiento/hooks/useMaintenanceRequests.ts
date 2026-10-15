@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { approveWorkshopEntry } from '../../Operaciones/actions/mutations.server';
-import type { ApproveRequestItemsInput, ApproveWorkshopEntryInput, RejectRequestInput } from '../../types';
+import type { ApproveRequestItemsInput, ApproveWorkshopEntryInput } from '../../types';
 import { invalidateAllMaintenanceQueries } from '../../utils/queryInvalidation';
-import { approveMaintenanceRequestItems, rejectMaintenanceRequest, rejectMaintenanceRequestItems } from '../actions/approvals.server';
+import { approveMaintenanceRequestItems, rejectMaintenanceRequestItems } from '../actions/approvals.server';
 
 export const MAINTENANCE_REQUESTS_QUERY_KEY = ['maintenance-requests'];
 
@@ -14,21 +14,6 @@ export function useApproveMaintenanceRequestItems() {
 
   return useMutation({
     mutationFn: (input: ApproveRequestItemsInput) => approveMaintenanceRequestItems(input),
-    onSuccess: () => {
-      invalidateAllMaintenanceQueries(queryClient);
-    },
-  });
-}
-
-/**
- * Hook para rechazar una solicitud completa
- * @deprecated Usar useRejectMaintenanceRequestItems para rechazar items específicos
- */
-export function useRejectMaintenanceRequest() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (input: RejectRequestInput) => rejectMaintenanceRequest(input),
     onSuccess: () => {
       invalidateAllMaintenanceQueries(queryClient);
     },

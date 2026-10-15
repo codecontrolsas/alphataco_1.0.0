@@ -2,9 +2,10 @@ import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/comp
 import { Textarea } from '@/components/ui/textarea';
 import { MessageSquare } from 'lucide-react';
 import type { UseFormReturn } from 'react-hook-form';
+import type { DailyReportRowFormValues } from '../form-types';
 
 type ObservationsSectionProps = {
-  form: UseFormReturn<any>;
+  form: UseFormReturn<DailyReportRowFormValues>;
   disabled?: boolean;
 };
 

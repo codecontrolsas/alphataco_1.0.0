@@ -61,6 +61,9 @@ export function ReturnLoanDialog({
       queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.loans });
       queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.stock });
       queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.movements });
+      queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.availability });
+      queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.stockAttention });
+      queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.loansAttention });
       router.refresh();
       onOpenChange(false);
     },

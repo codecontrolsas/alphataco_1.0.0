@@ -2,7 +2,7 @@
  * Rutas de Facturación. Módulo puro: lo usan Server y Client Components por igual.
  */
 
-/** La subtab Facturación dentro de Comercial (`SectionManagerServer` tab + `TabsManagerServer` subtab). */
+/** La subtab Facturación dentro de Comercial (`SectionManagerServer` en los dos niveles: `?tab=comerce&subtab=`). */
 export const INVOICING_TAB_HREF = '/dashboard/comercial?tab=comerce&subtab=facturacion';
 
 export const CERTIFICATIONS_TAB_HREF = '/dashboard/comercial?tab=comerce&subtab=certificaciones';
@@ -12,7 +12,9 @@ export const FISCAL_DATA_HREF = '/dashboard/configuration?tab=general&subtab=dat
 export const NEW_INVOICE_HREF = '/dashboard/comercial/facturacion/nueva';
 
 export function invoiceHref(id: string, result?: string): string {
-  return result ? `/dashboard/comercial/facturacion/${id}?resultado=${result}` : `/dashboard/comercial/facturacion/${id}`;
+  return result
+    ? `/dashboard/comercial/facturacion/${id}?resultado=${result}`
+    : `/dashboard/comercial/facturacion/${id}`;
 }
 
 /** Ficha del cliente, donde se cargan sus datos fiscales. */

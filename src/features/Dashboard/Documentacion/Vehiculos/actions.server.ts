@@ -1,19 +1,20 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
-import type { Prisma } from '@/generated/prisma/client';
-import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { canViewDashboard } from '@/features/Dashboard/lib/permissions.server';
 import {
-  buildDateRangeFiltersWhere,
-  buildFiltersWhere,
-  NULL_FILTER_VALUE,
-  parseSearchParams,
-  stateToPrismaParams,
-} from '@/shared/components/common/DataTable/helpers';
+  equipmentDocumentSpec,
+  type EquipmentDocumentRow,
+} from '@/features/Documentacion/DocumentosEquipos/lib/equipment-document-rows.server';
+import { Logger } from '@/lib/logger';
+import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { prisma } from '@/shared/lib/prisma';
-import moment from 'moment';
+import type { ExportResult } from '@/shared/lib/export-result';
+import { applyTableState, facetCounts, paginate, type InMemoryTableSpec } from '@/shared/lib/in-memory-table';
+import type { VehicleExpiringDocListItem } from '../lib/expiring-docs-types';
+import { loadVehicleExpiringRows } from '../lib/expiring-rows.server';
+
+/** Tope de filas por export: más que esto se pide acotar con filtros. */
+const EXPORT_MAX_ROWS = 10_000;
 
 const logger = new Logger('features/Dashboard/Documentacion/Vehiculos');
 
@@ -21,134 +22,31 @@ const logger = new Logger('features/Dashboard/Documentacion/Vehiculos');
 // CONSTANTS
 // ============================================================================
 
-/** Documentos que vencen dentro de los próximos 30 días (o ya vencidos) */
-const EXPIRY_WINDOW_DAYS = 30;
+/** Id de la columna "Tipo de Documento" de esta tabla. */
+const TYPE_COLUMN_ID = 'document_type';
 
-/** Campos reales de BD que admiten ordenamiento */
-const VALID_SORT_FIELDS = new Set(['created_at', 'validity', 'state', 'vehicle', 'document_type', 'sub_type', 'owner']);
+const BASE_SPEC = equipmentDocumentSpec(TYPE_COLUMN_ID);
 
-/** Columnas FK con resolución de orderBy en Prisma */
-const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Prisma.documents_equipmentOrderByWithRelationInput> = {
-  vehicle: (dir) => ({ vehicles: { domain: dir } }),
-  document_type: (dir) => ({ document_types: { name: dir } }),
-  sub_type: (dir) => ({ vehicles: { sub_type: { name: dir } } }),
-  owner: (dir) => ({ vehicles: { equipment_owners: { name: dir } } }),
+/** Facetas de subtipo y propietario de esta tabla: ids de columna propios sobre los del equipo. */
+function optionalFacet(id: string | null, name: string | null | undefined) {
+  return id === null ? [] : [{ id, name: name ?? null }];
+}
+
+/** Misma búsqueda/filtros/facetas que la lista de permanentes; sin orden elegido, el más urgente primero. */
+const SPEC: InMemoryTableSpec<EquipmentDocumentRow> = {
+  ...BASE_SPEC,
+  facets: {
+    ...BASE_SPEC.facets,
+    sub_type: (row) => optionalFacet(row.vehicles.subType, row.vehicles.sub_type?.name),
+    owner: (row) => optionalFacet(row.vehicles.owner_id, row.vehicles.equipment_owners?.name),
+  },
+  sorters: {
+    ...BASE_SPEC.sorters,
+    sub_type: (row) => row.vehicles.sub_type?.name,
+    owner: (row) => row.vehicles.equipment_owners?.name,
+  },
+  defaultSort: [(row) => row.validity, ...(BASE_SPEC.defaultSort ?? [])],
 };
-
-/** Columnas con filtro de rango de fechas */
-const DATE_RANGE_COLUMNS = ['created_at', 'validity'];
-
-/** Mapping columnId (URL) → campo Prisma */
-const COLUMN_MAP: Record<string, string> = {
-  state: 'state',
-  document_type: 'id_document_types',
-};
-
-/** Columnas con filtro de texto libre (manejadas manualmente por ser campos de relaciones) */
-const TEXT_FILTER_COLUMNS = ['vehicle'] as const;
-
-/**
- * Columnas facetadas que viven en la relación `vehicles`, no en `documents_equipment`.
- * `buildFiltersWhere` solo arma condiciones sobre el modelo raíz, por eso se excluyen
- * y se construyen manualmente dentro del bloque `vehicles` con `buildVehicleFkFilter`.
- */
-const VEHICLE_FK_FILTER_COLUMNS = ['sub_type', 'owner'] as const;
-
-// ============================================================================
-// HELPERS
-// ============================================================================
-
-/**
- * Construye el filtro de una columna FK que vive en la relación `vehicles`,
- * contemplando la opción "Sin asignar" (NULL_FILTER_VALUE).
- */
-function buildVehicleFkFilter(
-  field: 'subType' | 'owner_id',
-  values: string[] | undefined
-): Prisma.vehiclesWhereInput | null {
-  if (!values || values.length === 0) return null;
-
-  const hasNull = values.includes(NULL_FILTER_VALUE);
-  const ids = values.filter((v) => v !== NULL_FILTER_VALUE);
-
-  const nullCondition: Prisma.vehiclesWhereInput = field === 'subType' ? { subType: null } : { owner_id: null };
-  const inCondition: Prisma.vehiclesWhereInput =
-    field === 'subType' ? { subType: { in: ids } } : { owner_id: { in: ids } };
-
-  if (hasNull && ids.length > 0) return { OR: [nullCondition, inCondition] };
-  if (hasNull) return nullCondition;
-  return inCondition;
-}
-
-/** Construye el bloque `vehicles` del WHERE: filtros base + dominio + FKs facetadas */
-function buildVehiclesWhere(
-  companyId: string,
-  filters: Record<string, string[] | undefined>
-): Prisma.vehiclesWhereInput {
-  const domainFilter = filters['vehicle']?.[0];
-  const subTypeFilter = buildVehicleFkFilter('subType', filters['sub_type']);
-  const ownerFilter = buildVehicleFkFilter('owner_id', filters['owner']);
-
-  // Ambas FK pueden aportar un OR — se combinan con AND para no pisarse entre sí
-  const fkConditions = [subTypeFilter, ownerFilter].filter((f): f is Prisma.vehiclesWhereInput => f !== null);
-
-  return {
-    company_id: companyId,
-    is_active: true,
-    ...(domainFilter ? { domain: { contains: domainFilter, mode: 'insensitive' } } : {}),
-    ...(fkConditions.length > 0 ? { AND: fkConditions } : {}),
-  };
-}
-
-// ============================================================================
-// WHERE CLAUSE BUILDER
-// ============================================================================
-
-/**
- * Construye la cláusula WHERE compartida entre paginated, export y facets.
- * Incluye el filtro permanente de documentos por vencer (validity <= nextMonth).
- */
-async function buildWhereClause(
-  companyId: string,
-  state: ReturnType<typeof parseSearchParams>
-): Promise<Prisma.documents_equipmentWhereInput> {
-  const canViewPrivate = await checkPermissionServer('documentacion', 'documentos-de-equipos', 'view_private');
-  const nextMonth = moment().add(EXPIRY_WINDOW_DAYS, 'days').endOf('day').toDate();
-
-  // Filtros facetados
-  const filtersWhere = buildFiltersWhere(state.filters, COLUMN_MAP, {
-    exclude: [
-      ...DATE_RANGE_COLUMNS.flatMap((c) => [`${c}_from`, `${c}_to`]),
-      ...TEXT_FILTER_COLUMNS,
-      ...VEHICLE_FK_FILTER_COLUMNS,
-    ],
-  });
-
-  // Filtros de rango de fechas
-  const dateFiltersWhere = buildDateRangeFiltersWhere(state.filters, DATE_RANGE_COLUMNS);
-
-  const validityFilter: Prisma.DateTimeNullableFilter = {
-    not: null,
-    lte: nextMonth,
-  };
-
-  const userValidityFilter = (dateFiltersWhere as Record<string, unknown>).validity;
-  const userCreatedAtFilter = (dateFiltersWhere as Record<string, unknown>).created_at;
-
-  return {
-    // Excluir documentos archivados (archived_at no nulo = historial / no vigente)
-    archived_at: null,
-    vehicles: buildVehiclesWhere(companyId, state.filters),
-    document_types: {
-      is_it_montlhy: false,
-      is_active: true,
-      ...(!canViewPrivate && { private: { not: true } }),
-    },
-    validity: userValidityFilter !== undefined ? (userValidityFilter as Prisma.DateTimeNullableFilter) : validityFilter,
-    ...(userCreatedAtFilter !== undefined ? { created_at: userCreatedAtFilter as Prisma.DateTimeFilter } : {}),
-    ...(filtersWhere as Prisma.documents_equipmentWhereInput),
-  };
-}
 
 // ============================================================================
 // PAGINATED QUERY
@@ -158,63 +56,9 @@ export async function getVehicleExpiringDocsPaginated(searchParams: DataTableSea
   logger.debug('Obteniendo documentos de vehículos por vencer');
 
   try {
-    const companyId = await getActiveCompanyId();
     const state = parseSearchParams(searchParams);
-    const { skip, take } = stateToPrismaParams(state);
-
-    // Resolver sorting con validación y FK_SORT_MAP
-    const resolvedSorts: Prisma.documents_equipmentOrderByWithRelationInput[] = [];
-    for (const s of state.sorting) {
-      if (VALID_SORT_FIELDS.has(s.id)) {
-        const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-        const fkMapper = FK_SORT_MAP[s.id];
-        resolvedSorts.push(fkMapper ? fkMapper(dir) : { [s.id]: dir });
-      }
-    }
-    const safeOrderBy: Prisma.documents_equipmentOrderByWithRelationInput[] =
-      resolvedSorts.length > 0 ? resolvedSorts : [{ validity: 'asc' }];
-
-    const where = await buildWhereClause(companyId, state);
-
-    const [data, total] = await Promise.all([
-      prisma.documents_equipment.findMany({
-        where,
-        skip,
-        take,
-        orderBy: safeOrderBy,
-        select: {
-          id: true,
-          created_at: true,
-          validity: true,
-          state: true,
-          is_active: true,
-          document_path: true,
-          id_document_types: true,
-          applies: true,
-          vehicles: {
-            select: {
-              id: true,
-              domain: true,
-              intern_number: true,
-              serie: true,
-              // type_of_contract: permite mostrar "Propio" cuando no hay titular externo cargado
-              type_of_contract: true,
-              sub_type: { select: { id: true, name: true } },
-              equipment_owners: { select: { id: true, name: true } },
-            },
-          },
-          document_types: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-      }),
-      prisma.documents_equipment.count({ where }),
-    ]);
-
-    return { data, total };
+    const filtered = applyTableState(await loadVehicleExpiringRows(), state, SPEC);
+    return { data: paginate(filtered, state), total: filtered.length };
   } catch (error) {
     logger.error('Error al obtener documentos de vehículos por vencer', { data: { error } });
     throw new Error('No se pudieron obtener los documentos. Intente nuevamente.');
@@ -225,49 +69,27 @@ export async function getVehicleExpiringDocsPaginated(searchParams: DataTableSea
 // EXPORT QUERY (sin paginación)
 // ============================================================================
 
-export async function getAllVehicleExpiringDocsForExport(searchParams: DataTableSearchParams) {
+export async function getAllVehicleExpiringDocsForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<VehicleExpiringDocListItem[]>> {
   logger.debug('Exportando documentos de vehículos por vencer');
 
-  try {
-    const companyId = await getActiveCompanyId();
-    const state = parseSearchParams(searchParams);
-    const where = await buildWhereClause(companyId, state);
+  if (!(await canViewDashboard('vehiculos')))
+    return { ok: false, message: 'No tenés permiso para exportar esta lista' };
 
-    return await prisma.documents_equipment.findMany({
-      where,
-      orderBy: [{ validity: 'asc' }],
-      select: {
-        id: true,
-        created_at: true,
-        validity: true,
-        state: true,
-        is_active: true,
-        document_path: true,
-        id_document_types: true,
-        applies: true,
-        vehicles: {
-          select: {
-            id: true,
-            domain: true,
-            intern_number: true,
-            serie: true,
-            // type_of_contract: permite mostrar "Propio" cuando no hay titular externo cargado
-            type_of_contract: true,
-            sub_type: { select: { id: true, name: true } },
-            equipment_owners: { select: { id: true, name: true } },
-          },
-        },
-        document_types: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
+  try {
+    const state = parseSearchParams(searchParams);
+    const rows = applyTableState(await loadVehicleExpiringRows(), state, SPEC);
+    if (rows.length > EXPORT_MAX_ROWS) {
+      return {
+        ok: false,
+        message: `La exportación supera el máximo de ${EXPORT_MAX_ROWS.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`,
+      };
+    }
+    return { ok: true, data: rows };
   } catch (error) {
     logger.error('Error al exportar documentos de vehículos por vencer', { data: { error } });
-    throw new Error('No se pudo exportar la lista. Intente nuevamente.');
+    return { ok: false, message: 'No se pudo exportar la lista. Intente nuevamente.' };
   }
 }
 
@@ -289,156 +111,16 @@ export async function getVehicleExpiringDocsSingleFacet(
   logger.debug('Obteniendo facet de documentos de vehículos por vencer', { data: { columnId } });
 
   try {
-    const companyId = await getActiveCompanyId();
-    const canViewPrivate = await checkPermissionServer('documentacion', 'documentos-de-equipos', 'view_private');
-    const nextMonth = moment().add(EXPIRY_WINDOW_DAYS, 'days').endOf('day').toDate();
-
-    const baseWhere: Prisma.documents_equipmentWhereInput = {
-      // Excluir documentos archivados (archived_at no nulo = historial / no vigente)
-      archived_at: null,
-      vehicles: {
-        company_id: companyId,
-        is_active: true,
-      },
-      document_types: {
-        is_it_montlhy: false,
-        is_active: true,
-        // Mismo criterio que buildWhereClause: sin permiso no se listan tipos privados
-        ...(!canViewPrivate && { private: { not: true } }),
-      },
-      validity: {
-        not: null,
-        lte: nextMonth,
-      },
-    };
-
-    /** Construye un WHERE con todos los filtros activos EXCEPTO la columna indicada */
-    function crossWhere(excludeColumn: string): Prisma.documents_equipmentWhereInput {
-      if (!searchParams || Object.keys(searchParams).length === 0) return baseWhere;
-      const state = parseSearchParams(searchParams);
-
-      const filtersWithoutExcluded = { ...state.filters };
-      delete filtersWithoutExcluded[excludeColumn];
-      delete filtersWithoutExcluded[`${excludeColumn}_from`];
-      delete filtersWithoutExcluded[`${excludeColumn}_to`];
-
-      const crossState = { ...state, filters: filtersWithoutExcluded };
-      const filtersWhere = buildFiltersWhere(crossState.filters, COLUMN_MAP, {
-        exclude: [
-          ...DATE_RANGE_COLUMNS.flatMap((c) => [`${c}_from`, `${c}_to`]),
-          ...TEXT_FILTER_COLUMNS,
-          ...VEHICLE_FK_FILTER_COLUMNS,
-        ],
-      });
-      const dateFiltersWhere = buildDateRangeFiltersWhere(crossState.filters, DATE_RANGE_COLUMNS);
-
-      const userValidityFilter = (dateFiltersWhere as Record<string, unknown>).validity;
-      const userCreatedAtFilter = (dateFiltersWhere as Record<string, unknown>).created_at;
-
-      return {
-        ...baseWhere,
-        vehicles: buildVehiclesWhere(companyId, crossState.filters),
-        ...(userValidityFilter !== undefined ? { validity: userValidityFilter as Prisma.DateTimeNullableFilter } : {}),
-        ...(userCreatedAtFilter !== undefined ? { created_at: userCreatedAtFilter as Prisma.DateTimeFilter } : {}),
-        ...(filtersWhere as Prisma.documents_equipmentWhereInput),
-      };
+    const result = facetCounts(await loadVehicleExpiringRows(), parseSearchParams(searchParams ?? {}), SPEC, columnId);
+    if (!result) {
+      logger.warn('columnId no reconocido en getVehicleExpiringDocsSingleFacet', { data: { columnId } });
+      return null;
     }
-
-    function toFacetMap(rows: { key: string | null; count: number }[]): Map<string, number> {
-      const map = new Map<string, number>();
-      for (const { key, count } of rows) {
-        map.set(key == null ? NULL_FILTER_VALUE : key, (map.get(key == null ? NULL_FILTER_VALUE : key) ?? 0) + count);
-      }
-      return map;
-    }
-
-    const where = crossWhere(columnId);
-
-    if (columnId === 'state') {
-      const rows = await prisma.documents_equipment.groupBy({
-        by: ['state'],
-        where,
-        _count: true,
-      });
-      return {
-        counts: toFacetMap(rows.map((r) => ({ key: r.state, count: r._count }))),
-      };
-    }
-
-    if (columnId === 'document_type') {
-      const rows = await prisma.documents_equipment.groupBy({
-        by: ['id_document_types'],
-        where,
-        _count: true,
-      });
-
-      const docTypeIds = rows.filter((r) => r.id_document_types != null).map((r) => r.id_document_types!);
-      const resolvedOptions =
-        docTypeIds.length > 0
-          ? await prisma.document_types.findMany({
-              where: { id: { in: docTypeIds } },
-              select: { id: true, name: true },
-              orderBy: { name: 'asc' },
-            })
-          : [];
-
-      const counts = new Map<string, number>();
-      for (const r of rows) {
-        const key = r.id_document_types == null ? NULL_FILTER_VALUE : r.id_document_types;
-        counts.set(key, (counts.get(key) ?? 0) + r._count);
-      }
-
-      return { counts, resolvedOptions };
-    }
-
-    // Subtipo y Propietario viven en la relación `vehicles`: Prisma no permite groupBy
-    // sobre columnas de una relación, así que se cuentan en memoria sobre el set filtrado.
-    if (columnId === 'sub_type' || columnId === 'owner') {
-      const rows = await prisma.documents_equipment.findMany({
-        where,
-        select: {
-          vehicles: {
-            select: { subType: true, owner_id: true },
-          },
-        },
-      });
-
-      const counts = new Map<string, number>();
-      for (const row of rows) {
-        const rawKey = columnId === 'sub_type' ? row.vehicles?.subType : row.vehicles?.owner_id;
-        const key = rawKey ?? NULL_FILTER_VALUE;
-        counts.set(key, (counts.get(key) ?? 0) + 1);
-      }
-
-      const ids = [...counts.keys()].filter((key) => key !== NULL_FILTER_VALUE);
-      const resolvedOptions =
-        ids.length > 0
-          ? columnId === 'sub_type'
-            ? await prisma.sub_type.findMany({
-                where: { id: { in: ids } },
-                select: { id: true, name: true },
-                orderBy: { name: 'asc' },
-              })
-            : await prisma.equipment_owners.findMany({
-                where: { id: { in: ids } },
-                select: { id: true, name: true },
-                orderBy: { name: 'asc' },
-              })
-          : [];
-
-      return { counts, resolvedOptions };
-    }
-
-    logger.warn('columnId no reconocido en getVehicleExpiringDocsSingleFacet', { data: { columnId } });
-    return null;
+    return result.options.length > 0
+      ? { counts: result.counts, resolvedOptions: result.options }
+      : { counts: result.counts };
   } catch (error) {
     logger.error('Error al obtener facet de documentos de vehículos por vencer', { data: { error, columnId } });
     return null;
   }
 }
-
-// ============================================================================
-// TIPOS EXPORTADOS
-// ============================================================================
-
-export type VehicleExpiringDocListItem = Awaited<ReturnType<typeof getVehicleExpiringDocsPaginated>>['data'][number];

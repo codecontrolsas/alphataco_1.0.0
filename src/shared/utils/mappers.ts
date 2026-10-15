@@ -155,13 +155,6 @@ export const dailyReportStatusLabels: Record<string, string> = {
   cerrado_incompleto: 'Cerrado incompleto',
 };
 
-export const dailyReportStatusBadges: Record<string, BadgeVariant> = {
-  abierto: 'info',
-  cerrado: 'secondary',
-  cerrado_completo: 'success',
-  cerrado_incompleto: 'warning',
-};
-
 /**
  * Labels para daily_report_status (estado de una fila del parte diario)
  * Valores: pendiente, sin_recursos_asignados, ejecutado, reprogramado, cancelado, en_certificacion
@@ -173,15 +166,6 @@ export const dailyReportRowStatusLabels: Record<string, string> = {
   reprogramado: 'Reprogramado',
   cancelado: 'Cancelado',
   en_certificacion: 'En certificación',
-};
-
-export const dailyReportRowStatusBadges: Record<string, BadgeVariant> = {
-  pendiente: 'pending',
-  sin_recursos_asignados: 'destructive',
-  ejecutado: 'success',
-  reprogramado: 'warning',
-  cancelado: 'secondary',
-  en_certificacion: 'info',
 };
 
 /**
@@ -251,6 +235,47 @@ export const documentStateBadges: Record<string, BadgeVariant> = {
   aprobado: 'success',
   vencido: 'yellow',
   pendiente: 'secondary',
+};
+
+// ============================================================================
+// OPERACIONES: PEDIDOS (preparte) Y TONOS DEL PARTE DIARIO
+// ============================================================================
+
+/** Labels para el enum `preparte_status` (estado de un pedido). */
+export const preparteStatusLabels: Record<string, string> = {
+  pendiente: 'Pendiente',
+  confirmado: 'Confirmado',
+  reprogramado: 'Reprogramado',
+  rechazado: 'Rechazado',
+  cancelado: 'Cancelado',
+  vencido: 'Vencido',
+};
+
+export const preparteStatusBadges: Record<string, BadgeVariant> = {
+  pendiente: 'warning',
+  confirmado: 'success',
+  reprogramado: 'default',
+  rechazado: 'destructive',
+  cancelado: 'pending',
+  vencido: 'expired',
+};
+
+/** Tono del badge para el estado de una fila del parte diario (`daily_report_status`). */
+export const dailyReportRowStatusTones: Record<string, BadgeVariant> = {
+  pendiente: 'warning',
+  sin_recursos_asignados: 'destructive',
+  ejecutado: 'success',
+  reprogramado: 'default',
+  cancelado: 'pending',
+  en_certificacion: 'cert',
+};
+
+/** Tono del badge para el estado del parte diario (`daily_report_header_status_new`). */
+export const dailyReportStatusTones: Record<string, BadgeVariant> = {
+  abierto: 'default',
+  cerrado: 'success',
+  cerrado_completo: 'success',
+  cerrado_incompleto: 'warning',
 };
 
 // ============================================================================

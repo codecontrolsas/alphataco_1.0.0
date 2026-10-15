@@ -1,6 +1,6 @@
 'use client';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -30,6 +30,8 @@ export interface StepRequestTypeProps {
   setSelectedPreventiveType: (value: PreventiveType | '') => void;
   templates: ChecklistTemplatesForEquipment | undefined;
   templatesError: Error | null;
+  /** Reintenta la carga de los checklists (opcional: sin él el error se informa sin botón). */
+  refetchTemplates?: () => void;
   visibleRequestTypes: RequestType[];
 }
 
@@ -47,6 +49,7 @@ export function StepRequestType({
   setSelectedPreventiveType,
   templates,
   templatesError,
+  refetchTemplates,
   visibleRequestTypes,
 }: StepRequestTypeProps) {
   return (
@@ -107,60 +110,74 @@ export function StepRequestType({
               <Skeleton className="h-16 w-full" />
             </div>
           ) : templatesError ? (
-            <div className="p-4 bg-red-50 text-red-700 rounded-lg">Error al cargar los checklists</div>
+            <div
+              role="alert"
+              className="flex flex-wrap items-center gap-2 rounded-lg border border-destructive/30 bg-danger-subtle p-4 text-sm text-danger-subtle-foreground"
+            >
+              No se pudieron cargar los checklists.
+              {refetchTemplates && (
+                <Button type="button" variant="outline" size="sm" className="min-h-11" onClick={refetchTemplates}>
+                  Reintentar
+                </Button>
+              )}
+            </div>
           ) : templates && templates.length > 0 ? (
             <div className="space-y-2">
               {templates.map((template) => (
-                <Card
+                <button
                   key={template.id}
+                  type="button"
+                  aria-pressed={selectedTemplateId === template.id}
+                  onClick={() => handleSelectTemplate(template.id)}
                   className={cn(
-                    'cursor-pointer transition-all hover:border-primary/50',
+                    'flex min-h-14 w-full items-center justify-between gap-3 rounded-xl border bg-card p-4 text-left outline-none transition-all hover:border-primary/50',
+                    'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
                     selectedTemplateId === template.id && 'border-primary bg-primary/5'
                   )}
-                  onClick={() => handleSelectTemplate(template.id)}
                 >
-                  <CardContent className="p-4 flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">{template.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {template.checklist_template_sections?.length || 0} secciones
-                      </p>
-                    </div>
-                    {selectedTemplateId === template.id && <Check className="h-5 w-5 text-primary" />}
-                  </CardContent>
-                </Card>
+                  <span>
+                    <span className="block font-medium">{template.name}</span>
+                    <span className="block text-sm text-muted-foreground tabular-nums">
+                      {template.checklist_template_sections?.length || 0} secciones
+                    </span>
+                  </span>
+                  {selectedTemplateId === template.id && (
+                    <Check aria-hidden="true" className="h-5 w-5 shrink-0 text-primary" />
+                  )}
+                </button>
               ))}
             </div>
           ) : (
-            <div className="p-4 bg-muted text-center rounded-lg">
-              No hay checklists disponibles para este tipo de equipo
+            <div role="status" className="rounded-lg bg-muted p-4 text-center text-sm">
+              No hay checklists configurados para este tipo de equipo. Podés usar Carga Manual.
             </div>
           )}
         </div>
       ) : requestType === 'preventive' ? (
         <div className="space-y-4">
           <Label>Selecciona el programa</Label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
             {(Object.entries(PREVENTIVE_TYPES) as [PreventiveType, string][]).map(([key, label]) => {
               const Icon = PREVENTIVE_TYPE_ICONS[key];
               return (
-                <Card
+                <button
                   key={key}
+                  type="button"
+                  aria-pressed={selectedPreventiveType === key}
+                  onClick={() => setSelectedPreventiveType(key)}
                   className={cn(
-                    'cursor-pointer transition-all hover:border-primary/50',
+                    'flex min-h-14 flex-col items-center gap-2 rounded-xl border bg-card p-4 text-center outline-none transition-all hover:border-primary/50',
+                    'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
                     selectedPreventiveType === key && 'border-primary bg-primary/5'
                   )}
-                  onClick={() => setSelectedPreventiveType(key)}
                 >
-                  <CardContent className="p-4 flex flex-col items-center text-center gap-2">
-                    <Icon className="h-8 w-8 text-muted-foreground" />
-                    <div>
-                      <p className="font-medium text-sm">{label}</p>
-                      <p className="text-xs text-muted-foreground">{PREVENTIVE_TYPE_DESCRIPTIONS[key]}</p>
-                    </div>
-                    {selectedPreventiveType === key && <Check className="h-4 w-4 text-primary" />}
-                  </CardContent>
-                </Card>
+                  <Icon aria-hidden="true" className="h-8 w-8 text-muted-foreground" />
+                  <span>
+                    <span className="block text-sm font-medium">{label}</span>
+                    <span className="block text-sm text-muted-foreground">{PREVENTIVE_TYPE_DESCRIPTIONS[key]}</span>
+                  </span>
+                  {selectedPreventiveType === key && <Check aria-hidden="true" className="h-4 w-4 text-primary" />}
+                </button>
               );
             })}
           </div>
@@ -178,7 +195,7 @@ export function StepRequestType({
         </div>
       ) : (
         <div className="flex items-start gap-3 rounded-lg border border-dashed p-4">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          <Info aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
             En el paso siguiente vas a cargar directamente las reparaciones que necesita el equipo, sin partir de un
             checklist.

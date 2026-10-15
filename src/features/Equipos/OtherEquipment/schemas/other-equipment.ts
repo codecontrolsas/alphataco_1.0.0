@@ -45,7 +45,11 @@ export const otherEquipmentInputSchema = z.object({
   cost_center_id: emptyToNull(uuid.nullable().optional()),
   cost_type: z.enum(OTHER_EQUIPMENT_COST_TYPES).nullable().optional(),
   sector: emptyToNull(uuid.nullable().optional()),
-  contractors: z.array(uuid).optional(),
+  /**
+   * Afectaciones a clientes como altas y bajas EXPLÍCITAS: la ausencia de un id nunca implica
+   * borrado. El formulario calcula el delta contra el baseline que leyó del servidor.
+   */
+  contractors: z.object({ add: z.array(uuid).default([]), remove: z.array(uuid).default([]) }).optional(),
 });
 
 export type OtherEquipmentInput = z.input<typeof otherEquipmentInputSchema>;
@@ -55,5 +59,7 @@ export type ParsedOtherEquipmentInput = z.output<typeof otherEquipmentInputSchem
 export const otherEquipmentCertificationSchema = z.object({
   equipmentId: uuid,
   name: z.string().trim().min(1, 'El nombre es requerido'),
-  expiration_date: z.union([z.literal(''), z.string().regex(ISO_DATE_RE, 'Fecha inválida')]).transform((v) => v || null),
+  expiration_date: z
+    .union([z.literal(''), z.string().regex(ISO_DATE_RE, 'Fecha inválida')])
+    .transform((v) => v || null),
 });

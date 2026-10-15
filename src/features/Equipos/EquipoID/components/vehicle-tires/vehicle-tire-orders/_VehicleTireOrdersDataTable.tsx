@@ -4,14 +4,15 @@ import { ServiceOrderDetailView } from '@/features/Mantenimiento/Gomeria/Ordenes
 import { tireServiceOrderStatusLabels } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
 import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable';
 import { DataTable } from '@/shared/components/common/DataTable';
-import moment from 'moment';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useCallback, useMemo, useState } from 'react';
-import type { VehicleTireOrderItem } from '../actions.server';
 import {
   getVehicleTireOrderSingleFacet,
   getVehicleTireOrdersForExport,
   getVehicleTireOrdersPaginated,
-} from '../actions.server';
+  type VehicleTireOrderItem,
+} from '../actions/orders.server';
 import { getColumns } from './columns';
 
 // ============================================================================
@@ -139,8 +140,8 @@ export function VehicleTireOrdersDataTable({
   const exportConfig = useMemo(
     () => ({
       fetchAllData: async () => {
-        const exportData = await getVehicleTireOrdersForExport(vehicleId, currentParams);
-        return exportData as VehicleTireOrderItem[];
+        // La action devuelve el error (tope de filas, permiso) en vez de lanzarlo: así llega al toast.
+        return unwrapExportResult(await getVehicleTireOrdersForExport(vehicleId, currentParams));
       },
       options: {
         filename: `ordenes-gomeria-equipo`,
@@ -148,10 +149,11 @@ export function VehicleTireOrdersDataTable({
         title: 'Historial de Órdenes de Gomería',
       },
       formatters: {
-        service_date: (val: unknown) => (val ? moment(val as string).format('DD/MM/YYYY') : '-'),
-        closed_at: (val: unknown) => (val ? moment(val as string).format('DD/MM/YYYY') : '-'),
+        service_date: (val: unknown) => (val ? formatArgentinaDay(val as Date | string) : '-'),
+        closed_at: (val: unknown) => (val ? formatArgentinaDay(val as Date | string) : '-'),
         status: (val: unknown) => tireServiceOrderStatusLabels[val as string] ?? String(val ?? ''),
         creator: (_val: unknown, row: VehicleTireOrderItem) => row.creator?.fullname ?? '-',
+        interventions: (_val: unknown, row: VehicleTireOrderItem) => row._count.items,
       },
     }),
     [vehicleId, currentParams]

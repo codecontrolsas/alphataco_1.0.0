@@ -2,14 +2,17 @@ import { Card, CardContent } from '@/components/ui/card';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { getTireTypesPaginated } from '../actions/actions.server';
+import { getTireTypesPaginated } from '../actions/type-list.server';
 import _TiposDataTable from './_TiposDataTable';
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
 
-const TABLE_ID = 'tire-types';
+/** Clave de las preferencias guardadas (columnas y filtros visibles). `-v2`: el diseño nuevo parte de cero. */
+const TABLE_ID = 'tire-types-v2';
+/** Prefijo de los params de la URL: no cambia con el rediseño para que los enlaces guardados sigan abriendo. */
+const PARAM_NAMESPACE = 'tire-types';
 
 // ============================================================================
 // TYPES
@@ -26,7 +29,7 @@ interface TiposListProps {
 
 export default async function TiposList({ searchParams, permissionsMap }: TiposListProps) {
   // Extract only the params for this table (strip namespace prefix)
-  const tableParams = stripPrefixFromSearchParams(searchParams as DataTableSearchParams, TABLE_ID);
+  const tableParams = stripPrefixFromSearchParams(searchParams as DataTableSearchParams, PARAM_NAMESPACE);
 
   // Facets are loaded lazy (on-demand when each popover opens) — not in SSR
   const [{ data, total }, preferences] = await Promise.all([

@@ -6,15 +6,23 @@ import { Logger } from '@/lib/logger';
 import { withActor } from '@/shared/lib/actor';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';
-import { callVoid } from '@/shared/lib/sql';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import type { z } from 'zod';
+import { refreshDocumentStatus } from '../../shared/compliance/server/document-status.server';
+import { assertDocTypeIdPermission, assertDocTypePermission } from '../lib/document-type-permissions';
 import { findScopedDocumentType } from '../lib/document-type-scope';
+import {
+  createDocumentTypeSchema,
+  firstSchemaError,
+  updateDocumentTypeSchema,
+  type CreateDocumentTypeData,
+  type UpdateDocumentTypeData,
+} from '../schemas/document-type.schema';
 
 const logger = new Logger('features/TiposDocumentos/mutations');
 
 /**
- * Actor de la transacción: los triggers de `document_types` (reconciliación de alertas) y de
- * `documents_*` (logs) leen `app_current_user_id()`. Sin sesión no hay mutación posible.
+ * Actor de la transacción: los triggers de auditoría de `documents_*` leen `app_current_user_id()`. Sin sesión no hay mutación posible.
  */
 async function requireActor(): Promise<string> {
   const userId = await getSessionUserId();
@@ -26,37 +34,25 @@ async function requireActor(): Promise<string> {
 // CRUD MUTATIONS
 // ============================================================================
 
-export interface CreateDocumentTypeInput {
-  name: string;
-  applies: document_applies;
-  equipment_type?: string | null;
-  mandatory: boolean;
-  explired: boolean;
-  special: boolean;
-  multiresource: boolean;
-  has_policy_number?: boolean;
-  is_it_montlhy?: boolean;
-  private?: boolean;
-  down_document?: boolean;
-  /** Ticket 505: habilita el tipo en el checklist de documentos de un candidato */
-  available_for_pre_file?: boolean;
-  description?: string;
-  conditions?: Prisma.JsonValue[];
-}
+export type CreateDocumentTypeInput = z.input<typeof createDocumentTypeSchema>;
 
 /**
  * Crea un nuevo tipo de documento.
  */
-export async function createDocumentType(data: CreateDocumentTypeInput) {
+export async function createDocumentType(input: CreateDocumentTypeInput) {
+  const parsed = createDocumentTypeSchema.safeParse(input);
+  if (!parsed.success) throw new Error(firstSchemaError(parsed.error));
+  const data: CreateDocumentTypeData = parsed.data;
+
   const companyId = await getActiveCompanyId();
   const actor = await requireActor();
+  await assertDocTypePermission(data.applies, 'create');
 
   logger.debug('Creando tipo de documento', { data: { name: data.name, applies: data.applies } });
 
   try {
-    // withActor: el trigger `document_types_after_insert` genera las alertas con el actor de sesión.
-    const created = await withActor(actor, (tx) =>
-      tx.document_types.create({
+    const created = await withActor(actor, async (tx) => {
+      const row = await tx.document_types.create({
         data: {
           company_id: companyId,
           name: data.name,
@@ -75,8 +71,11 @@ export async function createDocumentType(data: CreateDocumentTypeInput) {
           conditions: (data.conditions ?? []) as Prisma.InputJsonValue[],
         },
         select: { id: true },
-      })
-    );
+      });
+      // Un tipo nuevo cambia lo que se exige a toda la empresa: se refresca el cache de status.
+      await refreshCompanyStatus(tx, data.applies, companyId);
+      return row;
+    });
 
     logger.info('Tipo de documento creado', { data: { id: created.id } });
     return created;
@@ -86,41 +85,37 @@ export async function createDocumentType(data: CreateDocumentTypeInput) {
   }
 }
 
-export interface UpdateDocumentTypeInput {
-  name?: string;
-  applies?: document_applies;
-  equipment_type?: string | null;
-  mandatory?: boolean;
-  explired?: boolean;
-  special?: boolean;
-  multiresource?: boolean;
-  has_policy_number?: boolean;
-  is_it_montlhy?: boolean;
-  private?: boolean;
-  down_document?: boolean;
-  /** Ticket 505: habilita el tipo en el checklist de documentos de un candidato */
-  available_for_pre_file?: boolean;
-  description?: string | null;
-  conditions?: Prisma.JsonValue[];
-}
+export type UpdateDocumentTypeInput = z.input<typeof updateDocumentTypeSchema>;
 
 /**
  * Actualiza un tipo de documento existente.
  */
-export async function updateDocumentType(id: string, data: UpdateDocumentTypeInput) {
+export async function updateDocumentType(id: string, input: UpdateDocumentTypeInput) {
+  const parsed = updateDocumentTypeSchema.safeParse(input);
+  if (!parsed.success) throw new Error(firstSchemaError(parsed.error));
+  const data: UpdateDocumentTypeData = parsed.data;
+
   const companyId = await getActiveCompanyId();
   const actor = await requireActor();
+  await assertDocTypeIdPermission(id, companyId, 'update');
 
   logger.debug('Actualizando tipo de documento', { data: { id } });
 
   try {
     // Perímetro de escritura: sólo tipos propios (un global lanza GLOBAL_DOCUMENT_TYPE_READ_ONLY).
-    await findScopedDocumentType(prisma, id, companyId, { id: true }, {}, 'write');
+    const current = await findScopedDocumentType(prisma, id, companyId, { id: true, applies: true }, {}, 'write');
 
     // Build update payload explicitly so Prisma can type-check it
     const updatePayload: Prisma.document_typesUpdateInput = {};
     if (data.name !== undefined) updatePayload.name = data.name;
-    if (data.applies !== undefined) updatePayload.applies = data.applies;
+    if (data.applies !== undefined) {
+      if (data.applies !== current.applies) {
+        // Las filas de documentos viven en una tabla por alcance: con archivos cargados quedarían en la tabla equivocada.
+        await assertNoUploadedDocuments(id, current.applies);
+        await assertDocTypePermission(data.applies, 'update');
+      }
+      updatePayload.applies = data.applies;
+    }
     if (data.equipment_type !== undefined) updatePayload.equipment_type = data.equipment_type;
     if (data.mandatory !== undefined) updatePayload.mandatory = data.mandatory;
     if (data.explired !== undefined) updatePayload.explired = data.explired;
@@ -134,14 +129,20 @@ export async function updateDocumentType(id: string, data: UpdateDocumentTypeInp
     if (data.description !== undefined) updatePayload.description = data.description;
     if (data.conditions !== undefined) updatePayload.conditions = data.conditions as Prisma.InputJsonValue[];
 
-    // withActor: el trigger `document_types_after_update` reconcilia alertas con el actor de sesión.
-    const updated = await withActor(actor, (tx) =>
-      tx.document_types.update({
+    const updated = await withActor(actor, async (tx) => {
+      const row = await tx.document_types.update({
         where: { id },
         data: updatePayload,
         select: { id: true },
-      })
-    );
+      });
+      // Cambiar condiciones/obligatoriedad/recurso afecta a toda la empresa: se refresca el
+      // status de ese tipo de recurso (y del anterior si el tipo cambió de `applies`).
+      await refreshCompanyStatus(tx, current.applies, companyId);
+      if (data.applies !== undefined && data.applies !== current.applies) {
+        await refreshCompanyStatus(tx, data.applies, companyId);
+      }
+      return row;
+    });
 
     logger.info('Tipo de documento actualizado', { data: { id: updated.id } });
     return updated;
@@ -151,30 +152,41 @@ export async function updateDocumentType(id: string, data: UpdateDocumentTypeInp
   }
 }
 
+/**
+ * Rechaza el cambio de alcance (`applies`) de un tipo que ya tiene documentos con archivo: las filas viven
+ * en `documents_employees` / `documents_equipment` / `documents_company` según el alcance, y mover el tipo
+ * las dejaría huérfanas en la tabla equivocada.
+ */
+async function assertNoUploadedDocuments(docTypeId: string, applies: document_applies): Promise<void> {
+  const where = { id_document_types: docTypeId, document_path: { not: null } };
+  const uploaded =
+    applies === document_applies.Persona
+      ? await prisma.documents_employees.count({ where })
+      : applies === document_applies.Equipos
+        ? await prisma.documents_equipment.count({ where })
+        : await prisma.documents_company.count({ where });
+  if (uploaded > 0) {
+    throw new Error(
+      `No se puede cambiar el alcance: el tipo tiene ${uploaded} documento(s) cargado(s). Cree un tipo nuevo o desactive este.`
+    );
+  }
+}
+
 // ============================================================================
 // STATUS DE RECURSOS
 // ============================================================================
 
 /**
- * Recalcula el status de un conjunto de recursos (empleados o equipos) dentro de una transacción.
- * Helper interno — no exportado.
- *
- * Ticket 712: delega en la función SQL `recalcular_status_documentacion`, que es la
- * única definición del status de documentación (la misma que usan el trigger de
- * documentos y las funciones de reconciliación por recurso). Antes esta función
- * tenía su propia copia de la fórmula, que contaba como faltantes los tipos
- * especiales que no le corresponden al recurso y no filtraba los archivados, por
- * lo que nunca podía dar 'Completo'.
- *
- * Retorna void en SQL, por lo que se invoca con `callVoid` (`$executeRaw`) y NO con `$queryRaw*`.
+ * Refresca el cache de status (`employees.status` / `vehicles.status`) de TODA la empresa para
+ * el tipo de recurso del documento. Lo escribe únicamente el motor de cumplimiento
+ * (`refreshDocumentStatus`): un cambio en un tipo (alta, edición, baja, alta lógica, borrado)
+ * altera lo que se exige a todos los recursos, no a un conjunto puntual. Los documentos de la
+ * empresa (`Empresa`) no tienen status cacheado.
  */
-async function recalculateResourceStatus(
-  tx: Prisma.TransactionClient,
-  resourceIds: string[],
-  resourceType: 'Persona' | 'Equipos'
-) {
-  if (resourceIds.length === 0) return;
-  await callVoid('recalcular_status_documentacion', [{ uuidArray: resourceIds }, resourceType], tx);
+async function refreshCompanyStatus(tx: Prisma.TransactionClient, applies: document_applies, companyId: string) {
+  if (applies === document_applies.Persona || applies === document_applies.Equipos) {
+    await refreshDocumentStatus(tx, applies, { companyId });
+  }
 }
 
 // ============================================================================
@@ -183,13 +195,14 @@ async function recalculateResourceStatus(
 
 /**
  * Desactiva un tipo de documento (soft delete via is_active = false).
- * Opcionalmente elimina las alertas vacías (sin documento subido) del tipo.
+ * Modelo derivado: no hay filas vacías que borrar; sólo se refresca el status de la empresa.
  */
-export async function deactivateDocumentType(docTypeId: string, options: { deleteEmptyAlerts: boolean }) {
+export async function deactivateDocumentType(docTypeId: string) {
   const companyId = await getActiveCompanyId();
   const actor = await requireActor();
+  await assertDocTypeIdPermission(docTypeId, companyId, 'update');
 
-  logger.info('Desactivando tipo de documento', { data: { docTypeId, options } });
+  logger.info('Desactivando tipo de documento', { data: { docTypeId } });
 
   try {
     return await withActor(actor, async (tx) => {
@@ -198,7 +211,7 @@ export async function deactivateDocumentType(docTypeId: string, options: { delet
         tx,
         docTypeId,
         companyId,
-        { id: true, applies: true, mandatory: true, is_active: true },
+        { id: true, applies: true, is_active: true },
         {},
         'write'
       );
@@ -209,60 +222,7 @@ export async function deactivateDocumentType(docTypeId: string, options: { delet
         data: { is_active: false },
       });
 
-      // Defensa en profundidad: aunque el tipo sea propio, sólo se tocan documentos de recursos
-      // de la empresa activa (relación employees/vehicles).
-      const employeeDocs = { id_document_types: docTypeId, employees: { company_id: companyId } };
-      const equipmentDocs = { id_document_types: docTypeId, vehicles: { company_id: companyId } };
-
-      let affectedResourceIds: string[] = [];
-
-      if (options.deleteEmptyAlerts && docType.mandatory) {
-        if (docType.applies === document_applies.Persona) {
-          const affected = await tx.documents_employees.findMany({
-            where: { ...employeeDocs, document_path: null },
-            select: { applies: true },
-          });
-          affectedResourceIds = affected.map((a) => a.applies).filter((id): id is string => id !== null);
-
-          await tx.documents_employees.deleteMany({
-            where: { ...employeeDocs, document_path: null },
-          });
-        } else if (docType.applies === document_applies.Equipos) {
-          const affected = await tx.documents_equipment.findMany({
-            where: { ...equipmentDocs, document_path: null },
-            select: { applies: true },
-          });
-          affectedResourceIds = affected.map((a) => a.applies).filter((id): id is string => id !== null);
-
-          await tx.documents_equipment.deleteMany({
-            where: { ...equipmentDocs, document_path: null },
-          });
-        } else {
-          await tx.documents_company.deleteMany({
-            where: { id_document_types: docTypeId, applies: companyId, document_path: null },
-          });
-        }
-      }
-
-      if (docType.applies !== document_applies.Empresa) {
-        if (!options.deleteEmptyAlerts || affectedResourceIds.length === 0) {
-          const resources =
-            docType.applies === document_applies.Persona
-              ? await tx.documents_employees.findMany({
-                  where: employeeDocs,
-                  select: { applies: true },
-                  distinct: ['applies'],
-                })
-              : await tx.documents_equipment.findMany({
-                  where: equipmentDocs,
-                  select: { applies: true },
-                  distinct: ['applies'],
-                });
-          affectedResourceIds = resources.map((r) => r.applies).filter((id): id is string => id !== null);
-        }
-
-        await recalculateResourceStatus(tx, affectedResourceIds, docType.applies as 'Persona' | 'Equipos');
-      }
+      await refreshCompanyStatus(tx, docType.applies, companyId);
 
       return { success: true };
     });
@@ -275,11 +235,12 @@ export async function deactivateDocumentType(docTypeId: string, options: { delet
 /**
  * Elimina permanentemente un tipo de documento.
  * Solo permitido si NO hay documentos subidos (document_path IS NOT NULL) asociados.
- * Elimina todas las alertas vacías y recalcula el status de los recursos afectados.
+ * Recalcula el status de los recursos de la empresa.
  */
 export async function hardDeleteDocumentType(docTypeId: string) {
   const companyId = await getActiveCompanyId();
   const actor = await requireActor();
+  await assertDocTypeIdPermission(docTypeId, companyId, 'update');
 
   logger.info('Eliminando permanentemente tipo de documento', { data: { docTypeId } });
 
@@ -317,28 +278,10 @@ export async function hardDeleteDocumentType(docTypeId: string) {
         );
       }
 
-      // Defensa en profundidad: las alertas se borran sólo para recursos de la empresa activa.
-      let affectedResourceIds: string[] = [];
-
-      if (docType.applies === document_applies.Persona) {
-        const where = { id_document_types: docTypeId, employees: { company_id: companyId } };
-        const affected = await tx.documents_employees.findMany({ where, select: { applies: true } });
-        affectedResourceIds = affected.map((a) => a.applies).filter((id): id is string => id !== null);
-        await tx.documents_employees.deleteMany({ where });
-      } else if (docType.applies === document_applies.Equipos) {
-        const where = { id_document_types: docTypeId, vehicles: { company_id: companyId } };
-        const affected = await tx.documents_equipment.findMany({ where, select: { applies: true } });
-        affectedResourceIds = affected.map((a) => a.applies).filter((id): id is string => id !== null);
-        await tx.documents_equipment.deleteMany({ where });
-      } else {
-        await tx.documents_company.deleteMany({ where: { id_document_types: docTypeId, applies: companyId } });
-      }
-
+      // El borrado cascadea (ON DELETE CASCADE) las filas del tipo: no hay filas vacías que limpiar a mano.
       await tx.document_types.delete({ where: { id: docTypeId } });
 
-      if (docType.applies !== document_applies.Empresa && affectedResourceIds.length > 0) {
-        await recalculateResourceStatus(tx, affectedResourceIds, docType.applies as 'Persona' | 'Equipos');
-      }
+      await refreshCompanyStatus(tx, docType.applies, companyId);
 
       return { success: true };
     });
@@ -350,13 +293,14 @@ export async function hardDeleteDocumentType(docTypeId: string) {
 
 /**
  * Reactiva un tipo de documento (is_active = true).
- * Opcionalmente recrea alertas pendientes para los recursos que no las tienen.
+ * Modelo derivado: no se crean filas pendientes; sólo se refresca el status de la empresa.
  */
-export async function reactivateDocumentType(docTypeId: string, options: { recreateAlerts: boolean }) {
+export async function reactivateDocumentType(docTypeId: string) {
   const companyId = await getActiveCompanyId();
   const actor = await requireActor();
+  await assertDocTypeIdPermission(docTypeId, companyId, 'update');
 
-  logger.info('Reactivando tipo de documento', { data: { docTypeId, options } });
+  logger.info('Reactivando tipo de documento', { data: { docTypeId } });
 
   try {
     return await withActor(actor, async (tx) => {
@@ -365,87 +309,18 @@ export async function reactivateDocumentType(docTypeId: string, options: { recre
         tx,
         docTypeId,
         companyId,
-        { id: true, applies: true, mandatory: true, special: true, conditions: true, down_document: true, is_active: true },
+        { id: true, applies: true, is_active: true },
         {},
         'write'
       );
       if (docType.is_active) throw new Error('Tipo de documento no encontrado o ya esta activo');
-
-      // Los tipos "Documento de baja" generan alertas tambien para recursos dados de
-      // baja; el resto solo para recursos activos.
-      const onlyActive = !docType.down_document;
 
       await tx.document_types.update({
         where: { id: docTypeId },
         data: { is_active: true },
       });
 
-      const newAlertResourceIds: string[] = [];
-
-      if (options.recreateAlerts && docType.mandatory) {
-        if (docType.applies === document_applies.Persona) {
-          const missing = await tx.employees.findMany({
-            where: {
-              company_id: companyId,
-              ...(onlyActive ? { is_active: true } : {}),
-              documents_employees: { none: { id_document_types: docTypeId } },
-            },
-            select: { id: true },
-          });
-
-          if (missing.length > 0) {
-            await tx.documents_employees.createMany({
-              data: missing.map((emp) => ({
-                id_document_types: docTypeId,
-                applies: emp.id,
-                state: 'pendiente' as const,
-                is_active: true,
-              })),
-            });
-            newAlertResourceIds.push(...missing.map((emp) => emp.id));
-          }
-        } else if (docType.applies === document_applies.Equipos) {
-          const missing = await tx.vehicles.findMany({
-            where: {
-              company_id: companyId,
-              ...(onlyActive ? { is_active: true } : {}),
-              documents_equipment: { none: { id_document_types: docTypeId } },
-            },
-            select: { id: true },
-          });
-
-          if (missing.length > 0) {
-            await tx.documents_equipment.createMany({
-              data: missing.map((veh) => ({
-                id_document_types: docTypeId,
-                applies: veh.id,
-                state: 'pendiente' as const,
-                is_active: true,
-              })),
-            });
-            newAlertResourceIds.push(...missing.map((veh) => veh.id));
-          }
-        } else {
-          const existing = await tx.documents_company.findFirst({
-            where: { id_document_types: docTypeId, applies: companyId },
-            select: { id: true },
-          });
-          if (!existing) {
-            await tx.documents_company.create({
-              data: {
-                id_document_types: docTypeId,
-                applies: companyId,
-                state: 'pendiente',
-                is_active: true,
-              },
-            });
-          }
-        }
-      }
-
-      if (docType.applies !== document_applies.Empresa && newAlertResourceIds.length > 0) {
-        await recalculateResourceStatus(tx, newAlertResourceIds, docType.applies as 'Persona' | 'Equipos');
-      }
+      await refreshCompanyStatus(tx, docType.applies, companyId);
 
       return { success: true };
     });

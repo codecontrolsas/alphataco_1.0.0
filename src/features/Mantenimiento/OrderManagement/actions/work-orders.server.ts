@@ -14,9 +14,32 @@ import { requireServerAuthProfile } from '@/shared/actions/auth.actions';
 import { INVALIDATION_MAP } from '@/shared/constants/cache-invalidation-map';
 import { prisma } from '@/shared/lib/prisma';
 import { invalidateCacheTags } from '@/shared/utils/cache-invalidation';
-import { assertOrderInActiveCompany } from './perimeter';
+import { z } from 'zod';
+import {
+  lockEditableOrder,
+  OrderManagementError,
+  requireOrderManagementPermission,
+  requireOrderManagementPermissions,
+  toFailure,
+} from './access';
+import {
+  applyChiefCommentUpdates,
+  applyDescriptionUpdates,
+  applyItemAdds,
+  applyItemDeletes,
+  applyRepairTypeUpdates,
+  requiredActionsForChanges,
+} from './item-changes';
+import {
+  orderChangeSetSchema,
+  orderIdSchema,
+  plannedDatesSchema,
+  wizardSectorAssignmentsSchema,
+  wizardSectorOrderSchema,
+} from '../schemas/order-changes';
+import { assertOrderInActiveCompany, assertSectorInCompany } from './perimeter';
 import { DIAGNOSTICO_REPAIR_TYPE_ID } from '../../utils/constants';
-import type { OrderChangeSet } from './items.server';
+import type { OrderChangeSet } from '../schemas/order-changes';
 import { getOrderGenerationPreview } from './queries.server';
 import { withMaintenanceActor } from '@/features/Mantenimiento/shared/maintenance-actor';
 import { nextWorkOrderSequence } from '@/features/Mantenimiento/shared/order-numbering';
@@ -28,6 +51,28 @@ const logger = new Logger('OrderManagement/work-orders');
  * Crea una OT por sector, con sus work_order_items y work_order_item_repairs.
  */
 export async function generateWorkOrdersForOrder(
+  orderId: string,
+  dates: { plannedStartDate: string; plannedEndDate: string }
+): Promise<GenerateWorkOrdersResult> {
+  try {
+    // Permiso: generar OTs es un alta.
+    await requireOrderManagementPermission('create');
+    orderIdSchema.parse(orderId);
+    const validDates = plannedDatesSchema.parse(dates);
+    const workOrders = await generateWorkOrdersCore(orderId, validDates);
+    return { ok: true, workOrders };
+  } catch (error) {
+    if (error instanceof z.ZodError) return { ok: false, message: error.issues[0]?.message ?? 'Datos inválidos' };
+    return toFailure(error);
+  }
+}
+
+export type GenerateWorkOrdersResult =
+  | { ok: true; workOrders: Array<{ orderNumber: string; sectorName: string; itemCount: number }> }
+  | { ok: false; message: string };
+
+/** Núcleo sin chequeo de permisos: lo llaman las dos acciones exportadas, que ya lo verificaron. */
+async function generateWorkOrdersCore(
   orderId: string,
   dates: { plannedStartDate: string; plannedEndDate: string }
 ) {
@@ -90,6 +135,26 @@ export async function generateWorkOrdersForOrder(
 
       // Crear la OT y sus items en una transacción por sector
       const workOrder = await withMaintenanceActor(profile.id, async (tx) => {
+        // Orden de locks pedido → OT; además rechaza pedidos en estado terminal.
+        await lockEditableOrder(tx, orderId);
+
+        // Con el pedido lockeado se re-verifica que los ítems sigan elegibles: un doble click o
+        // dos usuarios a la vez no pueden generar dos OTs para los mismos ítems.
+        const sectorItemIds = sector.items.map((i) => i.id);
+        const stillEligible = await tx.maintenance_order_items.count({
+          where: {
+            id: { in: sectorItemIds },
+            maintenance_order_id: orderId,
+            work_order_id: null,
+            is_rejected: false,
+          },
+        });
+        if (stillEligible !== sectorItemIds.length) {
+          throw new OrderManagementError(
+            'Algunos ítems ya tienen una orden de trabajo generada. Actualice la pantalla e intente de nuevo.'
+          );
+        }
+
         // El número de secuencia se toma DENTRO de la transacción y por empresa: el
         // `max()+1` leído afuera repetía el número entre generaciones simultáneas.
         const sequenceNumber = await nextWorkOrderSequence(tx, companyId);
@@ -177,7 +242,7 @@ export async function generateWorkOrdersForOrder(
 
         // Actualizar maintenance_order_items con work_order_id
         await tx.maintenance_order_items.updateMany({
-          where: { id: { in: itemIds } },
+          where: { id: { in: itemIds }, maintenance_order_id: orderId },
           data: { work_order_id: wo.id },
         });
 
@@ -296,122 +361,63 @@ export async function generateWorkOrdersForOrder(
  * 3. Actualiza el sector_sequence_order de todos los items
  * 4. Genera las OTs agrupadas por sector
  */
+export type SetupAndGenerateResult =
+  | { ok: true; workOrders: Array<{ orderNumber: string; sectorName: string; itemCount: number }> }
+  | { ok: false; message: string };
+
 export async function setupAndGenerateWorkOrders(
   orderId: string,
-  itemChanges: OrderChangeSet,
-  sectorAssignments: Array<{ itemIds: string[]; sectorId: string }>,
-  sectorOrder: Array<{ sectorId: string; sequenceOrder: number }>,
-  dates: { plannedStartDate: string; plannedEndDate: string }
-) {
-  // Perímetro: el pedido tiene que ser de la empresa activa.
-  await assertOrderInActiveCompany(orderId);
-
-  const profile = await requireServerAuthProfile();
-
-  logger.info('Wizard: iniciando setup y generacion de OTs', {
-    data: {
-      orderId,
-      itemChanges: {
-        adds: itemChanges.adds.length,
-        deletes: itemChanges.deletes.length,
-        repairTypeUpdates: itemChanges.repairTypeUpdates.length,
-        descriptionUpdates: itemChanges.descriptionUpdates.length,
-      },
-      sectorAssignments: sectorAssignments.length,
-      sectorOrder: sectorOrder.length,
-    },
-  });
-
+  rawItemChanges: OrderChangeSet,
+  rawSectorAssignments: Array<{ itemIds: string[]; sectorId: string }>,
+  rawSectorOrder: Array<{ sectorId: string; sequenceOrder: number }>,
+  rawDates: { plannedStartDate: string; plannedEndDate: string }
+): Promise<SetupAndGenerateResult> {
   try {
+    orderIdSchema.parse(orderId);
+    const itemChanges = orderChangeSetSchema.parse(rawItemChanges);
+    const sectorAssignments = wizardSectorAssignmentsSchema.parse(rawSectorAssignments);
+    const sectorOrder = wizardSectorOrderSchema.parse(rawSectorOrder);
+    const dates = plannedDatesSchema.parse(rawDates);
+
+    // Permisos: generar es un alta; además cada tipo de cambio exige su acción. Asignar sectores
+    // es una edición.
+    await requireOrderManagementPermissions([
+      'create',
+      ...requiredActionsForChanges(itemChanges),
+      ...(sectorAssignments.length > 0 ? (['update'] as const) : []),
+    ]);
+
+    // Perímetro: el pedido tiene que ser de la empresa activa.
+    await assertOrderInActiveCompany(orderId);
+
+    const profile = await requireServerAuthProfile();
+
+    logger.info('Wizard: iniciando setup y generacion de OTs', {
+      data: {
+        orderId,
+        itemChanges: {
+          adds: itemChanges.adds.length,
+          deletes: itemChanges.deletes.length,
+          repairTypeUpdates: itemChanges.repairTypeUpdates.length,
+          descriptionUpdates: itemChanges.descriptionUpdates.length,
+        },
+        sectorAssignments: sectorAssignments.length,
+        sectorOrder: sectorOrder.length,
+      },
+    });
+
     await withMaintenanceActor(profile.id, async (tx) => {
+      await lockEditableOrder(tx, orderId);
       const companyId = await getMaintenanceOrderCompanyId(tx, orderId);
-      // ──────────────────────────────────────────────
-      // 1. APLICAR CAMBIOS DE ITEMS
-      // ──────────────────────────────────────────────
 
-      // 1a. DELETES
-      for (const itemId of itemChanges.deletes) {
-        const item = await tx.maintenance_order_items.findUnique({
-          where: { id: itemId },
-          select: { id: true, maintenance_request_item_id: true, is_diagnostico: true },
-        });
+      // 1. APLICAR CAMBIOS DE ITEMS (mismas reglas de perímetro que `saveOrderChanges`)
+      await applyItemDeletes(tx, orderId, itemChanges.deletes);
+      await applyItemAdds(tx, orderId, companyId, itemChanges.adds);
+      await applyRepairTypeUpdates(tx, orderId, companyId, itemChanges.repairTypeUpdates);
+      await applyDescriptionUpdates(tx, orderId, itemChanges.descriptionUpdates);
+      await applyChiefCommentUpdates(tx, orderId, profile.id, itemChanges.chiefCommentUpdates);
 
-        if (item && (!item.maintenance_request_item_id || item.is_diagnostico)) {
-          await tx.maintenance_order_items.delete({ where: { id: itemId } });
-        }
-      }
-
-      // 1b. ADDS - Guardar nuevos items y retornar IDs reales
-      const tempToRealIdMap = new Map<number, string>(); // index → real id
-      for (let i = 0; i < itemChanges.adds.length; i++) {
-        const add = itemChanges.adds[i];
-        const newItem = await tx.maintenance_order_items.create({
-          data: {
-            maintenance_order_id: orderId,
-            company_id: companyId,
-            description: add.description,
-            repair_type_id: add.repairTypeIds[0] ?? null,
-          },
-        });
-
-        tempToRealIdMap.set(i, newItem.id);
-
-        if (add.repairTypeIds.length > 0) {
-          await tx.maintenance_order_item_repair_types.createMany({
-            data: add.repairTypeIds.map((repairTypeId) => ({
-              maintenance_order_item_id: newItem.id,
-              repair_type_id: repairTypeId,
-            })),
-            skipDuplicates: true,
-          });
-        }
-      }
-
-      // 1c. REPAIR TYPE UPDATES
-      for (const update of itemChanges.repairTypeUpdates) {
-        await tx.maintenance_order_items.update({
-          where: { id: update.itemId },
-          data: { repair_type_id: update.repairTypeIds[0] ?? null },
-        });
-
-        await tx.maintenance_order_item_repair_types.deleteMany({
-          where: { maintenance_order_item_id: update.itemId },
-        });
-
-        if (update.repairTypeIds.length > 0) {
-          await tx.maintenance_order_item_repair_types.createMany({
-            data: update.repairTypeIds.map((repairTypeId) => ({
-              maintenance_order_item_id: update.itemId,
-              repair_type_id: repairTypeId,
-            })),
-            skipDuplicates: true,
-          });
-        }
-      }
-
-      // 1d. DESCRIPTION UPDATES
-      for (const descUpdate of itemChanges.descriptionUpdates) {
-        await tx.maintenance_order_items.update({
-          where: { id: descUpdate.itemId },
-          data: { description: descUpdate.description },
-        });
-      }
-
-      // 1e. CHIEF COMMENT UPDATES
-      for (const commentUpdate of itemChanges.chiefCommentUpdates) {
-        await tx.maintenance_order_items.update({
-          where: { id: commentUpdate.itemId },
-          data: {
-            workshop_chief_comment: commentUpdate.comment,
-            workshop_chief_comment_by: profile.id,
-          },
-        });
-      }
-
-      // ──────────────────────────────────────────────
       // 2. ASIGNAR ITEMS A SECTORES + CREAR DIAGNOSTICO
-      // ──────────────────────────────────────────────
-
       // Backend safeguard: normalize sector order considering sectors that already have work orders
       const existingSequences = await tx.maintenance_order_items.findMany({
         where: {
@@ -439,13 +445,15 @@ export async function setupAndGenerateWorkOrders(
       }
 
       for (const assignment of sectorAssignments) {
+        // El sector llega del cliente: tiene que ser de la empresa del pedido.
+        await assertSectorInCompany(assignment.sectorId, companyId);
         const seqOrder = sectorSequenceMap.get(assignment.sectorId) ?? 1;
 
         // Filtrar IDs reales (descartar temp IDs que no se pudieron resolver)
-        const realIds = assignment.itemIds.filter((id) => !id.startsWith('temp-'));
+        const realIds = assignment.itemIds.filter((id) => z.string().uuid().safeParse(id).success);
         if (realIds.length > 0) {
           await tx.maintenance_order_items.updateMany({
-            where: { id: { in: realIds } },
+            where: { id: { in: realIds }, maintenance_order_id: orderId },
             data: {
               assigned_sector_id: assignment.sectorId,
               sector_sequence_order: seqOrder,
@@ -507,20 +515,20 @@ export async function setupAndGenerateWorkOrders(
       }
     });
 
-    // ──────────────────────────────────────────────
     // 3. GENERAR OTs (fuera de la transacción anterior para evitar timeouts)
-    // ──────────────────────────────────────────────
-
-    const result = await generateWorkOrdersForOrder(orderId, dates);
+    const workOrders = await generateWorkOrdersCore(orderId, dates);
 
     logger.info('Wizard: setup y generacion completados', {
-      data: { orderId, workOrdersCreated: result.length },
+      data: { orderId, workOrdersCreated: workOrders.length },
     });
 
     await invalidateCacheTags(INVALIDATION_MAP.setupAndGenerateWorkOrders);
-    return result;
+    return { ok: true, workOrders };
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { ok: false, message: error.issues[0]?.message ?? 'Los datos enviados son inválidos' };
+    }
     logger.error('Error en wizard setup y generacion', { data: { error, orderId } });
-    throw error;
+    return toFailure(error);
   }
 }

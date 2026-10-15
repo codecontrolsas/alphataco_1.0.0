@@ -1,6 +1,5 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useState } from 'react';
 import { ConflictResolutionModal } from './ConflictResolutionModal';
 import { DiagramMassiveForm } from './DiagramMassiveForm';
@@ -33,41 +32,32 @@ function DiagramMassive() {
     setResults(null);
   };
 
+  // La superficie y el título los pone la vista ("Carga masiva"); acá solo los pasos del circuito.
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Carga Masiva</CardTitle>
-          <div className="text-sm text-muted-foreground">
-            Asigna un patrón de diagrama cíclico o una novedad puntual a múltiples empleados en un rango de fechas.
-          </div>
-        </CardHeader>
-        <CardContent>
-          <StepIndicator currentStep={currentStep} />
+      <StepIndicator currentStep={currentStep} />
 
-          {currentStep === 'form' && (
-            <DiagramMassiveForm
-              onConflictsFound={handleConflictsFound}
-              onProcessingComplete={handleProcessingComplete}
-              loading={loading}
-              setLoading={setLoading}
-            />
-          )}
+      {currentStep === 'form' && (
+        <DiagramMassiveForm
+          onConflictsFound={handleConflictsFound}
+          onProcessingComplete={handleProcessingComplete}
+          loading={loading}
+          setLoading={setLoading}
+        />
+      )}
 
-          {currentStep === 'conflicts' && conflicts && formData && (
-            <ConflictResolutionModal
-              conflicts={conflicts}
-              formData={formData}
-              onCancel={handleStartOver}
-              onProcessingComplete={handleProcessingComplete}
-            />
-          )}
+      {currentStep === 'conflicts' && conflicts && formData && (
+        <ConflictResolutionModal
+          conflicts={conflicts}
+          formData={formData}
+          onCancel={handleStartOver}
+          onProcessingComplete={handleProcessingComplete}
+        />
+      )}
 
-          {currentStep === 'results' && results && (
-            <DiagramMassiveResults results={results} onStartOver={handleStartOver} />
-          )}
-        </CardContent>
-      </Card>
+      {currentStep === 'results' && results && (
+        <DiagramMassiveResults results={results} onStartOver={handleStartOver} />
+      )}
     </div>
   );
 }

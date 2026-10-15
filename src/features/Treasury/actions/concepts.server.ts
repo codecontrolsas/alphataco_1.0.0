@@ -36,13 +36,17 @@ export type TreasuryConceptRow = Awaited<ReturnType<typeof getTreasuryConcepts>>
 
 async function findDuplicate(companyId: string, name: string, exceptId?: string) {
   return prisma.treasury_concepts.findFirst({
-    where: { company_id: companyId, name: { equals: name, mode: 'insensitive' }, ...(exceptId ? { id: { not: exceptId } } : {}) },
+    where: {
+      company_id: companyId,
+      name: { equals: name, mode: 'insensitive' },
+      ...(exceptId ? { id: { not: exceptId } } : {}),
+    },
     select: { name: true },
   });
 }
 
 export async function createTreasuryConcept(values: TreasuryConceptFormValues): Promise<ActionResult<{ id: string }>> {
-  if (!(await checkPermissionServer('tesoreria', 'config-tesoreria', 'update'))) return fail(NO_PERMISSION);
+  if (!(await checkPermissionServer('tesoreria', 'config-tesoreria', 'create'))) return fail(NO_PERMISSION);
   const parsed = treasuryConceptFormSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
   const companyId = await getActiveCompanyId();
@@ -93,7 +97,10 @@ export async function setTreasuryConceptActive(id: string, isActive: boolean): P
   if (!UUID_RE.test(id)) return fail(NOT_FOUND);
   const companyId = await getActiveCompanyId();
   try {
-    const { count } = await prisma.treasury_concepts.updateMany({ where: { id, company_id: companyId }, data: { is_active: isActive } });
+    const { count } = await prisma.treasury_concepts.updateMany({
+      where: { id, company_id: companyId },
+      data: { is_active: isActive },
+    });
     if (count === 0) return fail(NOT_FOUND);
     revalidateTreasury();
     return ok(null);
@@ -104,7 +111,7 @@ export async function setTreasuryConceptActive(id: string, isActive: boolean): P
 
 /** Un concepto usado no se borra: se desactiva. */
 export async function deleteTreasuryConcept(id: string): Promise<ActionResult> {
-  if (!(await checkPermissionServer('tesoreria', 'config-tesoreria', 'update'))) return fail(NO_PERMISSION);
+  if (!(await checkPermissionServer('tesoreria', 'config-tesoreria', 'delete'))) return fail(NO_PERMISSION);
   if (!UUID_RE.test(id)) return fail(NOT_FOUND);
   const companyId = await getActiveCompanyId();
   try {

@@ -2,15 +2,11 @@
  * Empleados: ~120 legajos repartidos por puesto, con convenio, categoria, diagrama de trabajo,
  * centro de costo y clientes asignados. Diez estan dados de baja.
  *
- * Al insertarlos, los triggers de la base generan sus documentos pendientes, las filas de
- * `companies_employees` y las de `contractor_employee` (desde `allocated_to`).
+ * Al insertarlos, los triggers de la base generan sus documentos pendientes. Las filas de
+ * `contractor_employee` se insertan acá, explícitas (desde `allocated_to`): ya no hay trigger
+ * que las derive. `companies_employees` dejó de escribirse (la empresa es `employees.company_id`).
  */
 import type { Prisma } from '../../../src/generated/prisma/client.ts';
-import type { Ctx } from '../lib/ctx.ts';
-import { insertMany } from '../lib/ctx.ts';
-import { demoId } from '../lib/ids.ts';
-import { corporateEmail, makePerson } from '../lib/people.ts';
-import { pick, sample, weighted } from '../lib/random.ts';
 import {
   APTITUDES,
   CATEGORIES,
@@ -22,6 +18,11 @@ import {
   type WorkDiagramKey,
 } from '../data/catalog.ts';
 import { ACTIVE_CUSTOMERS, EXTERNAL_CUSTOMERS, customerId, demandOf } from '../data/customers.ts';
+import type { Ctx } from '../lib/ctx.ts';
+import { insertMany } from '../lib/ctx.ts';
+import { demoId } from '../lib/ids.ts';
+import { corporateEmail, makePerson } from '../lib/people.ts';
+import { pick, sample, weighted } from '../lib/random.ts';
 import { NEUQUEN_PROVINCE } from './catalogs.ts';
 
 export interface DemoEmployee {
@@ -61,16 +62,29 @@ const WORKSHOP: PositionKey[] = ['mecanico', 'electricista', 'gomero', 'jefe_tal
 export function assignCustomers(ctx: Ctx, type: string | null): string[] {
   const options = ACTIVE_CUSTOMERS.map((c) => [c, demandOf(c, type)] as const).filter(([, d]) => d > 0);
   if (!options.length) return sample(ctx.faker, EXTERNAL_CUSTOMERS, 1).map(customerId);
-  const first = weighted(ctx.faker, options.map(([c, d]) => [c, d] as [typeof c, number]));
+  const first = weighted(
+    ctx.faker,
+    options.map(([c, d]) => [c, d] as [typeof c, number])
+  );
   const rest = options.filter(([c]) => c !== first);
-  const second = rest.length && ctx.faker.datatype.boolean({ probability: 0.25 }) ? weighted(ctx.faker, rest.map(([c, d]) => [c, d] as [typeof c, number])) : null;
+  const second =
+    rest.length && ctx.faker.datatype.boolean({ probability: 0.25 })
+      ? weighted(
+          ctx.faker,
+          rest.map(([c, d]) => [c, d] as [typeof c, number])
+        )
+      : null;
   return [first, ...(second ? [second] : [])].map(customerId);
 }
 
 function categoryFor(ctx: Ctx, position: PositionKey): string {
   switch (position) {
     case 'chofer':
-      return weighted(ctx.faker, [['chofer1', 60], ['chofer3', 30], ['camion_1', 10]]);
+      return weighted(ctx.faker, [
+        ['chofer1', 60],
+        ['chofer3', 30],
+        ['camion_1', 10],
+      ]);
     case 'operador':
       return 'operador';
     case 'ayudante':
@@ -85,12 +99,19 @@ function categoryFor(ctx: Ctx, position: PositionKey): string {
     case 'tecnico_hse':
       return 'supervisor';
     default:
-      return weighted(ctx.faker, [['admin_a', 50], ['admin_b', 50]]);
+      return weighted(ctx.faker, [
+        ['admin_a', 50],
+        ['admin_b', 50],
+      ]);
   }
 }
 
 function diagramFor(ctx: Ctx, position: PositionKey): WorkDiagramKey {
-  if (OPERATIONS.includes(position)) return weighted(ctx.faker, [['14x14', 55], ['7x7', 45]]);
+  if (OPERATIONS.includes(position))
+    return weighted(ctx.faker, [
+      ['14x14', 55],
+      ['7x7', 45],
+    ]);
   if (WORKSHOP.includes(position)) return '6x1';
   if (position === 'tecnico_hse') return '7x7';
   return '5x2';
@@ -99,7 +120,10 @@ function diagramFor(ctx: Ctx, position: PositionKey): WorkDiagramKey {
 function costCenterFor(ctx: Ctx, position: PositionKey): string {
   if (WORKSHOP.includes(position)) return 'taller';
   if (['administrativo', 'analista_rrhh'].includes(position)) return 'admin';
-  return weighted(ctx.faker, [['anelo', 60], ['rincon', 40]]);
+  return weighted(ctx.faker, [
+    ['anelo', 60],
+    ['rincon', 40],
+  ]);
 }
 
 export async function seedEmployees(ctx: Ctx): Promise<DemoEmployee[]> {
@@ -111,11 +135,22 @@ export async function seedEmployees(ctx: Ctx): Promise<DemoEmployee[]> {
 
   let file = 1000;
   const positions = POSITIONS.flatMap((p) => Array.from({ length: POSITION_HEADCOUNT[p.key] }, () => p));
-  const inactiveIdx = new Set(sample(faker, positions.map((_, i) => i).filter((i) => positions[i].key !== 'jefe_taller'), 10));
+  const inactiveIdx = new Set(
+    sample(
+      faker,
+      positions.map((_, i) => i).filter((i) => positions[i].key !== 'jefe_taller'),
+      10
+    )
+  );
 
   for (const [index, pos] of positions.entries()) {
     file += faker.number.int({ min: 1, max: 4 });
-    const person = makePerson(faker, usedDni, { today: cal.today, female: ['administrativo', 'analista_rrhh', 'tecnico_hse'].includes(pos.key) ? faker.datatype.boolean({ probability: 0.6 }) : undefined });
+    const person = makePerson(faker, usedDni, {
+      today: cal.today,
+      female: ['administrativo', 'analista_rrhh', 'tecnico_hse'].includes(pos.key)
+        ? faker.datatype.boolean({ probability: 0.6 })
+        : undefined,
+    });
     const id = demoId('employee', index);
     const active = !inactiveIdx.has(index);
     // Antiguedad: la mayoria entre 1 y 10 años; algunos ingresos recientes.
@@ -134,7 +169,13 @@ export async function seedEmployees(ctx: Ctx): Promise<DemoEmployee[]> {
     const city = pick(faker, neuquenCities).id;
     const email = corporateEmail(person.firstname, person.lastname);
     const contract =
-      admission > -90 ? 'prueba' : weighted(faker, [['indeterminado', 88], ['plazo_fijo', 9], ['eventual', 3]]);
+      admission > -90
+        ? 'prueba'
+        : weighted(faker, [
+            ['indeterminado', 88],
+            ['plazo_fijo', 9],
+            ['eventual', 3],
+          ]);
 
     employees.push({
       id,
@@ -170,10 +211,23 @@ export async function seedEmployees(ctx: Ctx): Promise<DemoEmployee[]> {
       nationality: 'Argentina',
       birthplace: demoId('country', 'Argentina'),
       gender: person.gender,
-      marital_status: weighted(faker, [['Casado', 40], ['Soltero', 35], ['Union_de_hecho', 18], ['Divorciado', 7]]),
+      marital_status: weighted(faker, [
+        ['Casado', 40],
+        ['Soltero', 35],
+        ['Union_de_hecho', 18],
+        ['Divorciado', 7],
+      ]),
       level_of_education: OPERATIONS.includes(pos.key)
-        ? weighted(faker, [['Secundario', 75], ['Primario', 15], ['Terciario', 10]])
-        : weighted(faker, [['Terciario', 40], ['Universitario', 45], ['Secundario', 15]]),
+        ? weighted(faker, [
+            ['Secundario', 75],
+            ['Primario', 15],
+            ['Terciario', 10],
+          ])
+        : weighted(faker, [
+            ['Terciario', 40],
+            ['Universitario', 45],
+            ['Secundario', 15],
+          ]),
       street: person.street,
       street_number: person.streetNumber,
       province: BigInt(NEUQUEN_PROVINCE),
@@ -184,7 +238,9 @@ export async function seedEmployees(ctx: Ctx): Promise<DemoEmployee[]> {
       file: String(file),
       normal_hours: OPERATIONS.includes(pos.key) ? '12' : '8',
       date_of_admission: cal.day(admission),
-      affiliate_status: ['jefe_base', 'jefe_taller', 'supervisor'].includes(pos.key) ? 'Fuera_de_convenio' : 'Dentro_de_convenio',
+      affiliate_status: ['jefe_base', 'jefe_taller', 'supervisor'].includes(pos.key)
+        ? 'Fuera_de_convenio'
+        : 'Dentro_de_convenio',
       hierarchical_position: demoId('hierarchy', pos.hierarchy[0]),
       company_position: demoId('position', pos.key),
       workflow_diagram: demoId('work_diagram', diagram),
@@ -198,12 +254,30 @@ export async function seedEmployees(ctx: Ctx): Promise<DemoEmployee[]> {
       company_id: company.id,
       is_active: active,
       termination_date: terminated === null ? null : cal.day(terminated),
-      reason_for_termination: terminated === null ? null : weighted(faker, [['Renuncia', 50], ['Despido_sin_causa', 20], ['Fin_de_contrato', 20], ['Acuerdo_de_partes', 10]]),
+      reason_for_termination:
+        terminated === null
+          ? null
+          : weighted(faker, [
+              ['Renuncia', 50],
+              ['Despido_sin_causa', 20],
+              ['Fin_de_contrato', 20],
+              ['Acuerdo_de_partes', 10],
+            ]),
       created_at: cal.at(Math.max(admission, -1500), 10),
     });
   }
 
   await insertMany(rows, (chunk) => tx.employees.createMany({ data: chunk }), 40);
+
+  // Afectaciones a clientes: pivote explícita, en sincronía con `allocated_to`.
+  const contractorLinks = employees.flatMap((e) =>
+    e.customers.map((contractorId) => ({ employee_id: e.id, contractor_id: contractorId }))
+  );
+  await insertMany(
+    contractorLinks,
+    (chunk) => tx.contractor_employee.createMany({ data: chunk, skipDuplicates: true }),
+    500
+  );
 
   // Aptitudes tecnicas segun el puesto.
   const aptitudes = employees.flatMap((e) =>

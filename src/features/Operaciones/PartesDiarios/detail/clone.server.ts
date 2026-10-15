@@ -7,7 +7,8 @@ import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import moment from 'moment';
 import { findCloneConflicts, formatUtcTime, type CloneConflictsByDate } from '../lib/clone-conflicts';
-import { assertDailyReportInCompany, filterRowsInCompany } from './lib/row-query';
+import { resolveCloneRowIds } from './lib/clone-helpers';
+import { reconcileRowResourceStatus } from '../lib/row-resource-status';
 import { createRowRelations, type EmployeeInput } from './mutations.server';
 
 const logger = new Logger('features/Operaciones/PartesDiarios/detail/clone');
@@ -100,26 +101,13 @@ export async function cloneDailyReportRows(rowIds: string[], targetDates: string
     // sin pasar por la UI, así que rowIds/cloneAllFromReportId no son de fiar por sí solos.
     const companyId = await getActiveCompanyId();
 
-    // Modo "clonar todo": si rowIds está vacío pero se proporcionó un dailyReportId,
-    // buscar todas las filas activas del parte (con filtro opcional por tipo de servicio)
-    let resolvedRowIds: string[];
-    if (rowIds.length === 0) {
-      if (!options.cloneAllFromReportId) {
-        return { createdReportIds: [], clonedRowCount: 0 };
-      }
-      await assertDailyReportInCompany(options.cloneAllFromReportId, companyId);
-      const allRows = await prisma.dailyreportrows.findMany({
-        where: {
-          daily_report_id: options.cloneAllFromReportId,
-          ...(options.typeServiceFilter?.length ? { type_service: { in: options.typeServiceFilter } } : {}),
-        },
-        select: { id: true },
-      });
-      resolvedRowIds = allRows.map((r) => r.id);
-    } else {
-      // Perímetro: sólo se clonan las filas que realmente cuelgan de la empresa activa.
-      resolvedRowIds = await filterRowsInCompany(rowIds, companyId);
-    }
+    // Modo "clonar todo" (rowIds vacío + cloneAllFromReportId) o selección acotada a la empresa activa.
+    const resolvedRowIds = await resolveCloneRowIds(
+      companyId,
+      rowIds,
+      options.cloneAllFromReportId,
+      options.typeServiceFilter
+    );
 
     if (resolvedRowIds.length === 0) {
       return { createdReportIds: [], clonedRowCount: 0 };
@@ -226,6 +214,7 @@ export async function cloneDailyReportRows(rowIds: string[], targetDates: string
 
       // Clonar todas las filas para esta fecha en una transacción
       await withSessionActor(async (tx) => {
+        const newRowIds: string[] = [];
         for (const originalRow of rowsForThisDate) {
           // Determinar empleados a copiar (solo activos)
           const employeesToCopy: EmployeeInput[] = includeEmployees
@@ -296,8 +285,11 @@ export async function cloneDailyReportRows(rowIds: string[], targetDates: string
             customerEquipmentToCopy
           );
 
+          newRowIds.push(newRowId);
           totalCloned++;
         }
+        // Estado definitivo con la fórmula única (flags del ítem), una sola sentencia para todas las líneas.
+        await reconcileRowResourceStatus(tx, newRowIds);
       });
     }
 
@@ -351,23 +343,7 @@ export async function getCloneConflicts(
     const companyId = await getActiveCompanyId();
 
     // 1. Resolver rows efectivas (mismo flujo que el clone)
-    let effectiveRowIds: string[];
-    if (rowIds.length === 0) {
-      if (!cloneAllFromReportId) {
-        return { conflicts: {}, totalCount: 0, skipMap: {} };
-      }
-      await assertDailyReportInCompany(cloneAllFromReportId, companyId);
-      const allRows = await prisma.dailyreportrows.findMany({
-        where: {
-          daily_report_id: cloneAllFromReportId,
-          ...(typeServiceFilter?.length ? { type_service: { in: typeServiceFilter } } : {}),
-        },
-        select: { id: true },
-      });
-      effectiveRowIds = allRows.map((r) => r.id);
-    } else {
-      effectiveRowIds = await filterRowsInCompany(rowIds, companyId);
-    }
+    const effectiveRowIds = await resolveCloneRowIds(companyId, rowIds, cloneAllFromReportId, typeServiceFilter);
 
     if (effectiveRowIds.length === 0) {
       return { conflicts: {}, totalCount: 0, skipMap: {} };

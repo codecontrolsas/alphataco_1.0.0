@@ -25,12 +25,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatArgentinaDay } from '@/features/Treasury/lib/today';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { Logger } from '@/lib/logger';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, Circle, CircleAlert, Download, RefreshCw, Trash2, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { useInvalidatePreEmployeeLists } from '../hooks/useInvalidatePreEmployeeLists';
 import {
   deletePreEmployeeDocument,
   getPreEmployeeDocumentChecklist,
@@ -54,6 +55,7 @@ interface PreEmployeeDocumentChecklistProps {
  */
 export function PreEmployeeDocumentChecklist({ preEmployeeId, readOnly = false }: PreEmployeeDocumentChecklistProps) {
   const queryClient = useQueryClient();
+  const invalidateLists = useInvalidatePreEmployeeLists();
   const [uploadTarget, setUploadTarget] = useState<PreEmployeeChecklistItem | null>(null);
   // Eliminar borra la fila y el archivo del storage: se confirma antes.
   const [deleteTarget, setDeleteTarget] = useState<PreEmployeeChecklistItem | null>(null);
@@ -68,7 +70,11 @@ export function PreEmployeeDocumentChecklist({ preEmployeeId, readOnly = false }
     queryFn: () => getPreEmployeeDocumentChecklist(preEmployeeId),
   });
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['pre-employee-documents', preEmployeeId] });
+  // También la lista de candidatos: la columna Documentos (X/Y) depende de lo cargado.
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['pre-employee-documents', preEmployeeId] });
+    invalidateLists();
+  };
 
   const deleteMutation = useMutation({
     mutationFn: (documentId: string) => deletePreEmployeeDocument(documentId),
@@ -128,7 +134,9 @@ export function PreEmployeeDocumentChecklist({ preEmployeeId, readOnly = false }
     );
   }
 
-  // El avance cuenta sólo los obligatorios: son los que condicionan pasar a pre ingreso.
+  // El avance cuenta sólo los obligatorios.
+  // NOTA: el servidor no exige que estén completos para pasar a pre ingreso (decisión de producto vigente);
+  // el texto previo "condicionan pasar a pre ingreso" era engañoso y se quitó sin cambiar el flujo.
   const mandatory = checklist.filter((item) => item.documentType.mandatory);
   const uploadedCount = mandatory.filter((item) => item.document).length;
   const progress = mandatory.length ? Math.round((uploadedCount / mandatory.length) * 100) : 100;
@@ -299,7 +307,7 @@ function UploadDocumentDialog({ preEmployeeId, item, open, onOpenChange, onUploa
       onUploaded();
     } catch (error) {
       logger.error('Error al subir el documento', { data: { error } });
-      toast.error('No se pudo subir el documento');
+      toast.error(error instanceof Error && error.message ? error.message : 'No se pudo subir el documento');
     } finally {
       setIsUploading(false);
     }

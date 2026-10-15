@@ -8,13 +8,13 @@ import Link from 'next/link';
 import {
   approvePaymentOrder,
   backToDraftPaymentOrder,
-  cancelPaymentOrder,
   getPaymentOrderPdf,
   rejectPaymentOrder,
   sendPaymentOrder,
   submitPaymentOrder,
-  type PaymentOrderDetail,
 } from '../../actions/payment-orders.server';
+import { cancelPaymentOrder } from '../../actions/payment-register.server';
+import type { PaymentOrderDetail } from '../../lib/payment-query-types';
 import { ConfirmAction } from '../../components/ConfirmAction';
 import { SendToSupplierDialog } from '../../components/SendToSupplierDialog';
 import { RegisterPaymentDialog } from './RegisterPaymentDialog';

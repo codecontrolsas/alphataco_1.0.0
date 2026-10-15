@@ -1,45 +1,20 @@
 import { Badge } from '@/components/ui/badge';
-import { Ban, CheckCircle2, CircleDashed, Clock, FilePen, Lock, PackageCheck, XCircle, type LucideIcon } from 'lucide-react';
-import { PURCHASE_REQUEST_STATUS_LABELS, type PurchaseRequestStatus } from '../../lib/request-state-machine';
+import type { PurchaseRequestStatus } from '../../lib/request-state-machine';
+import type { LucideIcon } from 'lucide-react';
+import { REQUEST_STATUS_UI, TONE_TO_BADGE } from '../../lib/status-presentation';
 
 /** Icono por estado: lo comparten la celda, el filtro de la tabla y el detalle. */
-export const purchaseRequestStatusIcons: Record<PurchaseRequestStatus, LucideIcon> = {
-  DRAFT: FilePen,
-  PENDING_APPROVAL: Clock,
-  APPROVED: CheckCircle2,
-  PARTIALLY_ORDERED: CircleDashed,
-  ORDERED: PackageCheck,
-  CLOSED: Lock,
-  REJECTED: XCircle,
-  CANCELLED: Ban,
-};
-
-const VARIANTS: Record<PurchaseRequestStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  DRAFT: 'outline',
-  PENDING_APPROVAL: 'secondary',
-  APPROVED: 'default',
-  PARTIALLY_ORDERED: 'secondary',
-  ORDERED: 'default',
-  CLOSED: 'secondary',
-  REJECTED: 'destructive',
-  CANCELLED: 'destructive',
-};
-
-const CLASSES: Partial<Record<PurchaseRequestStatus, string>> = {
-  DRAFT: 'text-muted-foreground',
-  PENDING_APPROVAL: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
-  APPROVED: 'bg-green-600 text-white hover:bg-green-600/90',
-  PARTIALLY_ORDERED: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300',
-  ORDERED: 'bg-blue-600 text-white hover:bg-blue-600/90',
-  CLOSED: 'text-muted-foreground',
-};
+export const purchaseRequestStatusIcons = Object.fromEntries(
+  Object.entries(REQUEST_STATUS_UI).map(([status, ui]) => [status, ui.icon])
+) as Record<PurchaseRequestStatus, LucideIcon>;
 
 export function PurchaseRequestStatusBadge({ status }: { status: PurchaseRequestStatus }) {
-  const Icon = purchaseRequestStatusIcons[status];
+  const ui = REQUEST_STATUS_UI[status];
+  const Icon = ui.icon;
   return (
-    <Badge variant={VARIANTS[status]} className={`gap-1 ${CLASSES[status] ?? ''}`}>
-      <Icon className="h-3 w-3" />
-      {PURCHASE_REQUEST_STATUS_LABELS[status]}
+    <Badge variant={TONE_TO_BADGE[ui.tone]} className="gap-1 whitespace-nowrap">
+      <Icon className="h-3 w-3" aria-hidden="true" />
+      {ui.label}
     </Badge>
   );
 }

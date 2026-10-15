@@ -44,3 +44,10 @@ export const OPEN_WORK_ORDERS_ONLY = {
  * equipamiento), así que contar OT es contar patentes.
  */
 export const OCCUPYING_WORK_ORDER_STATUSES: work_order_status[] = ['in_progress', 'paused'];
+
+/**
+ * Parámetro de la URL con el sector elegido en la grilla de tarjetas (`?tab=workshop_view&sector=<id>`).
+ * Lo lee el Server Component de la Vista Taller para armar la tabla de ESE sector y lo escribe la grilla al
+ * tocar una tarjeta. No lleva el prefijo de ninguna tabla: los parámetros de cada tabla van namespaced.
+ */
+export const WORKSHOP_SECTOR_PARAM = 'sector';

@@ -8,7 +8,6 @@ src/generated/
 .yarn/install-state.gz
 /dist/
 /out/
-cypress.env.json
 .cursor/
 # testing
 /coverage
@@ -50,10 +49,6 @@ NOTAS.md
 bun.lockb
 
 # Cypress
-cypress/videos
-cypress/screenshots
-cypress/downloads
-cypress.env.json
 .mcp.json
 settings.local.json
 .claude/settings.local.json

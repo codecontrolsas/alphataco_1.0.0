@@ -1,1 +1,0 @@
-export { OrderManagementSkeleton } from './OrderManagementSkeleton';

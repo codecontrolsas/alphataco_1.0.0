@@ -1,5 +1,4 @@
-import { TabsManagerServer } from '@/features/TabsManager';
-import { BarChart3, ClipboardList } from 'lucide-react';
+import { ViewManagerServer } from '@/features/TabsManager/ViewManagerServer';
 import { Suspense } from 'react';
 import GraficosTabContent from './Graficos/GraficosTabContent';
 import { GraficosGridSkeleton } from './Graficos/fallback/KpiChartSkeleton';
@@ -14,20 +13,19 @@ export default async function KpisTabContent({
   permissions: Record<string, boolean>;
 }) {
   return (
-    <TabsManagerServer
+    <ViewManagerServer
+      layout="menu"
       paramName="kpiview"
+      defaultView="indicadores"
+      ariaLabel="Indicadores"
+      preserveParams={['tab', 'subtab']}
       searchParams={searchParams}
-      defaultTab="indicadores"
       permissions={permissions}
-      tabs={[
+      views={[
         {
           value: 'indicadores',
-          label: (
-            <span className="flex items-center gap-2">
-              <ClipboardList className="h-4 w-4" />
-              Indicadores
-            </span>
-          ),
+          label: 'Indicadores',
+          description: 'Alta y seguimiento de indicadores con su umbral y fórmula de cálculo',
           moduleSlug: 'configuracion',
           tabSlug: 'indicadores',
           content: (
@@ -38,12 +36,8 @@ export default async function KpisTabContent({
         },
         {
           value: 'graficos',
-          label: (
-            <span className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4" />
-              Gráficos
-            </span>
-          ),
+          label: 'Gráficos',
+          description: 'Evolución de cada indicador en el tiempo',
           moduleSlug: 'configuracion',
           tabSlug: 'graficos',
           content: (

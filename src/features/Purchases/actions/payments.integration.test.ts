@@ -105,7 +105,7 @@ let accountId = '';
 
 /** Factura A (o NC A) de gasto por `net` + 21 % de IVA, cargada con la action real de la etapa 4. */
 async function expenseInvoice(supplierId: string, net: string, cbteType = 1, relatedInvoiceId = '') {
-  const invoices = await import('./invoices.server');
+  const invoices = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
   invoiceNumber += 1;
   const vat = (Math.round(Number(net) * 21) / 100).toFixed(2);
   const created = await invoices.createSupplierInvoice({
@@ -154,7 +154,7 @@ const payValues = (amount: string, over: Partial<import('../schemas/payment-orde
 });
 
 async function approveAndPay(orderId: string, net: string) {
-  const actions = await import('./payment-orders.server');
+  const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
   expectOk(await actions.submitPaymentOrder(orderId));
   expectOk(await actions.approvePaymentOrder(orderId));
   expectOk(await actions.registerPayment(orderId, payValues(net)));
@@ -353,7 +353,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     });
 
     it('pago parcial con retenciones; el pendiente cuenta el borrador', async () => {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const invoice = await expenseInvoice(SUPPLIER, '1000000');
       const order = expectOk(await actions.createPaymentOrder(paymentForm(SUPPLIER, [invoiceLine(invoice, '605000')])));
       expect(order.number).toMatch(/^OP-\d{6}$/);
@@ -367,7 +367,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     });
 
     it('circuito: aprobar y pagar; medios que no suman, otro mes; certificados numerados', async () => {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const invoice = await expenseInvoice(SUPPLIER, '10000');
       const order = expectOk(await actions.createPaymentOrder(paymentForm(SUPPLIER, [invoiceLine(invoice, '12100')])));
       expect(expectFail(await actions.registerPayment(order.id, payValues('1')))).toMatch(/ya fue|no está aprobada/);
@@ -387,7 +387,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     });
 
     it('acumulado de Ganancias entre dos ordenes pagadas del mes', async () => {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const prisma = await db();
       const before = await prisma.payment_orders.aggregate({
         where: { supplier_id: SUPPLIER, status: 'PAID' },
@@ -409,7 +409,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     });
 
     it('dos borradores del mes: al pagar el segundo se exige recalcular Ganancias con el primero pagado', async () => {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const invoice = await expenseInvoice(SUPPLIER, '600000');
       const first = expectOk(await actions.createPaymentOrder(paymentForm(SUPPLIER, [invoiceLine(invoice, '363000')])));
       const second = expectOk(await actions.createPaymentOrder(paymentForm(SUPPLIER, [invoiceLine(invoice, '363000')])));
@@ -428,7 +428,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     });
 
     it('neto 0 (factura compensada con su NC): se paga sin medios de pago', async () => {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const invoice = await expenseInvoice(OTHER_SUPPLIER, '1000');
       const credit = await expenseInvoice(OTHER_SUPPLIER, '1000', 3, invoice);
       const order = expectOk(await actions.createPaymentOrder(paymentForm(OTHER_SUPPLIER, [invoiceLine(invoice, '1210'), creditLine(credit, '1210')])));
@@ -447,7 +447,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     });
 
     it('concurrencia: dos ordenes sobre el mismo comprobante que juntas superan el pendiente', async () => {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const invoice = await expenseInvoice(OTHER_SUPPLIER, '100000');
       const results = await Promise.all([
         actions.createPaymentOrder(paymentForm(OTHER_SUPPLIER, [invoiceLine(invoice, '80000')])),
@@ -460,7 +460,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     });
 
     it('anticipo, NC y anticipo aplicado; no se anula la orden del anticipo consumido', async () => {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const advanceOrder = expectOk(
         await actions.createPaymentOrder(paymentForm(OTHER_SUPPLIER, [], { advance: { amount: '50000', purchaseOrderId: '', description: 'Anticipo obra' } }))
       );
@@ -483,7 +483,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     });
 
     it('anular una orden pagada anula sus certificados', async () => {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const invoice = await expenseInvoice(SUPPLIER, '20000');
       const order = expectOk(await actions.createPaymentOrder(paymentForm(SUPPLIER, [invoiceLine(invoice, '24200')])));
       await approveAndPay(order.id, (await orderRow(order.id)).net_total.toString());
@@ -494,7 +494,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     });
 
     it('neto negativo y nada que pagar → error', async () => {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const invoice = await expenseInvoice(OTHER_SUPPLIER, '1000');
       const credit = await expenseInvoice(OTHER_SUPPLIER, '5000', 3);
       expect(expectFail(await actions.createPaymentOrder(paymentForm(OTHER_SUPPLIER, [invoiceLine(invoice, '1210'), creditLine(credit, '6050')])))).toMatch(
@@ -504,8 +504,8 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     });
 
     it('etapa 4: un comprobante en una orden no se edita ni se anula', async () => {
-      const actions = await import('./payment-orders.server');
-      const invoices = await import('./invoices.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
+      const invoices = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
       const invoice = await expenseInvoice(OTHER_SUPPLIER, '3000');
       const order = expectOk(await actions.createPaymentOrder(paymentForm(OTHER_SUPPLIER, [invoiceLine(invoice, '3630')])));
       expect(expectFail(await invoices.cancelSupplierInvoice(invoice, 'x'))).toBe(`Está en la ${order.number}: anulala o sacalo de ahí primero`);
@@ -514,7 +514,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     });
 
     it('perimetro: proveedor y cuenta de otra empresa', async () => {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       expect(expectFail(await actions.createPaymentOrder(paymentForm(FOREIGN_SUPPLIER, [], { advance: { amount: '10', purchaseOrderId: '', description: '' } })))).toBe(
         'El proveedor no existe'
       );
@@ -543,7 +543,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
       }
 
       async function approvedAdvance(amount: string) {
-        const actions = await import('./payment-orders.server');
+        const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
         const order = expectOk(
           await actions.createPaymentOrder(paymentForm(OTHER_SUPPLIER, [], { plannedOn: AR_TODAY, advance: { amount, purchaseOrderId: '', description: 'Anticipo' } }))
         );
@@ -564,7 +564,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
       const transfer = (amount: string) => ({ method: 'TRANSFER' as const, accountId: chequesId, amount, reference: 'T', checkNumber: '', checkBank: '', checkDueOn: '' });
 
       it('transferencia + e-cheq: la transferencia mueve el saldo; el e-cheq queda emitido y a debitar; anular la orden anula los dos', async () => {
-        const actions = await import('./payment-orders.server');
+        const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
         const order = await approvedAdvance('1000');
         expectOk(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [transfer('400'), echeck('600', TOMORROW)] }));
         const prisma = await db();
@@ -594,7 +594,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
       });
 
       it('un e-cheq con fecha de hoy tampoco entra al saldo: queda a debitar hasta confirmar el débito', async () => {
-        const actions = await import('./payment-orders.server');
+        const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
         const order = await approvedAdvance('250');
         const second = { ...echeck('250', AR_TODAY), checkNumber: '988' };
         expectOk(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [second] }));
@@ -602,7 +602,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
       });
 
       it('pagar desde una cuenta desactivada dice cuál está inactiva', async () => {
-        const actions = await import('./payment-orders.server');
+        const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
         const accounts = await import('@/features/Treasury/actions/accounts.server');
         const order = await approvedAdvance('10');
         // Una cuenta propia: la de los cheques tiene e-cheqs emitidos y no se puede desactivar (etapa 3b).
@@ -649,7 +649,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     }
 
     async function approvedAdvance(amount: string, supplierId = OTHER_SUPPLIER) {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const order = expectOk(await actions.createPaymentOrder(paymentForm(supplierId, [], { plannedOn: AR_TODAY, advance: { amount, purchaseOrderId: '', description: 'Anticipo' } })));
       expectOk(await actions.submitPaymentOrder(order.id));
       expectOk(await actions.approvePaymentOrder(order.id));
@@ -674,7 +674,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     }
 
     it('pagar con un cheque de la cartera lo endosa al proveedor y lo saca de la cartera', async () => {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const check = await portfolioCheck('600.00');
       const order = await approvedAdvance('1000');
       expectOk(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [endorse(check.id), transfer('400')] }));
@@ -692,7 +692,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     });
 
     it('un cheque mayor que lo que falta no cierra el pago', async () => {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const check = await portfolioCheck('600.00');
       const order = await approvedAdvance('100');
       expect(expectFail(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [endorse(check.id)] }))).toMatch(/^Los medios suman .* y no suman el neto a pagar/);
@@ -701,7 +701,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     });
 
     it('un cheque que otro depositó mientras tanto no se endosa: la orden sigue aprobada y sin movimientos', async () => {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const checks = await import('@/features/Treasury/actions/checks.server');
       const check = await portfolioCheck('50.00');
       const order = await approvedAdvance('50');
@@ -716,7 +716,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
 
     // El 1° del mes, ayer es otro mes y la orden se rechazaría por las retenciones antes de llegar al cheque.
     it.skipIf(AR_TODAY.endsWith('-01'))('el endoso no puede ser anterior a la entrada del cheque a la cartera', async () => {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const check = await portfolioCheck('20.00');
       const order = await approvedAdvance('20');
       const yesterday = moment(AR_TODAY).subtract(1, 'day').format('YYYY-MM-DD');
@@ -727,7 +727,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     });
 
     it('anular la orden devuelve el cheque a la cartera; si el cheque fue rechazado, no se anula', async () => {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const checks = await import('@/features/Treasury/actions/checks.server');
       const back = await portfolioCheck('70.00');
       const first = await approvedAdvance('70');
@@ -747,7 +747,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     });
 
     it('rechazo de un endosado: deuda del cliente y del proveedor; la orden que la paga no lleva retenciones', async () => {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const checks = await import('@/features/Treasury/actions/checks.server');
       const { customerCheckDebts, supplierCheckDebts } = await import('@/features/Treasury/lib/rejected-checks');
       const prisma = await db();
@@ -798,7 +798,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     });
 
     async function approvedAdvance(amount: string, supplierId = OTHER_SUPPLIER) {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const order = expectOk(await actions.createPaymentOrder(paymentForm(supplierId, [], { plannedOn: AR_TODAY, advance: { amount, purchaseOrderId: '', description: 'Anticipo' } })));
       expectOk(await actions.submitPaymentOrder(order.id));
       expectOk(await actions.approvePaymentOrder(order.id));
@@ -845,7 +845,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     }
 
     async function payWithCheck(amount: string) {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const order = await approvedAdvance(amount);
       const number = (await nextNumber())!;
       expectOk(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [physical(amount, number)] }));
@@ -866,7 +866,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     });
 
     it('un número usado, fuera de rango o inutilizado no se emite; el próximo libre los saltea', async () => {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const own = await import('@/features/Treasury/actions/own-checks.server');
       const order = await approvedAdvance('10');
       expect(expectFail(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [physical('10', '1001')] }))).toBe(
@@ -885,7 +885,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     });
 
     it('un e-cheq sale de una cuenta bancaria y su número no se repite en la cuenta', async () => {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const order = await approvedAdvance('20');
       expect(expectFail(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [echeck('20', 'E-1', cashId)] }))).toBe('Elegí una cuenta bancaria');
       expectOk(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [echeck('20', 'E-1')] }));
@@ -896,7 +896,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     });
 
     it('la fecha de pago del cheque no puede ser anterior al pago de la orden', async () => {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const order = await approvedAdvance('5');
       const yesterday = moment(AR_TODAY).subtract(1, 'day').format('YYYY-MM-DD');
       expect(expectFail(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [physical('5', '1009', yesterday)] }))).toBe(
@@ -929,7 +929,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     });
 
     it('el débito no puede ser anterior a la fecha de pago del cheque', async () => {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const own = await import('@/features/Treasury/actions/own-checks.server');
       const order = await approvedAdvance('7');
       const number = (await nextNumber())!;
@@ -950,7 +950,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     });
 
     it('anular la orden: el cheque emitido se anula; uno debitado o rechazado la bloquea', async () => {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const own = await import('@/features/Treasury/actions/own-checks.server');
       const issued = await payWithCheck('11');
       expectOk(await actions.cancelPaymentOrder(issued.order.id, 'Error de carga'));
@@ -974,7 +974,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     });
 
     it('rechazo: vuelve la deuda con el proveedor, se paga con otra orden sin retenciones y el rechazo no se anula mientras tanto', async () => {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const own = await import('@/features/Treasury/actions/own-checks.server');
       const { supplierCheckDebts, openCheckDebtsOfSupplier } = await import('@/features/Treasury/lib/rejected-checks');
       const prisma = await db();
@@ -1019,7 +1019,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     });
 
     it('chequeras: no se superponen; una dada de baja no emite ni inutiliza', async () => {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const own = await import('@/features/Treasury/actions/own-checks.server');
       expect(expectFail(await own.createCheckbook({ accountId: bankId, firstNumber: '1050', lastNumber: '1060' }))).toBe(
         'El rango se superpone con la chequera del 1001 al 1050 de «Banco propios»'
@@ -1037,7 +1037,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
     });
 
     it('el número de un e-cheq se guarda sin espacios: con espacios es el mismo número', async () => {
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const order = await approvedAdvance('21');
       expectOk(await actions.registerPayment(order.id, { paidOn: AR_TODAY, payments: [echeck('21', 'EQ 77 01')] }));
       expect((await ownCheckOf(order.id)).number).toBe('EQ7701');
@@ -1079,7 +1079,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
 
     it('cuenta corriente: comprobantes suman, NC y ordenes pagadas restan; saldo y resumen', async () => {
       const account = await import('./supplier-account.server');
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const invoice = await expenseInvoice(OTHER_SUPPLIER, '10000');
       const before = await account.getSupplierAccount(OTHER_SUPPLIER);
       expect(before).not.toBeNull();
@@ -1096,7 +1096,7 @@ describe.skipIf(!RUN)('pagos (integracion)', () => {
 
     it('retenciones del mes: listado, totales y archivos con el largo justo', async () => {
       const report = await import('./withholdings-report.server');
-      const actions = await import('./payment-orders.server');
+      const actions = { ...(await import('./payment-orders.server')), ...(await import('./payment-register.server')), ...(await import('./payment-queries.server')) };
       const big = await expenseInvoice(SUPPLIER, '2000000');
       const order = expectOk(await actions.createPaymentOrder(paymentForm(SUPPLIER, [invoiceLine(big, '2420000')])));
       await approveAndPay(order.id, (await orderRow(order.id)).net_total.toString());

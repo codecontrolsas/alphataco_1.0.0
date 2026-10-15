@@ -4,17 +4,39 @@ import {
   DataTable,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
+  type DataTableFilterOption,
+  type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { dailyReportStatusLabels } from '@/shared/utils/mappers';
-import { useQuery } from '@tanstack/react-query';
-import { CheckCircle2, CircleOff, XCircle } from 'lucide-react';
+import { unwrapExportResult } from '@/shared/lib/export-result';
+import { DailyReportPeriodSelector } from './DailyReportPeriodSelector';
+import { BookOpen, CheckCircle2, CircleOff, Clock, XCircle, type LucideIcon } from 'lucide-react';
 import moment from 'moment';
-import { useMemo } from 'react';
-import { getAllDailyReportsForExport, getDailyReportFacets, type DailyReportListItem } from '../actions.server';
-import { CreateDailyReportButton } from '../../components/CreateDailyReportButton';
-import { DAILY_REPORT_STATUS_ICONS } from '../../lib/daily-report-status-ui';
+import { useCallback, useMemo, useState } from 'react';
+import {
+  getAllDailyReportsForExport,
+  getDailyReportSingleFacet,
+  getDailyReportsPaginated,
+  type DailyReportListItem,
+} from '../actions.server';
 import { HIDDEN_COLUMNS_BY_DEFAULT, getColumns } from '../columns';
+
+// ============================================================================
+// ICONOS POR STATUS
+// ============================================================================
+
+const statusIcons: Record<string, LucideIcon> = {
+  abierto: Clock,
+  cerrado: XCircle,
+  cerrado_completo: CheckCircle2,
+  cerrado_incompleto: BookOpen,
+};
+
+/** Primer valor de un param de URL (puede venir como string o array). */
+function firstParam(value: string | string[] | undefined): string | null {
+  return (Array.isArray(value) ? value[0] : value) ?? null;
+}
 
 // ============================================================================
 // PROPS
@@ -24,11 +46,12 @@ interface Props {
   data: DailyReportListItem[];
   totalRows: number;
   searchParams: DataTableSearchParams;
+  /** Clave de las preferencias guardadas (columnas, filtros visibles). */
   tableId: string;
+  /** Prefijo de los params de la tabla en la URL. */
+  paramNamespace: string;
   /** Flat permissions map from server: "module:tab:action" → boolean */
   permissionsMap: Record<string, boolean>;
-  /** Muestra el alta de parte diario en la barra de la tabla. */
-  canCreate: boolean;
   initialColumnVisibility: Record<string, boolean>;
   initialFilterVisibility: Record<string, boolean>;
 }
@@ -42,8 +65,8 @@ export function _DailyReportDataTable({
   totalRows,
   searchParams,
   tableId,
+  paramNamespace,
   permissionsMap,
-  canCreate,
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
@@ -55,18 +78,31 @@ export function _DailyReportDataTable({
     }),
     [permissionsMap]
   );
-  // Extraer solo los params relevantes para facets (sin page/sort/pageSize)
-  const facetParams = useMemo(() => {
-    const { page, pageSize, sort, sortBy, sortOrder, ...rest } = searchParams;
-    return rest as DataTableSearchParams;
-  }, [searchParams]);
+  // Params actuales de la tabla (modo cliente): el export respeta los filtros activos
+  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
+  const handleStateChange = useCallback((params: DataTableSearchParams) => {
+    setCurrentParams(params);
+  }, []);
+  const tableQueryFn = useCallback((params: DataTableSearchParams) => getDailyReportsPaginated(params), []);
 
-  // Facets con cross-filtering
-  const { data: facets, isFetching: isFetchingFacets } = useQuery({
-    queryKey: ['daily-reports-list-facets', facetParams],
-    queryFn: () => getDailyReportFacets(facetParams),
-    staleTime: 5 * 60 * 1000,
-  });
+  // Facets lazy: cada filtro pide sus conteos al abrirse, con los filtros actuales de la tabla.
+  const makeFetchFacet = useCallback(
+    (columnId: string, options: DataTableFilterOption[]) =>
+      async (params: DataTableSearchParams): Promise<FacetResult> => {
+        const result = await getDailyReportSingleFacet(columnId, params);
+        if (!result) return { options: [], counts: new Map() };
+        return {
+          options: [
+            ...options,
+            ...(result.counts.has(NULL_FILTER_VALUE)
+              ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
+              : []),
+          ],
+          counts: result.counts,
+        };
+      },
+    []
+  );
 
   // Columnas ocultas por defecto
   const mergedColumnVisibility = useMemo(() => {
@@ -98,17 +134,14 @@ export function _DailyReportDataTable({
       {
         columnId: 'status',
         title: 'Estado',
-        options: [
-          ...Object.entries(dailyReportStatusLabels).map(([value, label]) => ({
+        fetchFacet: makeFetchFacet(
+          'status',
+          Object.entries(dailyReportStatusLabels).map(([value, label]) => ({
             value,
             label,
-            icon: DAILY_REPORT_STATUS_ICONS[value],
-          })),
-          ...(facets?.status?.has(NULL_FILTER_VALUE)
-            ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-            : []),
-        ],
-        externalCounts: facets?.status,
+            icon: statusIcons[value],
+          }))
+        ),
       },
 
       // Fecha de creación (dateRange, oculto por defecto)
@@ -122,14 +155,13 @@ export function _DailyReportDataTable({
       {
         columnId: 'is_active',
         title: 'Activo',
-        options: [
+        fetchFacet: makeFetchFacet('is_active', [
           { value: 'true', label: 'Activo', icon: CheckCircle2 },
           { value: 'false', label: 'Inactivo', icon: XCircle },
-        ],
-        externalCounts: facets?.is_active,
+        ]),
       },
     ],
-    [facets]
+    [makeFetchFacet]
   );
 
   // ─── Columnas ────────────────────────────────────────────────────────────────
@@ -137,25 +169,32 @@ export function _DailyReportDataTable({
 
   // ─── Render ──────────────────────────────────────────────────────────────────
   return (
+    <div className="space-y-4">
+    <DailyReportPeriodSelector
+      paramNamespace={paramNamespace}
+      serverFrom={firstParam(searchParams.date_from)}
+      serverTo={firstParam(searchParams.date_to)}
+    />
     <DataTable
       columns={columns}
       data={data}
       totalRows={totalRows}
       searchParams={searchParams}
-      searchPlaceholder="Buscar partes diarios..."
+      queryFn={tableQueryFn}
+      queryKey={['daily-reports', 'list']}
+      onStateChange={handleStateChange}
       mobileCards
-      toolbarActions={canCreate ? <CreateDailyReportButton /> : undefined}
+      searchPlaceholder="Buscar partes diarios..."
       facetedFilters={facetedFilters}
       initialColumnVisibility={mergedColumnVisibility}
       initialFilterVisibility={mergedFilterVisibility}
       tableId={tableId}
-      paramNamespace={tableId}
+      paramNamespace={paramNamespace}
       showFilterToggle={true}
-      isFetchingFacets={isFetchingFacets}
       emptyMessage="No hay partes diarios registrados"
       data-testid="daily-reports-table"
       exportConfig={{
-        fetchAllData: () => getAllDailyReportsForExport(searchParams),
+        fetchAllData: async () => unwrapExportResult(await getAllDailyReportsForExport(currentParams)),
         options: {
           filename: 'partes-diarios',
           title: 'Listado de Partes Diarios',
@@ -169,5 +208,6 @@ export function _DailyReportDataTable({
         },
       }}
     />
+    </div>
   );
 }

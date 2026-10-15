@@ -182,12 +182,12 @@ export function EmployeeFilterPanel({
           <CardTitle className="text-base">Filtrar empleados</CardTitle>
           <div className="flex items-center gap-2">
             {activeFilters.length > 0 && (
-              <Button variant="ghost" size="sm" onClick={onClearAll} className="h-7 px-2 text-xs">
+              <Button type="button" variant="ghost" size="sm" onClick={onClearAll} className="h-7 px-2 text-xs">
                 <X className="mr-1 h-3 w-3" />
                 Limpiar todo
               </Button>
             )}
-            <Button variant="outline" size="sm" onClick={onToggleFilters} className="h-7 px-2 text-xs">
+            <Button type="button" variant="outline" size="sm" onClick={onToggleFilters} className="h-7 px-2 text-xs">
               <Search className="mr-1 h-3 w-3" />
               {showFilters ? 'Ocultar filtros' : 'Mostrar filtros'}
             </Button>

@@ -1,2 +1,1 @@
-export { PedidosTableSkeleton } from './PedidosTableSkeleton';
-export { PendientesTableSkeleton } from './PendientesTableSkeleton';
+export { ConfirmadosTableSkeleton, PendientesTableSkeleton, PendingOrderMetricsSkeleton } from './PendientesTableSkeleton';

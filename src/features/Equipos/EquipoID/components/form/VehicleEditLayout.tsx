@@ -9,13 +9,13 @@ import type { UseFormReturn } from 'react-hook-form';
 import { VehicleAssignmentDataForm } from '../../forms/vehicle-assignment-data-form';
 import { VehicleBasicDataForm } from '../../forms/vehicle-basic-data-form';
 import { REQUIRED_VEHICLE_FIELDS, VEHICLE_FORM_SECTIONS } from '../../lib/vehicle-form';
-import type { VehicleFormData } from '../vehicle-tabs';
+import type { VehicleFormValues } from '../../schemas/vehicle';
 
 type BasicFormProps = Omit<React.ComponentProps<typeof VehicleBasicDataForm>, 'form' | 'readOnly'>;
 type AssignmentFormProps = Omit<React.ComponentProps<typeof VehicleAssignmentDataForm>, 'form' | 'readOnly'>;
 
 interface VehicleEditLayoutProps {
-  form: UseFormReturn<VehicleFormData>;
+  form: UseFormReturn<VehicleFormValues>;
   isNew: boolean;
   /** Dominio del equipo que se edita (título de la pantalla). */
   domain?: string | null;

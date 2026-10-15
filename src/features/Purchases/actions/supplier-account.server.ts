@@ -1,11 +1,11 @@
 'use server';
 
-import moment from 'moment';
 import { checkPermissionServer } from '@/features/Permissions';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { UUID_RE } from '../lib/action-errors';
-import { supplierInvoiceLabel } from '../lib/invoices';
+import { isCreditNoteCbte, supplierInvoiceLabel } from '../lib/invoices';
 import { openAdvancesOfSupplier, openInvoicesOfSupplier } from '../lib/payment-balances';
 import { openCheckDebtsOfSupplier } from '@/features/Treasury/lib/rejected-checks';
 import { cents, money } from '../lib/payment-totals';
@@ -18,7 +18,6 @@ import { cents, money } from '../lib/payment-totals';
  * Saldo > 0 = se le debe; < 0 = queda a favor (anticipos sin aplicar).
  */
 
-const CREDIT_NOTES = [3, 8, 13];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function getSupplierAccount(supplierId: string, range: { from?: string; to?: string } = {}) {
@@ -56,7 +55,7 @@ export async function getSupplierAccount(supplierId: string, range: { from?: str
   };
   const all: Movement[] = [
     ...invoices.map((i): Movement => {
-      const credit = CREDIT_NOTES.includes(i.cbte_type);
+      const credit = isCreditNoteCbte(i.cbte_type);
       return {
         date: i.issue_date.toISOString().slice(0, 10),
         kind: credit ? 'CREDIT_NOTE' : 'INVOICE',
@@ -116,8 +115,8 @@ export async function getSupplierAccount(supplierId: string, range: { from?: str
     movements.push({ ...m, balance: money(running) });
   }
 
-  const today = moment().format('YYYY-MM-DD');
-  const debts = openInvoices.filter((i) => ![3, 8, 13].includes(i.cbteType));
+  const today = argentinaDate();
+  const debts = openInvoices.filter((i) => !isCreditNoteCbte(i.cbteType));
   const overdue = debts.filter((i) => i.dueDate && i.dueDate.toISOString().slice(0, 10) < today).reduce((acc, i) => acc + cents(i.pending), BigInt(0));
   const upcoming = debts.filter((i) => !i.dueDate || i.dueDate.toISOString().slice(0, 10) >= today).reduce((acc, i) => acc + cents(i.pending), BigInt(0));
 

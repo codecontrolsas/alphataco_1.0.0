@@ -1,5 +1,5 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import moment from 'moment';
+import { formatDateAr } from '@/shared/lib/argentina-time';
 import Link from 'next/link';
 import { TriangleAlert } from 'lucide-react';
 
@@ -13,14 +13,14 @@ export function ExpiredSupplierDocumentsAlert({
 }) {
   if (documents.length === 0) return null;
   return (
-    <Alert className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+    <Alert className="border-warn/35 bg-warn-subtle text-warn-subtle-foreground">
       <TriangleAlert className="h-4 w-4" />
       <AlertTitle>El proveedor tiene documentos vencidos</AlertTitle>
       <AlertDescription>
         <ul className="list-disc pl-4">
           {documents.map((doc) => (
             <li key={doc.id}>
-              {doc.name}: venció el {moment(doc.expiresAt, 'YYYY-MM-DD').format('DD/MM/YYYY')}
+              {doc.name}: venció el {formatDateAr(doc.expiresAt)}
             </li>
           ))}
         </ul>

@@ -1,24 +1,21 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Button } from '@/components/ui/button';
 import {
-  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   CheckCircle2,
   ChevronDown,
   Circle,
   Clock,
-  FileText,
   Hand,
   Loader2,
-  ShieldAlert,
   UserPlus,
-  Wrench,
   XCircle,
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
+import { REPAIR_STATUS_UI, TONE_TO_BADGE } from '../../lib/status-presentation';
 import type { SectorStatus } from './SectorTimeline';
 
 interface TaskInfo {
@@ -39,6 +36,10 @@ interface SectorCardProps {
   diagnosticoCompleted: boolean;
   workOrderNumber?: string;
   workOrderStatus?: string;
+  /** Reordenar el sector en la secuencia de ejecución; si falta, no se dibuja el control. */
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  isReordering?: boolean;
 }
 
 type BadgeVariant = NonNullable<React.ComponentProps<typeof Badge>['variant']>;
@@ -46,44 +47,42 @@ type BadgeVariant = NonNullable<React.ComponentProps<typeof Badge>['variant']>;
 // Exportados: el detalle de orden rotula el estado de cada tarea con los mismos
 // textos y colores que las tarjetas de sector, para que no haya dos vocabularios.
 export const statusBadgeVariants: Record<string, BadgeVariant> = {
-  pending: 'secondary',
-  pending_approval: 'warning',
-  in_progress: 'warning',
-  completed: 'success',
-  cancelled: 'destructive',
-  rejected: 'destructive',
-  reassignment_requested: 'destructive',
+  ...Object.fromEntries(Object.entries(REPAIR_STATUS_UI).map(([status, ui]) => [status, TONE_TO_BADGE[ui.tone]])),
   blocked: 'outline',
 };
 
 export const statusLabels: Record<string, string> = {
-  pending: 'Pendiente',
-  pending_approval: 'Pend. Aprobacion',
-  in_progress: 'En progreso',
-  completed: 'Completado',
-  cancelled: 'Cancelado',
-  rejected: 'Rechazado',
-  reassignment_requested: 'Devuelto',
+  ...Object.fromEntries(Object.entries(REPAIR_STATUS_UI).map(([status, ui]) => [status, ui.label])),
+  // `blocked` es presentación de una tarea trabada, no un valor de la columna.
   blocked: 'Bloqueado',
 };
 
-/** Small status icon for compact inline display */
+const REPAIR_TONE_TEXT: Record<string, string> = {
+  completed: 'text-ok',
+  in_progress: 'text-brand-ink',
+  rejected: 'text-danger',
+  reassignment_requested: 'text-danger',
+  pending_approval: 'text-warn',
+};
+
+/** Icono de estado de una tarea. El estado también se dice con texto en la pastilla de al lado. */
 function TaskStatusIcon({ status }: { status: string }) {
+  const tone = REPAIR_TONE_TEXT[status] ?? 'text-muted-foreground';
+  const common = `h-4 w-4 shrink-0 ${tone}`;
   switch (status) {
     case 'completed':
-      return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />;
+      return <CheckCircle2 aria-hidden="true" className={common} />;
     case 'in_progress':
-      return <Loader2 className="h-3.5 w-3.5 text-amber-500" />;
+      return <Loader2 aria-hidden="true" className={common} />;
     case 'rejected':
-      return <XCircle className="h-3.5 w-3.5 text-red-500" />;
-    case 'reassignment_requested':
-      return <Hand className="h-3.5 w-3.5 text-red-400" />;
-    case 'pending_approval':
-      return <Clock className="h-3.5 w-3.5 text-amber-500" />;
     case 'cancelled':
-      return <XCircle className="h-3.5 w-3.5 text-muted-foreground" />;
+      return <XCircle aria-hidden="true" className={common} />;
+    case 'reassignment_requested':
+      return <Hand aria-hidden="true" className={common} />;
+    case 'pending_approval':
+      return <Clock aria-hidden="true" className={common} />;
     default:
-      return <Circle className="h-3.5 w-3.5 text-muted-foreground/50" />;
+      return <Circle aria-hidden="true" className={common} />;
   }
 }
 
@@ -128,8 +127,11 @@ export function SectorCard({
   diagnosticoCompleted,
   workOrderNumber,
   workOrderStatus,
+  onMoveUp,
+  onMoveDown,
+  isReordering = false,
 }: SectorCardProps) {
-  const [isOpen, setIsOpen] = useState(status === 'in_progress' || status === 'pending');
+  const [isOpen, setIsOpen] = useState(true);
 
   const completedTasks = tasks.filter((t) => t.status === 'completed').length;
   const totalTasks = tasks.length;
@@ -137,144 +139,131 @@ export function SectorCard({
 
   const diagnosticoTask = tasks.find((t) => t.isDiagnostico);
   const regularTasks = tasks.filter((t) => !t.isDiagnostico);
+  // Con el diagnóstico sin cerrar, el resto de las tareas del sector todavía no se puede ejecutar.
+  const waitingDiagnostico = !diagnosticoCompleted && !!diagnosticoTask && status !== 'blocked';
+
+  const bodyId = useId();
 
   return (
-    <Card>
-      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-        <CollapsibleTrigger asChild>
-          <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3">
-            <CardTitle className="text-sm">
-              {/* Row 1: Sector name + status + progress */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold">{sectorName}</span>
-                  <Badge variant={sectorStatusBadge[status]}>{sectorStatusLabels[status]}</Badge>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-muted-foreground font-normal tabular-nums">
-                    {completedTasks}/{totalTasks}
-                  </span>
-                  {/* Segmented progress: one dot per task */}
-                  <div className="flex items-center gap-0.5">
-                    {tasks.map((t) => (
-                      <div
-                        key={t.id}
-                        className={`h-2 rounded-full transition-colors ${totalTasks <= 8 ? 'w-3' : 'w-2'} ${
-                          t.status === 'completed'
-                            ? 'bg-emerald-500'
-                            : t.status === 'in_progress'
-                              ? 'bg-amber-500'
-                              : t.status === 'rejected' || t.status === 'reassignment_requested'
-                                ? 'bg-red-400'
-                                : 'bg-muted-foreground/20'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                  <span className="text-xs text-muted-foreground font-normal tabular-nums">{progressPercent}%</span>
-                  <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-                </div>
-              </div>
+    <section aria-label={`Sector ${sectorName}`} className="bg-card overflow-hidden rounded-lg border">
+      <div className="flex items-center gap-2 pr-3">
+        <button
+          type="button"
+          aria-expanded={isOpen}
+          aria-controls={bodyId}
+          onClick={() => setIsOpen((open) => !open)}
+          className="hover:bg-muted/50 focus-visible:ring-ring flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
+        >
+          <ChevronDown
+            aria-hidden="true"
+            className={`h-4 w-4 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          />
+          <span className="text-sm font-semibold">{sectorName}</span>
+          {workOrderNumber && (
+            <code className="text-muted-foreground max-w-[220px] truncate font-mono text-xs" title={workOrderNumber}>
+              {workOrderNumber}
+            </code>
+          )}
+          <Badge variant={sectorStatusBadge[status]}>{sectorStatusLabels[status]}</Badge>
+          {workOrderStatus && (
+            <Badge variant={woStatusBadge[workOrderStatus] || 'outline'} className="text-[11px]">
+              OT {(woStatusLabels[workOrderStatus] || workOrderStatus).toLowerCase()}
+            </Badge>
+          )}
+        </button>
 
-              {/* Row 2: OT number + OT status */}
-              {workOrderNumber && (
-                <div className="flex items-center gap-2 mt-1.5">
-                  <FileText className="h-3 w-3 text-muted-foreground" />
-                  <TooltipProvider delayDuration={100}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <code className="text-[11px] font-mono text-muted-foreground truncate max-w-[280px] block">
-                          {workOrderNumber}
-                        </code>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom">
-                        <p className="font-mono text-xs">{workOrderNumber}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  {workOrderStatus && (
-                    <Badge variant={woStatusBadge[workOrderStatus] || 'outline'} className="text-[10px]">
-                      {woStatusLabels[workOrderStatus] || workOrderStatus}
-                    </Badge>
-                  )}
-                </div>
-              )}
-            </CardTitle>
-          </CardHeader>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <CardContent className="pt-0 space-y-1">
-            {/* Diagnostico task — highlighted row */}
-            {diagnosticoTask && (
-              <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-muted/50 border-l-2 border-blue-500">
-                <ShieldAlert className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                <span className="text-sm font-medium flex-1">DIAGNOSTICO</span>
-                <Badge variant={statusBadgeVariants[diagnosticoTask.status] || 'outline'} className="text-[10px]">
-                  {statusLabels[diagnosticoTask.status] || diagnosticoTask.status}
-                </Badge>
-                {!diagnosticoCompleted && status !== 'blocked' && (
-                  <TooltipProvider delayDuration={100}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="text-xs">Bloquea tareas restantes</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+        <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+          {completedTasks}/{totalTasks}
+        </span>
+        <div
+          role="progressbar"
+          aria-label={`Progreso de ${sectorName}`}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={progressPercent}
+          aria-valuetext={`${completedTasks} de ${totalTasks} tareas completadas`}
+          className="bg-muted hidden h-1.5 w-24 shrink-0 overflow-hidden rounded-full sm:block"
+        >
+          <div className="bg-brand h-full rounded-full transition-[width]" style={{ width: `${progressPercent}%` }} />
+        </div>
+
+        {(onMoveUp || onMoveDown) && (
+          <div className="flex shrink-0 gap-0.5">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              aria-label={`Subir ${sectorName}`}
+              disabled={!onMoveUp || isReordering}
+              onClick={onMoveUp}
+            >
+              <ArrowUp aria-hidden="true" className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              aria-label={`Bajar ${sectorName}`}
+              disabled={!onMoveDown || isReordering}
+              onClick={onMoveDown}
+            >
+              <ArrowDown aria-hidden="true" className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {isOpen && (
+        <ul id={bodyId} className="divide-y border-t">
+          {diagnosticoTask && (
+            <li className="flex items-center gap-3 px-4 py-2.5">
+              <TaskStatusIcon status={diagnosticoTask.status} />
+              <div className="min-w-0 flex-1">
+                <span className="text-sm font-medium">Diagnóstico {sectorName}</span>
+                <p className="text-muted-foreground text-xs">
+                  Obligatorio{waitingDiagnostico ? ' · bloquea las tareas restantes del sector' : ''}
+                </p>
+              </div>
+              <Badge variant={statusBadgeVariants[diagnosticoTask.status] || 'outline'} className="shrink-0 text-[11px]">
+                {statusLabels[diagnosticoTask.status] || diagnosticoTask.status}
+              </Badge>
+            </li>
+          )}
+
+          {regularTasks.map((task) => (
+            <li key={task.id} className="flex items-center gap-3 px-4 py-2.5">
+              <TaskStatusIcon status={task.status} />
+              <div className="min-w-0 flex-1">
+                <span className="text-sm leading-tight font-medium">{task.repairTypeName}</span>
+                {task.description && task.description !== task.repairTypeName && (
+                  <p className="text-muted-foreground truncate text-xs leading-tight">{task.description}</p>
+                )}
+                {(task.isOperatorAdded || task.isAutorizable) && (
+                  <p className="text-muted-foreground flex items-center gap-1 text-xs">
+                    {task.isOperatorAdded && (
+                      <>
+                        <UserPlus aria-hidden="true" className="h-3 w-3" />
+                        Agregado por operador
+                      </>
+                    )}
+                    {task.isOperatorAdded && task.isAutorizable && ' · '}
+                    {task.isAutorizable && 'Requiere autorización'}
+                  </p>
                 )}
               </div>
-            )}
+              <Badge variant={statusBadgeVariants[task.status] || 'outline'} className="shrink-0 text-[11px]">
+                {statusLabels[task.status] || task.status}
+              </Badge>
+            </li>
+          ))}
 
-            {/* Regular tasks — individual rows with status icon */}
-            {regularTasks.map((task) => (
-              <div
-                key={task.id}
-                className={`flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors hover:bg-muted/30 ${
-                  !diagnosticoCompleted && diagnosticoTask && status !== 'blocked' ? 'opacity-40' : ''
-                }`}
-              >
-                <TaskStatusIcon status={task.status} />
-                <Wrench className="h-3 w-3 text-muted-foreground/50 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <span className="text-sm leading-tight">{task.repairTypeName}</span>
-                  {task.description && task.description !== task.repairTypeName && (
-                    <p className="text-[11px] text-muted-foreground truncate leading-tight">{task.description}</p>
-                  )}
-                </div>
-                {task.isOperatorAdded && (
-                  <TooltipProvider delayDuration={100}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <UserPlus className="h-3 w-3 text-blue-400 shrink-0" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="text-xs">Agregado por operador</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-                {task.isAutorizable && (
-                  <Badge variant="warning" className="text-[10px] shrink-0 py-0">
-                    Autoriz.
-                  </Badge>
-                )}
-                <Badge
-                  variant={statusBadgeVariants[task.status] || 'outline'}
-                  className="text-[10px] shrink-0 min-w-[70px] justify-center"
-                >
-                  {statusLabels[task.status] || task.status}
-                </Badge>
-              </div>
-            ))}
-
-            {regularTasks.length === 0 && !diagnosticoTask && (
-              <p className="text-sm text-muted-foreground text-center py-2">Sin tareas asignadas</p>
-            )}
-          </CardContent>
-        </CollapsibleContent>
-      </Collapsible>
-    </Card>
+          {regularTasks.length === 0 && !diagnosticoTask && (
+            <li className="text-muted-foreground px-4 py-3 text-center text-sm">Sin tareas asignadas</li>
+          )}
+        </ul>
+      )}
+    </section>
   );
 }

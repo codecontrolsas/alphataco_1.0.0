@@ -14,8 +14,8 @@ interface EmployeeHeaderContentProps {
 }
 
 /**
- * Identidad del empleado en la cabecera del legajo: foto, nombre, puesto, identificadores en
- * mono y estados. Sin tarjeta propia: la envuelve `EmployeeHeaderShell`, que le suma las acciones.
+ * Identidad del empleado en la cabecera de la ficha: el legajo arriba (es como lo identifican),
+ * nombre, puesto, documento y estados. La tarjeta y las acciones las pone `RecordHeader`.
  */
 export function EmployeeHeaderContent({ employee }: EmployeeHeaderContentProps) {
   const fullName = `${employee.lastname} ${employee.firstname}`;
@@ -23,18 +23,23 @@ export function EmployeeHeaderContent({ employee }: EmployeeHeaderContentProps) 
   const role = [employee.company_positions?.name, employee.hierarchy?.name].filter(Boolean).join(' · ');
 
   return (
-    <div className="flex min-w-0 items-center gap-5">
-      <Avatar className="size-16 shrink-0">
+    <div className="flex min-w-0 items-start gap-4 sm:items-center">
+      <Avatar className="size-14 shrink-0 sm:size-16">
         <AvatarImage src={employee.picture || undefined} alt={fullName} />
-        <AvatarFallback className="bg-foreground text-background text-lg font-semibold">{initials}</AvatarFallback>
+        <AvatarFallback className="bg-brand-subtle text-brand-subtle-foreground text-lg font-semibold">
+          {initials}
+        </AvatarFallback>
       </Avatar>
 
-      <div className="min-w-0 space-y-1.5">
-        <h1 className="truncate text-2xl font-semibold tracking-tight">{fullName}</h1>
-        <p className="text-muted-foreground truncate">{role || 'Sin puesto asignado'}</p>
-        <p className="text-muted-foreground flex flex-wrap gap-x-4 font-mono text-sm tabular-nums">
-          <span>Legajo {employee.file ?? '-'}</span>
-          <span>DNI {employee.document_number ?? '-'}</span>
+      <div className="min-w-0 space-y-1">
+        <p className="text-muted-foreground font-mono text-sm tabular-nums">
+          Legajo <span className="text-foreground font-semibold">{employee.file ?? '—'}</span>
+        </p>
+        <h1 className="text-xl font-semibold tracking-tight text-balance sm:text-2xl">{fullName}</h1>
+        <p className="text-muted-foreground text-sm">
+          {role || 'Sin puesto asignado'}
+          <span aria-hidden="true"> · </span>
+          <span className="font-mono tabular-nums">DNI {employee.document_number ?? '—'}</span>
         </p>
         <div className="flex flex-wrap items-center gap-2 pt-1">
           <Badge variant={employee.is_active ? 'success' : 'secondary'}>{employee.is_active ? 'Activo' : 'Baja'}</Badge>

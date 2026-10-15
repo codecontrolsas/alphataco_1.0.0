@@ -5,6 +5,7 @@ import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { configPermissionError } from '../../lib/config-access.server';
 import { covenantScope } from '../lib/cct-scope';
 import type { CctMutationResult } from './types';
 
@@ -28,6 +29,9 @@ function normalizeName(name: string): string {
  * la empresa activa. El nombre no puede repetirse dentro del mismo convenio (ticket 616).
  */
 export async function createCategory(input: { name: string; covenant_id: string }): Promise<CctMutationResult> {
+  const denied = await configPermissionError('convenios', 'create');
+  if (denied) return { ok: false, error: denied };
+
   const parsed = categoryInputSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Datos inválidos' };

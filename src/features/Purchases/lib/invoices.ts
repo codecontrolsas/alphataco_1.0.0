@@ -23,6 +23,11 @@ export const CREDIT_NOTE_TYPES: number[] = Object.entries(CBTE_TYPES)
   .filter(([, info]) => info.kind === 'credit_note')
   .map(([id]) => Number(id));
 
+/** ¿El tipo de comprobante acredita (NC)? Misma regla que el calculo de saldos de pagos. */
+export function isCreditNoteCbte(cbteType: number): boolean {
+  return isCbteTypeId(cbteType) && CBTE_TYPES[cbteType].kind === 'credit_note';
+}
+
 export function voucherInfo(cbteType: number): { letter: VoucherLetter; kind: VoucherKind } {
   if (!isCbteTypeId(cbteType)) throw new PurchaseError('Tipo de comprobante inválido');
   return { letter: CBTE_TYPES[cbteType].letter, kind: CBTE_TYPES[cbteType].kind };
@@ -168,6 +173,61 @@ export async function invoicedByOrderLine(
     result.set(row.order_line_id, formatScaled(parseScaled(row.invoiced, QUANTITY_SCALE) ?? BigInt(0), QUANTITY_SCALE));
   }
   return result;
+}
+
+/**
+ * Anular una recepcion no puede dejar comprobantes vigentes que facturen mas de lo recibido, ni
+ * comprobantes sobre las OC complementarias que se anulan con ella. Llamar dentro de la transaccion,
+ * con la OC y las complementarias lockeadas y ANTES de revertir nada. Si no cubre, aborta nombrando
+ * los comprobantes.
+ */
+export async function assertReceiptCancellationKeepsInvoicesCovered(
+  tx: Pick<Prisma.TransactionClient, '$queryRaw'>,
+  receiptId: string,
+  complementOrderIds: readonly string[]
+): Promise<void> {
+  const ZERO = BigInt(0);
+  const big = (value: string) => parseScaled(value, QUANTITY_SCALE) ?? ZERO;
+  const removedRows = await tx.$queryRaw<{ order_line_id: string; quantity: string }[]>`
+    SELECT order_line_id, SUM(quantity)::text AS quantity
+    FROM purchase_receipt_lines WHERE receipt_id = ${receiptId}::uuid GROUP BY order_line_id
+  `;
+  const complementRows = complementOrderIds.length
+    ? await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM purchase_order_lines WHERE order_id = ANY(${[...complementOrderIds]}::uuid[])
+      `
+    : [];
+  const removed = new Map(removedRows.map((row) => [row.order_line_id, big(row.quantity)]));
+  const complementLineIds = complementRows.map((row) => row.id);
+  const lineIds = [...removed.keys(), ...complementLineIds];
+  if (lineIds.length === 0) return;
+
+  const [received, invoiced] = await Promise.all([receivedByOrderLine(tx, lineIds), invoicedByOrderLine(tx, lineIds)]);
+  const offenders = new Set<string>();
+  for (const id of complementLineIds) {
+    if ((big(invoiced.get(id) ?? '0')) > ZERO) offenders.add(id);
+  }
+  for (const [id, qty] of removed) {
+    if (big(invoiced.get(id) ?? '0') > big(received.get(id) ?? '0') - qty) offenders.add(id);
+  }
+  if (offenders.size === 0) return;
+
+  const statuses: string[] = INVOICED_STATUSES;
+  const invoices = await tx.$queryRaw<{ cbte_type: number; sales_point: number; number: bigint }[]>`
+    SELECT DISTINCT si.cbte_type, si.sales_point, si.number
+    FROM supplier_invoice_lines il
+    JOIN supplier_invoices si ON si.id = il.invoice_id
+    WHERE il.order_line_id = ANY(${[...offenders]}::uuid[])
+      AND si.status::text = ANY(${statuses}::text[])
+      AND si.cbte_type <> ALL(${CREDIT_NOTE_TYPES}::int[])
+    ORDER BY si.cbte_type, si.sales_point, si.number
+  `;
+  const labels = invoices.map(supplierInvoiceLabel);
+  throw new PurchaseError(
+    labels.length > 1
+      ? `Tiene las ${labels.join(', ')} que facturan lo recibido: anulalas o emití una NC primero.`
+      : `Tiene la ${labels[0] ?? 'factura'} que factura lo recibido: anulala o emití una NC primero.`
+  );
 }
 
 type ControlTx = Pick<Prisma.TransactionClient, '$queryRaw' | 'purchase_order_lines'>;

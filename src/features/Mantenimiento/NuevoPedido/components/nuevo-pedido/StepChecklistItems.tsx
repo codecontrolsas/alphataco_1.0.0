@@ -46,11 +46,13 @@ export function StepChecklistItems({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <Label>Selecciona los items con desvío</Label>
-        <Badge variant="secondary">{selectedDeviations.length} seleccionados</Badge>
+        <Badge variant="secondary" role="status" aria-live="polite" className="tabular-nums">
+          {selectedDeviations.length} {selectedDeviations.length === 1 ? 'seleccionado' : 'seleccionados'}
+        </Badge>
       </div>
 
       {selectedTemplate?.checklist_template_sections ? (
-        <ScrollArea className="h-[400px] pr-4">
+        <ScrollArea className="h-[min(60dvh,28rem)] pr-4">
           <div className="space-y-4">
             {selectedTemplate.checklist_template_sections
               .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
@@ -78,19 +80,21 @@ export function StepChecklistItems({
                               isSelected ? 'border-primary bg-primary/5' : 'border-transparent hover:border-muted'
                             )}
                           >
-                            <div
-                              className="flex items-start gap-2 cursor-pointer"
-                              onClick={() =>
-                                handleToggleDeviation(
-                                  { id: item.id, code: item.code, label: item.label, is_critical: item.is_critical },
-                                  section.code
-                                )
-                              }
-                            >
-                              <Checkbox checked={isSelected} className="mt-0.5" />
+                            {/* El <label> ocupa toda la fila (≥44 px): tocar el texto o la casilla marca el desvío */}
+                            <label className="flex min-h-11 cursor-pointer items-start gap-3 py-1">
+                              <Checkbox
+                                checked={isSelected}
+                                className="mt-0.5 size-5"
+                                onCheckedChange={() =>
+                                  handleToggleDeviation(
+                                    { id: item.id, code: item.code, label: item.label, is_critical: item.is_critical },
+                                    section.code
+                                  )
+                                }
+                              />
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="text-sm">{item.label}</span>
+                                  <span className="text-base">{item.label}</span>
                                   {item.is_critical && (
                                     <Badge variant="destructive" className="text-xs">
                                       Crítico
@@ -99,26 +103,27 @@ export function StepChecklistItems({
                                   {isNonPropagating && (
                                     <Badge
                                       variant="secondary"
-                                      className="text-[10px] gap-1 border-dashed font-normal"
+                                      className="text-xs gap-1 border-dashed font-normal"
                                       title="Si marcás este desvío, queda registrado pero no genera trabajo en taller."
                                     >
-                                      <Info className="h-3 w-3" />
+                                      <Info aria-hidden="true" className="h-3 w-3" />
                                       Solo informativo · No viaja a taller
                                     </Badge>
                                   )}
                                 </div>
-                                <span className="text-xs text-muted-foreground">{item.code}</span>
+                                <span className="text-sm text-muted-foreground">{item.code}</span>
                               </div>
-                            </div>
+                            </label>
 
                             {isSelected && (
-                              <div className="mt-2 ml-6">
+                              <div className="mt-2 ml-8">
                                 <Textarea
                                   placeholder="Comentario sobre el desvío (opcional)"
                                   value={deviationComments[item.id] || ''}
                                   onChange={(e) => handleUpdateComment(item.id, e.target.value)}
                                   rows={2}
-                                  className="text-sm"
+                                  className="text-base"
+                                  aria-label={`Comentario sobre el desvío: ${item.label}`}
                                 />
                               </div>
                             )}
@@ -131,7 +136,7 @@ export function StepChecklistItems({
           </div>
         </ScrollArea>
       ) : (
-        <div className="p-4 bg-muted text-center rounded-lg">No hay items en este checklist</div>
+        <div role="status" className="rounded-lg bg-muted p-4 text-center text-sm">Este checklist no tiene items cargados.</div>
       )}
 
       <ManualItemsInput items={manualItems} onChange={setManualItems} disabled={isSubmitting} />

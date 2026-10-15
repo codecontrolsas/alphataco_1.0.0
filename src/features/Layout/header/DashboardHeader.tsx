@@ -1,37 +1,32 @@
-import { Separator } from '@/components/ui/separator';
-import { SidebarTrigger } from '@/components/ui/sidebar';
-import { ModeToggle } from '@/components/ui/ToogleDarkButton';
 import { ContextualHelp } from '@/features/Ayuda/Manual/components/header/ContextualHelp';
-import { DashboardBreadcrumb } from '@/features/Layout/sidebar/components/DashboardBreadcrumb';
 import { Suspense } from 'react';
+import { HeaderNavAsync } from './components/HeaderNavAsync';
+import { HeaderNavFallback } from './components/HeaderNavFallback';
+import { ThemeToggle } from './components/ThemeToggle';
 
 /**
- * Header del dashboard, dentro del `SidebarInset` — es el header del bloque `sidebar-07`.
+ * Barra de contexto del dashboard, dentro del `SidebarInset`.
  *
- * Reemplaza al navbar: el hamburger pasó a ser `SidebarTrigger` (el estado lo maneja
- * `SidebarProvider`), y el selector de empresa y el menú de usuario se mudaron al sidebar.
- * Acá quedan las migas, la ayuda contextual ("?", abre la guía del manual de la pantalla actual)
- * y el cambio de tema.
+ * Su trabajo es ubicar (módulo / sección activa) y mover (menú "Ir a…", Ctrl/⌘ K). La marca, el
+ * selector de empresa y el menú de usuario viven en el sidebar. A la derecha quedan la ayuda
+ * contextual ("?", abre la guía del manual de la pantalla actual) y el cambio de tema.
  *
- * El Suspense es obligatorio: `DashboardBreadcrumb` lee `useSearchParams` y con
- * `cacheComponents` activo Next exige el límite.
+ * En md+ es una grilla de tres zonas para que el disparador quede centrado; en móvil, un flex
+ * donde el contexto trunca. `HeaderNavAsync` lee `useSearchParams` (vía el cliente) y permisos:
+ * con `cacheComponents` activo Next exige el límite de Suspense.
  */
 export function DashboardHeader() {
   return (
-    <header className="bg-background/80 sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b backdrop-blur-sm">
-      <div className="flex w-full items-center gap-2 px-4">
-        <SidebarTrigger className="-ml-1" />
-        <Separator orientation="vertical" className="mr-2 h-4" />
+    <header className="bg-background/85 supports-[backdrop-filter]:bg-background/70 border-border/60 sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b px-3 backdrop-blur sm:px-4 md:grid md:grid-cols-[1fr_minmax(0,24rem)_1fr]">
+      <Suspense fallback={<HeaderNavFallback />}>
+        <HeaderNavAsync />
+      </Suspense>
+      <div className="flex shrink-0 items-center justify-end gap-1">
+        {/* Lee permisos y el manual: dinámico, necesita su propio límite de Suspense. */}
         <Suspense fallback={null}>
-          <DashboardBreadcrumb />
+          <ContextualHelp />
         </Suspense>
-        <div className="ml-auto flex items-center gap-1">
-          {/* Lee permisos y el manual: dinámico, necesita su propio límite de Suspense. */}
-          <Suspense fallback={null}>
-            <ContextualHelp />
-          </Suspense>
-          <ModeToggle />
-        </div>
+        <ThemeToggle />
       </div>
     </header>
   );

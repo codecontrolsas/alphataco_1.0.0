@@ -1,4 +1,4 @@
-import { getPurchaseRequestDetail } from '@/features/Purchases/actions/requests.server';
+import { getPurchaseRequestDetail } from '@/features/Purchases/actions/request-queries.server';
 import { EditPurchaseRequestPage } from '@/features/Purchases/Requests/PurchaseRequestFormPage';
 import { notFound } from 'next/navigation';
 

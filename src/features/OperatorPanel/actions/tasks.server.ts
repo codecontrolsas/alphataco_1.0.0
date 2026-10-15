@@ -44,6 +44,7 @@ export async function getRepairTypesForSector(sectorId: string) {
     },
     select: { types_of_repairs: { select: REPAIR_TYPE_SELECT } },
     orderBy: { types_of_repairs: { name: 'asc' } },
+    take: 500,
   });
 
   return rows.map((row) => row.types_of_repairs);
@@ -60,6 +61,8 @@ export async function getAllRepairTypes(): Promise<OperatorRepairType[]> {
     where: { company_id: operator.companyId, is_active: true, id: { not: DIAGNOSTICO_REPAIR_TYPE_ID } },
     select: REPAIR_TYPE_SELECT,
     orderBy: { name: 'asc' },
+    // Catálogo acotado: un combo no necesita más que esto
+    take: 500,
   });
 }
 

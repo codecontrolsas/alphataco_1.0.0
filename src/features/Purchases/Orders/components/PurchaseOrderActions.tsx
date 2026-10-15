@@ -13,11 +13,11 @@ import {
   rejectPurchaseOrder,
   sendPurchaseOrder,
   submitPurchaseOrder,
-  type PurchaseOrderDetail,
 } from '../../actions/orders.server';
 import { ConfirmAction } from '../../components/ConfirmAction';
 import { ExpiredSupplierDocumentsAlert } from '../../components/ExpiredSupplierDocumentsAlert';
 import { SendToSupplierDialog } from '../../components/SendToSupplierDialog';
+import type { PurchaseOrderDetail } from '../../lib/order-query-types';
 
 /** Botones del detalle de la OC segun su estado y los permisos (calculados en el servidor). */
 export function PurchaseOrderActions({ order }: { order: PurchaseOrderDetail }) {
@@ -78,25 +78,25 @@ export function PurchaseOrderActions({ order }: { order: PurchaseOrderDetail }) 
         </>
       )}
       {can.send && (
-        <>
-          <SendToSupplierDialog
-            documentLabel={`la orden de compra ${order.number}`}
-            recipients={order.recipients}
-            send={(values) => sendPurchaseOrder(order.id, values)}
-            loadPdf={() => getPurchaseOrderPdf(order.id)}
-            warning={expired}
-          />
-          <ConfirmAction
-            icon={CheckCheck}
-            variant="outline"
-            label="Marcar como enviada"
-            title={`¿Marcar ${order.number} como enviada?`}
-            description="Para cuando se la hiciste llegar al proveedor por otro medio (WhatsApp, en mano). No se manda ningún mail."
-            confirmLabel="Marcar como enviada"
-            successMessage={`Orden ${order.number} marcada como enviada`}
-            run={() => markPurchaseOrderSent(order.id)}
-          />
-        </>
+        <SendToSupplierDialog
+          documentLabel={`la orden de compra ${order.number}`}
+          recipients={order.recipients}
+          send={(values) => sendPurchaseOrder(order.id, values)}
+          loadPdf={() => getPurchaseOrderPdf(order.id)}
+          warning={expired}
+        />
+      )}
+      {can.markSent && (
+        <ConfirmAction
+          icon={CheckCheck}
+          variant="outline"
+          label="Marcar como enviada"
+          title={`¿Marcar ${order.number} como enviada?`}
+          description="Para cuando se la hiciste llegar al proveedor por otro medio (WhatsApp, en mano). No se manda ningún mail."
+          confirmLabel="Marcar como enviada"
+          successMessage={`Orden ${order.number} marcada como enviada`}
+          run={() => markPurchaseOrderSent(order.id)}
+        />
       )}
       {can.receive && (
         <Button asChild size="sm">
@@ -106,7 +106,7 @@ export function PurchaseOrderActions({ order }: { order: PurchaseOrderDetail }) 
           </Link>
         </Button>
       )}
-      <DownloadPdfButton load={() => getPurchaseOrderPdf(order.id)} />
+      {can.pdf && <DownloadPdfButton load={() => getPurchaseOrderPdf(order.id)} />}
       {can.close && (
         <ConfirmAction
           icon={Lock}

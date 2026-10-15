@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { uploadDocumentForRequirement } from '@/features/Documentacion/shared/actions/document-actions';
 import {
   getActiveDocumentTypesByResource,
   getActiveResourcesForDocuments,
@@ -19,24 +20,19 @@ import {
 } from '@/features/Documentacion/shared/actions/document-resources.server';
 import { uploadMultiResourceDocument } from '@/features/Documentacion/shared/actions/upload-multiresource-document';
 import { cn } from '@/lib/utils';
-import { useLoggedUserStore } from '@/shared/store/loggedUser';
 import { CaretSortIcon } from '@radix-ui/react-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckIcon } from 'lucide-react';
-import moment from 'moment';
 import { useSearchParams } from 'next/navigation';
 import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
+import { toArgentinaValidityIso } from '../lib/document-dates';
+import { DOCUMENT_FILE_ACCEPT, validateDocumentFile } from '../lib/document-file-rules';
+import { invalidateDocumentLists } from '../lib/document-query-keys';
+import type { SimpleDocumentForm } from '../schemas/simple-document';
 
 type TypeFilter = 'Ambos' | 'Permanentes' | 'Mensuales';
-
-interface SimpleDocumentForm {
-  applies: string;
-  id_document_types: string;
-  validity: string;
-  period: string;
-}
 
 /**
  * Modal "Subir documento" de las tablas de documentos (empleados/equipos).
@@ -49,8 +45,8 @@ export default function SimpleDocument({
   resource,
   handleOpen,
   defaultDocumentId,
-  document,
   numberDocument,
+  requirement,
   onUploaded,
 }: {
   resource: string | undefined;
@@ -59,21 +55,38 @@ export default function SimpleDocument({
   document?: string;
   numberDocument?: string;
   /**
-   * Refresco extra tras subir. Las tablas nuevas (React Query) ya se refrescan con
-   * invalidateQueries(); las tablas del sistema viejo (BaseDataTable SSR, ej. detalle
-   * de equipo) deben pasar `() => router.refresh()` aqui para verse actualizadas.
+   * Exigencia faltante (modelo derivado: no hay una fila de documento que actualizar). Fija el recurso
+   * y el tipo, y sube con `uploadDocumentForRequirement` en vez de la vía genérica.
+   */
+  requirement?: {
+    kind: 'employee' | 'vehicle';
+    resourceId: string;
+    documentTypeId: string;
+    /** Período `YYYY-MM` precargado (fila faltante de un tipo mensual). */
+    period?: string;
+  };
+  /**
+   * Refresco extra tras subir. Las listas de documentos (React Query) ya se refrescan solas;
+   * las pantallas que renderizan en el servidor (SSR) deben pasar `() => router.refresh()`.
    */
   onUploaded?: () => void;
 }) {
-  const resourceKind: DocumentResource = resource === 'equipo' ? 'equipo' : 'empleado';
+  const resourceKind: DocumentResource = requirement
+    ? requirement.kind === 'vehicle'
+      ? 'equipo'
+      : 'empleado'
+    : resource === 'equipo'
+      ? 'equipo'
+      : 'empleado';
+  const lockedResourceKey = requirement?.resourceId ?? numberDocument;
+  const presetDocumentId = requirement?.documentTypeId ?? defaultDocumentId;
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const documentDrawerEmployees = useLoggedUserStore((state) => state.documentDrawerEmployees);
-  const documentDrawerVehicles = useLoggedUserStore((state) => state.documentDrawerVehicles);
   const searchParams = useSearchParams();
   const documentResource = searchParams.get('document');
-  const id = searchParams.get('id');
+  // `?id=` sólo identifica al recurso en el detalle de un equipo (trae el id del vehículo ahí).
+  const id = resourceKind === 'equipo' ? searchParams.get('id') : null;
 
   const { data: documentTypes = [], isLoading: loadingTypes } = useQuery({
     queryKey: ['document-types-by-resource', resourceKind],
@@ -89,18 +102,18 @@ export default function SimpleDocument({
   // Preseleccion del recurso: numberDocument (id o serie/domain/DNI), el searchParam `document`
   // (DNI del empleado) o el searchParam `id` (detalle de equipo trae el id del vehiculo ahi).
   const lockedResource = useMemo<DocumentResourceOption | undefined>(() => {
-    const keys = [numberDocument, documentResource, id].filter((k): k is string => !!k);
+    const keys = [lockedResourceKey, documentResource, id].filter((k): k is string => !!k);
     if (keys.length === 0) return undefined;
     return resources.find((r) => keys.includes(r.id) || keys.includes(r.document));
-  }, [resources, numberDocument, documentResource, id]);
-  const isLocked = Boolean(numberDocument || documentResource || id);
+  }, [resources, lockedResourceKey, documentResource, id]);
+  const isLocked = Boolean(lockedResourceKey || documentResource || id);
 
   const form = useForm<SimpleDocumentForm>({
     defaultValues: {
       applies: '',
-      id_document_types: defaultDocumentId ?? '',
+      id_document_types: presetDocumentId ?? '',
       validity: '',
-      period: '',
+      period: requirement?.period ?? '',
     },
   });
   const {
@@ -151,6 +164,11 @@ export default function SimpleDocument({
       setFileError('El archivo es obligatorio');
       return;
     }
+    const invalidFile = validateDocumentFile(selectedFile);
+    if (invalidFile) {
+      setFileError(invalidFile);
+      return;
+    }
     const docType = documentTypes.find((t) => t.id === formData.id_document_types);
     if (!docType) {
       setError('id_document_types', { type: 'required', message: 'Este campo es requerido' });
@@ -159,9 +177,10 @@ export default function SimpleDocument({
 
     // Multirecurso: aplica a TODOS los recursos ACTIVOS (la lista ya viene filtrada por is_active;
     // los dados de baja quedan excluidos y sus documentos existentes no se tocan).
-    const targetIds = docType.multiresource
-      ? resources.map((r) => r.id)
-      : [lockedResource?.id ?? formData.applies].filter(Boolean);
+    const targetIds =
+      docType.multiresource && !requirement
+        ? resources.map((r) => r.id)
+        : [requirement?.resourceId ?? lockedResource?.id ?? formData.applies].filter(Boolean);
     if (targetIds.length === 0) {
       if (docType.multiresource) {
         toast.error('No se encontraron recursos activos para vincular el documento');
@@ -171,27 +190,35 @@ export default function SimpleDocument({
       return;
     }
 
+    const validityDate = formData.validity ? new Date(toArgentinaValidityIso(formData.validity)) : null;
     const fd = new FormData();
     fd.append('file', selectedFile);
     fd.append('resource', resourceKind);
     fd.append('documentTypeId', docType.id);
     fd.append('appliesIds', JSON.stringify(targetIds));
-    if (formData.validity) fd.append('validity', moment(formData.validity).utc().format());
+    if (formData.validity) fd.append('validity', toArgentinaValidityIso(formData.validity));
     if (formData.period) fd.append('period', formData.period);
 
     toast.promise(
       async () => {
         setLoading(true);
         try {
-          const result = await uploadMultiResourceDocument(fd);
+          const result = requirement
+            ? await uploadDocumentForRequirement({
+                kind: requirement.kind,
+                resourceId: requirement.resourceId,
+                documentTypeId: docType.id,
+                file: selectedFile,
+                validity: validityDate,
+                period: formData.period || undefined,
+              })
+            : await uploadMultiResourceDocument(fd);
           if (!result.ok) {
-            if (result.error === 'El documento ya ha sido subido anteriormente') {
+            if ('code' in result && result.code === 'ALREADY_UPLOADED') {
               setError('id_document_types', { type: 'validate', message: result.error });
             }
             throw new Error(result.error);
           }
-          if (document) await documentDrawerEmployees(document);
-          if (id) await documentDrawerVehicles(id);
         } finally {
           setLoading(false);
         }
@@ -200,8 +227,8 @@ export default function SimpleDocument({
         loading: 'Subiendo...',
         success: () => {
           handleOpen();
-          // Refrescar solo la data de las tablas montadas (React Query), sin recargar la ruta
-          queryClient.invalidateQueries();
+          // Refrescar solo las listas de documentos (React Query y sus facets), sin recargar la ruta
+          void invalidateDocumentLists(queryClient);
           // Refresco extra para consumidores del sistema viejo (SSR) que no usan React Query
           onUploaded?.();
           if (fileInputRef.current) fileInputRef.current.value = '';
@@ -297,7 +324,7 @@ export default function SimpleDocument({
           )}
 
           <div className="space-y-2">
-            {!defaultDocumentId && (
+            {!presetDocumentId && (
               <ToggleGroup
                 value={typeFilter}
                 type="single"
@@ -329,7 +356,7 @@ export default function SimpleDocument({
                         className={cn('justify-between w-full', !field.value && 'text-muted-foreground')}
                       >
                         {field.value
-                          ? (documentTypes.find((t) => t.id === field.value)?.name ?? 'Seleccionar documento')
+                          ? documentTypes.find((t) => t.id === field.value)?.name ?? 'Seleccionar documento'
                           : 'Seleccionar documento'}
                         <CaretSortIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
@@ -384,6 +411,7 @@ export default function SimpleDocument({
               ref={fileInputRef}
               type="file"
               onChange={handleFileChange}
+              accept={DOCUMENT_FILE_ACCEPT}
               className="cursor-pointer"
             />
             {selectedFile && <p className="text-sm text-muted-foreground">Archivo seleccionado: {selectedFile.name}</p>}
@@ -418,7 +446,6 @@ export default function SimpleDocument({
                     <Input
                       placeholder="Seleccionar periodo"
                       type="month"
-                      min={new Date().toISOString().split('T')[0]}
                       value={field.value}
                       onChange={field.onChange}
                     />

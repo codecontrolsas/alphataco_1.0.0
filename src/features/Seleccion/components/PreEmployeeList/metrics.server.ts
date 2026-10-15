@@ -1,5 +1,6 @@
 'use server';
 
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
@@ -11,6 +12,9 @@ const logger = new Logger('Seleccion/PreEmployeeList/metrics.server');
  * Una sola consulta agrupada (no un `count` por estado).
  */
 export async function getPreEmployeeStatusMetrics() {
+  if (!(await checkPermissionServer('seleccion', 'candidatos', 'view'))) {
+    throw new Error('No tenés permiso para ver candidatos');
+  }
   const companyId = await getActiveCompanyId();
 
   try {

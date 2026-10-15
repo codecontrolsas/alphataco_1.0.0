@@ -1,13 +1,23 @@
 import { getUserPermissionsMapServer } from '@/features/Permissions';
 import { SectionManagerServer } from '@/features/TabsManager';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { Banknote, BookOpenText, ClipboardList, FileCheck, FileQuestion, PackageCheck, Percent, ReceiptText, Settings, Truck } from 'lucide-react';
+import { SectionErrorBoundary } from '@/shared/components/common/SectionErrorBoundary';
+import {
+  Banknote,
+  BookOpenText,
+  ClipboardList,
+  FileCheck,
+  FileQuestion,
+  PackageCheck,
+  Percent,
+  ReceiptText,
+  Settings,
+  Truck,
+} from 'lucide-react';
 import { Suspense } from 'react';
 import InvoicesTabContent from './Invoices/InvoicesTabContent';
 import OrdersTabContent from './Orders/OrdersTabContent';
 import PaymentsTabContent from './Payments/PaymentsTabContent';
-import WithholdingsTabContent from './Withholdings/WithholdingsTabContent';
-import { WithholdingsSkeleton } from './Withholdings/fallback/WithholdingsSkeleton';
 import QuotesTabContent from './Quotes/QuotesTabContent';
 import ReceiptsTabContent from './Receipts/ReceiptsTabContent';
 import RequestsTabContent from './Requests/RequestsTabContent';
@@ -16,6 +26,8 @@ import { PurchasesSettingsSkeleton } from './Settings/fallback/PurchasesSettings
 import SuppliersTabContent from './Suppliers/SuppliersTabContent';
 import VatBookTabContent from './VatBook/VatBookTabContent';
 import { VatBookSkeleton } from './VatBook/fallback/VatBookSkeleton';
+import WithholdingsTabContent from './Withholdings/WithholdingsTabContent';
+import { WithholdingsSkeleton } from './Withholdings/fallback/WithholdingsSkeleton';
 import { PurchasesSectionSkeleton } from './fallback/PurchasesSectionSkeleton';
 
 /**
@@ -48,9 +60,11 @@ export default async function PurchasesComponent({ searchParams }: { searchParam
           moduleSlug: 'compras',
           tabSlug: 'solicitudes',
           content: (
-            <Suspense fallback={<PurchasesSectionSkeleton />}>
-              <RequestsTabContent searchParams={searchParams} permissions={permissions} />
-            </Suspense>
+            <SectionErrorBoundary title="No se pudo mostrar Solicitudes">
+              <Suspense fallback={<PurchasesSectionSkeleton />}>
+                <RequestsTabContent searchParams={searchParams} permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
         {
@@ -59,9 +73,11 @@ export default async function PurchasesComponent({ searchParams }: { searchParam
           moduleSlug: 'compras',
           tabSlug: 'cotizaciones',
           content: (
-            <Suspense fallback={<PurchasesSectionSkeleton />}>
-              <QuotesTabContent searchParams={searchParams} permissions={permissions} />
-            </Suspense>
+            <SectionErrorBoundary title="No se pudo mostrar Cotizaciones">
+              <Suspense fallback={<PurchasesSectionSkeleton />}>
+                <QuotesTabContent searchParams={searchParams} permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
         {
@@ -70,9 +86,11 @@ export default async function PurchasesComponent({ searchParams }: { searchParam
           moduleSlug: 'compras',
           tabSlug: 'ordenes',
           content: (
-            <Suspense fallback={<PurchasesSectionSkeleton />}>
-              <OrdersTabContent searchParams={searchParams} permissions={permissions} />
-            </Suspense>
+            <SectionErrorBoundary title="No se pudo mostrar Órdenes de compra">
+              <Suspense fallback={<PurchasesSectionSkeleton />}>
+                <OrdersTabContent searchParams={searchParams} permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
         {
@@ -81,9 +99,11 @@ export default async function PurchasesComponent({ searchParams }: { searchParam
           moduleSlug: 'compras',
           tabSlug: 'recepciones',
           content: (
-            <Suspense fallback={<PurchasesSectionSkeleton />}>
-              <ReceiptsTabContent searchParams={searchParams} permissions={permissions} />
-            </Suspense>
+            <SectionErrorBoundary title="No se pudo mostrar Recepciones">
+              <Suspense fallback={<PurchasesSectionSkeleton />}>
+                <ReceiptsTabContent searchParams={searchParams} permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
         {
@@ -92,9 +112,11 @@ export default async function PurchasesComponent({ searchParams }: { searchParam
           moduleSlug: 'compras',
           tabSlug: 'facturas',
           content: (
-            <Suspense fallback={<PurchasesSectionSkeleton />}>
-              <InvoicesTabContent searchParams={searchParams} permissions={permissions} />
-            </Suspense>
+            <SectionErrorBoundary title="No se pudo mostrar Facturas">
+              <Suspense fallback={<PurchasesSectionSkeleton />}>
+                <InvoicesTabContent searchParams={searchParams} permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
         {
@@ -103,9 +125,11 @@ export default async function PurchasesComponent({ searchParams }: { searchParam
           moduleSlug: 'compras',
           tabSlug: 'pagos',
           content: (
-            <Suspense fallback={<PurchasesSectionSkeleton />}>
-              <PaymentsTabContent searchParams={searchParams} permissions={permissions} />
-            </Suspense>
+            <SectionErrorBoundary title="No se pudo mostrar Pagos">
+              <Suspense fallback={<PurchasesSectionSkeleton />}>
+                <PaymentsTabContent searchParams={searchParams} permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
         {
@@ -114,9 +138,11 @@ export default async function PurchasesComponent({ searchParams }: { searchParam
           moduleSlug: 'compras',
           tabSlug: 'retenciones',
           content: (
-            <Suspense fallback={<WithholdingsSkeleton />}>
-              <WithholdingsTabContent searchParams={searchParams} permissions={permissions} />
-            </Suspense>
+            <SectionErrorBoundary title="No se pudo mostrar Retenciones">
+              <Suspense fallback={<WithholdingsSkeleton />}>
+                <WithholdingsTabContent searchParams={searchParams} permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
         {
@@ -125,9 +151,11 @@ export default async function PurchasesComponent({ searchParams }: { searchParam
           moduleSlug: 'compras',
           tabSlug: 'libro-iva',
           content: (
-            <Suspense fallback={<VatBookSkeleton />}>
-              <VatBookTabContent searchParams={searchParams} permissions={permissions} />
-            </Suspense>
+            <SectionErrorBoundary title="No se pudo mostrar Libro IVA">
+              <Suspense fallback={<VatBookSkeleton />}>
+                <VatBookTabContent searchParams={searchParams} permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
         {
@@ -136,9 +164,11 @@ export default async function PurchasesComponent({ searchParams }: { searchParam
           moduleSlug: 'compras',
           tabSlug: 'proveedores',
           content: (
-            <Suspense fallback={<PurchasesSectionSkeleton />}>
-              <SuppliersTabContent searchParams={searchParams} permissions={permissions} />
-            </Suspense>
+            <SectionErrorBoundary title="No se pudo mostrar Proveedores">
+              <Suspense fallback={<PurchasesSectionSkeleton />}>
+                <SuppliersTabContent searchParams={searchParams} permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
         {
@@ -147,9 +177,11 @@ export default async function PurchasesComponent({ searchParams }: { searchParam
           moduleSlug: 'compras',
           tabSlug: 'config-compras',
           content: (
-            <Suspense fallback={<PurchasesSettingsSkeleton />}>
-              <SettingsTabContent permissions={permissions} />
-            </Suspense>
+            <SectionErrorBoundary title="No se pudo mostrar Configuración">
+              <Suspense fallback={<PurchasesSettingsSkeleton />}>
+                <SettingsTabContent permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
       ]}

@@ -1,9 +1,12 @@
 'use server';
 
+import { requireGomeriaPermission } from '@/features/Mantenimiento/Gomeria/shared/access.server';
 import {
-  assertSubTypeInActiveCompany,
-  assertTemplateInActiveCompany,
-} from '@/features/Mantenimiento/Gomeria/shared/perimeter';
+  composeAnd,
+  GOMERIA_EXPORT_MAX_ROWS,
+  gomeriaExportTooLargeMessage,
+} from '@/features/Mantenimiento/Gomeria/shared/list-query';
+import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
   buildDateRangeFiltersWhere,
@@ -11,11 +14,18 @@ import {
   buildSearchWhere,
   buildTextFiltersWhere,
   parseSearchParams,
-  stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
+import { clampedPageParams } from '@/shared/lib/table-pagination';
+
+/**
+ * Listado de plantillas de cubiertas del dashboard (paginado y export).
+ * Lectura = `view` de la pestaña `plantillas_cubiertas` (módulo `mantenimiento`).
+ * Las plantillas no tienen filtros facetados (solo texto y fecha), así que no hay facetas.
+ */
 
 const logger = new Logger('features/Mantenimiento/Gomeria/Plantillas');
 
@@ -56,45 +66,34 @@ const TEMPLATE_SELECT = {
     },
     orderBy: { axle_number: 'asc' as const },
   },
-};
+} as const;
 
 const VALID_SORT_FIELDS = new Set(['name', 'created_at']);
 
 const TEXT_FILTER_COLUMNS = ['name', 'description'];
 const DATE_RANGE_COLUMNS = ['created_at'];
 
+const ALLOWED_FILTER_KEYS = new Set([...TEXT_FILTER_COLUMNS, ...dateRangeKeys(DATE_RANGE_COLUMNS)]);
+
+type ListState = ReturnType<typeof parseSearchParams>;
+
 // ============================================================================
-// INTERNAL WHERE BUILDER
+// WHERE
 // ============================================================================
 
-function buildTemplatesWhereClause(state: ReturnType<typeof parseSearchParams>, companyId: string) {
-  const searchWhere = buildSearchWhere(state.search, ['name', 'description']);
+function parseListState(searchParams: DataTableSearchParams): ListState {
+  return sanitizeFilters(parseSearchParams(searchParams), ALLOWED_FILTER_KEYS);
+}
 
-  const filtersWhere = buildFiltersWhere(
-    state.filters,
-    {},
-    {
-      exclude: [...TEXT_FILTER_COLUMNS, ...DATE_RANGE_COLUMNS.flatMap((c) => [`${c}_from`, `${c}_to`])],
-    }
+/** Perímetro (empresa + activas), búsqueda y filtros dentro de UN solo `AND`. */
+function buildWhereClause(state: ListState, companyId: string) {
+  return composeAnd<Prisma.tire_templatesWhereInput>(
+    { company_id: companyId, is_active: true },
+    buildSearchWhere(state.search, ['name', 'description']),
+    buildFiltersWhere(state.filters, {}, { exclude: [...TEXT_FILTER_COLUMNS, ...dateRangeKeys(DATE_RANGE_COLUMNS)] }),
+    buildTextFiltersWhere(state.filters, TEXT_FILTER_COLUMNS),
+    buildDateRangeFiltersWhere(state.filters, DATE_RANGE_COLUMNS)
   );
-
-  const textFiltersWhere = buildTextFiltersWhere(state.filters, TEXT_FILTER_COLUMNS);
-  const dateFiltersWhere = buildDateRangeFiltersWhere(state.filters, DATE_RANGE_COLUMNS);
-
-  const filtersWhereAndConditions = (filtersWhere.AND as Record<string, unknown>[] | undefined) ?? [];
-  const { AND: _discarded, ...filtersWhereWithoutAnd } = filtersWhere as Record<string, unknown> & {
-    AND?: unknown;
-  };
-
-  return {
-    company_id: companyId,
-    is_active: true,
-    ...searchWhere,
-    ...filtersWhereWithoutAnd,
-    ...textFiltersWhere,
-    ...dateFiltersWhere,
-    ...(filtersWhereAndConditions.length > 0 ? { AND: filtersWhereAndConditions } : {}),
-  };
 }
 
 // ============================================================================
@@ -102,340 +101,62 @@ function buildTemplatesWhereClause(state: ReturnType<typeof parseSearchParams>, 
 // ============================================================================
 
 export async function getTemplatesPaginated(searchParams: DataTableSearchParams) {
-  logger.debug('Fetching tire templates paginated');
+  const companyId = await requireGomeriaPermission('plantillas_cubiertas', 'view');
 
   try {
-    const companyId = await getActiveCompanyId();
-    const state = parseSearchParams(searchParams);
-    const { skip, take } = stateToPrismaParams(state);
-    const where = buildTemplatesWhereClause(state, companyId);
+    const state = parseListState(searchParams);
+    const { skip, take } = clampedPageParams(state);
+    const where = buildWhereClause(state, companyId);
 
     const resolvedSorts: Record<string, unknown>[] = [];
     for (const s of state.sorting) {
-      if (VALID_SORT_FIELDS.has(s.id)) {
-        const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-        resolvedSorts.push({ [s.id]: dir });
-      }
+      if (VALID_SORT_FIELDS.has(s.id)) resolvedSorts.push({ [s.id]: s.desc ? 'desc' : 'asc' });
     }
-    const safeOrderBy = [...resolvedSorts, { created_at: 'desc' as const }];
+    const safeOrderBy = [...resolvedSorts, { created_at: 'desc' as const }, { id: 'asc' as const }];
 
     const [data, total] = await Promise.all([
-      prisma.tire_templates.findMany({
-        skip,
-        take,
-        orderBy: safeOrderBy,
-        where,
-        select: TEMPLATE_SELECT,
-      }),
+      prisma.tire_templates.findMany({ skip, take, orderBy: safeOrderBy, where, select: TEMPLATE_SELECT }),
       prisma.tire_templates.count({ where }),
     ]);
 
     return { data, total };
   } catch (error) {
     logger.error('Error fetching tire templates paginated', { data: { error } });
-    throw new Error(`Error al obtener las plantillas: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error('Error al obtener las plantillas');
   }
 }
 
 // ============================================================================
-// EXPORT QUERY
+// EXPORT QUERY (con tope)
 // ============================================================================
 
-export async function getTemplatesForExport(searchParams: DataTableSearchParams) {
-  logger.debug('Exporting tire templates');
-
-  try {
-    const companyId = await getActiveCompanyId();
-    const state = parseSearchParams(searchParams);
-    const where = buildTemplatesWhereClause(state, companyId);
-
-    const data = await prisma.tire_templates.findMany({
-      orderBy: [{ created_at: 'desc' }],
-      where,
-      select: TEMPLATE_SELECT,
-    });
-
-    return data;
-  } catch (error) {
-    logger.error('Error exporting tire templates', { data: { error } });
-    throw new Error('Error al exportar las plantillas');
-  }
-}
-
-// ============================================================================
-// SINGLE FACET (lazy-load, cross-filtering)
-// ============================================================================
-
-/**
- * Returns options and counts for a SINGLE faceted filter, with cross-filtering.
- * Templates have mostly text columns, so facets are minimal.
- */
-export async function getTemplateSingleFacet(
-  columnId: string,
-  searchParams?: DataTableSearchParams
-): Promise<{
-  counts: Map<string, number>;
-  resolvedOptions?: Array<{ id: string; name: string | null }>;
-} | null> {
-  logger.debug('Getting template single facet', { data: { columnId } });
-
+export async function getTemplatesForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<TemplateListItem[]>> {
   let companyId: string;
   try {
-    companyId = await getActiveCompanyId();
+    companyId = await requireGomeriaPermission('plantillas_cubiertas', 'view');
   } catch {
-    return null;
-  }
-
-  const baseWhere = { company_id: companyId, is_active: true };
-
-  let parsedState: ReturnType<typeof parseSearchParams> | null = null;
-  if (searchParams && Object.keys(searchParams).length > 0) {
-    parsedState = parseSearchParams(searchParams);
-  }
-
-  const hasActiveFilters = parsedState && (Object.keys(parsedState.filters).length > 0 || parsedState.search);
-
-  function crossWhere(excludeColumn: string) {
-    if (!parsedState || !hasActiveFilters) return baseWhere;
-    const modified = { ...parsedState, filters: { ...parsedState.filters } };
-    delete modified.filters[excludeColumn];
-    delete modified.filters[`${excludeColumn}_from`];
-    delete modified.filters[`${excludeColumn}_to`];
-    return buildTemplatesWhereClause(modified, companyId);
+    return { ok: false, message: 'No tenés permiso para exportar las plantillas' };
   }
 
   try {
-    const where = crossWhere(columnId);
+    const where = buildWhereClause(parseListState(searchParams), companyId);
 
-    logger.warn('getTemplateSingleFacet: unknown columnId', { data: { columnId } });
-    void where; // used for cross-filter pattern
-    return null;
-  } catch (error) {
-    logger.error('Error getting template single facet', { data: { error, columnId } });
-    return null;
-  }
-}
-
-// ============================================================================
-// CRUD ACTIONS
-// ============================================================================
-
-export async function getTemplateById(id: string) {
-  logger.debug('Fetching template by id', { data: { id } });
-  try {
-    const companyId = await getActiveCompanyId();
-    const template = await prisma.tire_templates.findFirst({
-      where: { id, company_id: companyId },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        company_id: true,
-        is_active: true,
-        created_at: true,
-        axles: {
-          select: {
-            id: true,
-            axle_number: true,
-            tires_per_side: true,
-            tire_size: true,
-            is_drive_axle: true,
-            is_spare: true,
-          },
-          orderBy: { axle_number: 'asc' },
-        },
-      },
-    });
-    return template;
-  } catch (error) {
-    logger.error('Error fetching template by id', { data: { error, id } });
-    throw error;
-  }
-}
-
-/** Alta de plantilla: la empresa sale de la sesión, no del formulario. */
-export async function createTemplate(data: { name: string; description?: string; axles: AxleInput[] }) {
-  logger.debug('Creating tire template', { data: { name: data.name } });
-  try {
-    const companyId = await getActiveCompanyId();
-
-    const template = await prisma.$transaction(async (tx) => {
-      const created = await tx.tire_templates.create({
-        data: {
-          name: data.name,
-          description: data.description ?? null,
-          company_id: companyId,
-        },
-      });
-
-      if (data.axles.length > 0) {
-        await tx.tire_template_axles.createMany({
-          data: data.axles.map((axle) => ({
-            template_id: created.id,
-            axle_number: axle.axle_number,
-            tires_per_side: axle.tires_per_side,
-            tire_size: axle.tire_size,
-            is_drive_axle: axle.is_drive_axle,
-            is_spare: axle.is_spare,
-          })),
-        });
-      }
-
-      return created;
+    const data = await prisma.tire_templates.findMany({
+      orderBy: [{ created_at: 'desc' }, { id: 'asc' }],
+      where,
+      select: TEMPLATE_SELECT,
+      take: GOMERIA_EXPORT_MAX_ROWS + 1,
     });
 
-    return template;
-  } catch (error) {
-    logger.error('Error creating tire template', { data: { error } });
-    throw error;
-  }
-}
-
-export async function updateTemplate(
-  id: string,
-  data: {
-    name: string;
-    description?: string;
-    axles: AxleInput[];
-  }
-) {
-  logger.debug('Updating tire template', { data: { id, name: data.name } });
-  try {
-    await assertTemplateInActiveCompany(id);
-
-    const template = await prisma.$transaction(async (tx) => {
-      const updated = await tx.tire_templates.update({
-        where: { id },
-        data: {
-          name: data.name,
-          description: data.description ?? null,
-        },
-      });
-
-      // Delete all existing axles and recreate
-      await tx.tire_template_axles.deleteMany({ where: { template_id: id } });
-
-      if (data.axles.length > 0) {
-        await tx.tire_template_axles.createMany({
-          data: data.axles.map((axle) => ({
-            template_id: id,
-            axle_number: axle.axle_number,
-            tires_per_side: axle.tires_per_side,
-            tire_size: axle.tire_size,
-            is_drive_axle: axle.is_drive_axle,
-            is_spare: axle.is_spare,
-          })),
-        });
-      }
-
-      return updated;
-    });
-
-    return template;
-  } catch (error) {
-    logger.error('Error updating tire template', { data: { error, id } });
-    throw error;
-  }
-}
-
-export async function deleteTemplate(id: string) {
-  logger.debug('Soft-deleting tire template', { data: { id } });
-  try {
-    await assertTemplateInActiveCompany(id);
-
-    // Check if any active sub_type uses this template
-    const subTypesWithTemplate = await prisma.sub_type.findMany({
-      where: { tire_template_id: id, is_active: true },
-      select: { id: true, name: true },
-    });
-
-    if (subTypesWithTemplate.length > 0) {
-      const names = subTypesWithTemplate.map((s) => s.name).join(', ');
-      throw new Error(`No se puede eliminar la plantilla porque está asignada a los siguientes subtipos: ${names}`);
+    if (data.length > GOMERIA_EXPORT_MAX_ROWS) {
+      return { ok: false, message: gomeriaExportTooLargeMessage('plantillas') };
     }
-
-    // Check if any active vehicle uses this template as override
-    const vehiclesWithTemplate = await prisma.vehicles.findMany({
-      where: { tire_template_id: id, is_active: true },
-      select: { id: true, domain: true },
-    });
-
-    if (vehiclesWithTemplate.length > 0) {
-      const domains = vehiclesWithTemplate.map((v) => v.domain ?? 'Sin dominio').join(', ');
-      throw new Error(
-        `No se puede eliminar la plantilla porque está asignada como personalizada a los siguientes equipos: ${domains}`
-      );
-    }
-
-    const template = await prisma.tire_templates.update({
-      where: { id },
-      data: { is_active: false },
-    });
-    return template;
+    return { ok: true, data };
   } catch (error) {
-    logger.error('Error deleting tire template', { data: { error, id } });
-    throw error;
-  }
-}
-
-export async function assignTemplateToSubType(subTypeId: string, templateId: string) {
-  logger.debug('Assigning template to sub_type', { data: { subTypeId, templateId } });
-  try {
-    // El subtipo y la plantilla llegan del cliente: los dos tienen que ser de la empresa activa.
-    await assertSubTypeInActiveCompany(subTypeId);
-    await assertTemplateInActiveCompany(templateId);
-
-    // Simply update the sub_type's tire_template_id.
-    // Vehicle positions are generated lazily (on-demand) when a service order is created.
-    await prisma.sub_type.update({
-      where: { id: subTypeId },
-      data: { tire_template_id: templateId },
-    });
-  } catch (error) {
-    logger.error('Error assigning template to sub_type', { data: { error, subTypeId, templateId } });
-    throw error;
-  }
-}
-
-export async function unassignTemplateFromSubType(subTypeId: string) {
-  logger.debug('Unassigning template from sub_type', { data: { subTypeId } });
-  try {
-    await assertSubTypeInActiveCompany(subTypeId);
-
-    await prisma.sub_type.update({
-      where: { id: subTypeId },
-      data: { tire_template_id: null },
-    });
-  } catch (error) {
-    logger.error('Error unassigning template from sub_type', { data: { error, subTypeId } });
-    throw error;
-  }
-}
-
-// ============================================================================
-// SUB_TYPE QUERY (for assignment)
-// ============================================================================
-
-/** Subtipos de la empresa activa, para el diálogo de asignación de plantillas. */
-export async function getSubTypesForTemplateAssign() {
-  logger.debug('Fetching sub_types for template assignment');
-  try {
-    const companyId = await getActiveCompanyId();
-    const subTypes = await prisma.sub_type.findMany({
-      where: { company_id: companyId, is_active: true },
-      select: {
-        id: true,
-        name: true,
-        tire_template_id: true,
-        tire_template: { select: { id: true, name: true } },
-        type_sub_type_typeTotype: { select: { id: true, name: true } },
-      },
-      orderBy: { name: 'asc' },
-    });
-    return subTypes;
-  } catch (error) {
-    logger.error('Error fetching sub_types for template assignment', { data: { error } });
-    throw error;
+    logger.error('Error exporting tire templates', { data: { error } });
+    return { ok: false, message: 'Error al exportar las plantillas' };
   }
 }
 
@@ -444,5 +165,3 @@ export async function getSubTypesForTemplateAssign() {
 // ============================================================================
 
 export type TemplateListItem = Awaited<ReturnType<typeof getTemplatesPaginated>>['data'][number];
-export type TemplateDetail = Awaited<ReturnType<typeof getTemplateById>>;
-export type SubTypeForAssign = Awaited<ReturnType<typeof getSubTypesForTemplateAssign>>[number];

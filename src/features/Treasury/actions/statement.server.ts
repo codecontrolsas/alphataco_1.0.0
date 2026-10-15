@@ -5,17 +5,19 @@ import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { UUID_RE } from '../lib/action-errors';
 import { ZERO_INDICATORS, getAccountIndicators, getAccountStatement, getBalanceOn, getIssuedOwnChecks } from '../lib/balances';
-import { DATE_RE } from '../schemas/shared';
+import { accountStatementRangeError } from '../lib/statement-range';
+import { isCalendarDay } from '../schemas/shared';
 import { localToday } from './shared';
 
 /**
  * Extracto de una cuenta entre `from` y `to` (spec Tesorería etapa 1 §3): datos de la cuenta, sus
  * indicadores de hoy, saldo anterior, movimientos con saldo acumulado y saldo final. Lo usan la
- * página del extracto y su Excel. null si la cuenta no es de la empresa o no hay permiso.
+ * página del extracto y su Excel. null si la cuenta no es de la empresa, no hay permiso o el período es inválido
+ * (fechas inexistentes, «Hasta» anterior a «Desde» o más de 12 meses: ver `accountStatementRangeError`).
  */
 export async function getAccountStatementData(accountId: string, from: string, to: string) {
   if (!(await checkPermissionServer('tesoreria', 'cuentas', 'view'))) return null;
-  if (!UUID_RE.test(accountId) || !DATE_RE.test(from) || !DATE_RE.test(to) || to < from) return null;
+  if (!UUID_RE.test(accountId) || accountStatementRangeError(from, to) !== null) return null;
   const companyId = await getActiveCompanyId();
   const account = await prisma.treasury_accounts.findFirst({
     where: { id: accountId, company_id: companyId },
@@ -45,7 +47,7 @@ export async function getAccountBalanceOn(accountId: string, date: string, exclu
     checkPermissionServer('tesoreria', 'transferencias', 'view'),
   ]);
   if (!allowed.some(Boolean)) return null;
-  if (!UUID_RE.test(accountId) || !DATE_RE.test(date) || (excludeMovementId && !UUID_RE.test(excludeMovementId))) return null;
+  if (!UUID_RE.test(accountId) || !isCalendarDay(date) || (excludeMovementId && !UUID_RE.test(excludeMovementId))) return null;
   const companyId = await getActiveCompanyId();
   const exists = await prisma.treasury_accounts.count({ where: { id: accountId, company_id: companyId } });
   if (!exists) return null;

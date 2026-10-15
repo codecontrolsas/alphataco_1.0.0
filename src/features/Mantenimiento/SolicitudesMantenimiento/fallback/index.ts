@@ -1,1 +1,1 @@
-export { SolicitudesTableSkeleton } from './SolicitudesTableSkeleton';
+export { RequestMetricsSkeleton, SolicitudesTableSkeleton } from './SolicitudesTableSkeleton';

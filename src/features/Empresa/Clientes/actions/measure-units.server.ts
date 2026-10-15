@@ -2,10 +2,21 @@
 
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
+import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable';
+import {
+  buildSearchWhere,
+  buildTextFiltersWhere,
+  parseSearchParams,
+  stateToPrismaParams,
+} from '@/shared/components/common/DataTable/helpers';
+import { ExportTooLargeError } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
 import { errorMessage, fail, ok, type ActionResult } from '../lib/action-result';
+import { assertComercialView, requireComercialPermission } from '../lib/require-permission.server';
 import { measureUnitFormSchema, type MeasureUnitFormValues } from '../schemas/measure-unit';
 
 const logger = new Logger('features/Empresa/Clientes/measure-units');
@@ -17,6 +28,7 @@ const COMERCIAL_PATH = '/dashboard/comercial';
  * para no exponer el catálogo sin autenticación.
  */
 export async function getMeasureUnits() {
+  await assertComercialView(['mensure_units', 'service', 'items-contrato']);
   await getActiveCompanyId();
   try {
     return await prisma.measure_units.findMany({ orderBy: { unit: 'asc' } });
@@ -28,13 +40,129 @@ export async function getMeasureUnits() {
 
 export type MeasureUnitRow = Awaited<ReturnType<typeof getMeasureUnits>>[number];
 
+// ============================================================================
+// Tabla paginada (Comercial › Unidades de medida)
+// ============================================================================
+
+const TABLE_TAB = 'mensure_units';
+const VALID_SORT_FIELDS = new Set(['simbol', 'unit', 'tipo']);
+const ALLOWED_FILTER_KEYS = new Set(['simbol', 'unit', 'tipo']);
+const EXPORT_MAX_ROWS = 10_000;
+
+function parseState(searchParams: DataTableSearchParams | undefined) {
+  return sanitizeFilters(parseSearchParams(searchParams ?? {}), ALLOWED_FILTER_KEYS);
+}
+
+/** Mismo where para lista, export y facets. Catálogo global: sin filtro por empresa. */
+function buildWhereClause(state: ReturnType<typeof parseState>) {
+  const tipo = state.filters['tipo'];
+  return {
+    AND: [
+      buildSearchWhere(state.search, ['simbol', 'unit', 'tipo']),
+      buildTextFiltersWhere(state.filters, ['simbol', 'unit']),
+      tipo?.length ? { tipo: { in: tipo } } : {},
+    ],
+  };
+}
+
+function buildOrderBy(state: ReturnType<typeof parseState>) {
+  const sorts: Array<Record<string, 'asc' | 'desc'>> = [];
+  for (const s of state.sorting) {
+    if (VALID_SORT_FIELDS.has(s.id)) sorts.push({ [s.id]: s.desc ? 'desc' : 'asc' });
+  }
+  return [...sorts, { unit: 'asc' as const }, { id: 'asc' as const }];
+}
+
+const LIST_SELECT = { id: true, simbol: true, unit: true, tipo: true } as const;
+
+export async function getMeasureUnitsPaginated(searchParams: DataTableSearchParams) {
+  await assertComercialView([TABLE_TAB]);
+  await getActiveCompanyId();
+  try {
+    const state = parseState(searchParams);
+    const { skip, take } = stateToPrismaParams(state);
+    const where = buildWhereClause(state);
+    const [data, total] = await Promise.all([
+      prisma.measure_units.findMany({ where, orderBy: buildOrderBy(state), skip, take, select: LIST_SELECT }),
+      prisma.measure_units.count({ where }),
+    ]);
+    return { data, total };
+  } catch (error) {
+    logger.error('Error al obtener la lista de unidades de medida', { data: { error } });
+    throw new Error('No se pudo obtener la lista. Intente nuevamente.');
+  }
+}
+
+export type MeasureUnitListItem = Awaited<ReturnType<typeof getMeasureUnitsPaginated>>['data'][number];
+
+export async function getAllMeasureUnitsForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<MeasureUnitListItem[]>> {
+  await assertComercialView([TABLE_TAB]);
+  await getActiveCompanyId();
+  try {
+    const state = parseState(searchParams);
+    const rows = await prisma.measure_units.findMany({
+      where: buildWhereClause(state),
+      orderBy: buildOrderBy(state),
+      select: LIST_SELECT,
+      take: EXPORT_MAX_ROWS + 1,
+    });
+    if (rows.length > EXPORT_MAX_ROWS) {
+      throw new ExportTooLargeError(
+        `Hay más de ${EXPORT_MAX_ROWS.toLocaleString('es-AR')} unidades con los filtros actuales. Acote la exportación con filtros.`
+      );
+    }
+    return { ok: true, data: rows };
+  } catch (error) {
+    logger.error('Error al exportar unidades de medida', { data: { error } });
+    return {
+      ok: false,
+      message:
+        error instanceof ExportTooLargeError
+          ? error.message
+          : 'No se pudo exportar la lista de unidades. Intente nuevamente.',
+    };
+  }
+}
+
+/** Counts + opciones de UNA columna, con cross-filter (todos los filtros activos salvo el propio). */
+export async function getMeasureUnitSingleFacet(
+  columnId: string,
+  searchParams?: DataTableSearchParams
+): Promise<FacetResult | null> {
+  await assertComercialView([TABLE_TAB]);
+  await getActiveCompanyId();
+  try {
+    const state = parseState(searchParams);
+    const crossState = { ...state, filters: { ...state.filters } };
+    delete crossState.filters[columnId];
+    const where = buildWhereClause(crossState);
+
+    if (columnId !== 'tipo') return null;
+    const rows = await prisma.measure_units.groupBy({ by: ['tipo'], where, _count: true, orderBy: { tipo: 'asc' } });
+    return {
+      options: rows.map((r) => ({ value: r.tipo, label: r.tipo })),
+      counts: new Map(rows.map((r) => [r.tipo, r._count])),
+    };
+  } catch (error) {
+    logger.error('Error al obtener faceta de unidades de medida', { data: { error, columnId } });
+    return null;
+  }
+}
+
 export async function createMeasureUnit(input: MeasureUnitFormValues): Promise<ActionResult<{ id: number }>> {
   const parsed = measureUnitFormSchema.safeParse(input);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos');
+  const permissionError = await requireComercialPermission('mensure_units', 'create');
+  if (permissionError) return fail(permissionError);
   await getActiveCompanyId();
 
   try {
-    const existing = await prisma.measure_units.findFirst({ where: { simbol: parsed.data.simbol }, select: { id: true } });
+    const existing = await prisma.measure_units.findFirst({
+      where: { simbol: parsed.data.simbol },
+      select: { id: true },
+    });
     if (existing) return fail('Ya existe una unidad de medida con este símbolo');
 
     const created = await prisma.measure_units.create({ data: parsed.data, select: { id: true } });
@@ -47,9 +175,14 @@ export async function createMeasureUnit(input: MeasureUnitFormValues): Promise<A
   }
 }
 
-export async function updateMeasureUnit(id: number, input: MeasureUnitFormValues): Promise<ActionResult<{ id: number }>> {
+export async function updateMeasureUnit(
+  id: number,
+  input: MeasureUnitFormValues
+): Promise<ActionResult<{ id: number }>> {
   const parsed = measureUnitFormSchema.safeParse(input);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos');
+  const permissionError = await requireComercialPermission('mensure_units', 'update');
+  if (permissionError) return fail(permissionError);
   await getActiveCompanyId();
 
   try {
@@ -73,6 +206,8 @@ export async function updateMeasureUnit(id: number, input: MeasureUnitFormValues
 }
 
 export async function deleteMeasureUnit(id: number): Promise<ActionResult> {
+  const permissionError = await requireComercialPermission('mensure_units', 'delete');
+  if (permissionError) return fail(permissionError);
   await getActiveCompanyId();
   try {
     const inUse = await prisma.service_items.count({ where: { item_measure_units: id } });

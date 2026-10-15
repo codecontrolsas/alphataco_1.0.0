@@ -3,9 +3,10 @@
 import { Logger } from '@/lib/logger';
 import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { buildRowSelect, buildWhereClause } from './lib/row-query';
+import type { ExportResult } from '@/shared/lib/export-result';
+import { ExportTooLargeError, fetchDetailExportRows } from './lib/export-batches';
+import { buildWhereClause } from './lib/row-query';
 
 const logger = new Logger('features/Operaciones/PartesDiarios/detail/export');
 
@@ -14,8 +15,11 @@ const logger = new Logger('features/Operaciones/PartesDiarios/detail/export');
 // ============================================================================
 
 /**
- * Obtiene todas las filas del parte diario para exportación.
+ * Obtiene todas las filas del parte diario para exportación (hasta EXPORT_MAX_ROWS, en tandas).
  * Respeta los filtros activos pero sin paginación (skip/take).
+ *
+ * Devuelve un resultado discriminado: Next enmascara en producción el mensaje de un error lanzado desde una
+ * server action, así que el motivo (por ejemplo "demasiadas líneas") viaja en `{ ok: false, message }`.
  */
 export async function getDailyReportDetailForExport(dailyReportId: string, searchParams: DataTableSearchParams) {
   logger.debug('Exportando filas del parte diario', { data: { dailyReportId } });
@@ -31,23 +35,18 @@ export async function getDailyReportDetailForExport(dailyReportId: string, searc
       { service_items: { item_name: 'asc' as const } },
     ];
 
-    // Para export no necesitamos employees_diagram (no hay fecha de parte disponible aquí)
-    const rowSelect = buildRowSelect();
+    // Por tandas y con tope (EXPORT_MAX_ROWS): ver lib/export-batches.ts
+    const rows = await fetchDetailExportRows(where, safeOrderBy);
 
-    const data = await prisma.dailyreportrows.findMany({
-      where,
-      orderBy: safeOrderBy,
-      select: rowSelect,
-    });
-
-    return data;
+    return { ok: true, data: rows } satisfies ExportResult<typeof rows>;
   } catch (error) {
     logger.error('Error al exportar filas del parte diario', {
       data: { error, dailyReportId },
     });
-    throw new Error('No se pudieron exportar las filas del parte diario. Intente nuevamente.');
+    const message =
+      error instanceof ExportTooLargeError
+        ? error.message
+        : 'No se pudieron exportar las filas del parte diario. Intente nuevamente.';
+    return { ok: false, message } satisfies ExportResult<never>;
   }
 }
-
-export type DailyReportExportRow = Awaited<ReturnType<typeof getDailyReportDetailForExport>>[number];
-

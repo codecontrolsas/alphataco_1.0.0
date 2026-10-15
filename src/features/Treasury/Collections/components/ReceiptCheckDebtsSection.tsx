@@ -5,7 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import moment from 'moment';
 import type { UseFormReturn } from 'react-hook-form';
-import type { ReceiptFormData } from '../../actions/receipts.server';
+import type { ReceiptFormData } from '../../lib/receipt-types';
 import { formatInCurrency } from '../../lib/currency-format';
 import type { ReceiptFormValues } from '../../schemas/receipts';
 

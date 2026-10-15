@@ -3,11 +3,12 @@
 import { Badge } from '@/components/ui/badge';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatDateAr } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
-import moment from 'moment';
 import Link from 'next/link';
-import { destinationTypeIcons } from '../../../Movements/components/MovementsList/columns';
 import { DESTINATION_TYPE_LABELS } from '../../../lib/labels';
+import { isStaleLoan, STALE_LOAN_DAYS } from '../../../lib/loan-rules';
+import { destinationTypeIcons } from '../../../Movements/components/MovementsList/columns';
 import { LoanRowActions } from '../LoanRowActions';
 import type { LoanListItem } from './actions.server';
 
@@ -35,7 +36,7 @@ export function getColumns({ canReturn, canWriteOff }: LoanColumnsOptions): Colu
       cell: ({ row }) => (
         <Link
           href={`/dashboard/warehouse/materials/${row.original.material.id}`}
-          className="font-medium text-blue-600 hover:underline"
+          className="font-medium text-brand-ink hover:underline"
         >
           {row.original.material.name}
         </Link>
@@ -84,15 +85,26 @@ export function getColumns({ canReturn, canWriteOff }: LoanColumnsOptions): Colu
       accessorFn: (row) => row.since ?? '',
       meta: { title: 'Desde' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Desde" />,
-      // `since` es YYYY-MM-DD (fecha de la salida): se formatea en UTC para no correr un dia
-      cell: ({ row }) => <span>{row.original.since ? moment.utc(row.original.since).format('DD/MM/YYYY') : '-'}</span>,
+      // `since` es YYYY-MM-DD (fecha de la salida): se formatea como texto, sin pasar por Date
+      cell: ({ row }) => <span>{row.original.since ? formatDateAr(row.original.since) : '-'}</span>,
     },
     {
       id: 'days',
       accessorFn: (row) => row.days,
       meta: { title: 'Días en préstamo' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Días en préstamo" />,
-      cell: ({ row }) => <span className="tabular-nums">{row.original.days ?? '-'}</span>,
+      cell: ({ row }) =>
+        isStaleLoan(row.original.days) ? (
+          <Badge
+            variant="outline"
+            className="border-warn/35 bg-warn-subtle text-warn-subtle-foreground tabular-nums"
+            title={`${STALE_LOAN_DAYS} días o más en préstamo`}
+          >
+            {row.original.days}
+          </Badge>
+        ) : (
+          <span className="tabular-nums">{row.original.days ?? '-'}</span>
+        ),
     },
     {
       id: 'exit',
@@ -105,7 +117,7 @@ export function getColumns({ canReturn, canWriteOff }: LoanColumnsOptions): Colu
         row.original.exitMovementId ? (
           <Link
             href={`/dashboard/warehouse/movements/${row.original.exitMovementId}`}
-            className="font-mono text-sm font-medium text-blue-600 hover:underline"
+            className="font-mono text-sm font-medium text-brand-ink hover:underline"
           >
             {row.original.exitNumber}
           </Link>

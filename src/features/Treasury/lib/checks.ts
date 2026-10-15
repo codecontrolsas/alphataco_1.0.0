@@ -7,6 +7,7 @@ import { normalizeBank } from './check-number-format';
 import { nextCheckStatus, transitionError, type CheckAction, type CheckStatus } from './check-transitions';
 import { dateOnly } from './movements';
 import { TreasuryError } from './treasury-errors';
+import { UUID_RE } from '../schemas/shared';
 
 /**
  * Cheques de terceros (spec Tesorería etapa 3a §3): ÚNICA escritura de `third_party_checks.status`
@@ -17,7 +18,6 @@ import { TreasuryError } from './treasury-errors';
 
 type ChecksTx = Pick<Prisma.TransactionClient, '$queryRaw' | 'third_party_checks' | 'third_party_check_events'>;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ALIVE_KEY = 'third_party_checks_alive_key';
 
 export type LockedCheck = {

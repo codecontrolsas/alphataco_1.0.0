@@ -1,15 +1,23 @@
 'use client';
 
 import {
+  CatalogCreateButton,
+  CatalogFormSheet,
+  CatalogTableSurface,
+  useCatalogSheet,
+} from '@/shared/components/common/CatalogFormSheet';
+import {
   DataTable,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
   type FacetResult,
 } from '@/shared/components/common/DataTable';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Check, X } from 'lucide-react';
 import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
 import { KpiDetailModal } from '../components/KpiDetailModal';
+import { KpiForm } from '../components/KpiForm';
 import { useKpiStore } from '../store/kpi.store';
 import { KPI } from '../types';
 import { getAllKpisForExport, getKpisPaginated, getKpisSingleFacet, type KpiListItem } from './actions.server';
@@ -64,7 +72,7 @@ export default function _KpisIndicadoresDataTable({
     setIsDetailModalOpen(true);
   }, []);
 
-  const handleEdit = useCallback(
+  const handleLoadKpi = useCallback(
     (kpi: KpiListItem) => {
       // Convertir KpiListItem a KPI (formato del store)
       const kpiForStore: KPI = {
@@ -86,6 +94,17 @@ export default function _KpisIndicadoresDataTable({
     },
     [setEditingKpi]
   );
+
+  // ─── Sheet de alta/edición (el form sigue leyendo el store) ───────────────
+  const handleClearKpi = useCallback(() => setEditingKpi(null), [setEditingKpi]);
+  const sheet = useCatalogSheet<KpiListItem>({
+    canCreate: permissions.hasPermission('configuracion', 'kpis', 'create'),
+    canUpdate: permissions.hasPermission('configuracion', 'kpis', 'update'),
+    onOpenEdit: handleLoadKpi,
+    onOpenCreate: handleClearKpi,
+    onClosed: handleClearKpi,
+  });
+  const handleEdit = sheet.openEdit;
 
   // ─── Client-side navigation: estado reactivo para export con filtros ──────
   const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
@@ -202,38 +221,50 @@ export default function _KpisIndicadoresDataTable({
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <>
-      <DataTable
-        columns={columns}
-        data={data}
-        totalRows={totalRows}
-        searchParams={searchParams}
-        tableId={tableId}
-        paramNamespace={tableId}
-        facetedFilters={facetedFilters}
-        initialColumnVisibility={mergedColumnVisibility}
-        initialFilterVisibility={mergedFilterVisibility}
-        showFilterToggle
-        // Client-side navigation: fetch instantáneo via React Query, sin router.push
-        queryFn={tableQueryFn}
-        queryKey={['kpis-indicadores-paginated']}
-        onStateChange={handleStateChange}
-        searchPlaceholder="Buscar por código o nombre..."
-        emptyMessage="No se encontraron KPIs"
-        exportConfig={{
-          fetchAllData: () => getAllKpisForExport(currentParams),
-          options: {
-            filename: 'kpis-indicadores',
-            sheetName: 'KPIs Indicadores',
-            title: 'Listado de KPIs Indicadores',
-          },
-          formatters: {
-            validity_date: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
-            created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
-            is_active: (value) => (value ? 'Activo' : 'Inactivo'),
-            technical_support: (value) => (value ? 'Sí' : 'No'),
-          },
-        }}
-      />
+      <CatalogTableSurface>
+        <DataTable
+          columns={columns}
+          data={data}
+          totalRows={totalRows}
+          searchParams={searchParams}
+          tableId={tableId}
+          paramNamespace={tableId}
+          facetedFilters={facetedFilters}
+          initialColumnVisibility={mergedColumnVisibility}
+          initialFilterVisibility={mergedFilterVisibility}
+          showFilterToggle
+          toolbarActions={<CatalogCreateButton sheet={sheet} label="Nuevo KPI" />}
+          // Client-side navigation: fetch instantáneo via React Query, sin router.push
+          queryFn={tableQueryFn}
+          queryKey={['kpis-indicadores-paginated']}
+          onStateChange={handleStateChange}
+          searchPlaceholder="Buscar por código o nombre..."
+          emptyMessage="No se encontraron KPIs"
+          exportConfig={{
+            fetchAllData: async () => unwrapExportResult(await getAllKpisForExport(currentParams)),
+            options: {
+              filename: 'kpis-indicadores',
+              sheetName: 'KPIs Indicadores',
+              title: 'Listado de KPIs Indicadores',
+            },
+            formatters: {
+              validity_date: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
+              created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
+              is_active: (value) => (value ? 'Activo' : 'Inactivo'),
+              technical_support: (value) => (value ? 'Sí' : 'No'),
+            },
+          }}
+        />
+      </CatalogTableSurface>
+
+      <CatalogFormSheet
+        sheet={sheet}
+        getKey={(kpi) => kpi.id}
+        title={{ create: 'Nuevo KPI', edit: 'Editar KPI' }}
+        size="lg"
+      >
+        {() => <KpiForm />}
+      </CatalogFormSheet>
 
       {selectedKpi && (
         <KpiDetailModal

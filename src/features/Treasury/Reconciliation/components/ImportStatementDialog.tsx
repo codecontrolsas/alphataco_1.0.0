@@ -20,11 +20,13 @@ import { useId, useMemo, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 import { importStatement } from '../../actions/reconciliation.server';
+import { AMOUNT_SCALE, formatScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { formatInCurrency } from '../../lib/currency-format';
 import { invalidateTreasury } from '../../lib/invalidate';
 import { STATEMENT_DATE_FORMATS, buildStatementLines, columnLetter } from '../../lib/statement-parse';
 import { MAX_STATEMENT_ROWS, statementProfileSchema, type StatementProfileValues } from '../../schemas/reconciliation';
 import { readStatementFile, rowsAsText, type RawRows } from './read-statement-file';
+import { formatDay } from '../../lib/dates';
 
 const logger = new Logger('Treasury/ImportStatementDialog');
 
@@ -41,7 +43,6 @@ const DEFAULT_PROFILE: StatementProfileValues = {
   decimalSeparator: ',',
 };
 
-const dmy = (value: string) => moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY');
 
 /**
  * Importar un extracto (spec Tesorería etapa 4 §3.1): un solo diálogo con el archivo, el perfil de
@@ -298,7 +299,7 @@ export function ImportStatementDialog({ account, profile }: { account: { id: str
               <div className="space-y-2">
                 <Separator />
                 {preview.errors.length > 0 ? (
-                  <div role="status" className="space-y-1 text-sm text-red-600 dark:text-red-400">
+                  <div role="status" className="space-y-1 text-sm text-danger">
                     {preview.errors.slice(0, 5).map((e) => (
                       <p key={e}>{e}</p>
                     ))}
@@ -323,11 +324,11 @@ export function ImportStatementDialog({ account, profile }: { account: { id: str
                       <TableBody>
                         {preview.lines.slice(0, 10).map((l) => (
                           <TableRow key={l.key}>
-                            <TableCell className="tabular-nums">{dmy(l.date)}</TableCell>
+                            <TableCell className="tabular-nums">{formatDay(l.date)}</TableCell>
                             <TableCell>{l.description}</TableCell>
                             <TableCell>{l.reference}</TableCell>
-                            <TableCell className={`text-right tabular-nums ${l.amountCents < BigInt(0) ? 'text-red-600 dark:text-red-400' : ''}`}>
-                              {formatInCurrency((Number(l.amountCents) / 100).toFixed(2), 'ARS')}
+                            <TableCell className={`text-right tabular-nums ${l.amountCents < BigInt(0) ? 'text-danger' : ''}`}>
+                              {formatInCurrency(formatScaled(l.amountCents, AMOUNT_SCALE), 'ARS')}
                             </TableCell>
                           </TableRow>
                         ))}

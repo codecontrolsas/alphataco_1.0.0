@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
-import moment from 'moment';
+import { ActiveStatusBadge } from '../../components/ActiveStatusBadge';
 import type { PositionListItem } from './actions.server';
 
 // ============================================================================
@@ -47,13 +48,7 @@ export function getColumns(
       accessorKey: 'is_active',
       meta: { title: 'Estado' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
-      cell: ({ row }) => {
-        const val = row.original.is_active;
-        if (val === null || val === undefined) {
-          return <Badge variant="default">Sin asignar</Badge>;
-        }
-        return <Badge variant={val ? 'success' : 'secondary'}>{val ? 'Activo' : 'Inactivo'}</Badge>;
-      },
+      cell: ({ row }) => <ActiveStatusBadge value={row.original.is_active} />,
       filterFn: (row, id, value: string[]) => {
         const val = row.getValue(id);
         if (val === null || val === undefined) return value.includes(NULL_FILTER_VALUE);
@@ -63,7 +58,7 @@ export function getColumns(
 
     // ── Sector/Departamento (hierarchical_position_id — array de UUIDs) ─────
     {
-      id: 'hierarchyNames',
+      id: 'hierarchy',
       accessorFn: (row) => row.hierarchyNames?.join(', ') ?? '',
       meta: { title: 'Sector/Departamento' },
       enableSorting: false, // campo virtual (array en BD, no un campo ordenable directamente)
@@ -95,6 +90,11 @@ export function getColumns(
             </Tooltip>
           </TooltipProvider>
         );
+      },
+      filterFn: (row, _id, value: string[]) => {
+        const ids = row.original.hierarchical_position_id ?? [];
+        if (ids.length === 0) return value.includes(NULL_FILTER_VALUE);
+        return ids.some((id) => value.includes(id));
       },
     },
 
@@ -149,7 +149,7 @@ export function getColumns(
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de creación" />,
       cell: ({ row }) => {
         const val = row.original.created_at;
-        return <span>{val ? moment(val).format('DD/MM/YYYY') : '-'}</span>;
+        return <span>{val ? formatArgentinaDay(val) : '-'}</span>;
       },
     },
 
@@ -165,7 +165,9 @@ export function getColumns(
               <Button
                 size="sm"
                 variant="link"
-                className="hover:text-blue-400 p-0 h-auto"
+                type="button"
+                className="h-auto p-0"
+                aria-label={`Editar ${row.original.name}`}
                 onClick={() => onEdit(row.original)}
               >
                 Editar

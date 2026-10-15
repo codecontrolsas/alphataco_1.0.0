@@ -11,6 +11,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import {
   conditionLabels,
   costTypeLabels,
@@ -506,7 +507,7 @@ export const columns: ColumnDef<InactiveOtherEquipmentListItem>[] = [
     header: ({ column }) => <DataTableColumnHeader column={column} title="Creado" />,
     cell: ({ row }) =>
       row.original.created_at ? (
-        <span>{moment(row.original.created_at).format('DD/MM/YYYY')}</span>
+        <span>{formatArgentinaDay(row.original.created_at)}</span>
       ) : (
         <span className="text-muted-foreground">-</span>
       ),

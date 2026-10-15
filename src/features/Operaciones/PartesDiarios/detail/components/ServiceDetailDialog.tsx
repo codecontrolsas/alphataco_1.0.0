@@ -3,18 +3,20 @@
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
-import { Skeleton } from '@/components/ui/skeleton';
 import {
-  dailyReportRowStatusBadges,
   dailyReportRowStatusLabels,
+  dailyReportRowStatusTones,
   dailyReportTypeServiceLabels,
 } from '@/shared/utils/mappers';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Building2, ExternalLink, FileText, Mail, Phone, User, Wrench } from 'lucide-react';
-import moment from 'moment';
 import Link from 'next/link';
-import { getDailyReportRowDetail } from '../form-data.server';
-import { remitNumbersOf } from '../../remitManager/lib/remit-numbers';
+import { DetailField as Field, EmptyValue } from '@/features/Operaciones/shared/components/DetailField';
+import { DetailSkeleton } from '@/features/Operaciones/shared/components/DetailSkeleton';
+import { formatRowTime } from '../columns/helpers';
+import { DETAIL_QUERY_PREFIX } from '../constants';
+import { getDailyReportRowDetail } from '../form-data/row-detail.server';
+import { useRestoreFocus } from './hooks/useRestoreFocus';
 
 // ============================================================================
 // PROPS
@@ -27,46 +29,10 @@ interface Props {
 }
 
 // ============================================================================
-// HELPER SUBCOMPONENTS
-// ============================================================================
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1">
-      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</p>
-      <div className="text-sm">{children}</div>
-    </div>
-  );
-}
-
-function EmptyValue() {
-  return <span className="text-muted-foreground">—</span>;
-}
-
-function DetailSkeleton() {
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="space-y-1">
-            <Skeleton className="h-3 w-16" />
-            <Skeleton className="h-5 w-32" />
-          </div>
-        ))}
-      </div>
-      <Skeleton className="h-px w-full" />
-      <div className="space-y-2">
-        <Skeleton className="h-3 w-20" />
-        <Skeleton className="h-16 w-full" />
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
 // CONDITION LABELS
 // ============================================================================
 
+// TODO: reemplazar por el mapa compartido de `PartesDiarios/lib/equipment-condition.ts` cuando exista.
 const conditionLabels: Record<string, string> = {
   operativo: 'Operativo',
   no_operativo: 'No operativo',
@@ -84,9 +50,10 @@ const conditionVariants: Record<string, string> = {
 // ============================================================================
 
 export function ServiceDetailDialog({ open, onOpenChange, rowId }: Props) {
-  // Fetch enriched data on-demand when dialog opens
+  const { onOpenAutoFocus, onCloseAutoFocus } = useRestoreFocus();
+  // Fetch enriched data on-demand when dialog opens. Cuelga del prefijo del detalle: `invalidateDetail()` lo refresca.
   const { data: row, isLoading } = useQuery({
-    queryKey: ['daily-report-row-detail', rowId],
+    queryKey: [DETAIL_QUERY_PREFIX, 'row-detail', rowId],
     queryFn: () => getDailyReportRowDetail(rowId!),
     enabled: open && rowId !== null,
     staleTime: 30_000,
@@ -95,8 +62,7 @@ export function ServiceDetailDialog({ open, onOpenChange, rowId }: Props) {
   if (!rowId) return null;
 
   const statusLabel = row?.status ? dailyReportRowStatusLabels[row.status] ?? row.status : null;
-  const remitNumbers = row ? remitNumbersOf(row) : [];
-  const statusVariant = row?.status ? dailyReportRowStatusBadges[row.status] ?? 'default' : 'default';
+  const statusVariant = row?.status ? dailyReportRowStatusTones[row.status] ?? 'default' : 'default';
   const typeServiceLabel = row?.type_service
     ? dailyReportTypeServiceLabels[row.type_service] ?? row.type_service
     : null;
@@ -105,14 +71,16 @@ export function ServiceDetailDialog({ open, onOpenChange, rowId }: Props) {
   const equipmentRelations = row?.dailyreportequipmentrelations ?? [];
   const customerEquipmentRelations = row?.dailyreport_customer_equipment_relations ?? [];
 
-  const formatTime = (val: Date | string | null | undefined) => {
-    if (!val) return null;
-    return moment(val).format('HH:mm');
-  };
+  // Columna `Time`: se lee en UTC, igual que la tabla (`formatRowTime`).
+  const formatTime = formatRowTime;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="max-w-2xl max-h-[90vh] overflow-y-auto"
+        onOpenAutoFocus={onOpenAutoFocus}
+        onCloseAutoFocus={onCloseAutoFocus}
+      >
         <DialogHeader>
           <DialogTitle>Detalle del Servicio</DialogTitle>
         </DialogHeader>
@@ -126,13 +94,13 @@ export function ServiceDetailDialog({ open, onOpenChange, rowId }: Props) {
             {/* Preparte section — only when linked */}
             {row.preparte?.numero_pedido && (
               <>
-                <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3">
+                <div className="rounded-md border border-warn/40 bg-warn-subtle text-warn-subtle-foreground p-3">
                   <div className="flex items-center gap-2 text-sm">
-                    <FileText className="h-4 w-4 text-amber-600" />
+                    <FileText className="h-4 w-4" />
                     <span className="font-medium">Pedido vinculado:</span>
                     <Link
                       href="/dashboard/operations?tab=preparte"
-                      className="text-amber-700 hover:underline font-semibold inline-flex items-center gap-1"
+                      className="text-warn-subtle-foreground underline-offset-2 hover:underline font-semibold inline-flex items-center gap-1"
                     >
                       {row.preparte.numero_pedido}
                       <ExternalLink className="h-3 w-3" />
@@ -173,7 +141,7 @@ export function ServiceDetailDialog({ open, onOpenChange, rowId }: Props) {
               <Field label="Horario fin">{formatTime(row.end_time) ?? <EmptyValue />}</Field>
               <Field label="Estado">
                 {statusLabel ? (
-                  <Badge variant={statusVariant as Parameters<typeof Badge>[0]['variant']}>{statusLabel}</Badge>
+                  <Badge variant={statusVariant}>{statusLabel}</Badge>
                 ) : (
                   <EmptyValue />
                 )}
@@ -181,13 +149,7 @@ export function ServiceDetailDialog({ open, onOpenChange, rowId }: Props) {
               <Field label="Tipo servicio">
                 {typeServiceLabel ? <Badge variant="outline">{typeServiceLabel}</Badge> : <EmptyValue />}
               </Field>
-              <Field label="Remitos">
-                {remitNumbers.length > 0 ? (
-                  <span className="font-mono tabular-nums">{remitNumbers.join(', ')}</span>
-                ) : (
-                  <EmptyValue />
-                )}
-              </Field>
+              <Field label="Nro Remito">{row.remit_number ?? <EmptyValue />}</Field>
             </div>
 
             {/* Descripción */}
@@ -222,7 +184,7 @@ export function ServiceDetailDialog({ open, onOpenChange, rowId }: Props) {
                         <div className="flex items-center justify-between">
                           <Link
                             href={`/dashboard/employee/${emp.id}`}
-                            className="font-medium text-blue-600 hover:underline inline-flex items-center gap-1"
+                            className="font-medium text-brand-ink hover:underline inline-flex items-center gap-1"
                           >
                             [{emp.file ?? '?'}] {fullName}
                             <ExternalLink className="h-3 w-3" />
@@ -286,7 +248,7 @@ export function ServiceDetailDialog({ open, onOpenChange, rowId }: Props) {
                           <div className="flex items-center justify-between">
                             <Link
                               href={`/dashboard/equipment/${v.id}`}
-                              className="font-medium text-blue-600 hover:underline inline-flex items-center gap-1"
+                              className="font-medium text-brand-ink hover:underline inline-flex items-center gap-1"
                             >
                               {label}
                               <ExternalLink className="h-3 w-3" />
@@ -308,7 +270,7 @@ export function ServiceDetailDialog({ open, onOpenChange, rowId }: Props) {
                             {v.intern_number && v.domain && <span>N° Interno: {v.intern_number}</span>}
                           </div>
                           {v.condition && v.condition !== 'operativo' && (
-                            <div className="flex items-center gap-1 text-xs text-red-600 mt-1">
+                            <div className="flex items-center gap-1 text-xs text-danger mt-1">
                               <AlertTriangle className="h-3 w-3" />
                               <span>Equipo {conditionLabels[v.condition]?.toLowerCase() ?? v.condition}</span>
                             </div>

@@ -4,9 +4,12 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { Building, Check, ChevronsUpDown, X } from 'lucide-react';
+import { Building, Check, ChevronsUpDown } from 'lucide-react';
 import type { UseFormReturn } from 'react-hook-form';
 import type { DailyReportRowFormValues } from '../form-types';
+import { CustomerEquipmentField } from './CustomerEquipmentField';
+import { CustomerOptionField } from './CustomerOptionField';
+import { getCustomerAreas, getCustomerSectors } from './customer-options';
 
 import type { CustomerForRowForm } from '@/features/Operaciones/PartesDiarios/actions/comercial-rows.server';
 
@@ -56,36 +59,8 @@ export function CustomerDataSection({
   disabled,
 }: CustomerDataSectionProps) {
   const activeCustomers = customers?.filter((c) => c.is_active) || [];
-  const customerSectors = Array.from(
-    new Set(
-      selectedCustomer?.customer_services
-        ?.flatMap((service) => service.service_sectors || [])
-        .filter((sector) => sector.sectors && sector.service_id === selectedServiceId)
-        .map((sector) => ({ sector_id: sector.sectors?.id, id: sector.id }))
-    )
-  ).map((data) => ({
-    id: data.id,
-    name:
-      selectedCustomer?.customer_services
-        ?.flatMap((service) => service.service_sectors || [])
-        .find((sector) => sector.sectors?.id === data.sector_id)?.sectors?.name || '',
-  }));
-
-  // Filtrar áreas del cliente seleccionado
-  const customerAreas = Array.from(
-    new Set(
-      selectedCustomer?.customer_services
-        ?.flatMap((service) => service.service_areas || [])
-        .filter((area) => area.areas_cliente && area.service_id === selectedServiceId)
-        .map((area) => ({ id: area.id, area_id: area.areas_cliente?.id }))
-    )
-  ).map((data) => ({
-    id: data.id,
-    name:
-      selectedCustomer?.customer_services
-        ?.flatMap((service) => service.service_areas || [])
-        .find((area) => area.areas_cliente?.id === data.area_id)?.areas_cliente?.nombre || '',
-  }));
+  const customerSectors = getCustomerSectors(selectedCustomer, selectedServiceId);
+  const customerAreas = getCustomerAreas(selectedCustomer, selectedServiceId);
 
   return (
     <div className="space-y-4 rounded-lg dark:bg-slate-900 bg-slate-50 p-4 w-full">
@@ -291,215 +266,38 @@ export function CustomerDataSection({
         />
 
         {/* Sector del Cliente */}
-        <FormField
-          control={form.control}
+        <CustomerOptionField
+          form={form}
           name="sector_service_id"
-          render={({ field }) => (
-            <FormItem className="flex flex-col">
-              <FormLabel>Sector del Cliente</FormLabel>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <FormControl>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      disabled={isSectorDisabled || disabled}
-                      className={cn(
-                        'w-full justify-between',
-                        !field.value && 'text-muted-foreground',
-                        isSectorDisabled && 'opacity-50 cursor-not-allowed'
-                      )}
-                    >
-                      {field.value
-                        ? customerSectors.find((s) => s.id === field.value)?.name || selectedRow?.sector
-                        : 'Seleccionar sector'}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </FormControl>
-                </PopoverTrigger>
-                <PopoverContent align="start" className="w-full p-0">
-                  <Command>
-                    <CommandInput
-                      placeholder="Buscar sector..."
-                      className="h-9"
-                      disabled={isSectorDisabled || disabled}
-                    />
-                    <CommandList>
-                      <CommandEmpty>No hay sectores disponibles.</CommandEmpty>
-                      {customerSectors.length > 0 && (
-                        <CommandGroup>
-                          {customerSectors.map((sector) => (
-                            <CommandItem
-                              value={sector.name || ''}
-                              key={sector.id}
-                              onSelect={() => form.setValue('sector_service_id', sector.id)}
-                              disabled={disabled}
-                            >
-                              {sector.name || 'Sin nombre'}
-                              <Check
-                                className={cn(
-                                  'ml-auto h-4 w-4',
-                                  sector.id === field.value ? 'opacity-100' : 'opacity-0'
-                                )}
-                              />
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      )}
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-              <FormMessage />
-            </FormItem>
-          )}
+          label="Sector del Cliente"
+          options={customerSectors}
+          placeholder="Seleccionar sector"
+          searchPlaceholder="Buscar sector..."
+          emptyMessage="No hay sectores disponibles."
+          fallbackName={selectedRow?.sector}
+          isLocked={isSectorDisabled}
+          disabled={disabled}
         />
 
         {/* Área del Cliente */}
-        <FormField
-          control={form.control}
+        <CustomerOptionField
+          form={form}
           name="areas_service_id"
-          render={({ field }) => (
-            <FormItem className="flex flex-col">
-              <FormLabel>Área del Cliente</FormLabel>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <FormControl>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      disabled={isAreaDisabled || disabled}
-                      className={cn(
-                        'w-full justify-between',
-                        !field.value && 'text-muted-foreground',
-                        isAreaDisabled && 'opacity-50 cursor-not-allowed'
-                      )}
-                    >
-                      {field.value
-                        ? customerAreas.find((a) => a.id === field.value)?.name || selectedRow?.area
-                        : 'Seleccionar área'}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </FormControl>
-                </PopoverTrigger>
-                <PopoverContent align="start" className="w-full p-0">
-                  <Command>
-                    <CommandInput placeholder="Buscar área..." className="h-9" disabled={isAreaDisabled || disabled} />
-                    <CommandList>
-                      <CommandEmpty>No hay áreas disponibles.</CommandEmpty>
-                      {customerAreas.length > 0 && (
-                        <CommandGroup>
-                          {customerAreas.map((area) => (
-                            <CommandItem
-                              value={area.name || ''}
-                              key={area.id}
-                              onSelect={() => form.setValue('areas_service_id', area.id)}
-                              disabled={disabled}
-                            >
-                              {area.name || 'Sin nombre'}
-                              <Check
-                                className={cn('ml-auto h-4 w-4', area.id === field.value ? 'opacity-100' : 'opacity-0')}
-                              />
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      )}
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-              <FormMessage />
-            </FormItem>
-          )}
+          label="Área del Cliente"
+          options={customerAreas}
+          placeholder="Seleccionar área"
+          searchPlaceholder="Buscar área..."
+          emptyMessage="No hay áreas disponibles."
+          fallbackName={selectedRow?.area}
+          isLocked={isAreaDisabled}
+          disabled={disabled}
         />
 
         {/* Equipos de Cliente */}
-        <FormField
-          control={form.control}
-          name="equipos_cliente"
-          render={({ field }) => {
-            const selectedCustomerEquipment = form.watch('equipos_cliente') || [];
-            const customerEquipments = selectedCustomer?.equipos_clientes || [];
-
-            return (
-              <FormItem className="flex flex-col">
-                <FormLabel>Equipos de Cliente (Máx. 2)</FormLabel>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <FormControl>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        disabled={disabled || customerEquipments.length === 0}
-                        className="w-full justify-between"
-                      >
-                        {selectedCustomerEquipment.length > 0
-                          ? `${selectedCustomerEquipment.length} equipo(s) seleccionado(s)`
-                          : 'Seleccionar equipos'}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </FormControl>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-full p-0" align="start">
-                    <Command>
-                      <CommandInput placeholder="Buscar equipo..." />
-                      <CommandList>
-                        <CommandEmpty>No hay equipos disponibles.</CommandEmpty>
-                        <CommandGroup>
-                          {customerEquipments.map((equipment) => {
-                            const isSelected = selectedCustomerEquipment.includes(equipment.id);
-                            return (
-                              <CommandItem
-                                key={equipment.id}
-                                onSelect={() => {
-                                  const newValue = isSelected
-                                    ? selectedCustomerEquipment.filter((id: string) => id !== equipment.id)
-                                    : selectedCustomerEquipment.length < 2
-                                      ? [...selectedCustomerEquipment, equipment.id]
-                                      : selectedCustomerEquipment;
-                                  form.setValue('equipos_cliente', newValue);
-                                }}
-                                disabled={!isSelected && selectedCustomerEquipment.length >= 2}
-                              >
-                                <Check className={cn('mr-2 h-4 w-4', isSelected ? 'opacity-100' : 'opacity-0')} />
-                                {equipment.name}
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-                {selectedCustomerEquipment.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {selectedCustomerEquipment.map((eqId: string) => {
-                      const eq = customerEquipments.find((item) => item.id === eqId);
-                      return (
-                        <Badge key={eqId} variant="secondary" className="gap-1">
-                          {eq?.name}
-                          <button
-                            type="button"
-                            aria-label="Quitar equipo"
-                            className="ml-1 inline-flex cursor-pointer rounded hover:bg-muted-foreground/20"
-                            onClick={() => {
-                              form.setValue(
-                                'equipos_cliente',
-                                selectedCustomerEquipment.filter((id: string) => id !== eqId)
-                              );
-                            }}
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </Badge>
-                      );
-                    })}
-                  </div>
-                )}
-                <FormMessage />
-              </FormItem>
-            );
-          }}
+        <CustomerEquipmentField
+          form={form}
+          customerEquipments={selectedCustomer?.equipos_clientes || []}
+          disabled={disabled}
         />
       </div>
     </div>

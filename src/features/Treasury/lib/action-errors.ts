@@ -6,7 +6,8 @@ import { Prisma } from '@/generated/prisma/client';
 import type { Logger } from '@/lib/logger';
 import { TreasuryError } from './treasury-errors';
 
-export { NO_PERMISSION, UUID_RE, firstIssue } from '@/features/Purchases/lib/action-errors';
+export { NO_PERMISSION, firstIssue } from '@/features/Purchases/lib/action-errors';
+export { UUID_RE } from '../schemas/shared';
 
 /**
  * Error de una action de Tesorería -> `ActionResult` (mismo criterio que Compras: se DEVUELVE,

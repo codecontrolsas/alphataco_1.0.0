@@ -1,17 +1,18 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { RowActionsMenu, type RowAction } from '@/features/Mantenimiento/Gomeria/shared/RowActionsMenu';
 import type { DiagramAxle } from '@/features/Mantenimiento/Gomeria/shared/tire-diagram-utils';
 import { calculatePositions } from '@/features/Mantenimiento/Gomeria/shared/tire-diagram-utils';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import { CarFront, Pencil, Trash2 } from 'lucide-react';
-import moment from 'moment';
 import type { ReactNode } from 'react';
 import type { TemplateListItem } from '../actions/actions.server';
+import { TemplateAxlesMini } from './TemplateAxlesMini';
 
 // ============================================================================
 // TYPES
@@ -25,7 +26,7 @@ type Permissions = {
 // HELPERS
 // ============================================================================
 
-function computePositionCount(item: TemplateListItem): number {
+export function computePositionCount(item: TemplateListItem): number {
   if (!item.axles || item.axles.length === 0) return 0;
 
   const diagramAxles: DiagramAxle[] = item.axles.map((axle) => ({
@@ -44,6 +45,20 @@ function computePositionCount(item: TemplateListItem): number {
 // COLUMNS
 // ============================================================================
 
+/** Columnas que arrancan ocultas en el diseño nuevo (`-v2`); las preferencias guardadas ganan sobre esta lista. */
+export const TEMPLATE_HIDDEN_COLUMNS_BY_DEFAULT: Record<string, boolean> = {
+  description: false,
+  created_at: false,
+};
+
+/** Estado de las medidas de los ejes (celda y export comparten las etiquetas). */
+export const templateSizesStatusLabels: Record<string, string> = {
+  empty: 'Sin ejes',
+  none: 'Por vehículo',
+  partial: 'Parciales',
+  all: 'Todas',
+};
+
 export function getColumns(
   permissions: Permissions,
   onEdit: (template: TemplateListItem) => void,
@@ -52,6 +67,7 @@ export function getColumns(
 ): ColumnDef<TemplateListItem>[] {
   const canUpdate = permissions.hasPermission('mantenimiento', 'plantillas_cubiertas', 'update');
   const canCreate = permissions.hasPermission('mantenimiento', 'plantillas_cubiertas', 'create');
+  const canDelete = permissions.hasPermission('mantenimiento', 'plantillas_cubiertas', 'delete');
 
   return [
     // --- Select ---
@@ -76,16 +92,26 @@ export function getColumns(
       meta: { excludeFromExport: true, title: '' },
     },
 
-    // --- Name ---
+    // --- Name (compuesta: mini diagrama de ejes + nombre + descripción; el export usa solo el nombre) ---
     {
       id: 'name',
       accessorKey: 'name',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
-      cell: ({ row }) => <div className="font-medium">{row.original.name}</div>,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Plantilla" />,
+      cell: ({ row }) => (
+        <div className="flex items-center gap-3">
+          <TemplateAxlesMini axles={row.original.axles ?? []} />
+          <div className="min-w-0">
+            <div className="font-medium">{row.original.name}</div>
+            {row.original.description ? (
+              <div className="text-muted-foreground line-clamp-1 text-xs">{row.original.description}</div>
+            ) : null}
+          </div>
+        </div>
+      ),
       meta: { title: 'Nombre' },
     },
 
-    // --- Description ---
+    // --- Description (atómica, oculta por defecto) ---
     {
       id: 'description',
       accessorKey: 'description',
@@ -158,7 +184,12 @@ export function getColumns(
           <TooltipProvider delayDuration={200}>
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="inline-block cursor-help">{badge}</span>
+                <span
+                  tabIndex={0}
+                  className="focus-visible:ring-ring/50 inline-block cursor-help rounded-sm outline-none focus-visible:ring-[3px]"
+                >
+                  {badge}
+                </span>
               </TooltipTrigger>
               <TooltipContent side="top" className="max-w-xs">
                 <p className="text-xs leading-relaxed">{tooltipText}</p>
@@ -176,58 +207,38 @@ export function getColumns(
       id: 'created_at',
       accessorKey: 'created_at',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Creado" />,
-      cell: ({ row }) => (
-        <div>{row.original.created_at ? moment(row.original.created_at).format('DD/MM/YYYY') : '-'}</div>
-      ),
+      cell: ({ row }) => <div>{row.original.created_at ? formatArgentinaDay(row.original.created_at) : '-'}</div>,
       meta: { title: 'Creado' },
     },
 
-    // --- Actions ---
-    ...(canUpdate || canCreate
+    // --- Actions: menú ⋯ (asignar = create, editar = update, eliminar = delete) ---
+    ...(canUpdate || canCreate || canDelete
       ? [
           {
             id: 'actions',
-            cell: ({ row }: { row: import('@tanstack/react-table').Row<TemplateListItem> }) => (
-              <TooltipProvider delayDuration={200}>
-                <div className="flex items-center gap-1">
-                  {canCreate && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onAssign(row.original)}>
-                          <CarFront className="h-3.5 w-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Asignar a subtipo</TooltipContent>
-                    </Tooltip>
-                  )}
-                  {canUpdate && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(row.original)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Editar</TooltipContent>
-                    </Tooltip>
-                  )}
-                  {canUpdate && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => onDelete(row.original)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Eliminar</TooltipContent>
-                    </Tooltip>
-                  )}
-                </div>
-              </TooltipProvider>
-            ),
+            cell: ({ row }: { row: import('@tanstack/react-table').Row<TemplateListItem> }) => {
+              const template = row.original;
+              const actions: RowAction[] = [];
+              if (canCreate)
+                actions.push({
+                  key: 'assign',
+                  label: 'Asignar a subtipo',
+                  icon: CarFront,
+                  onSelect: () => onAssign(template),
+                });
+              if (canUpdate)
+                actions.push({ key: 'edit', label: 'Editar', icon: Pencil, onSelect: () => onEdit(template) });
+              if (canDelete) {
+                actions.push({
+                  key: 'delete',
+                  label: 'Eliminar',
+                  icon: Trash2,
+                  destructive: true,
+                  onSelect: () => onDelete(template),
+                });
+              }
+              return <RowActionsMenu label={`Acciones de la plantilla ${template.name}`} actions={actions} />;
+            },
             enableSorting: false,
             enableHiding: false,
             meta: { title: '', excludeFromExport: true },

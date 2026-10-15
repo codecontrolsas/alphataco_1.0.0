@@ -1,16 +1,16 @@
 import type { ModuleSlug } from '@/features/Permissions/permissions-map';
 import {
   Boxes,
-  ShoppingCart,
-  Landmark,
   Building2,
   CalendarDays,
   CircleHelp,
   ClipboardList,
   FileText,
   Handshake,
+  Landmark,
   LayoutDashboard,
   Settings,
+  ShoppingCart,
   Truck,
   UserSearch,
   Users,
@@ -25,7 +25,7 @@ export type ModuleIcon = ComponentType<{ className?: string }>;
  * Icono de cada modulo del sistema. Fuente unica.
  *
  * Antes vivia duplicado en tres lugares —el sidebar y los dos editores de permisos
- * (`RolePermissionsEditor`, `ModulePermissions`)—, con el riesgo de que un modulo se viera con
+ * (`permission-editor/PermissionEditor` y su `ModuleRail`)—, con el riesgo de que un modulo se viera con
  * un icono en el menu y con otro en la pantalla de permisos.
  *
  * Nombres al dia de lucide (0.562): `CircleHelp` en lugar del alias viejo `HelpCircle`,

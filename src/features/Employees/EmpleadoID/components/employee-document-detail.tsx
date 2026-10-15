@@ -2,80 +2,51 @@ import { MonthlyEmployeeDocumentsList } from '@/features/Documentacion/Documento
 import { MonthlyEmployeeDocumentsSkeleton } from '@/features/Documentacion/DocumentosEmpleados/Mensuales/fallback/MonthlyEmployeeDocumentsSkeleton';
 import { EmployeePermanentDocumentsList } from '@/features/Documentacion/DocumentosEmpleados/Permanentes/EmployeePermanentDocumentsList';
 import { EmployeePermanentDocumentsSkeleton } from '@/features/Documentacion/DocumentosEmpleados/Permanentes/fallback/EmployeePermanentDocumentsSkeleton';
-import DocumentNav from '@/features/Documentacion/shared/components/DocumentNav';
-import { PermissionGuardServer, getUserPermissionsMapServer } from '@/features/Permissions';
-import { TabsManagerServer } from '@/features/TabsManager';
-import { Calendar, FileArchive } from 'lucide-react';
+import { ViewManagerServer } from '@/features/TabsManager';
 import { Suspense } from 'react';
-
-// ============================================================================
-// TYPES
-// ============================================================================
 
 interface EmployeeDocumentDetailProps {
   employeeId: string;
   searchParams: Record<string, string | string[] | undefined>;
+  permissions: Record<string, boolean>;
 }
 
-// ============================================================================
-// SERVER COMPONENT
-// ============================================================================
-
-export async function EmployeeDocumentDetail({ employeeId, searchParams }: EmployeeDocumentDetailProps) {
-  // Obtener permisos (usa cache pre-cargado en layout, sin query adicional)
-  const permissions = await getUserPermissionsMapServer();
-
+/**
+ * Documentación del empleado dentro de su ficha: permanentes o mensuales (`?subtab=`), sin perder la
+ * ficha ni la sección (`action`, `employee_id`, `tab`) al cambiar de vista.
+ */
+export async function EmployeeDocumentDetail({ employeeId, searchParams, permissions }: EmployeeDocumentDetailProps) {
   return (
-    <TabsManagerServer
+    <ViewManagerServer
       paramName="subtab"
       searchParams={searchParams}
-      defaultTab="permanentes"
+      defaultView="permanentes"
       permissions={permissions}
-      tabs={[
+      preserveParams={['action', 'employee_id', 'tab']}
+      ariaLabel="Tipo de documentación"
+      views={[
         {
           value: 'permanentes',
-          label: (
-            <span className="flex items-center gap-2">
-              <FileArchive className="h-4 w-4" />
-              Documentos Permanentes
-            </span>
-          ),
+          label: 'Permanentes',
+          description: 'Documentos de presentación única',
           moduleSlug: 'documentacion',
           tabSlug: 'docs-empleados-permanentes',
           content: (
-            <div>
-              <PermissionGuardServer module="documentacion" tab="documentos-de-empleados" action="create">
-                <div className="flex gap-4 flex-wrap mb-4">
-                  <DocumentNav id_user={employeeId} onlyEmployees onlyNoMultiresource />
-                </div>
-              </PermissionGuardServer>
-              <Suspense fallback={<EmployeePermanentDocumentsSkeleton />}>
-                <EmployeePermanentDocumentsList searchParams={searchParams} employeeId={employeeId} />
-              </Suspense>
-            </div>
+            <Suspense fallback={<EmployeePermanentDocumentsSkeleton />}>
+              <EmployeePermanentDocumentsList searchParams={searchParams} employeeId={employeeId} />
+            </Suspense>
           ),
         },
         {
           value: 'mensuales',
-          label: (
-            <span className="flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              Documentos Mensuales
-            </span>
-          ),
+          label: 'Mensuales',
+          description: 'Documentos que se presentan por período',
           moduleSlug: 'documentacion',
           tabSlug: 'docs-empleados-mensuales',
           content: (
-            <div>
-              <PermissionGuardServer module="documentacion" tab="documentos-de-empleados" action="create">
-                <div className="flex gap-4 flex-wrap mb-4">
-                  <DocumentNav id_user={employeeId} onlyEmployees onlyNoMultiresource />
-                </div>
-              </PermissionGuardServer>
-              <Suspense fallback={<MonthlyEmployeeDocumentsSkeleton />}>
-                <MonthlyEmployeeDocumentsList searchParams={searchParams} employeeId={employeeId} />
-              </Suspense>
-            </div>
+            <Suspense fallback={<MonthlyEmployeeDocumentsSkeleton />}>
+              <MonthlyEmployeeDocumentsList searchParams={searchParams} employeeId={employeeId} />
+            </Suspense>
           ),
         },
       ]}

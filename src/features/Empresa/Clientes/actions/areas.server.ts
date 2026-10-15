@@ -1,44 +1,25 @@
 'use server';
 
-import { Prisma } from '@/generated/prisma/client';
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
 import { errorMessage, fail, ok, type ActionResult } from '../lib/action-result';
+import { areaInclude, serializeArea } from '../lib/area-row';
 import { diffAssignments, normalizeIds } from '../lib/assignment-diff';
+import { assertComercialView, requireComercialPermission } from '../lib/require-permission.server';
 import { areaFormSchema, type AreaFormValues } from '../schemas/area';
 
 const logger = new Logger('features/Empresa/Clientes/areas');
 
 const COMERCIAL_PATH = '/dashboard/comercial';
 
-const areaInclude = {
-  customers: { select: { id: true, name: true, company_id: true } },
-  area_province: { select: { province_id: true, provinces: { select: { id: true, name: true } } } },
-} satisfies Prisma.areas_clienteInclude;
-
-type AreaWithRelations = Prisma.areas_clienteGetPayload<{ include: typeof areaInclude }>;
-
-/** `provinces.id` es bigint: hacia el cliente viaja como number. */
-function serializeArea(area: AreaWithRelations) {
-  return {
-    id: area.id,
-    nombre: area.nombre,
-    descripcion_corta: area.descripcion_corta,
-    customer_id: area.customer_id,
-    customers: area.customers,
-    area_province: area.area_province.map((ap) => ({
-      province_id: Number(ap.province_id),
-      provinces: { id: Number(ap.provinces.id), name: ap.provinces.name },
-    })),
-  };
-}
-
 export type AreaRow = ReturnType<typeof serializeArea>;
 
 /** Áreas de los clientes de la empresa activa, con sus provincias. */
 export async function getAreasWithProvinces(): Promise<AreaRow[]> {
+  await assertComercialView(['areas-cliente', 'service']);
   const companyId = await getActiveCompanyId();
   try {
     const rows = await prisma.areas_cliente.findMany({
@@ -53,6 +34,25 @@ export async function getAreasWithProvinces(): Promise<AreaRow[]> {
   }
 }
 
+/** Áreas de UN cliente de la empresa activa (pestaña "Áreas" de la ficha). */
+export async function getAreasByCustomer(customerId: string): Promise<AreaRow[]> {
+  if (!(await checkPermissionServer('comercial', 'areas-cliente', 'view'))) {
+    throw new Error('No tenés permiso para ver las áreas del cliente');
+  }
+  const companyId = await getActiveCompanyId();
+  try {
+    const rows = await prisma.areas_cliente.findMany({
+      where: { customer_id: customerId, customers: { company_id: companyId } },
+      include: areaInclude,
+      orderBy: { nombre: 'asc' },
+    });
+    return rows.map(serializeArea);
+  } catch (error) {
+    logger.error('Error al obtener las áreas del cliente', { data: { error, customerId } });
+    throw new Error('No se pudieron cargar las áreas del cliente');
+  }
+}
+
 async function findOwnedArea(areaId: string, companyId: string) {
   return prisma.areas_cliente.findFirst({
     where: { id: areaId, customers: { company_id: companyId } },
@@ -61,7 +61,10 @@ async function findOwnedArea(areaId: string, companyId: string) {
 }
 
 async function assertCustomerOwned(customerId: string, companyId: string): Promise<void> {
-  const customer = await prisma.customers.findFirst({ where: { id: customerId, company_id: companyId }, select: { id: true } });
+  const customer = await prisma.customers.findFirst({
+    where: { id: customerId, company_id: companyId },
+    select: { id: true },
+  });
   if (!customer) throw new Error('Cliente no encontrado');
 }
 
@@ -91,6 +94,8 @@ export async function createArea(input: AreaFormValues): Promise<ActionResult<{ 
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos');
   const values = parsed.data;
 
+  const permissionError = await requireComercialPermission('areas-cliente', 'create');
+  if (permissionError) return fail(permissionError);
   const companyId = await getActiveCompanyId();
   try {
     await assertCustomerOwned(values.customer_id, companyId);
@@ -127,6 +132,8 @@ export async function updateArea(input: AreaFormValues & { id: string }): Promis
   const values = parsed.data;
   const areaId = input.id;
 
+  const permissionError = await requireComercialPermission('areas-cliente', 'update');
+  if (permissionError) return fail(permissionError);
   const companyId = await getActiveCompanyId();
   try {
     const current = await findOwnedArea(areaId, companyId);
@@ -181,6 +188,7 @@ export async function updateArea(input: AreaFormValues & { id: string }): Promis
 
 /** Ids de contratos ya vinculados a un área (para filtrarlos del selector en edición). */
 export async function getAreaLinkedContracts(areaId: string): Promise<string[]> {
+  await assertComercialView(['areas-cliente']);
   const companyId = await getActiveCompanyId();
   try {
     const rows = await prisma.service_areas.findMany({
@@ -205,6 +213,8 @@ export async function linkAreaToContracts(
   const ids = normalizeIds(serviceIds);
   if (!areaId || ids.length === 0) return { ok: false, error: 'Faltan datos para vincular' };
 
+  const permissionError = await requireComercialPermission('areas-cliente', 'update');
+  if (permissionError) return { ok: false, error: permissionError };
   const companyId = await getActiveCompanyId();
   try {
     const area = await findOwnedArea(areaId, companyId);

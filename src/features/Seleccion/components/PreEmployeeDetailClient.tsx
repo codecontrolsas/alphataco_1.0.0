@@ -4,6 +4,7 @@ import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import type { PreEmployeeDetailData } from '../actions/pre-employee-actions.server';
+import { useInvalidatePreEmployeeLists } from '../hooks/useInvalidatePreEmployeeLists';
 import { getAvailableTransitions, isEditableStatus } from '../lib/state-machine';
 import { ApprovePreEmployeeSheet } from './ApprovePreEmployeeSheet';
 import { RejectPreEmployeeDialog } from './RejectPreEmployeeDialog';
@@ -13,14 +14,16 @@ import { PreEmployeeReadView } from './view/PreEmployeeReadView';
 interface PreEmployeeDetailClientProps {
   preEmployee: PreEmployeeDetailData | null;
   mode: 'new' | 'view' | 'edit';
+  section?: string;
 }
 
 /**
  * Ficha del candidato: alterna entre lectura y formulario sin navegar (el `?action=` de la URL
  * se actualiza con `replaceState`) y aloja los diálogos de rechazo y aprobación de gerencia.
  */
-export function PreEmployeeDetailClient({ preEmployee, mode: initialMode }: PreEmployeeDetailClientProps) {
+export function PreEmployeeDetailClient({ preEmployee, mode: initialMode, section }: PreEmployeeDetailClientProps) {
   const router = useRouter();
+  const invalidateLists = useInvalidatePreEmployeeLists();
   const { hasPermission } = usePermissions();
   const [mode, setMode] = useState(initialMode);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
@@ -32,7 +35,11 @@ export function PreEmployeeDetailClient({ preEmployee, mode: initialMode }: PreE
 
   const showMode = (next: 'view' | 'edit') => {
     setMode(next);
-    window.history.replaceState(null, '', `?action=${next}&pre_employee_id=${preEmployee?.id ?? ''}`);
+    window.history.replaceState(
+      null,
+      '',
+      `?action=${next}&pre_employee_id=${preEmployee?.id ?? ''}${section ? `&section=${section}` : ''}`
+    );
   };
 
   if (!preEmployee) {
@@ -63,6 +70,7 @@ export function PreEmployeeDetailClient({ preEmployee, mode: initialMode }: PreE
         onEdit={() => showMode('edit')}
         onReject={() => setShowRejectDialog(true)}
         onApprove={() => setShowApproveSheet(true)}
+        section={section}
       />
 
       {/* Acciones de gerencia */}
@@ -72,7 +80,10 @@ export function PreEmployeeDetailClient({ preEmployee, mode: initialMode }: PreE
             preEmployeeId={preEmployee.id}
             open={showRejectDialog}
             onOpenChange={setShowRejectDialog}
-            onRejected={() => router.refresh()}
+            onRejected={() => {
+              invalidateLists();
+              router.refresh();
+            }}
           />
 
           <ApprovePreEmployeeSheet
@@ -81,7 +92,10 @@ export function PreEmployeeDetailClient({ preEmployee, mode: initialMode }: PreE
             proposedCompanyPosition={preEmployee.proposed_company_position}
             open={showApproveSheet}
             onOpenChange={setShowApproveSheet}
-            onApproved={(employeeId) => router.push(`/dashboard/employee/action?action=view&employee_id=${employeeId}`)}
+            onApproved={(employeeId) => {
+              invalidateLists({ includeEmployees: true });
+              router.push(`/dashboard/employee/action?action=view&employee_id=${employeeId}`);
+            }}
           />
         </>
       )}

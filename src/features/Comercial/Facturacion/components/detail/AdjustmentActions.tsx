@@ -15,7 +15,7 @@ import { ChevronDown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 import { toast } from 'sonner';
-import { createAdjustmentDraft } from '../../actions/invoice-drafts.server';
+import { createAdjustmentDraft } from '../../actions/invoice-drafts-create.server';
 import type { AdjustmentInput } from '../../schemas/invoice';
 import { invoiceHref } from '../../utils/invoice-links';
 
@@ -80,7 +80,11 @@ export function AdjustmentActions({
   const create = (option: Option) => {
     if (option.disabledReason || pending) return;
     startTransition(async () => {
-      const result = await createAdjustmentDraft({ originalInvoiceId: invoiceId, kind: option.kind, mode: option.mode });
+      const result = await createAdjustmentDraft({
+        originalInvoiceId: invoiceId,
+        kind: option.kind,
+        mode: option.mode,
+      });
       if (!result.ok) {
         logger.warn('No se creó la nota', { data: { invoiceId, error: result.error } });
         toast.error(`No se creó la nota: ${result.error}`);
@@ -104,7 +108,9 @@ export function AdjustmentActions({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">
-        <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">Sobre {voucherLabel}</DropdownMenuLabel>
+        <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
+          Sobre {voucherLabel}
+        </DropdownMenuLabel>
         <DropdownMenuGroup>
           {options.map((option) => (
             <DropdownMenuItem
@@ -120,7 +126,9 @@ export function AdjustmentActions({
               }}
             >
               <span>{option.label}</span>
-              <span className="text-muted-foreground text-xs text-pretty">{option.disabledReason ?? option.description}</span>
+              <span className="text-muted-foreground text-xs text-pretty">
+                {option.disabledReason ?? option.description}
+              </span>
             </DropdownMenuItem>
           ))}
         </DropdownMenuGroup>

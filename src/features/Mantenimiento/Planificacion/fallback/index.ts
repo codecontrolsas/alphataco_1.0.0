@@ -1,1 +1,0 @@
-export { PlanificacionTableSkeleton } from './PlanificacionTableSkeleton';

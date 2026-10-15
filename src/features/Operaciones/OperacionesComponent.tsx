@@ -1,6 +1,5 @@
 import { getUserPermissionsMapServer } from '@/features/Permissions';
 import { SectionManagerServer } from '@/features/TabsManager';
-import { ClipboardList, Package } from 'lucide-react';
 import { Suspense } from 'react';
 import PartesDiariosTabContent from './PartesDiarios/PartesDiariosTabContent';
 import { DailyReportTableSkeleton } from './PartesDiarios/list/fallback/DailyReportTableSkeleton';
@@ -25,12 +24,8 @@ export default async function OperacionesComponent({
         tabs={[
           {
             value: 'preparte',
-            label: (
-              <span className="flex items-center gap-2">
-                <Package className="h-4 w-4" />
-                Gestor de Pedidos
-              </span>
-            ),
+            label: 'Planificador',
+            description: 'Pedidos de los clientes y su programación.',
             moduleSlug: 'operaciones',
             tabSlug: 'preparte',
             content: (
@@ -41,12 +36,8 @@ export default async function OperacionesComponent({
           },
           {
             value: 'dailyreportstable',
-            label: (
-              <span className="flex items-center gap-2">
-                <ClipboardList className="h-4 w-4" />
-                Partes Diarios
-              </span>
-            ),
+            label: 'Partes de operaciones',
+            description: 'Un parte por día con las líneas de servicio y los recursos asignados.',
             moduleSlug: 'operaciones',
             tabSlug: 'dailyreportstable',
             content: (

@@ -17,6 +17,7 @@ import { formatInCurrency } from '../../lib/currency-format';
 import { invalidateTreasury } from '../../lib/invalidate';
 import { TREASURY_QUERY_KEYS } from '../../lib/query-keys';
 import { registerLineSchema, type RegisterLineValues } from '../../schemas/reconciliation';
+import { formatDay } from '../../lib/dates';
 
 const logger = new Logger('Treasury/RegisterLineDialog');
 
@@ -60,7 +61,7 @@ export function RegisterLineDialog({ open, onOpenChange, line }: RegisterLineDia
         <DialogHeader>
           <DialogTitle>Registrar en el libro</DialogTitle>
           <DialogDescription>
-            {moment(line.date, 'YYYY-MM-DD').format('DD/MM/YYYY')} · {formatInCurrency(line.amount, 'ARS')}. Se crea un movimiento manual en esa fecha, ya conciliado con la línea.
+            {formatDay(line.date)} · {formatInCurrency(line.amount, 'ARS')}. Se crea un movimiento manual en esa fecha, ya conciliado con la línea.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>

@@ -9,11 +9,11 @@ import {
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { CircleOff } from 'lucide-react';
-import moment from 'moment';
-import { useCallback, useMemo, useState } from 'react';
+import { unwrapExportResult } from '@/shared/lib/export-result';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { WAREHOUSE_QUERY_KEYS } from '../../../../lib/query-keys';
 import { getAllStockForExport, getStockPaginated, getStockSingleFacet, type StockListItem } from '../actions.server';
-import { HIDDEN_COLUMNS_BY_DEFAULT, belowMinIcons, getColumns } from '../columns';
+import { HIDDEN_COLUMNS_BY_DEFAULT, formatBatchExpiry, getColumns, stockLevelByBelowMin } from '../columns';
 
 interface Props {
   data: StockListItem[];
@@ -23,6 +23,8 @@ interface Props {
   permissionsMap: Record<string, boolean>;
   initialColumnVisibility?: Record<string, boolean>;
   initialFilterVisibility?: Record<string, boolean>;
+  /** Banda y tarjetas de atención resueltas en el servidor; se muestran sobre la tabla. */
+  topSlot?: ReactNode;
 }
 
 const DEFAULT_VISIBLE_FILTERS = ['warehouse', 'category', 'below_min'];
@@ -37,6 +39,7 @@ export function _StockDataTable({
   permissionsMap,
   initialColumnVisibility,
   initialFilterVisibility,
+  topSlot,
 }: Props) {
   const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
   const handleStateChange = useCallback((params: DataTableSearchParams) => setCurrentParams(params), []);
@@ -75,14 +78,15 @@ export function _StockDataTable({
       { columnId: 'category', title: 'Categoría', fetchFacet: makeFkFetchFacet('category') },
       {
         columnId: 'below_min',
-        title: 'Bajo mínimo',
+        title: 'Nivel de stock',
         fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
           const result = await getStockSingleFacet('below_min', params);
           if (!result) return EMPTY_FACET;
           return {
             options: [
-              { value: 'true', label: 'Sí', icon: belowMinIcons.true },
-              { value: 'false', label: 'No', icon: belowMinIcons.false },
+              // Mismos textos e íconos que el badge de la celda (STOCK_LEVEL_UI)
+              { value: 'true', label: stockLevelByBelowMin.true.label, icon: stockLevelByBelowMin.true.icon },
+              { value: 'false', label: stockLevelByBelowMin.false.label, icon: stockLevelByBelowMin.false.icon },
             ],
             counts: result.counts,
           };
@@ -109,35 +113,38 @@ export function _StockDataTable({
 
   const exportConfig: DataTableExportConfig<StockListItem> = useMemo(
     () => ({
-      fetchAllData: () => getAllStockForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllStockForExport(currentParams)),
       options: { filename: 'stock', title: 'Stock por depósito', sheetName: 'Stock' },
       formatters: {
-        expires_at: (value) => (value ? moment.utc(value as string | Date).format('DD/MM/YYYY') : ''),
-        below_min: (value) => (value ? 'Sí' : 'No'),
+        expires_at: (value) => formatBatchExpiry(value as string | Date | null),
+        below_min: (value) => (value ? stockLevelByBelowMin.true.label : stockLevelByBelowMin.false.label),
       },
     }),
     [currentParams]
   );
 
   return (
-    <DataTable
-      columns={columns}
-      data={data}
-      totalRows={totalRows}
-      searchParams={searchParams}
-      tableId={tableId}
-      paramNamespace={tableId}
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={mergedColumnVisibility}
-      initialFilterVisibility={mergedFilterVisibility}
-      showFilterToggle
-      queryFn={tableQueryFn}
-      queryKey={[...WAREHOUSE_QUERY_KEYS.stock]}
-      onStateChange={handleStateChange}
-      searchPlaceholder="Buscar por código, material o lote"
-      emptyMessage="No hay stock cargado"
-      exportConfig={exportConfig}
-      data-testid="warehouse-stock-table"
-    />
+    <div className="space-y-4">
+      {topSlot}
+      <DataTable
+        columns={columns}
+        data={data}
+        totalRows={totalRows}
+        searchParams={searchParams}
+        tableId={tableId}
+        paramNamespace={tableId}
+        facetedFilters={facetedFilters}
+        initialColumnVisibility={mergedColumnVisibility}
+        initialFilterVisibility={mergedFilterVisibility}
+        showFilterToggle
+        queryFn={tableQueryFn}
+        queryKey={[...WAREHOUSE_QUERY_KEYS.stock]}
+        onStateChange={handleStateChange}
+        searchPlaceholder="Buscar por código, material o lote"
+        emptyMessage="No hay stock cargado"
+        exportConfig={exportConfig}
+        data-testid="warehouse-stock-table"
+      />
+    </div>
   );
 }

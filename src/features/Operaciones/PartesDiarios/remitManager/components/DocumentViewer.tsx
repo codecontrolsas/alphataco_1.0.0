@@ -11,21 +11,28 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { formatArgentinaDay } from '@/features/Treasury/lib/today';
-import { Download, Eye, FileText, FileType, ImageIcon, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import { Download, Eye, FileText, FileType, ImageIcon, Trash2 } from 'lucide-react';
 import { useDeleteDocument, useDocumentUrl, useDownloadDocument } from '../hooks/useDocuments';
 import { DocumentViewerProps } from '../types';
 
 export function DocumentViewer({ document, dailyReportRowId }: DocumentViewerProps) {
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const deleteDocument = useDeleteDocument(dailyReportRowId);
   const downloadDocument = useDownloadDocument();
   const { data: documentUrl } = useDocumentUrl(document.document_path);
 
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
   const handleDelete = async () => {
-    await deleteDocument.mutateAsync(document.id);
-    setConfirmDelete(false);
+    try {
+      await deleteDocument.mutateAsync(document.id);
+    } catch {
+      // El error ya se informa con toast en el hook.
+    } finally {
+      setConfirmOpen(false);
+    }
   };
 
   const handleDownload = async () => {
@@ -41,92 +48,109 @@ export function DocumentViewer({ document, dailyReportRowId }: DocumentViewerPro
     }
   };
 
-  const extension = document.document_name.split('.').pop()?.toLowerCase() ?? '';
-  const FileIcon = ['jpg', 'jpeg', 'png', 'webp'].includes(extension)
-    ? ImageIcon
-    : extension === 'pdf'
-      ? FileType
-      : FileText;
+  const getFileIcon = () => {
+    const ext = document.document_name.split('.').pop()?.toLowerCase();
+    if (['jpg', 'jpeg', 'png', 'webp'].includes(ext || '')) {
+      return <ImageIcon className="h-5 w-5 text-primary" />;
+    }
+    if (ext === 'pdf') {
+      return <FileType className="h-5 w-5 text-red-600" />;
+    }
+    return <FileText className="h-5 w-5 text-muted-foreground" />;
+  };
+
+  const getFileType = () => {
+    const ext = document.document_name.split('.').pop()?.toUpperCase();
+    return ext || 'FILE';
+  };
 
   return (
-    <div className="bg-card hover:border-brand/50 flex items-center gap-4 rounded-xl border p-4 transition-colors">
-      <div className="relative shrink-0">
-        <div className="bg-muted text-muted-foreground flex size-12 items-center justify-center rounded-lg">
-          <FileIcon className="size-5" aria-hidden="true" />
+    <Card className="group hover:shadow-md hover:border-primary/50 transition-all duration-200">
+      <CardContent className="p-4">
+        <div className="flex items-center gap-4">
+          <div className="relative flex-shrink-0">
+            <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform">
+              {getFileIcon()}
+            </div>
+            <div className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[8px] font-bold px-1.5 py-0.5 rounded">
+              {getFileType()}
+            </div>
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">
+              {document.document_name}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Subido el{' '}
+              <span className="font-mono tabular-nums">
+                {document.created_at ? formatArgentinaDay(document.created_at) : '-'}
+              </span>
+            </p>
+          </div>
+
+          <div className="flex gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              onClick={handleView}
+              aria-label="Ver documento"
+              className="hover:bg-primary/10 hover:text-primary"
+              title="Ver documento"
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              onClick={handleDownload}
+              aria-label="Descargar"
+              disabled={downloadDocument.isPending}
+              className="hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-950/20"
+              title="Descargar"
+            >
+              <Download className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              onClick={() => setConfirmOpen(true)}
+              aria-label="Eliminar"
+              disabled={deleteDocument.isPending}
+              className="hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/20"
+              title="Eliminar"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
-        <span className="bg-secondary text-secondary-foreground absolute -top-1 -right-1 rounded px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase">
-          {extension || 'archivo'}
-        </span>
-      </div>
+      </CardContent>
 
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{document.document_name}</p>
-        <p className="text-muted-foreground mt-0.5 text-xs">
-          Subido el{' '}
-          <span className="font-mono tabular-nums">
-            {document.created_at ? formatArgentinaDay(document.created_at) : '-'}
-          </span>
-        </p>
-      </div>
-
-      <div className="flex gap-0.5">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          onClick={handleView}
-          disabled={!documentUrl}
-          aria-label={`Ver ${document.document_name}`}
-          title="Ver documento"
-        >
-          <Eye className="size-4" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          onClick={handleDownload}
-          disabled={downloadDocument.isPending}
-          aria-label={`Descargar ${document.document_name}`}
-          title="Descargar"
-        >
-          <Download className="size-4" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => setConfirmDelete(true)}
-          disabled={deleteDocument.isPending}
-          className="text-danger-subtle-foreground hover:text-danger-subtle-foreground"
-          aria-label={`Eliminar ${document.document_name}`}
-          title="Eliminar"
-        >
-          <Trash2 className="size-4" />
-        </Button>
-      </div>
-
-      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar el documento?</AlertDialogTitle>
+            <AlertDialogTitle>¿Eliminar documento?</AlertDialogTitle>
             <AlertDialogDescription>
-              Se quita <strong>{document.document_name}</strong> de este remito. Si el mismo archivo está vinculado a
-              otra línea, ahí se conserva.
+              Se eliminará {document.document_name} de este remito. Esta acción no se puede deshacer. Si el mismo archivo está vinculado a otra línea, ahí se conserva.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleteDocument.isPending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDelete}
               disabled={deleteDocument.isPending}
-              className="bg-destructive hover:bg-destructive/90 text-white"
+              onClick={(e) => {
+                e.preventDefault();
+                void handleDelete();
+              }}
             >
-              {deleteDocument.isPending ? 'Eliminando...' : 'Eliminar'}
+              Eliminar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </Card>
   );
 }

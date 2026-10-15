@@ -7,13 +7,13 @@ import {
   DocumentNameCell,
   DocumentRowActions,
   DocumentStatePill,
+  documentListStateLabels,
   documentStateIcons,
 } from '@/features/Documentacion/shared/components/DocumentCells';
-import SimpleDocument from '@/features/Documentacion/shared/components/SimpleDocument';
-import { formatArgentinaDay } from '@/features/Treasury/lib/today';
+import { RequirementUpload } from '@/features/Documentacion/shared/components/RequirementUpload';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { documentStateLabels } from '@/shared/utils/mappers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import Link from 'next/link';
 import type { MonthlyEquipmentDocumentListItem } from './actions.server';
@@ -33,7 +33,7 @@ export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = [
 
 /** Íconos y labels de estado: los mismos que usa la pill de la tabla (los consume el filtro de Estado). */
 export const stateIcons = documentStateIcons;
-export const stateLabels = documentStateLabels;
+export const stateLabels = documentListStateLabels;
 
 // ============================================================================
 // ACTIONS CELL
@@ -47,7 +47,7 @@ function ActionsCell({ row }: { row: MonthlyEquipmentDocumentListItem }) {
       documentId={row.id}
       documentName={row.document_types?.name}
       state={row.state}
-      archived={row.archived_at != null}
+      archived={row.notApplicable}
       resource={row.vehicles ? 'Equipos' : 'Persona'}
       viewTab="docs-equipos-mensuales"
       upload={{
@@ -55,11 +55,12 @@ function ActionsCell({ row }: { row: MonthlyEquipmentDocumentListItem }) {
         tab: isPrivateDocType ? 'documentos-de-equipos' : 'docs-equipos-mensuales',
         action: isPrivateDocType ? 'upload_private' : 'update',
         render: (close) => (
-          <SimpleDocument
-            resource="equipo"
-            handleOpen={close}
-            defaultDocumentId={row.id_document_types ?? undefined}
-            numberDocument={row.vehicles?.serie ?? undefined}
+          <RequirementUpload
+            kind="vehicle"
+            resourceId={row.applies}
+            documentTypeId={row.id_document_types}
+            period={row.period}
+            close={close}
           />
         ),
       }}
@@ -147,7 +148,7 @@ export const columns: ColumnDef<MonthlyEquipmentDocumentListItem>[] = [
     header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
     cell: ({ row }) => (
       // Documento archivado: historial / ya no aplica (solo visible en el detalle del equipo)
-      <DocumentStatePill state={row.original.state} archived={row.original.archived_at != null} />
+      <DocumentStatePill state={row.original.state} archived={row.original.notApplicable} />
     ),
     filterFn: (row, id, value: string[]) => {
       const val = row.getValue(id) as string | null;
@@ -164,12 +165,10 @@ export const columns: ColumnDef<MonthlyEquipmentDocumentListItem>[] = [
     meta: { title: 'Subido el' },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Subido el" />,
     cell: ({ row }) => {
-      const isPending = row.original.state === 'pendiente';
-      if (isPending) return <span className="text-muted-foreground">No disponible</span>;
-
       // Usar el log más reciente si existe, sino created_at
       const latestLog = row.original.documents_equipment_logs?.[0];
       const date = latestLog?.updated_at ?? row.original.created_at;
+      if (row.original.isMissing || !date) return <span className="text-muted-foreground">No disponible</span>;
       return <span className="font-mono tabular-nums">{formatArgentinaDay(date)}</span>;
     },
     enableSorting: true,

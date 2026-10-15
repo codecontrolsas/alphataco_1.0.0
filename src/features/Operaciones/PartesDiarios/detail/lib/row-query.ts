@@ -1,6 +1,5 @@
 import 'server-only';
 
-import { Logger } from '@/lib/logger';
 import {
   buildFiltersWhere,
   buildSearchWhere,
@@ -9,10 +8,7 @@ import {
   parseSearchParams,
 } from '@/shared/components/common/DataTable/helpers';
 import { prisma } from '@/shared/lib/prisma';
-import { REMIT_NUMBERS_SELECT, remitNumberContainsWhere } from '../../remitManager/lib/remit-numbers';
-import moment from 'moment';
-
-const logger = new Logger('features/Operaciones/PartesDiarios/detail/lib');
+import { sanitizeFilters } from '@/shared/lib/table-filters';
 
 /** Tipo del cliente transaccional de Prisma (evita TS2589 con Omit<typeof prisma, ...>) */
 export type PrismaTransactionClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
@@ -29,6 +25,7 @@ export const VALID_SORT_FIELDS = new Set([
   'start_time',
   'end_time',
   'description',
+  'remit_number',
   'completed_day',
   'completed_night',
   'created_at',
@@ -48,10 +45,7 @@ export const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Record<string,
 export const DATE_RANGE_COLUMNS: string[] = [];
 
 /** Columnas de texto libre */
-export const TEXT_COLUMNS = ['description', 'cancel_reason', 'working_day'];
-
-/** Campos de texto propios de la fila que entran en la búsqueda global (los remitos se suman aparte). */
-const SEARCH_FIELDS = ['description', 'cancel_reason', 'working_day'];
+export const TEXT_COLUMNS = ['description', 'remit_number', 'cancel_reason', 'working_day'];
 
 /** Columnas manejadas manualmente (no pasar a buildFiltersWhere) */
 export const MANUALLY_HANDLED = [
@@ -65,8 +59,6 @@ export const MANUALLY_HANDLED = [
   'employees',
   'equipment',
   'customer_equipment',
-  // Remitos: viven en la tabla `remitos` (1:N), se filtran con `some`
-  'remit_number',
   ...TEXT_COLUMNS,
 ];
 
@@ -76,14 +68,16 @@ export const COLUMN_MAP: Record<string, string> = {
   type_service: 'type_service',
 };
 
+/**
+ * Únicas claves de URL que filtran el detalle. Cualquier otra (`daily_report_id`, `dailyreport`, un campo
+ * ajeno…) se descarta antes de armar el `where`: no puede pisar el perímetro ni filtrar por columnas no expuestas.
+ */
+const ALLOWED_FILTER_KEYS: ReadonlySet<string> = new Set([...Object.keys(COLUMN_MAP), ...MANUALLY_HANDLED]);
+
 // ============================================================================
 // HELPERS INTERNOS
 // ============================================================================
 
-/**
- * Construye el WHERE clause compartido entre paginated, export y facets.
- * Acepta dailyReportId para filtrar siempre al parte correspondiente.
- */
 /**
  * WHERE compartido por el listado, el export y los facets del detalle.
  *
@@ -92,14 +86,11 @@ export const COLUMN_MAP: Record<string, string> = {
  */
 export function buildWhereClause(
   dailyReportId: string,
-  state: ReturnType<typeof parseSearchParams>,
+  rawState: ReturnType<typeof parseSearchParams>,
   companyId: string
 ) {
-  // La búsqueda global también encuentra la línea por cualquiera de sus remitos
-  const fieldsSearch = buildSearchWhere(state.search, SEARCH_FIELDS);
-  const searchWhere = state.search
-    ? { OR: [...(fieldsSearch.OR ?? []), remitNumberContainsWhere(state.search)] }
-    : {};
+  const state = sanitizeFilters(rawState, ALLOWED_FILTER_KEYS);
+  const searchWhere = buildSearchWhere(state.search, ['description', 'remit_number', 'cancel_reason', 'working_day']);
 
   const filtersWhere = buildFiltersWhere(state.filters, COLUMN_MAP, {
     exclude: [...MANUALLY_HANDLED, ...DATE_RANGE_COLUMNS.flatMap((c) => [`${c}_from`, `${c}_to`])],
@@ -275,24 +266,24 @@ export function buildWhereClause(
     }
   }
 
-  // remit_number (texto libre sobre los remitos de la línea)
-  const remitNumberValue = state.filters['remit_number']?.[0];
-  if (remitNumberValue) manualFilters.push(remitNumberContainsWhere(remitNumberValue));
+  // `AND` de `buildFiltersWhere` (casos mixtos con null): se fusiona con los filtros manuales.
+  const { AND: filtersAnd, ...filtersRest } = filtersWhere as { AND?: Record<string, unknown>[] };
 
-  const base: Record<string, unknown> = {
-    daily_report_id: dailyReportId,
-    dailyreport: { company_id: companyId },
+  // El perímetro (parte + empresa) va dentro de `AND` y el resto de los fragmentos se esparcen ANTES:
+  // ninguna clave de filtro puede pisarlo.
+  const where: Record<string, unknown> = {
     ...searchWhere,
-    ...filtersWhere,
+    ...filtersRest,
     ...textFiltersWhere,
+    AND: [
+      { daily_report_id: dailyReportId },
+      { dailyreport: { company_id: companyId } },
+      ...(filtersAnd ?? []),
+      ...manualFilters,
+    ],
   };
 
-  if (manualFilters.length > 0) {
-    const existingAnd = (base.AND as Record<string, unknown>[] | undefined) ?? [];
-    base.AND = [...existingAnd, ...manualFilters];
-  }
-
-  return base;
+  return where;
 }
 
 // ============================================================================
@@ -300,14 +291,10 @@ export function buildWhereClause(
 // ============================================================================
 
 /**
- * Construye el select de Prisma para las filas del parte.
- * reportDate se usa para filtrar employees_diagram por fecha.
+ * Select de Prisma de las filas del parte (listado paginado y export).
+ * Ya no trae `employees_diagram`: ninguna columna del detalle lo usa (los desvíos salen de la función SQL).
  */
-export function buildRowSelect(reportDate?: string) {
-  const day = reportDate ? Number(moment(reportDate).format('D')) : undefined;
-  const month = reportDate ? Number(moment(reportDate).format('M')) : undefined;
-  const year = reportDate ? Number(moment(reportDate).format('YYYY')) : undefined;
-
+export function buildRowSelect() {
   return {
     id: true,
     daily_report_id: true,
@@ -322,7 +309,7 @@ export function buildRowSelect(reportDate?: string) {
     document_path: true,
     sector_service_id: true,
     areas_service_id: true,
-    remitos: REMIT_NUMBERS_SELECT,
+    remit_number: true,
     cancel_reason: true,
     type_service: true,
     completed_day: true,
@@ -372,27 +359,6 @@ export function buildRowSelect(reportDate?: string) {
             firstname: true,
             lastname: true,
             file: true,
-            // Diagrama del día del parte para detección de desviaciones
-            employees_diagram:
-              day != null && month != null && year != null
-                ? {
-                    where: {
-                      day: day,
-                      month: month,
-                      year: year,
-                    },
-                    select: {
-                      id: true,
-                      diagram_type_employees_diagram_diagram_typeTodiagram_type: {
-                        select: {
-                          id: true,
-                          name: true,
-                          work_active: true,
-                        },
-                      },
-                    },
-                  }
-                : false,
           },
         },
       },
@@ -438,128 +404,11 @@ export function buildRowSelect(reportDate?: string) {
   } as const;
 }
 
-
-// ============================================================================
-// PERÍMETRO DE EMPRESA (sin RLS: cada action verifica lo que escribe)
-// ============================================================================
-
-/** Lanza si el parte diario no pertenece a la empresa indicada. */
-export async function assertDailyReportInCompany(dailyReportId: string, companyId: string): Promise<void> {
-  const report = await prisma.dailyreport.findFirst({
-    where: { id: dailyReportId, company_id: companyId },
-    select: { id: true },
-  });
-  if (!report) {
-    throw new Error('El parte diario no existe o no pertenece a la empresa activa.');
-  }
-}
-
-/** Lanza si la línea no cuelga de un parte diario de la empresa indicada. */
-export async function assertRowInCompany(rowId: string, companyId: string): Promise<void> {
-  const row = await prisma.dailyreportrows.findFirst({
-    where: { id: rowId, dailyreport: { company_id: companyId } },
-    select: { id: true },
-  });
-  if (!row) {
-    throw new Error('La línea del parte diario no existe o no pertenece a la empresa activa.');
-  }
-}
-
-/** Devuelve, de `rowIds`, sólo las líneas que cuelgan de partes de la empresa indicada. */
-export async function filterRowsInCompany(rowIds: string[], companyId: string): Promise<string[]> {
-  if (rowIds.length === 0) return [];
-  const rows = await prisma.dailyreportrows.findMany({
-    where: { id: { in: rowIds }, dailyreport: { company_id: companyId } },
-    select: { id: true },
-  });
-  return rows.map((row) => row.id);
-}
-
-export interface RowResourceRefs {
-  customerId?: string | null;
-  serviceId?: string | null;
-  itemId?: string | null;
-  sectorServiceId?: string | null;
-  areasServiceId?: string | null;
-  employeeIds?: string[];
-  equipmentIds?: string[];
-  otherEquipmentIds?: string[];
-  customerEquipmentIds?: string[];
-}
-
-/**
- * Verifica que cliente, contrato, ítem, sector, área, empleados y equipos pertenezcan a la
- * empresa activa antes de asociarlos a una línea. Sin RLS es la única defensa: la FK acepta
- * cualquier uuid que llegue del cliente.
- */
-export async function assertRowResourcesInCompany(companyId: string, refs: RowResourceRefs): Promise<void> {
-  const employeeIds = [...new Set(refs.employeeIds ?? [])];
-  const equipmentIds = [...new Set(refs.equipmentIds ?? [])];
-  const otherEquipmentIds = [...new Set(refs.otherEquipmentIds ?? [])];
-  const customerEquipmentIds = [...new Set(refs.customerEquipmentIds ?? [])];
-
-  const [customer, service, item, sector, area, employees, vehicles, otherEquipment, customerEquipment] =
-    await Promise.all([
-      refs.customerId
-        ? prisma.customers.findFirst({ where: { id: refs.customerId, company_id: companyId }, select: { id: true } })
-        : Promise.resolve(null),
-      refs.serviceId
-        ? prisma.customer_services.findFirst({
-            where: { id: refs.serviceId, customers: { company_id: companyId } },
-            select: { id: true },
-          })
-        : Promise.resolve(null),
-      refs.itemId
-        ? prisma.service_items.findFirst({
-            where: { id: refs.itemId, customer_services: { customers: { company_id: companyId } } },
-            select: { id: true },
-          })
-        : Promise.resolve(null),
-      refs.sectorServiceId
-        ? prisma.service_sectors.findFirst({
-            where: { id: refs.sectorServiceId, customer_services: { customers: { company_id: companyId } } },
-            select: { id: true },
-          })
-        : Promise.resolve(null),
-      refs.areasServiceId
-        ? prisma.service_areas.findFirst({
-            where: { id: refs.areasServiceId, customer_services: { customers: { company_id: companyId } } },
-            select: { id: true },
-          })
-        : Promise.resolve(null),
-      employeeIds.length
-        ? prisma.employees.findMany({ where: { id: { in: employeeIds }, company_id: companyId }, select: { id: true } })
-        : Promise.resolve([]),
-      equipmentIds.length
-        ? prisma.vehicles.findMany({ where: { id: { in: equipmentIds }, company_id: companyId }, select: { id: true } })
-        : Promise.resolve([]),
-      otherEquipmentIds.length
-        ? prisma.other_equipment.findMany({
-            where: { id: { in: otherEquipmentIds }, company_id: companyId },
-            select: { id: true },
-          })
-        : Promise.resolve([]),
-      customerEquipmentIds.length
-        ? prisma.equipos_clientes.findMany({
-            where: { id: { in: customerEquipmentIds }, customers: { company_id: companyId } },
-            select: { id: true },
-          })
-        : Promise.resolve([]),
-    ]);
-
-  const invalid =
-    (refs.customerId && !customer) ||
-    (refs.serviceId && !service) ||
-    (refs.itemId && !item) ||
-    (refs.sectorServiceId && !sector) ||
-    (refs.areasServiceId && !area) ||
-    employees.length !== employeeIds.length ||
-    vehicles.length !== equipmentIds.length ||
-    otherEquipment.length !== otherEquipmentIds.length ||
-    customerEquipment.length !== customerEquipmentIds.length;
-
-  if (invalid) {
-    logger.warn('Recursos de otra empresa en una línea de parte diario', { data: { companyId } });
-    throw new Error('Alguno de los recursos de la línea no pertenece a la empresa activa.');
-  }
-}
+// El perímetro de empresa vive en ./perimeter; se re-exporta para no romper a los importadores existentes.
+export {
+  assertDailyReportInCompany,
+  assertRowInCompany,
+  assertRowResourcesInCompany,
+  filterRowsInCompany,
+  type RowResourceRefs,
+} from './perimeter';

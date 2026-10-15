@@ -31,15 +31,20 @@ import { formatInCurrency } from '../../lib/currency-format';
 import { invalidateTreasury } from '../../lib/invalidate';
 import { TREASURY_QUERY_KEYS } from '../../lib/query-keys';
 import { formatArgentinaDateTime } from '../../lib/today';
-import { BANK_LINE_STATUS_LABELS } from '../../schemas/reconciliation';
+import { BANK_LINE_STATUS_UI, TONE_TO_BADGE } from '../../lib/status-presentation';
 import { TREASURY_MOVEMENT_KIND_LABELS } from '../../schemas/movements';
 import { ImportStatementDialog } from './ImportStatementDialog';
 import { RegisterLineDialog } from './RegisterLineDialog';
+import { formatDay } from '../../lib/dates';
 
 const logger = new Logger('Treasury/ReconciliationView');
 
-const dmy = (value: string) => moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY');
-const tone = (amount: string) => (amount.startsWith('-') ? 'text-red-600 dark:text-red-400' : '');
+const tone = (amount: string) => (amount.startsWith('-') ? 'text-danger' : '');
+
+function LineStatusIcon({ status }: { status: keyof typeof BANK_LINE_STATUS_UI }) {
+  const Icon = BANK_LINE_STATUS_UI[status].icon;
+  return <Icon className="h-3 w-3" aria-hidden="true" />;
+}
 
 type Line = ReconciliationData['lines'][number];
 type Can = { import: boolean; update: boolean; delete: boolean; debitChecks: boolean };
@@ -70,7 +75,7 @@ export function ReconciliationView({
   const [selectedMovement, setSelectedMovement] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
 
-  const { data } = useQuery({
+  const { data, isError, isFetching, refetch } = useQuery({
     queryKey: [...TREASURY_QUERY_KEYS.reconciliation, accountId, showAll],
     queryFn: () => getReconciliationData(accountId, { showAll }),
     initialData: showAll ? undefined : initialData,
@@ -138,9 +143,23 @@ export function ReconciliationView({
         </div>
       </div>
 
+      {isError && (
+        <div role="alert" className="flex flex-wrap items-center gap-2 rounded-md border border-danger/40 bg-danger-subtle p-3 text-sm text-danger-subtle-foreground">
+          No se pudo actualizar la conciliación: se muestran los últimos datos cargados.
+          <Button type="button" size="sm" variant="outline" onClick={() => refetch()} disabled={isFetching}>
+            Reintentar
+          </Button>
+        </div>
+      )}
+      {showAll && isFetching && !data && (
+        <p role="status" className="text-sm text-muted-foreground">
+          Cargando todas las líneas…
+        </p>
+      )}
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
-          { label: `Saldo del libro al ${dmy(s.to)}`, value: s.bookBalance },
+          { label: `Saldo del libro al ${formatDay(s.to)}`, value: s.bookBalance },
           { label: 'Extracto pendiente: créditos', value: s.pendingCredits },
           { label: 'Extracto pendiente: débitos', value: s.pendingDebits },
           { label: 'Libro sin conciliar (ingresos / egresos)', value: `${s.unreconciledIn}|${s.unreconciledOut}` },
@@ -150,7 +169,7 @@ export function ReconciliationView({
               <p className="text-xs text-muted-foreground">{k.label}</p>
               {k.value.includes('|') ? (
                 <p className="text-lg font-semibold tabular-nums">
-                  {formatInCurrency(k.value.split('|')[0]!, 'ARS')} / <span className="text-red-600 dark:text-red-400">{formatInCurrency(k.value.split('|')[1]!, 'ARS')}</span>
+                  {formatInCurrency(k.value.split('|')[0]!, 'ARS')} / <span className="text-danger">{formatInCurrency(k.value.split('|')[1]!, 'ARS')}</span>
                 </p>
               ) : (
                 <p className={`text-lg font-semibold tabular-nums ${tone(k.value)}`}>{formatInCurrency(k.value, 'ARS')}</p>
@@ -167,7 +186,7 @@ export function ReconciliationView({
               <CardTitle className="text-base">Extracto del banco</CardTitle>
               <CardDescription>Elegí una línea para ver sus movimientos sugeridos.</CardDescription>
               {current.totalLines > current.lines.length && (
-                <p role="status" className="text-xs tabular-nums text-amber-700 dark:text-amber-400">
+                <p role="status" className="text-xs tabular-nums text-warn-subtle-foreground">
                   Mostrando {current.lines.length} de {current.totalLines} líneas{showAll ? ' (las más nuevas)' : ' (las más viejas primero)'}
                 </p>
               )}
@@ -198,14 +217,17 @@ export function ReconciliationView({
                     const selected = l.id === selectedLine;
                     return (
                       <TableRow key={l.id} className={selected ? 'bg-muted' : undefined}>
-                        <TableCell className="whitespace-nowrap tabular-nums">{dmy(l.date)}</TableCell>
+                        <TableCell className="whitespace-nowrap tabular-nums">{formatDay(l.date)}</TableCell>
                         <TableCell>
                           <span className="block">{l.description || '—'}</span>
                           {l.reference && <span className="block text-xs text-muted-foreground">Ref. {l.reference}</span>}
                           {l.status !== 'PENDING' && (
-                            <span className="block text-xs text-muted-foreground">
-                              {BANK_LINE_STATUS_LABELS[l.status]}
-                              {l.movement ? ` · ${TREASURY_MOVEMENT_KIND_LABELS[l.movement.kind]} del ${dmy(l.movement.date)}` : ''}
+                            <span className="mt-1 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                              <Badge variant={TONE_TO_BADGE[BANK_LINE_STATUS_UI[l.status].tone]} className="gap-1">
+                                <LineStatusIcon status={l.status} />
+                                {BANK_LINE_STATUS_UI[l.status].label}
+                              </Badge>
+                              {l.movement ? `${TREASURY_MOVEMENT_KIND_LABELS[l.movement.kind]} del ${formatDay(l.movement.date)}` : ''}
                               {l.ignoreReason ? ` · ${l.ignoreReason}` : ''}
                             </span>
                           )}
@@ -269,7 +291,7 @@ export function ReconciliationView({
               <CardTitle className="text-base">Libro sin conciliar</CardTitle>
               <CardDescription>Movimientos vigentes de la cuenta en el período del extracto (±5 días).</CardDescription>
               {current.totalBookMovements > current.bookMovements.length && (
-                <p role="status" className="text-xs tabular-nums text-amber-700 dark:text-amber-400">
+                <p role="status" className="text-xs tabular-nums text-warn-subtle-foreground">
                   Mostrando {current.bookMovements.length} de {current.totalBookMovements} movimientos
                 </p>
               )}
@@ -302,23 +324,23 @@ export function ReconciliationView({
                 </TableHeader>
                 <TableBody>
                   {current.bookMovements.map((m) => (
-                    <TableRow key={m.id} className={m.id === selectedMovement ? 'bg-muted' : suggested.has(m.id) ? 'bg-emerald-50 dark:bg-emerald-950/40' : undefined}>
+                    <TableRow key={m.id} className={m.id === selectedMovement ? 'bg-muted' : suggested.has(m.id) ? 'bg-ok-subtle' : undefined}>
                       <TableCell>
                         <input
                           type="radio"
                           name="book-movement"
-                          aria-label={`Elegir el movimiento del ${dmy(m.date)}`}
+                          aria-label={`Elegir el movimiento del ${formatDay(m.date)}`}
                           checked={m.id === selectedMovement}
                           disabled={!can.update}
                           onChange={() => setSelectedMovement(m.id)}
                         />
                       </TableCell>
-                      <TableCell className="whitespace-nowrap tabular-nums">{dmy(m.date)}</TableCell>
+                      <TableCell className="whitespace-nowrap tabular-nums">{formatDay(m.date)}</TableCell>
                       <TableCell>
                         <span className="block text-xs text-muted-foreground">{TREASURY_MOVEMENT_KIND_LABELS[m.kind]}</span>
                         {m.description || '—'}
                         {suggested.has(m.id) && (
-                          <Badge variant="outline" className="ml-2 border-emerald-600 text-emerald-700 dark:text-emerald-400">
+                          <Badge variant="outline" className="ml-2 border-ok text-ok-subtle-foreground">
                             Sugerido
                           </Badge>
                         )}
@@ -359,7 +381,7 @@ export function ReconciliationView({
                     <TableCell className="whitespace-nowrap tabular-nums">{formatArgentinaDateTime(st.createdAt)}</TableCell>
                     <TableCell>{st.fileName}</TableCell>
                     <TableCell className="whitespace-nowrap tabular-nums">
-                      {dmy(st.dateFrom)} al {dmy(st.dateTo)}
+                      {formatDay(st.dateFrom)} al {formatDay(st.dateTo)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {st.lineCount}
@@ -388,7 +410,7 @@ export function ReconciliationView({
           open
           onOpenChange={(open) => !open && setDialog(null)}
           title="Ignorar la línea"
-          description={`${dmy(dialog.line.date)} · ${dialog.line.description} · ${formatInCurrency(dialog.line.amount, 'ARS')}. Queda fuera de la conciliación; se puede volver a pendiente.`}
+          description={`${formatDay(dialog.line.date)} · ${dialog.line.description} · ${formatInCurrency(dialog.line.amount, 'ARS')}. Queda fuera de la conciliación; se puede volver a pendiente.`}
           successMessage="Línea ignorada"
           confirmLabel="Ignorar"
           run={(reason) => ignoreLine({ lineId: dialog.line.id, reason })}

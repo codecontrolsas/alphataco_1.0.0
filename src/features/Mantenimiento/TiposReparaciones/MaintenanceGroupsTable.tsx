@@ -1,62 +1,83 @@
+'use client';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { BaseDataTable } from '@/shared/components/data-table/base/data-table';
-import { DataTableColumnHeader } from '@/shared/components/data-table/base/data-table-column-header';
-import { ColumnDef, VisibilityState } from '@tanstack/react-table';
-import { useState } from 'react';
+import {
+  DataTable,
+  DataTableColumnHeader,
+  type DataTableFacetedFilterConfig,
+} from '@/shared/components/common/DataTable';
+import {
+  inMemoryDateSortingFn,
+  inMemoryFacetedFilterFn,
+  inMemoryTextFilterFn,
+} from '@/shared/components/common/DataTable/in-memory';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import type { ColumnDef } from '@tanstack/react-table';
+import { Check, X } from 'lucide-react';
+import { useMemo, type ReactNode } from 'react';
 import { fetchMaintenanceGroupsActionType, fetchTypesOfRepairActionType } from './actions/maintenanceGroupActions';
+
+type GroupRow = fetchMaintenanceGroupsActionType['groups'][number] & Record<string, unknown>;
+type RepairTypes = fetchTypesOfRepairActionType['types'];
 
 interface MaintenanceGroupsTableProps {
   groups: fetchMaintenanceGroupsActionType['groups'];
-  types: fetchTypesOfRepairActionType['types'];
-  selectedGroup: MaintenanceGroupsTableProps['groups'][number] | null;
-  setSelectedGroup: (group: MaintenanceGroupsTableProps['groups'][number] | null) => void;
-  setMode: (mode: 'create' | 'edit') => void;
-  mode: 'create' | 'edit';
-  savedVisibility: VisibilityState;
-  savedFilter: string[];
+  types: RepairTypes;
+  onEdit: (group: fetchMaintenanceGroupsActionType['groups'][number]) => void;
   canEdit: boolean;
+  /** Botón "Nuevo grupo" en la barra de la tabla. */
+  toolbarActions?: ReactNode;
 }
 
-function getTypeNames(typeIds: string[], types: MaintenanceGroupsTableProps['types']) {
-  return typeIds.map((id) => types.find((t) => t.id === id)?.name).filter(Boolean) as string[];
+const DEFAULT_VISIBLE_FILTERS = ['name', 'types', 'is_active'];
+const HIDDEN_COLUMNS = ['description', 'created_at'];
+
+function getTypeNames(row: GroupRow, types: RepairTypes): string[] {
+  const names = new Map(types.map((type) => [type.id, type.name]));
+  return row.maintenance_group_type_of_repairs
+    .map((relation) => names.get(relation.type_id))
+    .filter((name): name is string => !!name);
 }
 
-export function getMaintenanceGroupsColumns(
-  types: MaintenanceGroupsTableProps['types'],
-  onEdit: (group: MaintenanceGroupsTableProps['groups'][number]) => void,
+function getColumns(
+  types: RepairTypes,
+  onEdit: MaintenanceGroupsTableProps['onEdit'],
   canEdit: boolean
-): ColumnDef<MaintenanceGroupsTableProps['groups'][number]>[] {
-  const columns: ColumnDef<MaintenanceGroupsTableProps['groups'][number]>[] = [
+): ColumnDef<GroupRow>[] {
+  const columns: ColumnDef<GroupRow>[] = [
     {
+      id: 'name',
       accessorKey: 'name',
-      id: 'Nombre',
+      meta: { title: 'Nombre' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
       cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
-      filterFn: (row, id, value) => value.includes(row.getValue(id)),
+      filterFn: inMemoryTextFilterFn,
     },
     {
-      accessorKey: 'type_ids',
-      id: 'Tipos de reparación',
-      header: 'Tipos de reparación',
+      id: 'types',
+      // Para el Excel y la búsqueda: nombres separados por coma.
+      accessorFn: (row) => getTypeNames(row, types).join(', '),
+      meta: { title: 'Tipos de reparación' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipos de reparación" />,
       cell: ({ row }) => {
-        const typeNames = getTypeNames(
-          row.original.maintenance_group_type_of_repairs?.map((r) => r.type_id) || [],
-          types
-        );
+        const typeNames = getTypeNames(row.original, types);
         if (!typeNames.length) return <span>-</span>;
         const [first, ...rest] = typeNames;
-        if (rest.length === 0) {
-          return <Badge variant="default">{first}</Badge>;
-        }
+        if (rest.length === 0) return <Badge variant="default">{first}</Badge>;
         return (
           <TooltipProvider delayDuration={100}>
             <Tooltip>
-              <TooltipTrigger>
-                <Badge variant="default" className="cursor-pointer select-none">
-                  {first} +{rest.length}
-                </Badge>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Badge variant="default" className="cursor-pointer select-none">
+                    {first} +{rest.length}
+                  </Badge>
+                </button>
               </TooltipTrigger>
               <TooltipContent>
                 <div className="flex flex-col gap-1">
@@ -69,28 +90,49 @@ export function getMaintenanceGroupsColumns(
           </TooltipProvider>
         );
       },
-      filterFn: (row, id, value) => {
-        const rowTypeIds = row.original.maintenance_group_type_of_repairs?.map((r) => r.type_id) || [];
-        return value.some((val: string) => rowTypeIds.includes(val));
-      },
+      // El filtro es por tipo (id): el grupo coincide si tiene alguno de los elegidos.
+      filterFn: (row, _id, value: string[]) =>
+        row.original.maintenance_group_type_of_repairs.some((relation) => value.includes(relation.type_id)),
     },
     {
+      id: 'description',
       accessorKey: 'description',
-      id: 'Descripción',
+      meta: { title: 'Descripción' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción" />,
-      cell: ({ row }) => <span className="whitespace-pre-line text-gray-700">{row.original.description || '-'}</span>,
-      filterFn: (row, id, value) => value.includes(row.getValue(id)),
+      cell: ({ row }) => (
+        <span className="whitespace-pre-line text-muted-foreground">{row.original.description || '-'}</span>
+      ),
+      filterFn: inMemoryTextFilterFn,
     },
     {
-      accessorKey: 'is_active',
-      id: 'Estado',
-      header: 'Estado',
+      id: 'is_active',
+      accessorFn: (row) => (row.is_active ? 'Activo' : 'Inactivo'),
+      meta: { title: 'Estado' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
       cell: ({ row }) => (
         <Badge variant={row.original.is_active ? 'success' : 'default'}>
+          {row.original.is_active ? (
+            <Check aria-hidden="true" className="mr-1 h-3 w-3" />
+          ) : (
+            <X aria-hidden="true" className="mr-1 h-3 w-3" />
+          )}
           {row.original.is_active ? 'Activo' : 'Inactivo'}
         </Badge>
       ),
-      filterFn: (row, id, value) => value.includes(row.getValue(id)),
+      filterFn: inMemoryFacetedFilterFn,
+    },
+    {
+      id: 'created_at',
+      accessorFn: (row) => (row.created_at ? formatArgentinaDay(row.created_at) : ''),
+      meta: { title: 'Creado' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Creado" />,
+      cell: ({ row }) => (
+        <span className="tabular-nums">
+          {row.original.created_at ? formatArgentinaDay(row.original.created_at) : '-'}
+        </span>
+      ),
+      // El modo in-memory no resuelve rangos de fecha: se ordena y se exporta, sin filtro.
+      sortingFn: inMemoryDateSortingFn,
     },
   ];
 
@@ -98,77 +140,64 @@ export function getMaintenanceGroupsColumns(
     columns.push({
       id: 'actions',
       header: 'Acciones',
+      meta: { excludeFromExport: true, title: 'Acciones' },
+      enableSorting: false,
+      enableHiding: false,
       cell: ({ row }) => (
-        <Button size="sm" variant="link" className="hover:text-blue-400" onClick={() => onEdit(row.original)}>
+        <Button type="button" size="sm" variant="link" onClick={() => onEdit(row.original)}>
           Editar
         </Button>
       ),
-      enableSorting: false,
     });
   }
 
   return columns;
 }
 
-function MaintenanceGroupsTable({
-  groups,
-  types,
-  setSelectedGroup,
-  setMode,
-  mode,
-  savedVisibility,
-  savedFilter,
-  canEdit,
-}: MaintenanceGroupsTableProps) {
-  const [filteredData, setFilteredData] = useState<MaintenanceGroupsTableProps['groups']>(
-    groups.filter((g) => g.is_active)
+function MaintenanceGroupsTable({ groups, types, onEdit, canEdit, toolbarActions }: MaintenanceGroupsTableProps) {
+  const rows = groups as GroupRow[];
+  const columns = useMemo(() => getColumns(types, onEdit, canEdit), [types, onEdit, canEdit]);
+
+  const facetedFilters = useMemo<DataTableFacetedFilterConfig[]>(
+    () => [
+      { columnId: 'name', title: 'Nombre', type: 'text' },
+      { columnId: 'types', title: 'Tipos de reparación', options: types.map((t) => ({ label: t.name, value: t.id })) },
+      {
+        columnId: 'is_active',
+        title: 'Estado',
+        options: [
+          { label: 'Activo', value: 'Activo', icon: Check },
+          { label: 'Inactivo', value: 'Inactivo', icon: X },
+        ],
+      },
+      { columnId: 'description', title: 'Descripción', type: 'text' },
+    ],
+    [types]
   );
 
-  const handleEdit = (group: MaintenanceGroupsTableProps['groups'][number]) => {
-    setSelectedGroup(group);
-    setMode('edit');
-  };
-
-  const typeOptions = types.map((t) => ({ label: t.name, value: t.id }));
-  const nameOptions = Array.from(new Set(groups.map((g) => g.name))).map((name) => ({ label: name, value: name }));
-  const estadoOptions = [
-    { label: 'Activo', value: 'true' },
-    { label: 'Inactivo', value: 'false' },
-  ];
+  const initialColumnVisibility = useMemo(() => Object.fromEntries(HIDDEN_COLUMNS.map((id) => [id, false])), []);
+  const initialFilterVisibility = useMemo(
+    () => Object.fromEntries(facetedFilters.map((f) => [f.columnId, DEFAULT_VISIBLE_FILTERS.includes(f.columnId)])),
+    [facetedFilters]
+  );
 
   return (
-    <div className="ml-4">
-      <div className="flex justify-between">
-        <h2 className="text-xl font-bold">Grupos de Reparación</h2>
-      </div>
-      <BaseDataTable
-        className="mt-4"
-        columns={getMaintenanceGroupsColumns(types, handleEdit, canEdit)}
-        data={groups}
-        savedVisibility={savedVisibility}
-        tableId="maintenance-groups-table"
-        toolbarOptions={{
-          initialVisibleFilters: savedFilter || [],
-          filterableColumns: [
-            {
-              columnId: 'Nombre',
-              title: 'Nombre',
-              options: nameOptions,
-            },
-            {
-              columnId: 'Tipos de reparación',
-              title: 'Tipos de reparación',
-              options: typeOptions,
-            },
-            {
-              columnId: 'Estado',
-              title: 'Estado',
-              options: estadoOptions,
-            },
-          ],
-        }}
-      />
-    </div>
+    <DataTable
+      columns={columns}
+      data={rows}
+      totalRows={rows.length}
+      searchParams={{}}
+      inMemory
+      toolbarActions={toolbarActions}
+      tableId="maintenance-groups-table"
+      paramNamespace="maintenance-groups-table"
+      facetedFilters={facetedFilters}
+      initialColumnVisibility={initialColumnVisibility}
+      initialFilterVisibility={initialFilterVisibility}
+      searchPlaceholder="Buscar por nombre o descripción..."
+      showFilterToggle
+      emptyMessage="No hay grupos de reparación cargados"
+    />
   );
 }
 

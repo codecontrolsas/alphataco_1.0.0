@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  isAboveThreshold,
   THRESHOLD_DOT_ABOVE_COLOR,
+  THRESHOLD_DOT_NEUTRAL_COLOR,
   THRESHOLD_DOT_WITHIN_COLOR,
+  isAboveThreshold,
   thresholdDotColor,
 } from './chart-thresholds';
 
@@ -28,6 +29,6 @@ describe('thresholdDotColor', () => {
   it('pinta de rojo por encima del umbral y de verde el resto', () => {
     expect(thresholdDotColor(95, 80)).toBe(THRESHOLD_DOT_ABOVE_COLOR);
     expect(thresholdDotColor(10, 80)).toBe(THRESHOLD_DOT_WITHIN_COLOR);
-    expect(thresholdDotColor(undefined, 80)).toBe(THRESHOLD_DOT_WITHIN_COLOR);
+    expect(thresholdDotColor(undefined, 80)).toBe(THRESHOLD_DOT_NEUTRAL_COLOR);
   });
 });

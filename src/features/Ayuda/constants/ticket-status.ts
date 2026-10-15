@@ -1,97 +1,65 @@
-export interface StatusDef {
-  label: string;
-  badgeClass: string;
+import {
+  TONE_TO_BADGE,
+  type BadgeVariant,
+  type StatusTone,
+  type StatusUi,
+} from '@/features/Mantenimiento/lib/status-presentation';
+import {
+  Ban,
+  CalendarClock,
+  CheckCircle2,
+  CircleDot,
+  Clock,
+  Hourglass,
+  Loader,
+  Lock,
+  Tag,
+  ThumbsUp,
+  type LucideIcon,
+} from 'lucide-react';
+
+/**
+ * Presentación de los estados de ticket (etiqueta, tono e ícono). El color sale del tono, que
+ * resuelve a los tokens de `globals.css` (claro y oscuro). Las clases van ESCRITAS COMPLETAS:
+ * Tailwind v4 solo genera las que encuentra literales en el código.
+ */
+export const STATUS_BY_SLUG: Record<string, StatusUi> = {
+  open: { label: 'Abierto', tone: 'info', icon: CircleDot },
+  pendiente_aprobacion: { label: 'Esperando tu aprobación', tone: 'warn', icon: Clock },
+  aprobado_cliente: { label: 'Aprobado por vos', tone: 'ok', icon: ThumbsUp },
+  in_progress: { label: 'En curso', tone: 'brand', icon: Loader },
+  blocked: { label: 'Frenado', tone: 'danger', icon: Lock },
+  planned: { label: 'Planificado', tone: 'pending', icon: CalendarClock },
+  valued: { label: 'Valorizado', tone: 'pending', icon: Tag },
+  pending_planning: { label: 'Pendiente de planificación', tone: 'neutral', icon: Hourglass },
+  resolved: { label: 'Resuelto', tone: 'ok', icon: CheckCircle2 },
+  done: { label: 'Resuelto', tone: 'ok', icon: CheckCircle2 },
+  closed: { label: 'Cerrado', tone: 'neutral', icon: Ban },
+  cancelled: { label: 'Cancelado', tone: 'neutral', icon: Ban },
+};
+
+/** Clases derivadas del tono (borde lateral, punto y degradé de la tarjeta). */
+const TONE_CLASSES: Record<StatusTone, { borderClass: string; dotClass: string; tintClass: string }> = {
+  neutral: {
+    borderClass: 'border-l-muted-foreground',
+    dotClass: 'bg-muted-foreground',
+    tintClass: 'from-muted-foreground/10',
+  },
+  pending: { borderClass: 'border-l-pending', dotClass: 'bg-pending', tintClass: 'from-pending/10' },
+  warn: { borderClass: 'border-l-warn', dotClass: 'bg-warn', tintClass: 'from-warn/10' },
+  brand: { borderClass: 'border-l-brand', dotClass: 'bg-brand', tintClass: 'from-brand/10' },
+  info: { borderClass: 'border-l-info', dotClass: 'bg-info', tintClass: 'from-info/10' },
+  ok: { borderClass: 'border-l-ok', dotClass: 'bg-ok', tintClass: 'from-ok/10' },
+  danger: { borderClass: 'border-l-danger', dotClass: 'bg-danger', tintClass: 'from-danger/10' },
+};
+
+export interface TicketStatusPresentation extends StatusUi {
+  badgeVariant: BadgeVariant;
   borderClass: string;
   dotClass: string;
   tintClass: string;
+  icon: LucideIcon;
 }
-
-export const STATUS_BY_SLUG: Record<string, StatusDef> = {
-  open: {
-    label: 'Abierto',
-    badgeClass: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-    borderClass: 'border-l-blue-500',
-    dotClass: 'bg-blue-500',
-    tintClass: 'from-blue-500/10',
-  },
-  pendiente_aprobacion: {
-    label: 'Esperando tu aprobación',
-    badgeClass: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-    borderClass: 'border-l-yellow-500',
-    dotClass: 'bg-yellow-500',
-    tintClass: 'from-yellow-500/10',
-  },
-  aprobado_cliente: {
-    label: 'Aprobado por vos',
-    badgeClass: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-    borderClass: 'border-l-green-500',
-    dotClass: 'bg-green-500',
-    tintClass: 'from-green-500/10',
-  },
-  in_progress: {
-    label: 'En curso',
-    badgeClass: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
-    borderClass: 'border-l-amber-500',
-    dotClass: 'bg-amber-500',
-    tintClass: 'from-amber-500/10',
-  },
-  blocked: {
-    label: 'Frenado',
-    badgeClass: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-    borderClass: 'border-l-red-500',
-    dotClass: 'bg-red-500',
-    tintClass: 'from-red-500/10',
-  },
-  planned: {
-    label: 'Planificado',
-    badgeClass: 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200',
-    borderClass: 'border-l-violet-500',
-    dotClass: 'bg-violet-500',
-    tintClass: 'from-violet-500/10',
-  },
-  valued: {
-    label: 'Valorizado',
-    badgeClass: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-    borderClass: 'border-l-orange-500',
-    dotClass: 'bg-orange-500',
-    tintClass: 'from-orange-500/10',
-  },
-  pending_planning: {
-    label: 'Pendiente de planificación',
-    badgeClass: 'bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900 dark:text-fuchsia-200',
-    borderClass: 'border-l-fuchsia-500',
-    dotClass: 'bg-fuchsia-500',
-    tintClass: 'from-fuchsia-500/10',
-  },
-  resolved: {
-    label: 'Resuelto',
-    badgeClass: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
-    borderClass: 'border-l-emerald-500',
-    dotClass: 'bg-emerald-500',
-    tintClass: 'from-emerald-500/10',
-  },
-  done: {
-    label: 'Resuelto',
-    badgeClass: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
-    borderClass: 'border-l-emerald-500',
-    dotClass: 'bg-emerald-500',
-    tintClass: 'from-emerald-500/10',
-  },
-  closed: {
-    label: 'Cerrado',
-    badgeClass: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200',
-    borderClass: 'border-l-slate-400',
-    dotClass: 'bg-slate-400',
-    tintClass: 'from-slate-400/10',
-  },
-  cancelled: {
-    label: 'Cancelado',
-    badgeClass: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200',
-    borderClass: 'border-l-slate-400',
-    dotClass: 'bg-slate-400',
-    tintClass: 'from-slate-400/10',
-  },
-};
 
 /**
  * Estado que se muestra cuando el slug no está en la tabla.
@@ -104,15 +72,9 @@ export const STATUS_BY_SLUG: Record<string, StatusDef> = {
  * que ni un slug inesperado ni un backend viejo puedan filtrar un nombre
  * interno.
  */
-const UNKNOWN_STATUS: StatusDef = {
-  label: 'En curso',
-  badgeClass: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
-  borderClass: 'border-l-amber-500',
-  dotClass: 'bg-amber-500',
-  tintClass: 'from-amber-500/10',
-};
+const UNKNOWN_STATUS: StatusUi = { label: 'En curso', tone: 'brand', icon: Loader };
 
-export function statusFor(slug: string | undefined): StatusDef {
-  if (slug && STATUS_BY_SLUG[slug]) return STATUS_BY_SLUG[slug];
-  return UNKNOWN_STATUS;
+export function statusFor(slug: string | undefined): TicketStatusPresentation {
+  const ui = slug && STATUS_BY_SLUG[slug] ? STATUS_BY_SLUG[slug] : UNKNOWN_STATUS;
+  return { ...ui, badgeVariant: TONE_TO_BADGE[ui.tone], ...TONE_CLASSES[ui.tone] };
 }

@@ -15,6 +15,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { OWN_CHECK_KIND_LABELS, OWN_CHECK_STATUS_LABELS } from '../../../lib/own-check-transitions';
 import { TREASURY_QUERY_KEYS } from '../../../lib/query-keys';
 import { DebitOwnChecksDialog, type DebitableOwnCheck } from '../../components/DebitOwnChecksDialog';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { getAllOwnChecksForExport, getOwnCheckSingleFacet, getOwnChecksPaginated, type OwnCheckListItem } from '../actions.server';
 import { HIDDEN_COLUMNS_BY_DEFAULT, formatValueDate, getColumns, ownCheckKindIcons, ownCheckStatusIcons } from '../columns';
 import { OWN_CHECK_KIND_VALUES, OWN_CHECK_STATUS_VALUES } from '../constants';
@@ -153,7 +154,7 @@ export function _OwnChecksDataTable({
 
   const exportConfig: DataTableExportConfig<OwnCheckListItem> = useMemo(
     () => ({
-      fetchAllData: () => getAllOwnChecksForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllOwnChecksForExport(currentParams)),
       options: { filename: 'cheques-propios', title: 'Cheques propios', sheetName: 'Cheques propios' },
       formatters: {
         amount: (value) => (value ? formatMoney(String(value)) : ''),

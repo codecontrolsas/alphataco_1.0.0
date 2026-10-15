@@ -31,7 +31,8 @@ interface AssignmentDialogProps {
   fieldLabel: string;
   placeholder: string;
   emptyMessage: string;
-  options: AssignmentOption[];
+  /** Opciones elegibles (recursos activos), consultadas al abrir el modal. */
+  loadOptions: () => Promise<AssignmentOption[]>;
   /** Singular/plural para el resumen del toast ("empleado"/"empleados"). */
   nouns: { singular: string; plural: string };
   /** Afectaciones vigentes leídas de la BASE al abrir el modal (baseline). */
@@ -69,7 +70,7 @@ export function AssignmentDialog({
   fieldLabel,
   placeholder,
   emptyMessage,
-  options,
+  loadOptions,
   nouns,
   loadBaseline,
   save,
@@ -77,14 +78,20 @@ export function AssignmentDialog({
 }: AssignmentDialogProps) {
   const [open, setOpen] = useState(false);
   const [baseline, setBaseline] = useState<string[] | null>(null);
+  const [options, setOptions] = useState<AssignmentOption[]>([]);
   const [isLoadingBaseline, setIsLoadingBaseline] = useState(false);
   const form = useForm<FormValues>({ defaultValues: { selected: [] } });
+
+  const resetState = () => {
+    setBaseline(null);
+    setOptions([]);
+    form.reset({ selected: [] });
+  };
 
   const handleOpenChange = async (nextOpen: boolean) => {
     if (!nextOpen) {
       setOpen(false);
-      setBaseline(null);
-      form.reset({ selected: [] });
+      resetState();
       return;
     }
 
@@ -92,16 +99,36 @@ export function AssignmentDialog({
     setIsLoadingBaseline(true);
     form.reset({ selected: [] });
     try {
-      const current = await loadBaseline();
+      // Las opciones (activos) y las afectaciones vigentes se leen de la base al abrir, en paralelo.
+      const [current, available] = await Promise.all([loadBaseline(), loadOptions()]);
+      const availableValues = new Set(available.map((option) => option.value));
       setBaseline(current);
-      form.reset({ selected: current });
+      setOptions(available);
+      // Solo se preselecciona lo que el usuario puede ver; el resto queda protegido (ver más abajo).
+      form.reset({ selected: current.filter((id) => availableValues.has(id)) });
     } catch {
-      toast.error('No se pudieron cargar las afectaciones actuales. Volvé a abrir el modal.');
-      setBaseline(null);
+      toast.error(`No se pudieron cargar los ${nouns.plural} y sus afectaciones. Volvé a abrir el modal.`);
+      resetState();
       setOpen(false);
     } finally {
       setIsLoadingBaseline(false);
     }
+  };
+
+  /**
+   * Afectaciones vigentes que NO están entre las opciones (recursos dados de baja): el modal no las
+   * muestra, así que nunca puede quitarlas. Sin esto, "Todos" o una lista recortada las daría de baja.
+   */
+  const protectedIds = (() => {
+    if (!baseline) return [];
+    const availableValues = new Set(options.map((option) => option.value));
+    return baseline.filter((id) => !availableValues.has(id));
+  })();
+
+  const computeDelta = (selected: string[]) => {
+    const available = new Set(options.map((option) => option.value));
+    const visibleBaseline = (baseline ?? []).filter((id) => available.has(id));
+    return diffAssignments(visibleBaseline, selected);
   };
 
   const handleSubmit = async (values: FormValues) => {
@@ -111,10 +138,11 @@ export function AssignmentDialog({
       return;
     }
 
-    const { toAdd, toRemove } = diffAssignments(baseline, values.selected);
+    const { toAdd, toRemove } = computeDelta(values.selected);
     if (toAdd.length === 0 && toRemove.length === 0) {
       toast.info('No hay cambios para guardar');
       setOpen(false);
+      resetState();
       return;
     }
 
@@ -126,8 +154,7 @@ export function AssignmentDialog({
 
     toast.success(buildAssignmentSummary(result.added, result.removed, nouns.singular, nouns.plural));
     setOpen(false);
-    setBaseline(null);
-    form.reset({ selected: [] });
+    resetState();
     onSaved?.();
   };
 
@@ -149,7 +176,7 @@ export function AssignmentDialog({
               control={form.control}
               name="selected"
               render={({ field }) => {
-                const pending = baseline ? diffAssignments(baseline, field.value) : null;
+                const pending = baseline ? computeDelta(field.value) : null;
                 return (
                   <FormItem className="w-full">
                     <FormLabel>{fieldLabel}</FormLabel>
@@ -167,22 +194,32 @@ export function AssignmentDialog({
                     </FormControl>
                     {/* Resumen de lo que va a pasar al guardar: el usuario ve las bajas antes de confirmarlas */}
                     {isLoadingBaseline ? (
-                      <p className="text-xs text-muted-foreground">Cargando las afectaciones actuales del cliente...</p>
+                      <p className="text-xs text-muted-foreground" role="status">
+                        Cargando las afectaciones actuales del cliente...
+                      </p>
                     ) : pending ? (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground" role="status">
                         {baseline?.length ?? 0} afectados actualmente.{' '}
                         {pending.toAdd.length === 0 && pending.toRemove.length === 0 ? (
                           'Sin cambios.'
                         ) : (
                           <>
                             {pending.toAdd.length > 0 && (
-                              <span className="text-green-600 dark:text-green-500">
+                              <span className="text-ok-subtle-foreground font-medium">
                                 Se agregan {pending.toAdd.length}.{' '}
                               </span>
                             )}
                             {pending.toRemove.length > 0 && (
                               <span className="text-destructive font-medium">Se quitan {pending.toRemove.length}.</span>
                             )}
+                          </>
+                        )}
+                        {protectedIds.length > 0 && (
+                          <>
+                            {' '}
+                            {protectedIds.length === 1
+                              ? 'Hay 1 afectado dado de baja que no se muestra acá y no se modifica.'
+                              : `Hay ${protectedIds.length} afectados dados de baja que no se muestran acá y no se modifican.`}
                           </>
                         )}
                       </p>

@@ -4,8 +4,9 @@ import { Badge } from '@/components/ui/badge';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type { ColumnDef } from '@tanstack/react-table';
-import moment from 'moment';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import Link from 'next/link';
+import type { MouseEvent } from 'react';
 import { destinationTypeIcons } from '../../../Movements/components/MovementsList/columns';
 import { DESTINATION_TYPE_LABELS } from '../../../lib/labels';
 import { RequestStatusBadge } from '../RequestStatusBadge';
@@ -13,7 +14,12 @@ import type { RequestListItem } from './actions.server';
 
 export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = [];
 
-export function getColumns(): ColumnDef<RequestListItem>[] {
+interface ColumnsOptions {
+  /** Abre el detalle en el panel lateral. */
+  onOpenDetail: (id: string) => void;
+}
+
+export function getColumns({ onOpenDetail }: ColumnsOptions): ColumnDef<RequestListItem>[] {
   return [
     {
       id: 'number',
@@ -23,7 +29,13 @@ export function getColumns(): ColumnDef<RequestListItem>[] {
       cell: ({ row }) => (
         <Link
           href={`/dashboard/warehouse/requests/${row.original.id}`}
-          className="font-mono text-sm font-medium text-blue-600 hover:underline"
+          className="text-brand-ink font-mono text-sm font-medium hover:underline"
+          onClick={(event: MouseEvent<HTMLAnchorElement>) => {
+            // Click normal abre el panel; con modificador (nueva pestana) navega a la pagina de detalle.
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+            event.preventDefault();
+            onOpenDetail(row.original.id);
+          }}
         >
           {row.original.number}
         </Link>
@@ -81,7 +93,7 @@ export function getColumns(): ColumnDef<RequestListItem>[] {
       accessorKey: 'created_at',
       meta: { title: 'Fecha' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha" />,
-      cell: ({ row }) => <span>{moment(row.original.created_at).format('DD/MM/YYYY')}</span>,
+      cell: ({ row }) => <span>{formatArgentinaDay(row.original.created_at)}</span>,
     },
     {
       id: 'progress',

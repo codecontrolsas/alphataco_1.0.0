@@ -1,15 +1,17 @@
 'use server';
 
-import { Prisma } from '@/generated/prisma/client';
 import { checkPermissionServer } from '@/features/Permissions';
+import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
+import { fromDateOnly } from '@/shared/lib/date-only';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
 import { errorMessage, fail, ok, type ActionResult } from '../lib/action-result';
-import { applyFactor, indexFactor, polynomialFactor, PriceFactorError } from '../lib/price-factor';
+import { PriceFactorError, applyFactor, indexFactor, polynomialFactor } from '../lib/price-factor';
 import { writePriceRevision } from '../lib/price-revision-writer';
+import { assertComercialView } from '../lib/require-permission.server';
 import { polynomialConfigSchema, priceRuleFormSchema, type PriceRuleFormValues } from '../schemas/price-rule';
 
 const logger = new Logger('features/Empresa/Clientes/price-rules');
@@ -27,6 +29,7 @@ const COMERCIAL_PATH = '/dashboard/comercial';
  */
 
 export async function getPriceUpdateRules() {
+  await assertComercialView(['reglas-precio']);
   const companyId = await getActiveCompanyId();
 
   try {
@@ -70,6 +73,7 @@ async function assertServiceOwned(customerServiceId: string | null, companyId: s
  * necesita el texto de un `<Select>`.
  */
 export async function getContractOptionsForRules() {
+  await assertComercialView(['reglas-precio', 'certificaciones']);
   const companyId = await getActiveCompanyId();
   try {
     const rows = await prisma.customer_services.findMany({
@@ -197,8 +201,15 @@ export async function runPriceUpdateRule(input: RunRuleInput): Promise<ActionRes
 
   const companyId = await getActiveCompanyId();
 
-  const validFrom = new Date(input.validFrom);
-  if (Number.isNaN(validFrom.getTime())) return fail('La fecha de vigencia no es válida');
+  // `valid_from` es @db.Date: 'YYYY-MM-DD' estricto, a medianoche UTC.
+  let parsedFrom: Date | null = null;
+  try {
+    parsedFrom = fromDateOnly(input.validFrom);
+  } catch {
+    parsedFrom = null;
+  }
+  if (!parsedFrom) return fail('La fecha de vigencia no es válida');
+  const validFrom: Date = parsedFrom;
 
   try {
     const rule = await prisma.price_update_rules.findFirst({
@@ -223,9 +234,7 @@ export async function runPriceUpdateRule(input: RunRuleInput): Promise<ActionRes
         const config = polynomialConfigSchema.parse(rule.config);
         const faltante = config.components.find((c) => !input.coefficients?.[c.name]);
         if (faltante) return fail(`Falta el coeficiente de "${faltante.name}"`);
-        factor = polynomialFactor(
-          config.components.map((c) => ({ ...c, coefficient: input.coefficients![c.name] }))
-        );
+        factor = polynomialFactor(config.components.map((c) => ({ ...c, coefficient: input.coefficients![c.name] })));
       }
     } catch (error) {
       if (error instanceof PriceFactorError) return fail(error.message);

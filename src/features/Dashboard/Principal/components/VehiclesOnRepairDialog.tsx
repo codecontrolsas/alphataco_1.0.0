@@ -1,168 +1,29 @@
 'use client';
 
-import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   DataTable,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
   type FacetResult,
 } from '@/shared/components/common/DataTable';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { conditionLabels } from '@/shared/utils/mappers';
-import type { ColumnDef } from '@tanstack/react-table';
-import { CircleOff } from 'lucide-react';
-import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
 import {
   getRepairVehicleSingleFacet,
   getRepairVehiclesForExport,
   getRepairVehiclesPaginated,
-  type RepairVehicleItem,
 } from '../actions/fleet.server';
+import { unwrapExportWithToast } from '../lib/export-client';
+import {
+  VEHICLE_TEXT_FILTERS,
+  buildConditionFacetResult,
+  buildFkFacetResult,
+  getVehicleDialogColumns,
+  vehicleExportFormatters,
+} from './vehicleDialogShared';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers — builders para FacetResult
-// ─────────────────────────────────────────────────────────────────────────────
-
-function buildFkFacetResult(
-  resolvedOptions: Array<{ id: string; name: string | null }> | undefined,
-  counts: Map<string, number>,
-  nullLabel = 'Sin asignar'
-): FacetResult {
-  return {
-    options: [
-      ...(resolvedOptions?.map((o) => ({ value: o.id, label: o.name ?? '' })) ?? []),
-      ...(counts.has(NULL_FILTER_VALUE) ? [{ value: NULL_FILTER_VALUE, label: nullLabel, icon: CircleOff }] : []),
-    ],
-    counts,
-  };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Columns
-// ─────────────────────────────────────────────────────────────────────────────
-
-function getColumns(): ColumnDef<RepairVehicleItem>[] {
-  return [
-    {
-      id: 'domain',
-      accessorKey: 'domain',
-      meta: { title: 'Dominio' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Dominio" />,
-      cell: ({ row }) => (
-        <Link
-          href={`/dashboard/equipment/action?action=view&id=${row.original.id}`}
-          target="_blank"
-          className="font-medium hover:underline text-primary"
-        >
-          {row.original.domain ?? '-'}
-        </Link>
-      ),
-    },
-    {
-      id: 'serie',
-      accessorKey: 'serie',
-      meta: { title: 'Serie' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Serie" />,
-      cell: ({ row }) => <span className="text-muted-foreground">{row.original.serie ?? '-'}</span>,
-    },
-    {
-      id: 'intern_number',
-      accessorKey: 'intern_number',
-      meta: { title: 'N° Interno' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="N° Interno" />,
-      cell: ({ row }) => <span className="text-muted-foreground">{row.original.intern_number ?? '-'}</span>,
-    },
-    {
-      id: 'vehicleType',
-      accessorFn: (row) => row.type_vehicles_typeTotype?.name ?? '',
-      meta: { title: 'Tipo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo" />,
-      cell: ({ row }) => (
-        <span className="text-muted-foreground">{row.original.type_vehicles_typeTotype?.name ?? '-'}</span>
-      ),
-      filterFn: (row, _id, value: string[]) => {
-        const id = row.original.type;
-        if (id == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(id);
-      },
-    },
-    {
-      id: 'subType',
-      accessorFn: (row) => row.sub_type?.name ?? '',
-      meta: { title: 'Subtipo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Subtipo" />,
-      cell: ({ row }) => <span className="text-muted-foreground">{row.original.sub_type?.name ?? '-'}</span>,
-      filterFn: (row, _id, value: string[]) => {
-        const id = row.original.subType;
-        if (id == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(id);
-      },
-    },
-    {
-      id: 'condition',
-      accessorKey: 'condition',
-      meta: { title: 'Condición' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Condición" />,
-      cell: ({ row }) => (
-        <Badge variant="destructive" className="text-xs">
-          {conditionLabels[row.original.condition ?? ''] ?? row.original.condition ?? '-'}
-        </Badge>
-      ),
-    },
-    {
-      id: 'contractor_equipment',
-      accessorFn: (row) =>
-        row.contractor_equipment
-          ?.map((c) => c.customers?.name)
-          .filter(Boolean)
-          .join(', ') ?? '',
-      meta: { title: 'Afectaciones' },
-      enableSorting: false,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Afectaciones" />,
-      cell: ({ row }) => {
-        const names =
-          row.original.contractor_equipment?.map((c) => c.customers?.name).filter((n): n is string => !!n) ?? [];
-        if (names.length === 0) {
-          return <Badge variant="outline">Sin afectar</Badge>;
-        }
-        return (
-          <TooltipProvider delayDuration={100}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Badge variant="outline">
-                  {names[0]}
-                  {names.length > 1 && ` +${names.length - 1}`}
-                </Badge>
-              </TooltipTrigger>
-              {names.length > 1 && (
-                <TooltipContent>
-                  <div className="flex flex-col gap-1">
-                    {names.map((name) => (
-                      <span key={name}>{name}</span>
-                    ))}
-                  </div>
-                </TooltipContent>
-              )}
-            </Tooltip>
-          </TooltipProvider>
-        );
-      },
-      filterFn: (row, _id, value: string[]) => {
-        const items = row.original.contractor_equipment ?? [];
-        if (items.length === 0) return value.includes(NULL_FILTER_VALUE);
-        return items.some((c) => c.customers?.id && value.includes(c.customers.id));
-      },
-    },
-  ];
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Component
-// ─────────────────────────────────────────────────────────────────────────────
+/** Condiciones que entran al listado de fuera de servicio (las mismas que filtra la action). */
+const OUT_OF_SERVICE_CONDITIONS = ['no_operativo', 'en_reparacion', 'en_preparacion'] as const;
 
 interface Props {
   open: boolean;
@@ -180,7 +41,7 @@ export default function VehiclesOnRepairDialog({ open, onOpenChange, count }: Pr
   // queryFn paginado — apunta directo a Prisma server-side
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getRepairVehiclesPaginated(params), []);
 
-  const columns = useMemo(() => getColumns(), []);
+  const columns = useMemo(() => getVehicleDialogColumns('destructive'), []);
 
   const makeFkFetchFacet = useCallback((columnId: string, nullLabel = 'Sin asignar') => {
     return async (params: DataTableSearchParams): Promise<FacetResult> => {
@@ -190,36 +51,47 @@ export default function VehiclesOnRepairDialog({ open, onOpenChange, count }: Pr
     };
   }, []);
 
+  const fetchConditionFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
+    const result = await getRepairVehicleSingleFacet('condition', params);
+    return buildConditionFacetResult(OUT_OF_SERVICE_CONDITIONS, result?.counts ?? new Map());
+  }, []);
+
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
     () => [
+      ...VEHICLE_TEXT_FILTERS,
       { columnId: 'vehicleType', title: 'Tipo', fetchFacet: makeFkFetchFacet('vehicleType') },
       { columnId: 'subType', title: 'Subtipo', fetchFacet: makeFkFetchFacet('subType') },
+      { columnId: 'condition', title: 'Condición', fetchFacet: fetchConditionFacet },
       {
         columnId: 'contractor_equipment',
         title: 'Afectaciones',
         fetchFacet: makeFkFetchFacet('contractor_equipment', 'Sin afectar'),
       },
     ],
-    [makeFkFetchFacet]
+    [makeFkFetchFacet, fetchConditionFacet]
+  );
+
+  // Sólo 3 filtros a la vista; el resto se activa con el botón de filtros.
+  const initialFilterVisibility = useMemo(
+    () =>
+      Object.fromEntries(
+        facetedFilters.map((f) => [
+          f.columnId,
+          ['vehicleType', 'condition', 'contractor_equipment'].includes(f.columnId),
+        ])
+      ),
+    [facetedFilters]
   );
 
   const exportConfig = useMemo(
     () => ({
-      fetchAllData: () => getRepairVehiclesForExport(currentParams),
+      fetchAllData: async () => unwrapExportWithToast(await getRepairVehiclesForExport(currentParams)),
       options: {
-        filename: 'vehiculos-en-reparacion',
-        sheetName: 'Vehiculos en Reparacion',
-        title: 'Vehiculos en Reparacion',
+        filename: 'vehiculos-fuera-de-servicio',
+        sheetName: 'Fuera de servicio',
+        title: 'Equipos fuera de servicio',
       },
-      formatters: {
-        vehicleType: (_val: unknown, row: RepairVehicleItem) => row.type_vehicles_typeTotype?.name ?? '-',
-        subType: (_val: unknown, row: RepairVehicleItem) => row.sub_type?.name ?? '-',
-        condition: (val: unknown) => conditionLabels[String(val ?? '')] ?? String(val ?? '-'),
-        contractor_equipment: (_val: unknown, row: RepairVehicleItem) => {
-          const names = row.contractor_equipment?.map((c) => c.customers?.name).filter((n): n is string => !!n) ?? [];
-          return names.length > 0 ? names.join(', ') : 'Sin afectar';
-        },
-      },
+      formatters: vehicleExportFormatters,
     }),
     [currentParams]
   );
@@ -228,8 +100,10 @@ export default function VehiclesOnRepairDialog({ open, onOpenChange, count }: Pr
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Vehiculos no disponibles ({count})</DialogTitle>
-          <DialogDescription>Vehiculos que se encuentran actualmente no operativos.</DialogDescription>
+          <DialogTitle>Equipos fuera de servicio ({count})</DialogTitle>
+          <DialogDescription>
+            Equipos activos con condición no operativo, en reparación o en preparación.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="mt-2">
@@ -241,12 +115,13 @@ export default function VehiclesOnRepairDialog({ open, onOpenChange, count }: Pr
             queryKey={['dashboard-repair-vehicles']}
             onStateChange={handleStateChange}
             facetedFilters={facetedFilters}
+            initialFilterVisibility={initialFilterVisibility}
             exportConfig={exportConfig}
             searchPlaceholder="Buscar por dominio, serie, N° interno..."
             showSearch
             showFilterToggle
             showColumnToggle
-            emptyMessage="No hay vehiculos en reparacion"
+            emptyMessage="No hay equipos fuera de servicio"
             paramNamespace="veh-repair-dialog"
           />
         </div>

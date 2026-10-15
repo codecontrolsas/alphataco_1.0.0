@@ -1,6 +1,6 @@
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { Suspense } from 'react';
-import { NoPermission } from '../fallback/NoPermission';
+import { StateBlock } from '@/shared/components/common/StateBlock';
 import { TreasurySectionSkeleton } from '../fallback/TreasurySectionSkeleton';
 import { WithholdingsList } from './WithholdingsList/WithholdingsList';
 
@@ -15,7 +15,7 @@ export default async function WithholdingsTabContent({
   searchParams: DataTableSearchParams;
   permissions: Record<string, boolean>;
 }) {
-  if (permissions['tesoreria:retenciones-sufridas:view'] !== true) return <NoPermission />;
+  if (permissions['tesoreria:retenciones-sufridas:view'] !== true) return <StateBlock variant="noperm" title="No tenés permiso para ver esta información" />;
   return (
     <Suspense fallback={<TreasurySectionSkeleton />}>
       <WithholdingsList searchParams={searchParams} permissionsMap={permissions} />

@@ -1,18 +1,27 @@
 'use client';
 
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  CatalogCreateButton,
+  CatalogFormSheet,
+  CatalogTableSurface,
+  useCatalogSheet,
+  useCatalogSheetClose,
+} from '@/shared/components/common/CatalogFormSheet';
+import {
   DataTable,
+  useDataTableFilter,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useQuery } from '@tanstack/react-query';
 import { Check, CircleOff, Truck, X } from 'lucide-react';
-import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
+import { activeStatusLabel, buildActiveFacetResult } from '../../lib/active-status';
 import EquipmentTypesForm from './EquipmentTypeForm';
 import {
   getAllEquipmentTypesForExport,
@@ -24,6 +33,12 @@ import {
 } from './actions.server';
 import { APPLIES_TO_LABELS, HIDDEN_COLUMNS_BY_DEFAULT, getColumns } from './columns';
 import { useEquipmentTypeStore } from './store/equipmentType.store';
+
+/** Lleva la vista al bloque de la tabla relacionada (respeta `prefers-reduced-motion`). */
+function scrollToBlock(id: string) {
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.getElementById(id)?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+}
 
 // ============================================================================
 // TYPES
@@ -65,22 +80,36 @@ export default function _EquipmentTypeDataTable({
     [permissionsMap]
   );
 
-  const canCreateOrUpdate =
-    permissions.hasPermission('configuracion', 'tipos', 'create') || permissions.hasPermission('configuracion', 'tipos', 'update');
+  const canCreate = permissions.hasPermission('configuracion', 'tipos', 'create');
+  const canUpdate = permissions.hasPermission('configuracion', 'tipos', 'update');
 
-  // ── Store de edición ──────────────────────────────────────────────────────
+  // ── Sheet de alta/edición (el form sigue leyendo el store de edición) ─────
   const setEquipmentType = useEquipmentTypeStore((state) => state.setEquipmentType);
-
-  const handleEdit = useCallback(
-    (item: EquipmentTypeListItem) => {
-      setEquipmentType(item);
-    },
-    [setEquipmentType]
-  );
 
   const handleReset = useCallback(() => {
     setEquipmentType(null);
   }, [setEquipmentType]);
+
+  const sheet = useCatalogSheet<EquipmentTypeListItem>({
+    canCreate,
+    canUpdate,
+    onOpenEdit: setEquipmentType,
+    onOpenCreate: handleReset,
+    onClosed: handleReset,
+  });
+  const handleEdit = sheet.openEdit;
+
+  // ── "Ver subtipos": fija el filtro de tipo de la tabla de subtipos (mismo bloque agrupado) ──
+  // 'equipment-sub-types' = tableId de EquipmentSubTypeList (namespace de la URL de esa tabla).
+  const [, setSubTypeTypeFilter] = useDataTableFilter('equipment-sub-types', 'type');
+  const canViewSubTypes = permissions.hasPermission('configuracion', 'subtipos', 'view');
+  const handleViewSubTypes = useCallback(
+    (item: EquipmentTypeListItem) => {
+      setSubTypeTypeFilter(item.id);
+      scrollToBlock('subtipos');
+    },
+    [setSubTypeTypeFilter]
+  );
 
   // ── Client-side navigation mode ───────────────────────────────────────────
   const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
@@ -92,7 +121,10 @@ export default function _EquipmentTypeDataTable({
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getEquipmentTypesPaginated(params), []);
 
   // ── Columns ───────────────────────────────────────────────────────────────
-  const columns = useMemo(() => getColumns(permissions, handleEdit), [permissions, handleEdit]);
+  const columns = useMemo(
+    () => getColumns(permissions, handleEdit, canViewSubTypes ? handleViewSubTypes : undefined),
+    [permissions, handleEdit, canViewSubTypes, handleViewSubTypes]
+  );
 
   // ── Column visibility ─────────────────────────────────────────────────────
   const mergedColumnVisibility = useMemo(() => {
@@ -118,16 +150,7 @@ export default function _EquipmentTypeDataTable({
   const fetchIsActiveFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
     const result = await getEquipmentTypeSingleFacet('is_active', params);
     if (!result) return { options: [], counts: new Map() };
-    return {
-      options: [
-        { value: 'true', label: 'Activo', icon: Check },
-        { value: 'false', label: 'Inactivo', icon: X },
-        ...(result.counts.has(NULL_FILTER_VALUE)
-          ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-          : []),
-      ],
-      counts: result.counts,
-    };
+    return buildActiveFacetResult(result.counts);
   }, []);
 
   const fetchAppliesToFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
@@ -203,6 +226,7 @@ export default function _EquipmentTypeDataTable({
       queryFn={tableQueryFn}
       queryKey={['equipment-types']}
       onStateChange={handleStateChange}
+      toolbarActions={<CatalogCreateButton sheet={sheet} label="Nuevo tipo" />}
       tableId={tableId}
       paramNamespace={tableId}
       facetedFilters={facetedFilters}
@@ -212,17 +236,14 @@ export default function _EquipmentTypeDataTable({
       searchPlaceholder="Buscar por nombre..."
       emptyMessage="No se encontraron tipos de equipo"
       exportConfig={{
-        fetchAllData: () => getAllEquipmentTypesForExport(currentParams),
+        fetchAllData: async () => unwrapExportResult(await getAllEquipmentTypesForExport(currentParams)),
         options: {
           filename: 'tipos-de-equipo',
           sheetName: 'Tipos de Equipo',
           title: 'Tipos de Equipo',
         },
         formatters: {
-          is_active: (value) => {
-            if (value === null || value === undefined) return 'Sin asignar';
-            return value ? 'Activo' : 'Inactivo';
-          },
+          is_active: (value) => activeStatusLabel(value),
           applies_to: (value) => {
             if (!value) return '—';
             return APPLIES_TO_LABELS[value as string] ?? String(value);
@@ -243,32 +264,24 @@ export default function _EquipmentTypeDataTable({
             if (value === null || value === undefined) return '—';
             return value ? 'Sí' : 'No';
           },
-          created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
+          created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
         },
       }}
     />
   );
 
-  // Si no tiene permisos de crear/editar, mostrar solo la tabla
-  if (!canCreateOrUpdate) {
-    return table;
-  }
-
-  // Con permisos: layout resizable con formulario a la izquierda y tabla a la derecha
   return (
-    <div className="w-full">
-      <ResizablePanelGroup className="min-h-[500px]" direction="horizontal">
-        <ResizablePanel defaultSize={35}>
-          <div className="overflow-auto h-full pr-2">
-            <EquipmentTypesFormWrapper allActiveTypes={allActiveTypes} onReset={handleReset} />
-          </div>
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={65}>
-          <div className="overflow-auto h-full pl-2">{table}</div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    </div>
+    <>
+      <CatalogTableSurface>{table}</CatalogTableSurface>
+      <CatalogFormSheet
+        sheet={sheet}
+        getKey={(type) => type.id}
+        title={{ create: 'Nuevo tipo de unidad', edit: 'Editar tipo de unidad' }}
+        size="xl"
+      >
+        {() => <EquipmentTypesFormWrapper allActiveTypes={allActiveTypes} onReset={handleReset} />}
+      </CatalogFormSheet>
+    </>
   );
 }
 
@@ -284,16 +297,23 @@ function EquipmentTypesFormWrapper({
   onReset: () => void;
 }) {
   const equipmentType = useEquipmentTypeStore((state) => state.equipmentType);
+  const closeSheet = useCatalogSheetClose();
+  const handleClose = useCallback(() => {
+    onReset();
+    closeSheet();
+  }, [onReset, closeSheet]);
   const typeId = equipmentType?.id ?? null;
 
   // Relaciones existentes del tipo. El form las toma en `defaultValues`, que solo se evaluan
   // al montar: por eso se espera a que las queries resuelvan y se remonta con `key`.
-  // Sin esto el form abre vacio y, como el guardado hace delete + insert, borra las relaciones.
+  // Esa lectura es tambien la base del delta {add, remove} que se envia al guardar.
   const { data: checklistIds = [], isLoading: isLoadingChecklists } = useQuery({
     queryKey: ['type-checklists', typeId],
     queryFn: () => getChecklistIdsForType(typeId!),
     enabled: !!typeId,
-    staleTime: 2 * 60 * 1000,
+    // Alimenta el form y la base del delta: siempre datos frescos al abrir.
+    staleTime: 0,
+    gcTime: 0,
     refetchOnWindowFocus: false,
   });
 
@@ -301,7 +321,8 @@ function EquipmentTypesFormWrapper({
     queryKey: ['type-hitch-types', typeId],
     queryFn: () => getHitchTypeIdsForType(typeId!),
     enabled: !!typeId,
-    staleTime: 2 * 60 * 1000,
+    staleTime: 0,
+    gcTime: 0,
     refetchOnWindowFocus: false,
   });
 
@@ -343,7 +364,7 @@ function EquipmentTypesFormWrapper({
       key={typeId ?? 'create'}
       initialData={formInitialData}
       isEditing={!!equipmentType}
-      onReset={onReset}
+      onReset={handleClose}
       allTypes={formAllTypes}
       initialChecklistIds={checklistIds}
       initialHitchTypeIds={hitchTypeIds}

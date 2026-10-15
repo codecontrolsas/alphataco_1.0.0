@@ -1,28 +1,27 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
+import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Logger } from '@/lib/logger';
-import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
-import { CalendarIcon, Plus, Trash2 } from 'lucide-react';
 import moment from 'moment';
-import type { Dispatch, SetStateAction } from 'react';
+import 'moment/locale/es';
+import { Fragment, type ReactNode } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
 import type { PreparteFormData } from '../../schemas/preparte-form';
-import type { Cliente } from '../PreparteManager';
+import type { Cliente } from '../../types/entities';
 import type { AreaOption, ContractItemOption, Contrato, EquipmentOption, ItemRow, SectorOption } from './types';
 
 const logger = new Logger('PreparteForm');
+
+function PageGrid({ children }: { children: ReactNode }) {
+  return <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{children}</div>;
+}
 
 interface CustomerContractSectionProps {
   form: UseFormReturn<PreparteFormData>;
@@ -31,15 +30,18 @@ interface CustomerContractSectionProps {
   isEditing: boolean;
   isLoading: boolean;
   isLoadingContratos: boolean;
+  /** `page`: campos en grilla de dos columnas dentro de un SectionCard. Por defecto, el Sheet. */
+  variant?: 'sheet' | 'page';
 }
 
 /**
  * Datos del cliente: cliente, contrato, fecha de solicitud, solicitante y estado.
  * Sección extraída de `PreparteForm` (el formulario superaba las 1.000 líneas).
  */
-export function CustomerContractSection({ form, clientes, contratos, isEditing, isLoading, isLoadingContratos }: CustomerContractSectionProps) {
+export function CustomerContractSection({ form, clientes, contratos, isEditing, isLoading, isLoadingContratos, variant = 'sheet' }: CustomerContractSectionProps) {
+  const Wrapper = variant === 'page' ? PageGrid : Fragment;
   return (
-    <>
+    <Wrapper>
             {/* Selector de Clientes */}
             <FormField
               control={form.control}
@@ -112,36 +114,28 @@ export function CustomerContractSection({ form, clientes, contratos, isEditing, 
               render={({ field }) => (
                 <FormItem className="flex flex-col">
                   <FormLabel>Fecha de Solicitud</FormLabel>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          variant="outline"
-                          disabled={isEditing}
-                          className={cn(
-                            'w-full justify-start text-left font-normal',
-                            !field.value && 'text-muted-foreground'
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {field.value ? format(field.value, 'PPP', { locale: es }) : <span>Seleccionar fecha</span>}
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={field.value}
-                        onSelect={(selectedDate) => {
-                          if (!selectedDate) return;
-                          if (selectedDate > new Date()) return;
+                  {isEditing ? (
+                    <Input
+                      disabled
+                      value={field.value ? moment(field.value).format('DD/MM/YYYY') : ''}
+                      aria-label="Fecha de solicitud"
+                    />
+                  ) : (
+                    <FormControl>
+                      <EnhancedDatePicker
+                        date={field.value}
+                        setDate={(selectedDate) => {
+                          // La fecha de solicitud no puede ser futura
+                          if (selectedDate && moment(selectedDate).isAfter(moment(), 'day')) {
+                            field.onChange(undefined);
+                            return;
+                          }
                           field.onChange(selectedDate);
                         }}
-                        initialFocus
-                        locale={es}
+                        placeholder="DD/MM/AAAA"
                       />
-                    </PopoverContent>
-                  </Popover>
+                    </FormControl>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
@@ -264,35 +258,13 @@ export function CustomerContractSection({ form, clientes, contratos, isEditing, 
                             render={({ field }) => (
                               <FormItem className="flex flex-col">
                                 <FormLabel className="mt-2">Fecha de reprogramación</FormLabel>
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <FormControl>
-                                      <Button
-                                        variant={'outline'}
-                                        className={cn(
-                                          'pl-3 text-left font-normal',
-                                          !field.value && 'text-muted-foreground'
-                                        )}
-                                      >
-                                        {field.value ? (
-                                          format(field.value, 'PPP', { locale: es })
-                                        ) : (
-                                          <span>Seleccionar fecha</span>
-                                        )}
-                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                      </Button>
-                                    </FormControl>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-auto p-0" align="start">
-                                    <Calendar
-                                      mode="single"
-                                      selected={field.value}
-                                      onSelect={field.onChange}
-                                      disabled={(date) => moment(date).isBefore(moment().startOf('day'))}
-                                      initialFocus
-                                    />
-                                  </PopoverContent>
-                                </Popover>
+                                <FormControl>
+                                  <EnhancedDatePicker
+                                    date={field.value}
+                                    setDate={field.onChange}
+                                    minDate={moment().startOf('day').toDate()}
+                                  />
+                                </FormControl>
                                 <FormMessage />
                               </FormItem>
                             )}
@@ -322,6 +294,6 @@ export function CustomerContractSection({ form, clientes, contratos, isEditing, 
                 }}
               />
             )}
-    </>
+    </Wrapper>
   );
 }

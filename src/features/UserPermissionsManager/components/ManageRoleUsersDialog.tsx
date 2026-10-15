@@ -183,8 +183,14 @@ function UserRow({
         <p className="text-xs text-muted-foreground truncate">{user.userEmail}</p>
       </div>
       <Link href={`/dashboard/configuration/user/${user.userId}`} target="_blank">
-        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-          <ExternalLink className="h-4 w-4" />
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          aria-label={`Abrir permisos de ${user.userName}`}
+        >
+          <ExternalLink className="h-4 w-4" aria-hidden="true" />
         </Button>
       </Link>
     </div>

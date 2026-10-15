@@ -2,7 +2,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { getLoansPaginated } from './actions.server';
+import { getLoansAttention, getLoansPaginated } from './actions.server';
+import { LoansAttentionSection } from './LoansAttentionSection';
 import { _LoansDataTable } from './components/_LoansDataTable';
 
 interface LoansListProps {
@@ -14,6 +15,9 @@ const TABLE_ID = 'warehouse-loans';
 
 export async function LoansList({ searchParams, permissionsMap }: LoansListProps) {
   const tableParams = stripPrefixFromSearchParams(searchParams, TABLE_ID);
+
+  // La banda arranca antes de esperar la tabla: su Suspense la resuelve sin frenarla.
+  const attention = getLoansAttention();
 
   // Los facets se cargan lazy en el cliente (al abrir cada filtro), no en SSR.
   const [{ data, total }, preferences] = await Promise.all([
@@ -30,6 +34,7 @@ export async function LoansList({ searchParams, permissionsMap }: LoansListProps
           searchParams={tableParams}
           tableId={TABLE_ID}
           permissionsMap={permissionsMap}
+          topSlot={<LoansAttentionSection attention={attention} />}
           initialColumnVisibility={preferences.columnVisibility ?? {}}
           initialFilterVisibility={preferences.filterVisibility ?? {}}
         />

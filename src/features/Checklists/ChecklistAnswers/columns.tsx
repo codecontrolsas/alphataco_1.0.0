@@ -2,12 +2,13 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay, formatDateAr } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { LucideIcon } from 'lucide-react';
-import { CheckCircle2, Clock, Eye, XCircle } from 'lucide-react';
-import moment from 'moment';
+import { CheckCircle2, Clock, Eye, HelpCircle, XCircle } from 'lucide-react';
 import Link from 'next/link';
 import type { ChecklistAnswerListItem } from './actions.server';
 import { normalizeResult } from './utils';
@@ -62,6 +63,9 @@ function getEquipmentLabel(item: ChecklistAnswerListItem): string {
 
 export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['observations', 'customer_id'];
 
+/** Etiquetas de la columna de legajo (header con tooltip de coincidencia exacta). */
+const FILE_NUMBER_HINT = 'Coincidencia exacta: ingrese el legajo completo';
+
 // ============================================================================
 // DEFINICIÓN DE COLUMNAS
 // ============================================================================
@@ -77,9 +81,13 @@ export function getColumns(templateId: string): ColumnDef<ChecklistAnswerListIte
         const answerData = row.original.answer_data as Record<string, string> | null;
         const fecha = answerData?.fecha;
         const hora = answerData?.hora;
-        const dateStr = fecha ?? row.original.created_at;
-        if (!dateStr) return <span>—</span>;
-        const formatted = moment(dateStr).format('DD/MM/YYYY');
+        if (!fecha && !row.original.created_at) return <span>—</span>;
+        // `fecha` del formulario es un día suelto (YYYY-MM-DD); `created_at` es un instante: va en hora argentina.
+        const formatted = fecha
+          ? /^\d{4}-\d{2}-\d{2}/.test(fecha)
+            ? formatDateAr(fecha.slice(0, 10))
+            : fecha
+          : formatArgentinaDay(row.original.created_at as Date);
         return (
           <span className="whitespace-nowrap font-medium">
             {formatted}
@@ -124,6 +132,34 @@ export function getColumns(templateId: string): ColumnDef<ChecklistAnswerListIte
         const id = row.original.chofer_employee_id;
         if (id == null) return value.includes(NULL_FILTER_VALUE);
         return value.includes(id);
+      },
+    },
+
+    // ── Legajo del chofer (columna propia; filtro de texto con coincidencia exacta) ──
+    {
+      id: 'fileNumber',
+      meta: { title: 'Legajo' },
+      enableSorting: false,
+      accessorFn: (row) => row.employees_checklist_answers_chofer_employee_idToemployees?.file ?? '',
+      header: ({ column }) => (
+        <div className="flex items-center gap-1">
+          <DataTableColumnHeader column={column} title="Legajo" />
+          <TooltipProvider delayDuration={100}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="cursor-help" aria-label={FILE_NUMBER_HINT}>
+                  <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{FILE_NUMBER_HINT}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      ),
+      cell: ({ row }) => {
+        const file = row.original.employees_checklist_answers_chofer_employee_idToemployees?.file;
+        if (!file) return <span className="text-muted-foreground">-</span>;
+        return <span className="font-mono font-semibold tabular-nums">{file}</span>;
       },
     },
 

@@ -35,7 +35,7 @@ export function getColumns(
   onView: (kpi: KpiListItem) => void,
   onEdit: (kpi: KpiListItem) => void
 ): ColumnDef<KpiListItem>[] {
-  const canUpdate = permissions.hasPermission('dashboard', 'kpis', 'update');
+  const canUpdate = permissions.hasPermission('configuracion', 'kpis', 'update');
 
   return [
     // ── Código ──────────────────────────────────────────────────────────────

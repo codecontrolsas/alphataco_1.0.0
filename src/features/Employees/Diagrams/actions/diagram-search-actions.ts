@@ -1,15 +1,43 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import { prisma } from '@/shared/lib/prisma';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { toDateOnly } from '@/shared/lib/date-only';
+import { prisma } from '@/shared/lib/prisma';
+import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import moment from 'moment';
+import { assertDiagramAccess } from '../lib/diagram-access';
+import { buildDiagramDayRangeWhere, toDiagramDay } from '../lib/diagram-dates';
 
 const logger = new Logger('features/Employees/Diagrams');
 
+/** Tamaño máximo de página y de la ventana de novedades que se trae por empleado. */
+const MAX_PAGE_SIZE = 200;
+const MAX_WINDOW_DAYS = 366;
+/** Ventana por defecto (días hacia atrás y hacia adelante desde hoy) cuando el cliente no manda fechas. */
+const DEFAULT_WINDOW_DAYS = 93;
+
 /**
- * Search employees with their diagrams (paginated)
+ * Ventana de fechas de las novedades que se devuelven por empleado. Sin `dateFrom`/`dateTo` es
+ * hoy ± `DEFAULT_WINDOW_DAYS` (hora argentina); con ellas, el rango pedido (máx. `MAX_WINDOW_DAYS`).
+ */
+function resolveDiagramWindow(dateFrom?: string, dateTo?: string) {
+  const today = argentinaDate();
+  const fromKey = dateFrom ?? moment.utc(today).subtract(DEFAULT_WINDOW_DAYS, 'days').format('YYYY-MM-DD');
+  const toKey = dateTo ?? moment.utc(today).add(DEFAULT_WINDOW_DAYS, 'days').format('YYYY-MM-DD');
+  const from = toDiagramDay(fromKey);
+  const to = toDiagramDay(toKey);
+  if (moment.utc(toKey).diff(moment.utc(fromKey), 'days') > MAX_WINDOW_DAYS) {
+    throw new Error(`Máximo ${MAX_WINDOW_DAYS} días por consulta`);
+  }
+  return { from, to, today };
+}
+
+/**
+ * Search employees with their diagrams (paginated).
+ * Las novedades de cada empleado se limitan a una ventana de fechas (`dateFrom`/`dateTo` en `YYYY-MM-DD`,
+ * por defecto hoy ± 93 días): sin ese límite cada fila traía toda su historia.
  */
 export async function searchEmployeeDiagrams(params: {
   firstname?: string;
@@ -24,7 +52,10 @@ export async function searchEmployeeDiagrams(params: {
   diagramTypes?: string[];
   page: number;
   pageSize: number;
+  dateFrom?: string;
+  dateTo?: string;
 }) {
+  await assertDiagramAccess('old', 'massive_diagram');
   // La empresa sale de la sesión validada, no del claim crudo: con `undefined` el
   // `where` de Prisma se ignora y la búsqueda devolvía los empleados de todas las empresas.
   const companyId = await getActiveCompanyId();
@@ -32,6 +63,13 @@ export async function searchEmployeeDiagrams(params: {
   logger.debug('Searching employee diagrams', { data: { params } });
 
   try {
+    const diagramWindow = resolveDiagramWindow(params.dateFrom, params.dateTo);
+    const { skip, take } = clampedPageParams(
+      { page: Number(params.page) - 1, pageSize: Number(params.pageSize) },
+      { max: MAX_PAGE_SIZE, fallback: 100 }
+    );
+    const currentPage = skip / take + 1;
+
     const where: Record<string, unknown> = {
       is_active: true,
       company_id: companyId,
@@ -69,8 +107,7 @@ export async function searchEmployeeDiagrams(params: {
 
     // Diagram type filter — scoped to today's date (same as dashboard getDiagramIndicators)
     if (params.diagramTypes?.length) {
-      const now = moment().utcOffset(-3);
-      const todayFilter = { day: now.date(), month: now.month() + 1, year: now.year() };
+      const todayFilter = toDiagramDay(diagramWindow.today);
 
       const hasNoDiagram = params.diagramTypes.includes('__none__');
       const actualTypes = params.diagramTypes.filter((t) => t !== '__none__');
@@ -108,6 +145,7 @@ export async function searchEmployeeDiagrams(params: {
           covenant: { select: { id: true, name: true } },
           guild: { select: { id: true, name: true } },
           employees_diagram: {
+            where: buildDiagramDayRangeWhere(diagramWindow.from, diagramWindow.to),
             select: {
               id: true,
               day: true,
@@ -139,9 +177,9 @@ export async function searchEmployeeDiagrams(params: {
             },
           },
         },
-        orderBy: { lastname: 'asc' },
-        skip: (params.page - 1) * params.pageSize,
-        take: params.pageSize,
+        orderBy: [{ lastname: 'asc' }, { id: 'asc' }],
+        skip,
+        take,
       }),
       prisma.employees.count({ where }),
     ]);
@@ -189,7 +227,7 @@ export async function searchEmployeeDiagrams(params: {
         contractor_employee: emp.contractor_employee,
       })),
       total,
-      hasMore: params.page * params.pageSize < total,
+      hasMore: currentPage * take < total,
     };
   } catch (error) {
     logger.error('Error searching employee diagrams', { data: { error } });
@@ -205,6 +243,7 @@ export type DiagramEmployee = DiagramSearchResult['data'][number];
  * Each filter type loads independently to avoid loading all catalogs upfront.
  */
 export async function getDiagramFilterOptions(filterType: string) {
+  await assertDiagramAccess('old', 'massive_diagram');
   const companyId = await getActiveCompanyId();
 
   logger.debug('Loading filter options', { data: { filterType } });

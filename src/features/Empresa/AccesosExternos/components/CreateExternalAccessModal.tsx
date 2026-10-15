@@ -30,8 +30,9 @@ import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import { createExternalApiClient, type CreatedExternalApiClient } from '../actions.server';
+import { createExternalApiClient } from '../actions.server';
 import { createExternalApiClientSchema, type CreateExternalApiClientValues } from '../schemas';
+import type { CreatedExternalApiClient } from '../types';
 import { SecretRevealPanel } from './SecretRevealPanel';
 
 const logger = new Logger('AccesosExternos/CreateExternalAccessModal');

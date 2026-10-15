@@ -17,6 +17,7 @@ export type {
 } from '@/features/Permissions/actions/roles.server';
 
 export {
+  applyUserPermissionChanges,
   assignRoleToUserServer,
   cleanAllUserPermissionsAndRoles,
   cleanUserCustomPermissions,
@@ -31,7 +32,5 @@ export {
   getUserRolesServer,
   getUsersForRoleAssignment,
   removeRoleFromUserServer,
-  removeUserPermissionServer,
-  setUserPermissionServer,
   updateRoleWithPermissions,
 } from '@/features/Permissions/actions/roles.server';

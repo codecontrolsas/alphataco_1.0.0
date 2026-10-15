@@ -32,5 +32,7 @@ export type RowActionHandlers = {
 export type DeviationGetters = {
   getEmployeeDeviation: (employeeId: string, rowId: string) => EmployeeDeviation | null;
   getEquipmentDeviation: (equipmentId: string, rowId: string) => EquipmentDeviation | null;
+  /** Cantidad de desvíos (personal + equipos) de una línea; 0 si no tiene. */
+  getRowDeviationCount: (rowId: string) => number;
   loadingValidations: boolean;
 };

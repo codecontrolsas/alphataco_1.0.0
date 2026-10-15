@@ -1,33 +1,23 @@
-import { toDocumentStateCounts } from '@/features/Documentacion/shared/lib/state-counts';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import 'server-only';
+
 import { Logger } from '@/lib/logger';
-import { prisma } from '@/shared/lib/prisma';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { stateCountsOf } from '../../lists-shared/document-list-server';
+import { loadEquipmentDocumentRows } from '../lib/equipment-document-rows.server';
 
 const logger = new Logger('MonthlyEquipmentDocs/metrics.server');
 
 /**
- * Tarjetas por estado de los documentos mensuales de equipos. Mismo universo que la tabla
- * (`buildWhereClause` en `actions.server.ts`): equipos activos de la empresa, tipos mensuales
- * activos, sin archivados y respetando el permiso de tipos privados. Sin los filtros del usuario.
+ * Tarjetas por estado de los documentos mensuales de equipos. Salen de las MISMAS filas que la tabla (motor de cumplimiento, respetando
+ * el permiso de tipos privados), sin los filtros del usuario, y exigen el mismo permiso `view`.
+ * `pendiente` son las filas faltantes.
  */
 export async function getMonthlyEquipmentDocumentStateCounts() {
-  const companyId = await getActiveCompanyId();
-
   try {
-    const canViewPrivate = await checkPermissionServer('documentacion', 'documentos-de-equipos', 'view_private');
-    const rows = await prisma.documents_equipment.groupBy({
-      by: ['state'],
-      where: {
-        archived_at: null,
-        vehicles: { company_id: companyId, is_active: true },
-        document_types: { is_it_montlhy: true, is_active: true, ...(!canViewPrivate && { private: { not: true } }) },
-      },
-      _count: { _all: true },
-    });
-    return toDocumentStateCounts(rows);
+    return await stateCountsOf('docs-equipos-mensuales', ({ companyId, canViewPrivate }) =>
+      loadEquipmentDocumentRows(companyId, true, canViewPrivate, '')
+    );
   } catch (error) {
-    logger.error('Error al obtener las métricas de documentos mensuales de equipos', { data: { error } });
+    logger.error('Error al obtener las métricas de los documentos mensuales de equipos', { data: { error } });
     throw error;
   }
 }

@@ -51,10 +51,10 @@ export function AllGoodDeviationPromptDialog({ isOpen, onCancel, onConfirm }: Al
         <AlertDialogHeader className="text-left space-y-3">
           <div className="flex items-center gap-2.5">
             <span
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ok-subtle ring-1 ring-ok/30"
               aria-hidden="true"
             >
-              <CircleCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              <CircleCheck className="h-4 w-4 text-ok" />
             </span>
             <AlertDialogTitle className="text-base leading-tight">Checklist guardado correctamente</AlertDialogTitle>
           </div>

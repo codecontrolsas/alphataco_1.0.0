@@ -45,8 +45,9 @@ export function formatDateOnly(date: string | Date | null | undefined, format = 
 export function formatDateTime(date: string | Date | null | undefined, format = 'DD/MM/YYYY HH:mm'): string {
   if (!date) return '-';
 
-  // moment automáticamente usa el timezone del navegador (Argentina)
-  return moment(date).format(format);
+  // Siempre hora argentina, sin depender de la zona del servidor ni del navegador.
+  // Argentina es UTC-3 fijo (sin horario de verano): el offset se aplica explícito.
+  return moment.utc(date).utcOffset(-180).format(format);
 }
 
 /**

@@ -1,9 +1,10 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 import { ItemComments } from '@/features/Mantenimiento/components/ItemComments';
+import { MaintenanceStatusPill } from '@/features/Mantenimiento/shared/components/MaintenanceStatusPill';
 import { RepairGroupBadge } from '@/features/Mantenimiento/shared/components/RepairGroupBadge';
 import { RepairItemPhotos } from '@/features/Mantenimiento/shared/components/RepairItemPhotos';
 import { PREVENTIVE_TYPES, type PreventiveType } from '@/features/Mantenimiento/shared/preventive-maintenance';
@@ -24,18 +25,6 @@ interface PedidoDetailDialogProps {
   onClose: () => void;
 }
 
-const STATUS_CONFIG: Record<
-  string,
-  { label: string; variant: 'warning' | 'success' | 'default' | 'secondary' | 'destructive' }
-> = {
-  pending_scheduling: { label: 'Pendiente Planificar', variant: 'warning' },
-  scheduled: { label: 'Planificado', variant: 'secondary' },
-  date_confirmed: { label: 'Fecha Confirmada', variant: 'success' },
-  in_workshop: { label: 'En Taller', variant: 'default' },
-  completed: { label: 'Completado', variant: 'secondary' },
-  rejected: { label: 'Rechazado', variant: 'destructive' },
-};
-
 function formatSectionCode(code: string | null | undefined): string {
   if (!code) return '-';
   return code
@@ -52,7 +41,6 @@ export function PedidoDetailDialog({ order, open, onClose }: PedidoDetailDialogP
   const resourceKindLabel = getResourceKindLabel(order);
   const internNumber = getResourceInternNumber(order);
   const ResourceIcon = isOtherEquipment ? Package : Truck;
-  const statusInfo = STATUS_CONFIG[order.status] ?? { label: order.status, variant: 'secondary' as const };
   const itemCount = order.maintenance_order_items?.length ?? 0;
   const description = order.description ?? order.maintenance_requests?.description ?? null;
 
@@ -62,8 +50,8 @@ export function PedidoDetailDialog({ order, open, onClose }: PedidoDetailDialogP
     order.other_equipment?.horometer ?? order.vehicles?.engine_hours ?? order.maintenance_requests?.engine_hours;
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="w-[calc(100vw-2rem)] max-w-3xl max-h-[90svh] flex flex-col p-0 gap-0 overflow-hidden">
+    <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <SheetContent side="right" aria-describedby={undefined} className="w-full gap-0 overflow-hidden p-0 sm:max-w-[920px]">
         {/*
           Ticket 676: el modal no scrolleaba. Antes solo la lista de items tenia
           su propio ScrollArea: si el pedido no tenia items (o el encabezado era
@@ -75,14 +63,14 @@ export function PedidoDetailDialog({ order, open, onClose }: PedidoDetailDialogP
         <div className="flex-1 min-h-0 overflow-y-auto">
           {/* ── Header compacto ──────────────────────────────────────────── */}
           <div className="px-6 pt-6 pb-4 space-y-3">
-            <DialogHeader className="space-y-1">
+            <SheetHeader className="space-y-1 p-0 pr-10">
               <div className="flex items-center gap-2">
-                <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
-                <DialogTitle className="text-base">
+                <MaintenanceStatusPill entity="order" status={order.status} />
+                <SheetTitle className="text-base">
                   {order.order_number ? `Pedido #${order.order_number}` : 'Pedido de Mantenimiento'}
-                </DialogTitle>
+                </SheetTitle>
               </div>
-              <DialogDescription className="flex items-center gap-3 text-xs">
+              <SheetDescription className="flex items-center gap-3 text-xs">
                 <span className="inline-flex items-center gap-1">
                   <ResourceIcon className="h-3 w-3" />
                   <span className="text-muted-foreground">{resourceKindLabel}</span>
@@ -91,8 +79,8 @@ export function PedidoDetailDialog({ order, open, onClose }: PedidoDetailDialogP
                 </span>
                 <span className="text-muted-foreground">·</span>
                 <span>Creado {formatDateTime(order.created_at)}</span>
-              </DialogDescription>
-            </DialogHeader>
+              </SheetDescription>
+            </SheetHeader>
 
             {/* ── Datos clave (fila horizontal) ───────────────────────────── */}
             {(order.scheduled_date || kilometer || engineHours) && (
@@ -125,16 +113,16 @@ export function PedidoDetailDialog({ order, open, onClose }: PedidoDetailDialogP
 
             {/* ── Alert de reprogramación ──────────────────────────────── */}
             {order.date_rejection_reason && (
-              <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md">
+              <div className="bg-warn-subtle border-warn/40 rounded-md border p-3">
                 <div className="flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                  <AlertTriangle className="h-4 w-4 text-warn mt-0.5 shrink-0" />
                   <div>
-                    <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                    <span className="text-sm font-medium text-warn-subtle-foreground">
                       Motivo de reprogramación
                     </span>
-                    <p className="text-sm text-amber-700 dark:text-amber-300 mt-0.5">{order.date_rejection_reason}</p>
+                    <p className="text-sm text-warn-subtle-foreground mt-0.5">{order.date_rejection_reason}</p>
                     {order.date_rejected_at && (
-                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                      <p className="text-xs text-warn-subtle-foreground mt-1">
                         Rechazado el {formatDateTime(order.date_rejected_at)}
                       </p>
                     )}
@@ -252,7 +240,7 @@ export function PedidoDetailDialog({ order, open, onClose }: PedidoDetailDialogP
             </>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }

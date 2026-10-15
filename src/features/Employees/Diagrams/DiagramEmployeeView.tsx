@@ -1,8 +1,6 @@
 'use client';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { CalendarIcon } from '@radix-ui/react-icons';
-import { addDays, format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
 
 import { Calendar } from '@/components/ui/calendar';
@@ -15,6 +13,7 @@ import { Card } from '@/components/ui/card';
 import { Form, FormDescription, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import InfoComponent from '@/shared/components/common/InfoComponent';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowDownIcon, ArrowUpIcon, FileDown } from 'lucide-react';
 import moment from 'moment';
@@ -22,6 +21,9 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { z } from 'zod';
+
+/** Hoy en hora argentina como fecha local a medianoche (lo que espera el calendario). */
+const argentinaToday = () => moment(argentinaDate(), 'YYYY-MM-DD');
 
 // Tipo para un diagrama
 type DiagramType = {
@@ -66,11 +68,22 @@ type EmployeeWithDiagrams = {
  * Los datos llegan del wrapper, que los mantiene al día con React Query (`refetchInterval`):
  * ya no hay suscripción realtime a `employees_diagram`.
  */
-function DiagramEmployeeView({ employeesData }: { employeesData: EmployeeWithDiagrams[] }) {
-  const [date, setDate] = useState<DateRange | undefined>({
-    from: new Date(),
-    to: addDays(new Date(), 30),
+function DiagramEmployeeView({
+  employeesData,
+  dateRange,
+  onDateRangeChange,
+}: {
+  employeesData: EmployeeWithDiagrams[];
+  /** Rango controlado por el wrapper: así el servidor trae las novedades de la ventana que se está mirando. */
+  dateRange?: DateRange;
+  onDateRangeChange?: (range: DateRange | undefined) => void;
+}) {
+  const [localDate, setLocalDate] = useState<DateRange | undefined>({
+    from: argentinaToday().toDate(),
+    to: argentinaToday().add(30, 'days').toDate(),
   });
+  const date = onDateRangeChange ? dateRange : localDate;
+  const setDate = onDateRangeChange ?? setLocalDate;
   // `null` = "todos los empleados de la búsqueda": así una recarga de datos (refetch o
   // "cargar más") no pisa la selección del usuario ni hace falta un useEffect para resetearla.
   const [pickedResources, setPickedResources] = useState<string[] | null>(null);
@@ -165,7 +178,7 @@ function DiagramEmployeeView({ employeesData }: { employeesData: EmployeeWithDia
     const datosExcel = [];
 
     // Encabezados (primera fila)
-    const encabezados = [...columnasEmpleado, ...diasMostrados.map((day) => format(day, 'dd/MM', { locale: es }))];
+    const encabezados = [...columnasEmpleado, ...diasMostrados.map((day) => moment(day).format('DD/MM'))];
     datosExcel.push(encabezados);
 
     // Filtrar empleados según selección
@@ -180,7 +193,7 @@ function DiagramEmployeeView({ employeesData }: { employeesData: EmployeeWithDia
         employee.label,
         employee.position || '',
         employee.sector || '',
-        employee.dateOfAdmission ? moment(employee.dateOfAdmission).format('DD/MM/YYYY') : '',
+        employee.dateOfAdmission ? moment.utc(employee.dateOfAdmission).format('DD/MM/YYYY') : '',
         employee.workDiagram || '',
         employee.costCenter || '',
         employee.category || '',
@@ -232,7 +245,7 @@ function DiagramEmployeeView({ employeesData }: { employeesData: EmployeeWithDia
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Diagramas');
 
-    const dateStamp = format(new Date(), 'MMdd');
+    const dateStamp = argentinaToday().format('MMDD');
     XLSX.writeFile(workbook, `Diagramas_${dateStamp}.xlsx`, { compression: true });
 
     toast.success('Archivo Excel generado correctamente');
@@ -285,6 +298,7 @@ function DiagramEmployeeView({ employeesData }: { employeesData: EmployeeWithDia
             <Popover>
               <PopoverTrigger asChild>
                 <Button
+                  type="button"
                   id="date"
                   variant="outline"
                   className={cn('w-[300px] justify-start text-left font-normal', !date && 'text-muted-foreground')}
@@ -293,11 +307,10 @@ function DiagramEmployeeView({ employeesData }: { employeesData: EmployeeWithDia
                   {date?.from ? (
                     date.to ? (
                       <>
-                        {format(date.from, 'dd/MM/yyyy', { locale: es })} -{' '}
-                        {format(date.to, 'dd/MM/yyyy', { locale: es })}
+                        {moment(date.from).format('DD/MM/YYYY')} - {moment(date.to).format('DD/MM/YYYY')}
                       </>
                     ) : (
-                      format(date.from, 'dd/MM/yyyy', { locale: es })
+                      moment(date.from).format('DD/MM/YYYY')
                     )
                   ) : (
                     <span>Seleccionar fecha</span>
@@ -318,7 +331,6 @@ function DiagramEmployeeView({ employeesData }: { employeesData: EmployeeWithDia
             <InfoComponent size="sm" message="La selección máxima es de 30 días" />
           </div>
         </div>
-
       </div>
 
       {/* Tabla de diagramas */}
@@ -334,8 +346,12 @@ function DiagramEmployeeView({ employeesData }: { employeesData: EmployeeWithDia
                 <TableHead className="flex items-center gap-2">
                   Empleado
                   <Button
+                    type="button"
                     variant="ghost"
                     size="sm"
+                    aria-label={
+                      isDescending ? 'Ordenar empleados de forma ascendente' : 'Ordenar empleados de forma descendente'
+                    }
                     onClick={() => {
                       setIsDescending(!isDescending);
                     }}
@@ -345,7 +361,7 @@ function DiagramEmployeeView({ employeesData }: { employeesData: EmployeeWithDia
                 </TableHead>
                 {diasMostrados.map((dia, idx) => (
                   <TableHead key={`dia-${idx}`} className="text-nowrap p-0">
-                    {format(dia, 'dd/MM', { locale: es })}
+                    {moment(dia).format('DD/MM')}
                   </TableHead>
                 ))}
               </TableRow>
@@ -422,6 +438,7 @@ function DiagramEmployeeView({ employeesData }: { employeesData: EmployeeWithDia
       {/* Botón para exportar a Excel */}
       <div className="py-2 w-full flex justify-start gap-4">
         <Button
+          type="button"
           variant="outline"
           onClick={exportarAExcel}
           disabled={!employeesData?.length || selectedResources.length === 0}

@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -9,6 +10,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import moment from 'moment';
 import { useMemo, useState } from 'react';
 import { DailyAbsenceTimeseriesItem, getCurrentAbsentEmployees } from '../../actions.server';
+import { formatAbsencePercent } from '../../lib/absence-level';
 import { _EmployeeAbsenceDataTable } from '../EmployeeAbsenceTable/_EmployeeAbsenceDataTable';
 import { getDailyAbsenceColumns } from './columns';
 
@@ -33,7 +35,36 @@ export function _DailyAbsenceDataTable({ data, companyId }: Props) {
 
   const castedData = data as DailyAbsenceRecord[];
 
-  const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(() => [], []);
+  // Una columna, un filtro. En modo in-memory no hay rango de fechas: la fecha («DD/MM/YYYY») se filtra
+  // por texto (por ejemplo «/08/2026» trae todo agosto) y los números por coincidencia parcial.
+  const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
+    () => [
+      { columnId: 'fecha', title: 'Fecha', type: 'text', placeholder: 'Buscar fecha (DD/MM/AAAA)...' },
+      { columnId: 'dotacion', title: 'Dotación', type: 'text', placeholder: 'Buscar dotación...' },
+      { columnId: 'altas', title: 'Altas', type: 'text', placeholder: 'Buscar altas...' },
+      { columnId: 'bajas', title: 'Bajas', type: 'text', placeholder: 'Buscar bajas...' },
+      { columnId: 'vacaciones', title: 'Vacaciones', type: 'text', placeholder: 'Buscar vacaciones...' },
+      { columnId: 'totalDotacion', title: 'Total Dotación', type: 'text', placeholder: 'Buscar total dotación...' },
+      { columnId: 'totalAusentes', title: 'Total Ausentes', type: 'text', placeholder: 'Buscar total ausentes...' },
+      { columnId: 'porcentajeAusentismo', title: '% Ausentismo', type: 'text', placeholder: 'Buscar porcentaje...' },
+    ],
+    []
+  );
+
+  // Se muestran 3 filtros; el resto se activa desde el selector de filtros.
+  const initialFilterVisibility = useMemo(
+    () => ({
+      fecha: true,
+      totalAusentes: true,
+      porcentajeAusentismo: true,
+      dotacion: false,
+      altas: false,
+      bajas: false,
+      vacaciones: false,
+      totalDotacion: false,
+    }),
+    []
+  );
 
   const exportConfig = useMemo(
     () => ({
@@ -44,7 +75,7 @@ export function _DailyAbsenceDataTable({ data, companyId }: Props) {
         title: 'Serie Diaria de Ausentismo',
       },
       formatters: {
-        porcentajeAusentismo: (val: unknown) => `${(val as number).toFixed(2)}%`,
+        porcentajeAusentismo: (val: unknown) => (val == null ? '' : formatAbsencePercent(val as number)),
         altas: (val: unknown) => String(val || 0),
         bajas: (val: unknown) => String(val || 0),
         vacaciones: (val: unknown) => String(val || 0),
@@ -60,7 +91,12 @@ export function _DailyAbsenceDataTable({ data, companyId }: Props) {
   }, [selectedDate]);
 
   // Fetch on-demand: solo se dispara cuando el modal está abierto y hay fecha seleccionada
-  const { data: absenceDetail, isLoading: isLoadingDetail } = useQuery({
+  const {
+    data: absenceDetail,
+    isLoading: isLoadingDetail,
+    isError: isDetailError,
+    refetch: refetchDetail,
+  } = useQuery({
     queryKey: ['daily-absence-detail', companyId, isoDate],
     queryFn: () => getCurrentAbsentEmployees(isoDate!),
     enabled: isOpen && !!isoDate,
@@ -94,9 +130,10 @@ export function _DailyAbsenceDataTable({ data, companyId }: Props) {
         data={castedData}
         totalRows={castedData.length}
         facetedFilters={facetedFilters}
-        searchPlaceholder="Buscar por fecha..."
+        searchPlaceholder="Buscar por fecha, dotación o ausentes..."
         showSearch
         showFilterToggle
+        initialFilterVisibility={initialFilterVisibility}
         emptyMessage="No hay datos de ausentismo diario."
         exportConfig={exportConfig}
         tableId="daily-absence"
@@ -126,6 +163,15 @@ export function _DailyAbsenceDataTable({ data, companyId }: Props) {
                     ))}
                   </div>
                 ))}
+              </div>
+            ) : isDetailError ? (
+              <div role="alert" className="flex flex-col items-center gap-3 py-8 text-center">
+                <p className="text-sm text-muted-foreground">
+                  No se pudo cargar el detalle de ausentes. Esto no significa que no haya ausentes.
+                </p>
+                <Button type="button" variant="outline" onClick={() => refetchDetail()}>
+                  Reintentar
+                </Button>
               </div>
             ) : !absenceDetail ? (
               <div className="py-8 text-center text-muted-foreground">No hay datos para esta fecha.</div>

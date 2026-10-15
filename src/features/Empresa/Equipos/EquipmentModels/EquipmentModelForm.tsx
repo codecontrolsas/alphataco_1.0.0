@@ -7,6 +7,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui/use-toast';
 import { Logger } from '@/lib/logger';
+import { useCatalogSheetBusy } from '@/shared/components/common/CatalogFormSheet';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
@@ -53,6 +54,7 @@ interface EquipmentModelFormProps {
 export default function EquipmentModelForm({ editingItem, onReset }: EquipmentModelFormProps) {
   const queryClient = useQueryClient();
   const isEditing = !!editingItem;
+  const setBusy = useCatalogSheetBusy();
 
   // Cargar marcas activas para el select
   const { data: brands = [] } = useQuery<BrandForSelect[]>({
@@ -93,6 +95,7 @@ export default function EquipmentModelForm({ editingItem, onReset }: EquipmentMo
   }, [editingItem, reset]);
 
   const onSubmit = async (data: FormValues) => {
+    setBusy(true);
     try {
       const result =
         isEditing && editingItem
@@ -111,6 +114,7 @@ export default function EquipmentModelForm({ editingItem, onReset }: EquipmentMo
       // La accion devuelve el motivo como dato (no lo lanza) para que sobreviva
       // al build de produccion, donde Next oculta los mensajes de Error.
       if (!result.ok) {
+        setBusy(false);
         toast({ title: 'Error', description: result.error, variant: 'destructive' });
         return;
       }
@@ -128,6 +132,7 @@ export default function EquipmentModelForm({ editingItem, onReset }: EquipmentMo
     } catch (error) {
       logger.error('Error al guardar el modelo de equipo', { data: { error } });
       const message = error instanceof Error ? error.message : 'Ocurrió un error al guardar. Intente nuevamente.';
+      setBusy(false);
       toast({
         title: 'Error',
         description: message,
@@ -137,11 +142,9 @@ export default function EquipmentModelForm({ editingItem, onReset }: EquipmentMo
   };
 
   return (
-    <div className="flex space-y-8 max-w-[300px]">
+    <div className="w-full">
       <Form {...form}>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          <h2 className="text-xl font-bold mb-4">{isEditing ? 'Editar' : 'Crear'} Modelo de Unidad</h2>
-
           {/* Marca */}
           <FormField
             control={form.control}
@@ -151,7 +154,7 @@ export default function EquipmentModelForm({ editingItem, onReset }: EquipmentMo
                 <FormLabel>Marca</FormLabel>
                 <FormControl>
                   <Select onValueChange={field.onChange} value={field.value}>
-                    <SelectTrigger className="w-[300px]">
+                    <SelectTrigger className="w-full">
                       <SelectValue placeholder="Seleccione una marca" />
                     </SelectTrigger>
                     <SelectContent>

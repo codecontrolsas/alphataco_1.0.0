@@ -1,5 +1,5 @@
-import { Card, CardContent } from '@/components/ui/card';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
+import { CatalogTableSurface } from '@/shared/components/common/CatalogFormSheet';
 import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { Suspense } from 'react';
@@ -37,7 +37,7 @@ export default async function EmployeeList({ searchParams, isActive, permissions
   ]);
 
   return (
-    <div className="space-y-6">
+    <div className="flex min-w-0 flex-col gap-4">
       {/* Las tarjetas resumen sólo existen para los activos y llegan por su propio Suspense. */}
       {metrics && (
         <Suspense fallback={<EmployeeMetricsSkeleton />}>
@@ -45,20 +45,18 @@ export default async function EmployeeList({ searchParams, isActive, permissions
         </Suspense>
       )}
 
-      <Card>
-        <CardContent className="pt-6">
-          <_EmployeeDataTable
-            data={data}
-            totalRows={total}
-            searchParams={tableParams}
-            isActive={isActive}
-            tableId={tableId}
-            permissionsMap={permissions}
-            initialColumnVisibility={preferences.columnVisibility ?? {}}
-            initialFilterVisibility={preferences.filterVisibility ?? {}}
-          />
-        </CardContent>
-      </Card>
+      <CatalogTableSurface>
+        <_EmployeeDataTable
+          data={data}
+          totalRows={total}
+          searchParams={tableParams}
+          isActive={isActive}
+          tableId={tableId}
+          permissionsMap={permissions}
+          initialColumnVisibility={preferences.columnVisibility ?? {}}
+          initialFilterVisibility={preferences.filterVisibility ?? {}}
+        />
+      </CatalogTableSurface>
     </div>
   );
 }

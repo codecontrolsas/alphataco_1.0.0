@@ -4,11 +4,9 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { dailyReportRowStatusBadges, dailyReportRowStatusLabels } from '@/shared/utils/mappers';
+import { dailyReportRowStatusLabels, dailyReportRowStatusTones } from '@/shared/utils/mappers';
 import type { ColumnDef } from '@tanstack/react-table';
-import { CheckCircle2, CircleDashed, Info } from 'lucide-react';
-import { DAILY_REPORT_ROW_STATUS_ICONS } from '../../lib/daily-report-status-ui';
-import { remitNumbersOf } from '../../remitManager/lib/remit-numbers';
+import { CheckCircle2, Info } from 'lucide-react';
 import type { DailyReportDetailRow } from '../types';
 import { RowActionsCell } from './row-actions-cell';
 import type { Permissions, RowActionHandlers } from './types';
@@ -24,12 +22,7 @@ export function getStatusColumns(): ColumnDef<DailyReportDetailRow>[] {
       accessorKey: 'working_day',
       meta: { title: 'Jornada' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Jornada" />,
-      cell: ({ row }) =>
-        row.original.working_day ? (
-          <span>{row.original.working_day}</span>
-        ) : (
-          <span className="text-muted-foreground">-</span>
-        ),
+      cell: ({ row }) => <span>{row.original.working_day ?? '—'}</span>,
       filterFn: (row, id, value: string[]) => {
         const val = row.getValue(id) as string | null;
         if (val == null) return value.includes(NULL_FILTER_VALUE);
@@ -44,12 +37,12 @@ export function getStatusColumns(): ColumnDef<DailyReportDetailRow>[] {
       header: ({ column }) => <DataTableColumnHeader column={column} title="Hora Inicio" />,
       cell: ({ row }) => {
         const val = row.original.start_time;
-        if (!val) return <span className="text-muted-foreground">-</span>;
+        if (!val) return <span className="text-muted-foreground text-xs">—</span>;
         // start_time is a Time(6) stored as Date by Prisma — format as HH:mm
         const d = new Date(val as unknown as string);
         const hh = String(d.getUTCHours()).padStart(2, '0');
         const mm = String(d.getUTCMinutes()).padStart(2, '0');
-        return <span className="font-mono tabular-nums">{`${hh}:${mm}`}</span>;
+        return <span>{`${hh}:${mm}`}</span>;
       },
       // filterFn not needed for text filters
     },
@@ -61,11 +54,11 @@ export function getStatusColumns(): ColumnDef<DailyReportDetailRow>[] {
       header: ({ column }) => <DataTableColumnHeader column={column} title="Hora Fin" />,
       cell: ({ row }) => {
         const val = row.original.end_time;
-        if (!val) return <span className="text-muted-foreground">-</span>;
+        if (!val) return <span className="text-muted-foreground text-xs">—</span>;
         const d = new Date(val as unknown as string);
         const hh = String(d.getUTCHours()).padStart(2, '0');
         const mm = String(d.getUTCMinutes()).padStart(2, '0');
-        return <span className="font-mono tabular-nums">{`${hh}:${mm}`}</span>;
+        return <span>{`${hh}:${mm}`}</span>;
       },
     },
 
@@ -77,21 +70,15 @@ export function getStatusColumns(): ColumnDef<DailyReportDetailRow>[] {
       cell: ({ row }) => {
         const val = row.original.status;
         const label = dailyReportRowStatusLabels[val] ?? val;
-        const variant = dailyReportRowStatusBadges[val] ?? 'default';
+        const variant = dailyReportRowStatusTones[val] ?? 'default';
 
         // Ejecutado parcial: jornada 24h, no completamente ejecutado, pero al menos un turno completado
         const is24Hours = row.original.working_day?.toLowerCase() === 'jornada 24 horas';
         const completedDay = row.original.completed_day;
         const completedNight = row.original.completed_night;
         if (is24Hours && val !== 'ejecutado' && (completedDay || completedNight)) {
-          return (
-            <Badge variant="info">
-              <CircleDashed aria-hidden="true" />
-              Ejecutado parcial
-            </Badge>
-          );
+          return <Badge variant="info">Ejecutado parcial</Badge>;
         }
-        const Icon = DAILY_REPORT_ROW_STATUS_ICONS[val];
 
         // Cancelado con motivo → tooltip
         if (val === 'cancelado' && row.original.cancel_reason) {
@@ -99,13 +86,12 @@ export function getStatusColumns(): ColumnDef<DailyReportDetailRow>[] {
             <TooltipProvider delayDuration={100}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Badge variant={variant}>
-                    {Icon && <Icon aria-hidden="true" />}
+                  <Badge variant={variant} className="inline-flex items-center gap-1">
                     {label}
-                    <Info aria-label="Ver motivo" />
+                    <Info className="h-3.5 w-3.5 flex-shrink-0" />
                   </Badge>
                 </TooltipTrigger>
-                <TooltipContent className="max-w-xs">
+                <TooltipContent className="max-w-xs text-xs bg-black text-white rounded-lg p-2">
                   <p>{row.original.cancel_reason}</p>
                 </TooltipContent>
               </Tooltip>
@@ -113,12 +99,7 @@ export function getStatusColumns(): ColumnDef<DailyReportDetailRow>[] {
           );
         }
 
-        return (
-          <Badge variant={variant}>
-            {Icon && <Icon aria-hidden="true" />}
-            {label}
-          </Badge>
-        );
+        return <Badge variant={variant}>{label}</Badge>;
       },
       filterFn: (row, id, value: string[]) => {
         const val = row.getValue(id) as string;
@@ -133,7 +114,7 @@ export function getStatusColumns(): ColumnDef<DailyReportDetailRow>[] {
       header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción" />,
       cell: ({ row }) => {
         const val = row.original.description;
-        if (!val) return <span className="text-muted-foreground">-</span>;
+        if (!val) return <span className="text-muted-foreground text-xs">—</span>;
         const truncated = val.length > 60 ? `${val.slice(0, 60)}…` : val;
         return (
           <TooltipProvider delayDuration={100}>
@@ -152,28 +133,12 @@ export function getStatusColumns(): ColumnDef<DailyReportDetailRow>[] {
       },
     },
 
-    // ── Remitos (1:N, tabla `remitos`) ────────────────────────────────────────
-    // Mantiene el id `remit_number` para no perder el filtro ni las preferencias guardadas.
-    // Sin orden: una línea puede tener varios remitos (misma regla que las columnas M:M).
+    // ── Nro Remito (texto nullable) ───────────────────────────────────────────
     {
-      id: 'remit_number',
-      accessorFn: (row) => remitNumbersOf(row).join(', '),
-      meta: { title: 'Remitos' },
-      enableSorting: false,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Remitos" />,
-      cell: ({ row }) => {
-        const numbers = remitNumbersOf(row.original);
-        if (numbers.length === 0) return <span className="text-muted-foreground">-</span>;
-        return (
-          <div className="flex flex-wrap gap-1">
-            {numbers.map((number) => (
-              <Badge key={number} variant="outline" className="font-mono tabular-nums">
-                {number}
-              </Badge>
-            ))}
-          </div>
-        );
-      },
+      accessorKey: 'remit_number',
+      meta: { title: 'Nro Remito' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Nro Remito" />,
+      cell: ({ row }) => <span>{row.original.remit_number ?? '—'}</span>,
     },
 
     // ── Completado Día (booleano nullable) ────────────────────────────────────
@@ -184,7 +149,7 @@ export function getStatusColumns(): ColumnDef<DailyReportDetailRow>[] {
       cell: ({ row }) => {
         const val = row.original.completed_day;
         if (val === null || val === undefined) {
-          return <span className="text-muted-foreground">-</span>;
+          return <span className="text-muted-foreground text-xs">—</span>;
         }
         return (
           <Badge variant={val ? 'success' : 'secondary'}>
@@ -213,7 +178,7 @@ export function getStatusColumns(): ColumnDef<DailyReportDetailRow>[] {
       cell: ({ row }) => {
         const val = row.original.completed_night;
         if (val === null || val === undefined) {
-          return <span className="text-muted-foreground">-</span>;
+          return <span className="text-muted-foreground text-xs">—</span>;
         }
         return (
           <Badge variant={val ? 'success' : 'secondary'}>

@@ -9,14 +9,11 @@ import { Logger } from '@/lib/logger';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, X } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import {
-  bulkUpdateVehicleAxleSizes,
-  getVehicleAxleSizeOverrides,
-} from './actions.server';
+import { bulkUpdateVehicleAxleSizes, getVehicleAxleSizeOverrides } from './actions/positions.server';
 
 const logger = new Logger('VehicleAxleSizesForm');
 
@@ -61,36 +58,29 @@ function buildInitialValues(
   };
 }
 
+/** Referencia estable mientras carga: un `[]` nuevo por render invalidaría el `useMemo`. */
+const NO_OVERRIDES: Array<{ axle_number: number; tire_size: string }> = [];
+
 // ─── Component ─────────────────────────────────────────────────────────────
 
-export function VehicleAxleSizesForm({
-  vehicleId,
-  axles,
-  hasGeometricOverride,
-}: VehicleAxleSizesFormProps) {
+export function VehicleAxleSizesForm({ vehicleId, axles, hasGeometricOverride }: VehicleAxleSizesFormProps) {
   const queryClient = useQueryClient();
 
-  const { data: overrides = [], isLoading } = useQuery({
+  const { data: overrides = NO_OVERRIDES, isLoading } = useQuery({
     queryKey: ['vehicle-axle-size-overrides', vehicleId],
     queryFn: () => getVehicleAxleSizeOverrides(vehicleId),
     staleTime: 30 * 1000,
   });
 
-  const initialValues = useMemo(
-    () => buildInitialValues(axles, overrides),
-    [axles, overrides]
-  );
+  const initialValues = useMemo(() => buildInitialValues(axles, overrides), [axles, overrides]);
 
+  // `values` resincroniza el formulario cuando cambian los datos del servidor (por ejemplo, tras
+  // invalidar la query) sin un efecto aparte.
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: initialValues,
+    values: initialValues,
   });
-
-  // Resync form when server data changes (e.g. after invalidation).
-  // form.reset is a stable function — safe to use as effect with initialValues as dep.
-  useEffect(() => {
-    form.reset(initialValues);
-  }, [initialValues, form]);
 
   const watchedAxles = form.watch('axles');
 
@@ -102,7 +92,12 @@ export function VehicleAxleSizesForm({
       }));
       return bulkUpdateVehicleAxleSizes(vehicleId, updates);
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      // La action devuelve el error (no lo lanza) para que el mensaje llegue al toast en producción.
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
       toast.success('Medidas actualizadas correctamente');
       queryClient.invalidateQueries({ queryKey: ['vehicle-axle-size-overrides', vehicleId] });
       queryClient.invalidateQueries({ queryKey: ['vehicle-tire-positions-details', vehicleId] });
@@ -124,9 +119,7 @@ export function VehicleAxleSizesForm({
     return templateSize ?? null;
   }
 
-  const missingCount = axles.filter(
-    (a) => !getEffectiveSize(a.axle_number, a.tire_size)
-  ).length;
+  const missingCount = axles.filter((a) => !getEffectiveSize(a.axle_number, a.tire_size)).length;
 
   if (isLoading) {
     return (
@@ -152,8 +145,7 @@ export function VehicleAxleSizesForm({
           <div>
             <CardTitle>Medidas de cubierta</CardTitle>
             <CardDescription>
-              Configurá la medida específica para cada eje. Si dejás un eje vacío, hereda de la
-              plantilla.
+              Configurá la medida específica para cada eje. Si dejás un eje vacío, hereda de la plantilla.
             </CardDescription>
           </div>
           {hasGeometricOverride && (
@@ -168,9 +160,7 @@ export function VehicleAxleSizesForm({
           <div className="rounded-md border border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20 p-3 flex items-start gap-2">
             <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
             <p className="text-xs text-amber-700 dark:text-amber-500">
-              {missingCount === 1
-                ? 'Falta 1 medida (opcional).'
-                : `Faltan ${missingCount} medidas (opcional).`}{' '}
+              {missingCount === 1 ? 'Falta 1 medida (opcional).' : `Faltan ${missingCount} medidas (opcional).`}{' '}
               Cargarlas acá las deja precargadas; si no, se define la medida al cargar la cubierta dentro de la orden.
             </p>
           </div>
@@ -218,9 +208,7 @@ export function VehicleAxleSizesForm({
                               <FormControl>
                                 <Input
                                   placeholder={
-                                    axle.tire_size
-                                      ? `Override (heredando: ${axle.tire_size})`
-                                      : 'Ej: 295/80R22.5'
+                                    axle.tire_size ? `Override (heredando: ${axle.tire_size})` : 'Ej: 295/80R22.5'
                                   }
                                   className="h-8 text-sm"
                                   {...field}

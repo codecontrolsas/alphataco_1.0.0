@@ -34,10 +34,10 @@ export function TaskNotes({
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+          className="min-h-11 gap-1.5 px-2 text-sm text-muted-foreground hover:text-foreground"
           type="button"
         >
-          <MessageSquare className="h-3.5 w-3.5" />
+          <MessageSquare aria-hidden="true" className="h-4 w-4" />
           {hasNotes ? 'Ver notas' : 'Agregar notas'}
         </Button>
       </CollapsibleTrigger>
@@ -53,7 +53,8 @@ export function TaskNotes({
           }}
           rows={2}
           disabled={disabled}
-          className="text-sm resize-none"
+          className="text-base resize-none"
+          aria-label="Notas técnicas de la tarea"
         />
       </CollapsibleContent>
     </Collapsible>

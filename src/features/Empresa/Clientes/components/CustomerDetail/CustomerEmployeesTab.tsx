@@ -1,23 +1,16 @@
 'use client';
 
-import { EmployeesTableReusable } from '@/features/Employees/Empleados/components/tables/data/employees-table';
+import { useQueryClient } from '@tanstack/react-query';
+import { getCustomerEmployeeAssignments, updateCustomerEmployeeAssignments } from '../../actions/assignments.server';
+import { _CustomerEmployeesDataTable } from '../../employees/_CustomerEmployeesDataTable';
+import { getAssignableEmployeeOptions } from '../../employees/actions.server';
 import type { AssignmentChanges } from '../../lib/assignment-diff';
-import { PermissionGuard } from '@/features/Permissions';
-import { fetchAllEmployees2 } from '@/shared/actions/employees.actions';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { VisibilityState } from '@tanstack/react-table';
-import { Loader2 } from 'lucide-react';
-import { useMemo } from 'react';
-import {
-  getCustomerEmployeeAssignments,
-  updateCustomerEmployeeAssignments,
-} from '../../actions/assignments.server';
-import type { CustomerRow } from '../../lib/serializers';
+import { customerTabKey } from '../../lib/query-keys';
 import { AssignmentDialog } from './AssignmentDialog';
 
 interface CustomerEmployeesTabProps {
-  customer: CustomerRow;
-  savedVisibility: VisibilityState;
+  customer: { id: string; name: string };
+  canUpdate: boolean;
 }
 
 function capitalize(value: string): string {
@@ -25,69 +18,50 @@ function capitalize(value: string): string {
 }
 
 /**
- * Pestaña "Empleados": los afectados al cliente (tabla) y el modal de altas/bajas.
- * `fetchAllEmployees2` trae todos los empleados de la empresa con `contractor_employee`
- * filtrado a este cliente: sirve para la tabla (los que tienen afectación) y para las
- * opciones del selector (todos).
+ * Pestaña "Empleados": los afectados al cliente (tabla paginada en el servidor) y el modal de altas/bajas.
+ * Las opciones del modal son solo los empleados activos y se piden al abrirlo; el baseline sale de la base.
  */
-export function CustomerEmployeesTab({ customer, savedVisibility }: CustomerEmployeesTabProps) {
+export function CustomerEmployeesTab({ customer, canUpdate }: CustomerEmployeesTabProps) {
   const queryClient = useQueryClient();
-  const queryKey = ['customer-employees', customer.id] as const;
 
-  const { data: employees = [], isLoading } = useQuery({
-    queryKey,
-    queryFn: () => fetchAllEmployees2(customer.id),
-    staleTime: 60 * 1000,
-  });
-
-  const assignedEmployees = useMemo(
-    () => employees.filter((employee) => employee.contractor_employee.length > 0),
-    [employees]
-  );
-
-  const options = useMemo(
-    () =>
-      employees.map((employee) => ({
-        value: employee.id,
-        label: `[${employee.file}] ${capitalize(employee.lastname)} ${capitalize(employee.firstname)}`,
-      })),
-    [employees]
-  );
+  const loadOptions = async () => {
+    const employees = await getAssignableEmployeeOptions();
+    return employees.map((employee) => ({
+      value: employee.id,
+      label: `[${employee.file}] ${capitalize(employee.lastname)} ${capitalize(employee.firstname)}`,
+    }));
+  };
 
   const saveAssignments = (changes: AssignmentChanges) => updateCustomerEmployeeAssignments(customer.id, changes);
 
-  return (
-    <div className="p-6 rounded-lg border">
-      <div className="flex justify-between items-center mb-6">
-        <h3 className="text-xl font-semibold">Empleados del Cliente</h3>
-        <PermissionGuard module="comercial" tab="empleados-cliente" action="update">
-          <AssignmentDialog
-            triggerLabel="Cargar empleados"
-            title="Seleccionar empleados"
-            description={`Asigná los empleados que trabajan para ${customer.name}.`}
-            fieldLabel="Empleados"
-            placeholder="Buscar por legajo o nombre..."
-            emptyMessage="No se encontraron empleados"
-            options={options}
-            nouns={{ singular: 'empleado', plural: 'empleados' }}
-            loadBaseline={() => getCustomerEmployeeAssignments(customer.id)}
-            save={saveAssignments}
-            onSaved={() => queryClient.invalidateQueries({ queryKey })}
-          />
-        </PermissionGuard>
-      </div>
+  const refreshAfterSave = () => {
+    queryClient.invalidateQueries({ queryKey: customerTabKey(customer.id, 'employees') });
+    queryClient.invalidateQueries({ queryKey: customerTabKey(customer.id, 'summary') });
+  };
 
-      {isLoading ? (
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
-      ) : (
-        <EmployeesTableReusable
-          transformedEmployees={assignedEmployees}
-          tableId="employees-table"
-          savedVisibility={savedVisibility}
-        />
-      )}
+  return (
+    <div className="space-y-4 rounded-lg border p-4 sm:p-6">
+      <h3 className="text-xl font-semibold">Empleados del cliente</h3>
+      <_CustomerEmployeesDataTable
+        customerId={customer.id}
+        toolbarActions={
+          canUpdate ? (
+            <AssignmentDialog
+              triggerLabel="Cargar empleados"
+              title="Seleccionar empleados"
+              description={`Asigná los empleados que trabajan para ${customer.name}.`}
+              fieldLabel="Empleados"
+              placeholder="Buscar por legajo o nombre..."
+              emptyMessage="No se encontraron empleados"
+              loadOptions={loadOptions}
+              nouns={{ singular: 'empleado', plural: 'empleados' }}
+              loadBaseline={() => getCustomerEmployeeAssignments(customer.id)}
+              save={saveAssignments}
+              onSaved={refreshAfterSave}
+            />
+          ) : undefined
+        }
+      />
     </div>
   );
 }

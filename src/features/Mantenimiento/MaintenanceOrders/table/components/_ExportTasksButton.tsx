@@ -20,10 +20,11 @@ import {
   type WorkOrderItemStatus,
 } from '@/features/Mantenimiento/shared/work-order-types';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable';
+import { formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { exportToExcel, type ExcelColumn } from '@/shared/lib/excel-export';
 import { typeOfMaintenanceLabels } from '@/shared/utils/mappers';
 import { Download, Loader2 } from 'lucide-react';
-import moment from 'moment';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { getMaintenanceOrderTasksForExport } from '../actions.server';
@@ -66,12 +67,12 @@ const EXCEL_COLUMNS: ExcelColumn[] = [
   {
     key: 'workshop_entry_date',
     title: 'Ingreso a Taller',
-    formatter: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
+    formatter: (val) => (val ? formatArgentinaDay(val as string | Date) : ''),
   },
   {
     key: 'created_at',
     title: 'Fecha Creación',
-    formatter: (val) => (val ? moment(val as string).format('DD/MM/YYYY HH:mm') : ''),
+    formatter: (val) => (val ? formatArgentinaDateTime(val as string | Date) : ''),
   },
   { key: 'description', title: 'Descripción' },
 ];
@@ -82,7 +83,7 @@ export function _ExportTasksButton({ searchParams }: Props) {
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      const data = await getMaintenanceOrderTasksForExport(searchParams);
+      const data = unwrapExportResult(await getMaintenanceOrderTasksForExport(searchParams));
 
       if (data.length === 0) {
         toast.warning('No hay tareas para exportar');
@@ -97,8 +98,7 @@ export function _ExportTasksButton({ searchParams }: Props) {
 
       toast.success(`Exportado: ${data.length} tareas`);
     } catch (error) {
-      toast.error('Error al exportar');
-      throw error;
+      toast.error(error instanceof Error ? error.message : 'Error al exportar');
     } finally {
       setIsExporting(false);
     }
@@ -108,7 +108,7 @@ export function _ExportTasksButton({ searchParams }: Props) {
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button variant="outline" size="sm" onClick={handleExport} disabled={isExporting} className="h-8 gap-1.5">
+          <Button type="button" variant="outline" size="sm" onClick={handleExport} disabled={isExporting} className="h-8 gap-1.5">
             {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
             <span className="hidden sm:inline">Excel</span>
           </Button>

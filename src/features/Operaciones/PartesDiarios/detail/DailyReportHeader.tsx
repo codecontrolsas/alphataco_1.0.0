@@ -1,60 +1,57 @@
-import { Badge } from '@/components/ui/badge';
+import { checkPermissionServer } from '@/features/Permissions';
 import { RecordHeader } from '@/shared/components/common/RecordHeader';
-import { dailyReportStatusBadges, dailyReportStatusLabels } from '@/shared/utils/mappers';
-import { ClipboardList } from 'lucide-react';
+import { CalendarDays } from 'lucide-react';
 import moment from 'moment';
 import 'moment/locale/es';
-import { DAILY_REPORT_STATUS_ICONS } from '../lib/daily-report-status-ui';
-import { DailyReportColorLegend } from './components/DailyReportColorLegend';
-import { DailyReportSummaryStrip } from './components/DailyReportSummaryStrip';
-import { DetailBackButton } from './components/DetailBackButton';
-import { getDailyReportHeader, getDailyReportRowStatusSummary } from './queries.server';
+import { DailyReportProgress } from './components/DailyReportProgress';
+import { DailyReportStatusPills } from './components/DailyReportStatusPills';
+import { NewLineButton } from './components/NewLineButton';
+import { getCachedDailyReportHeader } from './lib/header-cache';
+import { toReportDateString } from './lib/report-date';
 
 interface Props {
   uuid: string;
 }
 
-/** Cabecera del detalle del parte: volver, identidad (fecha y estado), datos clave y leyenda de colores. */
 export async function DailyReportHeader({ uuid }: Props) {
-  const [header, summary] = await Promise.all([getDailyReportHeader(uuid), getDailyReportRowStatusSummary(uuid)]);
+  const [header, canUpdate] = await Promise.all([
+    getCachedDailyReportHeader(uuid),
+    checkPermissionServer('operaciones', 'detalle-parte-diario', 'update'),
+  ]);
 
   if (!header) return null;
 
-  // `date` es `@db.Date` (medianoche UTC): se lee en UTC para no correr el día.
-  const date = moment.utc(header.date);
-  const StatusIcon = header.status ? DAILY_REPORT_STATUS_ICONS[header.status] : undefined;
+  // `date` y `creation_date` son `@db.Date` (medianoche UTC): se leen en UTC para no correr el día.
+  const title = `Parte del ${moment.utc(header.date).locale('es').format('dddd DD/MM/YYYY')}`;
+  const createdOn = header.creation_date ? moment.utc(header.creation_date).format('DD/MM/YYYY') : null;
 
   return (
-    <div className="space-y-6">
-      <DetailBackButton />
-
-      <RecordHeader
-        identity={
-          <div className="flex items-center gap-4">
-            <div className="bg-muted text-muted-foreground flex size-14 shrink-0 items-center justify-center rounded-xl">
-              <ClipboardList className="size-7" aria-hidden="true" />
-            </div>
-            <div className="min-w-0 space-y-1.5">
-              <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
-                Parte del <span className="font-mono tabular-nums">{date.format('DD/MM/YYYY')}</span>
-              </h1>
-              <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
-                <span className="capitalize">{date.locale('es').format('dddd')}</span>
-                {header.status && (
-                  <Badge variant={dailyReportStatusBadges[header.status] ?? 'default'}>
-                    {StatusIcon && <StatusIcon aria-hidden="true" />}
-                    {dailyReportStatusLabels[header.status] ?? header.status}
-                  </Badge>
-                )}
-              </div>
-            </div>
+    <RecordHeader
+      identity={
+        <div className="flex items-center gap-4">
+          <span
+            className="bg-brand-subtle text-brand-subtle-foreground flex size-14 shrink-0 items-center justify-center rounded-xl"
+            aria-hidden="true"
+          >
+            <CalendarDays className="size-7" />
+          </span>
+          <div className="min-w-0 space-y-1.5">
+            <h1 className="text-foreground text-xl font-semibold tracking-tight">{title}</h1>
+            {createdOn ? <p className="text-muted-foreground text-sm">Creado el {createdOn}</p> : null}
+            <DailyReportStatusPills dailyReportId={uuid} reportStatus={header.status} />
           </div>
-        }
-      />
-
-      <DailyReportSummaryStrip dailyReportId={uuid} initialData={summary} />
-
-      <DailyReportColorLegend />
-    </div>
+        </div>
+      }
+      actions={
+        <>
+          <DailyReportProgress dailyReportId={uuid} />
+          <NewLineButton
+            canUpdate={canUpdate}
+            dailyReportStatus={header.status ?? 'abierto'}
+            reportDate={toReportDateString(header.date)}
+          />
+        </>
+      }
+    />
   );
 }

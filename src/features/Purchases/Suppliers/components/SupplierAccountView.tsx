@@ -1,23 +1,29 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatMoney } from '@/features/Warehouses/lib/format';
+import { SectionCard } from '@/shared/components/common/SectionCard';
+import { formatDateAr } from '@/shared/lib/argentina-time';
 import { exportToExcel, type ExcelColumn } from '@/shared/lib/excel-export';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Banknote, FileSpreadsheet } from 'lucide-react';
+import { Banknote, FileSpreadsheet, TriangleAlert } from 'lucide-react';
 import moment from 'moment';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { getSupplierAccount, type SupplierAccount } from '../../actions/supplier-account.server';
 
-const day = (value: string | null) => (value ? moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY') : '—');
+const day = (value: string | null) => (value ? formatDateAr(value) : '—');
 
 const KIND_LABELS = { INVOICE: 'Comprobante', CREDIT_NOTE: 'Nota de crédito', PAYMENT: 'Orden de pago', REJECTED_CHECK: 'Cheque rechazado' } as const;
+
+/** Importe `Decimal` serializado ("1234.50", "-10.00") mayor a cero, sin pasar por `Number`. */
+function isPositiveAmount(value: string): boolean {
+  return !value.startsWith('-') && /[1-9]/.test(value);
+}
 
 /**
  * Cuenta corriente del proveedor (spec Compras etapa 5 §4): movimientos con saldo acumulado,
@@ -25,7 +31,7 @@ const KIND_LABELS = { INVOICE: 'Comprobante', CREDIT_NOTE: 'Nota de crédito', P
  */
 export function SupplierAccountView({ initial, canCreatePayment }: { initial: SupplierAccount; canCreatePayment: boolean }) {
   const [range, setRange] = useState<{ from: string; to: string }>({ from: '', to: '' });
-  const { data: account, isFetching } = useQuery({
+  const { data: account, isFetching, isError, refetch } = useQuery({
     queryKey: ['supplier-account', initial.supplier.id, range.from, range.to],
     queryFn: () => getSupplierAccount(initial.supplier.id, { from: range.from || undefined, to: range.to || undefined }),
     initialData: !range.from && !range.to ? initial : undefined,
@@ -69,33 +75,39 @@ export function SupplierAccountView({ initial, canCreatePayment }: { initial: Su
 
   const a = account ?? initial;
   const s = a.summary;
-  const balanceText = Number(s.balance) < 0 ? `A favor ${formatMoney(s.balance.replace('-', ''))}` : formatMoney(s.balance);
+  const balanceText = s.balance.startsWith('-') ? `A favor ${formatMoney(s.balance.replace('-', ''))}` : formatMoney(s.balance);
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { label: 'Saldo', value: balanceText, tone: '' },
-          { label: 'Vencido sin orden de pago', value: formatMoney(s.overdue), tone: Number(s.overdue) > 0 ? 'text-red-600 dark:text-red-400' : '' },
+          { label: 'Vencido sin orden de pago', value: formatMoney(s.overdue), tone: isPositiveAmount(s.overdue) ? 'text-danger' : '' },
           { label: 'A vencer sin orden de pago', value: formatMoney(s.upcoming), tone: '' },
           { label: 'Anticipos disponibles', value: formatMoney(s.advancesAvailable), tone: '' },
         ].map((k) => (
-          <Card key={k.label}>
-            <CardContent className="pt-6">
-              <p className="text-xs text-muted-foreground">{k.label}</p>
-              <p className={`text-lg font-semibold tabular-nums ${k.tone}`}>{k.value}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <Card>
-        <CardHeader className="flex flex-col gap-3 space-y-0 md:flex-row md:items-end md:justify-between">
-          <div className="space-y-1">
-            <CardTitle className="text-base">Movimientos</CardTitle>
-            <CardDescription>Comprobantes a pagar (conformes o aprobados), notas de crédito y órdenes de pago pagadas.</CardDescription>
+          <div key={k.label} className="bg-card rounded-xl border p-4">
+            <dt className="text-muted-foreground text-sm">{k.label}</dt>
+            <dd className={`text-lg font-semibold tabular-nums ${k.tone}`}>{k.value}</dd>
           </div>
-          <div className="flex flex-wrap items-end gap-2">
+        ))}
+      </dl>
+
+      {isError && (
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-danger/30 bg-danger-subtle px-4 py-3 text-sm text-danger-subtle-foreground">
+          <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>No se pudo actualizar la cuenta corriente con ese rango de fechas.</span>
+          <Button type="button" size="sm" variant="outline" className="ml-auto" onClick={() => void refetch()}>
+            Reintentar
+          </Button>
+        </div>
+      )}
+
+      <SectionCard
+        title="Movimientos"
+        description="Comprobantes a pagar (conformes o aprobados), notas de crédito y órdenes de pago pagadas."
+        action={
+          <div className="flex flex-wrap items-end justify-end gap-2">
             <div className="space-y-1">
               <Label className="text-xs">Desde</Label>
               <EnhancedDatePicker
@@ -113,20 +125,22 @@ export function SupplierAccountView({ initial, canCreatePayment }: { initial: Su
               />
             </div>
             <Button type="button" size="sm" variant="outline" disabled={!account || excel.isPending} onClick={() => account && excel.mutate(account)}>
-              <FileSpreadsheet className="mr-1 h-4 w-4" />
-              Excel
+              <FileSpreadsheet className="mr-1 h-4 w-4" aria-hidden="true" />
+              {excel.isPending ? 'Exportando…' : 'Excel'}
             </Button>
             {canCreatePayment && (
               <Button asChild size="sm">
                 <Link href={`/dashboard/purchases/payments/new?supplier=${a.supplier.id}`}>
-                  <Banknote className="mr-1 h-4 w-4" />
+                  <Banknote className="mr-1 h-4 w-4" aria-hidden="true" />
                   Nueva orden de pago
                 </Link>
               </Button>
             )}
           </div>
-        </CardHeader>
-        <CardContent>
+        }
+        className="[&>header]:flex-wrap"
+      >
+        <div aria-busy={isFetching}>
           {a.movements.length === 0 && a.previousBalance === null ? (
             <p className="py-8 text-center text-sm text-muted-foreground">Sin movimientos: el proveedor no tiene comprobantes a pagar ni pagos registrados.</p>
           ) : (
@@ -182,8 +196,8 @@ export function SupplierAccountView({ initial, canCreatePayment }: { initial: Su
               </Table>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </SectionCard>
     </div>
   );
 }

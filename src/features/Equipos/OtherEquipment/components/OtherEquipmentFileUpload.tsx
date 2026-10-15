@@ -27,7 +27,8 @@ const logger = new Logger('OtherEquipmentFileUpload');
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
-const PICTURES_ACCEPT = 'image/*';
+// Mismas extensiones que acepta el servidor (sin SVG ni GIF)
+const PICTURES_ACCEPT = '.jpg,.jpeg,.png,.webp';
 const BLUEPRINTS_ACCEPT = '.pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.dwg,.dxf';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -86,7 +87,7 @@ export function OtherEquipmentFileUpload({
     },
     onError: (error: unknown) => {
       logger.error(`Error al agregar ${label}`, { data: { error, equipmentId, type } });
-      toast.error(`Error al subir el archivo. Intenta de nuevo.`);
+      toast.error(error instanceof Error ? error.message : 'Error al subir el archivo. Intenta de nuevo.');
     },
   });
 
@@ -101,7 +102,7 @@ export function OtherEquipmentFileUpload({
     },
     onError: (error: unknown) => {
       logger.error(`Error al eliminar ${label}`, { data: { error, equipmentId, type } });
-      toast.error(`Error al eliminar el archivo. Intenta de nuevo.`);
+      toast.error(error instanceof Error ? error.message : 'Error al eliminar el archivo. Intenta de nuevo.');
     },
   });
 

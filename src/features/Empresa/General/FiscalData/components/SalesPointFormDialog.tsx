@@ -1,14 +1,21 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import type { FiscalDataOverview } from '../actions/fiscal-data.server';
 import { createSalesPoint, updateSalesPoint } from '../actions/sales-points.server';
+import type { FiscalDataOverview } from '../lib/fiscal-data-overview.server';
 import { salesPointSchema, type SalesPointValues } from '../schemas/fiscal-data';
 import { formatSalesPointNumber } from '../utils/format';
 

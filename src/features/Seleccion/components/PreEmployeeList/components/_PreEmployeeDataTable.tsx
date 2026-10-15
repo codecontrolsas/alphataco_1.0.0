@@ -11,7 +11,8 @@ import {
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { CircleOff } from 'lucide-react';
-import moment from 'moment';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useCallback, useMemo, useState } from 'react';
 import {
   getAllPreEmployeesForExport,
@@ -168,7 +169,7 @@ export function _PreEmployeeDataTable({
   // ─── Exportacion a Excel ────────────────────────────────────────────────
   const exportConfig: DataTableExportConfig<PreEmployeeListItem> = useMemo(
     () => ({
-      fetchAllData: () => getAllPreEmployeesForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllPreEmployeesForExport(currentParams)),
       options: {
         filename: 'candidatos',
         title: 'Listado de Candidatos',
@@ -176,8 +177,8 @@ export function _PreEmployeeDataTable({
       },
       formatters: {
         status: (value) => STATUS_LABELS[value as PreEmployeeStatus] || String(value),
-        created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
-        reviewed_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
+        created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
+        reviewed_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
       },
     }),
     [currentParams]

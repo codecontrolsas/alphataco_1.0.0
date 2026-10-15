@@ -1,6 +1,7 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
+import { requireResourceAccess } from '@/features/Mantenimiento/shared/resource-access.server';
 import { auth } from '@/shared/lib/auth';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
@@ -331,17 +332,17 @@ export async function getPendingDeviations(equipmentId: string, options?: Pendin
   }
 
   try {
-    const vehicle = await prisma.vehicles.findUnique({
-      where: { id: equipmentId },
-      select: { company_id: true },
-    });
-
-    if (!vehicle?.company_id) {
-      deviationsLogger.warn('El equipo no tiene empresa asignada', { data: { equipmentId } });
+    // Perímetro de dos caminos: operario del QR con legajo de la empresa del equipo, o usuario
+    // del dashboard con esa empresa activa. Sin tab propia: lo llaman la ficha del equipo, la
+    // tabla de equipos con desvíos y el formulario de checklist, cada uno con su permiso de
+    // vista, así que alcanza con la pertenencia a la empresa activa. Sin acceso → lista vacía.
+    let companyId: string;
+    try {
+      ({ companyId } = await requireResourceAccess('vehicle', equipmentId));
+    } catch (error) {
+      deviationsLogger.warn('Acceso denegado a los desvíos del equipo', { data: { equipmentId, error } });
       return [];
     }
-
-    const companyId = vehicle.company_id;
 
     const allDeviations = await prisma.checklist_deviations.findMany({
       where: withCompany(
@@ -370,8 +371,9 @@ export async function getPendingDeviations(equipmentId: string, options?: Pendin
             checklist_templates: { select: { id: true, name: true } },
           },
         },
-        profile: { select: { id: true, fullname: true, email: true } },
-        employees: { select: { id: true, firstname: true, lastname: true, cuil: true } },
+        // Mínimo necesario para mostrar "cargado por": sin email ni CUIL.
+        profile: { select: { id: true, fullname: true } },
+        employees: { select: { id: true, firstname: true, lastname: true } },
         maintenance_request_items: { select: { repair_type_id: true } },
       },
       orderBy: { created_at: 'desc' },

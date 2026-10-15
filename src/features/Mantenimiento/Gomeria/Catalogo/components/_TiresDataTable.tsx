@@ -17,6 +17,9 @@ import {
   tireStatusLabels,
   tireTreadTypeLabels,
 } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
+import { TIRE_STATUS_UI } from '@/features/Mantenimiento/Gomeria/shared/tire-status-presentation';
+import { formatMoney } from '@/features/Warehouses/lib/format';
+import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { TireRetreadLevel, TireStatus, TireTreadType } from '@/generated/prisma/enums';
 import {
   DataTable,
@@ -24,26 +27,24 @@ import {
   type DataTableSearchParams,
   type FacetResult,
 } from '@/shared/components/common/DataTable';
-import { formatMoney } from '@/features/Warehouses/lib/format';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
 import { Layers, Plus } from 'lucide-react';
-import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
-  deleteTire,
   getTireSingleFacet,
   getTiresForExport,
   getTiresPaginated,
-  updateTireStatus,
   type TireListItem,
-} from '../actions/actions.server';
+} from '../actions/tire-list.server';
+import { deleteTire, updateTireStatus } from '../actions/tire-mutations.server';
 import { TireBulkForm } from './TireBulkForm';
 import { TireForm } from './TireForm';
 import { TireReturnDialog } from './TireReturnDialog';
-import { getColumns, getTireWarehouseLabel } from './columns';
+import { TIRE_HIDDEN_COLUMNS_BY_DEFAULT, getColumns, getTireWarehouseLabel } from './columns';
 
 // ============================================================================
 // TYPES
@@ -53,7 +54,10 @@ interface TiresDataTableProps {
   data: TireListItem[];
   totalRows: number;
   searchParams: DataTableSearchParams;
+  /** Clave de las preferencias guardadas de la tabla (`-v2`). */
   tableId: string;
+  /** Prefijo de los params de la URL de la tabla (no cambia con el rediseño). */
+  paramNamespace: string;
   permissionsMap: Record<string, boolean>;
   initialColumnVisibility?: Record<string, boolean>;
   initialFilterVisibility?: Record<string, boolean>;
@@ -62,6 +66,10 @@ interface TiresDataTableProps {
 // ============================================================================
 // DEFAULT VISIBLE FILTERS
 // ============================================================================
+
+const STATUS_ICONS: Record<string, LucideIcon> = Object.fromEntries(
+  Object.entries(TIRE_STATUS_UI).map(([status, ui]) => [status, ui.icon])
+);
 
 const DEFAULT_VISIBLE_FILTERS = ['status', 'brand_id', 'tread_type'];
 
@@ -87,6 +95,7 @@ export default function _TiresDataTable({
   totalRows,
   searchParams,
   tableId,
+  paramNamespace,
   permissionsMap,
   initialColumnVisibility,
   initialFilterVisibility,
@@ -133,6 +142,7 @@ export default function _TiresDataTable({
     onSuccess: (tire) => {
       toast.success(`Cubierta ${tire.serial_number} marcada como disponible`);
       queryClient.invalidateQueries({ queryKey: ['tires-catalog'] });
+      queryClient.invalidateQueries({ queryKey: ['datatable-facet'] });
       setReturningTire(null);
     },
     onError: (error) => {
@@ -164,6 +174,15 @@ export default function _TiresDataTable({
         canViewPrices
       ),
     [permissions, handleMarkAvailable, canViewPrices]
+  );
+
+  // ─── Column visibility: las preferencias guardadas ganan; sin ellas, las atómicas arrancan ocultas ──
+  const mergedColumnVisibility = useMemo(
+    () =>
+      initialColumnVisibility && Object.keys(initialColumnVisibility).length > 0
+        ? initialColumnVisibility
+        : TIRE_HIDDEN_COLUMNS_BY_DEFAULT,
+    [initialColumnVisibility]
   );
 
   // ─── Filter visibility ────────────────────────────────────────────────────
@@ -207,7 +226,7 @@ export default function _TiresDataTable({
       {
         columnId: 'status',
         title: 'Estado',
-        fetchFacet: makeEnumFetchFacet('status', Object.values(TireStatus), tireStatusLabels),
+        fetchFacet: makeEnumFetchFacet('status', Object.values(TireStatus), tireStatusLabels, STATUS_ICONS),
       },
 
       // ── Brand (FK UUID) ────────────────────────────────────────────────────
@@ -294,6 +313,7 @@ export default function _TiresDataTable({
       unwrapAction(await deleteTire(deletingTire.id));
       toast.success('Cubierta eliminada correctamente');
       queryClient.invalidateQueries({ queryKey: ['tires-catalog'] });
+      queryClient.invalidateQueries({ queryKey: ['datatable-facet'] });
       setDeletingTire(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Error al eliminar la cubierta');
@@ -311,19 +331,20 @@ export default function _TiresDataTable({
         totalRows={totalRows}
         searchParams={searchParams}
         tableId={tableId}
-        paramNamespace={tableId}
+        paramNamespace={paramNamespace}
         facetedFilters={facetedFilters}
-        initialColumnVisibility={initialColumnVisibility}
+        initialColumnVisibility={mergedColumnVisibility}
         initialFilterVisibility={mergedFilterVisibility}
         toolbarActions={toolbarActions}
         showFilterToggle
         queryFn={tableQueryFn}
         queryKey={['tires-catalog']}
         onStateChange={handleStateChange}
-        emptyMessage="No hay cubiertas registradas"
-        searchPlaceholder="Buscar por número o medida..."
+        mobileCards
+        emptyMessage="No hay cubiertas para mostrar. Si hay filtros aplicados, quitalos; si no, se muestran las cubiertas a medida que se dan de alta."
+        searchPlaceholder="Buscar por número..."
         exportConfig={{
-          fetchAllData: () => getTiresForExport(currentParams),
+          fetchAllData: async () => unwrapExportResult(await getTiresForExport(currentParams)),
           options: {
             filename: 'catalogo-cubiertas',
             sheetName: 'Cubiertas',
@@ -339,7 +360,7 @@ export default function _TiresDataTable({
             size: (_value, row) => row.tire_type?.size ?? '-',
             is_new: (value) => (value ? 'Nueva' : 'Usada'),
             tread_depth: (value) => (value != null ? `${value} mm` : '-'),
-            created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
+            created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
             warehouse: (_value, row) => getTireWarehouseLabel(row.material_unit),
             cost: (value) => (value != null ? formatMoney(value as string) : 'Sin costo'),
             vehicle: (_value, row) => {

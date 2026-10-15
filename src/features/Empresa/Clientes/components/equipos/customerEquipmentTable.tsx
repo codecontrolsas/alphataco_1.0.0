@@ -1,48 +1,54 @@
 'use client';
 
-import { createFilterOptions } from '@/features/Employees/Empleados/components/utils/utils';
-import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
-import { BaseDataTable } from '@/shared/components/data-table/base/data-table';
-import { DataTableColumnHeader } from '@/shared/components/data-table/base/data-table-column-header';
-import type { ColumnDef, VisibilityState } from '@tanstack/react-table';
-import Cookies from 'js-cookie';
+import {
+  DataTable,
+  DataTableColumnHeader,
+  inMemoryFacetedFilterFn,
+  inMemoryTextFilterFn,
+  type DataTableFacetedFilterConfig,
+} from '@/shared/components/common/DataTable';
+import type { ColumnDef } from '@tanstack/react-table';
+import { Truck } from 'lucide-react';
 import { useMemo } from 'react';
 import type { CustomerEquipmentRow } from '../../actions/customer-equipment.server';
+import { CUSTOMER_EQUIPMENT_TYPES } from '../../schemas/customer-equipment';
 import { CustomerEquipmentFormDialog } from './CustomerEquipmentFormDialog';
 
 interface CustomerEquipmentTableProps {
   customerEquipments: CustomerEquipmentRow[];
   /** Cliente de la ficha: se le pasa al diálogo de edición para no volver a preguntarlo. */
   customerId: string;
+  canEdit: boolean;
+  initialColumnVisibility: Record<string, boolean>;
+  initialFilterVisibility: Record<string, boolean>;
 }
 
-function includesValue(value: unknown, filter: unknown): boolean {
-  return Array.isArray(filter) && filter.includes(value);
-}
+const TABLE_ID = 'customer-own-equipment';
 
-export function getCustomerEquipmentColumns(
-  customerId: string,
-  canEdit: boolean
-): ColumnDef<CustomerEquipmentRow>[] {
+export function getCustomerEquipmentColumns(customerId: string, canEdit: boolean): ColumnDef<CustomerEquipmentRow>[] {
   const columns: ColumnDef<CustomerEquipmentRow>[] = [
     {
       accessorKey: 'name',
-      id: 'Nombre',
+      meta: { title: 'Nombre' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
-      filterFn: (row, id, value) => includesValue(row.getValue(id), value),
+      cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
+      filterFn: inMemoryTextFilterFn,
     },
     {
       accessorKey: 'type',
-      id: 'Tipo de equipo',
+      meta: { title: 'Tipo de equipo' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo de equipo" />,
-      filterFn: (row, id, value) => includesValue(row.getValue(id), value),
+      filterFn: inMemoryFacetedFilterFn,
     },
   ];
 
   if (canEdit) {
     columns.push({
-      id: 'Acciones',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Acciones" />,
+      id: 'actions',
+      meta: { title: 'Acciones', excludeFromExport: true },
+      enableSorting: false,
+      enableHiding: false,
+      header: () => <span className="sr-only">Acciones</span>,
       cell: ({ row }) => (
         <CustomerEquipmentFormDialog
           customerId={customerId}
@@ -57,49 +63,54 @@ export function getCustomerEquipmentColumns(
   return columns;
 }
 
-function readCookieJson<T>(name: string, fallback: T): T {
-  const raw = Cookies.get(name);
-  if (!raw) return fallback;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function CustomerEquipmentTable({ customerEquipments, customerId }: CustomerEquipmentTableProps) {
-  const { hasPermission } = usePermissions();
-  const canEdit = hasPermission('comercial', 'equipos-cliente', 'update');
-
-  const savedVisibility = readCookieJson<VisibilityState>('comercial-equipment-table', {});
-  const savedFilters = readCookieJson<string[]>('comercial-equipment-table-filters', []);
-
+/**
+ * Equipos que aporta el cliente (`equipos_clientes`): un catálogo chico por cliente que llega completo desde
+ * el servidor, así que ordena, filtra y pagina en memoria (`inMemory`).
+ */
+function CustomerEquipmentTable({
+  customerEquipments,
+  customerId,
+  canEdit,
+  initialColumnVisibility,
+  initialFilterVisibility,
+}: CustomerEquipmentTableProps) {
   const columns = useMemo(() => getCustomerEquipmentColumns(customerId, canEdit), [customerId, canEdit]);
 
-  const filterOptions = useMemo(
-    () => ({
-      names: createFilterOptions(customerEquipments, (equipment) => equipment.name),
-      types: createFilterOptions(customerEquipments, (equipment) => equipment.type),
-    }),
-    [customerEquipments]
+  const facetedFilters = useMemo<DataTableFacetedFilterConfig[]>(
+    () => [
+      { columnId: 'name', title: 'Nombre', type: 'text', placeholder: 'Buscar por nombre...' },
+      {
+        columnId: 'type',
+        title: 'Tipo de equipo',
+        options: CUSTOMER_EQUIPMENT_TYPES.map((type) => ({ value: type, label: type, icon: Truck })),
+      },
+    ],
+    []
   );
 
   return (
-    <div className="p-4 pt-0">
-      <BaseDataTable
-        columns={columns}
-        data={customerEquipments}
-        savedVisibility={savedVisibility}
-        tableId="comercial-equipment-table"
-        toolbarOptions={{
-          initialVisibleFilters: savedFilters,
-          filterableColumns: [
-            { columnId: 'Nombre', title: 'Nombre', options: filterOptions.names },
-            { columnId: 'Tipo de equipo', title: 'Tipo de equipo', options: filterOptions.types },
-          ],
-        }}
-      />
-    </div>
+    <DataTable
+      columns={columns}
+      data={customerEquipments}
+      totalRows={customerEquipments.length}
+      searchParams={{}}
+      inMemory
+      mobileCards
+      tableId={TABLE_ID}
+      paramNamespace={TABLE_ID}
+      facetedFilters={facetedFilters}
+      initialColumnVisibility={initialColumnVisibility}
+      initialFilterVisibility={initialFilterVisibility}
+      searchPlaceholder="Buscar por nombre o tipo"
+      showSearch
+      showFilterToggle
+      emptyMessage="Este cliente no tiene equipos propios cargados"
+      data-testid="customer-own-equipment-table"
+      exportConfig={{
+        fetchAllData: async () => customerEquipments,
+        options: { filename: 'equipos-del-cliente', title: 'Equipos del cliente', sheetName: 'Equipos' },
+      }}
+    />
   );
 }
 

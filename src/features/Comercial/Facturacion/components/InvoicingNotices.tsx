@@ -1,4 +1,4 @@
-import { getFiscalDataOverview } from '@/features/Empresa/General/FiscalData/actions/fiscal-data.server';
+import { getFiscalDataOverview } from '@/features/Empresa/General/FiscalData/lib/fiscal-data-overview.server';
 import { daysUntil } from '@/features/Empresa/General/FiscalData/lib/readiness';
 import { ENVIRONMENT_LABELS } from '@/features/Empresa/General/FiscalData/schemas/fiscal-data';
 import { joinList } from '@/features/Empresa/General/FiscalData/utils/format';
@@ -6,16 +6,15 @@ import { cn } from '@/lib/utils';
 import { AlertTriangle, CircleDashed, FlaskConical, MonitorPlay } from 'lucide-react';
 import moment from 'moment';
 import Link from 'next/link';
-import { FISCAL_DATA_HREF } from '../utils/invoice-links';
 import type { ReactNode } from 'react';
-
+import { FISCAL_DATA_HREF } from '../utils/invoice-links';
 
 type NoticeTone = 'neutral' | 'warning';
 
-/** Clases escritas completas (Tailwind v4). Ámbar = mismo criterio que el estado del certificado en Datos fiscales. */
+/** Clases escritas completas (Tailwind v4). Tono warn = mismo criterio que el estado del certificado en Datos fiscales. */
 const NOTICE_STYLES: Record<NoticeTone, string> = {
   neutral: 'border-border text-foreground',
-  warning: 'border-amber-500/50 bg-amber-500/5 text-amber-800 dark:text-amber-300',
+  warning: 'border-warn/35 bg-warn-subtle text-warn-subtle-foreground',
 };
 
 const LINK_CLASS =

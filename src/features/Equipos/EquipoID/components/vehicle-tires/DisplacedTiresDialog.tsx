@@ -14,11 +14,11 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useTireReturnWarehouse } from '@/features/Mantenimiento/Gomeria/shared/hooks/useTireReturnWarehouse';
 import { TireReturnWarehouseSelect } from '@/features/Mantenimiento/Gomeria/shared/TireReturnWarehouseSelect';
+import { useTireReturnWarehouse } from '@/features/Mantenimiento/Gomeria/shared/hooks/useTireReturnWarehouse';
 import { AlertTriangle } from 'lucide-react';
 import { useState } from 'react';
-import type { DisplacedTireAction } from './actions.server';
+import type { DisplacedTireAction } from './schemas/axles';
 
 export interface DisplacedTireInfo {
   tireId: string;

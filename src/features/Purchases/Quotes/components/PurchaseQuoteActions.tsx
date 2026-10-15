@@ -15,8 +15,8 @@ import {
   getPurchaseQuotePdf,
   markPurchaseQuoteSent,
   sendPurchaseQuote,
-  type PurchaseQuoteDetail,
 } from '../../actions/quotes.server';
+import type { PurchaseQuoteDetail } from '../../lib/quote-query-types';
 import { ConfirmAction } from '../../components/ConfirmAction';
 import { SendToSupplierDialog } from '../../components/SendToSupplierDialog';
 import { invalidatePurchases } from '../../lib/invalidate';

@@ -9,6 +9,7 @@ import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { useQuery } from '@tanstack/react-query';
 import { CalendarDays, ChevronLeft, ChevronRight, Loader2, Wrench } from 'lucide-react';
 import moment from 'moment';
@@ -56,7 +57,7 @@ function fmtNum(value: string): string {
  * solicitudes abiertas y tooltip). Cuenta dominios unicos que entraron a taller.
  */
 export function MaintenanceByTypeCard() {
-  const [selectedMonth, setSelectedMonth] = React.useState(() => moment().startOf('month'));
+  const [selectedMonth, setSelectedMonth] = React.useState(() => moment(argentinaDate()).startOf('month'));
   const [selectedTypeId, setSelectedTypeId] = React.useState<string | null>(null);
   const [filterTypeIds, setFilterTypeIds] = React.useState<string[]>([]);
   const [monthPickerOpen, setMonthPickerOpen] = React.useState(false);
@@ -66,7 +67,7 @@ export function MaintenanceByTypeCard() {
     const f = selectedMonth.clone().locale('es').format('MMMM YYYY');
     return f.charAt(0).toUpperCase() + f.slice(1);
   }, [selectedMonth]);
-  const maxMonth = React.useMemo(() => moment().add(1, 'month').startOf('month'), []);
+  const maxMonth = React.useMemo(() => moment(argentinaDate()).add(1, 'month').startOf('month'), []);
   const canGoForward = selectedMonth.isBefore(maxMonth, 'month');
 
   // Cambiar de mes resetea seleccion y filtro (los tipos pueden no existir).
@@ -118,10 +119,10 @@ export function MaintenanceByTypeCard() {
 
   return (
     <TooltipProvider delayDuration={150}>
-      <Card className="py-0">
+      <Card className="@container py-0">
         <CardHeader className="px-6 pt-4 pb-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
+          <div className="flex flex-col gap-3 @xl:flex-row @xl:items-start @xl:justify-between">
+            <div className="min-w-0">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Wrench className="h-4 w-4 text-muted-foreground" />
                 Equipos en mantenimiento por tipo
@@ -133,6 +134,7 @@ export function MaintenanceByTypeCard() {
               {/* Selector de mes: flechas mes a mes + calendario para saltar de mes/año */}
               <div className="mt-3 flex w-fit items-center gap-1 rounded-md border bg-card/40 p-0.5">
                 <Button
+                  type="button"
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
@@ -164,11 +166,12 @@ export function MaintenanceByTypeCard() {
                           setMonthPickerOpen(false);
                         }
                       }}
-                      disabled={(date) => moment(date).isAfter(moment(), 'month')}
+                      disabled={(date) => moment(date).isAfter(moment(argentinaDate()), 'month')}
                     />
                   </PopoverContent>
                 </Popover>
                 <Button
+                  type="button"
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
@@ -181,7 +184,7 @@ export function MaintenanceByTypeCard() {
               </div>
             </div>
             {typeOptions.length > 0 && (
-              <div className="sm:w-[210px]">
+              <div className="w-full @xl:w-[210px] @xl:shrink-0">
                 <MultiSelectCombobox
                   options={typeOptions}
                   placeholder="Todos los tipos"
@@ -204,7 +207,7 @@ export function MaintenanceByTypeCard() {
           ) : (
             <div className="flex flex-col gap-5">
               {/* Donut + leyenda */}
-              <div className="flex flex-col items-center gap-5 lg:flex-row lg:items-center lg:justify-around">
+              <div className="flex flex-col items-center gap-5 @2xl:flex-row @2xl:items-center @2xl:justify-around">
                 <ChartContainer config={chartConfig} className="aspect-square h-[190px] w-[190px] shrink-0">
                   <PieChart>
                     <Pie
@@ -220,17 +223,29 @@ export function MaintenanceByTypeCard() {
                         <Cell key={entry.typeId} fill={entry.fill} fillOpacity={entry.fillOpacity} />
                       ))}
                     </Pie>
-                    <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle" className="fill-foreground text-3xl font-bold">
+                    <text
+                      x="50%"
+                      y="46%"
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      className="fill-foreground text-3xl font-bold"
+                    >
                       {total}
                     </text>
-                    <text x="50%" y="58%" textAnchor="middle" dominantBaseline="middle" className="fill-muted-foreground text-xs">
+                    <text
+                      x="50%"
+                      y="58%"
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      className="fill-muted-foreground text-xs"
+                    >
                       equipos
                     </text>
                   </PieChart>
                 </ChartContainer>
 
                 {/* Leyenda clickeable con scroll interno */}
-                <div className="w-full lg:max-w-xs">
+                <div className="w-full @2xl:max-w-xs">
                   <p className="mb-1.5 px-1 text-[11px] uppercase tracking-wide text-muted-foreground/80">
                     Tipos · tocá uno para ver sus equipos
                   </p>
@@ -248,7 +263,9 @@ export function MaintenanceByTypeCard() {
                           aria-label={`${g.typeName}: ${g.count} equipos. Tocá para ver la lista`}
                           className={cn(
                             'group flex w-full cursor-pointer items-center gap-2 rounded-md border px-2 py-1.5 text-left transition-all',
-                            isSel ? 'border-foreground/30 bg-muted/70' : 'border-transparent hover:border-border hover:bg-muted/50',
+                            isSel
+                              ? 'border-foreground/30 bg-muted/70'
+                              : 'border-transparent hover:border-border hover:bg-muted/50',
                             dimmed && 'opacity-50'
                           )}
                         >
@@ -281,7 +298,7 @@ export function MaintenanceByTypeCard() {
                   <span className="text-xs uppercase tracking-wide text-muted-foreground">
                     Equipos · <span className="normal-case text-foreground/80">{selectedGroup.typeName}</span>
                   </span>
-                  <div className="grid max-h-[240px] grid-cols-1 gap-1 overflow-y-auto pr-1 sm:grid-cols-2">
+                  <div className="grid max-h-[240px] grid-cols-1 gap-1 overflow-y-auto pr-1 @xl:grid-cols-2">
                     {selectedGroup.vehicles.map((v) => (
                       <Tooltip key={v.id}>
                         <TooltipTrigger asChild>
@@ -295,7 +312,7 @@ export function MaintenanceByTypeCard() {
                             {v.openCount > 0 && (
                               <Badge
                                 variant="outline"
-                                className="shrink-0 border-amber-300 tabular-nums text-amber-600 dark:border-amber-700 dark:text-amber-400"
+                                className="shrink-0 border-[var(--dash-warn)] tabular-nums text-foreground"
                               >
                                 {v.openCount} {v.openCount === 1 ? 'abierta' : 'abiertas'}
                               </Badge>

@@ -1,8 +1,7 @@
-import { Building2, Truck, User } from 'lucide-react';
 import { Suspense } from 'react';
 
 import { PermissionGuardServer } from '@/features/Permissions';
-import { TabsManagerServer } from '@/features/TabsManager';
+import { ViewManagerServer, type ViewDefinition } from '@/features/TabsManager';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 
 import { EmpresaList } from './EmpresaList/EmpresaList';
@@ -34,17 +33,13 @@ export default async function TiposDocumentosTabContent({
   showOnlyEmpresa = false,
   permissions,
 }: TiposDocumentosTabContentProps) {
-  const allTabs = [];
+  const allTabs: ViewDefinition<'configuracion'>[] = [];
 
   if (!showOnlyEquipos && !showOnlyEmpresa) {
     allTabs.push({
       value: 'Personas',
-      label: (
-        <span className="flex items-center gap-2">
-          <User className="h-4 w-4" />
-          Personas
-        </span>
-      ),
+      label: 'Personal',
+      description: 'Tipos de documento que se exigen al personal',
       moduleSlug: 'configuracion' as const,
       tabSlug: 'tipos-docs-personas' as const,
       content: (
@@ -58,12 +53,8 @@ export default async function TiposDocumentosTabContent({
   if (!showOnlyPersonas && !showOnlyEmpresa) {
     allTabs.push({
       value: 'Equipos',
-      label: (
-        <span className="flex items-center gap-2">
-          <Truck className="h-4 w-4" />
-          Equipos
-        </span>
-      ),
+      label: 'Equipos',
+      description: 'Tipos de documento que se exigen a los equipos',
       moduleSlug: 'configuracion' as const,
       tabSlug: 'tipos-docs-equipos' as const,
       content: (
@@ -77,12 +68,8 @@ export default async function TiposDocumentosTabContent({
   if (!showOnlyPersonas && !showOnlyEquipos) {
     allTabs.push({
       value: 'Empresa',
-      label: (
-        <span className="flex items-center gap-2">
-          <Building2 className="h-4 w-4" />
-          Empresa
-        </span>
-      ),
+      label: 'Empresa',
+      description: 'Tipos de documento de la empresa',
       moduleSlug: 'configuracion' as const,
       tabSlug: 'tipos-docs-empresa' as const,
       content: (
@@ -102,17 +89,20 @@ export default async function TiposDocumentosTabContent({
         : 'Personas';
 
   return (
-    <TabsManagerServer
+    <ViewManagerServer
       paramName="subtab"
       searchParams={searchParams}
-      defaultTab={defaultTab}
+      defaultView={defaultTab}
+      preserveParams={['tab']}
+      layout="menu"
+      ariaLabel="Tipos de documento"
       permissions={permissions}
       actions={
         <PermissionGuardServer module="configuracion" tab="documentos" action="create">
           <_CreateDocumentTypeButton />
         </PermissionGuardServer>
       }
-      tabs={allTabs}
+      views={allTabs}
     />
   );
 }

@@ -6,8 +6,9 @@ import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { fetchCitiesByProvinceId, fetchProvinces } from '@/features/Employees/EmpleadoID/lib/actions/catalog-actions';
-import { Logger } from '@/lib/logger';
+import { useCatalogSheetBusy, useCatalogSheetClose } from '@/shared/components/common/CatalogFormSheet';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -16,7 +17,7 @@ import { z } from 'zod';
 import { createWorkshop, updateWorkshop } from '../../../actions/workshops.server';
 import { useTalleresStore } from './store/talleres.store';
 
-const logger = new Logger('TalleresForm');
+const LOOKUP_STALE_TIME = 5 * 60 * 1000;
 
 const TalleresSchema = z.object({
   id: z.string().optional(),
@@ -39,11 +40,10 @@ function TalleresForm() {
   const editingWorkshop = useTalleresStore((state) => state.workshop);
   const setWorkshop = useTalleresStore((state) => state.setWorkshop);
   const router = useRouter();
+  const closeSheet = useCatalogSheetClose();
+  const setBusy = useCatalogSheetBusy();
 
   const [isEditing, setIsEditing] = useState(!!editingWorkshop);
-  const [provinces, setProvinces] = useState<{ id: number; name: string }[]>([]);
-  const [cities, setCities] = useState<{ id: number; name: string }[]>([]);
-  const [loadingCities, setLoadingCities] = useState(false);
 
   const form = useForm<TalleresFormValues>({
     resolver: zodResolver(TalleresSchema),
@@ -66,38 +66,18 @@ function TalleresForm() {
   const workshopType = watch('type');
   const selectedProvince = watch('province');
 
-  // Load provinces on mount
-  useEffect(() => {
-    const loadProvinces = async () => {
-      try {
-        const data = await fetchProvinces();
-        setProvinces(data);
-      } catch (error) {
-        logger.error('Error loading provinces', { data: { error } });
-      }
-    };
-    loadProvinces();
-  }, []);
-
-  // Load cities when province changes
-  useEffect(() => {
-    const loadCities = async () => {
-      if (selectedProvince) {
-        setLoadingCities(true);
-        try {
-          const data = await fetchCitiesByProvinceId(selectedProvince);
-          setCities(data);
-        } catch (error) {
-          logger.error('Error loading cities', { data: { error } });
-        } finally {
-          setLoadingCities(false);
-        }
-      } else {
-        setCities([]);
-      }
-    };
-    loadCities();
-  }, [selectedProvince]);
+  // Provincias y ciudades en caché: abrir el Sheet varias veces no repite el pedido.
+  const { data: provinces = [] } = useQuery({
+    queryKey: ['workshop-form-provinces'],
+    queryFn: () => fetchProvinces(),
+    staleTime: LOOKUP_STALE_TIME,
+  });
+  const { data: cities = [], isFetching: loadingCities } = useQuery({
+    queryKey: ['workshop-form-cities', selectedProvince],
+    queryFn: () => fetchCitiesByProvinceId(selectedProvince as number),
+    enabled: !!selectedProvince,
+    staleTime: LOOKUP_STALE_TIME,
+  });
 
   // Populate form when editing
   useEffect(() => {
@@ -118,11 +98,12 @@ function TalleresForm() {
       });
       setIsEditing(true);
     } else {
-      resetForm();
+      resetValues();
     }
   }, [editingWorkshop, reset]);
 
   const onSubmit = async (values: TalleresFormValues) => {
+    setBusy(true);
     await toast
       .promise(
         async () => {
@@ -143,11 +124,12 @@ function TalleresForm() {
         {
           loading: 'Creando taller...',
           success: () => {
-            router.refresh();
             resetForm();
+            router.refresh();
             return 'Taller creado correctamente';
           },
           error: () => {
+            setBusy(false);
             return 'Error al crear el taller';
           },
         }
@@ -159,6 +141,7 @@ function TalleresForm() {
   };
 
   const onUpdate = async (values: TalleresFormValues) => {
+    setBusy(true);
     await toast
       .promise(
         async () => {
@@ -180,11 +163,12 @@ function TalleresForm() {
         {
           loading: 'Actualizando taller...',
           success: () => {
-            router.refresh();
             resetForm();
+            router.refresh();
             return 'Taller actualizado correctamente';
           },
           error: () => {
+            setBusy(false);
             return 'Error al actualizar el taller';
           },
         }
@@ -203,7 +187,7 @@ function TalleresForm() {
     }
   };
 
-  const resetForm = () => {
+  const resetValues = () => {
     reset({
       id: '',
       name: '',
@@ -222,15 +206,19 @@ function TalleresForm() {
     setWorkshop(null);
   };
 
+  // Éxito / cancelar: limpia el form y cierra el Sheet (antes del router.refresh()).
+  const resetForm = () => {
+    resetValues();
+    closeSheet();
+  };
+
   const handleCancel = () => {
     resetForm();
   };
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 py-4 px-2">
-        <h2 className="text-xl font-bold mb-4">{isEditing ? 'Editar Taller' : 'Crear Taller'}</h2>
-
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
         {/* Nombre */}
         <FormField
           control={form.control}
@@ -480,7 +468,7 @@ function TalleresForm() {
                 <RadioGroup
                   onValueChange={(value) => field.onChange(value === 'true')}
                   value={field.value ? 'true' : 'false'}
-                  className="flex space-x-4"
+                  className="flex flex-wrap gap-4"
                 >
                   <FormItem className="flex items-center space-x-2 space-y-0">
                     <FormControl>
@@ -506,11 +494,9 @@ function TalleresForm() {
           <Button type="submit" variant="brand" disabled={form.formState.isSubmitting}>
             {isEditing ? 'Actualizar' : 'Crear'}
           </Button>
-          {isEditing && (
-            <Button type="button" onClick={handleCancel} variant="outline">
-              Cancelar
-            </Button>
-          )}
+          <Button type="button" onClick={handleCancel} variant="outline">
+            Cancelar
+          </Button>
         </div>
       </form>
     </Form>

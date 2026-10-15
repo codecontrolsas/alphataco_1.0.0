@@ -2,37 +2,34 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PAYMENT_METHOD_LABELS } from '@/features/Purchases/schemas/payment-orders';
 import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
+import { Field, FieldGrid } from '@/shared/components/common/FieldGrid';
+import { RecordHeader } from '@/shared/components/common/RecordHeader';
+import { SectionCard } from '@/shared/components/common/SectionCard';
 import { DownloadPdfButton } from '@/shared/components/common/DownloadPdfButton';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ban, FileText } from 'lucide-react';
-import moment from 'moment';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { cancelReceipt, getReceiptPdf, type ReceiptDetail } from '../../actions/receipts.server';
+import { cancelReceipt, getReceiptPdf } from '../../actions/receipts.server';
+import type { ReceiptDetail } from '../../lib/receipt-types';
 import { attachWithholdingCertificate } from '../../actions/withholdings.server';
 import { CancelReasonDialog } from '../../components/CancelReasonDialog';
 import { formatInCurrency } from '../../lib/currency-format';
 import { invalidateTreasury } from '../../lib/invalidate';
-import { RECEIPT_STATUS_LABELS } from '../../lib/receipt-rules';
+import { RECEIPT_STATUS_UI } from '../../lib/status-presentation';
 import { formatArgentinaDateTime } from '../../lib/today';
 import { CERTIFICATE_MAX_BYTES, CUSTOMER_WITHHOLDING_TAX_LABELS } from '../../schemas/receipts';
+import { TreasuryStatusBadge } from '../../components/TreasuryStatusBadge';
 import { SendReceiptDialog } from './SendReceiptDialog';
+import { formatDay } from '../../lib/dates';
 
-const dmy = (value: string) => moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY');
 const dateTime = (value: string) => formatArgentinaDateTime(value);
 const pesos = (value: string) => formatInCurrency(value, 'ARS');
-
-const STATUS_BADGE: Record<ReceiptDetail['status'], 'default' | 'secondary' | 'destructive'> = {
-  DRAFT: 'secondary',
-  CONFIRMED: 'default',
-  CANCELLED: 'destructive',
-};
 
 /**
  * Detalle de un recibo confirmado o anulado (spec Tesorería etapa 2 §4.4): qué cobró, las
@@ -51,67 +48,55 @@ export function ReceiptDetailView({
   const label = detail.number ?? 'el borrador';
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardContent className="flex flex-wrap items-start gap-4 pt-6">
-          <div className="min-w-0 flex-1 space-y-1 text-sm">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={STATUS_BADGE[detail.status]}>{RECEIPT_STATUS_LABELS[detail.status]}</Badge>
-              <span className="text-muted-foreground">Fecha del cobro {dmy(detail.date)}</span>
-            </div>
-            <p>
-              <Link
-                href={`/dashboard/treasury/customers/${detail.customer.id}`}
-                className="font-medium underline underline-offset-4"
-              >
-                {detail.customer.name}
-              </Link>{' '}
-              <span className="text-muted-foreground">· CUIT {detail.customer.cuit}</span>
-            </p>
-            {detail.confirmedAt && (
-              <p className="text-muted-foreground">
-                Confirmado {dateTime(detail.confirmedAt)}
-                {detail.confirmedBy ? ` por ${detail.confirmedBy}` : ''}
-              </p>
-            )}
-            {detail.sentAt && (
-              <p className="text-muted-foreground">
-                Enviado {dateTime(detail.sentAt)} a {detail.sentTo.join(', ')}
-              </p>
-            )}
-            {detail.status === 'CANCELLED' && (
-              <p className="text-red-600 dark:text-red-400">
-                Anulado {detail.cancelledAt ? dateTime(detail.cancelledAt) : ''}
-                {detail.cancelledBy ? ` por ${detail.cancelledBy}` : ''}: {detail.cancelReason}
-              </p>
-            )}
-            {detail.notes && <p className="text-muted-foreground">{detail.notes}</p>}
+    <div className="mx-auto max-w-5xl space-y-4">
+      <RecordHeader
+        identity={
+          <div className="space-y-2">
+            <h1 className="text-2xl font-semibold">{detail.number ? `Recibo ${detail.number}` : 'Borrador de recibo'}</h1>
+            <TreasuryStatusBadge ui={RECEIPT_STATUS_UI[detail.status]} />
           </div>
-          <div className="flex flex-wrap gap-2">
+        }
+        actions={
+          <>
             {detail.number && <DownloadPdfButton load={() => getReceiptPdf(detail.id)} />}
             {confirmed && can.update && (
-              <SendReceiptDialog
-                receiptId={detail.id}
-                number={detail.number ?? ''}
-                defaultEmail={detail.customer.email}
-              />
+              <SendReceiptDialog receiptId={detail.id} number={detail.number ?? ''} defaultEmail={detail.customer.email} />
             )}
             {confirmed && can.delete && (
               <Button type="button" size="sm" variant="destructive" onClick={() => setCancelling(true)}>
-                <Ban className="mr-1 h-4 w-4" />
+                <Ban aria-hidden="true" className="mr-1 h-4 w-4" />
                 Anular
               </Button>
             )}
-          </div>
-        </CardContent>
-      </Card>
+          </>
+        }
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Qué se cobró</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
+      <SectionCard title="Datos del recibo">
+        <FieldGrid>
+          <Field label="Cliente">
+            <Link href={`/dashboard/treasury/customers/${detail.customer.id}`} className="underline underline-offset-4">
+              {detail.customer.name}
+            </Link>{' '}
+            <span className="text-muted-foreground font-normal">· CUIT {detail.customer.cuit}</span>
+          </Field>
+          <Field label="Fecha del cobro" value={formatDay(detail.date)} mono />
+          {detail.confirmedAt && (
+            <Field label="Confirmado" value={`${dateTime(detail.confirmedAt)}${detail.confirmedBy ? ` por ${detail.confirmedBy}` : ''}`} />
+          )}
+          {detail.sentAt && <Field label="Enviado" value={`${dateTime(detail.sentAt)} a ${detail.sentTo.join(', ')}`} />}
+          {detail.notes && <Field label="Notas" value={detail.notes} />}
+        </FieldGrid>
+        {detail.status === 'CANCELLED' && (
+          <p role="status" className="text-danger mt-5 text-sm">
+            Anulado {detail.cancelledAt ? dateTime(detail.cancelledAt) : ''}
+            {detail.cancelledBy ? ` por ${detail.cancelledBy}` : ''}: {detail.cancelReason}
+          </p>
+        )}
+      </SectionCard>
+
+      <SectionCard title="Qué se cobró">
+          <div className="overflow-x-auto"><Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Concepto</TableHead>
@@ -165,7 +150,7 @@ export function ReceiptDetailView({
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </Table></div>
           <dl className="ml-auto mt-4 grid max-w-sm grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-sm tabular-nums">
             <dt className="text-muted-foreground">Comprobantes</dt>
             <dd className="text-right">{pesos(detail.totals.invoices)}</dd>
@@ -196,16 +181,11 @@ export function ReceiptDetailView({
               </>
             )}
           </dl>
-        </CardContent>
-      </Card>
+        </SectionCard>
 
       {detail.withholdings.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Retenciones sufridas</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
+        <SectionCard title="Retenciones sufridas">
+            <div className="overflow-x-auto"><Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Impuesto</TableHead>
@@ -222,7 +202,7 @@ export function ReceiptDetailView({
                       {w.jurisdiction ? ` ${w.jurisdiction}` : ''}
                     </TableCell>
                     <TableCell className="tabular-nums">
-                      {w.certificateNumber} · {dmy(w.certificateDate)}
+                      {w.certificateNumber} · {formatDay(w.certificateDate)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{pesos(w.amount)}</TableCell>
                     <TableCell>
@@ -247,18 +227,13 @@ export function ReceiptDetailView({
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+            </Table></div>
+          </SectionCard>
       )}
 
       {detail.payments.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Medios</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
+        <SectionCard title="Medios">
+            <div className="overflow-x-auto"><Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Medio</TableHead>
@@ -304,7 +279,7 @@ export function ReceiptDetailView({
                     <TableCell>
                       {p.movement ? (
                         <span className="flex flex-wrap items-center gap-2 tabular-nums">
-                          {dmy(p.movement.date)}
+                          {formatDay(p.movement.date)}
                           {p.movement.cancelled ? (
                             <Badge variant="outline">Anulado</Badge>
                           ) : p.movement.future ? (
@@ -319,9 +294,8 @@ export function ReceiptDetailView({
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+            </Table></div>
+          </SectionCard>
       )}
 
       <CancelReasonDialog
@@ -356,7 +330,7 @@ function AttachCertificateButton({ withholdingId, replace }: { withholdingId: st
 
   return (
     <label className="inline-flex cursor-pointer items-center gap-1 rounded-md border px-2 py-1 text-xs hover:bg-muted">
-      <FileText className="h-3.5 w-3.5" />
+      <FileText aria-hidden="true" className="h-3.5 w-3.5" />
       {upload.isPending ? 'Subiendo…' : replace ? 'Reemplazar' : 'Adjuntar'}
       <input
         type="file"

@@ -17,7 +17,8 @@ const state = vi.hoisted(() => ({ denied: new Set<string>() }));
 
 vi.mock('@/shared/lib/tenant', () => ({ getActiveCompanyId: async () => 'e8000000-0000-4000-8000-000000000001' }));
 vi.mock('@/features/Permissions', () => ({
-  checkPermissionServer: async (module: string, tab: string, action: string) => !state.denied.has(`${module}:${tab}:${action}`),
+  checkPermissionServer: async (module: string, tab: string, action: string) =>
+    !state.denied.has(`${module}:${tab}:${action}`),
 }));
 vi.mock('@/shared/actions/auth.actions', () => {
   const current = () => ({
@@ -114,8 +115,12 @@ describe.skipIf(!RUN)('tesoreria (integracion)', () => {
       });
     }
     await prisma.profile.create({ data: { id: USER, credential_id: USER, email: 'tesoreria@alphataco.local' } });
-    await prisma.treasury_accounts.create({ data: { id: FOREIGN_ACCOUNT, company_id: OTHER_COMPANY, kind: 'BANK', name: 'Ajena' } });
-    await prisma.treasury_concepts.create({ data: { id: FOREIGN_CONCEPT, company_id: OTHER_COMPANY, name: 'Ajeno', direction: 'BOTH' } });
+    await prisma.treasury_accounts.create({
+      data: { id: FOREIGN_ACCOUNT, company_id: OTHER_COMPANY, kind: 'BANK', name: 'Ajena' },
+    });
+    await prisma.treasury_concepts.create({
+      data: { id: FOREIGN_CONCEPT, company_id: OTHER_COMPANY, name: 'Ajeno', direction: 'BOTH' },
+    });
   }, 60_000);
 
   afterAll(async () => {
@@ -130,19 +135,32 @@ describe.skipIf(!RUN)('tesoreria (integracion)', () => {
     it('alta con saldo inicial, duplicado, CBU, editar, perímetro y permisos', async () => {
       const actions = await import('./accounts.server');
       bankId = expectOk(
-        await actions.createTreasuryAccount(accountForm('Banco Galicia', { openingDate: LAST_MONTH, openingAmount: '100000' }))
+        await actions.createTreasuryAccount(
+          accountForm('Banco Galicia', { openingDate: LAST_MONTH, openingAmount: '100000' })
+        )
       ).id;
       cashId = expectOk(await actions.createTreasuryAccount(accountForm('Caja chica', { kind: 'CASH' }))).id;
-      expect(expectFail(await actions.createTreasuryAccount(accountForm('banco galicia')))).toBe('Ya existe la cuenta «Banco Galicia»');
-      expect(expectFail(await actions.createTreasuryAccount(accountForm('Otra', { cbu: '123' })))).toBe('El CBU tiene 22 dígitos');
+      expect(expectFail(await actions.createTreasuryAccount(accountForm('banco galicia')))).toBe(
+        'Ya existe la cuenta «Banco Galicia»'
+      );
+      expect(expectFail(await actions.createTreasuryAccount(accountForm('Otra', { cbu: '123' })))).toBe(
+        'El CBU tiene 22 dígitos'
+      );
       expect(expectFail(await actions.createTreasuryAccount(accountForm('Otra', { openingAmount: '10' })))).toBe(
         'Indicá la fecha del saldo inicial'
       );
       expectOk(await actions.updateTreasuryAccount(bankId, accountForm('Galicia CC', { bankName: 'Galicia' })));
-      expect(await indicatorsOf(bankId)).toEqual({ balance: '100000.00', toDebit: '0.00', toCredit: '0.00', projected: '100000.00' });
+      expect(await indicatorsOf(bankId)).toEqual({
+        balance: '100000.00',
+        toDebit: '0.00',
+        toCredit: '0.00',
+        projected: '100000.00',
+      });
       expect(expectFail(await actions.setTreasuryAccountActive(FOREIGN_ACCOUNT, false))).toBe('La cuenta no existe');
-      state.denied.add('tesoreria:config-tesoreria:update');
-      expect(expectFail(await actions.createTreasuryAccount(accountForm('X')))).toBe('No tenés permiso para realizar esta acción');
+      state.denied.add('tesoreria:config-tesoreria:create');
+      expect(expectFail(await actions.createTreasuryAccount(accountForm('X')))).toBe(
+        'No tenés permiso para realizar esta acción'
+      );
     });
 
     it('una cuenta con movimientos no se borra; una sin uso sí', async () => {
@@ -163,7 +181,11 @@ describe.skipIf(!RUN)('tesoreria (integracion)', () => {
       expect(expectFail(await actions.createTreasuryConcept({ name: 'gastos bancarios', direction: 'BOTH' }))).toBe(
         'Ya existe el concepto «Gastos bancarios»'
       );
-      expect((await actions.getTreasuryConcepts()).map((c) => c.name)).toEqual(['Ajuste', 'Aporte de socios', 'Gastos bancarios']);
+      expect((await actions.getTreasuryConcepts()).map((c) => c.name)).toEqual([
+        'Ajuste',
+        'Aporte de socios',
+        'Gastos bancarios',
+      ]);
     });
   });
 
@@ -174,8 +196,12 @@ describe.skipIf(!RUN)('tesoreria (integracion)', () => {
         `La cuenta ya tiene saldo inicial al ${moment(LAST_MONTH).format('DD/MM/YYYY')}: editalo`
       );
       const prisma = await db();
-      const opening = await prisma.treasury_movements.findFirstOrThrow({ where: { account_id: bankId, kind: 'OPENING' } });
-      expectOk(await actions.updateOpeningBalance(opening.id, { accountId: bankId, date: LAST_MONTH, amount: '200000' }));
+      const opening = await prisma.treasury_movements.findFirstOrThrow({
+        where: { account_id: bankId, kind: 'OPENING' },
+      });
+      expectOk(
+        await actions.updateOpeningBalance(opening.id, { accountId: bankId, date: LAST_MONTH, amount: '200000' })
+      );
       expect((await indicatorsOf(bankId)).balance).toBe('200000.00');
       // Una caja puede arrancar en negativo (descubierto)? Se permite: el saldo inicial lleva signo.
       expectOk(await actions.createOpeningBalance({ accountId: cashId, date: LAST_MONTH, amount: '-500' }));
@@ -187,16 +213,51 @@ describe.skipIf(!RUN)('tesoreria (integracion)', () => {
     it('alta de egreso de hoy: entra al saldo (fecha local)', async () => {
       const actions = await import('./movements.server');
       expectOk(
-        await actions.createManualMovement({ accountId: bankId, date: TODAY, direction: 'OUT', amount: '1500,50', conceptId: feesId, description: 'Comisión' })
+        await actions.createManualMovement({
+          accountId: bankId,
+          date: TODAY,
+          direction: 'OUT',
+          amount: '1500,50',
+          conceptId: feesId,
+          description: 'Comisión',
+        })
       );
-      expect(await indicatorsOf(bankId)).toEqual({ balance: '198499.50', toDebit: '0.00', toCredit: '0.00', projected: '198499.50' });
+      expect(await indicatorsOf(bankId)).toEqual({
+        balance: '198499.50',
+        toDebit: '0.00',
+        toCredit: '0.00',
+        projected: '198499.50',
+      });
     });
 
     it('futuros: a debitar y a acreditar, fuera del saldo', async () => {
       const actions = await import('./movements.server');
-      expectOk(await actions.createManualMovement({ accountId: bankId, date: TOMORROW, direction: 'OUT', amount: '1000', conceptId: feesId, description: '' }));
-      expectOk(await actions.createManualMovement({ accountId: bankId, date: TOMORROW, direction: 'IN', amount: '300', conceptId: incomeId, description: '' }));
-      expect(await indicatorsOf(bankId)).toEqual({ balance: '198499.50', toDebit: '-1000.00', toCredit: '300.00', projected: '197799.50' });
+      expectOk(
+        await actions.createManualMovement({
+          accountId: bankId,
+          date: TOMORROW,
+          direction: 'OUT',
+          amount: '1000',
+          conceptId: feesId,
+          description: '',
+        })
+      );
+      expectOk(
+        await actions.createManualMovement({
+          accountId: bankId,
+          date: TOMORROW,
+          direction: 'IN',
+          amount: '300',
+          conceptId: incomeId,
+          description: '',
+        })
+      );
+      expect(await indicatorsOf(bankId)).toEqual({
+        balance: '198499.50',
+        toDebit: '-1000.00',
+        toCredit: '300.00',
+        projected: '197799.50',
+      });
     });
 
     it('concepto con el sentido equivocado, inactivo o ajeno', async () => {
@@ -209,7 +270,9 @@ describe.skipIf(!RUN)('tesoreria (integracion)', () => {
       expect(expectFail(await actions.createManualMovement({ ...base, direction: 'OUT', conceptId: incomeId }))).toBe(
         'El concepto «Aporte de socios» es solo de ingresos'
       );
-      expect(expectFail(await actions.createManualMovement({ ...base, direction: 'IN', conceptId: FOREIGN_CONCEPT }))).toBe('El concepto no existe');
+      expect(
+        expectFail(await actions.createManualMovement({ ...base, direction: 'IN', conceptId: FOREIGN_CONCEPT }))
+      ).toBe('El concepto no existe');
       expectOk(await concepts.setTreasuryConceptActive(adjustId, false));
       expect(expectFail(await actions.createManualMovement({ ...base, direction: 'IN', conceptId: adjustId }))).toBe(
         'El concepto «Ajuste» está inactivo'
@@ -220,18 +283,39 @@ describe.skipIf(!RUN)('tesoreria (integracion)', () => {
     it('editar cambiando Ingreso → Egreso con un concepto solo de ingresos se rechaza y no cambia nada', async () => {
       const actions = await import('./movements.server');
       const created = expectOk(
-        await actions.createManualMovement({ accountId: cashId, date: TODAY, direction: 'IN', amount: '800', conceptId: incomeId, description: 'Aporte' })
+        await actions.createManualMovement({
+          accountId: cashId,
+          date: TODAY,
+          direction: 'IN',
+          amount: '800',
+          conceptId: incomeId,
+          description: 'Aporte',
+        })
       );
       expect(
         expectFail(
-          await actions.updateManualMovement(created.id, { accountId: cashId, date: TODAY, direction: 'OUT', amount: '800', conceptId: incomeId, description: 'Aporte' })
+          await actions.updateManualMovement(created.id, {
+            accountId: cashId,
+            date: TODAY,
+            direction: 'OUT',
+            amount: '800',
+            conceptId: incomeId,
+            description: 'Aporte',
+          })
         )
       ).toBe('El concepto «Aporte de socios» es solo de ingresos');
       const prisma = await db();
       const row = await prisma.treasury_movements.findUniqueOrThrow({ where: { id: created.id } });
       expect(row.amount.toString()).toBe('800');
       expectOk(
-        await actions.updateManualMovement(created.id, { accountId: cashId, date: TODAY, direction: 'OUT', amount: '50', conceptId: adjustId, description: 'Ajuste' })
+        await actions.updateManualMovement(created.id, {
+          accountId: cashId,
+          date: TODAY,
+          direction: 'OUT',
+          amount: '50',
+          conceptId: adjustId,
+          description: 'Ajuste',
+        })
       );
       expect((await indicatorsOf(cashId)).balance).toBe('-550.00');
     });
@@ -239,16 +323,32 @@ describe.skipIf(!RUN)('tesoreria (integracion)', () => {
     it('anular con motivo; la segunda anulación falla', async () => {
       const actions = await import('./movements.server');
       const created = expectOk(
-        await actions.createManualMovement({ accountId: bankId, date: TODAY, direction: 'OUT', amount: '99', conceptId: feesId, description: '' })
+        await actions.createManualMovement({
+          accountId: bankId,
+          date: TODAY,
+          direction: 'OUT',
+          amount: '99',
+          conceptId: feesId,
+          description: '',
+        })
       );
       expect((await indicatorsOf(bankId)).balance).toBe('198400.50');
       expect(expectFail(await actions.cancelManualMovement(created.id, ''))).toBe('Indicá el motivo');
       expectOk(await actions.cancelManualMovement(created.id, 'Cargado dos veces'));
       expect((await indicatorsOf(bankId)).balance).toBe('198499.50');
-      expect(expectFail(await actions.cancelManualMovement(created.id, 'Otra vez'))).toBe('El movimiento ya estaba anulado');
+      expect(expectFail(await actions.cancelManualMovement(created.id, 'Otra vez'))).toBe(
+        'El movimiento ya estaba anulado'
+      );
       expect(
         expectFail(
-          await actions.updateManualMovement(created.id, { accountId: bankId, date: TODAY, direction: 'OUT', amount: '1', conceptId: feesId, description: '' })
+          await actions.updateManualMovement(created.id, {
+            accountId: bankId,
+            date: TODAY,
+            direction: 'OUT',
+            amount: '1',
+            conceptId: feesId,
+            description: '',
+          })
         )
       ).toBe('El movimiento está anulado');
     });
@@ -258,9 +358,13 @@ describe.skipIf(!RUN)('tesoreria (integracion)', () => {
       const accounts = await import('./accounts.server');
       const base = { date: TODAY, direction: 'OUT' as const, amount: '10', conceptId: feesId, description: '' };
       expectOk(await accounts.setTreasuryAccountActive(cashId, false));
-      expect(expectFail(await actions.createManualMovement({ ...base, accountId: cashId }))).toBe('La cuenta «Caja chica» está inactiva');
+      expect(expectFail(await actions.createManualMovement({ ...base, accountId: cashId }))).toBe(
+        'La cuenta «Caja chica» está inactiva'
+      );
       expectOk(await accounts.setTreasuryAccountActive(cashId, true));
-      expect(expectFail(await actions.createManualMovement({ ...base, accountId: FOREIGN_ACCOUNT }))).toBe('La cuenta no existe');
+      expect(expectFail(await actions.createManualMovement({ ...base, accountId: FOREIGN_ACCOUNT }))).toBe(
+        'La cuenta no existe'
+      );
     });
 
     it('editar un manual conservando su concepto o su cuenta ya desactivados se permite; pasarlo a otra inactiva no', async () => {
@@ -268,15 +372,31 @@ describe.skipIf(!RUN)('tesoreria (integracion)', () => {
       const concepts = await import('./concepts.server');
       const accounts = await import('./accounts.server');
       const created = expectOk(
-        await actions.createManualMovement({ accountId: cashId, date: TODAY, direction: 'IN', amount: '70', conceptId: adjustId, description: '' })
+        await actions.createManualMovement({
+          accountId: cashId,
+          date: TODAY,
+          direction: 'IN',
+          amount: '70',
+          conceptId: adjustId,
+          description: '',
+        })
       );
       expectOk(await concepts.setTreasuryConceptActive(adjustId, false));
       expectOk(await accounts.setTreasuryAccountActive(cashId, false));
-      const values = { accountId: cashId, date: TODAY, direction: 'IN' as const, amount: '75', conceptId: adjustId, description: 'Corregido' };
+      const values = {
+        accountId: cashId,
+        date: TODAY,
+        direction: 'IN' as const,
+        amount: '75',
+        conceptId: adjustId,
+        description: 'Corregido',
+      };
       expectOk(await actions.updateManualMovement(created.id, values));
       expectOk(await accounts.setTreasuryAccountActive(cashId, true));
       expectOk(await accounts.setTreasuryAccountActive(bankId, false));
-      expect(expectFail(await actions.updateManualMovement(created.id, { ...values, accountId: bankId }))).toBe('La cuenta «Galicia CC» está inactiva');
+      expect(expectFail(await actions.updateManualMovement(created.id, { ...values, accountId: bankId }))).toBe(
+        'La cuenta «Galicia CC» está inactiva'
+      );
       expectOk(await accounts.setTreasuryAccountActive(bankId, true));
       expectOk(await concepts.setTreasuryConceptActive(adjustId, true));
       expectOk(await actions.cancelManualMovement(created.id, 'Prueba de edición'));
@@ -286,7 +406,16 @@ describe.skipIf(!RUN)('tesoreria (integracion)', () => {
       const actions = await import('./movements.server');
       state.denied.add('tesoreria:movimientos:create');
       expect(
-        expectFail(await actions.createManualMovement({ accountId: bankId, date: TODAY, direction: 'OUT', amount: '1', conceptId: feesId, description: '' }))
+        expectFail(
+          await actions.createManualMovement({
+            accountId: bankId,
+            date: TODAY,
+            direction: 'OUT',
+            amount: '1',
+            conceptId: feesId,
+            description: '',
+          })
+        )
       ).toBe('No tenés permiso para realizar esta acción');
     });
   });
@@ -297,14 +426,31 @@ describe.skipIf(!RUN)('tesoreria (integracion)', () => {
     it('crea dos movimientos con la misma fecha y numera TR-', async () => {
       const actions = await import('./transfers.server');
       const created = expectOk(
-        await actions.createTransfer({ fromAccountId: bankId, toAccountId: cashId, date: TODAY, amount: '10000', notes: 'Fondo de caja' })
+        await actions.createTransfer({
+          fromAccountId: bankId,
+          toAccountId: cashId,
+          date: TODAY,
+          amount: '10000',
+          notes: 'Fondo de caja',
+        })
       );
       transferId = created.id;
       expect(created.number).toBe('TR-000001');
-      const second = expectOk(await actions.createTransfer({ fromAccountId: cashId, toAccountId: bankId, date: TODAY, amount: '1', notes: '' }));
+      const second = expectOk(
+        await actions.createTransfer({
+          fromAccountId: cashId,
+          toAccountId: bankId,
+          date: TODAY,
+          amount: '1',
+          notes: '',
+        })
+      );
       expect(second.number).toBe('TR-000002');
       const prisma = await db();
-      const movements = await prisma.treasury_movements.findMany({ where: { transfer_id: transferId }, orderBy: { amount: 'asc' } });
+      const movements = await prisma.treasury_movements.findMany({
+        where: { transfer_id: transferId },
+        orderBy: { amount: 'asc' },
+      });
       expect(movements.map((m) => [m.account_id, m.amount.toString(), m.date.toISOString().slice(0, 10)])).toEqual([
         [bankId, '-10000', TODAY],
         [cashId, '10000', TODAY],
@@ -316,8 +462,12 @@ describe.skipIf(!RUN)('tesoreria (integracion)', () => {
       const actions = await import('./transfers.server');
       const accounts = await import('./accounts.server');
       const base = { date: TODAY, amount: '1', notes: '' };
-      expect(expectFail(await actions.createTransfer({ ...base, fromAccountId: bankId, toAccountId: bankId }))).toBe('Elegí cuentas distintas');
-      expect(expectFail(await actions.createTransfer({ ...base, fromAccountId: bankId, toAccountId: FOREIGN_ACCOUNT }))).toBe('La cuenta no existe');
+      expect(expectFail(await actions.createTransfer({ ...base, fromAccountId: bankId, toAccountId: bankId }))).toBe(
+        'Elegí cuentas distintas'
+      );
+      expect(
+        expectFail(await actions.createTransfer({ ...base, fromAccountId: bankId, toAccountId: FOREIGN_ACCOUNT }))
+      ).toBe('La cuenta no existe');
       expectOk(await accounts.setTreasuryAccountActive(cashId, false));
       expect(expectFail(await actions.createTransfer({ ...base, fromAccountId: bankId, toAccountId: cashId }))).toBe(
         'La cuenta «Caja chica» está inactiva'
@@ -327,7 +477,10 @@ describe.skipIf(!RUN)('tesoreria (integracion)', () => {
 
     it('dos anulaciones simultáneas: una anula los dos movimientos, la otra falla y no pisa el motivo', async () => {
       const actions = await import('./transfers.server');
-      const results = await Promise.all([actions.cancelTransfer(transferId, 'Primera'), actions.cancelTransfer(transferId, 'Segunda')]);
+      const results = await Promise.all([
+        actions.cancelTransfer(transferId, 'Primera'),
+        actions.cancelTransfer(transferId, 'Segunda'),
+      ]);
       expect(results.filter((r) => r.ok)).toHaveLength(1);
       expect(results.find((r) => !r.ok)).toEqual({ ok: false, error: 'La TR-000001 ya estaba anulada' });
       const prisma = await db();
@@ -341,7 +494,9 @@ describe.skipIf(!RUN)('tesoreria (integracion)', () => {
     it('un movimiento de transferencia no se edita ni se anula desde Movimientos', async () => {
       const movements = await import('./movements.server');
       const prisma = await db();
-      const second = await prisma.treasury_transfers.findFirstOrThrow({ where: { company_id: COMPANY, number: 'TR-000002' } });
+      const second = await prisma.treasury_transfers.findFirstOrThrow({
+        where: { company_id: COMPANY, number: 'TR-000002' },
+      });
       const row = await prisma.treasury_movements.findFirstOrThrow({ where: { transfer_id: second.id } });
       expect(expectFail(await movements.cancelManualMovement(row.id, 'x'))).toBe(
         'Este movimiento es de la transferencia TR-000002. Para revertirlo, anulá la transferencia'
@@ -368,7 +523,9 @@ describe.skipIf(!RUN)('tesoreria (integracion)', () => {
       expect(await actions.getAccountBalanceOn(bankId, TODAY)).toBe((await indicatorsOf(bankId)).balance);
       const expected = (Number((await indicatorsOf(bankId)).balance) - 1000 + 300).toFixed(2);
       expect(await actions.getAccountBalanceOn(bankId, TOMORROW)).toBe(expected);
-      const future = await prisma.treasury_movements.findFirstOrThrow({ where: { account_id: bankId, date: new Date(`${TOMORROW}T00:00:00.000Z`), amount: -1000 } });
+      const future = await prisma.treasury_movements.findFirstOrThrow({
+        where: { account_id: bankId, date: new Date(`${TOMORROW}T00:00:00.000Z`), amount: -1000 },
+      });
       expect(await actions.getAccountBalanceOn(bankId, TOMORROW, future.id)).toBe((Number(expected) + 1000).toFixed(2));
       expect(await actions.getAccountBalanceOn(FOREIGN_ACCOUNT, TODAY)).toBeNull();
     });

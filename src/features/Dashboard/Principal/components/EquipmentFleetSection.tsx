@@ -1,11 +1,12 @@
+import { percentageOrNull } from '@/features/Dashboard/lib/metric';
 import { getAllVehicleTypes, getEquipmentIndicators } from '../actions/fleet.server';
 import { EquipmentFleetClient } from './EquipmentFleetClient';
 
 const MOTOR_UNIT_TYPES = ['chasis', 'tractor'];
 
 export async function EquipmentFleetSection() {
-  // getEquipmentIndicators is wrapped with React.cache() so it deduplicates
-  // with EquipmentOperationSection's call in the same render.
+  // getEquipmentIndicators y getAllVehicleTypes están memoizados por request (clave primitiva), así que
+  // se comparten con EquipmentOperationSection cuando no hay filtro de tipos.
   // vehiclesOnRepair loads lazily in dialog via useQuery (bundle-dynamic-imports)
   const [equipmentData, vehicleTypes] = await Promise.all([getEquipmentIndicators(), getAllVehicleTypes()]);
 
@@ -17,47 +18,54 @@ export async function EquipmentFleetSection() {
   // Pre-compute fleet metrics with SINGLE LOOP (not 4 separate .reduce())
   let totalActive = 0;
   let totalInUse = 0;
+  let totalCancelled = 0;
   let totalNotAvailable = 0;
 
   // Motor units (Chasis & Tractor) — separate metrics
   let motorActive = 0;
   let motorInUse = 0;
+  let motorCancelled = 0;
   let motorNotAvailable = 0;
 
   for (const item of equipmentData) {
     totalActive += item.available_units;
     totalInUse += item.used_units;
+    totalCancelled += item.cancelled_units;
     totalNotAvailable += item.not_available_units;
 
     if (MOTOR_UNIT_TYPES.includes(item.type_name.toLowerCase())) {
       motorActive += item.available_units;
       motorInUse += item.used_units;
+      motorCancelled += item.cancelled_units;
       motorNotAvailable += item.not_available_units;
     }
   }
 
   const totalFleet = totalActive + totalNotAvailable;
-  const availabilityPercent = totalFleet > 0 ? Math.round((totalActive / totalFleet) * 100) : 0;
-  const usagePercent = totalActive > 0 ? Math.round((totalInUse / totalActive) * 100) : 0;
+  // Operatividad = operativos / flota total; Uso = en operaciones / operativos. `null` si no hay base.
+  const operativityPercent = percentageOrNull(totalActive, totalFleet);
+  const usagePercent = percentageOrNull(totalInUse, totalActive);
 
   // Motor unit metrics
   const motorFleet = motorActive + motorNotAvailable;
-  const motorAvailabilityPercent = motorFleet > 0 ? Math.round((motorActive / motorFleet) * 100) : 0;
-  const motorUsagePercent = motorActive > 0 ? Math.round((motorInUse / motorActive) * 100) : 0;
+  const motorOperativityPercent = percentageOrNull(motorActive, motorFleet);
+  const motorUsagePercent = percentageOrNull(motorInUse, motorActive);
 
   return (
     <EquipmentFleetClient
       totalActive={totalActive}
       totalNotAvailable={totalNotAvailable}
       totalInUse={totalInUse}
+      totalCancelled={totalCancelled}
       totalFleet={totalFleet}
-      availabilityPercent={availabilityPercent}
+      operativityPercent={operativityPercent}
       usagePercent={usagePercent}
       motorActive={motorActive}
       motorInUse={motorInUse}
+      motorCancelled={motorCancelled}
       motorNotAvailable={motorNotAvailable}
       motorFleet={motorFleet}
-      motorAvailabilityPercent={motorAvailabilityPercent}
+      motorOperativityPercent={motorOperativityPercent}
       motorUsagePercent={motorUsagePercent}
       motorTypeIds={motorTypeIds}
     />

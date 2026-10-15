@@ -1,19 +1,17 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
-import type { Prisma } from '@/generated/prisma/client';
+import { canViewDashboard } from '@/features/Dashboard/lib/permissions.server';
+import { employeeDocumentSpec } from '@/features/Documentacion/DocumentosEmpleados/lib/employee-document-rows.server';
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
-import {
-  buildDateRangeFiltersWhere,
-  buildFiltersWhere,
-  NULL_FILTER_VALUE,
-  parseSearchParams,
-  stateToPrismaParams,
-} from '@/shared/components/common/DataTable/helpers';
+import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { prisma } from '@/shared/lib/prisma';
-import moment from 'moment';
+import type { ExportResult } from '@/shared/lib/export-result';
+import { applyTableState, facetCounts, paginate } from '@/shared/lib/in-memory-table';
+import type { EmployeeExpiringDocListItem } from '../lib/expiring-docs-types';
+import { loadEmployeeExpiringRows } from '../lib/expiring-rows.server';
+
+/** Tope de filas por export: más que esto se pide acotar con filtros. */
+const EXPORT_MAX_ROWS = 10_000;
 
 const logger = new Logger('features/Dashboard/Documentacion/Empleados');
 
@@ -21,85 +19,15 @@ const logger = new Logger('features/Dashboard/Documentacion/Empleados');
 // CONSTANTS
 // ============================================================================
 
-/** Documentos que vencen dentro de los próximos 30 días (o ya vencidos) */
-const EXPIRY_WINDOW_DAYS = 30;
+/** Id de la columna "Tipo de Documento" de esta tabla. */
+const TYPE_COLUMN_ID = 'document_type';
 
-/** Campos reales de BD que admiten ordenamiento */
-const VALID_SORT_FIELDS = new Set(['created_at', 'validity', 'state', 'employee', 'document_type']);
-
-/** Columnas FK con resolución de orderBy en Prisma */
-const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Prisma.documents_employeesOrderByWithRelationInput> = {
-  employee: (dir) => ({ employees: { lastname: dir } }),
-  document_type: (dir) => ({ document_types: { name: dir } }),
+/** Misma búsqueda/filtros/facetas que la lista de permanentes; sin orden elegido, el más urgente primero. */
+const BASE_SPEC = employeeDocumentSpec(TYPE_COLUMN_ID);
+const SPEC: typeof BASE_SPEC = {
+  ...BASE_SPEC,
+  defaultSort: [(row) => row.validity, ...(BASE_SPEC.defaultSort ?? [])],
 };
-
-/** Columnas con filtro de rango de fechas */
-const DATE_RANGE_COLUMNS = ['created_at', 'validity'];
-
-/** Mapping columnId (URL) → campo Prisma */
-const COLUMN_MAP: Record<string, string> = {
-  state: 'state',
-  document_type: 'id_document_types',
-};
-
-/** Columnas con filtro de texto libre (manejadas manualmente por ser campos de relaciones) */
-const TEXT_FILTER_COLUMNS = ['fileNumber'] as const;
-
-// ============================================================================
-// WHERE CLAUSE BUILDER
-// ============================================================================
-
-/**
- * Construye la cláusula WHERE compartida entre paginated, export y facets.
- * Incluye el filtro permanente de documentos por vencer (validity <= nextMonth).
- */
-async function buildWhereClause(
-  companyId: string,
-  state: ReturnType<typeof parseSearchParams>
-): Promise<Prisma.documents_employeesWhereInput> {
-  const canViewPrivate = await checkPermissionServer('documentacion', 'documentos-de-empleados', 'view_private');
-  const nextMonth = moment().add(EXPIRY_WINDOW_DAYS, 'days').endOf('day').toDate();
-
-  // Filtros facetados (excluir columnas de texto manejadas manualmente)
-  const filtersWhere = buildFiltersWhere(state.filters, COLUMN_MAP, {
-    exclude: [
-      ...DATE_RANGE_COLUMNS.flatMap((c) => [`${c}_from`, `${c}_to`]),
-      ...TEXT_FILTER_COLUMNS,
-    ],
-  });
-
-  // Filtros de rango de fechas
-  const dateFiltersWhere = buildDateRangeFiltersWhere(state.filters, DATE_RANGE_COLUMNS);
-
-  // Filtro de legajo (campo anidado en la relación employees — coincidencia exacta)
-  const fileNumberFilter = state.filters['fileNumber']?.[0];
-
-  const validityFilter: Prisma.DateTimeNullableFilter = {
-    not: null,
-    lte: nextMonth,
-  };
-
-  // Si el usuario filtró por rango de validity, sobreescribir solo el campo validity
-  const userValidityFilter = (dateFiltersWhere as Record<string, unknown>).validity;
-  const userCreatedAtFilter = (dateFiltersWhere as Record<string, unknown>).created_at;
-
-  return {
-    // Excluir documentos archivados (archived_at no nulo = historial / no vigente)
-    archived_at: null,
-    employees: {
-      is_active: true,
-      company_id: companyId,
-      ...(fileNumberFilter ? { file: { equals: fileNumberFilter } } : {}),
-    },
-    document_types: {
-      is_it_montlhy: false,
-      ...(!canViewPrivate && { private: { not: true } }),
-    },
-    validity: userValidityFilter !== undefined ? (userValidityFilter as Prisma.DateTimeNullableFilter) : validityFilter,
-    ...(userCreatedAtFilter !== undefined ? { created_at: userCreatedAtFilter as Prisma.DateTimeFilter } : {}),
-    ...(filtersWhere as Prisma.documents_employeesWhereInput),
-  };
-}
 
 // ============================================================================
 // PAGINATED QUERY
@@ -109,59 +37,9 @@ export async function getEmployeeExpiringDocsPaginated(searchParams: DataTableSe
   logger.debug('Obteniendo documentos de empleados por vencer');
 
   try {
-    const companyId = await getActiveCompanyId();
     const state = parseSearchParams(searchParams);
-    const { skip, take } = stateToPrismaParams(state);
-
-    // Resolver sorting con validación y FK_SORT_MAP
-    const resolvedSorts: Prisma.documents_employeesOrderByWithRelationInput[] = [];
-    for (const s of state.sorting) {
-      if (VALID_SORT_FIELDS.has(s.id)) {
-        const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-        const fkMapper = FK_SORT_MAP[s.id];
-        resolvedSorts.push(fkMapper ? fkMapper(dir) : { [s.id]: dir });
-      }
-    }
-    const safeOrderBy: Prisma.documents_employeesOrderByWithRelationInput[] =
-      resolvedSorts.length > 0 ? resolvedSorts : [{ validity: 'asc' }];
-
-    const where = await buildWhereClause(companyId, state);
-
-    const [data, total] = await Promise.all([
-      prisma.documents_employees.findMany({
-        where,
-        skip,
-        take,
-        orderBy: safeOrderBy,
-        select: {
-          id: true,
-          created_at: true,
-          validity: true,
-          state: true,
-          is_active: true,
-          document_path: true,
-          id_document_types: true,
-          applies: true,
-          employees: {
-            select: {
-              id: true,
-              firstname: true,
-              lastname: true,
-              file: true,
-            },
-          },
-          document_types: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-      }),
-      prisma.documents_employees.count({ where }),
-    ]);
-
-    return { data, total };
+    const filtered = applyTableState(await loadEmployeeExpiringRows(), state, SPEC);
+    return { data: paginate(filtered, state), total: filtered.length };
   } catch (error) {
     logger.error('Error al obtener documentos de empleados por vencer', { data: { error } });
     throw new Error('No se pudieron obtener los documentos. Intente nuevamente.');
@@ -172,45 +50,27 @@ export async function getEmployeeExpiringDocsPaginated(searchParams: DataTableSe
 // EXPORT QUERY (sin paginación)
 // ============================================================================
 
-export async function getAllEmployeeExpiringDocsForExport(searchParams: DataTableSearchParams) {
+export async function getAllEmployeeExpiringDocsForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<EmployeeExpiringDocListItem[]>> {
   logger.debug('Exportando documentos de empleados por vencer');
 
-  try {
-    const companyId = await getActiveCompanyId();
-    const state = parseSearchParams(searchParams);
-    const where = await buildWhereClause(companyId, state);
+  if (!(await canViewDashboard('empleados')))
+    return { ok: false, message: 'No tenés permiso para exportar esta lista' };
 
-    return await prisma.documents_employees.findMany({
-      where,
-      orderBy: [{ validity: 'asc' }],
-      select: {
-        id: true,
-        created_at: true,
-        validity: true,
-        state: true,
-        is_active: true,
-        document_path: true,
-        id_document_types: true,
-        applies: true,
-        employees: {
-          select: {
-            id: true,
-            firstname: true,
-            lastname: true,
-            file: true,
-          },
-        },
-        document_types: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
+  try {
+    const state = parseSearchParams(searchParams);
+    const rows = applyTableState(await loadEmployeeExpiringRows(), state, SPEC);
+    if (rows.length > EXPORT_MAX_ROWS) {
+      return {
+        ok: false,
+        message: `La exportación supera el máximo de ${EXPORT_MAX_ROWS.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`,
+      };
+    }
+    return { ok: true, data: rows };
   } catch (error) {
     logger.error('Error al exportar documentos de empleados por vencer', { data: { error } });
-    throw new Error('No se pudo exportar la lista. Intente nuevamente.');
+    return { ok: false, message: 'No se pudo exportar la lista. Intente nuevamente.' };
   }
 }
 
@@ -232,119 +92,16 @@ export async function getEmployeeExpiringDocsSingleFacet(
   logger.debug('Obteniendo facet de documentos de empleados por vencer', { data: { columnId } });
 
   try {
-    const companyId = await getActiveCompanyId();
-    const nextMonth = moment().add(EXPIRY_WINDOW_DAYS, 'days').endOf('day').toDate();
-
-    const baseWhere: Prisma.documents_employeesWhereInput = {
-      // Excluir documentos archivados (archived_at no nulo = historial / no vigente)
-      archived_at: null,
-      employees: {
-        is_active: true,
-        company_id: companyId,
-      },
-      document_types: {
-        is_it_montlhy: false,
-      },
-      validity: {
-        not: null,
-        lte: nextMonth,
-      },
-    };
-
-    /** Construye un WHERE con todos los filtros activos EXCEPTO la columna indicada */
-    function crossWhere(excludeColumn: string): Prisma.documents_employeesWhereInput {
-      if (!searchParams || Object.keys(searchParams).length === 0) return baseWhere;
-      const state = parseSearchParams(searchParams);
-
-      const filtersWithoutExcluded = { ...state.filters };
-      delete filtersWithoutExcluded[excludeColumn];
-      delete filtersWithoutExcluded[`${excludeColumn}_from`];
-      delete filtersWithoutExcluded[`${excludeColumn}_to`];
-
-      const crossState = { ...state, filters: filtersWithoutExcluded };
-      const filtersWhere = buildFiltersWhere(crossState.filters, COLUMN_MAP, {
-        exclude: [
-          ...DATE_RANGE_COLUMNS.flatMap((c) => [`${c}_from`, `${c}_to`]),
-          ...TEXT_FILTER_COLUMNS,
-        ],
-      });
-      const dateFiltersWhere = buildDateRangeFiltersWhere(crossState.filters, DATE_RANGE_COLUMNS);
-
-      // Filtro de legajo (campo anidado en la relación employees — coincidencia exacta)
-      const fileNumberFilter = crossState.filters['fileNumber']?.[0];
-
-      const userValidityFilter = (dateFiltersWhere as Record<string, unknown>).validity;
-      const userCreatedAtFilter = (dateFiltersWhere as Record<string, unknown>).created_at;
-
-      return {
-        ...baseWhere,
-        employees: {
-          ...(baseWhere.employees as object),
-          ...(fileNumberFilter ? { file: { equals: fileNumberFilter } } : {}),
-        },
-        ...(userValidityFilter !== undefined ? { validity: userValidityFilter as Prisma.DateTimeNullableFilter } : {}),
-        ...(userCreatedAtFilter !== undefined ? { created_at: userCreatedAtFilter as Prisma.DateTimeFilter } : {}),
-        ...(filtersWhere as Prisma.documents_employeesWhereInput),
-      };
+    const result = facetCounts(await loadEmployeeExpiringRows(), parseSearchParams(searchParams ?? {}), SPEC, columnId);
+    if (!result) {
+      logger.warn('columnId no reconocido en getEmployeeExpiringDocsSingleFacet', { data: { columnId } });
+      return null;
     }
-
-    function toFacetMap(rows: { key: string | null; count: number }[]): Map<string, number> {
-      const map = new Map<string, number>();
-      for (const { key, count } of rows) {
-        map.set(key == null ? NULL_FILTER_VALUE : key, (map.get(key == null ? NULL_FILTER_VALUE : key) ?? 0) + count);
-      }
-      return map;
-    }
-
-    const where = crossWhere(columnId);
-
-    if (columnId === 'state') {
-      const rows = await prisma.documents_employees.groupBy({
-        by: ['state'],
-        where,
-        _count: true,
-      });
-      return {
-        counts: toFacetMap(rows.map((r) => ({ key: r.state, count: r._count }))),
-      };
-    }
-
-    if (columnId === 'document_type') {
-      const rows = await prisma.documents_employees.groupBy({
-        by: ['id_document_types'],
-        where,
-        _count: true,
-      });
-
-      const docTypeIds = rows.filter((r) => r.id_document_types != null).map((r) => r.id_document_types!);
-      const resolvedOptions =
-        docTypeIds.length > 0
-          ? await prisma.document_types.findMany({
-              where: { id: { in: docTypeIds } },
-              select: { id: true, name: true },
-              orderBy: { name: 'asc' },
-            })
-          : [];
-
-      const counts = new Map<string, number>();
-      for (const r of rows) {
-        const key = r.id_document_types == null ? NULL_FILTER_VALUE : r.id_document_types;
-        counts.set(key, (counts.get(key) ?? 0) + r._count);
-      }
-
-      return { counts, resolvedOptions };
-    }
-
-    logger.warn('columnId no reconocido en getEmployeeExpiringDocsSingleFacet', { data: { columnId } });
-    return null;
+    return result.options.length > 0
+      ? { counts: result.counts, resolvedOptions: result.options }
+      : { counts: result.counts };
   } catch (error) {
     logger.error('Error al obtener facet de documentos de empleados por vencer', { data: { error, columnId } });
     return null;
   }
 }
-
-// ============================================================================
-// TIPOS EXPORTADOS
-// ============================================================================
-
-export type EmployeeExpiringDocListItem = Awaited<ReturnType<typeof getEmployeeExpiringDocsPaginated>>['data'][number];

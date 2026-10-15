@@ -1,13 +1,14 @@
 import { getUserPermissionsMapServer } from '@/features/Permissions';
 import { createTabVisibilityChecker } from '@/features/Permissions/lib/tab-visibility';
 import { SectionManagerServer } from '@/features/TabsManager';
+import { SectionErrorBoundary } from '@/shared/components/common/SectionErrorBoundary';
 import { BookOpen, LifeBuoy } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
-import { MyTicketsListSkeleton } from './fallback/MyTicketsListSkeleton';
 import { ManualTabContent } from './Manual/ManualTabContent';
 import { ManualSkeleton } from './Manual/fallback/ManualSkeleton';
 import { TicketsTabContent } from './Tickets/TicketsTabContent';
+import { MyTicketsListSkeleton } from './fallback/MyTicketsListSkeleton';
 
 type SearchParams = { [key: string]: string | string[] | undefined };
 
@@ -43,9 +44,11 @@ export default async function AyudaComponent({ searchParams }: { searchParams: S
           // El Centro de Ayuda trae su propio título.
           hideTitle: true,
           content: (
-            <Suspense fallback={<MyTicketsListSkeleton />}>
-              <TicketsTabContent searchParams={searchParams} />
-            </Suspense>
+            <SectionErrorBoundary title="No se pudieron mostrar los tickets">
+              <Suspense fallback={<MyTicketsListSkeleton />}>
+                <TicketsTabContent searchParams={searchParams} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
         {
@@ -59,9 +62,11 @@ export default async function AyudaComponent({ searchParams }: { searchParams: S
           moduleSlug: 'ayuda',
           tabSlug: 'manual',
           content: (
-            <Suspense fallback={<ManualSkeleton />}>
-              <ManualTabContent searchParams={searchParams} permissions={permissions} />
-            </Suspense>
+            <SectionErrorBoundary title="No se pudo mostrar el manual">
+              <Suspense fallback={<ManualSkeleton />}>
+                <ManualTabContent searchParams={searchParams} permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
       ]}

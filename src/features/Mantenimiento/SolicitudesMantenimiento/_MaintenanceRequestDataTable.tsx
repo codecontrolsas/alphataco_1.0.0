@@ -1,6 +1,8 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
 import { ActivityHistoryModal } from '@/features/Mantenimiento/components/ActivityHistoryModal';
+import { invalidateAllMaintenanceQueries } from '@/features/Mantenimiento/utils/queryInvalidation';
 import type {
   DataTableFacetedFilterConfig,
   DataTableSearchParams,
@@ -8,11 +10,15 @@ import type {
 } from '@/shared/components/common/DataTable';
 import { DataTable } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { useQuery } from '@tanstack/react-query';
+import { unwrapExportResult } from '@/shared/lib/export-result';
+import { formatArgentinaDateTime, argentinaDate } from '@/shared/lib/argentina-time';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
 import { CircleOff } from 'lucide-react';
-import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
+import { REQUESTS_PARAM_NAMESPACE } from './constants';
 import { getMaintenanceRequestById } from './actions/queries.server';
 import {
   getAllMaintenanceRequestsForExport,
@@ -20,10 +26,6 @@ import {
   getMaintenanceRequestsPaginated,
   type MaintenanceRequestListItem,
 } from './actions/actionsTableServer';
-import { ReassignSupervisorDialog } from './components/ReassignSupervisorDialog';
-import { SolicitudApprovalDialog } from './components/SolicitudApprovalDialog';
-import { SolicitudDetailDialog } from './components/SolicitudDetailDialog';
-import { SolicitudRejectDialog } from './components/SolicitudRejectDialog';
 import {
   HIDDEN_COLUMNS_BY_DEFAULT,
   ORDER_STATUS_LABELS,
@@ -32,6 +34,20 @@ import {
   STATUS_ICONS,
   getMaintenanceRequestColumns,
 } from './tableColumns';
+
+// Diálogos pesados: se cargan recién cuando se abren (no forman parte del bundle inicial de la tabla)
+const SolicitudApprovalDialog = dynamic(() =>
+  import('./components/SolicitudApprovalDialog').then((m) => m.SolicitudApprovalDialog)
+);
+const SolicitudDetailDialog = dynamic(() =>
+  import('./components/SolicitudDetailDialog').then((m) => m.SolicitudDetailDialog)
+);
+const SolicitudRejectDialog = dynamic(() =>
+  import('./components/SolicitudRejectDialog').then((m) => m.SolicitudRejectDialog)
+);
+const ReassignSupervisorDialog = dynamic(() =>
+  import('./components/ReassignSupervisorDialog').then((m) => m.ReassignSupervisorDialog)
+);
 
 // Filtros visibles por defecto
 const DEFAULT_VISIBLE_FILTERS = ['status', 'vehicle', 'source'];
@@ -96,6 +112,8 @@ export function MaintenanceRequestDataTable({
   canApproveReject = false,
   fetchAllForExport,
 }: MaintenanceRequestDataTableProps) {
+  const queryClient = useQueryClient();
+  const router = useRouter();
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [dialogType, setDialogType] = useState<'view' | 'approve' | 'reject' | null>(null);
   const [historyRequestId, setHistoryRequestId] = useState<string | null>(null);
@@ -103,7 +121,7 @@ export function MaintenanceRequestDataTable({
   const [showReassignDialog, setShowReassignDialog] = useState(false);
 
   // Cargar request completo cuando se abre un diálogo (para datos detallados)
-  const { data: fullRequest } = useQuery({
+  const { data: fullRequest, isLoading: isLoadingRequest } = useQuery({
     queryKey: ['maintenance-request-detail', selectedRequestId],
     queryFn: () => getMaintenanceRequestById(selectedRequestId!),
     enabled: !!selectedRequestId,
@@ -143,9 +161,20 @@ export function MaintenanceRequestDataTable({
     setDialogType('reject');
   };
 
+  // Tras aprobar / rechazar / reasignar la tabla sale de React Query (client-side mode): hay que
+  // invalidar el detalle, la lista y las facetas además de refrescar los Server Components.
+  const refreshAfterChange = () => {
+    queryClient.invalidateQueries({ queryKey: ['maintenance-request-detail'] });
+    queryClient.invalidateQueries({ queryKey: ['datatable-facet'] });
+    // Lista, métricas de la banda y contadores del pipeline (todas cuelgan de `['maintenance']`).
+    invalidateAllMaintenanceQueries(queryClient);
+    router.refresh();
+  };
+
   const handleCloseDialog = () => {
     setSelectedRequestId(null);
     setDialogType(null);
+    refreshAfterChange();
   };
 
   const handleViewHistory = (request: MaintenanceRequestListItem) => {
@@ -276,14 +305,14 @@ export function MaintenanceRequestDataTable({
   const exportConfig = useMemo(
     () => ({
       options: {
-        filename: `solicitudes-mantenimiento-${moment().format('YYYY-MM-DD')}`,
+        filename: `solicitudes-mantenimiento-${argentinaDate()}`,
         sheetName: 'Solicitudes',
       },
       // Usa currentParams (estado reactivo del client-side mode), NO searchParams (prop inicial de SSR),
       // para que la exportación respete los filtros activos en el momento del click.
-      fetchAllData: () => fetchAllForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await fetchAllForExport(currentParams)),
       formatters: {
-        created_at: (val: unknown) => (val ? moment(val as string).format('DD/MM/YYYY HH:mm') : '-'),
+        created_at: (val: unknown) => (val ? formatArgentinaDateTime(val as string) : '-'),
         status: (val: unknown) => {
           const s = val as string;
           return REQUEST_STATUS_LABELS[s] ?? ORDER_STATUS_LABELS[s] ?? s ?? '-';
@@ -309,20 +338,39 @@ export function MaintenanceRequestDataTable({
         data={data}
         totalRows={totalRows}
         searchParams={searchParams}
-        paramNamespace={tableId}
+        paramNamespace={REQUESTS_PARAM_NAMESPACE}
         tableId={tableId}
+        mobileCards
         facetedFilters={facetedFilters}
         exportConfig={exportConfig}
         initialColumnVisibility={columnVisibility}
         initialFilterVisibility={mergedFilterVisibility}
         searchPlaceholder="Buscar solicitudes..."
-        emptyMessage="No hay solicitudes de mantenimiento"
+        emptyMessage="No hay solicitudes esperando validación. Aparecen cuando un chofer o supervisor informa desvíos; si aplicaste filtros, probá quitarlos."
         showFilterToggle={true}
         // Client-side navigation: fetch instantáneo vía React Query, sin router.push
         queryFn={tableQueryFn}
         queryKey={['maintenance-requests-paginated']}
         onStateChange={handleStateChange}
       />
+
+      {/* Mientras se trae el detalle no hay diálogo: se avisa, y si no se pudo cargar se dice y se puede cerrar. */}
+      {selectedRequestId && isLoadingRequest && (
+        <p role="status" className="sr-only">
+          Cargando la solicitud…
+        </p>
+      )}
+      {selectedRequestId && !isLoadingRequest && !fullRequest && (
+        <div
+          role="alert"
+          className="border-danger/30 bg-danger-subtle text-danger-subtle-foreground mt-4 flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 text-sm"
+        >
+          <span className="min-w-0 flex-1">No se pudo cargar la solicitud. Puede haber sido resuelta por otra persona.</span>
+          <Button type="button" variant="outline" size="sm" onClick={handleCloseDialog}>
+            Cerrar y actualizar
+          </Button>
+        </div>
+      )}
 
       {selectedRequestId && dialogType === 'view' && fullRequest && (
         <SolicitudDetailDialog request={fullRequest} open={true} onClose={handleCloseDialog} />
@@ -342,7 +390,10 @@ export function MaintenanceRequestDataTable({
           open={showReassignDialog}
           onOpenChange={(open) => {
             setShowReassignDialog(open);
-            if (!open) setReassignRequestId(null);
+            if (!open) {
+              setReassignRequestId(null);
+              refreshAfterChange();
+            }
           }}
         />
       )}

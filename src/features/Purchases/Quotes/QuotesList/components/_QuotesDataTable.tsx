@@ -1,5 +1,6 @@
 'use client';
 
+import { formatMoney } from '@/features/Warehouses/lib/format';
 import {
   DataTable,
   type DataTableExportConfig,
@@ -7,14 +8,15 @@ import {
   type DataTableSearchParams,
   type FacetResult,
 } from '@/shared/components/common/DataTable';
-import { formatMoney } from '@/features/Warehouses/lib/format';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { FileText, Truck, User } from 'lucide-react';
 import moment from 'moment';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { PURCHASES_QUERY_KEYS } from '../../../lib/query-keys';
 import {
-  PURCHASE_QUOTE_STATUS_LABELS,
   PURCHASE_QUOTE_STATUSES,
+  PURCHASE_QUOTE_STATUS_LABELS,
   type PurchaseQuoteStatus,
 } from '../../../lib/quote-state-machine';
 import { purchaseQuoteStatusIcons } from '../../components/PurchaseQuoteStatusBadge';
@@ -29,8 +31,12 @@ import { HIDDEN_COLUMNS_BY_DEFAULT, getColumns } from '../columns';
 interface Props {
   data: PurchaseQuoteListItem[];
   totalRows: number;
+  /** `compras:cotizaciones:view_prices`, resuelto en el servidor (el servidor enmascara por su cuenta). */
+  canViewPrices: boolean;
   searchParams: DataTableSearchParams;
   tableId: string;
+  /** Banda de atencion resuelta en el servidor; se muestra sobre la tabla. */
+  topSlot?: ReactNode;
   initialColumnVisibility?: Record<string, boolean>;
   initialFilterVisibility?: Record<string, boolean>;
 }
@@ -44,6 +50,8 @@ export function _QuotesDataTable({
   totalRows,
   searchParams,
   tableId,
+  canViewPrices,
+  topSlot,
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
@@ -51,7 +59,7 @@ export function _QuotesDataTable({
   const handleStateChange = useCallback((params: DataTableSearchParams) => setCurrentParams(params), []);
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getPurchaseQuotesPaginated(params), []);
 
-  const columns = useMemo(() => getColumns(), []);
+  const columns = useMemo(() => getColumns({ canViewPrices }), [canViewPrices]);
 
   const mergedColumnVisibility = useMemo(() => {
     const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((c) => [c, false]));
@@ -128,39 +136,42 @@ export function _QuotesDataTable({
 
   const exportConfig: DataTableExportConfig<PurchaseQuoteListItem> = useMemo(
     () => ({
-      fetchAllData: () => getAllPurchaseQuotesForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllPurchaseQuotesForExport(currentParams)),
       options: { filename: 'pedidos-de-cotizacion', title: 'Pedidos de cotización', sheetName: 'Cotizaciones' },
       formatters: {
         status: (value) => PURCHASE_QUOTE_STATUS_LABELS[value as PurchaseQuoteStatus] ?? String(value),
-        created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : ''),
-        sent_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : ''),
+        created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : ''),
+        sent_at: (value) => (value ? formatArgentinaDay(value as string | Date) : ''),
         received_at: (value) => (value ? moment.utc(value as string | Date).format('DD/MM/YYYY') : ''),
         valid_until: (value) => (value ? moment.utc(value as string | Date).format('DD/MM/YYYY') : ''),
-        total_quoted: (value) => (value ? formatMoney(String(value)) : ''),
+        total_quoted: (value) => (!canViewPrices ? 'Sin permiso' : value ? formatMoney(String(value)) : ''),
       },
     }),
-    [currentParams]
+    [currentParams, canViewPrices]
   );
 
   return (
-    <DataTable
-      columns={columns}
-      data={data}
-      totalRows={totalRows}
-      searchParams={searchParams}
-      tableId={tableId}
-      paramNamespace={tableId}
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={mergedColumnVisibility}
-      initialFilterVisibility={mergedFilterVisibility}
-      showFilterToggle
-      queryFn={tableQueryFn}
-      queryKey={[...PURCHASES_QUERY_KEYS.quotes]}
-      onStateChange={handleStateChange}
-      searchPlaceholder="Buscar por número o proveedor"
-      emptyMessage="No hay pedidos de cotización"
-      exportConfig={exportConfig}
-      data-testid="purchase-quotes-table"
-    />
+    <div className="space-y-4">
+      {topSlot}
+      <DataTable
+        columns={columns}
+        data={data}
+        totalRows={totalRows}
+        searchParams={searchParams}
+        tableId={tableId}
+        paramNamespace={tableId}
+        facetedFilters={facetedFilters}
+        initialColumnVisibility={mergedColumnVisibility}
+        initialFilterVisibility={mergedFilterVisibility}
+        showFilterToggle
+        queryFn={tableQueryFn}
+        queryKey={[...PURCHASES_QUERY_KEYS.quotes]}
+        onStateChange={handleStateChange}
+        searchPlaceholder="Buscar por número o proveedor"
+        emptyMessage="No hay pedidos de cotización"
+        exportConfig={exportConfig}
+        data-testid="purchase-quotes-table"
+      />
+    </div>
   );
 }

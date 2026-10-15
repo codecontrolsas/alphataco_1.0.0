@@ -539,7 +539,7 @@ function DeviationItem({
         {isCritical ? (
           <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
         ) : (
-          <AlertTriangle className="h-5 w-5 text-yellow-600 shrink-0 mt-0.5" />
+          <AlertTriangle className="h-5 w-5 text-warn shrink-0 mt-0.5" />
         )}
         <div className="flex-1">
           <div className="flex items-center gap-2 flex-wrap">

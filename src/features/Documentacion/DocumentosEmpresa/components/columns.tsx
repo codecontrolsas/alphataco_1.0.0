@@ -12,8 +12,8 @@ import {
 import AddCompanyDocumentForm from '@/features/Empresa/General/Documentacion/components/AddCompanyDocumentForm';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
-import moment from 'moment';
 import type { CompanyDocListItem } from '../actions.server';
 
 // ============================================================================
@@ -34,7 +34,7 @@ export const documentStateIcons = sharedDocumentStateIcons;
 // ============================================================================
 
 function ActionsCell({ doc, isMonthly }: { doc: CompanyDocListItem; isMonthly: boolean }) {
-  const isUploaded = doc.state !== 'pendiente' || !!doc.document_path;
+  const isUploaded = !doc.isMissing;
 
   if (!isUploaded) {
     return (
@@ -129,6 +129,7 @@ export function getCompanyDocsColumns(isMonthly: boolean): ColumnDef<CompanyDocL
         <DocumentExpiryCell
           validity={row.original.document_types?.explired ? parseCompanyValidity(row.original.validity) : null}
           state={row.original.state}
+          missing={row.original.isMissing}
         />
       ),
       enableSorting: true,
@@ -160,7 +161,7 @@ export function getCompanyDocsColumns(isMonthly: boolean): ColumnDef<CompanyDocL
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de carga" />,
       cell: ({ row }) => {
         const date = row.original.created_at;
-        return <span className="font-mono tabular-nums">{date ? moment(date).format('DD/MM/YYYY') : '-'}</span>;
+        return <span className="font-mono tabular-nums">{date ? formatArgentinaDay(date) : '-'}</span>;
       },
       enableSorting: true,
     },

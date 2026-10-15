@@ -1,4 +1,3 @@
-import { Skeleton } from '@/components/ui/skeleton';
 import { EquiposConDesviosTabContent } from '@/features/Mantenimiento/EquiposConDesvios';
 import { EquipmentsWithDeviationsSkeleton } from '@/features/Mantenimiento/EquiposConDesvios/fallback';
 import GomeriaTabContent from '@/features/Mantenimiento/Gomeria/GomeriaTabContent';
@@ -7,6 +6,7 @@ import { WorkshopSectorsSkeleton, WorkshopViewTabContent } from '@/features/Mant
 import { SectionManagerServer } from '@/features/TabsManager';
 import { AlertTriangle, Building2, CircleDot, ClipboardList, Plus, Warehouse } from 'lucide-react';
 import { Suspense } from 'react';
+import { GomeriaSkeleton } from './Gomeria/fallback/GomeriaSkeleton';
 import { OperacionesPipelineContent } from './Pipeline/OperacionesPipeline/OperacionesPipelineContent';
 import { OperacionesPipelineSkeleton } from './Pipeline/OperacionesPipeline/fallback/OperacionesPipelineSkeleton';
 import { TallerPipelineContent } from './Pipeline/TallerPipeline/TallerPipelineContent';
@@ -21,7 +21,7 @@ interface MantenimientoComponentProps {
  * Componente principal del módulo Mantenimiento.
  *
  * Estructura de tabs raíz:
- * - Operaciones: pipeline visual con 4 pasos (Validar → Aprobar Fecha → Para Taller → Seguimiento)
+ * - Supervisión: pipeline visual con 4 pasos (Validar → Aprobar Fecha → Para Taller → Seguimiento)
  * - Taller: pipeline visual con 4 pasos (Por Programar → Confirmados → En Taller → Aprobaciones)
  * - Nuevo Pedido: formulario de nuevo pedido de mantenimiento
  * - Equipos con Desvíos: tabla de equipos con desvíos pendientes
@@ -36,21 +36,21 @@ export default async function MantenimientoComponent({ searchParams, permissions
       permissions={permissions}
       tabs={[
         // ============================================
-        // TAB: OPERACIONES (Pipeline visual)
+        // TAB: SUPERVISIÓN (Pipeline visual; mismo rótulo que el sidebar y el mapa de permisos)
         // ============================================
         {
           value: 'maint_operaciones',
           label: (
             <span className="flex items-center gap-2">
               <ClipboardList className="h-4 w-4" />
-              Operaciones
+              Supervisión
             </span>
           ),
           moduleSlug: 'mantenimiento',
           tabSlug: 'maint_operaciones',
           content: (
             <Suspense fallback={<OperacionesPipelineSkeleton />}>
-              <OperacionesPipelineContent searchParams={searchParams} />
+              <OperacionesPipelineContent searchParams={searchParams} permissions={permissions} />
             </Suspense>
           ),
         },
@@ -88,7 +88,7 @@ export default async function MantenimientoComponent({ searchParams, permissions
           tabSlug: 'maint_taller',
           content: (
             <Suspense fallback={<TallerPipelineSkeleton />}>
-              <TallerPipelineContent searchParams={searchParams} />
+              <TallerPipelineContent searchParams={searchParams} permissions={permissions} />
             </Suspense>
           ),
         },
@@ -143,7 +143,7 @@ export default async function MantenimientoComponent({ searchParams, permissions
           moduleSlug: 'mantenimiento',
           tabSlug: 'gomeria',
           content: (
-            <Suspense fallback={<Skeleton className="h-[400px] w-full rounded-md" />}>
+            <Suspense fallback={<GomeriaSkeleton />}>
               <GomeriaTabContent searchParams={searchParams} permissions={permissions} />
             </Suspense>
           ),

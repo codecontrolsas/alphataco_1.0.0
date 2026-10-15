@@ -1,13 +1,13 @@
-import { getFiscalDataOverview } from '@/features/Empresa/General/FiscalData/actions/fiscal-data.server';
+import { getFiscalDataOverview } from '@/features/Empresa/General/FiscalData/lib/fiscal-data-overview.server';
 import { joinList } from '@/features/Empresa/General/FiscalData/utils/format';
 import { getUserPermissionsMapServer } from '@/features/Permissions';
 import { ArrowLeft, CircleDashed, FilePlus2, FileSpreadsheet, Lock } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { getCustomersForManualInvoice, getInvoiceableCustomers } from './actions/invoices.server';
+import { InvoiceEnvironmentNotice } from './components/InvoiceEnvironmentNotice';
 import { CertificationsInvoiceForm } from './components/new/CertificationsInvoiceForm';
 import { ManualInvoiceForm } from './components/new/ManualInvoiceForm';
-import { InvoiceEnvironmentNotice } from './components/InvoiceEnvironmentNotice';
 import { FISCAL_DATA_HREF, INVOICING_TAB_HREF, NEW_INVOICE_HREF } from './utils/invoice-links';
 
 export type NewInvoiceOrigin = 'certificaciones' | 'manual' | null;
@@ -35,7 +35,10 @@ function PageHeader({ title, description }: { title: string; description: string
 
 function BlockingNotice({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
-    <div role="note" className="flex items-start gap-3 border border-amber-500/50 bg-amber-500/5 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+    <div
+      role="note"
+      className="flex items-start gap-3 border border-warn/35 bg-warn-subtle px-4 py-3 text-sm text-warn-subtle-foreground"
+    >
       {icon}
       <div className="min-w-0 flex-1 text-pretty">{children}</div>
     </div>
@@ -62,7 +65,8 @@ export async function NewInvoicePage({ origin }: { origin: NewInvoiceOrigin }) {
   const titles: Record<'certificaciones' | 'manual' | 'none', { title: string; description: string }> = {
     certificaciones: {
       title: 'Nueva factura desde certificaciones',
-      description: 'Elegí el cliente y las certificaciones confirmadas que van en la factura. Tienen que ser de la misma moneda.',
+      description:
+        'Elegí el cliente y las certificaciones confirmadas que van en la factura. Tienen que ser de la misma moneda.',
     },
     manual: {
       title: 'Nueva factura manual',

@@ -53,7 +53,7 @@ export function InvoiceTotals({ letter, currency }: { letter: VoucherLetter; cur
       </dl>
       {letter === 'C' && <p className="text-muted-foreground text-xs">La Factura C no discrimina IVA.</p>}
       {skipped > 0 && (
-        <p className="text-xs text-amber-800 dark:text-amber-300">
+        <p className="text-xs text-warn-subtle-foreground">
           {countLabel(skipped, 'línea incompleta no suma', 'líneas incompletas no suman')} al total.
         </p>
       )}

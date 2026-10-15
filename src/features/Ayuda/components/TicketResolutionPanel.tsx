@@ -2,10 +2,10 @@
 
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import type { Ticket } from '@/shared/lib/taskapp/types';
 import { CheckCircle2, ClipboardCheck, Loader2 } from 'lucide-react';
 import { useId, useState } from 'react';
 import { toast } from 'sonner';
-import type { Ticket } from '@/shared/lib/taskapp/types';
 import { canDecide, parseVerificationSteps } from '../constants/ticket-copy';
 import { useConfirmTicket } from '../hooks/useConfirmTicket';
 import { TicketReopenRequestDialog } from './detail/TicketReopenRequestDialog';
@@ -39,19 +39,15 @@ export function TicketResolutionPanel({ ticket, canAct }: Props) {
     confirmTicket.mutate(undefined, {
       // Mismo verbo que el botón: la acción conserva el nombre en todo el flujo.
       onSuccess: () => toast.success('Listo, lo marcamos como resuelto.'),
-      onError: (e) =>
-        setError(e instanceof Error ? e.message : 'No se pudo registrar tu confirmación.'),
+      onError: (e) => setError(e instanceof Error ? e.message : 'No se pudo registrar tu confirmación.'),
     });
   }
 
   return (
     <div className="flex flex-col gap-5">
       {summary && (
-        <section
-          aria-label="Qué hicimos"
-          className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 dark:border-emerald-900/60 dark:bg-emerald-950/30"
-        >
-          <h4 className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+        <section aria-label="Qué hicimos" className="rounded-lg border border-ok/30 bg-ok-subtle p-3">
+          <h4 className="flex items-center gap-1.5 text-xs font-semibold text-ok-subtle-foreground">
             <CheckCircle2 aria-hidden className="h-3.5 w-3.5" />
             Qué hicimos
           </h4>
@@ -75,7 +71,7 @@ export function TicketResolutionPanel({ ticket, canAct }: Props) {
               onClick={handleConfirm}
               disabled={!canAct || confirmTicket.isPending}
               aria-busy={confirmTicket.isPending}
-              className="gap-2 bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-600 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
+              className="gap-2 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
             >
               {confirmTicket.isPending ? (
                 <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
@@ -102,11 +98,7 @@ export function TicketResolutionPanel({ ticket, canAct }: Props) {
           {error && (
             <p role="alert" className="text-xs text-destructive">
               {error}{' '}
-              <button
-                type="button"
-                onClick={handleConfirm}
-                className="underline underline-offset-2 hover:no-underline"
-              >
+              <button type="button" onClick={handleConfirm} className="underline underline-offset-2 hover:no-underline">
                 Reintentar
               </button>
             </p>
@@ -118,11 +110,7 @@ export function TicketResolutionPanel({ ticket, canAct }: Props) {
             </p>
           )}
 
-          <TicketReopenRequestDialog
-            ticketId={ticket.id}
-            open={reopenOpen}
-            onOpenChange={setReopenOpen}
-          />
+          <TicketReopenRequestDialog ticketId={ticket.id} open={reopenOpen} onOpenChange={setReopenOpen} />
         </div>
       )}
     </div>
@@ -191,9 +179,7 @@ function VerificationChecklist({ steps }: { steps: string[] }) {
         })}
       </ul>
 
-      <p className="text-[11px] text-muted-foreground">
-        Los tildes son sólo para vos: no se guardan.
-      </p>
+      <p className="text-[11px] text-muted-foreground">Los tildes son sólo para vos: no se guardan.</p>
     </section>
   );
 }

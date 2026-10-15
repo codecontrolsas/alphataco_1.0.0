@@ -2,6 +2,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Calendar, FileText, MessageSquare, User } from 'lucide-react';
 import moment from 'moment';
@@ -41,6 +42,19 @@ export function getColumns(): ColumnDef<DiagramReportListItem>[] {
       meta: { title: '', excludeFromExport: true },
     },
 
+    // ── Legajo (file number) — columna separada OBLIGATORIA ─────────────────
+    {
+      id: 'fileNumber',
+      accessorFn: (row) => row.employees?.file ?? '',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Legajo" />,
+      meta: { title: 'Legajo' },
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2">
+          <span className="font-medium tabular-nums">{row.original.employees?.file ?? '-'}</span>
+        </div>
+      ),
+    },
+
     // ── Empleado (lastname + firstname) ───────────────────────────────────────
     {
       id: 'employee',
@@ -62,20 +76,6 @@ export function getColumns(): ColumnDef<DiagramReportListItem>[] {
       },
     },
 
-    // ── Legajo (file number) — columna separada OBLIGATORIA ─────────────────
-    {
-      id: 'fileNumber',
-      accessorFn: (row) => row.employees?.file ?? '',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Legajo" />,
-      meta: { title: 'Legajo' },
-      cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <span className="font-medium tabular-nums">{row.original.employees?.file ?? '-'}</span>
-        </div>
-      ),
-      enableSorting: false,
-    },
-
     // ── CUIL ─────────────────────────────────────────────────────────────────
     {
       id: 'cuil',
@@ -83,7 +83,6 @@ export function getColumns(): ColumnDef<DiagramReportListItem>[] {
       header: ({ column }) => <DataTableColumnHeader column={column} title="CUIL" />,
       meta: { title: 'CUIL' },
       cell: ({ row }) => <span className="tabular-nums">{row.original.employees?.cuil ?? '-'}</span>,
-      enableSorting: false,
     },
 
     // ── Puesto (company position — FK) ────────────────────────────────────────
@@ -229,7 +228,7 @@ export function getColumns(): ColumnDef<DiagramReportListItem>[] {
       cell: ({ row }) =>
         row.original.created_at ? (
           <span className="text-sm text-muted-foreground tabular-nums">
-            {moment(row.original.created_at).format('DD/MM/YYYY')}
+            {formatArgentinaDay(row.original.created_at)}
           </span>
         ) : (
           <span className="text-muted-foreground">-</span>

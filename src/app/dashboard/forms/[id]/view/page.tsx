@@ -1,124 +1,105 @@
+import { fetchChecklistAnswerById, fetchChecklistTemplateById } from '@/features/Checklists/actions/checklist-queries';
 import { NormalizedChecklistForm } from '@/features/Checklists/components/NormalizedChecklistForm';
-import { fetchChecklistAnswerById } from '@/features/Checklists/actions/checklist-queries';
-import { fetchAnswerById, getCurrentProfile } from '@/features/Formularios/actions/form-actions';
-import { fetchAllEquipment } from '@/shared/actions/equipment.actions';
+import {
+  fetchAnswerById,
+  fetchEquipmentsByIdsForChecklist,
+  getCurrentProfile,
+} from '@/features/Formularios/actions/form-actions';
+import { readAnswerData } from '@/features/Formularios/utils/checklistView';
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { mapEquipmentToChecklistFormat } from '@/lib/utils';
 import BackButton from '@/shared/components/common/BackButton';
+import { StateBlock } from '@/shared/components/common/StateBlock';
 
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="space-y-6 px-4 py-4 sm:px-7">
+      <BackButton />
+      {children}
+    </div>
+  );
+}
+
+/** Respuesta vista por su propio id (ruta `/dashboard/forms/[id]/view`, donde `id` es el de la respuesta). */
 async function page({ params }: { params: Promise<{ id: string }> }) {
-  // En Next.js 15+, params es una Promise, necesitamos hacer await
-  const resolvedParams = await params;
+  const { id } = await params;
 
-  // Intentar obtener respuesta de checklist normalizado
-  const normalizedAnswer = await fetchChecklistAnswerById(resolvedParams.id);
+  const canView = await checkPermissionServer('formularios', 'formularios', 'view');
+  if (!canView) {
+    return (
+      <Shell>
+        <StateBlock variant="noperm" title="No tenés permiso para ver formularios" />
+      </Shell>
+    );
+  }
+
+  // Respuesta de checklist normalizado y perfil no dependen entre sí.
+  const [normalizedAnswer, currentUserProfile] = await Promise.all([fetchChecklistAnswerById(id), getCurrentProfile()]);
 
   if (normalizedAnswer) {
-    // Es una respuesta de checklist normalizado
-    const template = normalizedAnswer.template as any;
+    const answerData = readAnswerData(normalizedAnswer.answer_data);
+    const hitchEquipmentId = normalizedAnswer.hitch_equipment_id;
+
+    const [template, equipmentRows] = await Promise.all([
+      normalizedAnswer.template_id ? fetchChecklistTemplateById(normalizedAnswer.template_id) : null,
+      fetchEquipmentsByIdsForChecklist([normalizedAnswer.equipment_id, hitchEquipmentId ?? ''].filter(Boolean)),
+    ]);
+
     if (!template) {
       return (
-        <div className="px-7">
-          <div className="flex items-center gap-4 mb-6">
-            <BackButton />
-          </div>
-          <div className="p-4 border rounded-lg">
-            <p className="text-red-600">No se encontró el template del checklist</p>
-          </div>
-        </div>
+        <Shell>
+          <StateBlock variant="error" title="No se encontró la plantilla del formulario" />
+        </Shell>
       );
     }
 
-    const equipments = (await fetchAllEquipment())
-      .filter((equipment) => equipment.model && equipment.brand)
-      .map((equipment) => ({
-        label: equipment.domain
-          ? `${equipment.domain} - ${equipment.intern_number || '(Sin información)'}`
-          : `${equipment.serie} - ${equipment.intern_number || '(Sin información)'}`,
-        value: equipment.id,
-        domain: equipment.domain,
-        serie: equipment.serie,
-        kilometer: equipment.kilometer ?? '0',
-        engine_hours: equipment.engine_hours ?? '0',
-        model: equipment.model?.name || 'N/A',
-        brand: equipment.brand?.name || 'N/A',
-        intern_number: equipment.intern_number || '',
-        sub_type_id: equipment.subType?.id || null,
-        type_name: equipment.type?.name || 'N/A',
-        sub_type_name: equipment.subType?.name || 'N/A',
-      }));
-
-    const currentUserProfile = await getCurrentProfile();
-    const currentUser = currentUserProfile && currentUserProfile.length > 0 ? currentUserProfile[0] : null;
-
-    // Preparar respuestas por defecto desde answer_data
-    const answerData = normalizedAnswer.answer_data as any;
     const defaultAnswers = {
       equipment_id: normalizedAnswer.equipment_id,
-      chofer: answerData?.chofer || '',
-      fecha: answerData?.fecha || '',
-      hora: answerData?.hora || '',
-      kilometraje: answerData?.kilometraje || '',
-      horometro: answerData?.horometro || '',
+      chofer: answerData.chofer,
+      fecha: answerData.fecha,
+      hora: answerData.hora,
+      kilometraje: answerData.kilometraje,
+      horometro: answerData.horometro,
       observaciones: normalizedAnswer.observations || '',
-      ...answerData?.answers, // Respuestas por sección
+      ...answerData.answers, // Respuestas por sección
     };
 
     return (
-      <div className="px-7 py-4">
-        <div className="flex items-center gap-4 mb-6">
-          <BackButton />
-          <div>
-            <h1 className="text-2xl font-bold">{template.name}</h1>
-            {template.description && <p className="text-muted-foreground">{template.description}</p>}
-          </div>
+      <Shell>
+        <div>
+          <h1 className="text-2xl font-bold">{template.name}</h1>
+          {template.description && <p className="text-muted-foreground">{template.description}</p>}
         </div>
         <NormalizedChecklistForm
-          template={template as any}
-          equipments={equipments}
-          currentUser={currentUser}
+          template={template}
+          equipments={equipmentRows.map(mapEquipmentToChecklistFormat)}
+          currentUser={currentUserProfile.length > 0 ? currentUserProfile[0] : null}
           defaultAnswers={defaultAnswers}
-          readOnly={true}
+          defaultHitchEquipmentId={hitchEquipmentId}
+          readOnly
         />
-      </div>
+      </Shell>
     );
   }
 
-  // Intentar con estructura antigua
-  const answer = await fetchAnswerById(resolvedParams.id);
-  if (!answer || answer.length === 0) {
+  // Estructura antigua (`custom_form`): todavía no tiene visualización.
+  const answer = await fetchAnswerById(id);
+  if (answer.length === 0) {
     return (
-      <div className="px-7">
-        <div className="flex items-center gap-4 mb-6">
-          <BackButton />
-        </div>
-        <div className="p-4 border rounded-lg">
-          <p className="text-red-600">No se encontró la respuesta con ID: {resolvedParams.id}</p>
-        </div>
-      </div>
+      <Shell>
+        <StateBlock variant="error" title="No se encontró la respuesta" description={`ID: ${id}`} />
+      </Shell>
     );
   }
 
-  const equipments = (await fetchAllEquipment()).map((equipment) => ({
-    label: equipment.domain
-      ? `${equipment.domain} - ${equipment.intern_number}`
-      : `${equipment.serie} - ${equipment.intern_number}`,
-    value: equipment.id,
-    domain: equipment.domain,
-    serie: equipment.serie,
-    kilometer: equipment.kilometer ?? '0',
-    model: equipment.model?.name,
-    brand: equipment.brand?.name,
-    intern_number: equipment.intern_number || '',
-  }));
-  // TODO: Implementar visualización para estructura antigua
   return (
-    <div className="px-7">
-      <div className="flex items-center gap-4 mb-6">
-        <BackButton />
-      </div>
-      <div className="p-4 border rounded-lg">
-        <p className="text-muted-foreground">Visualización de respuestas de estructura antigua en desarrollo.</p>
-      </div>
-    </div>
+    <Shell>
+      <StateBlock
+        variant="empty"
+        title="Respuesta de un formulario anterior"
+        description="La visualización de respuestas de la estructura antigua todavía no está disponible."
+      />
+    </Shell>
   );
 }
 

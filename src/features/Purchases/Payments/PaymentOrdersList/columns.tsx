@@ -1,30 +1,20 @@
 'use client';
 
 import { formatMoney } from '@/features/Warehouses/lib/format';
-import type { payment_method } from '@/generated/prisma/enums';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { StackedCell } from '@/shared/components/common/StackedCell';
+import { formatArgentinaDay, formatDateAr } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
-import moment from 'moment';
 import Link from 'next/link';
 import { PAYMENT_ORDER_STATUS_LABELS } from '../../lib/payment-order-state-machine';
 import { PaymentOrderStatusBadge } from '../components/PaymentOrderStatusBadge';
 import type { PaymentOrderListItem } from './actions.server';
+import { NO_PAYMENT_LABEL, PAYMENT_METHOD_LABELS } from './constants';
 
-export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['credits_total', 'advance_total', 'created_at'];
-
-export const PAYMENT_METHOD_LABELS: Record<payment_method, string> = {
-  TRANSFER: 'Transferencia',
-  CHECK: 'Cheque',
-  ECHECK: 'E-cheq',
-  CASH: 'Efectivo',
-  THIRD_PARTY_CHECK: 'Cheque de tercero',
-};
-
-export const NO_PAYMENT_LABEL = 'Sin pagar';
-
-/** Columnas DATE (sin hora): se leen en UTC para no correr un dia. */
-const formatDateOnly = (value: Date | string | null) => (value ? moment.utc(value).format('DD/MM/YYYY') : '-');
+/** Columnas DATE (sin hora): llegan como medianoche UTC, se leen como fecha para no correr un día. */
+const formatDateOnly = (value: Date | string | null) =>
+  value ? formatDateAr(new Date(value).toISOString().slice(0, 10)) : '-';
 
 const moneyCell = (value: string) => <span className="tabular-nums">{formatMoney(value)}</span>;
 
@@ -38,7 +28,8 @@ export function getColumns(): ColumnDef<PaymentOrderListItem>[] {
       cell: ({ row }) => (
         <Link
           href={`/dashboard/purchases/payments/${row.original.id}`}
-          className="font-mono text-sm font-medium text-blue-600 hover:underline"
+          className="font-mono text-sm font-medium text-brand-ink hover:underline"
+          aria-label={`Ver orden de pago ${row.original.number}`}
         >
           {row.original.number}
         </Link>
@@ -50,11 +41,8 @@ export function getColumns(): ColumnDef<PaymentOrderListItem>[] {
       meta: { title: 'Proveedor' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Proveedor" />,
       cell: ({ row }) => (
-        <Link
-          href={`/dashboard/purchases/suppliers/${row.original.supplier.id}`}
-          className="text-blue-600 hover:underline"
-        >
-          {row.original.supplier.name}
+        <Link href={`/dashboard/purchases/suppliers/${row.original.supplier.id}`} className="block hover:underline">
+          <StackedCell primary={row.original.supplier.name} secondary={`CUIT ${row.original.supplier.cuit}`} />
         </Link>
       ),
       filterFn: (row, _id, value: string[]) => value.includes(row.original.supplier.id),
@@ -148,9 +136,7 @@ export function getColumns(): ColumnDef<PaymentOrderListItem>[] {
       accessorKey: 'created_at',
       meta: { title: 'Fecha de alta' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de alta" />,
-      cell: ({ row }) => (
-        <span>{row.original.created_at ? moment(row.original.created_at).format('DD/MM/YYYY') : '-'}</span>
-      ),
+      cell: ({ row }) => <span>{row.original.created_at ? formatArgentinaDay(row.original.created_at) : '-'}</span>,
     },
   ];
 }

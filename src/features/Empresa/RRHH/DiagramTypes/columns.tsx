@@ -1,12 +1,11 @@
 'use client';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Check, X } from 'lucide-react';
-import moment from 'moment';
+import { ActiveStatusBadge, BooleanBadge } from '../../components/ActiveStatusBadge';
 import type { DiagramTypeListItem } from './actions.server';
 
 // ============================================================================
@@ -76,24 +75,8 @@ export function getColumns(
       header: ({ column }) => <DataTableColumnHeader column={column} title="Lab. Activa" />,
       cell: ({ row }) => {
         const val = row.original.work_active;
-        if (val === null || val === undefined) {
-          return <Badge variant="default">Sin asignar</Badge>;
-        }
-        return (
-          <Badge variant={val ? 'success' : 'secondary'}>
-            {val ? (
-              <span className="flex items-center gap-1">
-                <Check className="h-3 w-3" />
-                Trabajando
-              </span>
-            ) : (
-              <span className="flex items-center gap-1">
-                <X className="h-3 w-3" />
-                No trabajando
-              </span>
-            )}
-          </Badge>
-        );
+        if (val === null || val === undefined) return <ActiveStatusBadge value={null} />;
+        return <BooleanBadge value={val} trueLabel="Trabajando" falseLabel="No trabajando" />;
       },
       filterFn: (row, id, value: string[]) => {
         const val = row.getValue(id);
@@ -107,24 +90,7 @@ export function getColumns(
       accessorKey: 'computes_absenteeism',
       meta: { title: 'Computa ausentismo' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Computa ausentismo" />,
-      cell: ({ row }) => {
-        const val = row.original.computes_absenteeism;
-        return (
-          <Badge variant={val ? 'success' : 'secondary'}>
-            {val ? (
-              <span className="flex items-center gap-1">
-                <Check className="h-3 w-3" />
-                Sí
-              </span>
-            ) : (
-              <span className="flex items-center gap-1">
-                <X className="h-3 w-3" />
-                No
-              </span>
-            )}
-          </Badge>
-        );
-      },
+      cell: ({ row }) => <BooleanBadge value={row.original.computes_absenteeism} trueLabel="Sí" falseLabel="No" />,
       filterFn: (row, id, value: string[]) => {
         const val = row.getValue(id);
         return value.includes(String(val));
@@ -136,24 +102,7 @@ export function getColumns(
       accessorKey: 'is_active',
       meta: { title: 'Estado' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
-      cell: ({ row }) => {
-        const val = row.original.is_active;
-        return (
-          <Badge variant={val ? 'success' : 'secondary'}>
-            {val ? (
-              <span className="flex items-center gap-1">
-                <Check className="h-3 w-3" />
-                Activo
-              </span>
-            ) : (
-              <span className="flex items-center gap-1">
-                <X className="h-3 w-3" />
-                Inactivo
-              </span>
-            )}
-          </Badge>
-        );
-      },
+      cell: ({ row }) => <ActiveStatusBadge value={row.original.is_active} />,
       filterFn: (row, id, value: string[]) => {
         const val = row.getValue(id);
         return value.includes(String(val));
@@ -167,7 +116,7 @@ export function getColumns(
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de creación" />,
       cell: ({ row }) => {
         const val = row.original.created_at;
-        return <span>{val ? moment(val).format('DD/MM/YYYY') : '-'}</span>;
+        return <span>{val ? formatArgentinaDay(val) : '-'}</span>;
       },
     },
 
@@ -183,7 +132,9 @@ export function getColumns(
               <Button
                 size="sm"
                 variant="link"
-                className="hover:text-blue-400 p-0 h-auto"
+                type="button"
+                className="h-auto p-0"
+                aria-label={`Editar ${row.original.name ?? 'tipo de novedad'}`}
                 onClick={() => onEdit(row.original)}
               >
                 Editar

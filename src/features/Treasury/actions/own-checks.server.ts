@@ -7,7 +7,6 @@ import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { withActor } from '@/shared/lib/actor';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import moment from 'moment';
 import { NO_PERMISSION, UUID_RE, firstIssue, toTreasuryActionError } from '../lib/action-errors';
 import { assertBankAccount, cancelMovements } from '../lib/movements';
 import { checkbookStatus, normalizeCheckNumber, ownCheckAlert } from '../lib/own-check-transitions';
@@ -26,6 +25,7 @@ import {
   type VoidCheckNumberValues,
 } from '../schemas/own-checks';
 import { SESSION_EXPIRED, TRANSACTION_OPTIONS, localToday, revalidateTreasury } from './shared';
+import { formatDay as dmy, isoDay } from '../lib/dates';
 
 /**
  * Chequeras y cheques propios (spec Tesorería etapa 3b §3). La emisión vive en `registerPayment`
@@ -37,8 +37,6 @@ import { SESSION_EXPIRED, TRANSACTION_OPTIONS, localToday, revalidateTreasury } 
 const logger = new Logger('features/Treasury/own-checks');
 
 const CHECK_NOT_FOUND = 'El cheque no existe';
-const dmy = (value: string) => moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY');
-const isoDay = (value: Date | null) => (value ? value.toISOString().slice(0, 10) : null);
 
 async function session() {
   const profile = await getServerAuthProfile();

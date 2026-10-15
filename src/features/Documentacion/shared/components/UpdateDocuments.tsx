@@ -3,6 +3,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { toArgentinaValidityIso } from '../lib/document-dates';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -10,10 +11,14 @@ import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { renewDocumentFile } from '@/features/Documentacion/shared/actions/document-files.server';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { InfoCircledIcon } from '@radix-ui/react-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { DOCUMENT_FILE_ACCEPT, validateDocumentFile } from '../lib/document-file-rules';
+import { invalidateDocumentLists } from '../lib/document-query-keys';
 
 export default function UpdateDocuments({
   documentName,
@@ -44,8 +49,10 @@ export default function UpdateDocuments({
     },
   });
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
-  const today = new Date();
+  // Mínimo del calendario: el día de hoy en Argentina (no el del navegador).
+  const today = new Date(`${argentinaDate()}T00:00:00`);
   async function onSubmit(values: z.infer<typeof FormSchema>) {
     if (!file) {
       form.setError('new_document', {
@@ -54,7 +61,15 @@ export default function UpdateDocuments({
       });
       return;
     }
-    if (!documentName) return;
+    if (!documentName) {
+      toast.error('El documento no tiene archivo cargado');
+      return;
+    }
+    const fileError = validateDocumentFile(file);
+    if (fileError) {
+      form.setError('new_document', { type: 'manual', message: fileError });
+      return;
+    }
 
     await toast
       .promise(
@@ -64,12 +79,13 @@ export default function UpdateDocuments({
           fd.append('id', id);
           fd.append('resource', resource ?? '');
           fd.append('file', file);
-          if (values.validity instanceof Date) fd.append('validity', values.validity.toISOString());
+          if (values.validity instanceof Date) fd.append('validity', toArgentinaValidityIso(values.validity));
           if (values.period) fd.append('period', values.period);
 
           const result = await renewDocumentFile(fd);
           if (!result.ok) throw new Error(result.error);
 
+          await invalidateDocumentLists(queryClient);
           router.refresh();
           setIsOpen(false);
         },
@@ -113,6 +129,7 @@ export default function UpdateDocuments({
                               field.onChange(e);
                             }}
                             type="file"
+                            accept={DOCUMENT_FILE_ACCEPT}
                           />
                         </FormControl>
                         <FormDescription>Sube el nuevo documento</FormDescription>
@@ -151,7 +168,6 @@ export default function UpdateDocuments({
                           <Input
                             placeholder="Elige una periodo"
                             type="month"
-                            min={new Date().toISOString().split('T')[0]}
                             onChange={(e) => {
                               form.setValue('period', e.target.value);
                             }}

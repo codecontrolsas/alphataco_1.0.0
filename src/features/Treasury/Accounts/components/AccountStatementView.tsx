@@ -7,9 +7,10 @@ import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatMoney } from '@/features/Warehouses/lib/format';
+import { StateBlock } from '@/shared/components/common/StateBlock';
 import { exportToExcel, type ExcelColumn } from '@/shared/lib/excel-export';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, FileSpreadsheet, Landmark, Wallet } from 'lucide-react';
+import { ArrowLeft, Ban, CheckCheck, Clock, FileSpreadsheet, Landmark, Wallet } from 'lucide-react';
 import moment from 'moment';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -18,14 +19,16 @@ import type { TreasuryAccountRow } from '../../actions/accounts.server';
 import type { TreasuryConceptRow } from '../../actions/concepts.server';
 import { getAccountStatementData, type AccountStatementData } from '../../actions/statement.server';
 import { NewMovementButton } from '../../Movements/components/NewMovementButton';
-import { OWN_CHECK_ALERT_LABEL, OWN_CHECK_KIND_LABELS, ownCheckAlert } from '../../lib/own-check-transitions';
+import { OWN_CHECK_KIND_LABELS, ownCheckAlert } from '../../lib/own-check-transitions';
 import { TREASURY_QUERY_KEYS } from '../../lib/query-keys';
 import { TREASURY_ACCOUNT_KIND_LABELS } from '../../schemas/accounts';
 import { TREASURY_MOVEMENT_KIND_LABELS } from '../../schemas/movements';
+import { formatDay } from '../../lib/dates';
+import { accountStatementRangeError, MAX_ACCOUNT_STATEMENT_MONTHS } from '../../lib/statement-range';
+import { MOVEMENT_STATE_UI, OWN_CHECK_ALERT_UI, TONE_TO_BADGE } from '../../lib/status-presentation';
 
-const day = (value: string) => moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY');
 const isNegative = (value: string) => value.startsWith('-');
-const tone = (value: string) => (isNegative(value) ? 'text-red-600 dark:text-red-400' : '');
+const tone = (value: string) => (isNegative(value) ? 'text-danger' : '');
 const abs = (value: string) => value.replace('-', '');
 
 type Row = AccountStatementData['rows'][number];
@@ -96,18 +99,20 @@ export function AccountStatementView({
   concepts: TreasuryConceptRow[];
 }) {
   const [range, setRange] = useState({ from: initial.from, to: initial.to });
-  const validRange = range.from !== '' && range.to !== '' && range.to >= range.from;
+  const rangeError = accountStatementRangeError(range.from, range.to);
+  const validRange = rangeError === null;
   const isInitialRange = range.from === initial.from && range.to === initial.to;
 
-  const { data, isFetching } = useQuery({
+  const { data, isFetching, refetch } = useQuery({
     queryKey: [...TREASURY_QUERY_KEYS.statement, initial.account.id, range.from, range.to],
     queryFn: () => getAccountStatementData(initial.account.id, range.from, range.to),
     initialData: isInitialRange ? initial : undefined,
     enabled: validRange,
     staleTime: 30 * 1000,
   });
-  const statement = data ?? initial;
-  const { account, indicators } = statement;
+  // Sin `?? initial`: si el rango nuevo falla (o aún carga) no se muestra ni se exporta el rango anterior.
+  const statement = data ?? null;
+  const { account, indicators } = initial;
   const Icon = account.kind === 'BANK' ? Landmark : Wallet;
 
   const excel = useMutation({
@@ -124,9 +129,9 @@ export function AccountStatementView({
         { key: 'status', title: 'Estado', width: 30 },
       ];
       const rows: Record<string, unknown>[] = [
-        { date: day(current.from), kind: '', detail: 'Saldo anterior', origin: '', credit: '', debit: '', balance: current.previous, status: '' },
+        { date: formatDay(current.from), kind: '', detail: 'Saldo anterior', origin: '', credit: '', debit: '', balance: current.previous, status: '' },
         ...current.rows.map((r) => ({
-          date: day(r.date),
+          date: formatDay(r.date),
           kind: TREASURY_MOVEMENT_KIND_LABELS[r.kind],
           detail: detailOf(r),
           origin: (r.ownCheck ? `Ch. Nº ${r.ownCheck.number}` : null) ?? r.paymentOrder?.number ?? r.customerReceipt?.number ?? r.transfer?.number ?? r.checkOperation?.number ?? '',
@@ -135,12 +140,12 @@ export function AccountStatementView({
           balance: r.balance,
           status: r.cancelled ? `Anulado: ${r.cancelReason ?? ''}` : [r.future ? (isNegative(r.amount) ? 'A debitar' : 'A acreditar') : '', r.reconciled ? 'Conciliado' : ''].filter(Boolean).join(' · '),
         })),
-        { date: day(current.to), kind: '', detail: 'Saldo final', origin: '', credit: '', debit: '', balance: current.closing, status: '' },
+        { date: formatDay(current.to), kind: '', detail: 'Saldo final', origin: '', credit: '', debit: '', balance: current.closing, status: '' },
       ];
       await exportToExcel(rows, columns, {
         filename: `Extracto ${current.account.name} ${current.from} a ${current.to}`,
         sheetName: 'Extracto',
-        title: `Extracto · ${current.account.name} · ${day(current.from)} a ${day(current.to)}`,
+        title: `Extracto · ${current.account.name} · ${formatDay(current.from)} a ${formatDay(current.to)}`,
       });
     },
     onError: () => toast.error('No se pudo exportar el Excel'),
@@ -150,11 +155,11 @@ export function AccountStatementView({
     <div className="mx-auto max-w-5xl space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
-          <Link href="/dashboard/treasury?tab=cuentas" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:underline">
-            <ArrowLeft className="h-4 w-4" /> Cuentas
+          <Link href="/dashboard/treasury?tab=cuentas" className="inline-flex items-center gap-1 rounded-sm text-sm text-muted-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <ArrowLeft aria-hidden="true" className="h-4 w-4" /> Cuentas
           </Link>
           <h1 className="flex items-center gap-2 text-xl font-semibold">
-            <Icon className="h-5 w-5 shrink-0 text-muted-foreground" />
+            <Icon aria-hidden="true" className="h-5 w-5 shrink-0 text-muted-foreground" />
             <span className="truncate">{account.name}</span>
             {!account.is_active && <Badge variant="outline">Inactiva</Badge>}
           </h1>
@@ -184,7 +189,7 @@ export function AccountStatementView({
         ))}
       </div>
 
-      {statement.issuedChecks.length > 0 && (
+      {initial.issuedChecks.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Cheques emitidos sin debitar</CardTitle>
@@ -203,7 +208,7 @@ export function AccountStatementView({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {statement.issuedChecks.map((c) => (
+                {initial.issuedChecks.map((c) => (
                   <TableRow key={c.id}>
                     <TableCell>
                       <Link href={`/dashboard/treasury/own-checks/${c.id}`} className="font-mono text-xs underline underline-offset-4">
@@ -212,10 +217,11 @@ export function AccountStatementView({
                     </TableCell>
                     <TableCell>{c.supplier ?? '—'}</TableCell>
                     <TableCell className="tabular-nums">
-                      {c.paymentDate ? day(c.paymentDate) : '—'}
-                      {ownCheckAlert('ISSUED', c.paymentDate, statement.today) && (
-                        <Badge variant="outline" className="ml-2 border-amber-500 text-amber-700 dark:text-amber-400">
-                          {OWN_CHECK_ALERT_LABEL}
+                      {c.paymentDate ? formatDay(c.paymentDate) : '—'}
+                      {ownCheckAlert('ISSUED', c.paymentDate, initial.today) && (
+                        <Badge variant={TONE_TO_BADGE[OWN_CHECK_ALERT_UI.PENDING_CONFIRMATION.tone]} className="ml-2">
+                          <Clock aria-hidden="true" />
+                          {OWN_CHECK_ALERT_UI.PENDING_CONFIRMATION.label}
                         </Badge>
                       )}
                     </TableCell>
@@ -232,36 +238,62 @@ export function AccountStatementView({
         <CardHeader className="flex flex-col gap-3 space-y-0 md:flex-row md:items-end md:justify-between">
           <div className="space-y-1">
             <CardTitle className="text-base">Movimientos</CardTitle>
-            <CardDescription>
-              {isFetching ? 'Actualizando…' : `${statement.rows.length} movimientos del ${day(statement.from)} al ${day(statement.to)}`}
+            <CardDescription aria-live="polite">
+              {isFetching ? 'Actualizando…' : statement ? `${statement.rows.length} movimientos del ${formatDay(statement.from)} al ${formatDay(statement.to)}` : 'Sin datos para el período'}
             </CardDescription>
+            <p className="text-xs text-muted-foreground">El período puede abarcar hasta {MAX_ACCOUNT_STATEMENT_MONTHS} meses.</p>
           </div>
           <div className="flex flex-wrap items-end gap-2">
             <div className="space-y-1">
-              <Label className="text-xs">Desde</Label>
+              <Label htmlFor="statement-from" className="text-xs">Desde</Label>
               <EnhancedDatePicker
+                id="statement-from"
+                aria-label="Desde"
                 date={range.from ? moment(range.from, 'YYYY-MM-DD').toDate() : undefined}
                 setDate={(d) => setRange((r) => ({ ...r, from: d ? moment(d).format('YYYY-MM-DD') : '' }))}
                 placeholder="DD/MM/AAAA"
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Hasta</Label>
+              <Label htmlFor="statement-to" className="text-xs">Hasta</Label>
               <EnhancedDatePicker
+                id="statement-to"
+                aria-label="Hasta"
                 date={range.to ? moment(range.to, 'YYYY-MM-DD').toDate() : undefined}
                 setDate={(d) => setRange((r) => ({ ...r, to: d ? moment(d).format('YYYY-MM-DD') : '' }))}
                 placeholder="DD/MM/AAAA"
               />
             </div>
-            <Button type="button" variant="outline" size="sm" disabled={excel.isPending} onClick={() => excel.mutate(statement)}>
-              <FileSpreadsheet className="mr-1 h-4 w-4" />
+            <Button type="button" variant="outline" size="sm" disabled={excel.isPending || isFetching || !statement} onClick={() => statement && excel.mutate(statement)}>
+              <FileSpreadsheet aria-hidden="true" className="mr-1 h-4 w-4" />
               Excel
             </Button>
           </div>
         </CardHeader>
         <CardContent>
-          {!validRange && <p className="pb-3 text-sm text-red-600 dark:text-red-400">Elegí un período válido: «Hasta» no puede ser anterior a «Desde».</p>}
-          <div className="overflow-x-auto">
+          {rangeError && (
+            <p role="alert" className="pb-3 text-sm text-danger">
+              {rangeError}
+            </p>
+          )}
+          {!statement && validRange && (
+            isFetching ? (
+              <p className="py-6 text-center text-sm text-muted-foreground" aria-busy="true">Cargando el período…</p>
+            ) : (
+              <StateBlock
+              variant="error"
+              title="No se pudo cargar el período"
+              description="La consulta falló o devolvió un período inválido. El Excel queda deshabilitado hasta que carguen los datos."
+              action={
+                <Button type="button" variant="outline" size="sm" onClick={() => refetch()}>
+                  Reintentar
+                </Button>
+              }
+            />
+            )
+          )}
+          {statement && (
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Movimientos del período">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -275,7 +307,7 @@ export function AccountStatementView({
               </TableHeader>
               <TableBody>
                 <TableRow className="bg-muted/40">
-                  <TableCell>{day(statement.from)}</TableCell>
+                  <TableCell>{formatDay(statement.from)}</TableCell>
                   <TableCell className="font-medium" colSpan={4}>
                     Saldo anterior
                   </TableCell>
@@ -290,7 +322,7 @@ export function AccountStatementView({
                 )}
                 {statement.rows.map((r) => (
                   <TableRow key={r.id} className={r.cancelled ? 'text-muted-foreground' : undefined}>
-                    <TableCell className="whitespace-nowrap">{day(r.date)}</TableCell>
+                    <TableCell className="whitespace-nowrap">{formatDay(r.date)}</TableCell>
                     <TableCell>
                       <div className={r.cancelled ? 'line-through' : undefined}>
                         <span className="text-xs text-muted-foreground">
@@ -300,10 +332,16 @@ export function AccountStatementView({
                         {detailOf(r)}
                       </div>
                       <div className="flex flex-wrap gap-1 pt-0.5">
-                        {r.cancelled && <span className="text-xs">Anulado: {r.cancelReason}</span>}
+                        {r.cancelled && (
+                          <Badge variant={TONE_TO_BADGE[MOVEMENT_STATE_UI.CANCELLED.tone]} className="text-xs">
+                            <Ban aria-hidden="true" />
+                            {MOVEMENT_STATE_UI.CANCELLED.label}: {r.cancelReason}
+                          </Badge>
+                        )}
                         {!r.cancelled && r.reconciled && (
-                          <Badge variant="outline" className="mr-1 border-emerald-600 text-emerald-700 dark:text-emerald-400" title="Conciliado con el extracto del banco">
-                            Conciliado
+                          <Badge variant={TONE_TO_BADGE[MOVEMENT_STATE_UI.RECONCILED.tone]} title="Conciliado con el extracto del banco">
+                            <CheckCheck aria-hidden="true" />
+                            {MOVEMENT_STATE_UI.RECONCILED.label}
                           </Badge>
                         )}
                         {!r.cancelled && r.future && (
@@ -326,7 +364,7 @@ export function AccountStatementView({
                   </TableRow>
                 ))}
                 <TableRow className="bg-muted/40">
-                  <TableCell>{day(statement.to)}</TableCell>
+                  <TableCell>{formatDay(statement.to)}</TableCell>
                   <TableCell className="font-medium" colSpan={4}>
                     Saldo final
                   </TableCell>
@@ -335,6 +373,7 @@ export function AccountStatementView({
               </TableBody>
             </Table>
           </div>
+          )}
         </CardContent>
       </Card>
     </div>

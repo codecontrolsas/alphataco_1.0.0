@@ -40,7 +40,8 @@ export function buildPreEmployeeDefaultValues(
     gender: preEmployee.gender ?? undefined,
     marital_status: preEmployee.marital_status ?? undefined,
     level_of_education: preEmployee.level_of_education ?? undefined,
-    picture: preEmployee.picture ?? undefined,
+    // La foto guardada NO entra al form: `undefined` = no tocar (ver `buildEmployeeDefaultValues`).
+    picture: undefined,
     street: preEmployee.street,
     street_number: preEmployee.street_number,
     province: Number(preEmployee.province),

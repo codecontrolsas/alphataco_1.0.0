@@ -1,32 +1,29 @@
 'use client';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import moment from 'moment';
+import { AttentionBanner } from '@/features/Mantenimiento/shared/components/AttentionBanner';
+import { Field, FieldGrid } from '@/shared/components/common/FieldGrid';
+import { RecordHeader } from '@/shared/components/common/RecordHeader';
+import { SectionCard } from '@/shared/components/common/SectionCard';
+import { Timeline, type TimelineItem } from '@/shared/components/common/Timeline';
 import Link from 'next/link';
-import { useState, type ReactNode } from 'react';
-import { cancelCheckOperation, cancelOpeningCheck, type CheckDetail } from '../../actions/checks.server';
+import { useState } from 'react';
+import { cancelCheckOperation, cancelOpeningCheck } from '../../actions/checks.server';
+import type { CheckDetail } from '../../lib/check-types';
 import { CancelReasonDialog } from '../../components/CancelReasonDialog';
-import { CHECK_KIND_LABELS, CHECK_STATUS_LABELS } from '../../lib/check-transitions';
-import { DEPOSIT_WARNING_LABELS } from '../../lib/checks-dates';
+import { TreasuryStatusBadge } from '../../components/TreasuryStatusBadge';
+import { CHECK_KIND_LABELS } from '../../lib/check-transitions';
 import { formatInCurrency } from '../../lib/currency-format';
+import { formatDay } from '../../lib/dates';
+import { CHECK_STATUS_UI, DEPOSIT_WARNING_UI } from '../../lib/status-presentation';
 import { formatArgentinaDateTime } from '../../lib/today';
 import { RETURNED_BY_LABELS } from '../../schemas/checks';
 import { RejectCheckDialog } from './RejectCheckDialog';
 
-const dmy = (value: string | null) => (value ? moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY') : '—');
+const dmy = (value: string | null) => formatDay(value) || '—';
 const cuit = (value: string) => (value.length === 11 ? `${value.slice(0, 2)}-${value.slice(2, 10)}-${value.slice(10)}` : value);
 
-const STATUS_BADGE: Record<CheckDetail['status'], 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  IN_PORTFOLIO: 'default',
-  DEPOSITED: 'secondary',
-  ENDORSED: 'secondary',
-  DISCOUNTED: 'secondary',
-  REJECTED: 'destructive',
-  CANCELLED: 'outline',
-};
+const TIMELINE_TONE: Record<string, TimelineItem['tone']> = { danger: 'danger', warn: 'warn', ok: 'ok' };
 
 const OPERATION_LABELS: Record<string, string> = { DEPOSIT: 'depósito', DISCOUNT: 'descuento', REJECTION: 'rechazo' };
 
@@ -40,49 +37,46 @@ export function CheckDetailView({ detail, can }: { detail: CheckDetail; can: { r
   const canCancelLast = can.cancel && last !== null;
 
   const destination = detail.bankAccount?.name ?? detail.supplier?.name ?? null;
-  const facts: [string, ReactNode][] = [
-    ['Tipo', CHECK_KIND_LABELS[detail.kind]],
-    ['Importe', <span key="amount" className="font-semibold tabular-nums">{formatInCurrency(detail.amount, 'ARS')}</span>],
-    ['Librador', `${detail.drawerName} · CUIT ${cuit(detail.drawerCuit)}`],
-    ['Cliente', detail.customer.name],
-    ['Emisión', dmy(detail.issueDate)],
-    ['Fecha de pago', dmy(detail.paymentDate)],
-    ['Vence para depositar', dmy(detail.depositDeadline)],
-    ['Cartera', detail.portfolio.name],
-    ...(destination ? ([['Destino', destination]] as [string, ReactNode][]) : []),
-    ...(detail.creditedOn ? ([['Acreditación', dmy(detail.creditedOn)]] as [string, ReactNode][]) : []),
-    [
-      'Origen',
-      detail.receipt ? (
-        <Link key="origin" href={`/dashboard/treasury/receipts/${detail.receipt.id}`} className="underline underline-offset-2">
-          Recibo {detail.receipt.number}
-        </Link>
-      ) : (
-        'Carga inicial'
+  const warning = detail.depositWarning !== 'OK' ? DEPOSIT_WARNING_UI[detail.depositWarning] : null;
+
+  const timeline: TimelineItem[] = detail.events.map((e) => {
+    const ui = CHECK_STATUS_UI[e.toStatus];
+    return {
+      tone: TIMELINE_TONE[ui.tone] ?? 'brand',
+      title: `${e.fromStatus ? `${CHECK_STATUS_UI[e.fromStatus].label} → ` : ''}${ui.label}`,
+      meta: (
+        <>
+          <span className="tabular-nums">{dmy(e.date)}</span>
+          {e.user ? ` · ${e.user}` : ''} · registrado <span className="tabular-nums">{formatArgentinaDateTime(e.createdAt)}</span>
+        </>
       ),
-    ],
-  ];
+      children: e.document ? (
+        <p className="text-sm">
+          {e.document.href ? (
+            <Link href={e.document.href} className="underline underline-offset-2">
+              {e.document.label}
+            </Link>
+          ) : (
+            e.document.label
+          )}
+        </p>
+      ) : null,
+    };
+  });
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={STATUS_BADGE[detail.status]}>{CHECK_STATUS_LABELS[detail.status]}</Badge>
-            {detail.depositWarning !== 'OK' && (
-              <Badge
-                variant="outline"
-                className={
-                  detail.depositWarning === 'EXPIRED'
-                    ? 'border-red-600 text-red-700 dark:border-red-400 dark:text-red-400'
-                    : 'border-amber-600 text-amber-700 dark:border-amber-400 dark:text-amber-400'
-                }
-              >
-                {DEPOSIT_WARNING_LABELS[detail.depositWarning]}
-              </Badge>
-            )}
+    <div className="mx-auto max-w-5xl space-y-4">
+      <RecordHeader
+        identity={
+          <div className="space-y-2">
+            <h1 className="text-2xl font-semibold">
+              Cheque Nº {detail.number} · {detail.bank}
+            </h1>
+            <TreasuryStatusBadge ui={CHECK_STATUS_UI[detail.status]} />
           </div>
-          <div className="flex flex-wrap gap-2">
+        }
+        actions={
+          <>
             {canReject && (
               <Button type="button" size="sm" variant="destructive" onClick={() => setRejecting(true)}>
                 Registrar rechazo
@@ -103,36 +97,51 @@ export function CheckDetailView({ detail, can }: { detail: CheckDetail; can: { r
                 <Link href={`/dashboard/purchases/payments/${detail.endorsement.id}`}>Endosado en la {detail.endorsement.number}</Link>
               </Button>
             )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
-            {facts.map(([label, value]) => (
-              <div key={label}>
-                <dt className="text-xs text-muted-foreground">{label}</dt>
-                <dd>{value}</dd>
-              </div>
-            ))}
-          </dl>
-          {last?.kind === 'REJECTION' && (
-            <p className="mt-3 text-sm text-muted-foreground">
-              Rechazo {last.number} del {dmy(last.date)}: {last.reason} (lo devolvió {last.returnedBy ? RETURNED_BY_LABELS[last.returnedBy].toLowerCase() : '—'}).
-            </p>
-          )}
-          {last?.kind === 'DISCOUNT' && (
-            <p className="mt-3 text-sm text-muted-foreground tabular-nums">
-              Descuento {last.number} del {dmy(last.date)}: intereses {formatInCurrency(last.interest, 'ARS')}, comisión {formatInCurrency(last.fee, 'ARS')}.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+          </>
+        }
+      />
+
+      {warning && <AttentionBanner tone={warning.tone === 'danger' ? 'danger' : 'warn'} title={warning.label} />}
+
+      <SectionCard title="Datos del cheque">
+        <FieldGrid>
+          <Field label="Tipo" value={CHECK_KIND_LABELS[detail.kind]} />
+          <Field label="Importe">
+            <span className="tabular-nums">{formatInCurrency(detail.amount, 'ARS')}</span>
+          </Field>
+          <Field label="Librador" value={`${detail.drawerName} · CUIT ${cuit(detail.drawerCuit)}`} />
+          <Field label="Cliente" value={detail.customer.name} />
+          <Field label="Emisión" value={dmy(detail.issueDate)} mono />
+          <Field label="Fecha de pago" value={dmy(detail.paymentDate)} mono />
+          <Field label="Vence para depositar" value={dmy(detail.depositDeadline)} mono />
+          <Field label="Cartera" value={detail.portfolio.name} />
+          {destination && <Field label="Destino" value={destination} />}
+          {detail.creditedOn && <Field label="Acreditación" value={dmy(detail.creditedOn)} mono />}
+          <Field label="Origen">
+            {detail.receipt ? (
+              <Link href={`/dashboard/treasury/receipts/${detail.receipt.id}`} className="underline underline-offset-2">
+                Recibo {detail.receipt.number}
+              </Link>
+            ) : (
+              'Carga inicial'
+            )}
+          </Field>
+        </FieldGrid>
+        {last?.kind === 'REJECTION' && (
+          <p className="mt-4 text-sm text-muted-foreground">
+            Rechazo {last.number} del {dmy(last.date)}: {last.reason} (lo devolvió {last.returnedBy ? RETURNED_BY_LABELS[last.returnedBy].toLowerCase() : '—'}).
+          </p>
+        )}
+        {last?.kind === 'DISCOUNT' && (
+          <p className="mt-4 text-sm text-muted-foreground tabular-nums">
+            Descuento {last.number} del {dmy(last.date)}: intereses {formatInCurrency(last.interest, 'ARS')}, comisión {formatInCurrency(last.fee, 'ARS')}.
+          </p>
+        )}
+      </SectionCard>
 
       {(detail.customerDebt || detail.supplierDebt) && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Deuda por el rechazo</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
+        <SectionCard title="Deuda por el rechazo">
+          <div className="space-y-2 text-sm">
             {detail.customerDebt && (
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span>
@@ -155,50 +164,13 @@ export function CheckDetailView({ detail, can }: { detail: CheckDetail; can: { r
                 <span className="text-muted-foreground"> · se paga con una orden de pago en Compras</span>
               </p>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </SectionCard>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Historial</CardTitle>
-        </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Documento</TableHead>
-                <TableHead>Usuario</TableHead>
-                <TableHead>Registrado</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {detail.events.map((e) => (
-                <TableRow key={e.id}>
-                  <TableCell className="tabular-nums">{dmy(e.date)}</TableCell>
-                  <TableCell>
-                    {e.fromStatus ? `${CHECK_STATUS_LABELS[e.fromStatus]} → ` : ''}
-                    {CHECK_STATUS_LABELS[e.toStatus]}
-                  </TableCell>
-                  <TableCell>
-                    {e.document?.href ? (
-                      <Link href={e.document.href} className="underline underline-offset-2">
-                        {e.document.label}
-                      </Link>
-                    ) : (
-                      (e.document?.label ?? '—')
-                    )}
-                  </TableCell>
-                  <TableCell>{e.user}</TableCell>
-                  <TableCell className="tabular-nums text-muted-foreground">{formatArgentinaDateTime(e.createdAt)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <SectionCard title="Historial">
+        {timeline.length > 0 ? <Timeline items={timeline} /> : <p className="text-sm text-muted-foreground">Sin movimientos registrados.</p>}
+      </SectionCard>
 
       {canReject && <RejectCheckDialog open={rejecting} onOpenChange={setRejecting} check={{ id: detail.id, number: detail.number, bank: detail.bank, status: detail.status }} />}
       {(canCancelLast || canCancelOpening) && (

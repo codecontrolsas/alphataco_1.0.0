@@ -1,46 +1,80 @@
 /**
  * Plan de escritura de una subida de documento (módulo puro).
  *
- * Semántica legacy conservada: la unidad es `(recurso, tipo, período)`, NO `(recurso, tipo)`.
- * Un tipo mensual (o no obligatorio) admite varias filas por recurso, una por período; el
- * período de un permanente es `null`. Para cada recurso pedido:
- * - sin fila para ese período → `toCreate`;
- * - fila vigente `presentado`/`aprobado` con archivo → `alreadyUploaded` (no se pisa: N=1 lo
- *   informa como error, el flujo multirecurso la ignora);
- * - fila `pendiente`, `rechazado`, `vencido` o archivada ("ya no aplica") → `toUpdate`
- *   (el llamador la reactiva con `archived_at = null` y conserva el período existente).
+ * Modelo derivado: la fila existe sólo si hay archivo; no hay filas `pendiente` vacías que
+ * "completar". La unidad es `(recurso, tipo, período)`: un tipo mensual admite una fila por período
+ * (normalizado `YYYY-MM`), un permanente una sola (período `null`). Para cada recurso pedido:
+ * - ya tiene un documento VIGENTE (con archivo, no rechazado, no vencido por fecha argentina o por
+ *   estado) → `skipped` (no se pisa: N=1 lo informa como error, el flujo multirrecurso lo ignora);
+ * - tiene uno VENCIDO o RECHAZADO → `toRenew` (se actualiza esa fila, misma semántica que renovar);
+ * - sólo tiene una fila legacy vacía (sin archivo) → `toFill` (se reutiliza en vez de insertar, para
+ *   no dejar basura hasta la migración que las borra);
+ * - no tiene nada → `toCreate` (fila nueva).
  */
+import { normalizePeriod as normalizeComplianceDate, parseValidity } from '../compliance/dates';
+
 export interface ExistingDocumentRow {
+  id: string;
   applies: string | null;
   state: string | null;
   document_path: string | null;
   period: string | null;
-  archived_at: Date | null;
+  validity: Date | null;
+}
+
+export interface PlanWritesOptions {
+  /** Período pedido (`YYYY-MM` o `MM/YYYY`); sólo cuenta para tipos mensuales. */
+  period: string | undefined | null;
+  /** El tipo tiene vencimiento: una validez pasada hace vencido al documento. */
+  hasExpiry: boolean;
+  /** `YYYY-MM-DD` de hoy en hora argentina (`arToday`). */
+  today: string;
+}
+
+/** Fila a actualizar: el recurso al que pertenece y su id. */
+export interface RowToUpdate {
+  applies: string;
+  id: string;
 }
 
 export interface DocumentWritePlan {
-  toUpdate: string[];
+  /** Tenían un documento vencido o rechazado: se actualiza esa fila con el archivo nuevo. */
+  toRenew: RowToUpdate[];
+  /** Sólo tenían una fila legacy vacía: se reutiliza. */
+  toFill: RowToUpdate[];
+  /** No tenían nada: se crea una fila. */
   toCreate: string[];
-  alreadyUploaded: string[];
+  /** Ya tenían un documento vigente de ese período: no se toca. */
+  skipped: string[];
 }
 
-/** Período normalizado para comparar y persistir: permanentes → `null`. */
+/** Período normalizado `YYYY-MM` para comparar y persistir: permanentes (o inválido) → `null`. */
 export function normalizePeriod(period: string | undefined | null): string | null {
-  return period ? period : null;
+  return normalizeComplianceDate(period);
 }
 
-function isUploaded(row: ExistingDocumentRow): boolean {
-  return (
-    row.document_path !== null && row.archived_at === null && (row.state === 'presentado' || row.state === 'aprobado')
-  );
+function hasFile(row: ExistingDocumentRow): boolean {
+  return typeof row.document_path === 'string' && row.document_path.trim() !== '';
+}
+
+function isExpired(row: ExistingDocumentRow, options: PlanWritesOptions): boolean {
+  if (row.state === 'vencido') return true;
+  if (!options.hasExpiry) return false;
+  const day = parseValidity(row.validity);
+  // El día del vencimiento todavía vale.
+  return day !== null && day < options.today;
+}
+
+function isCurrent(row: ExistingDocumentRow, options: PlanWritesOptions): boolean {
+  return hasFile(row) && row.state !== 'rechazado' && !isExpired(row, options);
 }
 
 export function planDocumentWrites(
   existing: readonly ExistingDocumentRow[],
   appliesIds: readonly string[],
-  period: string | undefined | null
+  options: PlanWritesOptions
 ): DocumentWritePlan {
-  const target = normalizePeriod(period);
+  const target = normalizePeriod(options.period);
   const byResource = new Map<string, ExistingDocumentRow[]>();
   for (const row of existing) {
     if (!row.applies || normalizePeriod(row.period) !== target) continue;
@@ -49,16 +83,21 @@ export function planDocumentWrites(
     byResource.set(row.applies, rows);
   }
 
-  const plan: DocumentWritePlan = { toUpdate: [], toCreate: [], alreadyUploaded: [] };
+  const plan: DocumentWritePlan = { toRenew: [], toFill: [], toCreate: [], skipped: [] };
   for (const id of appliesIds) {
-    const rows = byResource.get(id);
-    if (!rows || rows.length === 0) {
-      plan.toCreate.push(id);
-    } else if (rows.some(isUploaded)) {
-      plan.alreadyUploaded.push(id);
-    } else {
-      plan.toUpdate.push(id);
+    const rows = byResource.get(id) ?? [];
+    if (rows.some((row) => isCurrent(row, options))) {
+      plan.skipped.push(id);
+      continue;
     }
+    const withFile = rows.find(hasFile);
+    if (withFile) {
+      plan.toRenew.push({ applies: id, id: withFile.id });
+      continue;
+    }
+    const empty = rows[0];
+    if (empty) plan.toFill.push({ applies: id, id: empty.id });
+    else plan.toCreate.push(id);
   }
   return plan;
 }

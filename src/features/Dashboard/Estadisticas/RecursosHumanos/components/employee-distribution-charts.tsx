@@ -1,73 +1,37 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Logger } from '@/lib/logger';
 import { getEmployeesByContractType, getEmployeesByGenderAndPosition } from '../actions.server';
 import { EmployeeContractTypeChartComponent } from './charts/employee-contract-type-chart';
 import { EmployeeGenderPositionChartComponent } from './charts/employee-gender-position-chart';
 
-const logger = new Logger('features/Dashboard/RRHH/EmployeeDistributionCharts');
-
 export default async function EmployeeDistributionCharts() {
-  try {
-    // Obtener datos de ambos gráficos en paralelo
-    const [genderPositionData, contractTypeData] = await Promise.all([
-      getEmployeesByGenderAndPosition(),
-      getEmployeesByContractType(),
-    ]);
+  // Si una consulta falla, el SectionErrorBoundary del tablero lo muestra: un gráfico vacío con
+  // «sin datos» afirmaría que no hay empleados cuando en realidad no se pudieron leer.
+  const [genderPositionData, contractTypeData] = await Promise.all([
+    getEmployeesByGenderAndPosition(),
+    getEmployeesByContractType(),
+  ]);
 
-    return (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Gráfico de Género y Posición */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Distribución de Empleados</CardTitle>
-            <CardDescription>Visualización de empleados por género y posición en la empresa</CardDescription>
-          </CardHeader>
-          <CardContent className="h-full">
-            <EmployeeGenderPositionChartComponent data={genderPositionData} />
-          </CardContent>
-        </Card>
+  return (
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,24rem),1fr))] gap-6">
+      <Card className="@container min-w-0">
+        <CardHeader>
+          <CardTitle>Distribución de Empleados</CardTitle>
+          <CardDescription>Visualización de empleados por género y posición en la empresa</CardDescription>
+        </CardHeader>
+        <CardContent className="h-full">
+          <EmployeeGenderPositionChartComponent data={genderPositionData} />
+        </CardContent>
+      </Card>
 
-        {/* Gráfico de Tipo de Contrato */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Tipos de Contrato</CardTitle>
-            <CardDescription>Distribución de empleados según su tipo de contrato</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <EmployeeContractTypeChartComponent data={contractTypeData} />
-          </CardContent>
-        </Card>
-      </div>
-    );
-  } catch (error) {
-    logger.error('Error al cargar gráficos de distribución de empleados', { data: { error } });
-
-    return (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Distribución de Empleados</CardTitle>
-            <CardDescription>Error al cargar los datos</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-center h-[300px] text-muted-foreground">
-              Error al cargar los datos de distribución por género y posición
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Tipos de Contrato</CardTitle>
-            <CardDescription>Error al cargar los datos</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-center h-[300px] text-muted-foreground">
-              Error al cargar los datos de distribución por tipo de contrato
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+      <Card className="@container min-w-0">
+        <CardHeader>
+          <CardTitle>Tipos de Contrato</CardTitle>
+          <CardDescription>Distribución de empleados según su tipo de contrato</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <EmployeeContractTypeChartComponent data={contractTypeData} />
+        </CardContent>
+      </Card>
+    </div>
+  );
 }

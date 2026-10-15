@@ -3,12 +3,11 @@
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { REMIT_NUMBERS_SELECT } from '../remitManager/lib/remit-numbers';
 
 const logger = new Logger('features/Operaciones/PartesDiarios/detail/form-data');
 
 // ============================================================================
-// 11. FORM DATA — customers, services, items, sectors, areas, equipment
+// FORM DATA — catálogos (clientes, empleados, equipos) del formulario de línea
 // ============================================================================
 
 /**
@@ -88,74 +87,6 @@ export async function getCustomersForForm() {
 
 export type CustomersForForm = Awaited<ReturnType<typeof getCustomersForForm>>;
 export type CustomerForForm = CustomersForForm[number];
-
-/**
- * Returns a single row by id to pre-populate the edit form.
- * Includes all relations needed (employees with roles, equipment, customer equipment).
- */
-export async function getDailyReportRowForForm(rowId: string) {
-  logger.debug('Obteniendo fila del parte para el formulario', { data: { rowId } });
-
-  try {
-    // Perímetro: sólo datos de la empresa activa.
-    const companyId = await getActiveCompanyId();
-
-    const row = await prisma.dailyreportrows.findUnique({
-      where: { id: rowId, dailyreport: { company_id: companyId } },
-      select: {
-        id: true,
-        customer_id: true,
-        service_id: true,
-        item_id: true,
-        status: true,
-        working_day: true,
-        shift_12h: true,
-        start_time: true,
-        end_time: true,
-        description: true,
-        document_path: true,
-        sector_service_id: true,
-        areas_service_id: true,
-        cancel_reason: true,
-        type_service: true,
-        completed_day: true,
-        completed_night: true,
-        preparte_id: true,
-        dailyreportemployeerelations: {
-          select: {
-            id: true,
-            employee_id: true,
-            role: true,
-          },
-        },
-        dailyreportequipmentrelations: {
-          select: {
-            id: true,
-            equipment_id: true,
-            other_equipment_id: true,
-            // Para mostrar en el form los ya guardados que no están en la lista de opciones
-            other_equipment: {
-              select: { id: true, intern_number: true, serial_number: true, is_active: true },
-            },
-          },
-        },
-        dailyreport_customer_equipment_relations: {
-          select: {
-            id: true,
-            customer_equipment_id: true,
-          },
-        },
-      },
-    });
-
-    return row;
-  } catch (error) {
-    logger.error('Error al obtener fila del parte para el formulario', { data: { error, rowId } });
-    throw new Error('No se pudo obtener la fila. Intente nuevamente.');
-  }
-}
-
-export type DailyReportRowForForm = Awaited<ReturnType<typeof getDailyReportRowForForm>>;
 
 /**
  * Returns all active employees for the daily report form,
@@ -303,128 +234,5 @@ export async function getOtherEquipmentForForm() {
 export type OtherEquipmentForForm = Awaited<ReturnType<typeof getOtherEquipmentForForm>>;
 export type OtherEquipmentItem = OtherEquipmentForForm[number];
 
-// ============================================================================
-// 15. ROW DETAIL (on-demand — ServiceDetailDialog)
-// ============================================================================
-
-/**
- * Fetches full detail data for a single row, including enriched employee/equipment info.
- * Used by ServiceDetailDialog to show DNI, email, phone, position, brand, model, etc.
- * This is fetched on-demand (not in the paginated query) to avoid bloating the main payload.
- */
-export async function getDailyReportRowDetail(rowId: string) {
-  logger.debug('Obteniendo detalle enriquecido de fila del parte diario', { data: { rowId } });
-
-  try {
-    // Perímetro: sólo datos de la empresa activa.
-    const companyId = await getActiveCompanyId();
-
-    const row = await prisma.dailyreportrows.findUnique({
-      where: { id: rowId, dailyreport: { company_id: companyId } },
-      select: {
-        id: true,
-        customer_id: true,
-        service_id: true,
-        item_id: true,
-        description: true,
-        status: true,
-        working_day: true,
-        shift_12h: true,
-        start_time: true,
-        end_time: true,
-        remitos: REMIT_NUMBERS_SELECT,
-        cancel_reason: true,
-        type_service: true,
-        completed_day: true,
-        completed_night: true,
-        last_comercial_edit_at: true,
-        customers: {
-          select: { id: true, name: true },
-        },
-        customer_services: {
-          select: { id: true, service_name: true },
-        },
-        service_items: {
-          select: { id: true, item_name: true, item_description: true },
-        },
-        service_sectors: {
-          select: {
-            id: true,
-            sectors: { select: { id: true, name: true } },
-          },
-        },
-        service_areas: {
-          select: {
-            id: true,
-            areas_cliente: { select: { id: true, descripcion_corta: true } },
-          },
-        },
-        preparte: {
-          select: { id: true, numero_pedido: true },
-        },
-        dailyreportemployeerelations: {
-          select: {
-            id: true,
-            employee_id: true,
-            role: true,
-            employees: {
-              select: {
-                id: true,
-                firstname: true,
-                lastname: true,
-                file: true,
-                cuil: true,
-                email: true,
-                phone: true,
-                hierarchy: { select: { name: true } },
-              },
-            },
-          },
-        },
-        dailyreportequipmentrelations: {
-          select: {
-            id: true,
-            equipment_id: true,
-            other_equipment_id: true,
-            vehicles: {
-              select: {
-                id: true,
-                domain: true,
-                intern_number: true,
-                year: true,
-                condition: true,
-                brand_vehicles: { select: { name: true } },
-                model_vehicles: { select: { name: true } },
-                types_of_vehicles: { select: { name: true } },
-              },
-            },
-            other_equipment: {
-              select: {
-                id: true,
-                intern_number: true,
-                serial_number: true,
-              },
-            },
-          },
-        },
-        dailyreport_customer_equipment_relations: {
-          select: {
-            id: true,
-            customer_equipment_id: true,
-            equipos_clientes: {
-              select: { name: true, type: true },
-            },
-          },
-        },
-      },
-    });
-
-    return row;
-  } catch (error) {
-    logger.error('Error al obtener detalle de fila del parte diario', { data: { error, rowId } });
-    throw new Error('No se pudo obtener el detalle de la fila. Intente nuevamente.');
-  }
-}
-
-export type DailyReportRowDetailData = Awaited<ReturnType<typeof getDailyReportRowDetail>>;
-
+// El formulario de edición y el detalle de línea viven en `form-data/`; los tipos se re-exportan para no mover importadores.
+export type { DailyReportRowForForm } from './form-data/row-form.server';

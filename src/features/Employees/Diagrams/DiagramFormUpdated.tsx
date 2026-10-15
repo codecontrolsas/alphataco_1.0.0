@@ -1,25 +1,22 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
-import { Switch } from '@/components/ui/switch';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Textarea } from '@/components/ui/textarea';
 import { CreateDiagrams, UpdateDiagramsById } from '@/features/Employees/Diagrams/actions/mutations.server';
-import {
-  getEmployeeDiagramByIdandDate,
-  getEmployeesName,
-} from '@/features/Employees/Diagrams/actions/queries.server';
-import { DayCommentCell } from '@/features/Employees/Diagrams/components/DayCommentCell';
+import { getEmployeeDiagramByIdandDate, getEmployeesName } from '@/features/Employees/Diagrams/actions/queries.server';
+import { DiagramCommentFields } from '@/features/Employees/Diagrams/components/DiagramCommentFields';
 import { DiagramLoadSummary } from '@/features/Employees/Diagrams/components/DiagramLoadSummary';
+import { DuplicateDiagramsCard } from '@/features/Employees/Diagrams/components/DuplicateDiagramsCard';
+import { NewDiagramsCard } from '@/features/Employees/Diagrams/components/NewDiagramsCard';
 import { diagramFormSchema, type DiagramFormValues } from '@/features/Employees/Diagrams/schemas/diagram-form-schema';
+import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
+import { CatalogTableSurface } from '@/shared/components/common/CatalogFormSheet';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import moment from 'moment';
+import { useRouter } from 'next/navigation';
 import { useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -53,12 +50,19 @@ type ExistingDiagramEntry = DiagramQueryResult & {
 };
 
 /** Clave estable de un dia dentro de la lista de diagramas a crear. */
-const dayKey = (diagram: { day: number; month: number; year: number }) =>
+export const dayKey = (diagram: { day: number; month: number; year: number }) =>
   `${diagram.year}-${diagram.month}-${diagram.day}`;
 
 /** Fecha del dia en formato DD/MM/YYYY para mostrar y para los nombres accesibles. */
-const formatDayLabel = (diagram: { day: number; month: number; year: number }) =>
+export const formatDayLabel = (diagram: { day: number; month: number; year: number }) =>
   moment(`${diagram.year}-${diagram.month}-${diagram.day}`, 'YYYY-M-D').format('DD/MM/YYYY');
+
+/** Convierte un resultado con `count` 0 en error, para que el toast no diga "correcto" sin haber cambiado nada. */
+async function requireAffected(operation: Promise<{ count: number }>, message: string) {
+  const result = await operation;
+  if (result.count === 0) throw new Error(message);
+  return result;
+}
 
 /** Lo mínimo que necesita el selector de novedad: sirve tanto la fila completa como `{ id, name }`. */
 type DiagramTypeOption = { id: string; name: string | null };
@@ -80,6 +84,22 @@ function DiagramFormUpdated({
   // Identifica la carga vigente: si se genera otra mientras una operacion esta en vuelo, el
   // reset de la anterior no debe vaciar el formulario de la nueva.
   const currentLoadRef = useRef(0);
+  const queryClient = useQueryClient();
+  const router = useRouter();
+  // Mismas reglas que el servidor (`CreateDiagrams` / `UpdateDiagramsById`): crear = `new:create`, editar = `new:update`;
+  // `employees:update` habilita ambas porque el formulario también se embebe en el detalle del empleado.
+  const { hasPermission } = usePermissions();
+  const canEditEmployee = hasPermission('empleados', 'employees', 'update');
+  const canCreate = hasPermission('empleados', 'new', 'create') || canEditEmployee;
+  const canUpdate = hasPermission('empleados', 'new', 'update') || canEditEmployee;
+
+  /** Refresca las pantallas que muestran novedades (búsqueda de diagramas y reportes). */
+  const refreshDiagramViews = () => {
+    queryClient.invalidateQueries({ queryKey: ['diagram-search'] });
+    queryClient.invalidateQueries({ queryKey: ['diagram-reports-paginated'] });
+    queryClient.invalidateQueries({ queryKey: ['datatable-facet'] });
+    router.refresh();
+  };
 
   // Cargar empleados on-demand via React Query (no SSR bulk)
   const { data: employees = [], isLoading: isLoadingEmployees } = useQuery({
@@ -245,16 +265,19 @@ function DiagramFormUpdated({
    * Ejecuta la operacion contra la BD y, si con esto no queda ninguna fila pendiente en las
    * dos tablas, limpia el formulario cuando la promesa termina bien. Se limpia al terminar
    * la carga completa y no fila por fila, porque puede seguir habiendo trabajo en la otra
-   * tabla. Ojo: las server actions loguean los errores por fila y no los propagan, asi que
-   * "termino bien" significa "la operacion no lanzo", no "se guardaron todas las filas".
+   * tabla. Las server actions devuelven `count` (filas realmente afectadas) y lanzan si la
+   * transaccion falla: los mensajes de exito usan ese `count`, no la cantidad enviada.
    */
   const runDiagramOperation = <T,>(
     operation: Promise<T>,
-    messages: { loading: string; success: string | ((result: T) => string); error: string },
+    messages: { loading: string; success: string | ((result: T) => string); error: string | ((e: unknown) => string) },
     remainingErrors: ErrorToCreate[],
     remainingSuccess: DiagramaToCreate[]
   ) => {
     toast.promise(operation, messages);
+    operation.then(refreshDiagramViews).catch(() => {
+      // El toast ya avisa del error.
+    });
 
     // El boton queda deshabilitado hasta que la BD responde, para no repetir la operacion
     setIsProcessing(true);
@@ -286,18 +309,22 @@ function DiagramFormUpdated({
     setErrorsDiagrams(remainingErrors);
 
     runDiagramOperation(
-      UpdateDiagramsById([
-        {
-          diagram_type: diagramType,
-          diagramId: diagramToUpdate.prev_diagram_entry_id,
-          // Sin comentario no se pisa el que ya tenia el dia registrado
-          ...(comments ? { comments } : {}),
-        },
-      ]),
+      requireAffected(
+        UpdateDiagramsById([
+          {
+            diagram_type: diagramType,
+            diagramId: diagramToUpdate.prev_diagram_entry_id,
+            // Sin comentario no se pisa el que ya tenia el dia registrado
+            ...(comments ? { comments } : {}),
+          },
+        ]),
+        'No se encontró el diagrama a actualizar: no se modificó ningún registro.'
+      ),
       {
         loading: 'Actualizando diagrama...',
-        success: 'Diagrama actualizado correctamente',
-        error: 'No se pudo actualizar el diagrama. Volvé a intentar.',
+        success: 'Diagrama actualizado',
+        error: (e) =>
+          e instanceof Error && e.message ? e.message : 'No se pudo actualizar el diagrama. Volvé a intentar.',
       },
       remainingErrors,
       succesDiagrams
@@ -318,11 +345,15 @@ function DiagramFormUpdated({
     setErrorsDiagrams([]);
 
     runDiagramOperation(
-      UpdateDiagramsById(payload),
+      requireAffected(UpdateDiagramsById(payload), 'No se actualizó ningún diagrama: los registros ya no existen.'),
       {
         loading: 'Actualizando diagramas...',
-        success: `Se actualizaron ${payload.length} diagramas`,
-        error: 'No se pudieron actualizar los diagramas. Volvé a intentar.',
+        success: ({ count }) =>
+          count === payload.length
+            ? `Se actualizaron ${count} diagramas`
+            : `Se actualizaron ${count} de ${payload.length} diagramas`,
+        error: (e) =>
+          e instanceof Error && e.message ? e.message : 'No se pudieron actualizar los diagramas. Volvé a intentar.',
       },
       [],
       succesDiagrams
@@ -341,20 +372,23 @@ function DiagramFormUpdated({
     setSuccesDiagrams(remainingSuccess);
 
     runDiagramOperation(
-      CreateDiagrams([
-        {
-          day,
-          month,
-          year,
-          employee_id: employeeId,
-          diagram_type: diagramType,
-          comments: comments || null,
-        },
-      ]),
+      requireAffected(
+        CreateDiagrams([
+          {
+            day,
+            month,
+            year,
+            employee_id: employeeId,
+            diagram_type: diagramType,
+            comments: comments || null,
+          },
+        ]),
+        'Ese día ya tenía una novedad cargada: no se creó nada.'
+      ),
       {
         loading: 'Creando diagrama...',
         success: 'Diagrama creado correctamente',
-        error: 'No se pudo crear el diagrama. Volvé a intentar.',
+        error: (e) => (e instanceof Error && e.message ? e.message : 'No se pudo crear el diagrama. Volvé a intentar.'),
       },
       errorsDiagrams,
       remainingSuccess
@@ -376,12 +410,16 @@ function DiagramFormUpdated({
     setSuccesDiagrams([]);
 
     runDiagramOperation(
-      CreateDiagrams(payload),
+      requireAffected(CreateDiagrams(payload), 'Todos esos días ya tenían una novedad cargada: no se creó nada.'),
       {
         loading: 'Creando diagramas...',
         // Los días que ya tenían registro se omiten (skipDuplicates): se informa lo que se creó de verdad.
-        success: ({ count }) => `Se crearon ${count} diagramas`,
-        error: 'No se pudieron crear los diagramas. Volvé a intentar.',
+        success: ({ count }) =>
+          count === payload.length
+            ? `Se crearon ${count} diagramas`
+            : `Se crearon ${count} de ${payload.length} diagramas`,
+        error: (e) =>
+          e instanceof Error && e.message ? e.message : 'No se pudieron crear los diagramas. Volvé a intentar.',
       },
       errorsDiagrams,
       []
@@ -407,330 +445,161 @@ function DiagramFormUpdated({
   const hasResults = errorsDiagrams?.length > 0 || succesDiagrams?.length > 0;
 
   return (
-    <ResizablePanelGroup direction="horizontal">
-      <ResizablePanel defaultSize={30} minSize={24}>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
-            <h2 className="mb-4 text-xl font-bold">{'Generar Diagrama'}</h2>
-            <div className="flex flex-col gap-6 px-2">
-              {/* Identificacion: a quien y que novedad se le carga */}
-              <div className="flex flex-col space-y-3">
-                <FormField
-                  control={form.control}
-                  name="employee_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Empleado</FormLabel>
-                      <MultiSelectCombobox
-                        options={employeesOptions}
-                        placeholder={isLoadingEmployees ? 'Cargando empleados...' : 'Selecciona un empleado'}
-                        emptyMessage={isLoadingEmployees ? 'Cargando...' : 'No hay empleados'}
-                        selectedValues={field.value as string[]}
-                        onChange={field.onChange}
-                        disabled={!!defaultId || isLoadingEmployees}
-                        maxSelections={1}
-                      />
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="diagram_type"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tipo de novedad</FormLabel>
-                      <MultiSelectCombobox
-                        options={diagramsTypeOptions}
-                        placeholder="Selecciona un tipo de novedad"
-                        emptyMessage="No hay tipos de novedades"
-                        selectedValues={field.value as string[]}
-                        onChange={field.onChange}
-                        maxSelections={1}
-                      />
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+    // Generador (no es un ABM): formulario arriba y, desde `@4xl` del contenedor, a la izquierda con los resultados al lado.
+    <div className="@container min-w-0">
+      <div className="grid grid-cols-1 items-start gap-4 @4xl:grid-cols-[22rem_minmax(0,1fr)]">
+        <CatalogTableSurface>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)}>
+              <h2 className="mb-4 text-xl font-bold">{'Generar Diagrama'}</h2>
+              <div className="flex flex-col gap-6 px-2">
+                {/* Identificacion: a quien y que novedad se le carga */}
+                <div className="flex flex-col space-y-3">
+                  <FormField
+                    control={form.control}
+                    name="employee_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Empleado</FormLabel>
+                        <MultiSelectCombobox
+                          options={employeesOptions}
+                          placeholder={isLoadingEmployees ? 'Cargando empleados...' : 'Selecciona un empleado'}
+                          emptyMessage={isLoadingEmployees ? 'Cargando...' : 'No hay empleados'}
+                          selectedValues={field.value as string[]}
+                          onChange={field.onChange}
+                          disabled={!!defaultId || isLoadingEmployees}
+                          maxSelections={1}
+                        />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="diagram_type"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Tipo de novedad</FormLabel>
+                        <MultiSelectCombobox
+                          options={diagramsTypeOptions}
+                          placeholder="Selecciona un tipo de novedad"
+                          emptyMessage="No hay tipos de novedades"
+                          selectedValues={field.value as string[]}
+                          onChange={field.onChange}
+                          maxSelections={1}
+                        />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {/* Periodo: se puede escribir la fecha o elegirla en el calendario */}
+                <div className="flex flex-col space-y-3">
+                  <FormField
+                    control={form.control}
+                    name="date_from"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel>Fecha desde</FormLabel>
+                        <FormControl>
+                          <EnhancedDatePicker
+                            key={`date-from-${datePickersKey}`}
+                            date={field.value}
+                            setDate={(date) => field.onChange(date)}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="date_to"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel>Fecha hasta</FormLabel>
+                        <FormControl>
+                          <EnhancedDatePicker
+                            key={`date-to-${datePickersKey}`}
+                            date={field.value}
+                            setDate={(date) => field.onChange(date)}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Escribí las fechas como DD/MM/AAAA o elegilas en el calendario.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <DiagramCommentFields control={form.control} customizeComments={customizeComments} />
               </div>
 
-              {/* Periodo: se puede escribir la fecha o elegirla en el calendario */}
-              <div className="flex flex-col space-y-3">
-                <FormField
-                  control={form.control}
-                  name="date_from"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel>Fecha desde</FormLabel>
-                      <FormControl>
-                        <EnhancedDatePicker
-                          key={`date-from-${datePickersKey}`}
-                          date={field.value}
-                          setDate={(date) => field.onChange(date)}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="date_to"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel>Fecha hasta</FormLabel>
-                      <FormControl>
-                        <EnhancedDatePicker
-                          key={`date-to-${datePickersKey}`}
-                          date={field.value}
-                          setDate={(date) => field.onChange(date)}
-                        />
-                      </FormControl>
-                      <FormDescription>Escribí las fechas como DD/MM/AAAA o elegilas en el calendario.</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              {/* Comentario de la carga + personalizacion por dia */}
-              <div className="flex flex-col space-y-3">
-                <FormField
-                  control={form.control}
-                  name="comments"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Comentarios (opcional)</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Ej: certificado médico presentado"
-                          className="min-h-20"
-                          {...field}
-                          value={field.value ?? ''}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Se guarda en todos los días del rango, salvo los que personalices.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="customize_comments"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center gap-2 space-y-0">
-                      <FormControl>
-                        <Switch checked={field.value} onCheckedChange={field.onChange} />
-                      </FormControl>
-                      <FormLabel className="cursor-pointer font-normal">Personalizar comentario por día</FormLabel>
-                    </FormItem>
-                  )}
-                />
-                {customizeComments && (
-                  <p className="text-muted-foreground text-xs">
-                    Cada día quedó con el comentario general y podés cambiar solo los que necesites, en la columna
-                    “Comentario” de la derecha.
-                  </p>
-                )}
-              </div>
+              {canCreate || canUpdate ? (
+                <Button type="submit" className="mt-6" disabled={form.formState.isSubmitting}>
+                  {form.formState.isSubmitting ? 'Generando...' : 'Generar diagramas'}
+                </Button>
+              ) : (
+                <p className="text-muted-foreground mt-6 text-sm">
+                  No tenés permiso para cargar ni modificar novedades.
+                </p>
+              )}
+            </form>
+          </Form>
+        </CatalogTableSurface>
+        <CatalogTableSurface className="flex min-w-0 flex-col gap-4">
+          {!hasResults && (
+            <div className="text-muted-foreground flex min-h-48 flex-1 flex-col items-center justify-center gap-1 px-6 text-center text-sm">
+              {hasGenerated ? (
+                <>
+                  <p className="font-medium">No quedan diagramas pendientes de esta carga.</p>
+                  <p>Generá un nuevo rango para seguir cargando novedades.</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-medium">Todavía no generaste diagramas.</p>
+                  <p>Completá el formulario y presioná “Generar diagramas” para revisar el detalle día por día.</p>
+                </>
+              )}
             </div>
-
-            <Button type="submit" className="mt-6" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? 'Generando...' : 'Generar diagramas'}
-            </Button>
-          </form>
-        </Form>
-      </ResizablePanel>
-      <ResizableHandle withHandle />
-      <ResizablePanel className="flex min-w-[600px] flex-col gap-4 pl-6" defaultSize={70}>
-        {!hasResults && (
-          <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-1 px-6 text-center text-sm">
-            {hasGenerated ? (
-              <>
-                <p className="font-medium">No quedan diagramas pendientes de esta carga.</p>
-                <p>Generá un nuevo rango para seguir cargando novedades.</p>
-              </>
-            ) : (
-              <>
-                <p className="font-medium">Todavía no generaste diagramas.</p>
-                <p>Completá el formulario y presioná “Generar diagramas” para revisar el detalle día por día.</p>
-              </>
-            )}
-          </div>
-        )}
-        {hasResults && (
-          <DiagramLoadSummary employeeLabel={selectedEmployeeLabel} diagramTypeLabel={selectedDiagramTypeLabel} />
-        )}
-        {errorsDiagrams?.length > 0 && (
-          <Card className="bg-red-50 dark:bg-red-950">
-            <CardHeader>
-              <CardTitle>Diagramas duplicados</CardTitle>
-              <CardDescription>
-                Estos días ya tienen una novedad cargada. Al actualizarlos se reemplaza la novedad registrada; si dejás
-                el comentario vacío se conserva el que ya tenían.
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Novedad registrada</TableHead>
-                    {customizeComments && <TableHead className="w-full">Comentario</TableHead>}
-                    <TableHead className="w-px">
-                      <span className="sr-only">Acciones</span>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {errorsDiagrams?.map((d, index: number) => (
-                    <TableRow key={`error-${d.prev_diagram_entry_id}`}>
-                      <TableCell className="align-top tabular-nums">{formatDayLabel(d)}</TableCell>
-                      <TableCell className="align-top">{d.prev_event}</TableCell>
-                      {customizeComments && (
-                        <TableCell className="w-full min-w-0 align-top">
-                          <DayCommentCell
-                            control={form.control}
-                            dateLabel={formatDayLabel(d)}
-                            value={d.comments}
-                            onChange={(value) => setErrorComment(d.prev_diagram_entry_id, value)}
-                            onResetToGeneral={() => setErrorComment(d.prev_diagram_entry_id, undefined)}
-                          />
-                        </TableCell>
-                      )}
-                      <TableCell className="w-px align-top">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            type="button"
-                            variant={'default'}
-                            size="sm"
-                            onClick={() => updateDiagram(d)}
-                            aria-label={`Actualizar el diagrama del ${formatDayLabel(d)}`}
-                          >
-                            Actualizar
-                          </Button>
-                          <Button
-                            type="button"
-                            variant={'link'}
-                            size="sm"
-                            className="font-bold text-red-600"
-                            onClick={() => descartarOne(index, 'e')}
-                            aria-label={`Descartar el diagrama del ${formatDayLabel(d)}`}
-                          >
-                            Descartar
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-            {errorsDiagrams?.length > 1 && (
-              <CardFooter className="flex justify-around">
-                <Button type="button" variant={'default'} onClick={() => updateAll(errorsDiagrams)}>
-                  Actualizar Todos
-                </Button>
-                <Button
-                  type="button"
-                  variant={'link'}
-                  className="font-bold text-red-600"
-                  onClick={() => descartarAll('e')}
-                >
-                  Descartar Todos
-                </Button>
-              </CardFooter>
-            )}
-          </Card>
-        )}
-        {succesDiagrams?.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Diagramas correctos</CardTitle>
-              <CardDescription>Días sin novedad cargada: se van a crear con el comentario indicado.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fecha</TableHead>
-                    {customizeComments && <TableHead className="w-full">Comentario</TableHead>}
-                    <TableHead className="w-px">
-                      <span className="sr-only">Acciones</span>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {succesDiagrams?.map((d, index: number) => (
-                    <TableRow key={`success-${dayKey(d)}`}>
-                      <TableCell className="align-top tabular-nums">{formatDayLabel(d)}</TableCell>
-                      {customizeComments && (
-                        <TableCell className="w-full min-w-0 align-top">
-                          <DayCommentCell
-                            control={form.control}
-                            dateLabel={formatDayLabel(d)}
-                            value={d.comments}
-                            onChange={(value) => setSuccessComment(dayKey(d), value)}
-                            onResetToGeneral={() => setSuccessComment(dayKey(d), undefined)}
-                          />
-                        </TableCell>
-                      )}
-                      <TableCell className="w-px align-top">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            type="button"
-                            variant={'success'}
-                            size="sm"
-                            onClick={() => createDiagram(d)}
-                            disabled={isProcessing}
-                            aria-label={`Crear el diagrama del ${formatDayLabel(d)}`}
-                          >
-                            Crear
-                          </Button>
-                          <Button
-                            type="button"
-                            variant={'link'}
-                            size="sm"
-                            className="font-bold text-red-600"
-                            onClick={() => descartarOne(index, 's')}
-                            aria-label={`Descartar el diagrama del ${formatDayLabel(d)}`}
-                          >
-                            Descartar
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-            {succesDiagrams?.length > 1 && (
-              <CardFooter className="flex justify-around">
-                <Button
-                  type="button"
-                  variant={'success'}
-                  onClick={() => createAll(succesDiagrams)}
-                  disabled={isProcessing}
-                >
-                  Crear Todos
-                </Button>
-                <Button
-                  type="button"
-                  variant={'link'}
-                  className="font-bold text-red-600"
-                  onClick={() => descartarAll('s')}
-                >
-                  Descartar Todos
-                </Button>
-              </CardFooter>
-            )}
-          </Card>
-        )}
-      </ResizablePanel>
-    </ResizablePanelGroup>
+          )}
+          {hasResults && (
+            <DiagramLoadSummary employeeLabel={selectedEmployeeLabel} diagramTypeLabel={selectedDiagramTypeLabel} />
+          )}
+          {canUpdate && errorsDiagrams.length > 0 && (
+            <DuplicateDiagramsCard
+              rows={errorsDiagrams}
+              control={form.control}
+              customizeComments={customizeComments}
+              formatDayLabel={formatDayLabel}
+              onCommentChange={setErrorComment}
+              onUpdate={updateDiagram}
+              onUpdateAll={updateAll}
+              onDiscard={(index) => descartarOne(index, 'e')}
+              onDiscardAll={() => descartarAll('e')}
+            />
+          )}
+          {canCreate && succesDiagrams.length > 0 && (
+            <NewDiagramsCard
+              rows={succesDiagrams}
+              control={form.control}
+              customizeComments={customizeComments}
+              isProcessing={isProcessing}
+              formatDayLabel={formatDayLabel}
+              dayKey={dayKey}
+              onCommentChange={setSuccessComment}
+              onCreate={createDiagram}
+              onCreateAll={createAll}
+              onDiscard={(index) => descartarOne(index, 's')}
+              onDiscardAll={() => descartarAll('s')}
+            />
+          )}
+        </CatalogTableSurface>
+      </div>
+    </div>
   );
 }
 

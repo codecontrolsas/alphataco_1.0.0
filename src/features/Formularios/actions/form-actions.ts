@@ -1,10 +1,11 @@
 'use server';
 
+import { requireFormsPermission } from '@/features/Formularios/lib/access.server';
 import { Logger } from '@/lib/logger';
 import { getActualRole } from '@/shared/actions/shared-users.server';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
-import { getSessionUser, getSessionUserId } from '@/shared/lib/session';
+import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 
 const logger = new Logger('features/Formularios/actions');
@@ -13,6 +14,7 @@ const customFormSelect = { id: true, created_at: true, company_id: true, form: t
 
 /** Formulario personalizado (estructura legacy `custom_form`) de la empresa activa. */
 export const fetchCustomFormById = async (formId: string) => {
+  await requireFormsPermission('view');
   try {
     const company_id = await getActiveCompanyId();
     return await prisma.custom_form.findMany({
@@ -55,6 +57,7 @@ function toFormAnswer<T extends { custom_form: CustomFormRowShape }>({ custom_fo
  * las del formulario. El formulario se acota siempre a la empresa activa.
  */
 export const fetchFormsAnswersByFormId = async (formId: string) => {
+  await requireFormsPermission('view');
   try {
     const company_id = await getActiveCompanyId();
     const credentialId = await getSessionUserId();
@@ -119,6 +122,7 @@ export type FormAnswerRow = Awaited<ReturnType<typeof fetchFormsAnswersByFormId>
 
 /** Respuesta de formulario personalizado por id, con su formulario (empresa activa). */
 export const fetchAnswerById = async (answerId: string) => {
+  await requireFormsPermission('view');
   try {
     const company_id = await getActiveCompanyId();
     const answers = await prisma.form_answers.findMany({
@@ -142,9 +146,46 @@ export const fetchAnswerById = async (answerId: string) => {
 
 export type FormAnswerDetail = Awaited<ReturnType<typeof fetchAnswerById>>[number];
 
-/** Usuario autenticado del request (id de credencial y email). */
-export const fetchCurrentUser = async () => {
-  return getSessionUser();
+const equipmentOptionSelect = {
+  id: true,
+  domain: true,
+  serie: true,
+  intern_number: true,
+  kilometer: true,
+  engine_hours: true,
+  brand_vehicles: { select: { name: true } },
+  model_vehicles: { select: { name: true } },
+  type_vehicles_typeTotype: { select: { id: true, name: true } },
+  sub_type: { select: { id: true, name: true } },
+} as const;
+
+/**
+ * Equipos puntuales (empresa activa) para mostrar una respuesta en solo lectura: el equipo de la
+ * respuesta y su enganche, en vez de traer toda la flota. Shape de `mapEquipmentToChecklistFormat`.
+ */
+export const fetchEquipmentsByIdsForChecklist = async (equipmentIds: string[]) => {
+  await requireFormsPermission('view');
+  const ids = [...new Set(equipmentIds.filter(Boolean))];
+  if (ids.length === 0) return [];
+
+  try {
+    const company_id = await getActiveCompanyId();
+    const rows = await prisma.vehicles.findMany({
+      where: withCompany({ id: { in: ids } }, company_id),
+      select: equipmentOptionSelect,
+    });
+
+    return rows.map(({ brand_vehicles, model_vehicles, type_vehicles_typeTotype, sub_type, ...rest }) => ({
+      ...rest,
+      brand: brand_vehicles,
+      model: model_vehicles,
+      type: type_vehicles_typeTotype,
+      subType: sub_type,
+    }));
+  } catch (error) {
+    logger.error('Error al obtener los equipos de la respuesta', { data: { error, equipmentIds: ids } });
+    return [];
+  }
 };
 
 /**
@@ -185,6 +226,7 @@ export type CurrentProfile = Awaited<ReturnType<typeof getCurrentProfile>>[numbe
  * sólo para contarlas).
  */
 export const fetchCustomFormsWithAnswerCount = async () => {
+  await requireFormsPermission('view');
   try {
     const company_id = await getActiveCompanyId();
     const forms = await prisma.custom_form.findMany({
@@ -209,6 +251,7 @@ export type CustomFormWithAnswerCount = Awaited<ReturnType<typeof fetchCustomFor
  * de escribir (sin RLS, cada action exportada es un endpoint público).
  */
 export const createFormAnswer = async (formId: string, answer: string) => {
+  await requireFormsPermission('create');
   const company_id = await getActiveCompanyId();
 
   const form = await prisma.custom_form.findFirst({

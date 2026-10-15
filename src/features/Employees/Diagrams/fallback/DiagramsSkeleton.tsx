@@ -4,13 +4,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 export function DiagramsSkeleton() {
   return (
     <div className="space-y-4">
-      {/* Subtabs */}
-      <div className="flex gap-1 border-b">
-        <Skeleton className="h-9 w-40 rounded-none" />
-        <Skeleton className="h-9 w-36 rounded-none" />
-        <Skeleton className="h-9 w-32 rounded-none" />
-        <Skeleton className="h-9 w-28 rounded-none" />
-      </div>
+      {/* Selector de vista */}
+      <Skeleton className="h-10 w-full sm:w-80" />
 
       {/* Search form card */}
       <Card>

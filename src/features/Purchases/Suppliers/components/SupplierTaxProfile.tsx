@@ -1,12 +1,12 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { SectionCard } from '@/shared/components/common/SectionCard';
 import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -79,14 +79,10 @@ export function SupplierTaxProfile({
   });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Situación impositiva</CardTitle>
-        <CardDescription>
-          Qué se le retiene al pagarle. Sin régimen o con «No aplica», ese impuesto no se retiene. Los regímenes se cargan en Configuración de Compras.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+    <SectionCard
+      title="Situación impositiva"
+      description="Qué se le retiene al pagarle. Sin régimen o con «No aplica», ese impuesto no se retiene. Los regímenes se cargan en Configuración de Compras."
+    >
         <Form {...form}>
           <form onSubmit={form.handleSubmit((values) => save.mutate(values))} className="space-y-4">
             {WITHHOLDING_TAXES.map((tax, i) => (
@@ -104,8 +100,7 @@ export function SupplierTaxProfile({
             )}
           </form>
         </Form>
-      </CardContent>
-    </Card>
+    </SectionCard>
   );
 }
 

@@ -2,7 +2,7 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
+import { MaintenanceStatusPill } from '@/features/Mantenimiento/shared/components/MaintenanceStatusPill';
 import type { ManualRepair } from '@/features/Mantenimiento/shared/components/ManualRepairsInput';
 import {
   PREVENTIVE_TYPES,
@@ -59,27 +59,17 @@ export function StepConfirm({
       <div className="space-y-4">
         <div
           className={cn(
-            'p-4 border rounded-lg',
+            'rounded-lg border p-4',
             isCurrentUserSupervisor
-              ? 'bg-green-50 dark:bg-green-950/30 border-green-200'
-              : 'bg-blue-50 dark:bg-blue-950/30 border-blue-200'
+              ? 'border-ok/30 bg-ok-subtle text-ok-subtle-foreground'
+              : 'border-info/30 bg-info-subtle text-info-subtle-foreground'
           )}
         >
-          <div
-            className={cn(
-              'flex items-center gap-2 font-medium mb-2',
-              isCurrentUserSupervisor ? 'text-green-700 dark:text-green-300' : 'text-blue-700 dark:text-blue-300'
-            )}
-          >
-            <CheckCircle className="h-5 w-5" />
+          <div className="mb-2 flex items-center gap-2 font-medium">
+            <CheckCircle aria-hidden="true" className="h-5 w-5" />
             {isCurrentUserSupervisor ? 'Resumen del Pedido' : 'Resumen de la Solicitud'}
           </div>
-          <p
-            className={cn(
-              'text-sm',
-              isCurrentUserSupervisor ? 'text-green-600 dark:text-green-400' : 'text-blue-600 dark:text-blue-400'
-            )}
-          >
+          <p className="text-sm">
             {isCurrentUserSupervisor
               ? 'Verifica la información antes de crear el pedido de mantenimiento.'
               : 'Verifica la información antes de enviar la solicitud al supervisor.'}
@@ -133,7 +123,7 @@ export function StepConfirm({
                       <p className="font-medium text-sm">
                         {PREVENTIVE_TYPES[selectedPreventiveType as PreventiveType]}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-sm text-muted-foreground">
                         {PREVENTIVE_TYPE_DESCRIPTIONS[selectedPreventiveType as PreventiveType]}
                       </p>
                     </div>
@@ -160,7 +150,7 @@ export function StepConfirm({
                 {manualRepairs.map((repair) => {
                   return (
                     <li key={repair.localId} className="text-sm flex items-start gap-2">
-                      <span className="text-muted-foreground">•</span>
+                      <span aria-hidden="true" className="text-muted-foreground">•</span>
                       <div>
                         <span className="font-medium">{repair.freeText}</span>
                         {repair.images.length > 0 && (
@@ -169,7 +159,7 @@ export function StepConfirm({
                           </Badge>
                         )}
                         {repair.description.trim() && (
-                          <p className="text-xs text-muted-foreground mt-1 italic">
+                          <p className="text-sm text-muted-foreground mt-1 italic">
                             &quot;{repair.description.trim()}&quot;
                           </p>
                         )}
@@ -189,7 +179,7 @@ export function StepConfirm({
               <ul className="space-y-2">
                 {selectedDeviations.map((d) => (
                   <li key={d.itemId} className="text-sm flex items-start gap-2">
-                    <span className="text-muted-foreground">•</span>
+                    <span aria-hidden="true" className="text-muted-foreground">•</span>
                     <div>
                       <span className="font-medium">{d.itemLabel}</span>
                       {d.isCritical && (
@@ -198,7 +188,7 @@ export function StepConfirm({
                         </Badge>
                       )}
                       {d.comment && (
-                        <p className="text-xs text-muted-foreground mt-1 italic">&quot;{d.comment}&quot;</p>
+                        <p className="text-sm text-muted-foreground mt-1 italic">&quot;{d.comment}&quot;</p>
                       )}
                     </div>
                   </li>
@@ -223,20 +213,19 @@ export function StepConfirm({
           </CardContent>
         </Card>
 
-        {/* Estado inicial según el flujo */}
-        <div
-          className={cn(
-            'p-3 rounded-lg',
-            isCurrentUserSupervisor ? 'bg-green-50 dark:bg-green-950/20' : 'bg-yellow-50 dark:bg-yellow-950/20'
-          )}
-        >
+        {/* Estado inicial según el flujo: sin N° de orden, que se asigna recién al ingresar a taller */}
+        <div className="rounded-lg bg-muted p-3">
           <p className="text-sm font-medium">
             {isCurrentUserSupervisor ? 'Estado inicial del pedido' : 'Estado inicial de la solicitud'}
           </p>
-          <Badge variant={isCurrentUserSupervisor ? 'warning' : 'secondary'} className="mt-1">
-            {isCurrentUserSupervisor ? 'Pendiente de Planificación' : 'Pendiente de Aprobación'}
-          </Badge>
-          <p className="text-xs text-muted-foreground mt-2">
+          <div className="mt-1">
+            {isCurrentUserSupervisor ? (
+              <MaintenanceStatusPill entity="order" status="pending_scheduling" />
+            ) : (
+              <MaintenanceStatusPill entity="request" status="pending_approval" />
+            )}
+          </div>
+          <p className="mt-2 text-sm text-muted-foreground">
             {isCurrentUserSupervisor
               ? 'El pedido aparecerá en "Pedidos de Mantenimiento" → "Pendientes" para asignarle fecha.'
               : 'La solicitud aparecerá en "Pendientes de Validar" para que el supervisor la apruebe.'}

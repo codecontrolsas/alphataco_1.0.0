@@ -10,10 +10,12 @@ import {
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { destinationTypeIcons } from '@/features/Warehouses/Movements/components/MovementsList/columns';
 import { DESTINATION_TYPE_LABELS } from '@/features/Warehouses/lib/labels';
-import { STOCK_DESTINATION_TYPES } from '@/features/Warehouses/schemas/stock-movement';
+import { PURCHASES_QUERY_KEYS } from '../../../lib/query-keys';
+import { STOCK_DESTINATION_TYPES, type StockDestinationTypeValue } from '@/features/Warehouses/schemas/stock-movement';
+import { formatArgentinaDay, formatDateAr } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { CircleOff, User } from 'lucide-react';
-import moment from 'moment';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import {
   PURCHASE_REQUEST_STATUS_LABELS,
   PURCHASE_REQUEST_STATUSES,
@@ -33,6 +35,8 @@ interface Props {
   totalRows: number;
   searchParams: DataTableSearchParams;
   tableId: string;
+  /** Banda de atención resuelta en el servidor; se muestra sobre la tabla. */
+  topSlot?: ReactNode;
   initialColumnVisibility?: Record<string, boolean>;
   initialFilterVisibility?: Record<string, boolean>;
 }
@@ -46,6 +50,7 @@ export function _RequestsDataTable({
   totalRows,
   searchParams,
   tableId,
+  topSlot,
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
@@ -138,19 +143,24 @@ export function _RequestsDataTable({
 
   const exportConfig: DataTableExportConfig<PurchaseRequestListItem> = useMemo(
     () => ({
-      fetchAllData: () => getAllPurchaseRequestsForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllPurchaseRequestsForExport(currentParams)),
       options: { filename: 'solicitudes-de-compra', title: 'Solicitudes de compra', sheetName: 'Solicitudes' },
       formatters: {
         status: (value) => PURCHASE_REQUEST_STATUS_LABELS[value as PurchaseRequestStatus] ?? String(value),
-        created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : ''),
-        needed_by: (value) => (value ? moment.utc(value as string | Date).format('DD/MM/YYYY') : ''),
+        destination_type: (value) =>
+          value ? (DESTINATION_TYPE_LABELS[value as StockDestinationTypeValue] ?? String(value)) : 'Para stock',
+        created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : ''),
+        // `needed_by` es @db.Date (medianoche UTC): se lee como fecha, no como instante.
+        needed_by: (value) => (value ? formatDateAr(new Date(value as string | Date).toISOString().slice(0, 10)) : ''),
       },
     }),
     [currentParams]
   );
 
   return (
-    <DataTable
+    <div className="space-y-4">
+      {topSlot}
+      <DataTable
       columns={columns}
       data={data}
       totalRows={totalRows}
@@ -162,12 +172,13 @@ export function _RequestsDataTable({
       initialFilterVisibility={mergedFilterVisibility}
       showFilterToggle
       queryFn={tableQueryFn}
-      queryKey={['purchase-requests']}
+      queryKey={[...PURCHASES_QUERY_KEYS.requests]}
       onStateChange={handleStateChange}
       searchPlaceholder="Buscar por número o notas"
       emptyMessage="No hay solicitudes de compra"
       exportConfig={exportConfig}
       data-testid="purchase-requests-table"
-    />
+      />
+    </div>
   );
 }

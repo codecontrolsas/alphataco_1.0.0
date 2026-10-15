@@ -1,5 +1,4 @@
-import { TabsManagerServer } from '@/features/TabsManager';
-import { Layers, LayoutTemplate, Package, Tag, Wrench } from 'lucide-react';
+import { ViewManagerServer } from '@/features/TabsManager';
 import { Suspense } from 'react';
 import CatalogoTabContent from './Catalogo/CatalogoTabContent';
 import { CatalogoSkeleton } from './Catalogo/fallback/CatalogoSkeleton';
@@ -19,19 +18,16 @@ interface Props {
 
 export default async function GomeriaTabContent({ searchParams, permissions }: Props) {
   return (
-    <TabsManagerServer
+    <ViewManagerServer
       paramName="gomeria_tab"
+      ariaLabel="Secciones de gomería"
       searchParams={searchParams}
-      defaultTab="catalogo_cubiertas"
+      defaultView="catalogo_cubiertas"
       permissions={permissions}
-      tabs={[
+      views={[
         {
           value: 'catalogo_cubiertas',
-          label: (
-            <span className="flex items-center gap-2">
-              <Package className="h-4 w-4" /> Catálogo
-            </span>
-          ),
+          label: 'Catálogo',
           moduleSlug: 'mantenimiento',
           tabSlug: 'catalogo_cubiertas',
           content: (
@@ -42,11 +38,7 @@ export default async function GomeriaTabContent({ searchParams, permissions }: P
         },
         {
           value: 'plantillas_cubiertas',
-          label: (
-            <span className="flex items-center gap-2">
-              <LayoutTemplate className="h-4 w-4" /> Plantillas
-            </span>
-          ),
+          label: 'Plantillas',
           moduleSlug: 'mantenimiento',
           tabSlug: 'plantillas_cubiertas',
           content: (
@@ -57,11 +49,7 @@ export default async function GomeriaTabContent({ searchParams, permissions }: P
         },
         {
           value: 'ordenes_gomeria',
-          label: (
-            <span className="flex items-center gap-2">
-              <Wrench className="h-4 w-4" /> Órdenes
-            </span>
-          ),
+          label: 'Órdenes',
           moduleSlug: 'mantenimiento',
           tabSlug: 'ordenes_gomeria',
           content: (
@@ -72,11 +60,7 @@ export default async function GomeriaTabContent({ searchParams, permissions }: P
         },
         {
           value: 'marcas_cubiertas',
-          label: (
-            <span className="flex items-center gap-2">
-              <Tag className="h-4 w-4" /> Marcas
-            </span>
-          ),
+          label: 'Marcas',
           moduleSlug: 'mantenimiento',
           tabSlug: 'marcas_cubiertas',
           content: (
@@ -87,11 +71,7 @@ export default async function GomeriaTabContent({ searchParams, permissions }: P
         },
         {
           value: 'tipos_cubiertas',
-          label: (
-            <span className="flex items-center gap-2">
-              <Layers className="h-4 w-4" /> Tipos
-            </span>
-          ),
+          label: 'Tipos',
           moduleSlug: 'mantenimiento',
           tabSlug: 'tipos_cubiertas',
           content: (

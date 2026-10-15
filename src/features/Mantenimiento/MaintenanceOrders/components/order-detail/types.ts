@@ -1,4 +1,5 @@
 import type { BadgeProps } from '@/components/ui/badge';
+import { REPAIR_STATUS_UI, TONE_TO_BADGE } from '../../../lib/status-presentation';
 import type { MaintenanceOrderData } from '../../actions/queries.server';
 
 export interface SectorGroup {
@@ -26,17 +27,17 @@ export type StatusBadgeVariant = NonNullable<BadgeProps['variant']>;
 export type ItemStatusKey = 'rejected' | 'completed' | 'in_progress' | 'pending';
 
 export const itemStatusLabels: Record<ItemStatusKey, string> = {
-  rejected: 'Rechazado',
-  completed: 'Completado',
-  in_progress: 'En progreso',
-  pending: 'Pendiente',
+  rejected: REPAIR_STATUS_UI.rejected.label,
+  completed: REPAIR_STATUS_UI.completed.label,
+  in_progress: REPAIR_STATUS_UI.in_progress.label,
+  pending: REPAIR_STATUS_UI.pending.label,
 };
 
 export const itemStatusVariants: Record<ItemStatusKey, StatusBadgeVariant> = {
-  rejected: 'destructive',
-  completed: 'success',
-  in_progress: 'warning',
-  pending: 'secondary',
+  rejected: TONE_TO_BADGE[REPAIR_STATUS_UI.rejected.tone],
+  completed: TONE_TO_BADGE[REPAIR_STATUS_UI.completed.tone],
+  in_progress: TONE_TO_BADGE[REPAIR_STATUS_UI.in_progress.tone],
+  pending: TONE_TO_BADGE[REPAIR_STATUS_UI.pending.tone],
 };
 
 /** Represents a selectable repair item for rejection dialogs */

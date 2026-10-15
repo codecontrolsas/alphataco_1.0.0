@@ -4,7 +4,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { getCheckOperationFormData, type CheckOperationFormData } from '../../actions/checks.server';
+import { getCheckOperationFormData } from '../../actions/check-reads.server';
+import type { CheckOperationFormData } from '../../lib/check-types';
 import { TREASURY_QUERY_KEYS } from '../../lib/query-keys';
 
 /**

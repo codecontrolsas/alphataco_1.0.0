@@ -11,12 +11,18 @@ import { useQuery } from '@tanstack/react-query';
 import { Upload, X } from 'lucide-react';
 import { useState } from 'react';
 import { useFormContext } from 'react-hook-form';
+import { toast } from 'sonner';
 import { getAllCountryOptions } from '../../EmpleadoID/actions.server';
 import type { PersonalDataValues } from '../schemas/person-data-schemas';
+
+/** Lado mayor (px) al que se reduce la foto antes de guardarla. */
+const MAX_PICTURE_SIDE = 640;
 
 interface PersonalDataFieldsProps {
   /** Oculta el bloque de foto (el candidato no la carga). */
   hidePicture?: boolean;
+  /** Foto ya guardada (solo para mostrarla): no es un valor del form, así que una foto vieja no se revalida al guardar. */
+  currentPicture?: string | null;
 }
 
 /**
@@ -24,9 +30,10 @@ interface PersonalDataFieldsProps {
  * como el candidato: toma el form del contexto (`<Form {...form}>` de shadcn ya es un
  * FormProvider), asi que ambos formularios comparten estos campos sin duplicar JSX.
  */
-export function PersonalDataFields({ hidePicture = false }: PersonalDataFieldsProps) {
+export function PersonalDataFields({ hidePicture = false, currentPicture = null }: PersonalDataFieldsProps) {
   const form = useFormContext<PersonalDataValues>();
-  const [imagePreview, setImagePreview] = useState<string | null>(form.getValues('picture') || null);
+  const [imagePreview, setImagePreview] = useState<string | null>(form.getValues('picture') || currentPicture || null);
+  const pictureError = form.formState.errors.picture?.message;
 
   const { data: countries = [], isLoading: loadingCountries } = useQuery({
     queryKey: ['catalog', 'countries'],
@@ -34,22 +41,47 @@ export function PersonalDataFields({ hidePicture = false }: PersonalDataFieldsPr
     staleTime: 10 * 60 * 1000,
   });
 
+  /**
+   * Lee la imagen elegida, la reduce (lado mayor 640 px) y la guarda como JPEG: una foto de celular de varios MB
+   * superaría el tope del schema (1,5 M caracteres) y, además, no hace falta esa resolución para un avatar.
+   */
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        setImagePreview(result);
-        form.setValue('picture', result);
-      };
-      reader.readAsDataURL(file);
+    event.target.value = '';
+    if (!file) return;
+    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) {
+      toast.error('La foto debe ser PNG, JPG o WEBP.');
+      return;
     }
+    const objectUrl = URL.createObjectURL(file);
+    const image = new window.Image();
+    image.onload = () => {
+      const scale = Math.min(1, MAX_PICTURE_SIDE / Math.max(image.width, image.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(image.height * scale));
+      const context = canvas.getContext('2d');
+      if (!context) {
+        URL.revokeObjectURL(objectUrl);
+        toast.error('No se pudo procesar la foto.');
+        return;
+      }
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const result = canvas.toDataURL('image/jpeg', 0.85);
+      URL.revokeObjectURL(objectUrl);
+      setImagePreview(result);
+      form.setValue('picture', result, { shouldDirty: true, shouldValidate: true });
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      toast.error('No se pudo leer la foto.');
+    };
+    image.src = objectUrl;
   };
 
   const removeImage = () => {
     setImagePreview(null);
-    form.setValue('picture', '');
+    form.setValue('picture', '', { shouldDirty: true, shouldValidate: true });
   };
 
   return (
@@ -92,6 +124,11 @@ export function PersonalDataFields({ hidePicture = false }: PersonalDataFieldsPr
               </Button>
             </div>
           </div>
+          {pictureError && (
+            <p role="alert" className="text-destructive text-sm">
+              {pictureError}. Quitá la foto o elegí otra.
+            </p>
+          )}
         </div>
       )}
 

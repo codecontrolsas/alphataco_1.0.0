@@ -18,4 +18,11 @@ export const WAREHOUSE_QUERY_KEYS = {
   returnWarehouses: ['warehouse-return-warehouses'],
   /** Busqueda de materiales del formulario de movimientos. */
   materialOptions: ['warehouse-material-options'],
+  /** Avisos de la sub-navegacion (contadores de atencion). */
+  stockAttention: ['warehouse-stock-attention'],
+  requestsAttention: ['warehouse-requests-attention'],
+  loansAttention: ['warehouse-loans-attention'],
+  /** Hojas laterales de detalle. */
+  movementDetail: ['warehouse-movement-detail'],
+  requestDetail: ['warehouse-request-detail'],
 } as const;

@@ -1,7 +1,6 @@
 'use server';
 
 import { checkPermissionServer } from '@/features/Permissions';
-import { formatCuit } from '../../lib/supplier-ids';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
@@ -12,8 +11,13 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { isReceiverVatConditionId, RECEIVER_VAT_CONDITIONS } from '@/shared/lib/arca/catalogs';
+import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { formatCuit } from '../../lib/supplier-ids';
+import { CUIT_LENGTH, SUPPLIERS_EXPORT_MAX_ROWS } from './constants';
 import {
   deriveSupplierDocumentState,
   SUPPLIER_DOCUMENT_STATES,
@@ -25,7 +29,7 @@ const logger = new Logger('features/Purchases/Suppliers/SuppliersList');
 
 type SupplierWhere = Prisma.suppliersWhereInput;
 type SupplierOrderBy = Prisma.suppliersOrderByWithRelationInput;
-type FilterState = ReturnType<typeof parseSearchParams>;
+type FilterState = ReturnType<typeof parseListState>;
 
 // ============================================================================
 // CONSTANTS
@@ -40,11 +44,46 @@ const SORT_MAP: Record<string, (dir: 'asc' | 'desc') => SupplierOrderBy> = {
 
 const DATE_RANGE_COLUMNS = ['created_at'];
 
+/** Unicas claves de filtro que se aceptan: cualquier otra de la URL se descarta antes de armar el `where`. */
+const ALLOWED_FILTER_KEYS: ReadonlySet<string> = new Set([
+  'name',
+  'cuit',
+  'contact',
+  'vat_condition',
+  'categories',
+  'documents',
+  'is_active',
+  ...dateRangeKeys(DATE_RANGE_COLUMNS),
+]);
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Valores validos por columna con lista cerrada (un valor ajeno haria fallar a Prisma y tumbaria la lista). */
+const VALID_VALUES: Record<string, (value: string) => boolean> = {
+  vat_condition: (v) => /^\d{1,4}$/.test(v),
+  categories: (v) => v === NULL_FILTER_VALUE || UUID_RE.test(v),
+  documents: (v) => (SUPPLIER_DOCUMENT_STATES as readonly string[]).includes(v),
+  is_active: (v) => v === 'true' || v === 'false',
+};
+
 const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
 
 // ============================================================================
 // HELPERS INTERNOS
 // ============================================================================
+
+/** Estado de la tabla ya parseado, con solo los filtros permitidos y sus valores validos. */
+function parseListState(searchParams: DataTableSearchParams) {
+  const state = sanitizeFilters(parseSearchParams(searchParams), ALLOWED_FILTER_KEYS);
+  for (const [column, isValid] of Object.entries(VALID_VALUES)) {
+    const values = state.filters[column];
+    if (!values) continue;
+    const valid = values.filter(isValid);
+    if (valid.length > 0) state.filters[column] = valid;
+    else delete state.filters[column];
+  }
+  return state;
+}
 
 /** Empresa si el usuario puede ver proveedores; `null` = sin acceso -> lista vacia. */
 async function resolveCompanyId(): Promise<string | null> {
@@ -61,13 +100,19 @@ function cuitDigits(raw: string): string | null {
   return /^\d+$/.test(digits) ? digits : null;
 }
 
-/** Ids de proveedores cuyo CUIT contiene los digitos (BigInt no admite `contains` en Prisma). */
-async function findSupplierIdsByCuit(companyId: string, digits: string): Promise<string[]> {
+/**
+ * Condicion sobre el CUIT (BigInt: Prisma no admite `contains`). Con los 11 digitos es una igualdad relacional;
+ * con menos, una busqueda parcial por digitos en la BD (filtrada por empresa, sin tope: un tope dejaria proveedores
+ * afuera sin aviso; no admite un where relacional sin cambiar el esquema). Mas de 11 digitos no puede coincidir con ninguno.
+ */
+async function cuitWhere(companyId: string, digits: string): Promise<SupplierWhere> {
+  if (digits.length > CUIT_LENGTH) return { id: { in: [] } };
+  if (digits.length === CUIT_LENGTH) return { cuit: BigInt(digits) };
   const rows = await prisma.$queryRaw<{ id: string }[]>`
     SELECT id FROM suppliers
     WHERE company_id = ${companyId}::uuid AND cuit::text LIKE ${`%${digits}%`}
   `;
-  return rows.map((r) => r.id);
+  return { id: { in: rows.map((r) => r.id) } };
 }
 
 /** Condicion Prisma de cada estado de documentacion (sobre documentos vigentes). */
@@ -107,7 +152,7 @@ async function buildWhereClause(companyId: string, state: FilterState): Promise<
   if (search) {
     const or: SupplierWhere[] = [{ name: contains(search) }, { trade_name: contains(search) }];
     const digits = cuitDigits(search);
-    if (digits && digits.length >= 3) or.push({ id: { in: await findSupplierIdsByCuit(companyId, digits) } });
+    if (digits && digits.length >= 3) or.push(await cuitWhere(companyId, digits));
     and.push({ OR: or });
   }
 
@@ -119,7 +164,7 @@ async function buildWhereClause(companyId: string, state: FilterState): Promise<
   const cuitRaw = f.cuit?.[0]?.trim();
   if (cuitRaw) {
     const digits = cuitDigits(cuitRaw);
-    and.push({ id: { in: digits ? await findSupplierIdsByCuit(companyId, digits) : [] } });
+    and.push(digits ? await cuitWhere(companyId, digits) : { id: { in: [] } });
   }
 
   // Texto: contacto principal (nombre, mail o telefono)
@@ -127,7 +172,10 @@ async function buildWhereClause(companyId: string, state: FilterState): Promise<
   if (contact) {
     and.push({
       contacts: {
-        some: { is_primary: true, OR: [{ name: contains(contact) }, { email: contains(contact) }, { phone: contains(contact) }] },
+        some: {
+          is_primary: true,
+          OR: [{ name: contains(contact) }, { email: contains(contact) }, { phone: contains(contact) }],
+        },
       },
     });
   }
@@ -221,7 +269,7 @@ export async function getSuppliersPaginated(searchParams: DataTableSearchParams)
   if (!companyId) return { data: [], total: 0 };
 
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseListState(searchParams);
     const { skip, take } = stateToPrismaParams(state);
     const where = await buildWhereClause(companyId, state);
 
@@ -240,18 +288,36 @@ export async function getSuppliersPaginated(searchParams: DataTableSearchParams)
 // EXPORT (sin paginacion)
 // ============================================================================
 
-export async function getAllSuppliersForExport(searchParams: DataTableSearchParams) {
+export async function getAllSuppliersForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<SupplierListItem[]>> {
   const companyId = await resolveCompanyId();
-  if (!companyId) return [];
+  if (!companyId) return { ok: true, data: [] };
 
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseListState(searchParams);
     const where = await buildWhereClause(companyId, state);
-    const rows = await prisma.suppliers.findMany({ where, orderBy: buildOrderBy(state), select: SUPPLIER_SELECT });
-    return shape(rows);
+    const orderBy = [...buildOrderBy(state), { id: 'asc' as const }];
+
+    const rows = await fetchExportRowsInBatches({
+      maxRows: SUPPLIERS_EXPORT_MAX_ROWS,
+      listIds: (take) => prisma.suppliers.findMany({ where, orderBy, select: { id: true }, take }),
+      fetchByIds: (ids) =>
+        prisma.suppliers.findMany({ where: { id: { in: ids }, company_id: companyId }, select: SUPPLIER_SELECT }),
+      tooLargeMessage: (maxRows) =>
+        `Hay más de ${maxRows.toLocaleString('es-AR')} proveedores con los filtros actuales. Acote la exportación con filtros.`,
+    });
+    return { ok: true, data: shape(rows) };
   } catch (error) {
     logger.error('Error al exportar proveedores', { data: { error } });
-    throw new Error('No se pudo exportar la lista de proveedores');
+    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
+    return {
+      ok: false,
+      message:
+        error instanceof ExportTooLargeError
+          ? error.message
+          : 'No se pudo exportar la lista de proveedores. Intente nuevamente.',
+    };
   }
 }
 
@@ -266,11 +332,11 @@ export async function getSupplierSingleFacet(
   const companyId = await resolveCompanyId();
   if (!companyId) return null;
 
-  const parsed = searchParams && Object.keys(searchParams).length > 0 ? parseSearchParams(searchParams) : null;
+  const parsed = searchParams && Object.keys(searchParams).length > 0 ? parseListState(searchParams) : null;
 
   /** WHERE con todos los filtros activos MENOS el de la columna que se esta abriendo. */
   function crossWhere(excludeColumn: string): Promise<SupplierWhere> {
-    const base: FilterState = parsed ?? parseSearchParams({});
+    const base: FilterState = parsed ?? parseListState({});
     const filters = { ...base.filters };
     delete filters[excludeColumn];
     return buildWhereClause(companyId as string, { ...base, filters });
@@ -332,6 +398,30 @@ export async function getSupplierSingleFacet(
     return null;
   } catch (error) {
     logger.error('Error al obtener facet de proveedores', { data: { error, columnId } });
+    return null;
+  }
+}
+
+// ============================================================================
+// BANDA DE ATENCION
+// ============================================================================
+
+/**
+ * Proveedores activos con documentacion vencida (misma definicion que el estado "Vencido" de la tabla).
+ * Nunca rechaza: `null` si el usuario no puede ver proveedores o no se pudo contar.
+ */
+export async function getSuppliersAttention(): Promise<{ expiredDocuments: number } | null> {
+  try {
+    const companyId = await resolveCompanyId();
+    if (!companyId) return null;
+    const expiredDocuments = await prisma.suppliers.count({
+      where: {
+        AND: [{ company_id: companyId, is_active: true }, documentStateWhere('EXPIRED', supplierDocumentDates())],
+      },
+    });
+    return { expiredDocuments };
+  } catch (error) {
+    logger.error('Error al contar proveedores con documentacion vencida', { data: { error } });
     return null;
   }
 }

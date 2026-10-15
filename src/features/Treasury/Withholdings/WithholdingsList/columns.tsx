@@ -5,12 +5,12 @@ import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import type { ColumnDef } from '@tanstack/react-table';
 import { BadgeCheck, FileCheck2, FileX2, Landmark, Percent, ReceiptText, ShieldCheck, type LucideIcon } from 'lucide-react';
-import moment from 'moment';
 import Link from 'next/link';
 import { CUSTOMER_WITHHOLDING_TAX_LABELS } from '../../schemas/receipts';
 import type { WithholdingListItem } from './actions.server';
 import { NO_CERTIFICATE_LABEL, type CertificateFilterValue } from './constants';
 import { WithholdingRowActions } from './components/WithholdingRowActions';
+import { formatDay } from '../../lib/dates';
 
 export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = [];
 
@@ -29,8 +29,7 @@ export const certificateIcons: Record<CertificateFilterValue, LucideIcon> = {
 };
 
 /** Fecha valor (YYYY-MM-DD, sin hora): se formatea tal cual para no correr un dia. */
-export const formatValueDate = (value: string | null | undefined) =>
-  value ? moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY') : '';
+export const formatValueDate = formatDay;
 
 interface ColumnsOptions {
   canAttach: boolean;
@@ -98,7 +97,7 @@ export function getColumns({ canAttach }: ColumnsOptions): ColumnDef<Withholding
       cell: ({ row }) => (
         <Link
           href={`/dashboard/treasury/receipts/${row.original.receipt.id}`}
-          className="font-mono text-sm font-medium text-blue-600 hover:underline"
+          className="font-mono text-sm font-medium text-brand-ink hover:underline"
         >
           {row.original.receipt.number ?? 'Recibo'}
         </Link>
@@ -121,9 +120,10 @@ export function getColumns({ canAttach }: ColumnsOptions): ColumnDef<Withholding
         row.original.certificateUrl ? (
           <a
             href={row.original.certificateUrl}
+            aria-label={`Ver certificado ${row.original.certificateNumber}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline"
+            className="inline-flex items-center gap-1 text-sm font-medium text-brand-ink hover:underline"
           >
             <BadgeCheck className="h-3.5 w-3.5" />
             Ver

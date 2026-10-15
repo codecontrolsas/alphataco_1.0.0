@@ -1,7 +1,6 @@
 'use client';
 
-import moment from 'moment';
-import 'moment/locale/es';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { TicketMilestone } from '@/shared/lib/taskapp/types';
 
 interface Props {
@@ -26,9 +25,7 @@ interface Props {
  */
 export function TicketTimeline({ milestones, isLoading }: Props) {
   if (isLoading) {
-    return (
-      <div className="h-10 animate-pulse rounded-md bg-muted/60" aria-hidden />
-    );
+    return <div className="h-10 animate-pulse rounded-md bg-muted/60" aria-hidden />;
   }
 
   if (milestones.length === 0) return null;
@@ -41,7 +38,7 @@ export function TicketTimeline({ milestones, isLoading }: Props) {
             {i > 0 && ' · '}
             {m.label} el{' '}
             <time dateTime={m.at} className="tabular-nums">
-              {moment(m.at).locale('es').format('D MMM')}
+              {formatArgentinaDay(m.at)}
             </time>
           </span>
         ))}
@@ -53,9 +50,7 @@ export function TicketTimeline({ milestones, isLoading }: Props) {
 
   return (
     <section aria-label="Recorrido del ticket" className="flex flex-col gap-2">
-      <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-        Recorrido del ticket
-      </h4>
+      <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Recorrido del ticket</h4>
       {/* Vertical en pantallas chicas y con zoom alto: un carril horizontal a
           320px obliga a scrollear de costado para leer las fechas, que es
           justo el dato por el que existe el recorrido. */}
@@ -71,33 +66,23 @@ export function TicketTimeline({ milestones, isLoading }: Props) {
                 <span
                   aria-hidden
                   className={`inline-flex h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-background ${
-                    isLast ? 'bg-emerald-500' : 'bg-muted-foreground/40'
+                    isLast ? 'bg-ok' : 'bg-muted-foreground/40'
                   }`}
                 />
                 {/* El riel une hitos; en la última parada no hay nada que unir. */}
-                {!isLast && (
-                  <span
-                    aria-hidden
-                    className="ms-1 hidden h-px flex-1 bg-border sm:block"
-                  />
-                )}
+                {!isLast && <span aria-hidden className="ms-1 hidden h-px flex-1 bg-border sm:block" />}
               </div>
               <div className="min-w-0 flex-1 sm:pe-2">
                 <p
-                  className={`truncate text-xs font-medium ${
-                    isLast ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground'
-                  }`}
+                  className={`truncate text-xs font-medium ${isLast ? 'text-ok-subtle-foreground' : 'text-foreground'}`}
                   title={m.label}
                 >
                   {m.label}
                   {/* El color no puede ser la única señal de "acá está parado". */}
                   {isLast && <span className="sr-only"> — última parada</span>}
                 </p>
-                <time
-                  dateTime={m.at}
-                  className="text-[11px] tabular-nums text-muted-foreground"
-                >
-                  {moment(m.at).locale('es').format('D MMM')}
+                <time dateTime={m.at} className="text-[11px] tabular-nums text-muted-foreground">
+                  {formatArgentinaDay(m.at)}
                 </time>
               </div>
             </li>

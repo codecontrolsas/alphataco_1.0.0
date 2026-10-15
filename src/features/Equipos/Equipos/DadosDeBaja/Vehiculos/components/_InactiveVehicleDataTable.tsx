@@ -1,6 +1,12 @@
 'use client';
 
 import {
+  buildEnumFacetResult,
+  buildFkFacetResult,
+  formatDbDate,
+  formatTimestampDay,
+} from '@/features/Equipos/lib/vehicle-list-client';
+import {
   condition_enum,
   contract_type_vehicles_enum,
   cost_type_enum,
@@ -11,11 +17,10 @@ import {
 import {
   DataTable,
   type DataTableFacetedFilterConfig,
-  type DataTableFilterOption,
   type DataTableSearchParams,
   type FacetResult,
 } from '@/shared/components/common/DataTable';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import {
   conditionLabels,
   contractTypeVehiclesLabels,
@@ -25,10 +30,8 @@ import {
   terminationReasonEquipmentLabels,
 } from '@/shared/utils/mappers';
 import type { LucideIcon } from 'lucide-react';
-import { CircleOff } from 'lucide-react';
-import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
-import { conditionIcons } from '../../../VehicleList/columns';
+import { conditionIcons } from '../../../VehicleList/lib/condition-config';
 import {
   getAllInactiveVehiclesForExport,
   getInactiveVehicleSingleFacet,
@@ -48,40 +51,6 @@ interface Props {
   tableId: string;
   initialColumnVisibility: Record<string, boolean>;
   initialFilterVisibility: Record<string, boolean>;
-}
-
-// ============================================================================
-// HELPERS — FacetResult builders
-// ============================================================================
-
-function buildFkFacetResult(
-  resolvedOptions: { value: string; label: string }[] | undefined,
-  counts: Map<string, number>,
-  nullLabel = 'Sin asignar'
-): FacetResult {
-  const options: DataTableFilterOption[] = (resolvedOptions ?? []).map((o) => ({ value: o.value, label: o.label }));
-  if (counts.has(NULL_FILTER_VALUE)) {
-    options.push({ value: NULL_FILTER_VALUE, label: nullLabel, icon: CircleOff });
-  }
-  return { options, counts };
-}
-
-function buildEnumFacetResult(
-  enumValues: string[],
-  labels: Record<string, string>,
-  counts: Map<string, number>,
-  icons?: Record<string, LucideIcon | undefined>,
-  nullLabel = 'Sin asignar'
-): FacetResult {
-  const options: DataTableFilterOption[] = enumValues.map((v) => ({
-    value: v,
-    label: labels[v] ?? v,
-    ...(icons?.[v] ? { icon: icons[v] } : {}),
-  }));
-  if (counts.has(NULL_FILTER_VALUE)) {
-    options.push({ value: NULL_FILTER_VALUE, label: nullLabel, icon: CircleOff });
-  }
-  return { options, counts };
 }
 
 // ============================================================================
@@ -402,7 +371,7 @@ export function _InactiveVehicleDataTable({
       emptyMessage="No hay vehículos dados de baja"
       data-testid="inactive-vehicles-table"
       exportConfig={{
-        fetchAllData: () => getAllInactiveVehiclesForExport(currentParams),
+        fetchAllData: async () => unwrapExportResult(await getAllInactiveVehiclesForExport(currentParams)),
         options: {
           filename: 'vehiculos-dados-de-baja',
           title: 'Vehículos Dados de Baja',
@@ -415,10 +384,10 @@ export function _InactiveVehicleDataTable({
           currency: (val) => currencyLabels[val as string] ?? String(val ?? ''),
           type_of_contract: (val) => contractTypeVehiclesLabels[val as string] ?? String(val ?? ''),
           reason_for_termination: (val) => terminationReasonEquipmentLabels[val as string] ?? String(val ?? ''),
-          termination_date: (val) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
-          contract_start_date: (val) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
-          contract_expiration_date: (val) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
-          created_at: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
+          termination_date: formatDbDate,
+          contract_start_date: formatDbDate,
+          contract_expiration_date: formatDbDate,
+          created_at: formatTimestampDay,
           price: (val) => (val != null ? String(val) : ''),
         },
       }}

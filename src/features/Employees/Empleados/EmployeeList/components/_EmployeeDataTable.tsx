@@ -20,6 +20,8 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import {
   affiliateStatusLabels,
   costTypeLabels,
@@ -43,19 +45,18 @@ import {
   getEmployeesPaginated,
   type EmployeeListItem,
 } from '../actions.server';
+import { HIDDEN_COLUMNS_BY_DEFAULT, getColumns } from '../columns';
 import {
-  HIDDEN_COLUMNS_BY_DEFAULT,
   affiliateStatusIcons,
   costTypeIcons,
   documentTypeIcons,
   employeeStatusIcons,
   genderIcons,
-  getColumns,
   levelOfEducationIcons,
   maritalStatusIcons,
   nationalityIcons,
   reasonForTerminationIcons,
-} from '../columns';
+} from '../lib/employee-icons';
 
 // ============================================================================
 // TYPES
@@ -172,7 +173,6 @@ export default function _EmployeeDataTable({
     ) => {
       return async (params: DataTableSearchParams): Promise<FacetResult> => {
         const result = await getEmployeeSingleFacet(columnId, isActive, params);
-        if (!result) return { options: [], counts: new Map() };
         return buildEnumFacetResult(enumValues, labels, icons, result.counts);
       };
     },
@@ -184,7 +184,6 @@ export default function _EmployeeDataTable({
     (columnId: string, nullLabel = 'Sin asignar') => {
       return async (params: DataTableSearchParams): Promise<FacetResult> => {
         const result = await getEmployeeSingleFacet(columnId, isActive, params);
-        if (!result) return { options: [], counts: new Map() };
         return buildFkFacetResult(result.resolvedOptions, result.counts, nullLabel);
       };
     },
@@ -270,21 +269,6 @@ export default function _EmployeeDataTable({
           reasonForTerminationIcons
         ),
       },
-      {
-        columnId: 'is_active',
-        title: 'Activo',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getEmployeeSingleFacet('is_active', isActive, params);
-          if (!result) return { options: [], counts: new Map() };
-          return {
-            options: [
-              { value: 'true', label: 'Activo' },
-              { value: 'false', label: 'Inactivo' },
-            ],
-            counts: result.counts,
-          };
-        },
-      },
 
       // ── FK UUID ────────────────────────────────────────────────────────────
       { columnId: 'hierarchy', title: 'Sector', fetchFacet: makeFkFetchFacet('hierarchy') },
@@ -328,11 +312,11 @@ export default function _EmployeeDataTable({
       { columnId: 'street', title: 'Calle', type: 'text' as const, placeholder: 'Buscar por calle...' },
       { columnId: 'street_number', title: 'Altura', type: 'text' as const, placeholder: 'Buscar por altura...' },
       { columnId: 'postal_code', title: 'CP', type: 'text' as const, placeholder: 'Buscar por CP...' },
-      { columnId: 'file', title: 'Legajo', type: 'text' as const, placeholder: 'Buscar por legajo...' },
+      { columnId: 'file', title: 'Legajo', type: 'text' as const, placeholder: 'Buscar legajo...' },
       { columnId: 'normal_hours', title: 'Horas', type: 'text' as const, placeholder: 'Buscar por horas...' },
+      { columnId: 'born_date', title: 'Nacimiento', type: 'text' as const, placeholder: 'Buscar por nacimiento...' },
 
       // ── Filtros de rango de fechas ─────────────────────────────────────────
-      { columnId: 'born_date', title: 'Nacimiento', type: 'dateRange' as const },
       { columnId: 'date_of_admission', title: 'Fecha de ingreso', type: 'dateRange' as const },
       { columnId: 'created_at', title: 'Fecha de creacion', type: 'dateRange' as const },
       { columnId: 'termination_date', title: 'Fecha de baja', type: 'dateRange' as const },
@@ -389,7 +373,7 @@ export default function _EmployeeDataTable({
       showRowSelection
       emptyMessage="No se encontraron empleados"
       exportConfig={{
-        fetchAllData: () => getAllEmployeesForExport(currentParams, isActive),
+        fetchAllData: async () => unwrapExportResult(await getAllEmployeesForExport(currentParams, isActive)),
         options: {
           filename: isActive ? 'empleados-activos' : 'empleados-inactivos',
           sheetName: isActive ? 'Empleados Activos' : 'Empleados Inactivos',
@@ -406,7 +390,7 @@ export default function _EmployeeDataTable({
           affiliate_status: (value) => getEnumLabel(value as string, affiliateStatusLabels),
           reason_for_termination: (value) => getEnumLabel(value as string, reasonForTerminationLabels),
           date_of_admission: (value) => (value ? moment.utc(value as string | Date).format('DD/MM/YYYY') : '-'),
-          created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
+          created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
           termination_date: (value) => (value ? moment.utc(value as string | Date).format('DD/MM/YYYY') : '-'),
           born_date: (value) => {
             if (!value) return '-';

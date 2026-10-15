@@ -10,8 +10,9 @@ import {
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { CalendarDays, CircleOff, FileText, ShoppingCart, ShieldCheck, ShieldX, ShieldAlert, Truck, User } from 'lucide-react';
-import moment from 'moment';
-import { useCallback, useMemo, useState } from 'react';
+import { formatArgentinaDay, formatDateAr } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { supplierInvoiceStatusIcons } from '../../components/SupplierInvoiceStatusBadge';
 import { ARCA_CHECK_LABELS, SUPPLIER_INVOICE_STATUS_LABELS } from '../../../lib/invoice-status';
 import { PURCHASES_QUERY_KEYS } from '../../../lib/query-keys';
@@ -21,14 +22,8 @@ import {
   getSupplierInvoicesPaginated,
   type SupplierInvoiceListItem,
 } from '../actions.server';
-import {
-  HIDDEN_COLUMNS_BY_DEFAULT,
-  INVOICE_CBTE_TYPE_IDS,
-  NO_ARCA_CHECK_LABEL,
-  NO_ORDER_LABEL,
-  cbteTypeLabel,
-  getColumns,
-} from '../columns';
+import { cbteTypeLabel, getColumns } from '../columns';
+import { HIDDEN_COLUMNS_BY_DEFAULT, INVOICE_CBTE_TYPE_IDS, NO_ARCA_CHECK_LABEL, NO_ORDER_LABEL } from '../constants';
 import type { arca_check_result, supplier_invoice_status } from '@/generated/prisma/enums';
 
 interface Props {
@@ -36,6 +31,8 @@ interface Props {
   totalRows: number;
   searchParams: DataTableSearchParams;
   tableId: string;
+  /** Banda de atención resuelta en el servidor; se muestra sobre la tabla. */
+  topSlot?: ReactNode;
   initialColumnVisibility?: Record<string, boolean>;
   initialFilterVisibility?: Record<string, boolean>;
 }
@@ -48,13 +45,16 @@ const STATUS_VALUES = Object.keys(SUPPLIER_INVOICE_STATUS_LABELS) as supplier_in
 const ARCA_VALUES = Object.keys(ARCA_CHECK_LABELS) as arca_check_result[];
 const arcaIcons = { APPROVED: ShieldCheck, REJECTED: ShieldX, UNAVAILABLE: ShieldAlert } as const;
 
-const dateOnly = (value: unknown) => (value ? moment.utc(value as string | Date).format('DD/MM/YYYY') : '');
+/** Columnas DATE (sin hora): medianoche UTC, se leen como fecha para no correr un día. */
+const dateOnly = (value: unknown) =>
+  value ? formatDateAr(new Date(value as string | Date).toISOString().slice(0, 10)) : '';
 
 export function _InvoicesDataTable({
   data,
   totalRows,
   searchParams,
   tableId,
+  topSlot,
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
@@ -157,12 +157,12 @@ export function _InvoicesDataTable({
 
   const exportConfig: DataTableExportConfig<SupplierInvoiceListItem> = useMemo(
     () => ({
-      fetchAllData: () => getAllSupplierInvoicesForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllSupplierInvoicesForExport(currentParams)),
       options: { filename: 'facturas-proveedor', title: 'Facturas de proveedor', sheetName: 'Facturas' },
       formatters: {
         issue_date: dateOnly,
         due_date: dateOnly,
-        created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : ''),
+        created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : ''),
         total: (value) => formatMoney(value as string),
       },
     }),
@@ -170,24 +170,27 @@ export function _InvoicesDataTable({
   );
 
   return (
-    <DataTable
-      columns={columns}
-      data={data}
-      totalRows={totalRows}
-      searchParams={searchParams}
-      tableId={tableId}
-      paramNamespace={tableId}
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={mergedColumnVisibility}
-      initialFilterVisibility={mergedFilterVisibility}
-      showFilterToggle
-      queryFn={tableQueryFn}
-      queryKey={[...PURCHASES_QUERY_KEYS.invoices]}
-      onStateChange={handleStateChange}
-      searchPlaceholder="Buscar por número o proveedor"
-      emptyMessage="No hay comprobantes cargados"
-      exportConfig={exportConfig}
-      data-testid="supplier-invoices-table"
-    />
+    <div className="space-y-4">
+      {topSlot}
+      <DataTable
+        columns={columns}
+        data={data}
+        totalRows={totalRows}
+        searchParams={searchParams}
+        tableId={tableId}
+        paramNamespace={tableId}
+        facetedFilters={facetedFilters}
+        initialColumnVisibility={mergedColumnVisibility}
+        initialFilterVisibility={mergedFilterVisibility}
+        showFilterToggle
+        queryFn={tableQueryFn}
+        queryKey={[...PURCHASES_QUERY_KEYS.invoices]}
+        onStateChange={handleStateChange}
+        searchPlaceholder="Buscar por número o proveedor"
+        emptyMessage="No hay comprobantes cargados"
+        exportConfig={exportConfig}
+        data-testid="supplier-invoices-table"
+      />
+    </div>
   );
 }

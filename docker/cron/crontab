@@ -9,3 +9,4 @@
 5 8 * * 1   curl --fail-with-body -sS -H "Authorization: Bearer $JOBS_TOKEN" $APP_URL/api/jobs/warehouse-batch-expiry
 0 7 * * *   curl --fail-with-body -sS -H "Authorization: Bearer $JOBS_TOKEN" $APP_URL/api/jobs/daily-report-deviations
 30 0 * * *  curl --fail-with-body -sS -H "Authorization: Bearer $JOBS_TOKEN" $APP_URL/api/jobs/daily-indicators
+10 0 * * *  curl --fail-with-body -sS -H "Authorization: Bearer $JOBS_TOKEN" $APP_URL/api/jobs/documents-status

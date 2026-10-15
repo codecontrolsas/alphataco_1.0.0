@@ -4,6 +4,7 @@ import { Logger } from '@/lib/logger';
 import { taskAppClient } from '@/shared/lib/taskapp/client';
 import { TaskAppError } from '@/shared/lib/taskapp/errors';
 import type { Ticket } from '@/shared/lib/taskapp/types';
+import { requireSupportTickets } from '../lib/access.server';
 import { getReporterEmail } from './getReporterEmail';
 import { getSupportTicketById } from './support-tickets';
 
@@ -20,6 +21,7 @@ export async function requestSupportTicketReopen(
   reason: string,
   attachmentKeys: string[]
 ): Promise<Ticket> {
+  await requireSupportTickets();
   const reporter = await getReporterEmail();
   if (!reporter) throw new Error('No hay usuario autenticado');
 

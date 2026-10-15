@@ -3,6 +3,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ChartSummary } from '@/features/Dashboard/shared/charts/ChartSummary';
 import { type_of_maintenance_ENUM } from '@/generated/prisma/enums';
 import { useQuery } from '@tanstack/react-query';
 import { Gauge, Loader2 } from 'lucide-react';
@@ -78,7 +79,7 @@ export function MaintenanceKindCard() {
   const unclassified = data?.unclassified ?? 0;
 
   return (
-    <Card className="py-0">
+    <Card className="@container py-0">
       <CardHeader className="px-6 pt-4 pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <Gauge className="h-4 w-4 text-muted-foreground" />
@@ -108,13 +109,13 @@ export function MaintenanceKindCard() {
 
       <CardContent className="px-6 pb-5">
         {isError ? (
-          <div className="flex h-44 items-center justify-center text-sm text-muted-foreground">
+          <div role="alert" className="flex h-44 items-center justify-center text-sm text-muted-foreground">
             No se pudo cargar el indicador de preventivo/correctivo.
           </div>
         ) : isLoading ? (
-          <div className="flex flex-col items-center gap-5 py-2 lg:flex-row lg:justify-around">
+          <div className="flex flex-col items-center gap-5 py-2 @2xl:flex-row @2xl:justify-around">
             <Skeleton className="h-[190px] w-[190px] shrink-0 rounded-full" />
-            <div className="w-full space-y-2 lg:max-w-xs">
+            <div className="w-full space-y-2 @2xl:max-w-xs">
               {[0, 1, 2].map((row) => (
                 <Skeleton key={row} className="h-8 w-full" />
               ))}
@@ -134,7 +135,7 @@ export function MaintenanceKindCard() {
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            <div className="flex flex-col items-center gap-5 lg:flex-row lg:items-center lg:justify-around">
+            <div className="flex flex-col items-center gap-5 @2xl:flex-row @2xl:items-center @2xl:justify-around">
               <ChartContainer config={chartConfig} className="aspect-square h-[190px] w-[190px] shrink-0">
                 <PieChart>
                   <ChartTooltip cursor={false} content={<ChartTooltipContent nameKey="label" hideLabel />} />
@@ -173,7 +174,7 @@ export function MaintenanceKindCard() {
               </ChartContainer>
 
               {/* Reparto exacto: hace de leyenda y de tabla de datos. */}
-              <ul className="w-full space-y-1.5 lg:max-w-xs">
+              <ul className="w-full space-y-1.5 @2xl:max-w-xs">
                 {slices.map((slice) => (
                   <li
                     key={slice.kind}
@@ -191,6 +192,19 @@ export function MaintenanceKindCard() {
                 ))}
               </ul>
             </div>
+
+            <ChartSummary
+              title="Mantenimiento preventivo vs. correctivo"
+              summary={`${periodLabel}: ${total} ${total === 1 ? 'tarea ejecutada' : 'tareas ejecutadas'}, ${preventivePct}% preventivas; ${slices
+                .map((slice) => `${slice.label} ${slice.count} (${slice.pct}%)`)
+                .join(', ')}.`}
+              columns={[
+                { key: 'label', header: 'Tipo' },
+                { key: 'count', header: 'Tareas', numeric: true },
+                { key: 'pct', header: 'Participación', numeric: true },
+              ]}
+              rows={slices.map((slice) => ({ label: slice.label, count: slice.count, pct: `${slice.pct}%` }))}
+            />
 
             {(diagnostics > 0 || unclassified > 0) && (
               <div className="space-y-0.5 border-t pt-3 text-xs text-muted-foreground">

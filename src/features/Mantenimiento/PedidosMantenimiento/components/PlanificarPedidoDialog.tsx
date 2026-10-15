@@ -10,8 +10,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { ItemComments } from '@/features/Mantenimiento/components/ItemComments';
@@ -19,16 +19,17 @@ import { PreventiveInfoCard } from '@/features/Mantenimiento/components/Preventi
 import { RepairGroupBadge } from '@/features/Mantenimiento/shared/components/RepairGroupBadge';
 import { RepairItemPhotos } from '@/features/Mantenimiento/shared/components/RepairItemPhotos';
 import { formatDateForDB } from '@/features/Mantenimiento/utils/dateFormat';
-import { Clock, Gauge, Loader2, Package, Truck, Wrench } from 'lucide-react';
+import { CalendarCheck, Clock, Gauge, Loader2, Wrench } from 'lucide-react';
+import { argentinaDate, formatLongDateAr } from '@/shared/lib/argentina-time';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useQueryClient } from '@tanstack/react-query';
 import moment from 'moment';
 import { useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import {
-  getResourceInternNumber,
-  getResourceKind,
-  getResourceKindLabel,
-  getResourceLabel,
-} from '../../shared/maintenance-resource';
+import { z } from 'zod';
+import { ActionDialogResource, getActionErrorMessage } from '../../shared/components/ActionDialogParts';
+import { getResourceCondition, getResourceKind } from '../../shared/maintenance-resource';
 import { getRepairItemGroupName, getRepairItemImages, getRepairItemLabel } from '../../shared/repair-item-label';
 import type { MaintenanceOrderData } from '../actions/actionsServer';
 import { useScheduleMaintenanceOrder } from '../hooks/useMaintenanceOrders';
@@ -47,47 +48,68 @@ function formatSectionCode(code: string | null | undefined): string {
     .join(' ');
 }
 
+const scheduleSchema = z.object({
+  date: z.custom<Date>((value) => value instanceof Date && !Number.isNaN(value.getTime()), {
+    message: 'Debe seleccionar una fecha',
+  }),
+});
+
+type ScheduleValues = z.infer<typeof scheduleSchema>;
+
 export function PlanificarPedidoDialog({ order, open, onClose }: PlanificarPedidoDialogProps) {
-  const [dateStr, setDateStr] = useState<string>('');
+  return (
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      {/* El formulario vive dentro de DialogContent: al cerrar se desmonta y la fecha no se arrastra. */}
+      <DialogContent className="flex max-h-[90vh] max-w-2xl flex-col gap-0 overflow-hidden p-0">
+        <ScheduleForm order={order} onClose={onClose} />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ScheduleForm({ order, onClose }: { order: MaintenanceOrderData; onClose: () => void }) {
   const scheduleMutation = useScheduleMaintenanceOrder();
+  const queryClient = useQueryClient();
+  // Tras el éxito el botón sigue bloqueado mientras el diálogo termina de cerrarse.
+  const [isDone, setIsDone] = useState(false);
+
+  const form = useForm<ScheduleValues>({
+    resolver: zodResolver(scheduleSchema),
+    mode: 'onChange',
+    defaultValues: { date: undefined },
+  });
+  const { isSubmitting, isValid } = form.formState;
+  const selectedDate = form.watch('date');
 
   // Ticket 596: el pedido puede ser de un vehiculo o de un equipamiento
   const isOtherEquipment = getResourceKind(order) === 'other_equipment';
-  const resourceLabel = getResourceLabel(order);
-  const resourceKindLabel = getResourceKindLabel(order);
-  const internNumber = getResourceInternNumber(order);
-  const ResourceIcon = isOtherEquipment ? Package : Truck;
   const itemCount = order.maintenance_order_items?.length ?? 0;
   const isPreventive = order.maintenance_requests?.source === 'preventive';
+  const description = order.description ?? order.maintenance_requests?.description;
 
   // Un equipamiento no lleva kilometraje; sus horas de uso viven en `horometer`.
-  const kilometer = isOtherEquipment ? null : order.vehicles?.kilometer ?? order.maintenance_requests?.kilometer;
+  const kilometer = isOtherEquipment ? null : (order.vehicles?.kilometer ?? order.maintenance_requests?.kilometer);
   const engineHours =
     order.other_equipment?.horometer ?? order.vehicles?.engine_hours ?? order.maintenance_requests?.engine_hours;
 
-  const handleSchedule = async () => {
-    if (!dateStr) {
-      toast.error('Debe seleccionar una fecha');
-      return;
-    }
+  // Fecha mínima: hoy en Argentina (el servidor corre en UTC y entre las 21 y las 24 h ya es "mañana").
+  const todayAr = argentinaDate();
+  const minDate = moment(todayAr, 'YYYY-MM-DD').toDate();
 
-    const parsedDate = new Date(dateStr + 'T00:00:00');
-    if (Number.isNaN(parsedDate.getTime())) {
-      toast.error('Fecha inválida');
-      return;
-    }
-
+  async function onSubmit(values: ScheduleValues) {
     try {
       await scheduleMutation.mutateAsync({
         orderId: order.id,
-        scheduledDate: formatDateForDB(parsedDate),
+        scheduledDate: formatDateForDB(values.date),
       });
+      setIsDone(true);
+      queryClient.invalidateQueries({ queryKey: ['datatable-facet'] });
       toast.success('Pedido planificado exitosamente');
       onClose();
-    } catch {
-      toast.error('Error al planificar el pedido');
+    } catch (error) {
+      toast.error('Error al planificar el pedido', { description: getActionErrorMessage(error) ?? undefined });
     }
-  };
+  }
 
   // Agrupar items por tipo de reparación (soporta múltiples tipos)
   const itemsByRepairType = (order.maintenance_order_items || []).reduce(
@@ -111,44 +133,34 @@ export function PlanificarPedidoDialog({ order, open, onClose }: PlanificarPedid
     {} as Record<string, typeof order.maintenance_order_items>
   );
 
-  // Fecha mínima: hoy en formato YYYY-MM-DD
-  const todayStr = moment().format('YYYY-MM-DD');
+  const blocked = isSubmitting || isDone;
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
-        {/* ── Header compacto ──────────────────────────────────────────── */}
-        <div className="px-6 pt-6 pb-4 space-y-3">
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col" noValidate>
+        {/* ── Encabezado y resumen del equipo ─────────────────────────── */}
+        <div className="space-y-3 px-6 pt-6 pb-4">
           <DialogHeader className="space-y-1">
             <DialogTitle className="text-base">Planificar Pedido de Mantenimiento</DialogTitle>
-            <DialogDescription className="flex items-center gap-3 text-xs">
-              <span className="inline-flex items-center gap-1">
-                <ResourceIcon className="h-3 w-3" />
-                <span className="text-muted-foreground">{resourceKindLabel}</span>
-                {resourceLabel}
-                {internNumber && <span className="text-muted-foreground">(#{internNumber})</span>}
-              </span>
-              {order.order_number && (
-                <>
-                  <span className="text-muted-foreground">·</span>
-                  <span>Pedido #{order.order_number}</span>
-                </>
-              )}
+            <DialogDescription className="text-xs">
+              {order.order_number ? `Pedido #${order.order_number}` : 'Pedido de mantenimiento'}
             </DialogDescription>
           </DialogHeader>
+
+          <ActionDialogResource row={order} condition={getResourceCondition(order)} />
 
           {/* ── Datos clave (fila horizontal) ───────────────────────────── */}
           {(kilometer || engineHours) && (
             <div className="flex flex-wrap gap-4 text-sm">
               {kilometer && (
-                <div className="flex items-center gap-1.5 text-muted-foreground">
-                  <Gauge className="h-3.5 w-3.5" />
+                <div className="text-muted-foreground flex items-center gap-1.5">
+                  <Gauge className="h-3.5 w-3.5" aria-hidden="true" />
                   <span className="text-foreground font-medium">{Number(kilometer).toLocaleString('es-AR')} km</span>
                 </div>
               )}
               {engineHours && (
-                <div className="flex items-center gap-1.5 text-muted-foreground">
-                  <Clock className="h-3.5 w-3.5" />
+                <div className="text-muted-foreground flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5" aria-hidden="true" />
                   <span className="text-foreground font-medium">{Number(engineHours).toLocaleString('es-AR')} hs</span>
                 </div>
               )}
@@ -156,26 +168,32 @@ export function PlanificarPedidoDialog({ order, open, onClose }: PlanificarPedid
           )}
 
           {/* ── Descripción del pedido ──────────────────────────────────── */}
-          {(order.description ?? order.maintenance_requests?.description) && (
+          {description && (
             <div className="space-y-1">
-              <h3 className="text-xs font-semibold text-muted-foreground tracking-wide uppercase">Descripción</h3>
-              <p className="text-sm whitespace-pre-wrap break-words">
-                {order.description ?? order.maintenance_requests?.description}
-              </p>
+              <h3 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">Descripción</h3>
+              <p className="text-sm break-words whitespace-pre-wrap">{description}</p>
             </div>
           )}
 
-          {/* ── Selector de fecha (escritura directa) ──────────────────── */}
-          <div className="space-y-1.5">
-            <Label className="text-sm font-medium">Fecha de recepción en taller</Label>
-            <Input
-              type="date"
-              value={dateStr}
-              min={todayStr}
-              onChange={(e) => setDateStr(e.target.value)}
-              className="w-full"
-            />
-          </div>
+          {/* ── Fecha (escritura directa o calendario) ──────────────────── */}
+          <FormField
+            control={form.control}
+            name="date"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Fecha de recepción en taller *</FormLabel>
+                <FormControl>
+                  <EnhancedDatePicker date={field.value} setDate={field.onChange} minDate={minDate} />
+                </FormControl>
+                <FormDescription>
+                  {selectedDate
+                    ? `Se planifica para el ${formatLongDateAr(moment(selectedDate).format('YYYY-MM-DD'))}.`
+                    : 'DD/MM/AAAA. Podés escribirla o elegirla en el calendario.'}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </div>
 
         <Separator />
@@ -190,22 +208,22 @@ export function PlanificarPedidoDialog({ order, open, onClose }: PlanificarPedid
         {itemCount > 0 && (
           <>
             <div className="px-6 pt-3 pb-1">
-              <h3 className="text-sm font-semibold text-muted-foreground tracking-wide uppercase flex items-center gap-1.5">
-                <Wrench className="h-3.5 w-3.5" />
+              <h3 className="text-muted-foreground flex items-center gap-1.5 text-sm font-semibold tracking-wide uppercase">
+                <Wrench className="h-3.5 w-3.5" aria-hidden="true" />
                 Items a reparar
                 <span className="text-xs font-normal normal-case">({itemCount})</span>
               </h3>
             </div>
 
-            <ScrollArea className="flex-1 min-h-0">
-              <div className="px-6 pb-4 space-y-3">
+            <ScrollArea className="min-h-0 flex-1">
+              <div className="space-y-3 px-6 pb-4">
                 {Object.entries(itemsByRepairType).map(([repairType, items]) => (
                   <div key={repairType} className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="font-medium text-xs">
+                      <Badge variant="outline" className="text-xs font-medium">
                         {repairType}
                       </Badge>
-                      <span className="text-xs text-muted-foreground">({items?.length || 0})</span>
+                      <span className="text-muted-foreground text-xs">({items?.length || 0})</span>
                     </div>
                     <div className="space-y-1.5">
                       {items?.map((item, index) => {
@@ -215,16 +233,16 @@ export function PlanificarPedidoDialog({ order, open, onClose }: PlanificarPedid
                         const itemLabel = getRepairItemLabel(item);
                         const itemImages = getRepairItemImages(item);
                         return (
-                          <div key={item.id} className="p-2.5 border rounded-lg space-y-1">
-                            <div className="flex items-start gap-2 min-w-0">
-                              <span className="text-xs font-mono text-muted-foreground bg-muted rounded px-1.5 py-0.5 shrink-0 mt-0.5">
+                          <div key={item.id} className="space-y-1 rounded-lg border p-2.5">
+                            <div className="flex min-w-0 items-start gap-2">
+                              <span className="text-muted-foreground bg-muted mt-0.5 shrink-0 rounded px-1.5 py-0.5 font-mono text-xs">
                                 #{index + 1}
                               </span>
                               <div className="min-w-0">
-                                <p className="font-medium text-sm leading-snug">{itemLabel}</p>
+                                <p className="text-sm leading-snug font-medium">{itemLabel}</p>
                                 <RepairGroupBadge groupName={getRepairItemGroupName(item)} className="mt-1" />
                                 {deviation?.section_code && (
-                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                  <p className="text-muted-foreground mt-0.5 text-xs">
                                     {formatSectionCode(deviation.section_code)}
                                   </p>
                                 )}
@@ -254,22 +272,31 @@ export function PlanificarPedidoDialog({ order, open, onClose }: PlanificarPedid
 
         {itemCount === 0 && !isPreventive && (
           <div className="px-6 pb-4">
-            <p className="text-muted-foreground text-center py-6 text-sm">No hay items registrados</p>
+            <p className="text-muted-foreground py-6 text-center text-sm">No hay items registrados</p>
           </div>
         )}
 
         {/* ── Footer ──────────────────────────────────────────────────── */}
         <Separator />
-        <DialogFooter className="px-6 py-4 shrink-0">
-          <Button variant="outline" onClick={onClose}>
+        <DialogFooter className="shrink-0 items-center px-6 py-4">
+          {!isValid && !blocked && (
+            <p id="schedule-hint" className="text-muted-foreground mr-auto text-xs">
+              Elegí la fecha de recepción para habilitar la planificación.
+            </p>
+          )}
+          <Button type="button" variant="outline" onClick={onClose} disabled={blocked}>
             Cancelar
           </Button>
-          <Button onClick={handleSchedule} disabled={scheduleMutation.isPending || !dateStr}>
-            {scheduleMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Button type="submit" disabled={blocked || !isValid} aria-describedby={!isValid ? 'schedule-hint' : undefined}>
+            {blocked ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <CalendarCheck className="mr-2 h-4 w-4" aria-hidden="true" />
+            )}
             Confirmar Planificación
           </Button>
         </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </form>
+    </Form>
   );
 }

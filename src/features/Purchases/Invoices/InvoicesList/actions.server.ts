@@ -1,7 +1,6 @@
 'use server';
 
 import { checkPermissionServer } from '@/features/Permissions';
-import { pickFilters } from '@/features/Warehouses/lib/filters';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
@@ -12,15 +11,23 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { formatVoucherNumber } from '@/features/Comercial/Facturacion/lib/invoice-type';
+import { ARCA_CHECK_LABELS, SUPPLIER_INVOICE_STATUS_LABELS } from '../../lib/invoice-status';
 import { supplierInvoiceLabel } from '../../lib/invoices';
+import { getInvoicesSectionCount } from '../../lib/section-counts';
+import { formatCuit } from '../../lib/supplier-ids';
+import { INVOICE_CBTE_TYPE_IDS } from './constants';
 
 const logger = new Logger('features/Purchases/Invoices/InvoicesList');
 
 type InvoiceWhere = Prisma.supplier_invoicesWhereInput;
 type InvoiceOrderBy = Prisma.supplier_invoicesOrderByWithRelationInput;
-type FilterState = ReturnType<typeof parseSearchParams>;
+type FilterState = ReturnType<typeof parseListState>;
 
 // ============================================================================
 // CONSTANTS
@@ -50,6 +57,32 @@ const COLUMN_MAP: Record<string, string> = {
   creator: 'created_by',
 };
 
+/** Filtros de texto/propios que no pasan por `buildFiltersWhere`. */
+const OWN_FILTERS = ['cbte_type', 'number', 'supplier_cuit', 'total', 'orders'] as const;
+
+/** Unicas claves de filtro que se aceptan: cualquier otra de la URL se descarta antes de armar el `where`. */
+const ALLOWED_FILTER_KEYS: ReadonlySet<string> = new Set([
+  ...FACETED_COLUMNS,
+  ...OWN_FILTERS,
+  ...dateRangeKeys(DATE_RANGE_COLUMNS),
+]);
+
+/** Tope de filas del export. */
+const EXPORT_MAX_ROWS = 10_000;
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Valores validos por columna con lista cerrada (un valor ajeno haria fallar a Prisma y tumbaria la lista). */
+const VALID_VALUES: Record<string, (value: string) => boolean> = {
+  status: (v) => v in SUPPLIER_INVOICE_STATUS_LABELS,
+  arca_check_result: (v) => v === NULL_FILTER_VALUE || v in ARCA_CHECK_LABELS,
+  supplier: (v) => UUID_RE.test(v),
+  creator: (v) => UUID_RE.test(v),
+  vat_period: (v) => /^\d{4}-\d{2}$/.test(v),
+  cbte_type: (v) => (INVOICE_CBTE_TYPE_IDS as readonly number[]).includes(Number(v)),
+  orders: (v) => v === NULL_FILTER_VALUE || UUID_RE.test(v),
+};
+
 const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
 const digitsOf = (value: string) => value.replace(/\D/g, '');
 
@@ -64,9 +97,24 @@ async function resolveCompanyId(): Promise<string | null> {
   return getActiveCompanyId();
 }
 
+/** Estado de la tabla ya parseado, con solo los filtros permitidos y sus valores validos. */
+function parseListState(searchParams: DataTableSearchParams) {
+  const state = sanitizeFilters(parseSearchParams(searchParams), ALLOWED_FILTER_KEYS);
+  for (const [column, isValid] of Object.entries(VALID_VALUES)) {
+    const values = state.filters[column];
+    if (!values) continue;
+    const valid = values.filter(isValid);
+    if (valid.length > 0) state.filters[column] = valid;
+    else delete state.filters[column];
+  }
+  return state;
+}
+
 /** Numero de comprobante: "00003-00012345" (punto de venta + numero) o solo el numero. Coincidencia exacta. */
 function voucherNumberWhere(text: string): InvoiceWhere | null {
   const parts = text.split('-').map(digitsOf).filter(Boolean);
+  // Fuera de rango (punto de venta Int, numero bigint): ningun comprobante coincide
+  if (parts.some((p) => p.length > 18) || (parts.length === 2 && Number(parts[0]) > 99999)) return { id: { in: [] } };
   if (parts.length === 2) return { sales_point: Number(parts[0]), number: BigInt(parts[1]) };
   if (parts.length === 1) return { number: BigInt(parts[0]) };
   return null;
@@ -100,7 +148,7 @@ async function buildWhereClause(companyId: string, state: FilterState): Promise<
     and.push({ OR: or });
   }
 
-  and.push(buildFiltersWhere(pickFilters(f, FACETED_COLUMNS), COLUMN_MAP) as InvoiceWhere);
+  and.push(buildFiltersWhere(f, COLUMN_MAP, { exclude: [...OWN_FILTERS] }) as InvoiceWhere);
   and.push(buildDateRangeFiltersWhere(f, DATE_RANGE_COLUMNS) as InvoiceWhere);
 
   // Text: comprobante (exacto), CUIT (parcial, bigint) y total (exacto, decimal)
@@ -161,6 +209,7 @@ function shape(rows: Prisma.supplier_invoicesGetPayload<{ select: typeof INVOICE
     return {
       id: r.id,
       label: supplierInvoiceLabel(r),
+      voucher_number: formatVoucherNumber(r.sales_point, Number(r.number)),
       cbte_type: r.cbte_type,
       issue_date: r.issue_date,
       due_date: r.due_date,
@@ -169,7 +218,7 @@ function shape(rows: Prisma.supplier_invoicesGetPayload<{ select: typeof INVOICE
       status: r.status,
       arca_check_result: r.arca_check_result,
       created_at: r.created_at,
-      supplier: { id: r.supplier.id, name: r.supplier.name, cuit: r.supplier.cuit.toString() },
+      supplier: { id: r.supplier.id, name: r.supplier.name, cuit: formatCuit(r.supplier.cuit) },
       creator: { id: r.creator.id, name: profileName(r.creator) },
       orders: [...orders.values()].sort((a, b) => a.number.localeCompare(b.number)),
     };
@@ -185,7 +234,7 @@ export async function getSupplierInvoicesPaginated(searchParams: DataTableSearch
   if (!companyId) return { data: [], total: 0 };
 
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseListState(searchParams);
     const { skip, take } = stateToPrismaParams(state);
     const where = await buildWhereClause(companyId, state);
 
@@ -213,22 +262,36 @@ export async function getSupplierInvoicesPaginated(searchParams: DataTableSearch
 // EXPORT (sin paginacion)
 // ============================================================================
 
-export async function getAllSupplierInvoicesForExport(searchParams: DataTableSearchParams) {
+export async function getAllSupplierInvoicesForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<SupplierInvoiceListItem[]>> {
   const companyId = await resolveCompanyId();
-  if (!companyId) return [];
+  if (!companyId) return { ok: true, data: [] };
 
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseListState(searchParams);
     const where = await buildWhereClause(companyId, state);
-    const rows = await prisma.supplier_invoices.findMany({
-      where,
-      orderBy: [{ issue_date: 'desc' }, { created_at: 'desc' }],
-      select: INVOICE_SELECT,
+    const orderBy: InvoiceOrderBy[] = [{ issue_date: 'desc' }, { created_at: 'desc' }, { id: 'asc' }];
+
+    const rows = await fetchExportRowsInBatches({
+      maxRows: EXPORT_MAX_ROWS,
+      listIds: (take) => prisma.supplier_invoices.findMany({ where, orderBy, select: { id: true }, take }),
+      fetchByIds: (ids) =>
+        prisma.supplier_invoices.findMany({ where: { id: { in: ids }, company_id: companyId }, select: INVOICE_SELECT }),
+      tooLargeMessage: (maxRows) =>
+        `Hay más de ${maxRows.toLocaleString('es-AR')} comprobantes con los filtros actuales. Acote la exportación con filtros.`,
     });
-    return shape(rows);
+    return { ok: true, data: shape(rows) };
   } catch (error) {
     logger.error('Error al exportar comprobantes de proveedor', { data: { error } });
-    throw new Error('No se pudo exportar la lista de comprobantes');
+    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
+    return {
+      ok: false,
+      message:
+        error instanceof ExportTooLargeError
+          ? error.message
+          : 'No se pudo exportar la lista de comprobantes. Intente nuevamente.',
+    };
   }
 }
 
@@ -243,11 +306,11 @@ export async function getSupplierInvoiceSingleFacet(
   const companyId = await resolveCompanyId();
   if (!companyId) return null;
 
-  const parsed = searchParams && Object.keys(searchParams).length > 0 ? parseSearchParams(searchParams) : null;
+  const parsed = searchParams && Object.keys(searchParams).length > 0 ? parseListState(searchParams) : null;
 
   /** WHERE con todos los filtros activos MENOS el de la columna que se esta abriendo. */
   function crossWhere(excludeColumn: string): Promise<InvoiceWhere> {
-    const base: FilterState = parsed ?? parseSearchParams({});
+    const base: FilterState = parsed ?? parseListState({});
     const filters = { ...base.filters };
     delete filters[excludeColumn];
     return buildWhereClause(companyId as string, { ...base, filters });
@@ -353,6 +416,26 @@ export async function getSupplierInvoiceSingleFacet(
     return null;
   } catch (error) {
     logger.error('Error al obtener facet de comprobantes', { data: { error, columnId } });
+    return null;
+  }
+}
+
+// ============================================================================
+// ATENCION (banda sobre la tabla)
+// ============================================================================
+
+/**
+ * Facturas observadas que esperan decision (`facturas:approve`). Usa el mismo contador que la sub-navegacion
+ * (`getInvoicesSectionCount`), que es el `where` de la lista filtrada por estado Observada. Nunca rechaza:
+ * `null` si no corresponde o no se pudo contar (no se muestra la banda).
+ */
+export async function getSupplierInvoicesAttention(): Promise<{ observed: number } | null> {
+  try {
+    if (!(await checkPermissionServer('compras', 'facturas', 'view'))) return null;
+    const observed = await getInvoicesSectionCount();
+    return observed == null ? null : { observed };
+  } catch (error) {
+    logger.error('Error al contar facturas observadas', { data: { error } });
     return null;
   }
 }

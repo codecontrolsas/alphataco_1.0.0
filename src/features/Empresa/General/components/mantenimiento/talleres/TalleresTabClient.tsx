@@ -1,44 +1,55 @@
 'use client';
 
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
-import { Suspense } from 'react';
+import { CatalogCreateButton, CatalogFormSheet, useCatalogSheet } from '@/shared/components/common/CatalogFormSheet';
+import type { TablePreferences } from '@/shared/components/common/DataTable';
+import { Suspense, useCallback } from 'react';
 import type { Workshop } from '../../../actions/workshops.server';
 import TalleresForm from './TalleresForm';
 import TalleresTable from './TalleresTable';
+import { useTalleresStore } from './store/talleres.store';
 
 interface TalleresTabClientProps {
   workshops: Promise<Workshop[]>;
-  savedVisibility: Record<string, boolean>;
-  savedFilter: string[];
+  preferences: Promise<TablePreferences>;
 }
 
-export function TalleresTabClient({ workshops, savedVisibility, savedFilter }: TalleresTabClientProps) {
+/** Tabla de talleres a ancho completo; alta y edición en un Sheet. La superficie la pone quien monta la sección. */
+export function TalleresTabClient({ workshops, preferences }: TalleresTabClientProps) {
   const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('configuracion', 'talleres', 'create');
+  const canUpdate = hasPermission('configuracion', 'talleres', 'update');
 
-  // Verificar si tiene permisos de crear o editar
-  const canCreateOrUpdate =
-    hasPermission('configuracion', 'talleres', 'create') || hasPermission('configuracion', 'talleres', 'update');
+  // El form sigue leyendo el store de edición: el Sheet lo carga al abrir y lo limpia al cerrar.
+  const setWorkshop = useTalleresStore((state) => state.setWorkshop);
+  const clearWorkshop = useCallback(() => setWorkshop(null), [setWorkshop]);
+  const sheet = useCatalogSheet<Workshop>({
+    canCreate,
+    canUpdate,
+    onOpenEdit: setWorkshop,
+    onOpenCreate: clearWorkshop,
+    onClosed: clearWorkshop,
+  });
 
   return (
-    <div className="w-full">
-      <ResizablePanelGroup className="min-h-[400px]" direction="horizontal">
-        {canCreateOrUpdate && (
-          <>
-            <ResizablePanel defaultSize={30}>
-              <TalleresForm />
-            </ResizablePanel>
-            <ResizableHandle withHandle />
-          </>
-        )}
-
-        <ResizablePanel defaultSize={canCreateOrUpdate ? 70 : 100}>
-          <Suspense fallback={<Skeleton className="h-[400px] w-full rounded-md" />}>
-            <TalleresTable savedVisibility={savedVisibility} workshops={workshops} savedFilter={savedFilter} />
-          </Suspense>
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    </div>
+    <>
+      <Suspense fallback={<Skeleton className="h-[400px] w-full rounded-md" />}>
+        <TalleresTable
+          workshops={workshops}
+          preferences={preferences}
+          onEdit={sheet.openEdit}
+          toolbarActions={<CatalogCreateButton sheet={sheet} label="Nuevo taller" />}
+        />
+      </Suspense>
+      <CatalogFormSheet
+        sheet={sheet}
+        getKey={(workshop) => workshop.id}
+        title={{ create: 'Nuevo taller', edit: 'Editar taller' }}
+        size="xl"
+      >
+        {() => <TalleresForm />}
+      </CatalogFormSheet>
+    </>
   );
 }

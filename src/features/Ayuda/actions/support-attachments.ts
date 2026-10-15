@@ -3,6 +3,7 @@
 import { Logger } from '@/lib/logger';
 import { taskAppClient } from '@/shared/lib/taskapp/client';
 import { TaskAppError } from '@/shared/lib/taskapp/errors';
+import { requireSupportTickets } from '../lib/access.server';
 import { getReporterEmail } from './getReporterEmail';
 
 const logger = new Logger('features/Ayuda/support-attachments');
@@ -10,6 +11,7 @@ const logger = new Logger('features/Ayuda/support-attachments');
 const MAX_BYTES = 20 * 1024 * 1024; // 20 MB
 
 export async function uploadSupportTicketAttachment(formData: FormData): Promise<{ key: string }> {
+  await requireSupportTickets();
   const reporter = await getReporterEmail();
   if (!reporter) throw new Error('No hay usuario autenticado');
 
@@ -29,8 +31,7 @@ export async function uploadSupportTicketAttachment(formData: FormData): Promise
   // existente, el archivo queda en <project_slug>/ticket-<id>/. Si no, queda
   // en <project_slug>/ (caso del form de creacion del ticket).
   const rawTicketId = formData.get('ticket_id');
-  const ticketId =
-    typeof rawTicketId === 'string' && /^\d+$/.test(rawTicketId) ? Number(rawTicketId) : undefined;
+  const ticketId = typeof rawTicketId === 'string' && /^\d+$/.test(rawTicketId) ? Number(rawTicketId) : undefined;
 
   try {
     return await taskAppClient.uploadFile(raw, ticketId);
@@ -47,11 +48,9 @@ export async function uploadSupportTicketAttachment(formData: FormData): Promise
  * Asocia archivos ya subidos (storage keys) a un ticket existente del reporter actual.
  * El backend valida que el reporter sea el dueno del ticket y deduplica las keys.
  */
-export async function appendSupportTicketAttachments(
-  ticketId: number,
-  keys: string[]
-): Promise<void> {
+export async function appendSupportTicketAttachments(ticketId: number, keys: string[]): Promise<void> {
   if (keys.length === 0) return;
+  await requireSupportTickets();
   const reporter = await getReporterEmail();
   if (!reporter) throw new Error('No hay usuario autenticado');
 

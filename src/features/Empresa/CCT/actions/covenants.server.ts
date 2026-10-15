@@ -5,6 +5,7 @@ import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { configPermissionError } from '../../lib/config-access.server';
 import { covenantScope, guildReadScope } from '../lib/cct-scope';
 import type { CctMutationResult } from './types';
 
@@ -23,6 +24,9 @@ const covenantInputSchema = z.object({
  * es válido (ticket 616).
  */
 export async function createCovenant(input: { name: string; guild_id: string }): Promise<CctMutationResult> {
+  const denied = await configPermissionError('convenios', 'create');
+  if (denied) return { ok: false, error: denied };
+
   const parsed = covenantInputSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Datos inválidos' };

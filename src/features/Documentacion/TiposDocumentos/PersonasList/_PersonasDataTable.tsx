@@ -8,6 +8,7 @@ import {
   type DataTableSearchParams,
   type FacetResult,
 } from '@/shared/components/common/DataTable';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Check, X } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import {
@@ -208,7 +209,7 @@ export default function _PersonasDataTable({
         mobileCards
         emptyMessage="No hay tipos de documentos"
         exportConfig={{
-          fetchAllData: () => getPersonasDocTypesForExport(currentParams),
+          fetchAllData: async () => unwrapExportResult(await getPersonasDocTypesForExport(currentParams)),
           options: {
             filename: 'tipos-documentos-personas',
             sheetName: 'Tipos Documentos Personas',

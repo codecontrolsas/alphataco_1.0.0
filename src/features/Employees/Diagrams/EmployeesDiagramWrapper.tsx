@@ -7,16 +7,21 @@ import { Label } from '@/components/ui/label';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { Logger } from '@/lib/logger';
 import InfoComponent from '@/shared/components/common/InfoComponent';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Search, X } from 'lucide-react';
+import moment from 'moment';
 import { FormEvent, useMemo, useState } from 'react';
+import type { DateRange } from 'react-day-picker';
 import DiagramEmployeeView from './DiagramEmployeeView';
-import { getDiagramFilterOptions, searchEmployeeDiagrams, type CategoryFilterOption } from './actions/diagram-search-actions';
 import {
-  DEFAULT_FILTERS,
-  useDiagramUrlFilters,
-  type DiagramFilterState,
-} from './hooks/useDiagramUrlFilters';
+  getDiagramFilterOptions,
+  searchEmployeeDiagrams,
+  type CategoryFilterOption,
+} from './actions/diagram-search-actions';
+import { DEFAULT_FILTERS, useDiagramUrlFilters, type DiagramFilterState } from './hooks/useDiagramUrlFilters';
+
+const argentinaToday = () => moment(argentinaDate(), 'YYYY-MM-DD');
 
 const logger = new Logger('Diagrams/EmployeesDiagramWrapper');
 
@@ -34,6 +39,13 @@ export default function EmployeesDiagramWrapper({
   const [filters, setFilters] = useState<DiagramFilterState>(initialFilters);
   // Con filtros en la URL la búsqueda arranca sola al montar.
   const [hasSearched, setHasSearched] = useState<boolean>(hasUrlFilters);
+  // Rango de días que muestra la grilla: el servidor trae las novedades solo de esa ventana (máx. 366 días).
+  const [viewRange, setViewRange] = useState<DateRange | undefined>({
+    from: argentinaToday().toDate(),
+    to: argentinaToday().add(30, 'days').toDate(),
+  });
+  const viewDateFrom = viewRange?.from ? moment(viewRange.from).format('YYYY-MM-DD') : undefined;
+  const viewDateTo = viewRange?.from ? moment(viewRange.to ?? viewRange.from).format('YYYY-MM-DD') : undefined;
 
   // The committed filters sent to the server (only updated on submit)
   const [committedFilters, setCommittedFilters] = useState<DiagramFilterState | null>(
@@ -51,7 +63,7 @@ export default function EmployeesDiagramWrapper({
     hasNextPage,
     fetchNextPage,
   } = useInfiniteQuery({
-    queryKey: ['diagram-search', committedFilters],
+    queryKey: ['diagram-search', committedFilters, viewDateFrom, viewDateTo],
     queryFn: async ({ pageParam }) => {
       if (!committedFilters) return { data: [], hasMore: false };
       logger.debug('Fetching diagram search results', { data: { page: pageParam } });
@@ -68,6 +80,8 @@ export default function EmployeesDiagramWrapper({
         diagramTypes: committedFilters.diagramType,
         page: pageParam,
         pageSize: PAGE_SIZE,
+        dateFrom: viewDateFrom,
+        dateTo: viewDateTo,
       });
     },
     initialPageParam: 1,
@@ -77,10 +91,7 @@ export default function EmployeesDiagramWrapper({
     refetchInterval: REFETCH_INTERVAL_MS,
   });
 
-  const accumulatedEmployees = useMemo(
-    () => searchResult?.pages.flatMap((page) => page.data) ?? [],
-    [searchResult]
-  );
+  const accumulatedEmployees = useMemo(() => searchResult?.pages.flatMap((page) => page.data) ?? [], [searchResult]);
 
   const isLoadingFirstPage = isSearching;
   const isLoadingMore = isFetchingNextPage;
@@ -485,11 +496,21 @@ export default function EmployeesDiagramWrapper({
             </div>
           )}
 
-          <DiagramEmployeeView employeesData={accumulatedEmployees} />
+          <DiagramEmployeeView
+            employeesData={accumulatedEmployees}
+            dateRange={viewRange}
+            onDateRangeChange={setViewRange}
+          />
 
           {hasMoreData && (
             <div className="flex justify-center mt-4 mb-8">
-              <Button onClick={handleLoadMore} disabled={isLoadingMore} variant="outline" className="px-8">
+              <Button
+                type="button"
+                onClick={handleLoadMore}
+                disabled={isLoadingMore}
+                variant="outline"
+                className="px-8"
+              >
                 {isLoadingMore ? 'Cargando más empleados...' : 'Cargar más empleados'}
               </Button>
             </div>

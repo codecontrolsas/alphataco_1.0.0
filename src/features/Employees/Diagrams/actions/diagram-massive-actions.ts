@@ -7,9 +7,19 @@ import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getSessionUserId } from '@/shared/lib/session';
 import { callScalar } from '@/shared/lib/sql';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import moment from 'moment';
 import { z } from 'zod';
 
-import { buildDiagramDayRangeWhere, isActiveDayInCycle, toDiagramDay } from '../lib/diagram-dates';
+import { assertDiagramAccess, assertDiagramAction } from '../lib/diagram-access';
+import {
+  buildDiagramDayRangeWhere,
+  compareDiagramDays,
+  diagramDayKey,
+  isActiveDayInCycle,
+  toDiagramDay,
+  type DiagramDay,
+} from '../lib/diagram-dates';
+import { uuidLike } from '../lib/diagram-ids';
 import {
   computeMassiveConflicts,
   normalizeProcessingResult,
@@ -18,6 +28,7 @@ import {
   type ExistingDiagramEntry,
   type NoveltyInfo,
 } from '../lib/massive-diagrams';
+import { MASSIVE_MAX_DAYS_RANGE, MASSIVE_MAX_EMPLOYEES } from '../lib/massive-limits';
 import type { ConflictCheckResult, ProcessingResult } from '../types/massive-diagram';
 
 const logger = new Logger('features/Employees/Diagrams/massive');
@@ -28,6 +39,7 @@ const MASSIVE_TX_OPTIONS = { timeout: 120_000, maxWait: 5_000 } as const;
 // ─── Work Diagrams ──────────────────────────────────────────────────────────
 
 export async function getActiveWorkDiagrams() {
+  await assertDiagramAccess('massive_diagram');
   const companyId = await getActiveCompanyId();
   logger.debug('Fetching active work diagrams');
 
@@ -62,6 +74,7 @@ export type WorkDiagramItem = Awaited<ReturnType<typeof getActiveWorkDiagrams>>[
 // ─── Novelties ──────────────────────────────────────────────────────────────
 
 export async function getWorkDiagramNovelties(workDiagramId: string) {
+  await assertDiagramAccess('massive_diagram');
   const companyId = await getActiveCompanyId();
   logger.debug('Fetching novelties for work diagram', { data: { workDiagramId } });
 
@@ -111,6 +124,7 @@ export type ActiveNoveltyItem = NoveltyData['activeNovelties'][number];
  * No depende de un work_diagram — devuelve el catálogo completo.
  */
 export async function getActiveDiagramTypes() {
+  await assertDiagramAccess('massive_diagram');
   const companyId = await getActiveCompanyId();
   logger.debug('Fetching active diagram types');
 
@@ -135,6 +149,23 @@ export type DiagramTypeItem = Awaited<ReturnType<typeof getActiveDiagramTypes>>[
 
 // ─── Perímetro ──────────────────────────────────────────────────────────────
 
+const employeeIdsSchema = z.array(uuidLike).max(MASSIVE_MAX_EMPLOYEES * 10);
+
+/**
+ * Valida el rango de una carga masiva: fechas `YYYY-MM-DD` reales, desde <= hasta y no más de
+ * `MASSIVE_MAX_DAYS_RANGE` días (el mismo tope que aplica el formulario).
+ */
+function parseMassiveRange(dateFrom: string, dateTo: string): { from: DiagramDay; to: DiagramDay } {
+  const from = toDiagramDay(dateFrom);
+  const to = toDiagramDay(dateTo);
+  if (compareDiagramDays(from, to) > 0) {
+    throw new Error('Rango de fechas inválido: la fecha desde es posterior a la fecha hasta');
+  }
+  const days = moment.utc(diagramDayKey(to)).diff(moment.utc(diagramDayKey(from)), 'days');
+  if (days > MASSIVE_MAX_DAYS_RANGE) throw new Error(`Máximo ${MASSIVE_MAX_DAYS_RANGE} días permitidos`);
+  return { from, to };
+}
+
 async function requireActor(): Promise<string> {
   const userId = await getSessionUserId();
   if (!userId) throw new Error('Sesión requerida');
@@ -147,8 +178,11 @@ async function requireActor(): Promise<string> {
  * empleados ajenos ni procesar "los que se pueda" en silencio.
  */
 async function resolveOwnedEmployees(employeeIds: string[], companyId: string): Promise<ConflictEmployee[]> {
-  const unique = [...new Set(employeeIds)];
+  const parsed = employeeIdsSchema.safeParse(employeeIds);
+  if (!parsed.success) throw new Error('Lista de empleados inválida');
+  const unique = [...new Set(parsed.data)];
   if (unique.length === 0) throw new Error('Debe seleccionar al menos un empleado');
+  if (unique.length > MASSIVE_MAX_EMPLOYEES) throw new Error(`Máximo ${MASSIVE_MAX_EMPLOYEES} empleados permitidos`);
 
   const rows = await prisma.employees.findMany({
     where: withCompany({ id: { in: unique } }, companyId),
@@ -190,7 +224,11 @@ type OwnedWorkDiagram = Awaited<ReturnType<typeof findOwnedWorkDiagram>>;
  * Novedad activa a usar: la elegida (si es de la empresa) o, como hacía la función SQL
  * legacy, la única/primera configurada en el diagrama de trabajo.
  */
-async function resolveActiveNovelty(workDiagram: OwnedWorkDiagram, activeNoveltyId: string | undefined, companyId: string) {
+async function resolveActiveNovelty(
+  workDiagram: OwnedWorkDiagram,
+  activeNoveltyId: string | undefined,
+  companyId: string
+) {
   if (activeNoveltyId) {
     const novelty = await prisma.diagram_type.findFirst({
       where: withCompany({ id: activeNoveltyId }, companyId),
@@ -205,9 +243,10 @@ async function resolveActiveNovelty(workDiagram: OwnedWorkDiagram, activeNovelty
 }
 
 /** Filas ya cargadas en el rango + días con parte diario, para los empleados dados. */
-async function loadRangeState(employeeIds: string[], dateFrom: string, dateTo: string) {
-  const from = toDiagramDay(dateFrom);
-  const to = toDiagramDay(dateTo);
+async function loadRangeState(employeeIds: string[], from: DiagramDay, to: DiagramDay) {
+  // `dailyreport.date` es `@db.Date`: se compara con medianoche UTC del día, sin pasar por la zona del servidor.
+  const dateFrom = new Date(`${diagramDayKey(from)}T00:00:00.000Z`);
+  const dateTo = new Date(`${diagramDayKey(to)}T00:00:00.000Z`);
 
   const [existingRows, operations] = await Promise.all([
     prisma.employees_diagram.findMany({
@@ -224,7 +263,7 @@ async function loadRangeState(employeeIds: string[], dateFrom: string, dateTo: s
     prisma.dailyreportemployeerelations.findMany({
       where: {
         employee_id: { in: employeeIds },
-        dailyreportrows: { dailyreport: { date: { gte: new Date(dateFrom), lte: new Date(dateTo) } } },
+        dailyreportrows: { dailyreport: { date: { gte: dateFrom, lte: dateTo } } },
       },
       select: { employee_id: true, dailyreportrows: { select: { dailyreport: { select: { date: true } } } } },
     }),
@@ -267,6 +306,8 @@ export async function checkDiagramConflicts(params: {
   logger.debug('Checking diagram conflicts', { data: { params } });
 
   try {
+    await assertDiagramAccess('massive_diagram');
+    const range = parseMassiveRange(params.dateFrom, params.dateTo);
     const companyId = await getActiveCompanyId();
     const [employees, workDiagram] = await Promise.all([
       resolveOwnedEmployees(params.employeeIds, companyId),
@@ -279,8 +320,8 @@ export async function checkDiagramConflicts(params: {
 
     const state = await loadRangeState(
       employees.map((e) => e.id),
-      params.dateFrom,
-      params.dateTo
+      range.from,
+      range.to
     );
 
     const conflicts = computeMassiveConflicts({
@@ -315,6 +356,8 @@ export async function checkNoveltyConflicts(params: {
   logger.debug('Checking novelty conflicts', { data: { params } });
 
   try {
+    await assertDiagramAccess('massive_diagram');
+    const range = parseMassiveRange(params.dateFrom, params.dateTo);
     const companyId = await getActiveCompanyId();
     const [employees, novelty] = await Promise.all([
       resolveOwnedEmployees(params.employeeIds, companyId),
@@ -327,8 +370,8 @@ export async function checkNoveltyConflicts(params: {
 
     const state = await loadRangeState(
       employees.map((e) => e.id),
-      params.dateFrom,
-      params.dateTo
+      range.from,
+      range.to
     );
 
     const conflicts = computeMassiveConflicts({
@@ -360,6 +403,13 @@ export async function processMassiveDiagramCreation(params: {
   logger.debug('Processing massive diagram creation', { data: { params } });
 
   try {
+    await assertDiagramAction('create', 'massive_diagram');
+    const range = parseMassiveRange(params.dateFrom, params.dateTo);
+    if (params.conflictResolution !== 'skip' && params.conflictResolution !== 'update') {
+      throw new Error('Resolución de conflictos inválida');
+    }
+    // Sobrescribir novedades ya cargadas es una edición: exige además `update`.
+    if (params.conflictResolution === 'update') await assertDiagramAction('update', 'massive_diagram');
     const [companyId, actor] = await Promise.all([getActiveCompanyId(), requireActor()]);
     const [employees, workDiagram] = await Promise.all([
       resolveOwnedEmployees(params.employeeIds, companyId),
@@ -376,17 +426,17 @@ export async function processMassiveDiagramCreation(params: {
       (tx) =>
         callScalar(
           'process_massive_diagram_creation_v2',
-        [
-          { uuidArray: employees.map((e) => e.id) },
-          { uuid: workDiagram.id },
-          { uuid: activeNovelty.id },
-          { date: params.dateFrom },
-          { date: params.dateTo },
-          params.conflictResolution,
-        ],
-        z.unknown(),
-        tx
-      ),
+          [
+            { uuidArray: employees.map((e) => e.id) },
+            { uuid: workDiagram.id },
+            { uuid: activeNovelty.id },
+            { date: diagramDayKey(range.from) },
+            { date: diagramDayKey(range.to) },
+            params.conflictResolution,
+          ],
+          z.unknown(),
+          tx
+        ),
       prisma,
       MASSIVE_TX_OPTIONS
     );
@@ -408,6 +458,13 @@ export async function processMassiveNoveltyCreation(params: {
   logger.debug('Processing massive novelty creation', { data: { params } });
 
   try {
+    await assertDiagramAction('create', 'massive_diagram');
+    const range = parseMassiveRange(params.dateFrom, params.dateTo);
+    if (params.conflictResolution !== 'skip' && params.conflictResolution !== 'update') {
+      throw new Error('Resolución de conflictos inválida');
+    }
+    // Sobrescribir novedades ya cargadas es una edición: exige además `update`.
+    if (params.conflictResolution === 'update') await assertDiagramAction('update', 'massive_diagram');
     const [companyId, actor] = await Promise.all([getActiveCompanyId(), requireActor()]);
     const [employees, novelty] = await Promise.all([
       resolveOwnedEmployees(params.employeeIds, companyId),
@@ -424,16 +481,16 @@ export async function processMassiveNoveltyCreation(params: {
       (tx) =>
         callScalar(
           'process_massive_novelty_creation',
-        [
-          { uuidArray: employees.map((e) => e.id) },
-          { uuid: novelty.id },
-          { date: params.dateFrom },
-          { date: params.dateTo },
-          params.conflictResolution,
-        ],
-        z.unknown(),
-        tx
-      ),
+          [
+            { uuidArray: employees.map((e) => e.id) },
+            { uuid: novelty.id },
+            { date: diagramDayKey(range.from) },
+            { date: diagramDayKey(range.to) },
+            params.conflictResolution,
+          ],
+          z.unknown(),
+          tx
+        ),
       prisma,
       MASSIVE_TX_OPTIONS
     );

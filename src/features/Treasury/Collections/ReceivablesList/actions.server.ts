@@ -7,10 +7,12 @@ import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { ExportTooLargeError } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { formatCuitText } from '@/shared/utils/cuit-text';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { customerCheckDebtSql } from '../../lib/rejected-checks';
-import { invoiceBalanceSql } from '../../lib/receivables';
+import { receivableStateSql, receivablesBaseSql } from '../../lib/receivables';
 import { COLLECTABLE_CBTE_TYPES, overdueDays, receivableState, type ReceivableState } from '../../lib/receipt-rules';
 import { localToday } from '../../actions/shared';
 import { isUuid, ownEntry, parseAmountText, parseBoundedInt, parseDay, safePaging, textValue } from '../../lib/filter-values';
@@ -19,6 +21,12 @@ import { RECEIVABLE_CURRENCIES } from './constants';
 const logger = new Logger('features/Treasury/Collections/ReceivablesList');
 
 type FilterState = ReturnType<typeof parseSearchParams>;
+
+/** Tope de filas por export: más que esto se pide acotar con filtros. */
+const EXPORT_LIMIT = 10_000;
+
+const tooLargeMessage = (maxRows: number) =>
+  `Hay más de ${maxRows.toLocaleString('es-AR')} comprobantes a cobrar con los filtros actuales. Acote la exportación con filtros.`;
 
 const STATES: readonly ReceivableState[] = ['OVERDUE', 'DUE', 'IN_DRAFT'];
 
@@ -36,19 +44,10 @@ const SORT_SQL: Record<string, (dir: Prisma.Sql, today: string) => Prisma.Sql[]>
   total: (dir) => [Prisma.sql`r.total ${dir}`],
   pending: (dir) => [Prisma.sql`r.pending ${dir}`],
   overdue_days: (dir, today) => [Prisma.sql`GREATEST(0, ${today}::date - COALESCE(r.due_date, ${today}::date)) ${dir}`],
-  state: (dir, today) => [Prisma.sql`${stateSql(today)} ${dir}`],
+  state: (dir, today) => [Prisma.sql`${receivableStateSql(today)} ${dir}`],
 };
 
 const DEFAULT_ORDER = Prisma.sql`r.due_date ASC NULLS LAST, r.issue_date ASC, r.number ASC`;
-
-/** Estado derivado: misma regla que `receivableState` (libre = pendiente, reservado = reservado). */
-function stateSql(today: string): Prisma.Sql {
-  return Prisma.sql`(CASE
-    WHEN r.pending <= 0 AND r.reserved > 0 THEN 'IN_DRAFT'
-    WHEN r.row_kind = 'CHECK' THEN 'OVERDUE'
-    WHEN r.due_date IS NOT NULL AND r.due_date < ${today}::date THEN 'OVERDUE'
-    ELSE 'DUE' END)`;
-}
 
 /** "Factura A 00003-00000124": el mismo texto de la pantalla, para filtrar por lo que el usuario ve. */
 function voucherLabelSql(): Prisma.Sql {
@@ -57,43 +56,7 @@ function voucherLabelSql(): Prisma.Sql {
     || ' ' || lpad(r.sales_point::text, 5, '0') || '-' || lpad(r.number::text, 8, '0'))`;
 }
 
-/** Label de la deuda de un cheque (misma frase que `rejectedCheckLabel`), armado en SQL sobre el alias `d`. */
-function rejectedCheckLabelSql(): Prisma.Sql {
-  return Prisma.sql`('Cheque rechazado Nº ' || d.number || ' — ' || d.bank)`;
-}
-
 const like = (value: string) => `%${value.replace(/[\\%_]/g, '\\$&')}%`;
-
-/**
- * Subconsulta `r`: saldo de cada comprobante cobrable de la empresa (fórmula única de
- * `invoiceBalanceSql`) UNIDO a las deudas por cheques rechazados de los clientes (fórmula única de
- * `customerCheckDebtSql`), + nombre del cliente. Solo con algo por cobrar. La deuda de un cheque
- * se muestra en ARS, con la fecha del rechazo como emisión y vencimiento.
- */
-function baseSql(companyId: string): Prisma.Sql {
-  const collectable = [...COLLECTABLE_CBTE_TYPES];
-  const invoiceWhere = Prisma.sql`i.company_id = ${companyId}::uuid AND i.status = 'autorizada' AND i.cbte_type = ANY(${collectable}::int[])`;
-  const checkWhere = Prisma.sql`c.company_id = ${companyId}::uuid`;
-  return Prisma.sql`
-    SELECT u.*, c.name AS customer_name
-    FROM (
-      SELECT b.id, b.customer_id, b.cbte_type, b.currency::text AS currency, b.sales_point, b.number,
-             b.issue_date::date AS issue_date, b.due_date::date AS due_date, b.total::numeric AS total,
-             b.pending::numeric AS pending, b.reserved::numeric AS reserved,
-             'INVOICE'::text AS row_kind, NULL::text AS check_label
-      FROM (${invoiceBalanceSql(invoiceWhere, null)}) b
-      WHERE b.pending > 0 OR (b.pending = 0 AND b.reserved > 0)
-      UNION ALL
-      SELECT d.id, d.customer_id, NULL::int, 'ARS'::text, NULL::int, NULL::int,
-             d.rejected_on::date, d.rejected_on::date, d.amount::numeric,
-             d.pending::numeric, d.reserved::numeric,
-             'CHECK'::text, ${rejectedCheckLabelSql()}
-      FROM (${customerCheckDebtSql(checkWhere, null)}) d
-      WHERE d.pending::numeric > 0 OR (d.pending::numeric = 0 AND d.reserved::numeric > 0)
-    ) u
-    JOIN customers c ON c.id = u.customer_id
-  `;
-}
 
 /** Condiciones sobre `r` a partir del estado de la tabla; `exclude` omite el filtro propio (cross-filter de facets). */
 function buildConditions(state: FilterState, today: string, exclude?: string): Prisma.Sql[] {
@@ -118,7 +81,7 @@ function buildConditions(state: FilterState, today: string, exclude?: string): P
 
   if (exclude !== 'state') {
     const states = (f.state ?? []).filter((v) => (STATES as readonly string[]).includes(v));
-    if (states.length) conditions.push(Prisma.sql`${stateSql(today)} = ANY(${states}::text[])`);
+    if (states.length) conditions.push(Prisma.sql`${receivableStateSql(today)} = ANY(${states}::text[])`);
   }
 
   const dateRange = (columnId: 'issue_date' | 'due_date', column: Prisma.Sql) => {
@@ -167,6 +130,7 @@ type ReceivableRow = {
   id: string;
   customer_id: string;
   customer_name: string;
+  customer_cuit: string;
   cbte_type: number;
   sales_point: number;
   number: number;
@@ -181,7 +145,7 @@ type ReceivableRow = {
 };
 
 const SELECT_COLUMNS = Prisma.sql`
-  r.id, r.customer_id, r.customer_name, r.cbte_type, r.sales_point, r.number, trim(r.currency) AS currency,
+  r.id, r.customer_id, r.customer_name, r.customer_cuit, r.cbte_type, r.sales_point, r.number, trim(r.currency) AS currency,
   r.issue_date::text AS issue_date, r.due_date::text AS due_date,
   r.total::numeric(15,2)::text AS total, r.pending::numeric(15,2)::text AS pending, r.reserved::numeric(15,2)::text AS reserved,
   r.row_kind, r.check_label`;
@@ -189,7 +153,7 @@ const SELECT_COLUMNS = Prisma.sql`
 function shape(rows: ReceivableRow[], today: string) {
   return rows.map((r) => ({
     id: r.id,
-    customer: { id: r.customer_id, name: r.customer_name },
+    customer: { id: r.customer_id, name: r.customer_name, cuit: formatCuitText(r.customer_cuit) },
     cbteType: r.cbte_type,
     kind: r.row_kind,
     voucherLabel: r.check_label ?? formatVoucherLabel(r.cbte_type, r.sales_point, r.number),
@@ -240,9 +204,9 @@ export async function getReceivablesPaginated(searchParams: DataTableSearchParam
 
     const [rows, counted] = await Promise.all([
       prisma.$queryRaw<ReceivableRow[]>`
-        SELECT ${SELECT_COLUMNS} FROM (${baseSql(companyId)}) r ${where} ${orderSql(state, today)}
+        SELECT ${SELECT_COLUMNS} FROM (${receivablesBaseSql(companyId)}) r ${where} ${orderSql(state, today)}
         LIMIT ${take} OFFSET ${skip}`,
-      prisma.$queryRaw<{ total: bigint }[]>`SELECT count(*) AS total FROM (${baseSql(companyId)}) r ${where}`,
+      prisma.$queryRaw<{ total: bigint }[]>`SELECT count(*) AS total FROM (${receivablesBaseSql(companyId)}) r ${where}`,
     ]);
     return { data: shape(rows, today), total: Number(counted[0]?.total ?? 0) };
   } catch (error) {
@@ -255,19 +219,31 @@ export async function getReceivablesPaginated(searchParams: DataTableSearchParam
 // EXPORT (sin paginacion)
 // ============================================================================
 
-export async function getAllReceivablesForExport(searchParams: DataTableSearchParams) {
+export async function getAllReceivablesForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<ReceivableListItem[]>> {
   const companyId = await resolveCompanyId();
-  if (!companyId) return [];
+  if (!companyId) return { ok: false, message: 'No tiene permiso para exportar los comprobantes a cobrar.' };
 
   try {
     const state = parseSearchParams(searchParams);
     const today = localToday();
+    // SQL directo: se pide un registro de más para detectar que se pasó del tope sin traer todo
     const rows = await prisma.$queryRaw<ReceivableRow[]>`
-      SELECT ${SELECT_COLUMNS} FROM (${baseSql(companyId)}) r ${whereSql(buildConditions(state, today))} ${orderSql(state, today)}`;
-    return shape(rows, today);
+      SELECT ${SELECT_COLUMNS} FROM (${receivablesBaseSql(companyId)}) r ${whereSql(buildConditions(state, today))} ${orderSql(state, today)}
+      LIMIT ${EXPORT_LIMIT + 1}`;
+    if (rows.length > EXPORT_LIMIT) throw new ExportTooLargeError(tooLargeMessage(EXPORT_LIMIT));
+    return { ok: true, data: shape(rows, today) };
   } catch (error) {
     logger.error('Error al exportar comprobantes a cobrar', { data: { error } });
-    throw new Error('No se pudo exportar la lista de comprobantes a cobrar');
+    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en producción.
+    return {
+      ok: false,
+      message:
+        error instanceof ExportTooLargeError
+          ? error.message
+          : 'No se pudo exportar la lista de comprobantes a cobrar. Intente nuevamente.',
+    };
   }
 }
 
@@ -291,7 +267,7 @@ export async function getReceivableSingleFacet(
     if (columnId === 'customer') {
       const rows = await prisma.$queryRaw<{ id: string; name: string; count: bigint }[]>`
         SELECT r.customer_id AS id, r.customer_name AS name, count(*) AS count
-        FROM (${baseSql(companyId)}) r ${where} GROUP BY r.customer_id, r.customer_name ORDER BY r.customer_name`;
+        FROM (${receivablesBaseSql(companyId)}) r ${where} GROUP BY r.customer_id, r.customer_name ORDER BY r.customer_name`;
       return {
         counts: new Map(rows.map((r) => [r.id, Number(r.count)])),
         resolvedOptions: rows.map((r) => ({ id: r.id, name: r.name })),
@@ -300,13 +276,13 @@ export async function getReceivableSingleFacet(
 
     if (columnId === 'currency') {
       const rows = await prisma.$queryRaw<{ key: string; count: bigint }[]>`
-        SELECT trim(r.currency) AS key, count(*) AS count FROM (${baseSql(companyId)}) r ${where} GROUP BY trim(r.currency)`;
+        SELECT trim(r.currency) AS key, count(*) AS count FROM (${receivablesBaseSql(companyId)}) r ${where} GROUP BY trim(r.currency)`;
       return { counts: new Map(rows.map((r) => [r.key, Number(r.count)])) };
     }
 
     if (columnId === 'state') {
       const rows = await prisma.$queryRaw<{ key: string; count: bigint }[]>`
-        SELECT ${stateSql(today)} AS key, count(*) AS count FROM (${baseSql(companyId)}) r ${where} GROUP BY 1`;
+        SELECT ${receivableStateSql(today)} AS key, count(*) AS count FROM (${receivablesBaseSql(companyId)}) r ${where} GROUP BY 1`;
       return { counts: new Map(rows.map((r) => [r.key, Number(r.count)])) };
     }
 

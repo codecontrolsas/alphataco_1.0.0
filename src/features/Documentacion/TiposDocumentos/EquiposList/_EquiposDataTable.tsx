@@ -8,6 +8,7 @@ import {
   type DataTableSearchParams,
   type FacetResult,
 } from '@/shared/components/common/DataTable';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Check, X } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { HIDDEN_COLUMNS_BY_DEFAULT, getDocTypeColumns } from '../PersonasList/columns';
@@ -234,7 +235,7 @@ export default function _EquiposDataTable({
         mobileCards
         emptyMessage="No hay tipos de documentos"
         exportConfig={{
-          fetchAllData: () => getEquiposDocTypesForExport(currentParams),
+          fetchAllData: async () => unwrapExportResult(await getEquiposDocTypesForExport(currentParams)),
           options: {
             filename: 'tipos-documentos-equipos',
             sheetName: 'Tipos Documentos Equipos',

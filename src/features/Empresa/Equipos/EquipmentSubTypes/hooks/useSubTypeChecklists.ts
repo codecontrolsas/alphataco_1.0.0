@@ -12,7 +12,9 @@ export function useSubTypeChecklists(subTypeId: string | null) {
     queryKey: ['subtype-checklists', subTypeId],
     queryFn: () => getChecklistIdsForSubType(subTypeId!),
     enabled: !!subTypeId,
-    staleTime: 2 * 60 * 1000, // 2 minutos
+    // Alimenta el form y la base del delta {add, remove}: siempre datos frescos al abrir.
+    staleTime: 0,
+    gcTime: 0,
     refetchOnWindowFocus: false,
   });
 }

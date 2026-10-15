@@ -1,4 +1,4 @@
-import { getPurchaseOrderDetail } from '@/features/Purchases/actions/orders.server';
+import { getPurchaseOrderDetail } from '@/features/Purchases/actions/order-queries.server';
 import { EditPurchaseOrderPage } from '@/features/Purchases/Orders/PurchaseOrderPages';
 import { notFound } from 'next/navigation';
 

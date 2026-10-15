@@ -8,10 +8,11 @@ import {
   tireServiceOrderStatusLabels,
 } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Eye } from 'lucide-react';
-import moment from 'moment';
-import type { VehicleTireOrderItem } from '../actions.server';
+import type { VehicleTireOrderItem } from '../actions/orders.server';
 
 type BadgeVariant = NonNullable<BadgeProps['variant']>;
 
@@ -23,9 +24,7 @@ export function getColumns(onViewDetail: (order: VehicleTireOrderItem) => void):
       meta: { title: 'Fecha' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha" />,
       cell: ({ row }) => (
-        <div className="text-sm">
-          {row.original.service_date ? moment(row.original.service_date).format('DD/MM/YYYY') : '-'}
-        </div>
+        <div className="text-sm">{row.original.service_date ? formatArgentinaDay(row.original.service_date) : '-'}</div>
       ),
     },
     {
@@ -47,7 +46,7 @@ export function getColumns(onViewDetail: (order: VehicleTireOrderItem) => void):
       },
       filterFn: (row, id, value: string[]) => {
         const val = row.getValue(id) as string | null;
-        if (val == null) return value.includes('__null__');
+        if (val == null) return value.includes(NULL_FILTER_VALUE);
         return value.includes(val);
       },
     },
@@ -66,7 +65,7 @@ export function getColumns(onViewDetail: (order: VehicleTireOrderItem) => void):
       cell: ({ row }) => <div className="text-sm">{row.original.creator?.fullname ?? '-'}</div>,
       filterFn: (row, _id, value: string[]) => {
         const createdBy = row.original.created_by;
-        if (createdBy == null) return value.includes('__null__');
+        if (createdBy == null) return value.includes(NULL_FILTER_VALUE);
         return value.includes(createdBy);
       },
     },
@@ -76,9 +75,7 @@ export function getColumns(onViewDetail: (order: VehicleTireOrderItem) => void):
       meta: { title: 'Cerrado' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Cerrado" />,
       cell: ({ row }) => (
-        <div className="text-sm">
-          {row.original.closed_at ? moment(row.original.closed_at).format('DD/MM/YYYY') : '-'}
-        </div>
+        <div className="text-sm">{row.original.closed_at ? formatArgentinaDay(row.original.closed_at) : '-'}</div>
       ),
     },
     {
@@ -87,7 +84,13 @@ export function getColumns(onViewDetail: (order: VehicleTireOrderItem) => void):
       enableSorting: false,
       enableHiding: false,
       cell: ({ row }) => (
-        <Button variant="ghost" size="sm" onClick={() => onViewDetail(row.original)} title="Ver detalle de orden">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => onViewDetail(row.original)}
+          title="Ver detalle de orden"
+        >
           <Eye className="h-4 w-4 mr-1" />
           Ver detalle
         </Button>

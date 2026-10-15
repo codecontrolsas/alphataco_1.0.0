@@ -1,8 +1,8 @@
 'use client';
 
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
-import { CartesianGrid, LabelList, Line, LineChart, ReferenceLine, XAxis, YAxis } from 'recharts';
 import { makeThresholdDot } from '@/features/Dashboard/shared/charts/ThresholdDot';
+import { CartesianGrid, LabelList, Line, LineChart, ReferenceLine, XAxis, YAxis } from 'recharts';
 
 interface TrendData {
   date: string;
@@ -16,7 +16,7 @@ interface AbsenteeismTrendChartProps {
 }
 
 // Constante para el porcentaje esperado de ausentismo
-const EXPECTED_ABSENTEEISM_PERCENTAGE = 3;
+export const EXPECTED_ABSENTEEISM_PERCENTAGE = 3;
 
 export function AbsenteeismTrendChartComponent({ chartConfig, data, showLabels }: AbsenteeismTrendChartProps) {
   return (
@@ -63,13 +63,13 @@ export function AbsenteeismTrendChartComponent({ chartConfig, data, showLabels }
         {/* Línea de referencia del porcentaje esperado */}
         <ReferenceLine
           y={EXPECTED_ABSENTEEISM_PERCENTAGE}
-          stroke="hsl(142.1 76.2% 36.3%)"
+          stroke="var(--dash-ok, #52a27a)"
           strokeWidth={2}
           strokeDasharray="5 5"
           label={{
             value: `${EXPECTED_ABSENTEEISM_PERCENTAGE}%`,
             position: 'insideTopRight',
-            fill: 'hsl(142.1 76.2% 36.3%)',
+            fill: 'var(--dash-ok, #52a27a)',
             fontSize: 12,
             fontWeight: 600,
           }}

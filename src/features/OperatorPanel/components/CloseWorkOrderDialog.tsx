@@ -65,7 +65,9 @@ export function CloseWorkOrderDialog({ workOrderId, workOrderItems, open, onClos
       logger.info('Orden de trabajo cerrada exitosamente', {
         data: { workOrderId },
       });
-      toast.success('Orden de trabajo cerrada exitosamente');
+      toast.success('Orden de trabajo cerrada exitosamente', {
+        description: `${completed} completada${completed === 1 ? '' : 's'}, ${pending} pendiente${pending === 1 ? '' : 's'}, ${returned} devuelta${returned === 1 ? '' : 's'}.`,
+      });
 
       // La OT se cerró igual, pero el pedido no pudo avanzar: el operario tiene que saberlo
       // y a quién avisar. El toast va aparte y sin auto-cierre para que no se lo pierda.
@@ -105,11 +107,11 @@ export function CloseWorkOrderDialog({ workOrderId, workOrderItems, open, onClos
         variant="outline"
         onClick={handleClose}
         disabled={mutation.isPending}
-        className="h-11 w-full sm:w-auto"
+        className="h-12 w-full sm:h-11 sm:w-auto"
       >
         Cancelar
       </Button>
-      <Button type="button" onClick={handleSubmit} disabled={mutation.isPending} className="h-11 w-full sm:w-auto">
+      <Button type="button" onClick={handleSubmit} disabled={mutation.isPending} className="h-12 w-full sm:h-11 sm:w-auto">
         {mutation.isPending ? 'Cerrando...' : 'Cerrar Orden de Trabajo'}
       </Button>
     </div>
@@ -122,26 +124,26 @@ export function CloseWorkOrderDialog({ workOrderId, workOrderItems, open, onClos
         <div className="space-y-3">
           <h4 className="text-sm font-medium">Resumen de Reparaciones</h4>
           <div className="grid grid-cols-3 gap-2">
-            <div className="rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30 p-3 text-center">
-              <p className="text-xs font-medium text-green-700 dark:text-green-300">Completadas</p>
-              <p className="text-2xl font-bold text-green-800 dark:text-green-200">{completed}</p>
+            <div className="rounded-lg border border-ok/30 bg-ok-subtle p-3 text-center">
+              <p className="text-sm font-medium text-ok-subtle-foreground">Completadas</p>
+              <p className="text-2xl font-bold text-ok-subtle-foreground">{completed}</p>
             </div>
-            <div className="rounded-lg border border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950/30 p-3 text-center">
-              <p className="text-xs font-medium text-yellow-700 dark:text-yellow-300">Pendientes</p>
-              <p className="text-2xl font-bold text-yellow-800 dark:text-yellow-200">{pending}</p>
+            <div className="rounded-lg border border-warn/30 bg-warn-subtle p-3 text-center">
+              <p className="text-sm font-medium text-warn-subtle-foreground">Pendientes</p>
+              <p className="text-2xl font-bold text-warn-subtle-foreground">{pending}</p>
             </div>
-            <div className="rounded-lg border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/30 p-3 text-center">
-              <p className="text-xs font-medium text-orange-700 dark:text-orange-300">Devueltas</p>
-              <p className="text-2xl font-bold text-orange-800 dark:text-orange-200">{returned}</p>
+            <div className="rounded-lg border border-danger/30 bg-danger-subtle p-3 text-center">
+              <p className="text-sm font-medium text-danger-subtle-foreground">Devueltas</p>
+              <p className="text-2xl font-bold text-danger-subtle-foreground">{returned}</p>
             </div>
           </div>
         </div>
 
         {/* Warning if pending repairs */}
         {pending > 0 && (
-          <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-3.5 flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-amber-800 dark:text-amber-200">
+          <div className="rounded-lg border border-warn/30 bg-warn-subtle p-3.5 flex items-start gap-3">
+            <AlertTriangle aria-hidden="true" className="h-5 w-5 text-warn-subtle-foreground flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-warn-subtle-foreground">
               <p className="font-medium">Advertencia</p>
               <p className="mt-1">
                 Esta OT se cerrara con {pending} tarea{pending > 1 ? 's' : ''} pendiente{pending > 1 ? 's' : ''}
@@ -163,7 +165,7 @@ export function CloseWorkOrderDialog({ workOrderId, workOrderItems, open, onClos
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
-            className="min-h-[80px]"
+            className="min-h-[80px] text-base"
           />
         </div>
       </div>

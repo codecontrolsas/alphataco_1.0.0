@@ -1,14 +1,24 @@
 'use client';
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
+import { SectionCard } from '@/shared/components/common/SectionCard';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Plus, Power, RotateCcw, Trash2 } from 'lucide-react';
@@ -39,11 +49,25 @@ const EMPTY: TreasuryConceptFormValues = { name: '', direction: 'OUT' };
  * Conceptos de los movimientos manuales (gastos bancarios, aporte de socios…), con el sentido que
  * admiten. Un concepto usado no se borra (se desactiva) ni cambia de sentido.
  */
-export function ConceptsSection({ concepts, canUpdate }: { concepts: TreasuryConceptRow[]; canUpdate: boolean }) {
+export function ConceptsSection({
+  concepts,
+  canCreate,
+  canUpdate,
+  canDelete,
+}: {
+  concepts: TreasuryConceptRow[];
+  canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+}) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const [confirmDelete, setConfirmDelete] = useState<TreasuryConceptRow | null>(null);
   const [editing, setEditing] = useState<TreasuryConceptRow | 'new' | null>(null);
-  const form = useForm<TreasuryConceptFormValues>({ resolver: zodResolver(treasuryConceptFormSchema), defaultValues: EMPTY });
+  const form = useForm<TreasuryConceptFormValues>({
+    resolver: zodResolver(treasuryConceptFormSchema),
+    defaultValues: EMPTY,
+  });
 
   const openForm = (target: TreasuryConceptRow | 'new') => {
     form.reset(target === 'new' ? EMPTY : { name: target.name, direction: target.direction });
@@ -57,7 +81,11 @@ export function ConceptsSection({ concepts, canUpdate }: { concepts: TreasuryCon
 
   const save = useMutation({
     mutationFn: async (values: TreasuryConceptFormValues) =>
-      unwrapAction(editing && editing !== 'new' ? await updateTreasuryConcept(editing.id, values) : await createTreasuryConcept(values)),
+      unwrapAction(
+        editing && editing !== 'new'
+          ? await updateTreasuryConcept(editing.id, values)
+          : await createTreasuryConcept(values)
+      ),
     onSuccess: (_data, values) => {
       toast.success(editing === 'new' ? `${values.name} creado` : `${values.name} actualizado`);
       setEditing(null);
@@ -70,89 +98,107 @@ export function ConceptsSection({ concepts, canUpdate }: { concepts: TreasuryCon
   });
 
   const toggle = useMutation({
-    mutationFn: async (concept: TreasuryConceptRow) => unwrapAction(await setTreasuryConceptActive(concept.id, !concept.is_active)),
+    mutationFn: async (concept: TreasuryConceptRow) =>
+      unwrapAction(await setTreasuryConceptActive(concept.id, !concept.is_active)),
     onSuccess: (_data, concept) => {
       toast.success(concept.is_active ? `${concept.name} desactivado` : `${concept.name} reactivado`);
       refresh();
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : 'No se pudo cambiar el concepto'),
+    onError: (error) => {
+      logger.error('Error al cambiar el concepto', { data: { error } });
+      toast.error(error instanceof Error ? error.message : 'No se pudo cambiar el concepto');
+    },
   });
 
   const remove = useMutation({
     mutationFn: async (concept: TreasuryConceptRow) => unwrapAction(await deleteTreasuryConcept(concept.id)),
     onSuccess: (_data, concept) => {
       toast.success(`${concept.name} borrado`);
+      setConfirmDelete(null);
       refresh();
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : 'No se pudo borrar el concepto'),
+    onError: (error) => {
+      logger.error('Error al borrar el concepto', { data: { error } });
+      toast.error(error instanceof Error ? error.message : 'No se pudo borrar el concepto');
+    },
   });
 
   const editingUsed = editing !== null && editing !== 'new' && editing.used;
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
-        <div className="space-y-1">
-          <CardTitle>Conceptos</CardTitle>
-          <CardDescription>Clasifican los movimientos manuales: gastos bancarios, impuestos, aportes, retiros…</CardDescription>
-        </div>
-        {canUpdate && (
+    <SectionCard
+      title="Conceptos"
+      description="Clasifican los movimientos manuales: gastos bancarios, impuestos, aportes, retiros…"
+      action={
+        canCreate && (
           <Button type="button" size="sm" variant="outline" onClick={() => openForm('new')}>
             <Plus className="mr-1 h-4 w-4" />
             Agregar
           </Button>
-        )}
-      </CardHeader>
-      <CardContent>
-        {concepts.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">Todavía no hay conceptos. Hacen falta para cargar movimientos manuales.</p>
-        ) : (
-          <ul className="divide-y">
-            {concepts.map((c) => (
-              <li key={c.id} className="flex items-center gap-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className={c.is_active ? 'truncate' : 'truncate text-muted-foreground'}>{c.name}</span>
-                    {!c.is_active && <Badge variant="outline">Inactivo</Badge>}
-                  </div>
-                  <p className="text-xs text-muted-foreground">{TREASURY_CONCEPT_DIRECTION_LABELS[c.direction]}</p>
+        )
+      }
+    >
+      {concepts.length === 0 ? (
+        <p className="py-6 text-center text-sm text-muted-foreground">
+          Todavía no hay conceptos. Hacen falta para cargar movimientos manuales.
+        </p>
+      ) : (
+        <ul className="divide-y">
+          {concepts.map((c) => (
+            <li key={c.id} className="flex items-center gap-3 py-2">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className={c.is_active ? 'truncate' : 'truncate text-muted-foreground'}>{c.name}</span>
+                  {!c.is_active && <Badge variant="outline">Inactivo</Badge>}
                 </div>
-                {canUpdate && (
-                  <div className="flex shrink-0 items-center">
-                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8" aria-label={`Editar ${c.name}`} onClick={() => openForm(c)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      aria-label={c.is_active ? `Desactivar ${c.name}` : `Reactivar ${c.name}`}
-                      onClick={() => toggle.mutate(c)}
-                      disabled={toggle.isPending}
-                    >
-                      {c.is_active ? <Power className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
-                    </Button>
-                    {!c.used && (
+                <p className="text-xs text-muted-foreground">{TREASURY_CONCEPT_DIRECTION_LABELS[c.direction]}</p>
+              </div>
+              {(canUpdate || canDelete) && (
+                <div className="flex shrink-0 items-center">
+                  {canUpdate && (
+                    <>
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8"
-                        aria-label={`Borrar ${c.name}`}
-                        onClick={() => remove.mutate(c)}
-                        disabled={remove.isPending}
+                        aria-label={`Editar ${c.name}`}
+                        onClick={() => openForm(c)}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Pencil className="h-4 w-4" />
                       </Button>
-                    )}
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        aria-label={c.is_active ? `Desactivar ${c.name}` : `Reactivar ${c.name}`}
+                        onClick={() => toggle.mutate(c)}
+                        disabled={toggle.isPending}
+                      >
+                        {c.is_active ? <Power className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
+                      </Button>
+                    </>
+                  )}
+                  {canDelete && !c.used && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      aria-label={`Borrar ${c.name}`}
+                      onClick={() => setConfirmDelete(c)}
+                      disabled={remove.isPending}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
 
       <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
         <DialogContent className="sm:max-w-md">
@@ -194,7 +240,11 @@ export function ConceptsSection({ concepts, canUpdate }: { concepts: TreasuryCon
                         ))}
                       </SelectContent>
                     </Select>
-                    {editingUsed && <p className="text-xs text-muted-foreground">Ya se usó en movimientos: el sentido no se cambia.</p>}
+                    {editingUsed && (
+                      <p className="text-xs text-muted-foreground">
+                        Ya se usó en movimientos: el sentido no se cambia.
+                      </p>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -211,6 +261,29 @@ export function ConceptsSection({ concepts, canUpdate }: { concepts: TreasuryCon
           </Form>
         </DialogContent>
       </Dialog>
-    </Card>
+      <AlertDialog open={confirmDelete !== null} onOpenChange={(open) => !open && setConfirmDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Borrar {confirmDelete?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Solo se puede borrar un concepto que no se usó en movimientos. Si se usó, desactivalo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={remove.isPending}>Volver</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={remove.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                if (confirmDelete) remove.mutate(confirmDelete);
+              }}
+            >
+              Borrar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </SectionCard>
   );
 }

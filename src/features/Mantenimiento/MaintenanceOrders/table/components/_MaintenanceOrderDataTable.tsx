@@ -1,7 +1,7 @@
 'use client';
 
+import { Card, CardContent } from '@/components/ui/card';
 import { getOrderForManagement, type ExternalWorkshop, type OrderManagementItem, type WorkshopSector } from '@/features/Mantenimiento/OrderManagement/actions/queries.server';
-import { ManageOrderWizard } from '@/features/Mantenimiento/OrderManagement/components/ManageOrderWizard';
 import {
   DataTable,
   type DataTableFacetedFilterConfig,
@@ -9,10 +9,12 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { Activity, CheckCircle2, CircleOff, Clock, Settings, Truck, XCircle, type LucideIcon } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { CircleOff, Truck, type LucideIcon } from 'lucide-react';
+import dynamic from 'next/dynamic';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { OrderDetailDialog } from '../../components/OrderDetailDialog';
+import { ORDER_STATUS_FILTER_ORDER, ORDER_STATUS_UI } from '../../../lib/status-presentation';
+import { InWorkshopActionsProvider } from '../../components/InWorkshopActionsContext';
 import { RequestedItemsDialog } from '../../components/RequestedItemsDialog';
 import {
   getMaintenanceOrdersPaginated,
@@ -20,7 +22,18 @@ import {
   type MaintenanceOrderListItem,
 } from '../actions.server';
 import { HIDDEN_COLUMNS_BY_DEFAULT, getMaintenanceOrdersColumns, statusLabels } from '../columns';
+import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
 import { _ExportTasksButton } from './_ExportTasksButton';
+
+// El detalle y el wizard pesan (990 líneas y el flujo de gestión) y se abren a demanda: su chunk se pide
+// la primera vez que se usan, no al cargar la tabla.
+const OrderDetailDialog = dynamic(() => import('../../components/OrderDetailDialog').then((m) => m.OrderDetailDialog), {
+  ssr: false,
+});
+const ManageOrderWizard = dynamic(
+  () => import('@/features/Mantenimiento/OrderManagement/components/ManageOrderWizard').then((m) => m.ManageOrderWizard),
+  { ssr: false }
+);
 
 // ============================================================================
 // TYPES
@@ -30,7 +43,12 @@ interface Props {
   data: MaintenanceOrderListItem[];
   totalRows: number;
   searchParams: DataTableSearchParams;
+  /** Clave de las preferencias de columnas y filtros (con sufijo de versión). */
   tableId: string;
+  /** Prefijo de los params de la URL: no cambia aunque cambie `tableId`. */
+  paramNamespace: string;
+  /** Banda y tarjetas de atención, resueltas en el servidor; se muestran sobre la tabla. */
+  topSlot?: ReactNode;
   initialColumnVisibility: Record<string, boolean>;
   initialFilterVisibility: Record<string, boolean>;
   // Data for ManageOrderWizard (passed as serializable props from server)
@@ -49,15 +67,9 @@ const DEFAULT_VISIBLE_FILTER_IDS = ['status', 'vehicle', 'workshop_entry_date'];
 // STATUS ICONS
 // ============================================================================
 
-const statusIcons: Record<string, LucideIcon> = {
-  scheduled: Clock,
-  in_workshop: Settings,
-  pending_workshop_validation: Activity,
-  pending_operations_validation: Activity,
-  operations_rejected: XCircle,
-  workshop_rejected: XCircle,
-  completed: CheckCircle2,
-};
+const statusIcons: Record<string, LucideIcon> = Object.fromEntries(
+  Object.entries(ORDER_STATUS_UI).map(([status, ui]) => [status, ui.icon])
+);
 
 // ============================================================================
 // HELPERS — builders para FacetResult (lazy-load, ver DOCS.md "Lazy-Load Facets")
@@ -105,19 +117,26 @@ export function _MaintenanceOrderDataTable({
   totalRows,
   searchParams,
   tableId,
+  paramNamespace,
+  topSlot,
   initialColumnVisibility,
   initialFilterVisibility,
   sectors,
   repairTypes,
   externalWorkshops,
 }: Props) {
+  const { hasPermission } = usePermissions();
+  const canManageOrders = hasPermission('mantenimiento', 'gestion_ordenes', 'update');
   const [selectedOrder, setSelectedOrder] = useState<MaintenanceOrderListItem | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [detailMounted, setDetailMounted] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
   // ─── Manage Order Wizard state ──────────────────────────────────────────
   const [manageOrder, setManageOrder] = useState<OrderManagementItem | null>(null);
   const [manageDialogOpen, setManageDialogOpen] = useState(false);
+  // Se monta la primera vez que se abre (el chunk del wizard no se pide antes) y queda montado
+  const [manageMounted, setManageMounted] = useState(false);
   const [loadingManageOrder, setLoadingManageOrder] = useState(false);
 
   // ─── Requested Items dialog state ───────────────────────────────────────
@@ -134,17 +153,26 @@ export function _MaintenanceOrderDataTable({
     setItemsOrder(null);
   };
 
-  const handleManageOrder = async (order: MaintenanceOrderListItem) => {
+  // Las tarjetas y la banda viven fuera de la tabla pero abren este wizard: lo reciben por contexto.
+  const handleManageOrder = useCallback(async (orderId: string) => {
     setLoadingManageOrder(true);
     try {
-      const detailedOrder = await getOrderForManagement(order.id);
+      const detailedOrder = await getOrderForManagement(orderId);
       setManageOrder(detailedOrder);
+      setManageMounted(true);
       setManageDialogOpen(true);
     } catch {
       toast.error('Error al cargar los datos de gestión');
     } finally {
       setLoadingManageOrder(false);
     }
+  }, []);
+
+  // Desde el panel de detalle: se cierra el panel y se abre el wizard (misma permission que el botón de la fila).
+  const handleManageFromDetail = (orderId: string) => {
+    setDetailDialogOpen(false);
+    setSelectedOrder(null);
+    void handleManageOrder(orderId);
   };
 
   const handleCloseManage = () => {
@@ -156,6 +184,7 @@ export function _MaintenanceOrderDataTable({
   const handleViewDetail = (order: MaintenanceOrderListItem) => {
     setLoadingDetail(true);
     setSelectedOrder(order);
+    setDetailMounted(true);
     setDetailDialogOpen(true);
   };
 
@@ -179,7 +208,7 @@ export function _MaintenanceOrderDataTable({
     () =>
       getMaintenanceOrdersColumns({
         onViewDetail: handleViewDetail,
-        onManageOrder: handleManageOrder,
+        onManageOrder: (order) => handleManageOrder(order.id),
         onViewItems: handleViewItems,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -226,7 +255,7 @@ export function _MaintenanceOrderDataTable({
       {
         columnId: 'status',
         title: 'Estado',
-        fetchFacet: makeEnumFetchFacet('status', Object.keys(statusLabels), statusLabels, statusIcons, 'Sin estado'),
+        fetchFacet: makeEnumFetchFacet('status', [...ORDER_STATUS_FILTER_ORDER], statusLabels, statusIcons, 'Sin estado'),
       },
 
       // Equipo (FK UUID → vehicles)
@@ -309,71 +338,90 @@ export function _MaintenanceOrderDataTable({
     return Object.fromEntries(facetedFilters.map((f) => [f.columnId, DEFAULT_VISIBLE_FILTER_IDS.includes(f.columnId)]));
   }, [initialFilterVisibility, facetedFilters]);
 
-  return (
-    <>
-      <DataTable
-        columns={columns}
-        data={data}
-        totalRows={totalRows}
-        searchParams={searchParams}
-        paramNamespace={tableId}
-        tableId={tableId}
-        facetedFilters={facetedFilters}
-        // Botón de export a nivel de tarea (ticket 682) reemplaza al export estándar del DataTable —
-        // usa currentParams para reflejar los filtros activos en modo client-side.
-        toolbarActions={<_ExportTasksButton searchParams={currentParams} />}
-        initialColumnVisibility={mergedColumnVisibility}
-        initialFilterVisibility={mergedFilterVisibility}
-        searchPlaceholder="Buscar por N° orden, dominio..."
-        emptyMessage="No hay órdenes de mantenimiento"
-        showFilterToggle={true}
-        // Client-side navigation: fetch instantáneo vía React Query, sin router.push
-        queryFn={tableQueryFn}
-        queryKey={['maintenance-orders-paginated']}
-        onStateChange={handleStateChange}
-      />
+  const actions = useMemo(
+    () => ({ manageOrder: handleManageOrder, isManageLoading: loadingManageOrder }),
+    [handleManageOrder, loadingManageOrder]
+  );
 
-      {/* Loading overlay para carga de detalle */}
+  return (
+    <InWorkshopActionsProvider value={actions}>
+      <div className="space-y-4">
+        {topSlot}
+
+        <Card>
+          <CardContent className="pt-6">
+            <DataTable
+              columns={columns}
+              data={data}
+              totalRows={totalRows}
+              searchParams={searchParams}
+              paramNamespace={paramNamespace}
+              tableId={tableId}
+              facetedFilters={facetedFilters}
+              // Botón de export a nivel de tarea (ticket 682) reemplaza al export estándar del DataTable —
+              // usa currentParams para reflejar los filtros activos en modo client-side.
+              toolbarActions={<_ExportTasksButton searchParams={currentParams} />}
+              initialColumnVisibility={mergedColumnVisibility}
+              initialFilterVisibility={mergedFilterVisibility}
+              searchPlaceholder="Buscar por N° orden..."
+              emptyMessage="No hay órdenes de mantenimiento"
+              showFilterToggle={true}
+              mobileCards
+              // Client-side navigation: fetch instantáneo vía React Query, sin router.push
+              queryFn={tableQueryFn}
+              queryKey={['maintenance-orders-paginated']}
+              onStateChange={handleStateChange}
+            />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Overlay de carga del detalle */}
       {loadingDetail && (
-        <div className="fixed inset-0 bg-background/50 flex items-center justify-center z-50">
-          <div className="bg-card p-4 rounded-lg shadow-lg flex items-center gap-3">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <div className="bg-background/50 fixed inset-0 z-50 flex items-center justify-center" role="status" aria-live="polite">
+          <div className="bg-card flex items-center gap-3 rounded-lg p-4 shadow-lg">
+            <div className="border-primary h-5 w-5 animate-spin rounded-full border-2 border-t-transparent" aria-hidden="true" />
             <span className="text-sm">Cargando detalle de orden...</span>
           </div>
         </div>
       )}
 
-      {/* Dialog de detalle */}
-      <OrderDetailDialog
-        orderId={selectedOrder?.id}
-        open={detailDialogOpen}
-        onClose={handleCloseDetail}
-        onLoaded={() => setLoadingDetail(false)}
-        context="workshop"
-      />
+      {/* Detalle de la orden (mismas props: el panel lateral lo resuelve el propio componente) */}
+      {detailMounted && (
+        <OrderDetailDialog
+          orderId={selectedOrder?.id}
+          open={detailDialogOpen}
+          onClose={handleCloseDetail}
+          onLoaded={() => setLoadingDetail(false)}
+          context="workshop"
+          onManage={canManageOrders ? handleManageFromDetail : undefined}
+        />
+      )}
 
       {/* Dialog con la lista de items solicitados */}
       <RequestedItemsDialog order={itemsOrder} open={itemsDialogOpen} onClose={handleCloseItems} />
 
-      {/* Loading overlay para carga de datos de gestión */}
+      {/* Overlay de carga de los datos de gestión */}
       {loadingManageOrder && (
-        <div className="fixed inset-0 bg-background/50 flex items-center justify-center z-50">
-          <div className="bg-card p-4 rounded-lg shadow-lg flex items-center gap-3">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <div className="bg-background/50 fixed inset-0 z-50 flex items-center justify-center" role="status" aria-live="polite">
+          <div className="bg-card flex items-center gap-3 rounded-lg p-4 shadow-lg">
+            <div className="border-primary h-5 w-5 animate-spin rounded-full border-2 border-t-transparent" aria-hidden="true" />
             <span className="text-sm">Cargando datos de gestión...</span>
           </div>
         </div>
       )}
 
       {/* Wizard de gestión de órdenes */}
-      <ManageOrderWizard
-        order={manageOrder}
-        open={manageDialogOpen}
-        onClose={handleCloseManage}
-        sectors={sectors}
-        repairTypes={repairTypes}
-        externalWorkshops={externalWorkshops}
-      />
-    </>
+      {manageMounted && (
+        <ManageOrderWizard
+          order={manageOrder}
+          open={manageDialogOpen}
+          onClose={handleCloseManage}
+          sectors={sectors}
+          repairTypes={repairTypes}
+          externalWorkshops={externalWorkshops}
+        />
+      )}
+    </InWorkshopActionsProvider>
   );
 }

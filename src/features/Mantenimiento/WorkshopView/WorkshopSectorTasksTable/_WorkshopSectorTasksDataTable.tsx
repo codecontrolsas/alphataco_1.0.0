@@ -8,6 +8,7 @@ import type {
   DataTableSearchParams,
   FacetResult,
 } from '@/shared/components/common/DataTable/types';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { AlertTriangle, Check, CheckCircle2, CircleOff, Stethoscope, X, XCircle } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { OPEN_WORK_ORDER_STATUSES } from '../workshop-view-filters';
@@ -32,10 +33,10 @@ import {
 // CONSTANTS
 // ============================================================================
 
-const DEFAULT_VISIBLE_FILTERS = ['wo_status', 'vehicle', 'repair_type'];
+const DEFAULT_VISIBLE_FILTERS = ['wo_status', 'repair_type', 'is_critical'];
 
-/** Columnas virtuales que sólo existen para colgarles un filtro */
-const FILTER_ONLY_COLUMNS = ['wo_status', 'mo_status', 'repair_type', 'is_critical', 'is_rejected', 'is_diagnostico'];
+/** Columnas virtuales que sólo existen para colgarles un filtro (Estado OT y Crítica son columnas visibles) */
+const FILTER_ONLY_COLUMNS = ['mo_status', 'repair_type', 'is_rejected', 'is_diagnostico'];
 
 // ============================================================================
 // PROPS
@@ -46,7 +47,10 @@ interface Props {
   data: WorkshopSectorWorkOrderListItem[];
   totalRows: number;
   searchParams: DataTableSearchParams;
+  /** Clave de las preferencias guardadas (lleva el sufijo `-v2`). */
   tableId: string;
+  /** Prefijo de los parámetros de la URL: NO lleva el sufijo, así los links existentes siguen funcionando. */
+  paramNamespace: string;
   initialColumnVisibility?: Record<string, boolean>;
   initialFilterVisibility?: Record<string, boolean>;
 }
@@ -91,6 +95,7 @@ export function _WorkshopSectorTasksDataTable({
   totalRows,
   searchParams,
   tableId,
+  paramNamespace,
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
@@ -293,7 +298,7 @@ export function _WorkshopSectorTasksDataTable({
         filename: `ot-sector-${sectorId.slice(0, 8)}`,
         sheetName: 'Órdenes de trabajo',
       },
-      fetchAllData: () => getAllWorkshopSectorWorkOrdersForExport(sectorId, currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllWorkshopSectorWorkOrdersForExport(sectorId, currentParams)),
       formatters: exportFormatters,
     }),
     [sectorId, currentParams, exportFormatters]
@@ -310,9 +315,10 @@ export function _WorkshopSectorTasksDataTable({
       queryKey={['workshop-sector-work-orders', sectorId]}
       onStateChange={handleStateChange}
       tableId={tableId}
-      paramNamespace={tableId}
+      paramNamespace={paramNamespace}
+      mobileCards
       searchPlaceholder="Buscar por N° OT, N° OM o descripción de la tarea..."
-      emptyMessage="No hay órdenes de trabajo abiertas en este sector"
+      emptyMessage="No hay órdenes de trabajo abiertas en este sector. Si esperabas ver alguna, revisá los filtros activos."
       showFilterToggle={true}
       facetedFilters={facetedFilters}
       exportConfig={exportConfig}

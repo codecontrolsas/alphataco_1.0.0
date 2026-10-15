@@ -19,3 +19,11 @@ export function buildRowDescription(row: DailyReportDetailRow): string {
   );
   return parts.length > 0 ? parts.join(' · ') : 'Recursos asignados a esta fila del parte diario.';
 }
+
+/** Hora de una columna `Time` (Prisma la entrega como Date en UTC) como `HH:mm`; `null` si no hay. */
+export function formatRowTime(value: unknown): string | null {
+  if (!value) return null;
+  const d = new Date(value as string);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+}

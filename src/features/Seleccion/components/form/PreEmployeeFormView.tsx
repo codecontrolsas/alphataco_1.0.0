@@ -28,6 +28,7 @@ import {
   buildPreEmployeeDefaultValues,
 } from '../../lib/pre-employee-form';
 import { preEmployeeFormSchema, type PreEmployeeFormData } from '../../schemas/pre-employee-schema';
+import { useInvalidatePreEmployeeLists } from '../../hooks/useInvalidatePreEmployeeLists';
 import { PreEmployeeWorkDataForm } from '../forms/PreEmployeeWorkDataForm';
 
 const logger = new Logger('PreEmployeeFormView');
@@ -42,6 +43,7 @@ interface PreEmployeeFormViewProps {
 /** Alta y edición del candidato: tres secciones apiladas con un único form y, a la derecha, la completitud. */
 export function PreEmployeeFormView({ preEmployee, onClose }: PreEmployeeFormViewProps) {
   const router = useRouter();
+  const invalidateLists = useInvalidatePreEmployeeLists();
   const { refreshAndWait, isRefreshing } = useRefreshAndWait();
   const isNew = !preEmployee;
   // Tras crear, la navegación a la ficha tarda: el botón sigue bloqueado para no crear el mismo candidato dos veces.
@@ -57,6 +59,7 @@ export function PreEmployeeFormView({ preEmployee, onClose }: PreEmployeeFormVie
       if (!preEmployee) {
         const created = await createPreEmployee(values);
         toast.success('Candidato creado');
+        invalidateLists();
         setIsCreated(true);
         router.push(`/dashboard/recruitment/detail?action=view&pre_employee_id=${created.id}`);
         return;
@@ -64,6 +67,7 @@ export function PreEmployeeFormView({ preEmployee, onClose }: PreEmployeeFormVie
 
       await updatePreEmployee(preEmployee.id, values);
       toast.success('Cambios guardados');
+      invalidateLists();
       await refreshAndWait();
       onClose();
     } catch (error) {
@@ -77,7 +81,7 @@ export function PreEmployeeFormView({ preEmployee, onClose }: PreEmployeeFormVie
   return (
     <div className="space-y-6">
       <div className="space-y-1">
-        <Button variant="ghost" size="sm" onClick={onClose} className="-ml-2">
+        <Button type="button" variant="ghost" size="sm" onClick={onClose} className="-ml-2">
           <ArrowLeft />
           {isNew ? 'Candidatos' : 'Volver a la ficha'}
         </Button>
@@ -111,7 +115,7 @@ export function PreEmployeeFormView({ preEmployee, onClose }: PreEmployeeFormVie
                         />
                       </div>
                     )}
-                    <PersonalDataFields />
+                    <PersonalDataFields currentPicture={preEmployee?.picture} />
                   </div>
                 </SectionCard>
                 <SectionCard title="Contacto y dirección" description="Domicilio y medios de contacto.">

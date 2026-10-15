@@ -23,8 +23,9 @@ export function WorkdaysProgress({ worked, possible, context, className }: Workd
   const pct = possible > 0 ? Math.min(100, Math.round((worked / possible) * 100)) : 0;
   const noData = possible === 0;
 
-  const fillClass = pct < 30 ? 'bg-rose-500' : pct < 70 ? 'bg-amber-500' : 'bg-emerald-500';
-  const textClass = pct < 30 ? 'text-rose-600' : pct < 70 ? 'text-amber-600' : 'text-emerald-600';
+  const fillClass = pct < 30 ? 'bg-[var(--dash-danger)]' : pct < 70 ? 'bg-[var(--dash-warn)]' : 'bg-[var(--dash-ok)]';
+  const textClass =
+    pct < 30 ? 'text-[var(--dash-danger)]' : pct < 70 ? 'text-[var(--dash-warn)]' : 'text-[var(--dash-ok)]';
 
   return (
     <div className={cn('flex flex-col gap-1', className)}>

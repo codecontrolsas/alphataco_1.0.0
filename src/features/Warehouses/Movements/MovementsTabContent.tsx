@@ -3,7 +3,7 @@ import type { DataTableSearchParams } from '@/shared/components/common/DataTable
 import { Plus } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense } from 'react';
-import { NoPermission } from '../fallback/NoPermission';
+import { StateBlock } from '@/shared/components/common/StateBlock';
 import { canWarehouse, type PermissionsMap } from '../lib/permissions';
 import { MovementsList } from './components/MovementsList/MovementsList';
 import { MovementsTableSkeleton } from './components/MovementsList/fallback/MovementsTableSkeleton';
@@ -15,7 +15,7 @@ export default async function MovementsTabContent({
   searchParams: DataTableSearchParams;
   permissions: PermissionsMap;
 }) {
-  if (!canWarehouse(permissions, 'movimientos', 'view')) return <NoPermission />;
+  if (!canWarehouse(permissions, 'movimientos', 'view')) return <StateBlock variant="noperm" title="No tenés permiso para ver esta información." />;
   // Quien solo puede ajustar tambien entra al formulario: ahi ve solo el tipo "Ajuste".
   const canRegister =
     canWarehouse(permissions, 'movimientos', 'create') || canWarehouse(permissions, 'movimientos', 'adjust');

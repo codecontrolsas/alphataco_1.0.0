@@ -1,5 +1,6 @@
 'use server';
 
+import { refreshResourceStatus } from '@/features/Documentacion/shared/compliance/server/document-status.server';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { COMPANY_USERS_INVALIDATION } from '@/shared/constants/cache-invalidation-map';
@@ -73,7 +74,11 @@ async function findScopedShareUser(shareCompanyUserId: string, companyId: string
   if (!shareUser.profile?.credential_id) {
     throw new Error('El usuario no tiene credenciales de acceso vinculadas.');
   }
-  return { id: shareUser.id, credentialId: shareUser.profile.credential_id, linkedEmployee: shareUser.profile.employees };
+  return {
+    id: shareUser.id,
+    credentialId: shareUser.profile.credential_id,
+    linkedEmployee: shareUser.profile.employees,
+  };
 }
 
 /**
@@ -91,7 +96,11 @@ async function applyUserStatusPlan(
     await withActor(actor, async (tx) => {
       await tx.user.update({
         where: { id: shareUser.credentialId },
-        data: { banned: plan.banned, banReason: plan.banned ? 'Baja de usuario de la empresa' : null, updatedAt: new Date() },
+        data: {
+          banned: plan.banned,
+          banReason: plan.banned ? 'Baja de usuario de la empresa' : null,
+          updatedAt: new Date(),
+        },
       });
       if (plan.banned) {
         await tx.session.deleteMany({ where: { userId: shareUser.credentialId } });
@@ -101,8 +110,13 @@ async function applyUserStatusPlan(
 
       if (plan.employee) {
         const { id: employeeId, ...employeeData } = plan.employee;
-        const updated = await tx.employees.updateMany({ where: { id: employeeId, company_id: companyId }, data: employeeData });
+        const updated = await tx.employees.updateMany({
+          where: { id: employeeId, company_id: companyId },
+          data: employeeData,
+        });
         if (updated.count === 0) throw new Error('El legajo vinculado no pertenece a la empresa activa');
+        // Baja/reintegro del legajo: `is_active` cambia qué documentos se exigen. Refresca el cache de status.
+        await refreshResourceStatus(tx, 'Persona', companyId, employeeId);
 
         const diagramResult = await callScalar(
           'update_employee_diagram_status',
@@ -152,9 +166,15 @@ export async function unbanCompanyUser(shareCompanyUserId: string, reactivateEmp
     const [companyId, actor] = await Promise.all([getActiveCompanyId(), requireActor()]);
     await assertUsersPermission('update');
     const shareUser = await findScopedShareUser(shareCompanyUserId, companyId);
-    const plan = planUserStatusChange({ action: 'unban', linkedEmployee: shareUser.linkedEmployee, reactivateEmployee });
+    const plan = planUserStatusChange({
+      action: 'unban',
+      linkedEmployee: shareUser.linkedEmployee,
+      reactivateEmployee,
+    });
     await applyUserStatusPlan(plan, shareUser, companyId, actor);
-    logger.info('Usuario desbaneado exitosamente', { data: { shareCompanyUserId, credentialId: shareUser.credentialId } });
+    logger.info('Usuario desbaneado exitosamente', {
+      data: { shareCompanyUserId, credentialId: shareUser.credentialId },
+    });
   } catch (error) {
     logger.error('Error desbaneando usuario de empresa', { data: { error, shareCompanyUserId } });
     throw error;
@@ -167,7 +187,9 @@ export async function deleteCompanyUser(shareCompanyUserId: string) {
   try {
     const companyId = await getActiveCompanyId();
     await assertUsersPermission('delete');
-    const deleted = await prisma.share_company_users.deleteMany({ where: { id: shareCompanyUserId, company_id: companyId } });
+    const deleted = await prisma.share_company_users.deleteMany({
+      where: { id: shareCompanyUserId, company_id: companyId },
+    });
     if (deleted.count === 0) throw new Error('Usuario no encontrado en la empresa activa');
     await invalidateCacheTags(COMPANY_USERS_INVALIDATION);
     logger.info('Usuario eliminado exitosamente', { data: { shareCompanyUserId } });
@@ -180,7 +202,10 @@ export async function deleteCompanyUser(shareCompanyUserId: string) {
 /** El perfil tiene que ser miembro (u owner) de la empresa activa para poder editarlo desde acá. */
 async function assertProfileInCompany(profileId: string, companyId: string): Promise<void> {
   const [membership, company] = await Promise.all([
-    prisma.share_company_users.findFirst({ where: { profile_id: profileId, company_id: companyId }, select: { id: true } }),
+    prisma.share_company_users.findFirst({
+      where: { profile_id: profileId, company_id: companyId },
+      select: { id: true },
+    }),
     prisma.company.findUnique({ where: { id: companyId }, select: { owner_id: true } }),
   ]);
   if (!membership && company?.owner_id !== profileId) throw new Error('El usuario no pertenece a la empresa activa');

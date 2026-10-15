@@ -6,14 +6,17 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getCostCenterOptions } from '@/features/Empresa/General/actions/cost-centers.server';
-import { fetchAllContractorForVehicles } from '@/features/Equipos/EquipoID/actions/vehicle-actions';
+import { fetchAllContractorForVehicles } from '@/features/Equipos/EquipoID/actions/customer-catalog-actions';
 import { use } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
-import type { VehicleFormData } from '../components/vehicle-tabs';
+import { diffAllocations } from '../lib/allocation-diff';
+import type { VehicleFormValues } from '../schemas/vehicle';
 
 interface VehicleAssignmentDataFormProps {
-  form: UseFormReturn<VehicleFormData>;
+  form: UseFormReturn<VehicleFormValues>;
   readOnly?: boolean;
+  /** Afectaciones que la ficha trajo del servidor: contra esto se arma el delta que se guarda. */
+  baselineAllocations?: readonly string[];
   costCentersPromise: ReturnType<typeof getCostCenterOptions>;
   contractorsPromise: ReturnType<typeof fetchAllContractorForVehicles>;
   hierarchicalPositionsPromise: Promise<Array<{ id: string; name: string }>>;
@@ -22,6 +25,7 @@ interface VehicleAssignmentDataFormProps {
 export function VehicleAssignmentDataForm({
   form,
   readOnly = false,
+  baselineAllocations = [],
   contractorsPromise,
   costCentersPromise,
   hierarchicalPositionsPromise,
@@ -30,6 +34,10 @@ export function VehicleAssignmentDataForm({
   const contractorCompanies = use(contractorsPromise);
   const hierarchicalPositions = use(hierarchicalPositionsPromise);
   const allocatedTo = form.watch('allocated_to') || [];
+
+  const allocationDiff = diffAllocations(baselineAllocations, allocatedTo);
+  const contractorName = (contractorId: string) =>
+    contractorCompanies.find((c) => c.id === contractorId)?.name ?? 'Cliente inactivo';
 
   const handleContractorChange = (contractorId: string, checked: boolean) => {
     const currentAllocated = form.getValues('allocated_to') || [];
@@ -180,6 +188,20 @@ export function VehicleAssignmentDataForm({
                   )}
                 </div>
                 <FormDescription>Selecciona los contratistas a los que se asignará este equipo</FormDescription>
+                {/* Región viva siempre montada: si se insertara recién al haber cambios, no se anunciaría. */}
+                <div role="status" className="text-sm">
+                  {!readOnly && allocationDiff.remove.length > 0 && (
+                    <p className="text-destructive font-medium">
+                      Se quitan {allocationDiff.remove.length} afectación(es) al guardar:{' '}
+                      {allocationDiff.remove.map(contractorName).join(', ')}
+                    </p>
+                  )}
+                  {!readOnly && allocationDiff.add.length > 0 && baselineAllocations.length > 0 && (
+                    <p className="text-muted-foreground">
+                      Se agregan {allocationDiff.add.length} afectación(es) al guardar.
+                    </p>
+                  )}
+                </div>
                 <FormMessage />
               </FormItem>
             )}

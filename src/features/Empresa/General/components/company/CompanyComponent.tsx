@@ -1,41 +1,86 @@
-import { Building2, Globe, Hash, Mail, MapPin, Phone, Tag } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { buttonVariants } from '@/components/ui/button';
+import { PermissionGuardServer } from '@/features/Permissions';
+import { Field, FieldGrid } from '@/shared/components/common/FieldGrid';
+import { RecordHeader } from '@/shared/components/common/RecordHeader';
+import { SectionCard } from '@/shared/components/common/SectionCard';
+import { StateBlock } from '@/shared/components/common/StateBlock';
+import { Building2 } from 'lucide-react';
+import Link from 'next/link';
 import { getActiveCompany } from '../../actions/company.server';
 
-interface InfoItemProps {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}
-
-function InfoItem({ icon, label, value }: InfoItemProps) {
-  return (
-    <div className="flex items-start gap-3 p-4 rounded-lg border border-border/50 bg-muted/20 hover:bg-muted/40 transition-colors">
-      <div className="mt-0.5 text-primary">{icon}</div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-muted-foreground mb-1">{label}</p>
-        <p className="text-base font-semibold text-foreground break-words">{value || '-'}</p>
-      </div>
-    </div>
-  );
-}
-
+/** Ficha de la empresa activa: identidad arriba y datos agrupados por tema. */
 export default async function CompanyComponent() {
   const company = await getActiveCompany();
 
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <InfoItem icon={<Building2 className="h-5 w-5" />} label="Razón Social" value={company?.company_name || ''} />
-      <InfoItem icon={<Hash className="h-5 w-5" />} label="CUIT" value={company?.company_cuit || ''} />
-      <InfoItem icon={<MapPin className="h-5 w-5" />} label="Dirección" value={company?.address || ''} />
-      <InfoItem icon={<Globe className="h-5 w-5" />} label="País" value={company?.country || ''} />
-      <InfoItem icon={<MapPin className="h-5 w-5" />} label="Ciudad" value={company?.cities?.name || ''} />
-      <InfoItem icon={<Tag className="h-5 w-5" />} label="Industria" value={company?.industry || ''} />
-      <InfoItem
-        icon={<Phone className="h-5 w-5" />}
-        label="Teléfono de contacto"
-        value={company?.contact_phone || ''}
+  if (!company) {
+    return (
+      <StateBlock
+        variant="error"
+        title="No se pudieron cargar los datos de la empresa"
+        description="Probá recargar la página."
       />
-      <InfoItem icon={<Mail className="h-5 w-5" />} label="Email de contacto" value={company?.contact_email || ''} />
+    );
+  }
+
+  return (
+    <div className="flex min-w-0 flex-col gap-4">
+      <RecordHeader
+        identity={
+          <div className="flex min-w-0 items-center gap-4">
+            <Avatar className="size-14 shrink-0">
+              <AvatarImage
+                src={company.company_logo ?? undefined}
+                alt="Logo de la empresa"
+                className="object-contain"
+              />
+              <AvatarFallback>
+                <Building2 className="size-6" aria-hidden="true" />
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <h2 className="truncate text-lg font-semibold">{company.company_name}</h2>
+              <p className="text-muted-foreground font-mono text-sm tabular-nums">CUIT {company.company_cuit || '—'}</p>
+            </div>
+          </div>
+        }
+        actions={
+          <PermissionGuardServer module="configuracion" tab="general" action="update">
+            <Link
+              href={`/dashboard/configuration/companies/${company.id}`}
+              className={buttonVariants({ variant: 'brand' })}
+            >
+              Editar
+            </Link>
+          </PermissionGuardServer>
+        }
+      />
+
+      <div className="flex flex-col gap-4">
+        <SectionCard title="Identificación">
+          <FieldGrid>
+            <Field label="Razón social" value={company.company_name} />
+            <Field label="CUIT" value={company.company_cuit} mono />
+            <Field label="Industria" value={company.industry} />
+          </FieldGrid>
+        </SectionCard>
+
+        <SectionCard title="Contacto">
+          <FieldGrid>
+            <Field label="Email de contacto" value={company.contact_email} />
+            <Field label="Teléfono de contacto" value={company.contact_phone} mono />
+          </FieldGrid>
+        </SectionCard>
+
+        <SectionCard title="Ubicación">
+          <FieldGrid>
+            <Field label="Dirección" value={company.address} />
+            <Field label="País" value={company.country} />
+            <Field label="Provincia" value={company.provinces?.name} />
+            <Field label="Ciudad" value={company.cities?.name} />
+          </FieldGrid>
+        </SectionCard>
+      </div>
     </div>
   );
 }

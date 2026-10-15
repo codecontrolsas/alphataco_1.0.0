@@ -1,7 +1,9 @@
 import { Skeleton } from '@/components/ui/skeleton';
 import ContactComponent from '@/features/Empresa/Contactos/components/ContactComponent';
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { cn } from '@/lib/utils';
 import BackButton from '@/shared/components/common/BackButton';
+import { StateBlock } from '@/shared/components/common/StateBlock';
 import { Suspense } from 'react';
 
 /** `?id=` (contacto a ver/editar) y `?action=` (`new` | `edit` | `view`) de la ruta de contactos. */
@@ -29,7 +31,22 @@ export default async function ContactSection({
   backButtonAlign = 'start',
   skeletonClassName = 'h-[400px]',
 }: ContactSectionProps) {
-  const { id, action } = await searchParams;
+  const [{ id, action }, canView] = await Promise.all([
+    searchParams,
+    checkPermissionServer('comercial', 'customers', 'view'),
+  ]);
+
+  // Las lecturas del formulario exigen este permiso: sin él se muestra la falta de permiso, no un
+  // "contacto no encontrado" ni un selector de clientes vacío.
+  if (!canView) {
+    return (
+      <StateBlock
+        variant="noperm"
+        title="No tenés permiso para ver los contactos de clientes"
+        description="Pedile acceso a un administrador."
+      />
+    );
+  }
 
   return (
     <section className="grid grid-cols-2 xl:grid-cols-2 gap-2 py-4 justify-start">

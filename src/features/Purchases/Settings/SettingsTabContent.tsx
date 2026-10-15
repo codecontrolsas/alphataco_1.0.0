@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { getSupplierCategories } from '../actions/categories.server';
 import { getExpenseCategories } from '../actions/expense-categories.server';
 import { getWithholdingRegimes } from '../actions/withholding-regimes.server';
-import { NoPermission } from '../fallback/NoPermission';
+import { StateBlock } from '@/shared/components/common/StateBlock';
 import { ExpenseCategoriesSection } from './components/ExpenseCategoriesSection';
 import { SupplierCategoriesSection } from './components/SupplierCategoriesSection';
 import { WithholdingRegimesSection } from './components/WithholdingRegimesSection';
@@ -14,7 +14,7 @@ import { WithholdingRegimesSection } from './components/WithholdingRegimesSectio
  * cajas desde las que se paga se administran en Tesoreria.
  */
 export default async function SettingsTabContent({ permissions }: { permissions: Record<string, boolean> }) {
-  if (permissions['compras:config-compras:view'] !== true) return <NoPermission />;
+  if (permissions['compras:config-compras:view'] !== true) return <StateBlock variant="noperm" title="No tenés permiso para ver esta información" />;
   const [categories, expenseCategories, regimes] = await Promise.all([
     getSupplierCategories(),
     getExpenseCategories(),

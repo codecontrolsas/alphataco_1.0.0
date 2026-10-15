@@ -6,14 +6,14 @@ export async function DepartmentSummaryTable() {
   const data = await getDepartmentAbsenceSummary();
 
   return (
-    <Card>
+    <Card className="@container min-w-0">
       <CardHeader>
         <CardTitle className="text-lg font-semibold">Resumen por Sector</CardTitle>
         <CardDescription>
           Esta tabla resume el ausentismo actual por sector para comparar rápidamente el impacto en cada área.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="min-w-0">
         <_DepartmentSummaryDataTable data={data} />
       </CardContent>
     </Card>

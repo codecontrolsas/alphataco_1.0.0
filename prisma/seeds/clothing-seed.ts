@@ -6,10 +6,10 @@
  */
 
 import { PrismaPg } from '@prisma/adapter-pg';
-import { prismaPgConfig } from '../../src/shared/lib/prisma-pg-config';
 import 'dotenv/config';
 import { PrismaClient } from '../../src/generated/prisma/client';
 import { clothing_delivery_type } from '../../src/generated/prisma/enums';
+import { prismaPgConfig } from '../../src/shared/lib/prisma-pg-config';
 
 // ---------------------------------------------------------------------------
 // Client setup (standalone — not the Next.js singleton)
@@ -152,8 +152,7 @@ async function main() {
   const companyId = company.id;
 
   // ── 2. Find active employees from that company ─────────────────────────────
-  // NOTE: employees can be linked to a company either via employees.company_id
-  // or via the companies_employees pivot table. We try both.
+  // NOTE: la empresa de un empleado es employees.company_id.
   console.log('2. Looking for active employees...');
   let employees = await prisma.employees.findMany({
     where: {
@@ -165,40 +164,15 @@ async function main() {
     orderBy: { date_of_admission: 'asc' },
   });
 
-  // Fallback: try via companies_employees pivot
+  // Fallback: si no hay activos, tomar empleados de la empresa sin filtrar por is_active.
+  // (La pivote companies_employees ya no se escribe ni se lee: la empresa es employees.company_id.)
   if (employees.length === 0) {
-    const pivotLinks = await prisma.companies_employees.findMany({
+    employees = await prisma.employees.findMany({
       where: { company_id: companyId },
-      select: { employee_id: true },
+      select: { id: true, firstname: true, lastname: true, file: true },
       take: 3,
+      orderBy: { date_of_admission: 'asc' },
     });
-    if (pivotLinks.length > 0) {
-      const ids = pivotLinks.map((p) => p.employee_id);
-      employees = await prisma.employees.findMany({
-        where: { id: { in: ids }, is_active: true },
-        select: { id: true, firstname: true, lastname: true, file: true },
-        take: 3,
-        orderBy: { date_of_admission: 'asc' },
-      });
-    }
-  }
-
-  // Fallback 2: if still none found with is_active filter, try without it
-  if (employees.length === 0) {
-    const pivotLinks = await prisma.companies_employees.findMany({
-      where: { company_id: companyId },
-      select: { employee_id: true },
-      take: 3,
-    });
-    if (pivotLinks.length > 0) {
-      const ids = pivotLinks.map((p) => p.employee_id);
-      employees = await prisma.employees.findMany({
-        where: { id: { in: ids } },
-        select: { id: true, firstname: true, lastname: true, file: true },
-        take: 3,
-        orderBy: { date_of_admission: 'asc' },
-      });
-    }
   }
 
   console.log(`   Found ${employees.length} employee(s).`);

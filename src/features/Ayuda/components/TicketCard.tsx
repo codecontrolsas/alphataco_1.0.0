@@ -2,23 +2,20 @@
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import type { TicketWithUnread } from '@/shared/lib/taskapp/types';
 import { ChevronDown, MessageSquare, Paperclip, Tag } from 'lucide-react';
 import moment from 'moment';
 import 'moment/locale/es';
 import { useState } from 'react';
-import type { TicketWithUnread } from '@/shared/lib/taskapp/types';
 import { parseCategoryFromTitle } from '../constants/categories';
 import { canDecide, copyFor, demandFor } from '../constants/ticket-copy';
 import { statusFor } from '../constants/ticket-status';
 import { useMarkTicketAsReadMutation } from '../hooks/useMarkTicketAsReadMutation';
 import { useTicketTimeline } from '../hooks/useTicketTimeline';
 import { ProposeCloseAction } from './ProposeCloseAction';
-import { closeProposalNoticeId, TicketCloseProposalNotice } from './TicketCloseProposalNotice';
+import { TicketCloseProposalNotice, closeProposalNoticeId } from './TicketCloseProposalNotice';
 import { TicketPriorityBadge } from './TicketPriorityBadge';
 import { TicketResolutionPanel } from './TicketResolutionPanel';
 import { TicketTimeline } from './TicketTimeline';
@@ -134,10 +131,7 @@ export function TicketCard({ ticket, onOpenDetail, canAct, defaultOpen = false }
 
         <CollapsibleContent>
           <div className="flex flex-col gap-5 border-t px-4 pb-4 pt-4 duration-150 animate-in fade-in-0 motion-reduce:animate-none">
-            <TicketTimeline
-              milestones={timeline.data?.milestones ?? []}
-              isLoading={timeline.isLoading}
-            />
+            <TicketTimeline milestones={timeline.data?.milestones ?? []} isLoading={timeline.isLoading} />
 
             {ticket.description && (
               <section aria-label="Lo que reportaste" className="flex flex-col gap-1">
@@ -160,11 +154,7 @@ export function TicketCard({ ticket, onOpenDetail, canAct, defaultOpen = false }
                 detalle, que viven en el Sheet: acá va la puerta, no una
                 segunda copia del flujo de aprobación. */}
             {demand === 'approve' && (
-              <Button
-                type="button"
-                className="self-start gap-2"
-                onClick={() => onOpenDetail(ticket.id)}
-              >
+              <Button type="button" className="self-start gap-2" onClick={() => onOpenDetail(ticket.id)}>
                 Revisar el presupuesto del TKT-{ticket.id}
               </Button>
             )}
@@ -195,11 +185,8 @@ export function TicketCard({ ticket, onOpenDetail, canAct, defaultOpen = false }
                   {attachmentCount === 1 ? 'adjunto' : 'adjuntos'}
                 </span>
               )}
-              <time
-                dateTime={ticket.created_at}
-                className="ms-auto whitespace-nowrap text-muted-foreground"
-              >
-                Reportado el {moment(ticket.created_at).locale('es').format('D MMM YYYY')}
+              <time dateTime={ticket.created_at} className="ms-auto whitespace-nowrap text-muted-foreground">
+                Reportado el {formatArgentinaDay(ticket.created_at)}
               </time>
             </div>
           </div>

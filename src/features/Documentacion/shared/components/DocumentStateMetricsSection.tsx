@@ -1,3 +1,4 @@
+import { Logger } from '@/lib/logger';
 import { Suspense } from 'react';
 import { DocumentStateMetricsSkeleton } from '../fallback/DocumentStateMetricsSkeleton';
 import { DocumentStateMetrics, type DocumentStateCounts } from './DocumentStateMetrics';
@@ -9,8 +10,16 @@ interface DocumentStateMetricsSectionProps {
   counts: Promise<DocumentStateCounts>;
 }
 
+const logger = new Logger('Documentacion/DocumentStateMetricsSection');
+
 async function Metrics({ tableId, counts }: DocumentStateMetricsSectionProps) {
-  return <DocumentStateMetrics tableId={tableId} counts={await counts} />;
+  // Si el conteo falla (o no hay permiso) las tarjetas se omiten: la tabla sigue funcionando sola.
+  try {
+    return <DocumentStateMetrics tableId={tableId} counts={await counts} />;
+  } catch (error) {
+    logger.error('Error al cargar las tarjetas por estado', { data: { error } });
+    return null;
+  }
 }
 
 /** Server Component: resuelve las tarjetas en su propio Suspense, sin frenar la tabla. */

@@ -7,6 +7,7 @@ import { SectionCard } from '@/shared/components/common/SectionCard';
 import { SplitLayout } from '@/shared/components/common/SplitLayout';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import type { UseFormReturn } from 'react-hook-form';
+import { MAX_FILES_BY_KIND } from '../../lib/equipment-files';
 import { OTHER_EQUIPMENT_FORM_SECTIONS, REQUIRED_OTHER_EQUIPMENT_FIELDS } from '../../lib/other-equipment-form';
 import { OtherEquipmentAssignmentForm } from '../OtherEquipmentAssignmentForm';
 import { OtherEquipmentBasicDataForm } from '../OtherEquipmentBasicDataForm';
@@ -69,14 +70,17 @@ export function OtherEquipmentEditLayout({
 
             {equipment && (
               <>
-                <SectionCard title="Fotos" description="Imágenes del equipo (máx. 4). Se guardan al subirlas.">
+                <SectionCard
+                  title="Fotos"
+                  description={`Imágenes del equipo (máx. ${MAX_FILES_BY_KIND.pictures}). Se guardan al subirlas.`}
+                >
                   {/* key por equipo: sin remount, el estado interno mostraría las fotos del equipo anterior. */}
                   <OtherEquipmentFileUpload
                     key={`${equipment.id}-pictures`}
                     equipmentId={equipment.id}
                     type="pictures"
                     files={equipment.pictures ?? []}
-                    maxFiles={4}
+                    maxFiles={MAX_FILES_BY_KIND.pictures}
                   />
                 </SectionCard>
                 <SectionCard title="Planos" description="Documentos técnicos y planos. Se guardan al subirlos.">
@@ -85,6 +89,7 @@ export function OtherEquipmentEditLayout({
                     equipmentId={equipment.id}
                     type="blueprints"
                     files={equipment.blueprints ?? []}
+                    maxFiles={MAX_FILES_BY_KIND.blueprints}
                   />
                 </SectionCard>
               </>

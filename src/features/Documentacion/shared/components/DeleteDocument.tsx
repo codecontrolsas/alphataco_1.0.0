@@ -11,9 +11,11 @@ import { Input } from '@/components/ui/input';
 import { deleteDocumentFile } from '@/features/Documentacion/shared/actions/document-files.server';
 import { cn } from '@/lib/utils';
 import { InfoCircledIcon } from '@radix-ui/react-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { invalidateDocumentLists } from '../lib/document-query-keys';
 
 export default function DeleteDocument({
   documentName,
@@ -39,18 +41,21 @@ export default function DeleteDocument({
     },
   });
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   async function onSubmit() {
     await toast
       .promise(
         async () => {
-          if (!documentName) return;
+          if (!documentName) throw new Error('El documento no tiene archivo cargado');
           // Borrado del archivo y reseteo de las filas en el servidor (perímetro por empresa).
           const result = await deleteDocumentFile({ id, resource: resource ?? '' });
           if (!result.ok) throw new Error(result.error);
 
-          router.refresh();
+          // La fila se borra: la ficha ya no existe. Se invalidan las listas (React Query) y se vuelve a ellas.
+          await invalidateDocumentLists(queryClient);
           setIsOpen(false);
+          router.back();
         },
         {
           loading: 'Eliminando...',
@@ -109,7 +114,7 @@ export default function DeleteDocument({
                   type="submit"
                   variant="default"
                   className="self-end mt-5"
-                  disabled={form.formState.isSubmitting}
+                  disabled={form.formState.isSubmitting || !documentName}
                 >
                   Eliminar
                 </Button>

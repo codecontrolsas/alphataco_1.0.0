@@ -2,7 +2,6 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import {
@@ -14,57 +13,29 @@ import {
   terminationReasonEquipmentLabels,
 } from '@/shared/utils/mappers';
 import type { ColumnDef } from '@tanstack/react-table';
-import { AlertTriangle, Check, CheckCircle2, Clock, Eye, Wrench, X, XCircle } from 'lucide-react';
-import moment from 'moment';
+import { Check, Eye, X } from 'lucide-react';
 import Link from 'next/link';
-import React from 'react';
 import type { VehicleListItem } from './actions/actions.server';
+import {
+  ContractorsCell,
+  DateCell,
+  EmptyCell,
+  EquipmentCell,
+  MonoCell,
+  TimestampCell,
+  contractorNames,
+  equipmentTitle,
+} from './components/cells';
+import { conditionIcons, conditionVariants, type BadgeVariant } from './lib/condition-config';
 
-// ============================================================================
-// CONDITION CONFIG
-// ============================================================================
-
-type ConditionIconMap = Record<string, React.ComponentType<{ className?: string }>>;
-
-export const conditionIcons: ConditionIconMap = {
-  operativo: CheckCircle2,
-  no_operativo: XCircle,
-  en_reparacion: Wrench,
-  operativo_condicionado: AlertTriangle,
-  en_preparacion: Clock,
-};
-
-type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'yellow' | 'info';
-
-export const conditionVariants: Record<string, BadgeVariant> = {
-  operativo: 'success',
-  no_operativo: 'destructive',
-  en_reparacion: 'yellow',
-  operativo_condicionado: 'info',
-  en_preparacion: 'secondary',
-};
+// Re-export: los listados de bajas y de equipamiento y `EquipmentConditionControl` importan estos mapas de acá.
+export { conditionIcons, conditionVariants } from './lib/condition-config';
 
 // ============================================================================
 // HELPERS
 // ============================================================================
 
 const getVehicleHref = (id: string) => `/dashboard/equipment/action?action=view&id=${id}`;
-
-function EmptyCell() {
-  return <span className="text-muted-foreground">-</span>;
-}
-
-/** Fecha en monoespaciada; `-` si no hay valor. */
-function DateCell({ value }: { value: Date | string | null | undefined }) {
-  if (!value) return <EmptyCell />;
-  return <span className="font-mono tabular-nums">{moment(value).format('DD/MM/YYYY')}</span>;
-}
-
-/** Texto identificador (serie, motor, N° de contrato…) en monoespaciada. */
-function MonoCell({ value }: { value: string | number | null | undefined }) {
-  if (value == null || value === '') return <EmptyCell />;
-  return <span className="font-mono tabular-nums">{value}</span>;
-}
 
 // ============================================================================
 // HIDDEN COLUMNS BY DEFAULT
@@ -117,27 +88,10 @@ export const columns: ColumnDef<VehicleListItem>[] = [
   // ─── Equipo (identidad compuesta: Marca Modelo / Tipo · Año · N° interno) ─
   {
     id: 'equipment',
-    accessorFn: (row) => [row.brand_vehicles?.name, row.model_vehicles?.name].filter(Boolean).join(' '),
+    accessorFn: (row) => equipmentTitle(row),
     meta: { title: 'Equipo', excludeFromExport: true },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Equipo" />,
-    cell: ({ row }) => {
-      const v = row.original;
-      const title = [v.brand_vehicles?.name, v.model_vehicles?.name].filter(Boolean).join(' ');
-      const details = [
-        v.type_vehicles_typeTotype?.name,
-        v.year != null ? String(v.year) : null,
-        v.intern_number ? `N° ${v.intern_number}` : null,
-      ]
-        .filter(Boolean)
-        .join(' · ');
-      if (!title && !details) return <EmptyCell />;
-      return (
-        <div className="min-w-0">
-          <div className="font-semibold text-foreground">{title || '-'}</div>
-          {details && <div className="truncate text-sm text-muted-foreground">{details}</div>}
-        </div>
-      );
-    },
+    cell: ({ row }) => <EquipmentCell vehicle={row.original} />,
     // 'equipment' no es un campo ordenable en actions.server.ts (VALID_SORT_FIELDS)
     enableSorting: false,
   },
@@ -244,10 +198,7 @@ export const columns: ColumnDef<VehicleListItem>[] = [
     accessorFn: (row) => row.checklist_answers?.[0]?.created_at ?? null,
     meta: { title: 'Último Checklist' },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Último Checklist" />,
-    cell: ({ row }) => {
-      const lastDate = row.original.checklist_answers?.[0]?.created_at;
-      return <DateCell value={lastDate} />;
-    },
+    cell: ({ row }) => <TimestampCell value={row.original.checklist_answers?.[0]?.created_at} />,
     // Prisma no soporta ordenar por MAX(created_at) de una relacion 1:N sin SQL
     // crudo — se deja sin ordenamiento (ver nota en actions.server.ts VALID_SORT_FIELDS).
     enableSorting: false,
@@ -282,45 +233,10 @@ export const columns: ColumnDef<VehicleListItem>[] = [
   // ─── Afectaciones (M:M) ───────────────────────────────────────────────────
   {
     id: 'contractor_equipment',
-    accessorFn: (row) =>
-      (row.contractor_equipment ?? [])
-        .map((c) => c.customers?.name ?? '')
-        .filter(Boolean)
-        .join(', '),
+    accessorFn: (row) => contractorNames(row.contractor_equipment).join(', '),
     meta: { title: 'Afectaciones' },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Afectaciones" />,
-    cell: ({ row }) => {
-      const contractors = (row.original.contractor_equipment ?? []).map((c) => c.customers?.name ?? '').filter(Boolean);
-
-      if (contractors.length === 0) return <span className="text-muted-foreground">-</span>;
-
-      const [first, ...rest] = contractors;
-
-      if (rest.length === 0) {
-        return <Badge variant="default">{first}</Badge>;
-      }
-
-      return (
-        <TooltipProvider delayDuration={100}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="inline-flex">
-                <Badge variant="default" className="cursor-pointer select-none">
-                  {first} +{rest.length}
-                </Badge>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <div className="flex flex-col gap-1">
-                {rest.map((name) => (
-                  <span key={name}>{name}</span>
-                ))}
-              </div>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      );
-    },
+    cell: ({ row }) => <ContractorsCell names={contractorNames(row.original.contractor_equipment)} />,
     filterFn: (row, _id, filterValue) => {
       if (!filterValue || !Array.isArray(filterValue) || filterValue.length === 0) return true;
       const contractors = row.original.contractor_equipment ?? [];
@@ -618,7 +534,7 @@ export const columns: ColumnDef<VehicleListItem>[] = [
     accessorKey: 'created_at',
     meta: { title: 'Creado' },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Creado" />,
-    cell: ({ row }) => <DateCell value={row.original.created_at} />,
+    cell: ({ row }) => <TimestampCell value={row.original.created_at} />,
   },
 
   // ─── Acciones ─────────────────────────────────────────────────────────────

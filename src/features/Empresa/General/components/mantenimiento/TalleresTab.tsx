@@ -1,32 +1,31 @@
-import { cookies } from 'next/headers';
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { getTablePreferences } from '@/shared/actions/table-preferences';
+import { StateBlock } from '@/shared/components/common/StateBlock';
 import { fetchAllWorkshops } from '../../actions/workshops.server';
 import { TalleresTabClient } from './talleres/TalleresTabClient';
 
 /**
  * Sección Talleres, montable por sí sola.
  *
- * Antes venía empaquetada con Sectores dentro de `MantenimientoTab`, que tenía su propio
- * `TabsManagerClient` con `paramName="mantenimiento-subtab"`. Al unificar las 4 subtabs de
- * configuración de mantenimiento en una sola fila, ese manager intermedio dejó de tener
- * sentido: habría dado dos filas de pestañas anidadas.
- *
  * La promesa de `fetchAllWorkshops()` se pasa SIN await a propósito: el cliente la consume
- * con `use()`, así el componente no bloquea el render de la sección.
+ * con `use()`, así el componente no bloquea el render de la sección. Sin permiso `view` se
+ * muestra "sin permiso" (nunca una lista vacía).
  */
 async function TalleresTab() {
-  const cookiesStore = await cookies();
+  if (!(await checkPermissionServer('configuracion', 'talleres', 'view'))) {
+    return (
+      <StateBlock
+        variant="noperm"
+        title="No tenés permiso para ver los talleres"
+        description="Pedile acceso a un administrador."
+      />
+    );
+  }
+
   const workshops = fetchAllWorkshops();
+  const preferences = getTablePreferences('workshops');
 
-  const savedVisibility = cookiesStore.get('talleres-table')?.value;
-  const savedFilter = cookiesStore.get('talleres-table-filters')?.value;
-
-  return (
-    <TalleresTabClient
-      workshops={workshops}
-      savedVisibility={savedVisibility ? JSON.parse(savedVisibility) : {}}
-      savedFilter={savedFilter ? JSON.parse(savedFilter) : []}
-    />
-  );
+  return <TalleresTabClient workshops={workshops} preferences={preferences} />;
 }
 
 export default TalleresTab;

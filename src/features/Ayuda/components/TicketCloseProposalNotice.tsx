@@ -48,9 +48,7 @@ export function TicketCloseProposalNotice({ ticket, variant }: Props) {
       : // `rounded-md` dentro de la tarjeta `rounded-lg` con p-4: el radio de
         // adentro tiene que ser menor que el de afuera o el bloque se ve pegado.
         'rounded-md border p-3';
-  const toneClass = pending
-    ? 'border-amber-200 bg-amber-50/60 dark:border-amber-900/60 dark:bg-amber-950/30'
-    : 'bg-muted/40';
+  const toneClass = pending ? 'border-warn/30 bg-warn-subtle' : 'bg-muted/40';
 
   return (
     <div
@@ -64,7 +62,7 @@ export function TicketCloseProposalNotice({ ticket, variant }: Props) {
     >
       <div className="flex items-start gap-3">
         {pending ? (
-          <Clock aria-hidden className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <Clock aria-hidden className="mt-0.5 size-4 shrink-0 text-warn-subtle-foreground" />
         ) : (
           <MessageSquareReply aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         )}
@@ -84,9 +82,7 @@ function PendingBody({ ticket }: { ticket: Ticket }) {
       {/* El título dice el estado en palabras: el ámbar solo no alcanza. */}
       <p className="text-sm font-medium">Propuesta de cierre esperando respuesta</p>
       <p className="text-pretty text-xs text-muted-foreground">
-        {ticket.close_proposal_target === 'cancelled'
-          ? 'Se pidió cancelarlo'
-          : 'Se propuso darlo por resuelto'}
+        {ticket.close_proposal_target === 'cancelled' ? 'Se pidió cancelarlo' : 'Se propuso darlo por resuelto'}
         {when && (
           <>
             {' '}
@@ -119,8 +115,7 @@ function DeclinedBody({ ticket }: { ticket: Ticket }) {
           </>
         )}
         {/* Sin motivo el aviso se sostiene solo: nada de un "Motivo:" vacío. */}
-        {reason ? ' y dejó este motivo.' : '.'} Si todavía creés que corresponde cerrarlo, podés
-        volver a proponerlo.
+        {reason ? ' y dejó este motivo.' : '.'} Si todavía creés que corresponde cerrarlo, podés volver a proponerlo.
       </p>
       {reason && <ReasonQuote label="Motivo del equipo">{reason}</ReasonQuote>}
     </>

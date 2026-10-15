@@ -1,18 +1,27 @@
 'use server';
 
-import { Prisma } from '@/generated/prisma/client';
 import { resolveChecklistEmployeeId } from '@/features/Checklists/lib/checklist-attribution';
+import {
+  NUEVO_PEDIDO_CREATE,
+  NUEVO_PEDIDO_VIEW,
+  requireResourceAccess,
+  type ResourcePermission,
+} from '@/features/Mantenimiento/shared/resource-access.server';
+import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { CACHE_TAGS } from '@/shared/constants/cache';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionEmployeeIdClaim } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { invalidateCacheTags } from '@/shared/utils/cache-invalidation';
-import moment from 'moment';
 import { cookies } from 'next/headers';
 
 const serverLogger = new Logger('Checklists/actions');
+
+const FORMULARIOS_VIEW: ResourcePermission = { module: 'formularios', tab: 'formularios', action: 'view' };
+const FORMULARIOS_CREATE: ResourcePermission = { module: 'formularios', tab: 'formularios', action: 'create' };
 
 /**
  * Crea una nueva respuesta de checklist normalizado
@@ -77,19 +86,24 @@ const sanitize = (value: unknown): Prisma.InputJsonValue | null => {
 };
 
 /**
- * Empresa del checklist: SIEMPRE la del equipo, nunca la de sesión.
+ * Empresa del checklist: SIEMPRE la del equipo, nunca la de sesión — y SÓLO si quien llama
+ * prueba que pertenece a ella.
  *
- * El formulario se responde también desde el flujo QR anónimo
- * (`/maintenance/equipment/[id]/checklists/**`), donde no hay empresa activa;
- * misma regla que `Mantenimiento/shared/resource-company.ts::getResourceCompanyId`.
+ * El formulario se responde también desde el flujo QR (`/maintenance/equipment/[id]/checklists/**`),
+ * donde la sesión es la del operario y no es miembro de la empresa. Por eso el perímetro es de dos
+ * caminos (`requireResourceAccess`): operario del QR con legajo de la empresa del equipo, o
+ * usuario del dashboard con la empresa activa y el permiso que corresponda al modo:
+ * - `read` (armar el formulario): `formularios:formularios:view` o los permisos de Nuevo Pedido.
+ * - `write` (guardar una respuesta): `formularios:formularios:create` o `nuevo_pedido:create`.
  */
-async function getVehicleCompanyId(equipmentId: string): Promise<string> {
-  const vehicle = await prisma.vehicles.findUnique({
-    where: { id: equipmentId },
-    select: { company_id: true },
+async function getVehicleCompanyId(equipmentId: string, mode: 'read' | 'write' = 'read'): Promise<string> {
+  const { companyId } = await requireResourceAccess('vehicle', equipmentId, {
+    dashboardPermissions:
+      mode === 'write'
+        ? [FORMULARIOS_CREATE, NUEVO_PEDIDO_CREATE]
+        : [FORMULARIOS_VIEW, NUEVO_PEDIDO_VIEW, NUEVO_PEDIDO_CREATE],
   });
-  if (!vehicle?.company_id) throw new Error('No se encontró la empresa del equipo del checklist');
-  return vehicle.company_id;
+  return companyId;
 }
 
 /** Devuelve el id sólo si el empleado existe y pertenece a la empresa del equipo. */
@@ -111,7 +125,7 @@ export const CreateChecklistAnswer = async (templateId: string, answerData: Chec
   });
 
   // Sin RLS: la empresa sale del equipo y todo lo que llega del cliente se valida contra ella.
-  const companyId = await getVehicleCompanyId(answerData.equipment_id);
+  const companyId = await getVehicleCompanyId(answerData.equipment_id, 'write');
 
   const template = await prisma.checklist_templates.findFirst({
     where: { id: templateId, company_id: companyId },
@@ -390,12 +404,9 @@ async function getSupervisorsForCompany(company_id: string) {
     const activeEmployeeIds = new Set<string>();
 
     if (employeeIds.length > 0) {
-      const now = moment().utcOffset(-3);
-      const today = {
-        day: now.date(),
-        month: now.month() + 1,
-        year: now.year(),
-      };
+      // Día argentino (el contenedor corre en UTC)
+      const [todayYear, todayMonth, todayDay] = argentinaDate().split('-').map(Number);
+      const today = { day: todayDay!, month: todayMonth!, year: todayYear! };
 
       const activeDiagrams = await prisma.employees_diagram.findMany({
         where: {
@@ -479,12 +490,10 @@ export async function fetchSupervisorsForEquipment(equipmentId: string) {
 export async function fetchSupervisorsForResource(kind: 'vehicle' | 'other_equipment', resourceId: string) {
   try {
     if (kind === 'other_equipment') {
-      const equipment = await prisma.other_equipment.findUnique({
-        where: { id: resourceId },
-        select: { company_id: true },
+      const { companyId } = await requireResourceAccess('other_equipment', resourceId, {
+        dashboardPermissions: [NUEVO_PEDIDO_VIEW, NUEVO_PEDIDO_CREATE],
       });
-      if (!equipment?.company_id) throw new Error('No se encontró la empresa del equipamiento');
-      return await getSupervisorsForCompany(equipment.company_id);
+      return await getSupervisorsForCompany(companyId);
     }
 
     return await getSupervisorsForCompany(await getVehicleCompanyId(resourceId));

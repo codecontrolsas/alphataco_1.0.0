@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { useQuery } from '@tanstack/react-query';
 import { CalendarDays, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import moment from 'moment';
@@ -93,10 +94,10 @@ export function MantenimientoChartsClient({ initialSummary, initialMonthKey }: P
 
   const earliestMonth = React.useMemo(() => {
     const fromData = summary?.earliestMonth ?? initialSummary.earliestMonth;
-    return fromData ? moment(fromData, MONTH_KEY_FORMAT) : moment().subtract(1, 'year').startOf('month');
+    return fromData ? moment(fromData, MONTH_KEY_FORMAT) : moment(argentinaDate()).subtract(1, 'year').startOf('month');
   }, [summary?.earliestMonth, initialSummary.earliestMonth]);
 
-  const maxMonth = React.useMemo(() => moment().add(1, 'month').startOf('month'), []);
+  const maxMonth = React.useMemo(() => moment(argentinaDate()).add(1, 'month').startOf('month'), []);
 
   const canGoBack = selectedMonth.isAfter(earliestMonth, 'month');
   const canGoForward = selectedMonth.isBefore(maxMonth, 'month');
@@ -221,9 +222,9 @@ export function MantenimientoChartsClient({ initialSummary, initialMonthKey }: P
   return (
     <section className="grid grid-cols-1 gap-3 mb-4">
       {/* Donut card */}
-      <Card className="py-0">
-        <CardHeader className="flex flex-col items-stretch border-b p-0! sm:flex-row">
-          <div className="flex flex-1 flex-col justify-center gap-1 px-6 pt-4 pb-3 sm:py-4">
+      <Card className="@container py-0">
+        <CardHeader className="flex flex-col items-stretch border-b p-0! @3xl:flex-row">
+          <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 px-6 pt-4 pb-3 @3xl:py-4">
             <CardTitle className="text-base flex items-center gap-2">
               Mantenimiento de equipos
               {isFetching && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
@@ -240,6 +241,7 @@ export function MantenimientoChartsClient({ initialSummary, initialMonthKey }: P
             <div className="flex flex-wrap items-center gap-2 mt-3">
               <div className="flex items-center gap-1 rounded-md border bg-card/40 p-0.5">
                 <Button
+                  type="button"
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
@@ -254,6 +256,7 @@ export function MantenimientoChartsClient({ initialSummary, initialMonthKey }: P
                   {monthLabel}
                 </span>
                 <Button
+                  type="button"
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
@@ -267,7 +270,7 @@ export function MantenimientoChartsClient({ initialSummary, initialMonthKey }: P
             </div>
           </div>
         </CardHeader>
-        <CardContent className="px-2 pt-6 pb-6 sm:px-6">
+        <CardContent className="px-2 pt-6 pb-6 @xl:px-6">
           <OwnershipDonutChart
             countsByCategory={effectiveCountsByCategory}
             effectiveConditionCounts={effectiveConditionCounts}

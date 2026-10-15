@@ -48,7 +48,8 @@ export function RejectPreEmployeeDialog({
       onRejected?.();
     } catch (error) {
       logger.error('Error al rechazar el candidato', { data: { error, preEmployeeId } });
-      toast.error(error instanceof Error ? error.message : 'No se pudo rechazar el candidato');
+      // Si el servidor devolvió un mensaje claro se muestra tal cual; nunca el objeto crudo de Prisma.
+      toast.error(error instanceof Error && error.message ? error.message : 'No se pudo rechazar el candidato');
     }
   };
 

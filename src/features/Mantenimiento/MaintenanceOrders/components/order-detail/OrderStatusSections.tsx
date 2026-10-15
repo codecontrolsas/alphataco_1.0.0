@@ -222,8 +222,8 @@ export function OrderStatusSections({
             {status === 'operations_rejected' && context === 'operations' && (
               <>
                 <Separator />
-                <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md p-4">
-                  <h4 className="text-sm font-semibold text-amber-700 dark:text-amber-300 flex items-center gap-2 mb-1">
+                <div className="bg-warn-subtle border border-warn/40 rounded-md p-4">
+                  <h4 className="text-sm font-semibold text-warn-subtle-foreground flex items-center gap-2 mb-1">
                     <Clock className="h-4 w-4" />
                     Pendiente de revision por Jefe de Taller
                   </h4>
