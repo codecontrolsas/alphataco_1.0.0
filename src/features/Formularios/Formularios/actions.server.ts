@@ -39,7 +39,7 @@ const ALLOWED_FILTER_KEYS = new Set([...FACET_COLUMNS, ...TEXT_FILTER_COLUMNS, .
 /**
  * Las dos fuentes (custom_form legacy + checklist_templates) se unen, ordenan y paginan EN MEMORIA:
  * por eso cada una se trae con tope. Si una fuente lo alcanza, el listado queda truncado a sus filas
- * más recientes (se avisa por log).
+ * más recientes: se registra en el log y la tabla lo avisa en pantalla (`getFormsUnionCoverage`).
  */
 const UNION_MAX_ROWS_PER_SOURCE = 2_000;
 
@@ -274,6 +274,31 @@ export async function getFormsPaginated(searchParams: DataTableSearchParams) {
   } catch (error) {
     logger.error('Error al obtener formularios paginados', { data: { error } });
     throw new Error('No se pudo obtener la lista de formularios. Intente nuevamente.');
+  }
+}
+
+/**
+ * Cobertura del listado: cuántos formularios cumplen los filtros (conteo real en BD) y cuántos entran en la
+ * unión en memoria (`UNION_MAX_ROWS_PER_SOURCE` por fuente). Si `shown < total`, la tabla avisa en pantalla
+ * que lista solo los más recientes; nunca se trunca en silencio. `null` sin permiso o si falla (sin aviso).
+ */
+export async function getFormsUnionCoverage(
+  searchParams: DataTableSearchParams
+): Promise<{ shown: number; total: number } | null> {
+  try {
+    if (!(await canForms('view'))) return null;
+    const where = buildWhereClause(parseListState(searchParams), await getActiveCompanyId());
+    const [checklists, customForms] = await Promise.all([
+      where.includeChecklist ? prisma.checklist_templates.count({ where: where.checklistWhere }) : Promise.resolve(0),
+      where.includeCustomForm ? prisma.custom_form.count({ where: where.customFormWhere }) : Promise.resolve(0),
+    ]);
+    return {
+      shown: Math.min(checklists, UNION_MAX_ROWS_PER_SOURCE) + Math.min(customForms, UNION_MAX_ROWS_PER_SOURCE),
+      total: checklists + customForms,
+    };
+  } catch (error) {
+    logger.error('Error al contar la cobertura del listado de formularios', { data: { error } });
+    return null;
   }
 }
 

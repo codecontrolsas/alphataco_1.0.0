@@ -1,14 +1,23 @@
 import { getUserPermissionsMapServer } from '@/features/Permissions';
-import { SectionErrorBoundary } from '@/shared/components/common/SectionErrorBoundary';
 import { SectionManagerServer } from '@/features/TabsManager';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { Banknote, BookOpenText, ClipboardList, FileCheck, FileQuestion, PackageCheck, Percent, ReceiptText, Settings, Truck } from 'lucide-react';
+import { SectionErrorBoundary } from '@/shared/components/common/SectionErrorBoundary';
+import {
+  Banknote,
+  BookOpenText,
+  ClipboardList,
+  FileCheck,
+  FileQuestion,
+  PackageCheck,
+  Percent,
+  ReceiptText,
+  Settings,
+  Truck,
+} from 'lucide-react';
 import { Suspense } from 'react';
 import InvoicesTabContent from './Invoices/InvoicesTabContent';
 import OrdersTabContent from './Orders/OrdersTabContent';
 import PaymentsTabContent from './Payments/PaymentsTabContent';
-import WithholdingsTabContent from './Withholdings/WithholdingsTabContent';
-import { WithholdingsSkeleton } from './Withholdings/fallback/WithholdingsSkeleton';
 import QuotesTabContent from './Quotes/QuotesTabContent';
 import ReceiptsTabContent from './Receipts/ReceiptsTabContent';
 import RequestsTabContent from './Requests/RequestsTabContent';
@@ -17,7 +26,8 @@ import { PurchasesSettingsSkeleton } from './Settings/fallback/PurchasesSettings
 import SuppliersTabContent from './Suppliers/SuppliersTabContent';
 import VatBookTabContent from './VatBook/VatBookTabContent';
 import { VatBookSkeleton } from './VatBook/fallback/VatBookSkeleton';
-import { PurchasesSectionCounter } from './components/PurchasesSectionCounter';
+import WithholdingsTabContent from './Withholdings/WithholdingsTabContent';
+import { WithholdingsSkeleton } from './Withholdings/fallback/WithholdingsSkeleton';
 import { PurchasesSectionSkeleton } from './fallback/PurchasesSectionSkeleton';
 
 /**
@@ -43,18 +53,12 @@ export default async function PurchasesComponent({ searchParams }: { searchParam
       searchParams={searchParams}
       defaultTab="solicitudes"
       permissions={permissions}
-      sectionNav
       tabs={[
         {
           value: 'solicitudes',
           label: label(ClipboardList, 'Solicitudes'),
           moduleSlug: 'compras',
           tabSlug: 'solicitudes',
-          navCounter: (
-            <Suspense fallback={null}>
-              <PurchasesSectionCounter section="requests" label="Solicitudes pendientes de aprobación" />
-            </Suspense>
-          ),
           content: (
             <SectionErrorBoundary title="No se pudo mostrar Solicitudes">
               <Suspense fallback={<PurchasesSectionSkeleton />}>
@@ -81,11 +85,6 @@ export default async function PurchasesComponent({ searchParams }: { searchParam
           label: label(FileCheck, 'Órdenes de compra'),
           moduleSlug: 'compras',
           tabSlug: 'ordenes',
-          navCounter: (
-            <Suspense fallback={null}>
-              <PurchasesSectionCounter section="orders" label="Órdenes pendientes de aprobación" />
-            </Suspense>
-          ),
           content: (
             <SectionErrorBoundary title="No se pudo mostrar Órdenes de compra">
               <Suspense fallback={<PurchasesSectionSkeleton />}>
@@ -99,11 +98,6 @@ export default async function PurchasesComponent({ searchParams }: { searchParam
           label: label(PackageCheck, 'Recepciones'),
           moduleSlug: 'compras',
           tabSlug: 'recepciones',
-          navCounter: (
-            <Suspense fallback={null}>
-              <PurchasesSectionCounter section="receipts" label="Órdenes de compra por recibir" />
-            </Suspense>
-          ),
           content: (
             <SectionErrorBoundary title="No se pudo mostrar Recepciones">
               <Suspense fallback={<PurchasesSectionSkeleton />}>
@@ -117,11 +111,6 @@ export default async function PurchasesComponent({ searchParams }: { searchParam
           label: label(ReceiptText, 'Facturas'),
           moduleSlug: 'compras',
           tabSlug: 'facturas',
-          navCounter: (
-            <Suspense fallback={null}>
-              <PurchasesSectionCounter section="invoices" label="Facturas observadas" />
-            </Suspense>
-          ),
           content: (
             <SectionErrorBoundary title="No se pudo mostrar Facturas">
               <Suspense fallback={<PurchasesSectionSkeleton />}>
@@ -135,11 +124,6 @@ export default async function PurchasesComponent({ searchParams }: { searchParam
           label: label(Banknote, 'Pagos'),
           moduleSlug: 'compras',
           tabSlug: 'pagos',
-          navCounter: (
-            <Suspense fallback={null}>
-              <PurchasesSectionCounter section="payments" label="Comprobantes vencidos sin pagar" />
-            </Suspense>
-          ),
           content: (
             <SectionErrorBoundary title="No se pudo mostrar Pagos">
               <Suspense fallback={<PurchasesSectionSkeleton />}>

@@ -10,15 +10,24 @@ import {
   parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
+import { fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
-import { withCompany } from '@/shared/lib/prisma-tenant';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
-import { equipmentTypeCreateSchema, equipmentTypeUpdateSchema } from '../../lib/catalog-input-schemas';
+import { equipmentTypeCreateSchema } from '../../lib/catalog-input-schemas';
+import {
+  CATALOG_EXPORT_MAX_ROWS,
+  buildIsActiveWhere,
+  catalogExportFailure,
+  catalogTooLargeMessage,
+} from '../../lib/catalog-table.server';
 import { requireConfigTabPermission } from '../../lib/config-access.server';
 import { assertChecklistTemplatesOwned, assertTypesReadable } from '../lib/catalog-guards';
 import { catalogAccessError, catalogReadScope, catalogWriteScope, resolveCatalogAccess } from '../lib/catalog-scope';
 import { effectiveHitchTypeIds } from '../lib/hitch-compatibility';
+import { equipmentTypeUpdateInputSchema, type EquipmentTypeUpdateInput } from './lib/equipment-type-input';
 
 // ============================================================================
 // LOGGER
@@ -36,76 +45,62 @@ const VALID_SORT_FIELDS = new Set(['name', 'is_active', 'applies_to', 'is_tracto
 // WHERE BUILDER — DRY helper compartido por paginated, export y facets
 // ============================================================================
 
-function buildWhereClause(state: ReturnType<typeof parseSearchParams>) {
-  // Búsqueda global
-  const searchWhere = buildSearchWhere(state.search, ['name']);
+/** Claves de filtro que esta tabla realmente usa; el resto de la URL se descarta antes de armar el where. */
+const ALLOWED_FILTER_KEYS = new Set([
+  'is_active',
+  'applies_to',
+  'is_tractor_unit',
+  'name',
+  ...dateRangeKeys(['created_at']),
+]);
 
-  // is_active — booleano nullable, manejo manual
-  const isActiveValues = state.filters['is_active'];
-  const isActiveFilter: Record<string, unknown> = {};
-  if (isActiveValues?.length === 1) {
-    if (isActiveValues[0] === NULL_FILTER_VALUE) {
-      isActiveFilter.is_active = null;
-    } else {
-      isActiveFilter.is_active = isActiveValues[0] === 'true';
-    }
-  } else if (isActiveValues && isActiveValues.length > 1) {
-    const conditions: Array<{ is_active: boolean | null }> = [];
-    for (const v of isActiveValues) {
-      if (v === NULL_FILTER_VALUE) conditions.push({ is_active: null });
-      else conditions.push({ is_active: v === 'true' });
-    }
-    isActiveFilter.OR = conditions;
-  }
+function parseState(searchParams: DataTableSearchParams | undefined) {
+  return sanitizeFilters(parseSearchParams(searchParams ?? {}), ALLOWED_FILTER_KEYS);
+}
 
-  // applies_to — string enum nullable, manejo manual
-  const appliesToValues = state.filters['applies_to'];
-  const appliesToFilter: Record<string, unknown> = {};
-  if (appliesToValues?.length) {
-    const nullIncluded = appliesToValues.includes(NULL_FILTER_VALUE);
-    const realValues = appliesToValues.filter((v) => v !== NULL_FILTER_VALUE);
-    if (nullIncluded && realValues.length > 0) {
-      appliesToFilter.OR = [{ applies_to: { in: realValues } }, { applies_to: null }];
-    } else if (nullIncluded) {
-      appliesToFilter.applies_to = null;
-    } else {
-      appliesToFilter.applies_to = realValues.length === 1 ? realValues[0] : { in: realValues };
-    }
-  }
+/** `where` del filtro facetado de `is_tractor_unit` (booleano nullable): 'true' / 'false' / NULL_FILTER_VALUE. */
+function buildIsTractorUnitWhere(values: string[] | undefined): Record<string, unknown> {
+  if (!values?.length) return {};
+  const toCondition = (value: string) => ({ is_tractor_unit: value === NULL_FILTER_VALUE ? null : value === 'true' });
+  return values.length === 1 ? toCondition(values[0]) : { OR: values.map(toCondition) };
+}
 
-  // is_tractor_unit — booleano nullable, manejo manual
-  const isTractorValues = state.filters['is_tractor_unit'];
-  const isTractorFilter: Record<string, unknown> = {};
-  if (isTractorValues?.length === 1) {
-    if (isTractorValues[0] === NULL_FILTER_VALUE) {
-      isTractorFilter.is_tractor_unit = null;
-    } else {
-      isTractorFilter.is_tractor_unit = isTractorValues[0] === 'true';
-    }
-  } else if (isTractorValues && isTractorValues.length > 1) {
-    const conditions: Array<{ is_tractor_unit: boolean | null }> = [];
-    for (const v of isTractorValues) {
-      if (v === NULL_FILTER_VALUE) conditions.push({ is_tractor_unit: null });
-      else conditions.push({ is_tractor_unit: v === 'true' });
-    }
-    isTractorFilter.OR = conditions;
-  }
+/** `where` del filtro facetado de `applies_to` (enum de texto nullable). */
+function buildAppliesToWhere(values: string[] | undefined): Record<string, unknown> {
+  if (!values?.length) return {};
+  const nullIncluded = values.includes(NULL_FILTER_VALUE);
+  const realValues = values.filter((v) => v !== NULL_FILTER_VALUE);
+  if (nullIncluded && realValues.length > 0) return { OR: [{ applies_to: { in: realValues } }, { applies_to: null }] };
+  if (nullIncluded) return { applies_to: null };
+  return { applies_to: realValues.length === 1 ? realValues[0] : { in: realValues } };
+}
 
-  // Filtros de texto libre por columna
-  const textFiltersWhere = buildTextFiltersWhere(state.filters, ['name']);
-
-  // Filtros de rango de fecha
-  const dateFiltersWhere = buildDateRangeFiltersWhere(state.filters, ['created_at']);
-
+/** Mismo where para lista, export y facets. Los filtros con OR van en AND para que no se pisen. */
+function buildWhereClause(state: ReturnType<typeof parseState>, companyId: string) {
   return {
-    ...searchWhere,
-    ...isActiveFilter,
-    ...appliesToFilter,
-    ...isTractorFilter,
-    ...textFiltersWhere,
-    ...dateFiltersWhere,
+    AND: [
+      buildSearchWhere(state.search, ['name']),
+      buildIsActiveWhere(state.filters['is_active']),
+      buildAppliesToWhere(state.filters['applies_to']),
+      buildIsTractorUnitWhere(state.filters['is_tractor_unit']),
+      buildTextFiltersWhere(state.filters, ['name']),
+      buildDateRangeFiltersWhere(state.filters, ['created_at']),
+      catalogReadScope(companyId),
+    ],
   };
 }
+
+const LIST_SELECT = {
+  id: true,
+  name: true,
+  is_active: true,
+  applies_to: true,
+  is_tractor_unit: true,
+  has_hitch: true,
+  is_operative: true,
+  generates_qr: true,
+  created_at: true,
+} as const;
 
 // ============================================================================
 // QUERY PAGINADA
@@ -114,11 +109,10 @@ function buildWhereClause(state: ReturnType<typeof parseSearchParams>) {
 export async function getEquipmentTypesPaginated(searchParams: DataTableSearchParams) {
   await requireConfigTabPermission('tipos', 'view');
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseState(searchParams);
     const { skip, take } = stateToPrismaParams(state);
 
-    // `buildWhereClause` puede traer su propio `OR`: se combinan con AND para no pisarse.
-    const where = { AND: [buildWhereClause(state), catalogReadScope(await getActiveCompanyId())] };
+    const where = buildWhereClause(state, await getActiveCompanyId());
 
     // Resolución de multi-sort
     const resolvedSorts: Array<Record<string, unknown>> = [];
@@ -136,17 +130,7 @@ export async function getEquipmentTypesPaginated(searchParams: DataTableSearchPa
         take,
         orderBy: safeOrderBy,
         where,
-        select: {
-          id: true,
-          name: true,
-          is_active: true,
-          applies_to: true,
-          is_tractor_unit: true,
-          has_hitch: true,
-          is_operative: true,
-          generates_qr: true,
-          created_at: true,
-        },
+        select: LIST_SELECT,
       }),
       prisma.type.count({ where }),
     ]);
@@ -162,12 +146,13 @@ export async function getEquipmentTypesPaginated(searchParams: DataTableSearchPa
 // EXPORT COMPLETO — sin skip/take, mismos filtros
 // ============================================================================
 
-export async function getAllEquipmentTypesForExport(searchParams: DataTableSearchParams) {
+export async function getAllEquipmentTypesForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<EquipmentTypeListItem[]>> {
   await requireConfigTabPermission('tipos', 'view');
   try {
-    const state = parseSearchParams(searchParams);
-    // `buildWhereClause` puede traer su propio `OR`: se combinan con AND para no pisarse.
-    const where = { AND: [buildWhereClause(state), catalogReadScope(await getActiveCompanyId())] };
+    const state = parseState(searchParams);
+    const where = buildWhereClause(state, await getActiveCompanyId());
 
     const resolvedSorts: Array<Record<string, unknown>> = [];
     for (const s of state.sorting) {
@@ -175,26 +160,23 @@ export async function getAllEquipmentTypesForExport(searchParams: DataTableSearc
         resolvedSorts.push({ [s.id]: s.desc ? 'desc' : 'asc' });
       }
     }
-    const safeOrderBy = [{ is_active: 'desc' as const }, ...resolvedSorts, { name: 'asc' as const }];
+    const safeOrderBy = [
+      { is_active: 'desc' as const },
+      ...resolvedSorts,
+      { name: 'asc' as const },
+      { id: 'asc' as const },
+    ];
 
-    return await prisma.type.findMany({
-      where,
-      orderBy: safeOrderBy,
-      select: {
-        id: true,
-        name: true,
-        is_active: true,
-        applies_to: true,
-        is_tractor_unit: true,
-        has_hitch: true,
-        is_operative: true,
-        generates_qr: true,
-        created_at: true,
-      },
+    const rows = await fetchExportRowsInBatches({
+      maxRows: CATALOG_EXPORT_MAX_ROWS,
+      listIds: (take) => prisma.type.findMany({ where, orderBy: safeOrderBy, select: { id: true }, take }),
+      fetchByIds: (ids) => prisma.type.findMany({ where: { AND: [where, { id: { in: ids } }] }, select: LIST_SELECT }),
+      tooLargeMessage: catalogTooLargeMessage('tipos de unidad'),
     });
+    return { ok: true, data: rows };
   } catch (error) {
     logger.error('Error al exportar tipos de equipo', { data: { error } });
-    throw new Error('No se pudo exportar la lista. Intente nuevamente.');
+    return catalogExportFailure(error, 'la lista de tipos de unidad');
   }
 }
 
@@ -212,7 +194,7 @@ export async function getEquipmentTypeSingleFacet(
 ): Promise<FacetResult | null> {
   await requireConfigTabPermission('tipos', 'view');
   try {
-    const state = searchParams ? parseSearchParams(searchParams) : parseSearchParams({});
+    const state = parseState(searchParams);
 
     // crossWhere: aplica todos los filtros EXCEPTO el de la columna propia
     const crossState = {
@@ -221,7 +203,7 @@ export async function getEquipmentTypeSingleFacet(
     };
     delete crossState.filters[columnId];
 
-    const crossWhere = { AND: [buildWhereClause(crossState), catalogReadScope(await getActiveCompanyId())] };
+    const crossWhere = buildWhereClause(crossState, await getActiveCompanyId());
 
     switch (columnId) {
       case 'is_active': {
@@ -315,24 +297,9 @@ export async function getEquipmentTypeSingleFacet(
 // QUERIES DE CATÁLOGOS (para el formulario)
 // ============================================================================
 
-/** Obtiene todos los checklists activos para el select del formulario */
-export async function getActiveChecklistsForForm() {
-  try {
-    const companyId = await getActiveCompanyId();
-    const data = await prisma.checklist_templates.findMany({
-      where: withCompany({ is_active: true }, companyId),
-      select: { id: true, name: true, code: true },
-      orderBy: { name: 'asc' },
-    });
-    return data;
-  } catch (error) {
-    logger.error('Error al obtener checklists activos', { data: { error } });
-    return [];
-  }
-}
-
 /** Obtiene los IDs de checklists asignados a un tipo */
 export async function getChecklistIdsForType(typeId: string): Promise<string[]> {
+  await requireConfigTabPermission('tipos', 'view');
   try {
     const data = await prisma.checklist_template_types.findMany({
       where: { type_id: typeId },
@@ -347,6 +314,7 @@ export async function getChecklistIdsForType(typeId: string): Promise<string[]> 
 
 /** Obtiene los IDs de tipos de enganche compatibles para un tipo */
 export async function getHitchTypeIdsForType(typeId: string): Promise<string[]> {
+  await requireConfigTabPermission('tipos', 'view');
   try {
     const data = await prisma.type_hitch_types.findMany({
       where: { type_id: typeId },
@@ -361,6 +329,7 @@ export async function getHitchTypeIdsForType(typeId: string): Promise<string[]> 
 
 /** Obtiene todos los tipos activos (para el multi-select de enganche) */
 export async function getAllActiveTypes() {
+  await requireConfigTabPermission('tipos', 'view');
   try {
     const companyId = await getActiveCompanyId();
     const data = await prisma.type.findMany({
@@ -404,42 +373,46 @@ export async function createEquipmentType(formData: EquipmentTypeFormData) {
       assertChecklistTemplatesOwned(companyId, formData.checklist_ids),
     ]);
 
-    const created = await prisma.type.create({
-      data: {
-        ...catalogWriteScope(companyId),
-        name: formData.name,
-        applies_to: formData.applies_to,
-        is_active: formData.is_active,
-        is_operative: formData.applies_to === 'other_equipment' ? formData.is_operative : false,
-        is_tractor_unit: formData.is_tractor_unit,
-        has_hitch: formData.is_tractor_unit ? formData.has_hitch : false,
-      },
-      select: { id: true },
+    // Tipo y relaciones en una sola transacción: no queda un tipo creado sin sus enganches/checklists.
+    const created = await prisma.$transaction(async (tx) => {
+      const type = await tx.type.create({
+        data: {
+          ...catalogWriteScope(companyId),
+          name: formData.name,
+          applies_to: formData.applies_to,
+          is_active: formData.is_active,
+          is_operative: formData.applies_to === 'other_equipment' ? formData.is_operative : false,
+          is_tractor_unit: formData.is_tractor_unit,
+          has_hitch: formData.is_tractor_unit ? formData.has_hitch : false,
+        },
+        select: { id: true },
+      });
+
+      // En el alta todo es "add"
+      if (hitchTypeIds.length > 0) {
+        await tx.type_hitch_types.createMany({
+          data: hitchTypeIds.map((compatible_type_id) => ({
+            type_id: type.id,
+            compatible_type_id,
+            company_id: companyId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      if (formData.checklist_ids.length > 0) {
+        await tx.checklist_template_types.createMany({
+          data: formData.checklist_ids.map((template_id) => ({
+            type_id: type.id,
+            template_id,
+            company_id: companyId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      return type;
     });
-
-    // Crear relaciones de enganche
-    if (hitchTypeIds.length > 0) {
-      await prisma.type_hitch_types.createMany({
-        data: hitchTypeIds.map((compatible_type_id) => ({
-          type_id: created.id,
-          compatible_type_id,
-          company_id: companyId,
-        })),
-        skipDuplicates: true,
-      });
-    }
-
-    // Crear relaciones de checklists
-    if (formData.checklist_ids.length > 0) {
-      await prisma.checklist_template_types.createMany({
-        data: formData.checklist_ids.map((template_id) => ({
-          type_id: created.id,
-          template_id,
-          company_id: companyId,
-        })),
-        skipDuplicates: true,
-      });
-    }
 
     revalidatePath('/dashboard/configuration');
     return { success: true, id: created.id };
@@ -449,9 +422,14 @@ export async function createEquipmentType(formData: EquipmentTypeFormData) {
   }
 }
 
-export async function updateEquipmentType(formData: EquipmentTypeFormData & { id: string }) {
+/**
+ * Actualiza el tipo y sus relaciones M:M con altas/bajas explícitas (`hitches`, `checklists`).
+ * Todo ocurre en una transacción; el `deleteMany` queda acotado a los ids de `remove`.
+ * Devuelve las cantidades reales agregadas/quitadas.
+ */
+export async function updateEquipmentType(input: EquipmentTypeUpdateInput) {
   await requireConfigTabPermission('tipos', 'update');
-  formData = equipmentTypeUpdateSchema.parse(formData);
+  const formData = equipmentTypeUpdateInputSchema.parse(input);
   try {
     const companyId = await getActiveCompanyId();
 
@@ -463,53 +441,71 @@ export async function updateEquipmentType(formData: EquipmentTypeFormData & { id
     );
     if (accessError) throw new Error(accessError);
 
-    // Los ids llegan del cliente: se validan contra la empresa antes de escribir las pivotes.
-    const hitchTypeIds = effectiveHitchTypeIds(formData, formData.hitch_type_ids);
+    // Si el tipo dejó de ser tractor o de llevar enganche, no se agregan enganches (las bajas sí se respetan).
+    const hitchAdd = effectiveHitchTypeIds(formData, formData.hitches.add);
+    const hitchRemove = Array.from(new Set(formData.hitches.remove));
+    const checklistAdd = Array.from(new Set(formData.checklists.add));
+    const checklistRemove = Array.from(new Set(formData.checklists.remove));
+
+    // Los ids que se agregan llegan del cliente: se validan contra la empresa antes de escribir.
     await Promise.all([
-      assertTypesReadable(companyId, hitchTypeIds),
-      assertChecklistTemplatesOwned(companyId, formData.checklist_ids),
+      assertTypesReadable(companyId, hitchAdd),
+      assertChecklistTemplatesOwned(companyId, checklistAdd),
     ]);
 
-    await prisma.type.update({
-      where: { id: formData.id },
-      data: {
-        name: formData.name,
-        applies_to: formData.applies_to,
-        is_active: formData.is_active,
-        is_operative: formData.applies_to === 'other_equipment' ? formData.is_operative : false,
-        is_tractor_unit: formData.is_tractor_unit,
-        has_hitch: formData.is_tractor_unit ? formData.has_hitch : false,
-      },
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.type.update({
+        where: { id: formData.id },
+        data: {
+          name: formData.name,
+          applies_to: formData.applies_to,
+          is_active: formData.is_active,
+          is_operative: formData.applies_to === 'other_equipment' ? formData.is_operative : false,
+          is_tractor_unit: formData.is_tractor_unit,
+          has_hitch: formData.is_tractor_unit ? formData.has_hitch : false,
+        },
+      });
+
+      const removedHitches = hitchRemove.length
+        ? await tx.type_hitch_types.deleteMany({
+            where: { type_id: formData.id, compatible_type_id: { in: hitchRemove } },
+          })
+        : { count: 0 };
+      const addedHitches = hitchAdd.length
+        ? await tx.type_hitch_types.createMany({
+            data: hitchAdd.map((compatible_type_id) => ({
+              type_id: formData.id,
+              compatible_type_id,
+              company_id: companyId,
+            })),
+            skipDuplicates: true,
+          })
+        : { count: 0 };
+
+      const removedChecklists = checklistRemove.length
+        ? await tx.checklist_template_types.deleteMany({
+            where: { type_id: formData.id, template_id: { in: checklistRemove } },
+          })
+        : { count: 0 };
+      const addedChecklists = checklistAdd.length
+        ? await tx.checklist_template_types.createMany({
+            data: checklistAdd.map((template_id) => ({
+              type_id: formData.id,
+              template_id,
+              company_id: companyId,
+            })),
+            skipDuplicates: true,
+          })
+        : { count: 0 };
+
+      return {
+        hitches: { added: addedHitches.count, removed: removedHitches.count },
+        checklists: { added: addedChecklists.count, removed: removedChecklists.count },
+      };
     });
 
-    // Actualizar relaciones de enganche: delete + insert
-    await prisma.type_hitch_types.deleteMany({ where: { type_id: formData.id } });
-    if (hitchTypeIds.length > 0) {
-      await prisma.type_hitch_types.createMany({
-        data: hitchTypeIds.map((compatible_type_id) => ({
-          type_id: formData.id,
-          compatible_type_id,
-          company_id: companyId,
-        })),
-        skipDuplicates: true,
-      });
-    }
-
-    // Actualizar relaciones de checklists: delete + insert
-    await prisma.checklist_template_types.deleteMany({ where: { type_id: formData.id } });
-    if (formData.checklist_ids.length > 0) {
-      await prisma.checklist_template_types.createMany({
-        data: formData.checklist_ids.map((template_id) => ({
-          type_id: formData.id,
-          template_id,
-          company_id: companyId,
-        })),
-        skipDuplicates: true,
-      });
-    }
-
     revalidatePath('/dashboard/configuration');
-    return { success: true };
+    return { success: true, ...result };
   } catch (error) {
     logger.error('Error al actualizar tipo de equipo', { data: { error } });
     throw error instanceof Error ? error : new Error('No se pudo actualizar el tipo de equipo. Intente nuevamente.');

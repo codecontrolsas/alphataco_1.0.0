@@ -21,6 +21,7 @@ const SERVICE_LABELS: Record<string, string> = {
   mensual: 'Mensual',
   adicional: 'Adicional',
   adicional_permanente: 'Adicional Permanente',
+  sin_tipo: 'Sin tipo',
 };
 
 interface Props {
@@ -101,8 +102,8 @@ export function ServicesSection({ date, today, servicesSummary, clientDetail }: 
               <div className="mb-2 flex items-center gap-1">
                 <h4 className="text-sm font-medium">Por tipo de servicio</h4>
                 <InfoTip label="Cómo se calcula «Por tipo de servicio»">
-                  Servicios de hoy (hora argentina) en estado pendiente o ejecutado que tienen tipo informado. El
-                  porcentaje es sobre todos los servicios del día, incluso los sin tipo, así que puede no sumar 100 %.
+                  Servicios de hoy (hora argentina) en estado pendiente o ejecutado, los mismos que cuenta la tarjeta de
+                  servicios. Los que no tienen tipo informado figuran como «Sin tipo».
                 </InfoTip>
               </div>
               {servicesSummary === null ? (
@@ -157,8 +158,8 @@ export function ServicesSection({ date, today, servicesSummary, clientDetail }: 
               <div className="mb-3 flex items-center gap-1">
                 <h4 className="text-sm font-medium">Distribución por Cliente</h4>
                 <InfoTip label="Cómo se calcula «Distribución por Cliente»">
-                  Sólo servicios de hoy (pendientes o ejecutados) con cliente y de tipo mensual o adicional. Puede dar
-                  menos que el KPI «Servicios del día», que cuenta todos.
+                  Los mismos servicios de hoy (pendientes o ejecutados) que cuenta la tarjeta, por cliente. Los que no
+                  tienen cliente figuran como «Sin cliente».
                 </InfoTip>
               </div>
               {clientDetail === null ? (

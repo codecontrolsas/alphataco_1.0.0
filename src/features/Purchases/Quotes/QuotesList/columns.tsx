@@ -1,12 +1,12 @@
 'use client';
 
-import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
-import type { ColumnDef } from '@tanstack/react-table';
 import { StackedCell } from '@/shared/components/common/StackedCell';
 import { argentinaDate, formatArgentinaDay } from '@/shared/lib/argentina-time';
+import type { ColumnDef } from '@tanstack/react-table';
 import moment from 'moment';
 import Link from 'next/link';
+import { PriceText } from '../../components/PriceText';
 import { PurchaseQuoteStatusBadge } from '../components/PurchaseQuoteStatusBadge';
 import type { PurchaseQuoteListItem } from './actions.server';
 
@@ -20,7 +20,7 @@ const formatDateOnly = (value: Date | string | null) => (value ? moment.utc(valu
 const isExpired = (value: Date | string | null) =>
   value != null && moment.utc(value).format('YYYY-MM-DD') < argentinaDate();
 
-export function getColumns(): ColumnDef<PurchaseQuoteListItem>[] {
+export function getColumns({ canViewPrices }: { canViewPrices: boolean }): ColumnDef<PurchaseQuoteListItem>[] {
   return [
     {
       id: 'number',
@@ -106,7 +106,7 @@ export function getColumns(): ColumnDef<PurchaseQuoteListItem>[] {
       // Derivado de las lineas (no es columna de BD): ni se ordena ni se filtra en el servidor.
       enableSorting: false,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Total cotizado" />,
-      cell: ({ row }) => <span className="tabular-nums">{formatMoney(row.original.total_quoted)}</span>,
+      cell: ({ row }) => <PriceText value={row.original.total_quoted} canViewPrices={canViewPrices} />,
     },
     {
       id: 'requests',

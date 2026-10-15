@@ -8,14 +8,15 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import type { LucideIcon } from 'lucide-react';
 import { AlertTriangle, CheckCircle2, CircleOff, XCircle } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
+import type { EmployeeExpiringDocListItem } from '../lib/expiring-docs-types';
 import {
   getAllEmployeeExpiringDocsForExport,
   getEmployeeExpiringDocsPaginated,
   getEmployeeExpiringDocsSingleFacet,
-  type EmployeeExpiringDocListItem,
 } from './actions.server';
 import { HIDDEN_COLUMNS_BY_DEFAULT, columns, stateLabels } from './columns';
 
@@ -194,7 +195,7 @@ export function _EmployeeExpiringDocsDataTable({
   // ── Configuración de export ──────────────────────────────────────────────
   const exportConfig = useMemo(
     () => ({
-      fetchAllData: () => getAllEmployeeExpiringDocsForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllEmployeeExpiringDocsForExport(currentParams)),
       options: {
         filename: 'documentos-empleados-por-vencer',
         title: 'Documentos de Empleados por Vencer',

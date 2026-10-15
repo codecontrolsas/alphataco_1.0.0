@@ -18,21 +18,25 @@ export async function EquipmentFleetSection() {
   // Pre-compute fleet metrics with SINGLE LOOP (not 4 separate .reduce())
   let totalActive = 0;
   let totalInUse = 0;
+  let totalCancelled = 0;
   let totalNotAvailable = 0;
 
   // Motor units (Chasis & Tractor) — separate metrics
   let motorActive = 0;
   let motorInUse = 0;
+  let motorCancelled = 0;
   let motorNotAvailable = 0;
 
   for (const item of equipmentData) {
     totalActive += item.available_units;
     totalInUse += item.used_units;
+    totalCancelled += item.cancelled_units;
     totalNotAvailable += item.not_available_units;
 
     if (MOTOR_UNIT_TYPES.includes(item.type_name.toLowerCase())) {
       motorActive += item.available_units;
       motorInUse += item.used_units;
+      motorCancelled += item.cancelled_units;
       motorNotAvailable += item.not_available_units;
     }
   }
@@ -52,11 +56,13 @@ export async function EquipmentFleetSection() {
       totalActive={totalActive}
       totalNotAvailable={totalNotAvailable}
       totalInUse={totalInUse}
+      totalCancelled={totalCancelled}
       totalFleet={totalFleet}
       operativityPercent={operativityPercent}
       usagePercent={usagePercent}
       motorActive={motorActive}
       motorInUse={motorInUse}
+      motorCancelled={motorCancelled}
       motorNotAvailable={motorNotAvailable}
       motorFleet={motorFleet}
       motorOperativityPercent={motorOperativityPercent}

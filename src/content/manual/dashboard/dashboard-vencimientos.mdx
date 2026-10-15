@@ -2,14 +2,14 @@
 title: Próximos vencimientos
 summary: Los documentos de empleados y equipos que vencen en los próximos 30 días (y los ya vencidos), para renovarlos a tiempo.
 keywords: vencimientos, vence, documentos por vencer, vencidos, 30 días, renovar, alertas, dashboard
-updated: 2026-10-07
+updated: 2026-10-15
 ---
 
 Esta pantalla es la agenda de renovaciones: junta en un solo lugar todos los documentos de empleados y de equipos que vencen en los próximos 30 días, más los que ya vencieron y siguen sin renovar. La usa Control Documental para anticiparse antes de que un empleado o un equipo quede con la documentación vencida.
 
 <OpenScreen />
 
-Se entra desde el menú lateral, en **Dashboard → Documentación**. La tarjeta **Proximos vencimientos** (**Documentos que vencen en los proximos 30 dias**) tiene dos solapas: **Empleados** y **Vehículos**.
+Es el tablero **Vencimientos**: se entra desde el menú lateral, en **Dashboard → Vencimientos**, o desde el selector **Tablero** (ver <GuideLink to="dashboard-tableros">Tableros del Dashboard</GuideLink>). La tarjeta **Proximos vencimientos** (**Documentos que vencen en los proximos 30 dias**) tiene dos solapas: **Empleados** y **Vehículos**.
 
 ## Qué documentos aparecen
 
@@ -24,14 +24,14 @@ Se ordenan por fecha de vencimiento, del más próximo (o el más atrasado) al m
 
 ## Solapa Empleados
 
-| Columna | Qué muestra |
-|---|---|
-| **Legajo** | Número de legajo del empleado. |
-| **Empleado** | Nombre. Hacé clic para abrir su ficha. |
-| **Tipo de Documento** | Qué documento vence. |
-| **Vencimiento** | La fecha. En **rojo** con un ícono de advertencia si ya venció; en **naranja** si vence en 7 días o menos. |
-| **Estado** | **Presentado**, **Aprobado**, **Rechazado**, **Vencido** o **Pendiente**. |
-| **Subido el** | Oculta por defecto. |
+| Columna               | Qué muestra                                                                                                |
+| --------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **Legajo**            | Número de legajo del empleado.                                                                             |
+| **Empleado**          | Nombre. Hacé clic para abrir su ficha.                                                                     |
+| **Tipo de Documento** | Qué documento vence.                                                                                       |
+| **Vencimiento**       | La fecha. En **rojo** con un ícono de advertencia si ya venció; en **naranja** si vence en 7 días o menos. |
+| **Estado**            | **Presentado**, **Aprobado**, **Rechazado**, **Vencido** o **Pendiente**.                                  |
+| **Subido el**         | Oculta por defecto.                                                                                        |
 
 Al final de cada fila, **Ver documento** abre el detalle del documento.
 
@@ -43,12 +43,12 @@ Si no hay nada, dice **No hay documentos de empleados por vencer**.
 
 ## Solapa Vehículos
 
-| Columna | Qué muestra |
-|---|---|
-| **Equipo** | Dominio (o número interno, o serie, si no tiene dominio). Hacé clic para abrir su ficha. |
-| **Subtipo** | Subtipo del equipo. |
-| **Propietario** | Titular del equipo; los propios llevan la etiqueta **Propio**. |
-| **Tipo de Documento**, **Vencimiento**, **Estado**, **Subido el** | Igual que en empleados. |
+| Columna                                                           | Qué muestra                                                                              |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **Equipo**                                                        | Dominio (o número interno, o serie, si no tiene dominio). Hacé clic para abrir su ficha. |
+| **Subtipo**                                                       | Subtipo del equipo.                                                                      |
+| **Propietario**                                                   | Titular del equipo; los propios llevan la etiqueta **Propio**.                           |
+| **Tipo de Documento**, **Vencimiento**, **Estado**, **Subido el** | Igual que en empleados.                                                                  |
 
 - Buscador: **Buscar por equipo o tipo de documento...**
 - Filtros visibles: **Estado**, **Tipo de Documento**, **Vencimiento** y **Dominio**. También se pueden sumar **Subtipo**, **Propietario** y **Subido el**.
@@ -59,19 +59,17 @@ Si no hay nada, dice **No hay documentos de equipos por vencer**.
 ## Cómo renovar un documento que vence
 
 <Steps>
-  <Step title="Ubicá el documento">
-    Filtrá por **Vencimiento** o mirá las fechas en naranja y rojo.
-  </Step>
-  <Step title="Abrilo">
-    Hacé clic en **Ver documento**.
-  </Step>
+  <Step title="Ubicá el documento">Filtrá por **Vencimiento** o mirá las fechas en naranja y rojo.</Step>
+  <Step title="Abrilo">Hacé clic en **Ver documento**.</Step>
   <Step title="Subí la versión nueva">
-    En el detalle del documento, reemplazalo por el nuevo con su nueva fecha de vencimiento (ver <GuideLink to="detalle-de-documento">Detalle de documento</GuideLink>). Con la fecha nueva, sale de esta lista.
+    En el detalle del documento, reemplazalo por el nuevo con su nueva fecha de vencimiento (ver{' '}
+    <GuideLink to="detalle-de-documento">Detalle de documento</GuideLink>). Con la fecha nueva, sale de esta lista.
   </Step>
 </Steps>
 
 <Callout type="tip" title="Una revisión semanal alcanza">
-Como la lista mira 30 días hacia adelante, revisarla una vez por semana deja tiempo de sobra para pedir y cargar las renovaciones antes de que venzan.
+  Como la lista mira 30 días hacia adelante, revisarla una vez por semana deja tiempo de sobra para pedir y cargar las
+  renovaciones antes de que venzan.
 </Callout>
 
 ## Cómo se conecta con el resto del sistema

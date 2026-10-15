@@ -1,19 +1,20 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import {
-  buildDateRangeFiltersWhere,
-  buildFiltersWhere,
-  buildSearchWhere,
-  buildTextFiltersWhere,
-  NULL_FILTER_VALUE,
-  parseSearchParams,
-  stateToPrismaParams,
-} from '@/shared/components/common/DataTable/helpers';
+import { NULL_FILTER_VALUE, stateToPrismaParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { requireConfigTabPermission } from '../../lib/config-access.server';
+import { CATALOG_EXPORT_MAX_ROWS, catalogExportFailure, catalogTooLargeMessage } from '../../lib/catalog-table.server';
+import { configPermissionError, requireConfigTabPermission } from '../../lib/config-access.server';
+import {
+  EXTERNAL_API_CLIENT_SELECT,
+  buildWhereClause,
+  parseClientsState,
+  resolveSafeOrderBy,
+} from './lib/clients-where';
 
 const logger = new Logger('AccesosExternos/list/actions.server');
 
@@ -21,113 +22,8 @@ const logger = new Logger('AccesosExternos/list/actions.server');
  * Listado paginado de accesos externos (ticket 671).
  *
  * REGLA DE SEGURIDAD DURA: `secret_hash` NUNCA debe aparecer en ningun `select`
- * de este archivo, ni en columnas ni en export. Solo `secret_prefix`.
+ * de este archivo ni de `lib/clients-where.ts`. Solo `secret_prefix`.
  */
-
-// ============================================================================
-// CONSTANTS
-// ============================================================================
-
-/** Campos ordenables server-side. `status` y `creator` se resuelven via mapeo */
-const VALID_SORT_FIELDS = new Set(['name', 'client_id', 'status', 'last_used_at', 'created_at', 'creator', 'notes']);
-
-/** columnId → campo real de Prisma, para columnas directas cuyo nombre difiere */
-const SORT_FIELD_MAP: Record<string, string> = {
-  status: 'revoked_at',
-};
-
-/** columnId → orderBy de Prisma con relacion, para columnas FK */
-const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Record<string, unknown>> = {
-  creator: (dir) => ({ creator: { fullname: dir } }),
-};
-
-/** Columnas con filtro de texto libre (contains insensitive) */
-const TEXT_FILTER_COLUMNS = ['name', 'client_id', 'notes'];
-
-/** Columnas con filtro de rango de fechas */
-const DATE_RANGE_COLUMNS = ['last_used_at', 'created_at'];
-
-/**
- * Mapping de columnId (URL) → campo real en Prisma.
- * `status` NO tiene entrada aca: es una columna derivada de `revoked_at` y se
- * maneja completamente a mano (ver MANUALLY_HANDLED en buildWhereClause).
- */
-const COLUMN_MAP: Record<string, string> = {
-  creator: 'created_by',
-};
-
-/**
- * Select comun — NUNCA agregar `secret_hash` aqui.
- * `secret_prefix` no se pide en esta tabla (no hay columna que lo muestre);
- * si se necesita en el futuro, agregarlo aca junto con su columna.
- */
-const EXTERNAL_API_CLIENT_SELECT = {
-  id: true,
-  name: true,
-  client_id: true,
-  revoked_at: true,
-  last_used_at: true,
-  notes: true,
-  created_at: true,
-  creator: { select: { id: true, fullname: true } },
-} as const;
-
-// ============================================================================
-// HELPERS INTERNOS
-// ============================================================================
-
-function buildWhereClause(companyId: string, state: ReturnType<typeof parseSearchParams>) {
-  const searchWhere = buildSearchWhere(state.search, ['name', 'client_id']);
-
-  // `status` es derivado de `revoked_at` — se maneja a mano, nunca via buildFiltersWhere
-  const MANUALLY_HANDLED = ['status'];
-
-  const filtersWhere = buildFiltersWhere(state.filters, COLUMN_MAP, {
-    exclude: [
-      ...TEXT_FILTER_COLUMNS,
-      ...MANUALLY_HANDLED,
-      ...DATE_RANGE_COLUMNS.flatMap((c) => [`${c}_from`, `${c}_to`]),
-    ],
-  });
-
-  const textFiltersWhere = buildTextFiltersWhere(state.filters, TEXT_FILTER_COLUMNS);
-  const dateFiltersWhere = buildDateRangeFiltersWhere(state.filters, DATE_RANGE_COLUMNS);
-
-  // Filtro "Estado" (activo/revocado) — traducido a revoked_at null / not null.
-  // Si el usuario selecciona ambas opciones (o ninguna) no se filtra: coincide con todos.
-  const statusFilters: Record<string, unknown> = {};
-  const statusValues = state.filters['status'];
-  if (statusValues?.length === 1) {
-    statusFilters.revoked_at = statusValues[0] === 'active' ? null : { not: null };
-  }
-
-  return {
-    company_id: companyId,
-    ...searchWhere,
-    ...filtersWhere,
-    ...textFiltersWhere,
-    ...dateFiltersWhere,
-    ...statusFilters,
-  };
-}
-
-function resolveSafeOrderBy(state: ReturnType<typeof parseSearchParams>) {
-  const resolvedSorts: Record<string, unknown>[] = [];
-  for (const s of state.sorting) {
-    if (!VALID_SORT_FIELDS.has(s.id)) continue;
-    const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-    const fkMapper = FK_SORT_MAP[s.id];
-    if (fkMapper) {
-      resolvedSorts.push(fkMapper(dir));
-      continue;
-    }
-    const field = SORT_FIELD_MAP[s.id] ?? s.id;
-    resolvedSorts.push({ [field]: dir });
-  }
-  // Los accesos revocados (is_active: false) siempre quedan al final,
-  // independientemente del orden que elija el usuario.
-  return [{ is_active: 'desc' as const }, ...resolvedSorts, { created_at: 'desc' as const }];
-}
 
 function toFacetMap(rows: { key: string | null | undefined; count: number }[]): Map<string, number> {
   const map = new Map<string, number>();
@@ -146,16 +42,15 @@ export async function getExternalApiClientsPaginated(searchParams: DataTableSear
   const companyId = await getActiveCompanyId();
 
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseClientsState(searchParams);
     const { skip, take } = stateToPrismaParams(state);
     const where = buildWhereClause(companyId, state);
-    const safeOrderBy = resolveSafeOrderBy(state);
 
     const [data, total] = await Promise.all([
       prisma.external_api_clients.findMany({
         skip,
         take,
-        orderBy: safeOrderBy,
+        orderBy: resolveSafeOrderBy(state),
         where,
         select: EXTERNAL_API_CLIENT_SELECT,
       }),
@@ -169,29 +64,36 @@ export async function getExternalApiClientsPaginated(searchParams: DataTableSear
   }
 }
 
-export type ExternalApiClientListItem = Awaited<ReturnType<typeof getExternalApiClientsPaginated>>['data'][number];
-
 // ============================================================================
-// EXPORT QUERY (sin paginacion)
+// EXPORT QUERY (sin paginacion, con tope)
 // ============================================================================
 
-export async function getAllExternalApiClientsForExport(searchParams: DataTableSearchParams) {
-  await requireConfigTabPermission('accesos-externos', 'view');
-  const companyId = await getActiveCompanyId();
+export async function getAllExternalApiClientsForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<Awaited<ReturnType<typeof getExternalApiClientsPaginated>>['data']>> {
+  const denied = await configPermissionError('accesos-externos', 'view');
+  if (denied) return { ok: false, message: denied };
 
   try {
-    const state = parseSearchParams(searchParams);
+    const companyId = await getActiveCompanyId();
+    const state = parseClientsState(searchParams);
     const where = buildWhereClause(companyId, state);
-    const safeOrderBy = resolveSafeOrderBy(state);
+    const orderBy = [...resolveSafeOrderBy(state), { id: 'asc' as const }];
 
-    return await prisma.external_api_clients.findMany({
-      where,
-      orderBy: safeOrderBy,
-      select: EXTERNAL_API_CLIENT_SELECT,
+    const rows = await fetchExportRowsInBatches({
+      maxRows: CATALOG_EXPORT_MAX_ROWS,
+      listIds: (take) => prisma.external_api_clients.findMany({ where, orderBy, select: { id: true }, take }),
+      fetchByIds: (ids) =>
+        prisma.external_api_clients.findMany({
+          where: { AND: [where, { id: { in: ids } }] },
+          select: EXTERNAL_API_CLIENT_SELECT,
+        }),
+      tooLargeMessage: catalogTooLargeMessage('accesos externos'),
     });
+    return { ok: true, data: rows };
   } catch (error) {
     logger.error('Error al exportar accesos externos', { data: { error } });
-    throw new Error('No se pudo exportar el listado de accesos externos');
+    return catalogExportFailure(error, 'el listado de accesos externos');
   }
 }
 
@@ -200,8 +102,8 @@ export async function getAllExternalApiClientsForExport(searchParams: DataTableS
 // ============================================================================
 
 /**
- * Obtiene opciones y counts para UN SOLO filtro facetado, con cross-filtering.
- * Cada filtro del cliente llama a esta funcion al abrirse (lazy-load).
+ * Obtiene opciones y counts para UN SOLO filtro facetado, con cross-filtering
+ * (todos los filtros activos menos el de la propia columna).
  */
 export async function getExternalApiClientsSingleFacet(
   columnId: string,
@@ -212,32 +114,20 @@ export async function getExternalApiClientsSingleFacet(
 } | null> {
   await requireConfigTabPermission('accesos-externos', 'view');
   const companyId = await getActiveCompanyId();
-  const baseWhere = { company_id: companyId };
-
-  let parsedState: ReturnType<typeof parseSearchParams> | null = null;
-  if (searchParams && Object.keys(searchParams).length > 0) {
-    parsedState = parseSearchParams(searchParams);
-  }
-
-  const hasActiveFilters = parsedState && (Object.keys(parsedState.filters).length > 0 || parsedState.search);
-
-  function crossWhere(excludeColumn: string) {
-    if (!parsedState || !hasActiveFilters) return baseWhere;
-    const modified = { ...parsedState, filters: { ...parsedState.filters } };
-    delete modified.filters[excludeColumn];
-    delete modified.filters[`${excludeColumn}_from`];
-    delete modified.filters[`${excludeColumn}_to`];
-    return buildWhereClause(companyId, modified);
-  }
 
   try {
-    const where = crossWhere(columnId);
+    const state = parseClientsState(searchParams);
+    const crossState = { ...state, filters: { ...state.filters } };
+    delete crossState.filters[columnId];
+    delete crossState.filters[`${columnId}_from`];
+    delete crossState.filters[`${columnId}_to`];
+    const where = buildWhereClause(companyId, crossState);
 
     // ── Estado (derivado de revoked_at) ──────────────────────────────────────
     if (columnId === 'status') {
       const [activeCount, revokedCount] = await Promise.all([
-        prisma.external_api_clients.count({ where: { ...where, revoked_at: null } }),
-        prisma.external_api_clients.count({ where: { ...where, revoked_at: { not: null } } }),
+        prisma.external_api_clients.count({ where: { AND: [where, { revoked_at: null }] } }),
+        prisma.external_api_clients.count({ where: { AND: [where, { revoked_at: { not: null } }] } }),
       ]);
       const counts = new Map<string, number>();
       if (activeCount > 0) counts.set('active', activeCount);
@@ -247,13 +137,9 @@ export async function getExternalApiClientsSingleFacet(
 
     // ── Creado por (FK nullable a profile) ───────────────────────────────────
     if (columnId === 'creator') {
-      const rows = await prisma.external_api_clients.groupBy({
-        by: ['created_by'],
-        where,
-        _count: true,
-      });
+      const rows = await prisma.external_api_clients.groupBy({ by: ['created_by'], where, _count: true });
       const counts = toFacetMap(rows.map((r) => ({ key: r.created_by, count: r._count })));
-      const ids = rows.map((r) => r.created_by).filter(Boolean) as string[];
+      const ids = rows.map((r) => r.created_by).filter((id): id is string => Boolean(id));
       const resolvedOptions =
         ids.length > 0
           ? (await prisma.profile.findMany({ where: { id: { in: ids } }, select: { id: true, fullname: true } })).map(

@@ -9,12 +9,14 @@ import type {
 } from '@/shared/components/common/DataTable';
 import { DataTable } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Ban, CheckCircle2, CircleOff, Shield } from 'lucide-react';
-import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
-import type { CompanyUserListItem } from '../actions.server';
-import { getAllCompanyUsersForExport, getCompanyUserSingleFacet, getCompanyUsersPaginated } from '../actions.server';
+import { getAllCompanyUsersForExport, getCompanyUsersPaginated } from '../actions.server';
 import { CreateUserModal } from '../components/create-user-modal';
+import { getCompanyUserSingleFacet } from '../facets.server';
+import type { CompanyUserListItem } from '../lib/users-types';
 import { getCompanyUsersColumns } from './columns';
 
 const TABLE_ID = 'company-users';
@@ -188,7 +190,7 @@ export function _UsersDataTable({
         sheetName: 'Usuarios',
         title: 'Usuarios de la Empresa',
       },
-      fetchAllData: () => getAllCompanyUsersForExport(companyId, currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllCompanyUsersForExport(companyId, currentParams)),
       formatters: {
         fullname: (_val: unknown, row: CompanyUserListItem) => row.profile?.fullname ?? '',
         email: (_val: unknown, row: CompanyUserListItem) => row.profile?.email ?? '',
@@ -208,7 +210,7 @@ export function _UsersDataTable({
           return `[${emp.file}] ${emp.lastname ?? ''} ${emp.firstname ?? ''}`.trim();
         },
         created_at: (_val: unknown, row: CompanyUserListItem) =>
-          row.created_at && row.created_at.getTime() !== 0 ? moment(row.created_at).format('DD/MM/YYYY') : '',
+          row.created_at && row.created_at.getTime() !== 0 ? formatArgentinaDay(row.created_at) : '',
       } as Record<string, (value: unknown, row: CompanyUserListItem) => string>,
     }),
     [companyId, currentParams]

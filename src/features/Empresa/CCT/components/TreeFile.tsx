@@ -21,13 +21,9 @@ export const TreeNode: React.FC<TreeNodeProps> = ({ node, level }) => {
 
   const renderIcon = () => {
     if (node.children) {
-      return isOpen ? (
-        <FolderOpen className="h-4 w-4 text-yellow-500" />
-      ) : (
-        <FolderClosed className="h-4 w-4 text-yellow-500" />
-      );
+      return isOpen ? <FolderOpen className="h-4 w-4 text-warn" /> : <FolderClosed className="h-4 w-4 text-warn" />;
     }
-    return <FileText className="h-4 w-4 text-blue-500" />;
+    return <FileText className="h-4 w-4 text-info" />;
   };
 
   return (

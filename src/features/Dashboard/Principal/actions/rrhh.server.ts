@@ -18,7 +18,7 @@ import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { getOperationToday, getTodayParts } from '../lib/dashboard-dates';
+import { CANCELLED_ROW_STATUS, getOperationToday, getTodayParts } from '../lib/dashboard-dates';
 import { aggregateDiagramIndicators } from '../lib/indicators';
 import { positionFilter, sanitizePositionIds } from '../lib/position-filter';
 import { toFacetMap } from '../lib/row-mapping';
@@ -50,7 +50,7 @@ export async function getEmployeeIndicators(positionIds?: string[]): Promise<Emp
     const todayDate = getOperationToday();
     const positions = sanitizePositionIds(positionIds);
 
-    const [operativeDiagrams, usedRelations] = await Promise.all([
+    const [operativeDiagrams, reportRelations] = await Promise.all([
       prisma.employees_diagram.findMany({
         where: {
           day,
@@ -62,6 +62,8 @@ export async function getEmployeeIndicators(positionIds?: string[]): Promise<Emp
         select: { employee_id: true },
         distinct: ['employee_id'],
       }),
+      // Todas las filas de hoy con su estado: las canceladas no ponen al empleado en operación,
+      // pero se informan aparte (quién quedó afuera por una cancelación).
       prisma.dailyreportemployeerelations.findMany({
         where: {
           employee_id: { not: null },
@@ -70,17 +72,31 @@ export async function getEmployeeIndicators(positionIds?: string[]): Promise<Emp
           },
           employees: { is_active: true, ...positionFilter(positions) },
         },
-        select: { employee_id: true },
-        distinct: ['employee_id'],
+        select: { employee_id: true, dailyreportrows: { select: { status: true } } },
       }),
     ]);
 
+    const usedIds = new Set<string>();
+    const inCancelledIds = new Set<string>();
+    for (const relation of reportRelations) {
+      if (!relation.employee_id) continue;
+      if (relation.dailyreportrows?.status === CANCELLED_ROW_STATUS) inCancelledIds.add(relation.employee_id);
+      else usedIds.add(relation.employee_id);
+    }
+
     const employeesOperativos = operativeDiagrams.length;
-    const employeesUsed = usedRelations.length;
+    const employeesUsed = usedIds.size;
+    const employeesCancelled = [...inCancelledIds].filter((id) => !usedIds.has(id)).length;
+    // Disponibles = con diagrama de trabajo hoy y fuera del parte (diferencia de conjuntos, la misma
+    // que lista el diálogo). Restar los dos conteos daba negativo cuando había gente en el parte sin
+    // diagrama de trabajo: se descontaba a quien nunca estuvo en "con diagrama".
+    const employeesAvailable = operativeDiagrams.filter((row) => !usedIds.has(row.employee_id)).length;
 
     return {
       employees_operativos: employeesOperativos,
       employees_used: employeesUsed,
+      employees_available: employeesAvailable,
+      employees_cancelled: employeesCancelled,
       indicator: percentageOrNull(employeesUsed, employeesOperativos),
     };
   } catch (error) {
@@ -205,10 +221,8 @@ function buildAvailableEmployeeSelect() {
 }
 
 /**
- * Ids de los empleados "disponibles" hoy, calculados en la base.
- *
- * Replica la aritmética del indicador: disponibles = operativos − TODOS los que están en
- * el parte, de ahí el `LIMIT` con la resta de los dos conteos.
+ * Ids de los empleados "disponibles" hoy, calculados en la base: con diagrama de trabajo hoy y
+ * fuera del parte. Es la misma diferencia de conjuntos que el indicador (`employees_available`).
  *
  * `positionIds` va BINDEADO como `uuid[]`; antes se concatenaba dentro del texto del SQL
  * con `$queryRawUnsafe`.
@@ -254,15 +268,12 @@ async function getAvailableEmployeeIds(
       WHERE dr.date = ${todayDate}::date AND dr.is_active = true
         AND e.company_id = ${companyId}::uuid AND e.is_active = true
         AND drer.employee_id IS NOT NULL
+        AND drr.status <> ${CANCELLED_ROW_STATUS}::daily_report_status
         ${reportPositionClause}
     )
     SELECT o.employee_id
     FROM operativos o
     WHERE o.employee_id NOT IN (SELECT employee_id FROM in_report)
-    LIMIT GREATEST(
-      (SELECT COUNT(*)::int FROM operativos) - (SELECT COUNT(*)::int FROM in_report),
-      0
-    )
   `);
 
   return rows.map((row) => row.employee_id);

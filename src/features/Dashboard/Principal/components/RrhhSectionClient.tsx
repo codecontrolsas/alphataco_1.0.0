@@ -9,9 +9,11 @@ import Link from 'next/link';
 import * as React from 'react';
 import { Cell, Label, Pie, PieChart } from 'recharts';
 import type { DiagramIndicatorResult } from '../actions/types';
-import { CookieFilter } from '../shared/CookieFilter';
+import { cancelledNote } from '../lib/cancelled-note';
+import { POSITIONS_PARAM } from '../lib/url-list';
 import { IndicatorStats } from '../shared/IndicatorStats';
 import { RadialGauge } from '../shared/RadialGauge';
+import { UrlListFilter } from '../shared/UrlListFilter';
 
 // bundle-dynamic-imports — dialog loads only when opened
 const AvailableEmployeesDialog = dynamic(() => import('./AvailableEmployeesDialog'), {
@@ -23,6 +25,8 @@ interface Props {
   diagramData: DiagramIndicatorResult[];
   operativos: number;
   enOperacion: number;
+  /** En el parte de hoy solo en servicios cancelados. */
+  enCancelados: number;
   disponibles: number;
   /** Uso del personal con diagrama; `null` si no hay empleados con diagrama de trabajo. */
   indicatorPercent: number | null;
@@ -36,6 +40,7 @@ export function RrhhSectionClient({
   diagramData,
   operativos,
   enOperacion,
+  enCancelados,
   disponibles,
   indicatorPercent,
   positionIds,
@@ -71,17 +76,19 @@ export function RrhhSectionClient({
       {
         label: 'En operación',
         value: enOperacion,
-        description: 'Empleados activos cargados en el parte diario de hoy, tengan o no diagrama de trabajo.',
+        note: cancelledNote(enCancelados),
+        description:
+          'Empleados activos cargados en el parte diario de hoy, tengan o no diagrama de trabajo. Los servicios cancelados no cuentan: se indican aparte.',
       },
       {
         label: 'Disponibles',
         value: disponibles,
         onClick: () => setDialogOpen(true),
         description:
-          'Resta simple: con diagrama − en operación. Puede diferir de la lista, que muestra los empleados con diagrama de trabajo que no están en el parte de hoy.',
+          'Empleados con diagrama de trabajo para hoy que no están en el parte diario de hoy (o solo en servicios cancelados).',
       },
     ],
-    [operativos, enOperacion, disponibles]
+    [operativos, enOperacion, enCancelados, disponibles]
   );
 
   const totalDiagramEmployees = chartData.reduce((sum, d) => sum + d.value, 0);
@@ -110,8 +117,9 @@ export function RrhhSectionClient({
               <CardTitle className="text-base">Recursos Humanos</CardTitle>
               <CardDescription>{date}</CardDescription>
             </div>
-            <CookieFilter
-              cookieName="position-filter"
+            <UrlListFilter
+              key={initialFilterValues.join(',')}
+              paramName={POSITIONS_PARAM}
               options={positions}
               placeholder="Filtrar por posición..."
               initialValues={initialFilterValues}

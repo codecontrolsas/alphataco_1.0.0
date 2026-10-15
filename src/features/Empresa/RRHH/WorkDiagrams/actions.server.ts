@@ -16,6 +16,7 @@ import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { z } from 'zod';
 import { workDiagramCreateSchema, workDiagramUpdateSchema } from '../../lib/catalog-input-schemas';
 import {
   CATALOG_EXPORT_MAX_ROWS,
@@ -389,6 +390,7 @@ export async function getWorkDiagramSingleFacet(
  * Obtiene todos los tipos de diagrama para poblar los selects del formulario.
  */
 export async function getAllDiagramTypes() {
+  await requireConfigTabPermission('listado', 'view');
   try {
     const companyId = await getActiveCompanyId();
     return await prisma.diagram_type.findMany({
@@ -485,9 +487,44 @@ export async function createWorkDiagramPrisma(input: WorkDiagramInput) {
   }
 }
 
-export async function updateWorkDiagramPrisma(input: WorkDiagramInput & { id: string }) {
+/** Payload de edición: las novedades activas viajan como altas y bajas explícitas, nunca como conjunto final. */
+export type WorkDiagramUpdateInput = Omit<WorkDiagramInput, 'active_novelty'> & {
+  id: string;
+  active_novelty: { add: string[]; remove: string[] };
+};
+
+const workDiagramUpdateWithDeltaSchema = workDiagramUpdateSchema.omit({ active_novelty: true }).extend({
+  active_novelty: z.object({
+    add: z.array(z.string().uuid('Identificador inválido')).max(500, 'Demasiados elementos'),
+    remove: z.array(z.string().uuid('Identificador inválido')).max(500, 'Demasiados elementos'),
+  }),
+});
+
+/**
+ * Ids de las novedades activas (`diagram_type`) que tiene hoy el diagrama, leídos de la pivote.
+ * Es el baseline del formulario de edición: el delta se calcula contra esto, no contra la fila de la tabla.
+ */
+export async function getWorkDiagramActiveNoveltyIds(diagramId: string): Promise<string[]> {
+  await requireConfigTabPermission('listado', 'view');
+  const id = z.string().uuid('Identificador inválido').parse(diagramId);
+  try {
+    const companyId = await getActiveCompanyId();
+    const rows = await prisma.work_diagram_active_novelties.findMany({
+      where: withCompany({ work_diagram_id: id }, companyId),
+      select: { diagram_type_id: true },
+    });
+    return rows.map((row) => row.diagram_type_id);
+  } catch (error) {
+    logger.error('Error al obtener novedades activas del diagrama', { data: { error, diagramId } });
+    throw new Error('No se pudieron obtener las novedades activas del diagrama.');
+  }
+}
+
+export async function updateWorkDiagramPrisma(data: WorkDiagramUpdateInput) {
   await requireConfigTabPermission('listado', 'update');
-  input = workDiagramUpdateSchema.parse(input);
+  const input = workDiagramUpdateWithDeltaSchema.parse(data);
+  const { add, remove } = input.active_novelty;
+  if (add.some((id) => remove.includes(id))) throw new Error('Una novedad no puede agregarse y quitarse a la vez');
   try {
     const companyId = await getActiveCompanyId();
     // Perímetro sin RLS: sólo se edita un diagrama de la empresa activa.
@@ -498,12 +535,10 @@ export async function updateWorkDiagramPrisma(input: WorkDiagramInput & { id: st
     if (!owned) throw new Error('Diagrama no encontrado');
 
     const inactiveNovelty = input.inactive_novelty || null;
-    await assertDiagramTypesOwned(companyId, [...input.active_novelty, ...(inactiveNovelty ? [inactiveNovelty] : [])]);
+    await assertDiagramTypesOwned(companyId, [...add, ...(inactiveNovelty ? [inactiveNovelty] : [])]);
 
     const result = await prisma.$transaction(async (tx) => {
-      // Las novedades activas se reemplazan enteras: el form manda siempre el conjunto completo.
-      await tx.work_diagram_active_novelties.deleteMany({ where: { work_diagram_id: input.id } });
-      return tx.work_diagram.update({
+      const row = await tx.work_diagram.update({
         where: { id: input.id },
         data: {
           name: input.name,
@@ -511,17 +546,33 @@ export async function updateWorkDiagramPrisma(input: WorkDiagramInput & { id: st
           active_working_days: input.active_working_days,
           inactive_working_days: input.inactive_working_days,
           inactive_novelty: inactiveNovelty,
-          work_diagram_active_novelties: {
-            create: input.active_novelty.map((diagramTypeId) => ({
-              diagram_type_id: diagramTypeId,
-              company_id: companyId,
-            })),
-          },
         },
         select: workDiagramSelect,
       });
+      const removed =
+        remove.length > 0
+          ? (
+              await tx.work_diagram_active_novelties.deleteMany({
+                where: { work_diagram_id: input.id, diagram_type_id: { in: remove } },
+              })
+            ).count
+          : 0;
+      const added =
+        add.length > 0
+          ? (
+              await tx.work_diagram_active_novelties.createMany({
+                data: add.map((diagramTypeId) => ({
+                  work_diagram_id: input.id,
+                  diagram_type_id: diagramTypeId,
+                  company_id: companyId,
+                })),
+                skipDuplicates: true,
+              })
+            ).count
+          : 0;
+      return { row, added, removed };
     });
-    return serializeWorkDiagram(result);
+    return { ...serializeWorkDiagram(result.row), added: result.added, removed: result.removed };
   } catch (error) {
     logger.error('Error al actualizar diagrama de trabajo', { data: { error } });
     throw new Error('No se pudo actualizar el diagrama. Intente nuevamente.');

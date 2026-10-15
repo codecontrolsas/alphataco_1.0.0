@@ -12,6 +12,8 @@ interface StatItem {
   onClick?: () => void;
   /** Cómo se calcula la cifra; se muestra en un tooltip accesible por teclado. */
   description?: string;
+  /** Dato complementario bajo el rótulo (p. ej. los recursos que quedaron afuera por una cancelación). */
+  note?: string;
 }
 
 interface IndicatorStatsProps {
@@ -29,6 +31,9 @@ export function IndicatorStats({ items, className }: IndicatorStatsProps) {
             {Icon && <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
             <span className="text-xl font-bold tabular-nums">{item.value.toLocaleString('es-AR')}</span>
             <span className="text-[11px] text-muted-foreground leading-tight">{item.label}</span>
+            {item.note && (
+              <span className="text-[10px] leading-tight text-muted-foreground/80 tabular-nums">{item.note}</span>
+            )}
           </>
         );
 
@@ -38,7 +43,7 @@ export function IndicatorStats({ items, className }: IndicatorStatsProps) {
               <button
                 type="button"
                 onClick={item.onClick}
-                aria-label={`${item.label}: ${item.value.toLocaleString('es-AR')}. Ver listado`}
+                aria-label={`${item.label}: ${item.value.toLocaleString('es-AR')}${item.note ? ` (${item.note})` : ''}. Ver listado`}
                 className="flex w-full flex-col items-center gap-1 rounded-lg border p-3 text-center transition-colors hover:border-primary/20 hover:bg-muted/50 focus-visible:ring-ring outline-none focus-visible:ring-2"
               >
                 {body}

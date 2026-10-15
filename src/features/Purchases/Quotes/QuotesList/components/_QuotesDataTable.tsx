@@ -1,5 +1,6 @@
 'use client';
 
+import { formatMoney } from '@/features/Warehouses/lib/format';
 import {
   DataTable,
   type DataTableExportConfig,
@@ -7,16 +8,15 @@ import {
   type DataTableSearchParams,
   type FacetResult,
 } from '@/shared/components/common/DataTable';
-import { formatMoney } from '@/features/Warehouses/lib/format';
-import { FileText, Truck, User } from 'lucide-react';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
+import { FileText, Truck, User } from 'lucide-react';
 import moment from 'moment';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { PURCHASES_QUERY_KEYS } from '../../../lib/query-keys';
 import {
-  PURCHASE_QUOTE_STATUS_LABELS,
   PURCHASE_QUOTE_STATUSES,
+  PURCHASE_QUOTE_STATUS_LABELS,
   type PurchaseQuoteStatus,
 } from '../../../lib/quote-state-machine';
 import { purchaseQuoteStatusIcons } from '../../components/PurchaseQuoteStatusBadge';
@@ -31,6 +31,8 @@ import { HIDDEN_COLUMNS_BY_DEFAULT, getColumns } from '../columns';
 interface Props {
   data: PurchaseQuoteListItem[];
   totalRows: number;
+  /** `compras:cotizaciones:view_prices`, resuelto en el servidor (el servidor enmascara por su cuenta). */
+  canViewPrices: boolean;
   searchParams: DataTableSearchParams;
   tableId: string;
   /** Banda de atencion resuelta en el servidor; se muestra sobre la tabla. */
@@ -48,6 +50,7 @@ export function _QuotesDataTable({
   totalRows,
   searchParams,
   tableId,
+  canViewPrices,
   topSlot,
   initialColumnVisibility,
   initialFilterVisibility,
@@ -56,7 +59,7 @@ export function _QuotesDataTable({
   const handleStateChange = useCallback((params: DataTableSearchParams) => setCurrentParams(params), []);
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getPurchaseQuotesPaginated(params), []);
 
-  const columns = useMemo(() => getColumns(), []);
+  const columns = useMemo(() => getColumns({ canViewPrices }), [canViewPrices]);
 
   const mergedColumnVisibility = useMemo(() => {
     const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((c) => [c, false]));
@@ -141,10 +144,10 @@ export function _QuotesDataTable({
         sent_at: (value) => (value ? formatArgentinaDay(value as string | Date) : ''),
         received_at: (value) => (value ? moment.utc(value as string | Date).format('DD/MM/YYYY') : ''),
         valid_until: (value) => (value ? moment.utc(value as string | Date).format('DD/MM/YYYY') : ''),
-        total_quoted: (value) => (value ? formatMoney(String(value)) : ''),
+        total_quoted: (value) => (!canViewPrices ? 'Sin permiso' : value ? formatMoney(String(value)) : ''),
       },
     }),
-    [currentParams]
+    [currentParams, canViewPrices]
   );
 
   return (

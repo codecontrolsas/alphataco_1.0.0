@@ -2,7 +2,7 @@
 
 import { requireDashboardView } from '@/features/Dashboard/lib/permissions.server';
 import type { Prisma } from '@/generated/prisma/client';
-import type { condition_enum } from '@/generated/prisma/enums';
+import { condition_enum } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
 import {
   buildFiltersWhere,
@@ -19,17 +19,42 @@ import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { cache } from 'react';
-import { getOperationToday } from '../lib/dashboard-dates';
-import { aggregateEquipmentIndicators } from '../lib/indicators';
+import { CANCELLED_ROW_STATUS, getOperationToday } from '../lib/dashboard-dates';
+import { aggregateEquipmentIndicators, isNotOperative, NOT_OPERATIVE_CONDITIONS } from '../lib/indicators';
 import { toFacetMap } from '../lib/row-mapping';
 import type { EquipmentIndicatorResult } from './types';
 
 const logger = new Logger('features/Dashboard/Principal/fleet');
 
-/** Condiciones que dejan a un equipo disponible para el parte (listado del diálogo "Disponible / Sin asignar"). */
-const AVAILABLE_CONDITIONS: condition_enum[] = ['operativo', 'operativo_condicionado'];
-/** Condiciones que dejan a un equipo fuera de servicio (diálogo "Fuera de servicio"). Igual a `NOT_OPERATIVE_CONDITIONS`. */
-const REPAIR_CONDITIONS: condition_enum[] = ['no_operativo', 'en_reparacion', 'en_preparacion'];
+/**
+ * Condiciones "en servicio" (diálogo "Disponible / Sin asignar"): todas menos las de
+ * `NOT_OPERATIVE_CONDITIONS`. Un equipo sin condición también cuenta como en servicio, igual que
+ * en el indicador (`aggregateEquipmentIndicators`): una sola definición para los dos.
+ */
+const AVAILABLE_CONDITIONS: condition_enum[] = Object.values(condition_enum).filter((value) => !isNotOperative(value));
+/** Condiciones que dejan a un equipo fuera de servicio (diálogo "Fuera de servicio"). */
+const REPAIR_CONDITIONS: condition_enum[] = [...NOT_OPERATIVE_CONDITIONS];
+
+/**
+ * Relaciones equipo ↔ parte de HOY de la empresa: los equipos "en operaciones" (sin los servicios
+ * cancelados). La usan el indicador y el diálogo de disponibles, así los dos excluyen el mismo
+ * conjunto. `includeCancelled` trae todas las filas, para informar aparte las canceladas.
+ */
+function buildTodayReportVehicleRelationsWhere(
+  companyId: string,
+  typeIds: readonly string[] | undefined,
+  includeCancelled = false
+) {
+  const typeFilter = typeIds?.length ? { type: { in: [...typeIds] } } : {};
+  return {
+    equipment_id: { not: null },
+    dailyreportrows: {
+      status: includeCancelled ? undefined : { not: CANCELLED_ROW_STATUS },
+      dailyreport: { date: new Date(getOperationToday()), is_active: true, company_id: companyId },
+    },
+    vehicles: { is_active: true, company_id: companyId, ...typeFilter },
+  } satisfies Prisma.dailyreportequipmentrelationsWhereInput;
+}
 
 /**
  * Flota del dashboard principal: indicadores de uso de equipos y las tablas paginadas de los
@@ -52,31 +77,29 @@ const loadEquipmentIndicators = cache(async (typeIdsKey: string): Promise<Equipm
 
   try {
     const companyId = await getActiveCompanyId();
-    const todayDate = getOperationToday();
     const typeIds = typeIdsKey ? typeIdsKey.split(',') : [];
     const typeFilter = typeIds.length ? { type: { in: typeIds } } : {};
 
-    const [allVehicles, usedInReport] = await Promise.all([
+    const [allVehicles, reportRelations] = await Promise.all([
       prisma.vehicles.findMany({
         where: withCompany({ is_active: true, ...typeFilter }, companyId),
         select: { id: true, condition: true, type_vehicles_typeTotype: { select: { name: true } } },
       }),
       prisma.dailyreportequipmentrelations.findMany({
-        where: {
-          equipment_id: { not: null },
-          dailyreportrows: {
-            dailyreport: { date: new Date(todayDate), is_active: true, company_id: companyId },
-          },
-          vehicles: { is_active: true, company_id: companyId, ...typeFilter },
-        },
-        select: { equipment_id: true },
-        distinct: ['equipment_id'],
+        where: buildTodayReportVehicleRelationsWhere(companyId, typeIds, true),
+        select: { equipment_id: true, dailyreportrows: { select: { status: true } } },
       }),
     ]);
 
-    const usedIds = new Set(usedInReport.map((row) => row.equipment_id).filter((id): id is string => id != null));
+    const usedIds = new Set<string>();
+    const inCancelledIds = new Set<string>();
+    for (const relation of reportRelations) {
+      if (!relation.equipment_id) continue;
+      if (relation.dailyreportrows?.status === CANCELLED_ROW_STATUS) inCancelledIds.add(relation.equipment_id);
+      else usedIds.add(relation.equipment_id);
+    }
 
-    return aggregateEquipmentIndicators(allVehicles, usedIds);
+    return aggregateEquipmentIndicators(allVehicles, usedIds, inCancelledIds);
   } catch (error) {
     logger.error('Error al obtener indicadores de equipos', { data: { error } });
     // Sin dato no hay []: una flota vacía se leería como "no hay equipos".
@@ -155,7 +178,12 @@ const VEHICLE_DIALOG_SELECT = {
  * Filtros del DataTable de los diálogos. La condición del filtro se INTERSECA con `allowedConditions`
  * (las del diálogo): elegir «No operativo» en el diálogo de disponibles no amplía el listado.
  */
-function buildVehicleFiltersWhere(state: ReturnType<typeof parseSearchParams>, allowedConditions: condition_enum[]) {
+function buildVehicleFiltersWhere(
+  state: ReturnType<typeof parseSearchParams>,
+  allowedConditions: condition_enum[],
+  /** El diálogo admite equipos sin condición (los de disponibles, como el indicador). */
+  includeNullCondition = false
+) {
   const filtersWhere = buildFiltersWhere(
     state.filters,
     { vehicleType: 'type', subType: 'subType' },
@@ -166,8 +194,15 @@ function buildVehicleFiltersWhere(state: ReturnType<typeof parseSearchParams>, a
     (allowedConditions as string[]).includes(value)
   );
 
+  const wantsNullCondition = includeNullCondition && (state.filters['condition'] ?? []).includes(NULL_FILTER_VALUE);
+  const anyConditionSelected = selectedConditions.length > 0 || wantsNullCondition;
+  const conditionValues = anyConditionSelected ? selectedConditions : allowedConditions;
+  const withNullCondition = includeNullCondition && (!anyConditionSelected || wantsNullCondition);
+
   const contractorValues = state.filters['contractor_equipment'];
-  const extraAndConditions: Record<string, unknown>[] = [];
+  const extraAndConditions: Record<string, unknown>[] = withNullCondition
+    ? [{ OR: [{ condition: null }, { condition: { in: conditionValues } }] }]
+    : [];
   const directM2mFilters: Record<string, unknown> = {};
 
   if (contractorValues?.length) {
@@ -193,7 +228,7 @@ function buildVehicleFiltersWhere(state: ReturnType<typeof parseSearchParams>, a
 
   return {
     ...buildSearchWhere(state.search, VEHICLE_TEXT_COLUMNS),
-    condition: { in: selectedConditions.length > 0 ? selectedConditions : allowedConditions },
+    ...(withNullCondition ? {} : { condition: { in: conditionValues } }),
     ...filtersWhereWithoutAnd,
     ...buildTextFiltersWhere(state.filters, VEHICLE_TEXT_COLUMNS),
     ...directM2mFilters,
@@ -206,14 +241,8 @@ async function buildAvailableVehiclesWhereClause(
   typeIds: string[] | undefined,
   state: ReturnType<typeof parseSearchParams>
 ) {
-  const todayDate = getOperationToday();
-
   const vehiclesInReport = await prisma.dailyreportequipmentrelations.findMany({
-    where: {
-      equipment_id: { not: null },
-      dailyreportrows: { dailyreport: { date: new Date(todayDate), is_active: true } },
-      vehicles: { is_active: true, company_id: companyId, ...(typeIds?.length ? { type: { in: typeIds } } : {}) },
-    },
+    where: buildTodayReportVehicleRelationsWhere(companyId, typeIds),
     select: { equipment_id: true },
     distinct: ['equipment_id'],
   });
@@ -230,7 +259,7 @@ async function buildAvailableVehiclesWhereClause(
   // Los filtros del usuario van primero: lo que define el diálogo (empresa, activos, no están en el parte)
   // se aplica DESPUÉS y no se puede pisar desde la URL.
   return {
-    ...buildVehicleFiltersWhere(state, AVAILABLE_CONDITIONS),
+    ...buildVehicleFiltersWhere(state, AVAILABLE_CONDITIONS, true),
     is_active: true,
     company_id: companyId,
     ...(scopedTypes ? { type: { in: scopedTypes } } : {}),

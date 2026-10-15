@@ -5,12 +5,12 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Crown, Shield } from 'lucide-react';
-import moment from 'moment';
 import Link from 'next/link';
-import type { CompanyUserListItem } from '../actions.server';
 import { LinkEmployeeCell } from '../components/LinkEmployeeCell';
+import type { CompanyUserListItem } from '../lib/users-types';
 import { UserStatusCell } from './UserStatusCell';
 
 type Permissions = {
@@ -157,7 +157,7 @@ export function getCompanyUsersColumns(permissions: Permissions): ColumnDef<Comp
               {avatarElement}
               <span className="font-medium flex items-center gap-1.5">
                 {fullname}
-                <Crown className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                <Crown className="h-3.5 w-3.5 text-warn shrink-0" />
               </span>
             </div>
           );
@@ -265,8 +265,9 @@ export function getCompanyUsersColumns(permissions: Permissions): ColumnDef<Comp
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de alta" />,
       cell: ({ row }) => {
         const date = row.original.created_at;
-        if (!date) return <span className="text-muted-foreground">-</span>;
-        return <span className="text-sm text-muted-foreground">{moment(date).locale('es').fromNow()}</span>;
+        // El propietario no figura en `share_company_users`: su fecha es un centinela (epoch 0).
+        if (!date || row.original.isOwner) return <span className="text-muted-foreground">-</span>;
+        return <span className="text-sm text-muted-foreground">{formatArgentinaDay(date)}</span>;
       },
       enableSorting: true,
     },

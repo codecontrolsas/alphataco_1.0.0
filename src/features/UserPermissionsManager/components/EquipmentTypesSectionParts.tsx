@@ -63,8 +63,8 @@ export function EquipmentTypesSectionSkeleton({ rows = 6, compact = false }: { r
 export function EquipmentTypesSectionEmpty() {
   return (
     <p className="rounded-md border border-dashed border-border/70 px-3 py-2 text-xs text-muted-foreground">
-      No hay tipos de equipamiento activos. Se crean en Empresa → Equipos → Tipos de Unidad, con &quot;Otros
-      Equipos&quot; como destino.
+      No hay tipos de equipamiento activos. Se crean en Configuración › Flota › Tipos y subtipos, con &quot;Aplica a:
+      Otros Equipos&quot;.
     </p>
   );
 }

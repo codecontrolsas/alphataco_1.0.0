@@ -11,6 +11,7 @@ import { parseSearchParams } from '@/shared/components/common/DataTable/helpers'
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { applyTableState, facetCounts, paginate, type InMemoryTableSpec } from '@/shared/lib/in-memory-table';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 
 const logger = new Logger('Empresa/Documentacion/actions.server');
@@ -45,13 +46,12 @@ const SPEC: InMemoryTableSpec<CompanyDocRow> = {
  * fila real si hay archivo; subirlo la crea.
  */
 async function loadRows(): Promise<CompanyDocRow[]> {
-  const [companyId, canView, canViewPrivate] = await Promise.all([
+  // La pantalla vive en Configuración > General > Documentación: es el permiso que la muestra.
+  await assertCanView();
+  const [companyId, canViewPrivate] = await Promise.all([
     getActiveCompanyId(),
-    // La pantalla vive en Configuración > General > Documentación: es el permiso que la muestra.
-    checkPermissionServer('configuracion', 'documentacion', 'view'),
     checkPermissionServer('documentacion', 'documentos-de-empresa', 'view_private'),
   ]);
-  if (!canView) throw new Error('No tenés permiso para ver los documentos de la empresa.');
   const [permanent, monthly] = await Promise.all([
     loadCompanyDocumentRows(companyId, false, canViewPrivate),
     loadCompanyDocumentRows(companyId, true, canViewPrivate),
@@ -59,13 +59,31 @@ async function loadRows(): Promise<CompanyDocRow[]> {
   return [...permanent, ...monthly];
 }
 
-/** Quita los parámetros de navegación (pestañas) que comparten la URL con la tabla. */
+/** Filtros que esta tabla realmente aplica (lista blanca): el resto (pestañas, claves ajenas) se descarta. */
+const ALLOWED_FILTER_KEYS: ReadonlySet<string> = new Set([
+  'state',
+  'documentType',
+  'docType',
+  'mandatory',
+  'uploadedBy',
+  'period',
+  ...dateRangeKeys(['created_at']),
+]);
+
 function tableState(searchParams: DataTableSearchParams) {
-  const state = parseSearchParams(searchParams);
-  delete state.filters['tab'];
-  delete state.filters['subtab'];
-  return state;
+  return sanitizeFilters(parseSearchParams(searchParams), ALLOWED_FILTER_KEYS);
 }
+
+const NO_VIEW_MESSAGE = 'No tenés permiso para ver los documentos de la empresa.';
+
+/** Guard `view` de la tab Documentación de Configuración (compartido por lista, export y facets). */
+async function assertCanView(): Promise<void> {
+  if (!(await checkPermissionServer('configuracion', 'documentacion', 'view'))) {
+    throw new CompanyDocsPermissionError(NO_VIEW_MESSAGE);
+  }
+}
+
+class CompanyDocsPermissionError extends Error {}
 
 // ============================================================================
 // PAGINATED QUERY
@@ -78,6 +96,7 @@ export async function getCompanyDocsPaginated(searchParams: DataTableSearchParam
     const filtered = applyTableState(await loadRows(), state, SPEC);
     return { data: paginate(filtered, state), total: filtered.length };
   } catch (error) {
+    if (error instanceof CompanyDocsPermissionError) throw new Error(NO_VIEW_MESSAGE);
     logger.error('Error al obtener documentos de empresa paginados', { data: { error } });
     throw new Error('No se pudo obtener la lista de documentos. Intente nuevamente.');
   }
@@ -105,6 +124,7 @@ export async function getAllCompanyDocsForExport(
     }
     return { ok: true, data: filtered };
   } catch (error) {
+    if (error instanceof CompanyDocsPermissionError) return { ok: false, message: NO_VIEW_MESSAGE };
     logger.error('Error al exportar documentos de empresa', { data: { error } });
     return { ok: false, message: 'No se pudo exportar la lista de documentos. Intente nuevamente.' };
   }
@@ -133,6 +153,7 @@ export async function getCompanyDocsSingleFacet(
       ? { counts: result.counts, resolvedOptions: result.options }
       : { counts: result.counts };
   } catch (error) {
+    if (error instanceof CompanyDocsPermissionError) return empty;
     logger.error('Error al obtener facet de documentos de empresa', { data: { error, columnId } });
     return empty;
   }

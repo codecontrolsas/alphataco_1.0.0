@@ -15,7 +15,10 @@ interface ContractDocumentsListProps {
   isError: boolean;
   isRetrying: boolean;
   onRetry: () => void;
-  canManageDocuments: boolean;
+  /** Mostrar el aviso de cómo subir (`documentos-contrato:create`). */
+  canUpload: boolean;
+  /** Botón de eliminar (`documentos-contrato:delete`). */
+  canDelete: boolean;
   onPreview: (doc: ContractDocument) => void;
   onDownload: (doc: ContractDocument) => void;
   onDelete: (doc: ContractDocument) => void;
@@ -36,7 +39,8 @@ export function ContractDocumentsList({
   isError,
   isRetrying,
   onRetry,
-  canManageDocuments,
+  canUpload,
+  canDelete,
   onPreview,
   onDownload,
   onDelete,
@@ -73,7 +77,7 @@ export function ContractDocumentsList({
         ) : (
           <>
             <p className="mb-1 text-muted-foreground">No hay documentos para este contrato</p>
-            {canManageDocuments && (
+            {canUpload && (
               <p className="text-sm text-muted-foreground/80">
                 Subí documentos arrastrándolos o con el botón de selección
               </p>
@@ -130,7 +134,7 @@ export function ContractDocumentsList({
                   >
                     <Download className="h-4 w-4" />
                   </Button>
-                  {canManageDocuments && (
+                  {canDelete && (
                     <Button
                       type="button"
                       variant="ghost"

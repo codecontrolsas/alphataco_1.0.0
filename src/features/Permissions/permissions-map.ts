@@ -28,14 +28,14 @@ export const ACTIONS = {
   create: { slug: 'create', name: 'Crear' },
   update: { slug: 'update', name: 'Editar' },
   delete: { slug: 'delete', name: 'Eliminar' },
-  view_all_requests: { slug: 'view_all_requests', name: 'Ver todas las solicitudes' },
+  view_all_requests: { slug: 'view_all_requests', name: 'Ver las de todos' },
   view_private: { slug: 'view_private', name: 'Ver privados' },
   upload_private: { slug: 'upload_private', name: 'Subir privados' },
-  assign_resources: { slug: 'assign_resources', name: 'Asignar Recursos' },
+  assign_resources: { slug: 'assign_resources', name: 'Asignar recursos' },
   approve: { slug: 'approve', name: 'Aprobar' },
   // Un precio no es un dato como los otros: ver un parte y ver lo que vale son dos permisos
   // distintos, y poder tocar el precio es otro más.
-  view_prices: { slug: 'view_prices', name: 'Ver precios e importes' },
+  view_prices: { slug: 'view_prices', name: 'Ver importes' },
   update_prices: { slug: 'update_prices', name: 'Modificar precios' },
   // Almacenes: un ajuste corrige el inventario sin respaldo documental, y una anulacion
   // revierte un movimiento ya registrado. Ninguno de los dos es "registrar movimientos".
@@ -43,6 +43,9 @@ export const ACTIONS = {
   reverse: { slug: 'reverse', name: 'Anular movimiento' },
   // Salida de stock sin pedido. Sin esta accion, una salida pasa por un pedido aprobado.
   direct_exit: { slug: 'direct_exit', name: 'Salida directa' },
+  // Enviar un documento al proveedor (por correo o marcándolo como enviado). Antes lo cubría
+  // 'update'; es otra decisión: editar un borrador no es mandarlo afuera.
+  send: { slug: 'send', name: 'Enviar' },
 } as const;
 
 export type ActionSlug = keyof typeof ACTIONS;
@@ -61,7 +64,7 @@ export const PERMISSIONS = {
     tabs: {
       principal: {
         slug: 'principal',
-        name: 'Principal',
+        name: 'Resumen',
         tabId: '90000000-0000-0000-0000-000000000001',
         parent: null,
         allowedActions: ['view'],
@@ -69,21 +72,21 @@ export const PERMISSIONS = {
       },
       documentacion: {
         slug: 'documentacion',
-        name: 'Documentacion',
+        name: 'Vencimientos',
         tabId: '90000000-0000-0000-0000-000000000002',
         parent: null,
         allowedActions: ['view'],
         subtabs: {
           empleados: {
             slug: 'empleados',
-            name: 'Empleados',
+            name: 'Vencimientos de personal',
             tabId: '90000000-0000-0000-0000-000000000021',
             parent: 'documentacion',
             allowedActions: ['view'],
           },
           vehiculos: {
             slug: 'vehiculos',
-            name: 'Vehiculos',
+            name: 'Vencimientos de equipos',
             tabId: '90000000-0000-0000-0000-000000000022',
             parent: 'documentacion',
             allowedActions: ['view'],
@@ -92,35 +95,35 @@ export const PERMISSIONS = {
       },
       estadisticas: {
         slug: 'estadisticas',
-        name: 'Estadisticas',
+        name: 'Análisis',
         tabId: '90000000-0000-0000-0000-000000000003',
         parent: null,
         allowedActions: ['view'],
         subtabs: {
           operaciones: {
             slug: 'operaciones',
-            name: 'Operaciones',
+            name: 'Operación',
             tabId: '90000000-0000-0000-0000-000000000031',
             parent: 'estadisticas',
             allowedActions: ['view'],
           },
           rrhh: {
             slug: 'rrhh',
-            name: 'RRHH',
+            name: 'Personal',
             tabId: '90000000-0000-0000-0000-000000000032',
             parent: 'estadisticas',
             allowedActions: ['view'],
           },
           mantenimiento: {
             slug: 'mantenimiento',
-            name: 'Mantenimiento',
+            name: 'Flota y taller',
             tabId: '90000000-0000-0000-0000-000000000033',
             parent: 'estadisticas',
             allowedActions: ['view'],
           },
           desvios: {
             slug: 'desvios',
-            name: 'Sala de Control',
+            name: 'Control de desvíos',
             tabId: '90000000-0000-0000-0000-000000000034',
             parent: 'estadisticas',
             allowedActions: ['view'],
@@ -144,21 +147,21 @@ export const PERMISSIONS = {
     tabs: {
       general: {
         slug: 'general',
-        name: 'General',
+        name: 'Organización',
         tabId: '10000000-0000-0000-0000-000000000001',
         parent: null,
         allowedActions: ['view', 'update'],
         subtabs: {
           company: {
             slug: 'company',
-            name: 'Empresa',
+            name: 'Datos de la empresa',
             tabId: '10000000-0000-0000-0000-000000000011',
             parent: 'general',
             allowedActions: ['view'],
           },
           'cost-center': {
             slug: 'cost-center',
-            name: 'Centro de Costos',
+            name: 'Centros de costo',
             tabId: '10000000-0000-0000-0000-000000000012',
             parent: 'general',
             allowedActions: ['view', 'create', 'update'],
@@ -172,7 +175,7 @@ export const PERMISSIONS = {
           },
           users: {
             slug: 'users',
-            name: 'Usuarios',
+            name: 'Usuarios y accesos',
             tabId: '10000000-0000-0000-0000-000000000014',
             parent: 'general',
             allowedActions: ['view'],
@@ -186,21 +189,21 @@ export const PERMISSIONS = {
               },
               'gestion-roles': {
                 slug: 'gestion-roles',
-                name: 'Gestión de Roles',
+                name: 'Roles y permisos',
                 tabId: '10000000-0000-0000-0000-000000000142',
                 parent: 'users',
                 allowedActions: ['view', 'create', 'update', 'delete'],
               },
               'detalle-usuario': {
                 slug: 'detalle-usuario',
-                name: 'Detalle de Usuario',
+                name: 'Ficha y permisos del usuario',
                 tabId: '10000000-0000-0000-0000-000000000143',
                 parent: 'users',
                 allowedActions: ['view', 'update'],
               },
               'accesos-externos': {
                 slug: 'accesos-externos',
-                name: 'Accesos Externos',
+                name: 'Accesos externos',
                 tabId: '10000000-0000-0000-0000-000000000144',
                 parent: 'users',
                 allowedActions: ['view', 'create', 'update', 'delete'],
@@ -212,7 +215,7 @@ export const PERMISSIONS = {
           // modulo Configuracion (10000000-...), senal de que nacio aca.
           kpis: {
             slug: 'kpis',
-            name: 'KPIs',
+            name: 'Indicadores (KPIs)',
             tabId: '10000000-0000-0000-0000-000000000004',
             parent: 'general',
             allowedActions: ['view', 'create', 'update'],
@@ -235,7 +238,7 @@ export const PERMISSIONS = {
           },
           documentacion: {
             slug: 'documentacion',
-            name: 'Documentación',
+            name: 'Documentos de la empresa',
             tabId: '10000000-0000-0000-0000-000000000015',
             parent: 'general',
             allowedActions: ['view', 'create'],
@@ -252,35 +255,35 @@ export const PERMISSIONS = {
       },
       rrhh: {
         slug: 'rrhh',
-        name: 'RRHH',
+        name: 'Personal',
         tabId: '10000000-0000-0000-0000-000000000002',
         parent: null,
         allowedActions: ['view'],
         subtabs: {
           listado: {
             slug: 'listado',
-            name: 'Tipos de Diagramas',
+            name: 'Tipos de diagrama',
             tabId: '10000000-0000-0000-0000-000000000021',
             parent: 'rrhh',
             allowedActions: ['view', 'create', 'update'],
           },
           diagrams: {
             slug: 'diagrams',
-            name: 'Tipos de Novedades',
+            name: 'Tipos de novedad',
             tabId: '10000000-0000-0000-0000-000000000022',
             parent: 'rrhh',
             allowedActions: ['view', 'create', 'update'],
           },
           convenios: {
             slug: 'convenios',
-            name: 'CCT',
+            name: 'Convenios colectivos',
             tabId: '10000000-0000-0000-0000-000000000023',
             parent: 'rrhh',
             allowedActions: ['view', 'create'],
           },
           'contract-types': {
             slug: 'contract-types',
-            name: 'Tipos de Contrato',
+            name: 'Tipos de contrato',
             tabId: '10000000-0000-0000-0000-000000000024',
             parent: 'rrhh',
             allowedActions: ['view', 'create', 'update'],
@@ -294,14 +297,14 @@ export const PERMISSIONS = {
           },
           aptitudes: {
             slug: 'aptitudes',
-            name: 'Aptitudes Técnicas',
+            name: 'Aptitudes técnicas',
             tabId: '10000000-0000-0000-0000-000000000026',
             parent: 'rrhh',
             allowedActions: ['view', 'create', 'update'],
           },
           listado_maestro_articulos: {
             slug: 'listado_maestro_articulos',
-            name: 'Listado Maestro de Artículos',
+            name: 'Indumentaria y EPP',
             tabId: '69c7334c-84a1-4122-a83d-65e279964fcd',
             parent: 'rrhh',
             allowedActions: ['view'],
@@ -340,14 +343,14 @@ export const PERMISSIONS = {
       },
       vehicles: {
         slug: 'vehicles',
-        name: 'Vehículos',
+        name: 'Flota',
         tabId: '10000000-0000-0000-0000-000000000003',
         parent: null,
         allowedActions: ['view'],
         subtabs: {
           tipos: {
             slug: 'tipos',
-            name: 'Tipos de Unidad',
+            name: 'Tipos de equipo',
             tabId: '10000000-0000-0000-0000-000000000031',
             parent: 'vehicles',
             allowedActions: ['view', 'create', 'update'],
@@ -386,7 +389,7 @@ export const PERMISSIONS = {
       // tienen nada que ver con los datos generales de la empresa. El `tabId` no cambia.
       mantenimiento: {
         slug: 'mantenimiento',
-        name: 'Mantenimiento',
+        name: 'Taller',
         tabId: '10000000-0000-0000-0000-000000000016',
         parent: null,
         allowedActions: ['view'],
@@ -400,7 +403,7 @@ export const PERMISSIONS = {
           },
           sectores_taller: {
             slug: 'sectores_taller',
-            name: 'Sectores',
+            name: 'Sectores de taller',
             tabId: '10000000-0000-0000-0000-000000000162',
             parent: 'mantenimiento',
             allowedActions: ['view', 'create', 'update', 'delete'],
@@ -410,14 +413,14 @@ export const PERMISSIONS = {
           // cambiaron, asi que los permisos ya asignados siguen valiendo.
           type_of_repair: {
             slug: 'type_of_repair',
-            name: 'Tipos de Reparación',
+            name: 'Tipos de reparación',
             tabId: '60000000-0000-0000-0000-000000000012',
             parent: 'mantenimiento',
             allowedActions: ['view', 'create', 'update', 'delete'],
           },
           maintenance_groups: {
             slug: 'maintenance_groups',
-            name: 'Grupos',
+            name: 'Grupos de mantenimiento',
             tabId: '60000000-0000-0000-0000-000000000014',
             parent: 'mantenimiento',
             allowedActions: ['view', 'create', 'update'],
@@ -431,28 +434,28 @@ export const PERMISSIONS = {
       // sidebar que la declaran con `permissionModuleSlug`.
       documentos: {
         slug: 'documentos',
-        name: 'Documentos',
+        name: 'Tipos de documento',
         tabId: '50000000-0000-0000-0000-000000000004',
         parent: null,
         allowedActions: ['view', 'create'], // create para el botón de crear
         subtabs: {
           'tipos-docs-personas': {
             slug: 'tipos-docs-personas',
-            name: 'Personas',
+            name: 'De personal',
             tabId: '60000000-0000-0000-0000-000000000006',
             parent: 'documentos',
             allowedActions: ['view', 'update', 'create', 'view_private'],
           },
           'tipos-docs-equipos': {
             slug: 'tipos-docs-equipos',
-            name: 'Equipos',
+            name: 'De equipos',
             tabId: '60000000-0000-0000-0000-000000000007',
             parent: 'documentos',
             allowedActions: ['view', 'update', 'create', 'view_private'],
           },
           'tipos-docs-empresa': {
             slug: 'tipos-docs-empresa',
-            name: 'Empresa',
+            name: 'De la empresa',
             tabId: '60000000-0000-0000-0000-000000000018',
             parent: 'documentos',
             allowedActions: ['view', 'update', 'create', 'view_private'],
@@ -479,14 +482,14 @@ export const PERMISSIONS = {
         subtabs: {
           'empleados-activos': {
             slug: 'empleados-activos',
-            name: 'Empleados Activos',
+            name: 'Empleados activos',
             tabId: '20000000-0000-0000-0000-000000000011',
             parent: 'employees',
             allowedActions: ['view'],
           },
           'empleados-inactivos': {
             slug: 'empleados-inactivos',
-            name: 'Empleados Inactivos',
+            name: 'Empleados inactivos',
             tabId: '20000000-0000-0000-0000-000000000012',
             parent: 'employees',
             allowedActions: ['view'],
@@ -502,21 +505,21 @@ export const PERMISSIONS = {
         subtabs: {
           old: {
             slug: 'old',
-            name: 'Diagramas Cargados',
+            name: 'Diagramas cargados',
             tabId: '20000000-0000-0000-0000-000000000031',
             parent: 'diagrams',
             allowedActions: ['view'],
           },
           new: {
             slug: 'new',
-            name: 'Cargar Diagramas',
+            name: 'Cargar diagramas',
             tabId: '20000000-0000-0000-0000-000000000032',
             parent: 'diagrams',
             allowedActions: ['view', 'create', 'update'],
           },
           massive_diagram: {
             slug: 'massive_diagram',
-            name: 'Carga Masiva',
+            name: 'Carga masiva',
             tabId: '20000000-0000-0000-0000-000000000033',
             parent: 'diagrams',
             allowedActions: ['view', 'create', 'update'],
@@ -535,28 +538,28 @@ export const PERMISSIONS = {
       // Ver implementación en: src/app/dashboard/employee/page.tsx
       'detalle-empleado': {
         slug: 'detalle-empleado',
-        name: 'Detalle de Empleado',
+        name: 'Detalle de empleado',
         tabId: '20000000-0000-0000-0000-000000000006',
         parent: null,
         allowedActions: ['view', 'update'],
         subtabs: {
           'datos-personales': {
             slug: 'datos-personales',
-            name: 'Datos Personales',
+            name: 'Datos personales',
             tabId: '20000000-0000-0000-0000-000000000061',
             parent: 'detalle-empleado',
             allowedActions: ['view'],
           },
           'datos-contacto': {
             slug: 'datos-contacto',
-            name: 'Datos de Contacto',
+            name: 'Datos de contacto',
             tabId: '20000000-0000-0000-0000-000000000062',
             parent: 'detalle-empleado',
             allowedActions: ['view'],
           },
           'datos-laborales': {
             slug: 'datos-laborales',
-            name: 'Datos Laborales',
+            name: 'Datos laborales',
             tabId: '20000000-0000-0000-0000-000000000063',
             parent: 'detalle-empleado',
             allowedActions: ['view'],
@@ -615,7 +618,7 @@ export const PERMISSIONS = {
           },
           inactive: {
             slug: 'inactive',
-            name: 'Dados de Baja',
+            name: 'Dados de baja',
             tabId: '30000000-0000-0000-0000-000000000013',
             parent: 'equipos',
             allowedActions: ['view'],
@@ -639,14 +642,14 @@ export const PERMISSIONS = {
       },
       'detalle-otro-equipo': {
         slug: 'detalle-otro-equipo',
-        name: 'Detalle de Otro Equipo',
+        name: 'Detalle de otro equipo',
         tabId: 'e8604848-24d4-4f23-a466-700b43b24202',
         parent: null,
         allowedActions: ['view', 'update'],
         subtabs: {
           'datos-basicos-otro': {
             slug: 'datos-basicos-otro',
-            name: 'Datos Básicos',
+            name: 'Datos básicos',
             tabId: 'e59f78dc-269c-4280-b5a6-d16076e304a9',
             parent: 'detalle-otro-equipo',
             allowedActions: ['view'],
@@ -676,14 +679,14 @@ export const PERMISSIONS = {
       },
       'detalle-equipo': {
         slug: 'detalle-equipo',
-        name: 'Detalle de Equipo',
+        name: 'Detalle de equipo',
         tabId: '30000000-0000-0000-0000-000000000005',
         parent: null,
         allowedActions: ['view', 'update'],
         subtabs: {
           'datos-basicos': {
             slug: 'datos-basicos',
-            name: 'Datos Básicos',
+            name: 'Datos básicos',
             tabId: '30000000-0000-0000-0000-000000000051',
             parent: 'detalle-equipo',
             allowedActions: ['view'],
@@ -707,7 +710,7 @@ export const PERMISSIONS = {
           },
           'historial-mantenimiento-equipo': {
             slug: 'historial-mantenimiento-equipo',
-            name: 'Historial de Mantenimiento',
+            name: 'Historial de mantenimiento',
             tabId: '30000000-0000-0000-0000-000000000058',
             parent: 'detalle-equipo',
             allowedActions: ['view'],
@@ -727,7 +730,7 @@ export const PERMISSIONS = {
     tabs: {
       preparte: {
         slug: 'preparte',
-        name: 'Preparte',
+        name: 'Planificador',
         tabId: '70000000-0000-0000-0000-000000000001',
         parent: null,
         allowedActions: ['view', 'create', 'update', 'delete'],
@@ -735,7 +738,7 @@ export const PERMISSIONS = {
       },
       dailyreportstable: {
         slug: 'dailyreportstable',
-        name: 'Partes Diarios',
+        name: 'Partes de operaciones',
         tabId: '70000000-0000-0000-0000-000000000002',
         parent: null,
         allowedActions: ['view', 'create', 'delete'],
@@ -743,7 +746,7 @@ export const PERMISSIONS = {
       },
       'detalle-parte-diario': {
         slug: 'detalle-parte-diario',
-        name: 'Detalle de Parte Diario',
+        name: 'Detalle de parte diario',
         tabId: '70000000-0000-0000-0000-000000000003',
         parent: null,
         allowedActions: ['view', 'create', 'update', 'delete', 'assign_resources'],
@@ -781,7 +784,7 @@ export const PERMISSIONS = {
     tabs: {
       tickets: {
         slug: 'tickets',
-        name: 'Tickets de Soporte',
+        name: 'Tickets de soporte',
         tabId: 'a0000000-0000-0000-0000-000000000001',
         parent: null,
         allowedActions: ['view'],
@@ -811,7 +814,7 @@ export const PERMISSIONS = {
     tabs: {
       'documentos-de-empleados': {
         slug: 'documentos-de-empleados',
-        name: 'Documentos de Empleados',
+        name: 'Documentos de empleados',
         tabId: '50000000-0000-0000-0000-000000000001',
         parent: null,
         allowedActions: ['view', 'create', 'view_private', 'upload_private'],
@@ -834,7 +837,7 @@ export const PERMISSIONS = {
       },
       'documentos-de-equipos': {
         slug: 'documentos-de-equipos',
-        name: 'Documentos de Equipos',
+        name: 'Documentos de equipos',
         tabId: '50000000-0000-0000-0000-000000000002',
         parent: null,
         allowedActions: ['view', 'create', 'view_private', 'upload_private'],
@@ -857,7 +860,7 @@ export const PERMISSIONS = {
       },
       'documentos-de-empresa': {
         slug: 'documentos-de-empresa',
-        name: 'Documentos de Empresa',
+        name: 'Documentos de empresa',
         tabId: '50000000-0000-0000-0000-000000000003',
         parent: null,
         allowedActions: ['view', 'create', 'view_private', 'upload_private'],
@@ -880,7 +883,7 @@ export const PERMISSIONS = {
       },
       'detalle-de-documento': {
         slug: 'detalle-de-documento',
-        name: 'Detalle de Documento',
+        name: 'Detalle de documento',
         tabId: '50000000-0000-0000-0000-000000000005',
         parent: null,
         allowedActions: ['view', 'update'],
@@ -922,7 +925,7 @@ export const PERMISSIONS = {
       // Vista Taller (COD-394) — agrupada por sector de taller
       workshop_view: {
         slug: 'workshop_view',
-        name: 'Vista Taller',
+        name: 'Vista taller',
         tabId: '60000000-0000-0000-0000-000000000071',
         parent: null,
         allowedActions: ['view'],
@@ -934,7 +937,7 @@ export const PERMISSIONS = {
       // (ticket 593).
       nuevo_pedido: {
         slug: 'nuevo_pedido',
-        name: 'Nuevo Pedido',
+        name: 'Nuevo pedido',
         tabId: '60000000-0000-0000-0000-000000000024',
         parent: null,
         allowedActions: ['view', 'create'], // create = crear pedidos de mantenimiento
@@ -943,21 +946,21 @@ export const PERMISSIONS = {
       // Tab 1: Operaciones
       maint_operaciones: {
         slug: 'maint_operaciones',
-        name: 'Operaciones',
+        name: 'Supervisión',
         tabId: '60000000-0000-0000-0000-000000000030',
         parent: null,
         allowedActions: ['view'],
         subtabs: {
           equipments_with_deviations: {
             slug: 'equipments_with_deviations',
-            name: 'Equipos con Desvíos',
+            name: 'Equipos con desvíos',
             tabId: '60000000-0000-0000-0000-000000000015',
             parent: 'maint_operaciones',
             allowedActions: ['view'],
           },
           maintenance_requests: {
             slug: 'maintenance_requests',
-            name: 'Solicitudes de Mantenimiento',
+            name: 'Solicitudes de mantenimiento',
             tabId: '60000000-0000-0000-0000-000000000020',
             parent: 'maint_operaciones',
             allowedActions: ['view', 'update', 'view_all_requests'], // update = aprobar/denegar, view_all_requests = ver todas sin filtro de supervisor
@@ -967,7 +970,7 @@ export const PERMISSIONS = {
           // el taller es directamente la fecha de reparación.
           pendientes_ejecutar: {
             slug: 'pendientes_ejecutar',
-            name: 'Pendientes de Ejecutar (Legacy)',
+            name: 'Pendientes de ejecutar (en desuso)',
             tabId: '60000000-0000-0000-0000-000000000023',
             parent: 'maint_operaciones',
             allowedActions: ['view', 'update', 'view_all_requests'],
@@ -977,14 +980,14 @@ export const PERMISSIONS = {
           // "Pendiente de ingreso a taller".
           para_taller: {
             slug: 'para_taller',
-            name: 'Para Taller (Legacy)',
+            name: 'Para taller (en desuso)',
             tabId: '60000000-0000-0000-0000-000000000025',
             parent: 'maint_operaciones',
             allowedActions: ['view', 'update', 'view_all_requests'],
           },
           seguimiento_taller: {
             slug: 'seguimiento_taller',
-            name: 'Seguimiento en Taller',
+            name: 'Seguimiento en taller',
             tabId: '60000000-0000-0000-0000-000000000026',
             parent: 'maint_operaciones',
             allowedActions: ['view', 'update'], // update = validar/rechazar orden desde operaciones
@@ -1001,7 +1004,7 @@ export const PERMISSIONS = {
         subtabs: {
           maintenance_orders: {
             slug: 'maintenance_orders',
-            name: 'Pedidos de Mantenimiento',
+            name: 'Pedidos de mantenimiento',
             tabId: '60000000-0000-0000-0000-000000000021',
             parent: 'maint_taller',
             allowedActions: ['view', 'update'], // update = planificar fecha, aprobar entrada
@@ -1024,21 +1027,21 @@ export const PERMISSIONS = {
           },
           gestion_ordenes: {
             slug: 'gestion_ordenes',
-            name: 'Gestión de Órdenes',
+            name: 'Gestión de órdenes',
             tabId: '60000000-0000-0000-0000-000000000043',
             parent: 'maint_taller',
             allowedActions: ['view', 'create', 'update', 'delete'],
           },
           bandeja_aprobaciones: {
             slug: 'bandeja_aprobaciones',
-            name: 'Bandeja de Aprobaciones',
+            name: 'Bandeja de aprobaciones',
             tabId: '60000000-0000-0000-0000-000000000044',
             parent: 'maint_taller',
             allowedActions: ['view', 'update'],
           },
           ordenes_mantenimiento: {
             slug: 'ordenes_mantenimiento',
-            name: 'Órdenes de Mantenimiento',
+            name: 'Órdenes de mantenimiento',
             tabId: '60000000-0000-0000-0000-000000000045',
             parent: 'maint_taller',
             allowedActions: ['view', 'update'],
@@ -1046,7 +1049,7 @@ export const PERMISSIONS = {
           // Legacy tabs - desconectadas de la UI pero mantenidas para compatibilidad
           planificacion: {
             slug: 'planificacion',
-            name: 'Planificación (Legacy)',
+            name: 'Planificación (en desuso)',
             tabId: '60000000-0000-0000-0000-000000000041',
             parent: 'maint_taller',
             allowedActions: ['view', 'update'],
@@ -1063,28 +1066,28 @@ export const PERMISSIONS = {
         subtabs: {
           catalogo_cubiertas: {
             slug: 'catalogo_cubiertas',
-            name: 'Catálogo de Cubiertas',
+            name: 'Catálogo de cubiertas',
             tabId: '60000000-0000-0000-0000-000000000061',
             parent: 'gomeria',
             allowedActions: ['view', 'create', 'update', 'delete'],
           },
           plantillas_cubiertas: {
             slug: 'plantillas_cubiertas',
-            name: 'Plantillas de Cubiertas',
+            name: 'Plantillas de cubiertas',
             tabId: '60000000-0000-0000-0000-000000000062',
             parent: 'gomeria',
             allowedActions: ['view', 'create', 'update', 'delete'],
           },
           ordenes_gomeria: {
             slug: 'ordenes_gomeria',
-            name: 'Órdenes de Gomería',
+            name: 'Órdenes de gomería',
             tabId: '60000000-0000-0000-0000-000000000063',
             parent: 'gomeria',
             allowedActions: ['view', 'create', 'update', 'delete'],
           },
           marcas_cubiertas: {
             slug: 'marcas_cubiertas',
-            name: 'Marcas de Cubiertas',
+            name: 'Marcas de cubiertas',
             tabId: '60000000-0000-0000-0000-000000000064',
             parent: 'gomeria',
             allowedActions: ['view', 'create', 'update'],
@@ -1112,7 +1115,7 @@ export const PERMISSIONS = {
     tabs: {
       comerce: {
         slug: 'comerce',
-        name: 'Comercial',
+        name: 'Gestión comercial',
         tabId: '40000000-0000-0000-0000-000000000001',
         parent: null,
         allowedActions: ['view'],
@@ -1126,7 +1129,7 @@ export const PERMISSIONS = {
             subtabs: {
               'detalle-cliente': {
                 slug: 'detalle-cliente',
-                name: 'Detalle',
+                name: 'Ficha del cliente',
                 tabId: '40000000-0000-0000-0000-000000000111',
                 parent: 'customers',
                 allowedActions: ['view', 'update'],
@@ -1140,14 +1143,14 @@ export const PERMISSIONS = {
               },
               'areas-cliente': {
                 slug: 'areas-cliente',
-                name: 'Areas del Cliente',
+                name: 'Áreas del cliente',
                 tabId: '40000000-0000-0000-0000-000000000114',
                 parent: 'customers',
                 allowedActions: ['view', 'create', 'update', 'delete'],
               },
               'sectores-cliente': {
                 slug: 'sectores-cliente',
-                name: 'Sectores del Cliente',
+                name: 'Sectores del cliente',
                 tabId: '40000000-0000-0000-0000-000000000115',
                 parent: 'customers',
                 allowedActions: ['view', 'create', 'update', 'delete'],
@@ -1177,21 +1180,23 @@ export const PERMISSIONS = {
             subtabs: {
               'detalle-contrato': {
                 slug: 'detalle-contrato',
-                name: 'Detalle',
+                name: 'Ficha del contrato',
                 tabId: '40000000-0000-0000-0000-000000000151',
                 parent: 'service',
                 allowedActions: ['view', 'update'],
               },
+              // 'create' sube documentos al contrato y 'delete' los borra (hasta que las acciones
+              // lo consuman, siguen pidiendo 'detalle-contrato:update').
               'documentos-contrato': {
                 slug: 'documentos-contrato',
                 name: 'Documentos',
                 tabId: '40000000-0000-0000-0000-000000000152',
                 parent: 'service',
-                allowedActions: ['view'],
+                allowedActions: ['view', 'create', 'delete'],
               },
               'items-contrato': {
                 slug: 'items-contrato',
-                name: 'Items del Servicio',
+                name: 'Ítems del contrato',
                 tabId: '40000000-0000-0000-0000-000000000153',
                 parent: 'service',
                 // `view` deja ver el item; `view_prices` deja ver lo que vale, y
@@ -1200,16 +1205,17 @@ export const PERMISSIONS = {
               },
             },
           },
+          // 'delete' borra unidades (hasta que la acción lo consuma, sigue pidiendo 'update').
           mensure_units: {
             slug: 'mensure_units',
-            name: 'Unidades de Medida',
+            name: 'Unidades de medida',
             tabId: '40000000-0000-0000-0000-000000000016',
             parent: 'comerce',
-            allowedActions: ['view', 'create', 'update'],
+            allowedActions: ['view', 'create', 'update', 'delete'],
           },
           'reglas-precio': {
             slug: 'reglas-precio',
-            name: 'Reglas de Actualizacion de Precios',
+            name: 'Reglas de precio',
             tabId: '40000000-0000-0000-0000-000000000154',
             parent: 'comerce',
             allowedActions: ['view', 'create', 'update', 'delete'],
@@ -1225,20 +1231,21 @@ export const PERMISSIONS = {
             allowedActions: ['view', 'create', 'update', 'delete', 'approve', 'view_prices'],
             subtabs: {},
           },
-          // Facturación electrónica ARCA. `create` arma y edita borradores (y NC/ND);
-          // `approve` emite ante ARCA y consulta pendientes; `delete` descarta borradores;
+          // Facturación electrónica ARCA. `create` arma borradores (y NC/ND); `update` los edita y
+          // les quita certificaciones (hasta que las acciones lo consuman, editar sigue pidiendo
+          // `create`); `approve` emite ante ARCA y consulta pendientes; `delete` descarta borradores;
           // `view_prices` muestra importes (emitir exige además ver lo que se emite).
           facturacion: {
             slug: 'facturacion',
             name: 'Facturación',
             tabId: '40000000-0000-0000-0000-000000000019',
             parent: 'comerce',
-            allowedActions: ['view', 'create', 'delete', 'approve', 'view_prices'],
+            allowedActions: ['view', 'create', 'update', 'delete', 'approve', 'view_prices'],
             subtabs: {},
           },
           daily_reports: {
             slug: 'daily_reports',
-            name: 'Partes Diarios',
+            name: 'Partes diarios',
             tabId: '40000000-0000-0000-0000-000000000017',
             parent: 'comerce',
             allowedActions: ['view', 'create', 'update'],
@@ -1369,36 +1376,39 @@ export const PERMISSIONS = {
         tabId: 'c0000000-0000-0000-0000-000000000001',
         parent: null,
         // 'view' ve las propias, 'view_all_requests' todas; 'update' edita borradores ajenos y
-        // anula; 'approve' aprueba o rechaza.
-        allowedActions: ['view', 'view_all_requests', 'create', 'update', 'approve'],
+        // anula; 'approve' aprueba o rechaza; 'view_prices' muestra los importes estimados.
+        allowedActions: ['view', 'view_all_requests', 'create', 'update', 'approve', 'view_prices'],
         subtabs: {},
       },
-      // Etapa 2. 'update' envia, carga la respuesta, marca "no cotiza" y anula.
+      // Etapa 2. 'update' carga la respuesta, marca "no cotiza" y anula; 'send' envía el pedido al
+      // proveedor (hasta que las acciones lo consuman, el envío sigue pidiendo 'update');
+      // 'view_prices' muestra los importes cotizados.
       cotizaciones: {
         slug: 'cotizaciones',
         name: 'Cotizaciones',
         tabId: 'c0000000-0000-0000-0000-000000000004',
         parent: null,
-        allowedActions: ['view', 'create', 'update'],
+        allowedActions: ['view', 'create', 'update', 'send', 'view_prices'],
         subtabs: {},
       },
-      // 'update' edita borradores, envia a aprobacion, envia al proveedor y anula; 'approve'
-      // aprueba o rechaza.
+      // 'update' edita borradores, envia a aprobacion y anula; 'approve' aprueba o rechaza; 'send'
+      // envía al proveedor (hasta que las acciones lo consuman, sigue pidiendo 'update');
+      // 'view_prices' muestra los importes.
       ordenes: {
         slug: 'ordenes',
         name: 'Órdenes de compra',
         tabId: 'c0000000-0000-0000-0000-000000000005',
         parent: null,
-        allowedActions: ['view', 'create', 'update', 'approve'],
+        allowedActions: ['view', 'create', 'update', 'approve', 'send', 'view_prices'],
         subtabs: {},
       },
-      // Etapa 3. 'create' registra recepciones; 'update' las anula.
+      // Etapa 3. 'create' registra recepciones; 'update' las anula; 'view_prices' muestra importes.
       recepciones: {
         slug: 'recepciones',
         name: 'Recepciones',
         tabId: 'c0000000-0000-0000-0000-000000000006',
         parent: null,
-        allowedActions: ['view', 'create', 'update'],
+        allowedActions: ['view', 'create', 'update', 'view_prices'],
         subtabs: {},
       },
       // Etapa 4. 'create' carga comprobantes; 'update' los edita, anula y constata en ARCA;
@@ -1412,13 +1422,14 @@ export const PERMISSIONS = {
         subtabs: {},
       },
       // Etapa 5. 'create' arma órdenes de pago; 'update' las edita, envía a aprobación, vuelve a
-      // borrador, registra el pago, envía al proveedor y anula; 'approve' aprueba o rechaza.
+      // borrador, registra el pago y anula; 'approve' aprueba o rechaza; 'send' envía al proveedor
+      // (hasta que las acciones lo consuman, sigue pidiendo 'update'). Ver la pestaña es ver importes.
       pagos: {
         slug: 'pagos',
         name: 'Pagos',
         tabId: 'c0000000-0000-0000-0000-000000000009',
         parent: null,
-        allowedActions: ['view', 'create', 'update', 'approve'],
+        allowedActions: ['view', 'create', 'update', 'approve', 'send'],
         subtabs: {},
       },
       retenciones: {
@@ -1493,13 +1504,15 @@ export const PERMISSIONS = {
         allowedActions: ['view', 'create', 'update'],
         subtabs: {},
       },
-      // Cuentas y cajas (con saldo inicial) y conceptos.
+      // Cuentas y cajas (con saldo inicial) y conceptos. 'create' da de alta, 'update' edita y
+      // activa/desactiva, 'delete' borra (hasta que las acciones lo consuman, alta y baja siguen
+      // pidiendo 'update').
       'config-tesoreria': {
         slug: 'config-tesoreria',
         name: 'Configuración',
         tabId: 'd0000000-0000-0000-0000-000000000004',
         parent: null,
-        allowedActions: ['view', 'update'],
+        allowedActions: ['view', 'create', 'update', 'delete'],
         subtabs: {},
       },
       // Etapa 2. 'create' crea borradores de recibo; 'update' los edita y confirma, envía el recibo
@@ -1556,7 +1569,6 @@ export const PERMISSIONS = {
       },
     },
   },
-
 } as const;
 
 // ============================================

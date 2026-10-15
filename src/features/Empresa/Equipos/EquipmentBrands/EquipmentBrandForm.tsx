@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { useCatalogSheetBusy, useCatalogSheetClose } from '@/shared/components/common/CatalogFormSheet';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
@@ -33,6 +34,8 @@ function EquipmentBrandForm() {
   const editingBrand = useEquipmentBrandStore((state) => state.equipmentBrand);
   const setEquipmentBrand = useEquipmentBrandStore((state) => state.setEquipmentBrand);
   const queryClient = useQueryClient();
+  const closeSheet = useCatalogSheetClose();
+  const setBusy = useCatalogSheetBusy();
 
   const isEditing = !!editingBrand;
 
@@ -69,6 +72,7 @@ function EquipmentBrandForm() {
   const resetForm = () => {
     setEquipmentBrand(null);
     form.reset({ id: undefined, name: '', is_active: true });
+    closeSheet();
   };
 
   const invalidateTable = () => {
@@ -78,6 +82,7 @@ function EquipmentBrandForm() {
   // ── Submit handlers ────────────────────────────────────────────────────────
 
   const handleCreate = async (values: EquipmentBrandFormValues) => {
+    setBusy(true);
     toast.promise(createEquipmentBrand({ name: values.name, is_active: values.is_active }), {
       loading: 'Creando marca...',
       success: () => {
@@ -85,12 +90,16 @@ function EquipmentBrandForm() {
         resetForm();
         return 'Marca creada correctamente';
       },
-      error: 'Error al crear la marca',
+      error: () => {
+        setBusy(false);
+        return 'Error al crear la marca';
+      },
     });
   };
 
   const handleUpdate = async (values: EquipmentBrandFormValues) => {
     if (!values.id) return;
+    setBusy(true);
     toast.promise(updateEquipmentBrand({ id: values.id, name: values.name, is_active: values.is_active }), {
       loading: 'Actualizando marca...',
       success: () => {
@@ -98,7 +107,10 @@ function EquipmentBrandForm() {
         resetForm();
         return 'Marca actualizada correctamente';
       },
-      error: 'Error al actualizar la marca',
+      error: () => {
+        setBusy(false);
+        return 'Error al actualizar la marca';
+      },
     });
   };
 
@@ -114,9 +126,7 @@ function EquipmentBrandForm() {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 py-4 px-2 max-w-md">
-        <h2 className="text-xl font-bold mb-4">{isEditing ? 'Editar Marca de Unidad' : 'Crear Marca de Unidad'}</h2>
-
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
         <FormField
           control={form.control}
           name="name"
@@ -172,11 +182,9 @@ function EquipmentBrandForm() {
                 ? 'Actualizar'
                 : 'Crear'}
           </Button>
-          {isEditing && (
-            <Button type="button" onClick={resetForm} variant="outline">
-              Cancelar
-            </Button>
-          )}
+          <Button type="button" onClick={resetForm} variant="outline">
+            Cancelar
+          </Button>
         </div>
       </form>
     </Form>

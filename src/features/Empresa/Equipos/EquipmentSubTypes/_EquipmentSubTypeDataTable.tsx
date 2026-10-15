@@ -1,7 +1,13 @@
 'use client';
 
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  CatalogCreateButton,
+  CatalogFormSheet,
+  CatalogTableSurface,
+  useCatalogSheet,
+  useCatalogSheetClose,
+} from '@/shared/components/common/CatalogFormSheet';
 import {
   DataTable,
   type DataTableFacetedFilterConfig,
@@ -9,12 +15,13 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, CircleOff, X } from 'lucide-react';
-import moment from 'moment';
+import { CircleOff } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
+import { activeStatusLabel, buildActiveFacetResult } from '../../lib/active-status';
 import EquipmentSubTypesForm from './EquipmentSubTypeForm';
-import { useSubTypeChecklists } from './hooks/useSubTypeChecklists';
 import {
   getActiveEquipmentTypes,
   getAllEquipmentSubTypesForExport,
@@ -24,6 +31,7 @@ import {
   type EquipmentSubTypeListItem,
 } from './actions.server';
 import { HIDDEN_COLUMNS_BY_DEFAULT, getColumns } from './columns';
+import { useSubTypeChecklists } from './hooks/useSubTypeChecklists';
 
 // ============================================================================
 // TYPES
@@ -55,6 +63,11 @@ interface FormWrapperProps {
  */
 function EquipmentSubTypesFormWrapper({ editingItem, onReset }: FormWrapperProps) {
   const queryClient = useQueryClient();
+  const closeSheet = useCatalogSheetClose();
+  const handleClose = useCallback(() => {
+    onReset();
+    closeSheet();
+  }, [onReset, closeSheet]);
   const subTypeId = editingItem?.id ?? null;
 
   // Cargar tipos de unidad via server action (reemplaza FetchTypeOfVehicles con Supabase)
@@ -66,14 +79,15 @@ function EquipmentSubTypesFormWrapper({ editingItem, onReset }: FormWrapperProps
 
   // Relaciones existentes del subtipo. El form las toma en `defaultValues`, que solo se evaluan
   // al montar: por eso se espera a que las queries resuelvan y se remonta con `key`.
-  // Sin esto el form abre vacio y, como el guardado hace delete + insert, borra las relaciones.
+  // Esa lectura es tambien la base del delta {add, remove} que se envia al guardar.
   const { data: checklistIds = [], isLoading: isLoadingChecklists } = useSubTypeChecklists(subTypeId);
 
   const { data: compatibleRows = [], isLoading: isLoadingCompatibleItems } = useQuery({
     queryKey: ['subtype-compatible-items', subTypeId],
     queryFn: () => getCompatibleItemsForSubTypePrisma(subTypeId!),
     enabled: !!subTypeId,
-    staleTime: 2 * 60 * 1000,
+    staleTime: 0,
+    gcTime: 0,
     refetchOnWindowFocus: false,
   });
 
@@ -113,7 +127,7 @@ function EquipmentSubTypesFormWrapper({ editingItem, onReset }: FormWrapperProps
     <EquipmentSubTypesForm
       key={subTypeId ?? 'create'}
       initialData={formInitialData}
-      onReset={onReset}
+      onReset={handleClose}
       isEditing={!!editingItem}
       onSuccess={handleSuccess}
       types={types}
@@ -157,20 +171,24 @@ export default function _EquipmentSubTypeDataTable({
     [permissionsMap]
   );
 
-  const canCreateOrUpdate =
-    permissions.hasPermission('configuracion', 'subtipos', 'create') ||
-    permissions.hasPermission('configuracion', 'subtipos', 'update');
+  const canCreate = permissions.hasPermission('configuracion', 'subtipos', 'create');
+  const canUpdate = permissions.hasPermission('configuracion', 'subtipos', 'update');
 
-  // ── Estado de edición ─────────────────────────────────────────────────────
+  // ── Sheet de alta/edición (el form sigue leyendo el estado de edición local) ─
   const [editingItem, setEditingItem] = useState<EquipmentSubTypeListItem | null>(null);
-
-  const handleEdit = useCallback((item: EquipmentSubTypeListItem) => {
-    setEditingItem(item);
-  }, []);
 
   const handleReset = useCallback(() => {
     setEditingItem(null);
   }, []);
+
+  const sheet = useCatalogSheet<EquipmentSubTypeListItem>({
+    canCreate,
+    canUpdate,
+    onOpenEdit: setEditingItem,
+    onOpenCreate: handleReset,
+    onClosed: handleReset,
+  });
+  const handleEdit = sheet.openEdit;
 
   // ── Client-side navigation mode ──────────────────────────────────────────
   const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
@@ -207,14 +225,7 @@ export default function _EquipmentSubTypeDataTable({
   const fetchIsActiveFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
     const result = await getEquipmentSubTypeSingleFacet('is_active', params);
     if (!result) return { options: [], counts: new Map() };
-    const options = [
-      { value: 'true', label: 'Activo', icon: Check },
-      { value: 'false', label: 'Inactivo', icon: X },
-      ...(result.counts.has(NULL_FILTER_VALUE)
-        ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-        : []),
-    ];
-    return { options, counts: result.counts };
+    return buildActiveFacetResult(result.counts);
   }, []);
 
   // ── Lazy-load facet: type (FK UUID — Tipo de Unidad) ───────────────────────
@@ -275,6 +286,7 @@ export default function _EquipmentSubTypeDataTable({
       queryFn={tableQueryFn}
       queryKey={['equipment-sub-types']}
       onStateChange={handleStateChange}
+      toolbarActions={<CatalogCreateButton sheet={sheet} label="Nuevo subtipo" />}
       tableId={tableId}
       paramNamespace={tableId}
       facetedFilters={facetedFilters}
@@ -284,7 +296,7 @@ export default function _EquipmentSubTypeDataTable({
       searchPlaceholder="Buscar subtipos..."
       emptyMessage="No se encontraron subtipos de equipos"
       exportConfig={{
-        fetchAllData: () => getAllEquipmentSubTypesForExport(currentParams),
+        fetchAllData: async () => unwrapExportResult(await getAllEquipmentSubTypesForExport(currentParams)),
         options: {
           filename: 'subtipos-equipos',
           sheetName: 'Subtipos',
@@ -293,35 +305,24 @@ export default function _EquipmentSubTypeDataTable({
         formatters: {
           // La columna 'type' usa accessorFn que retorna el nombre — sin formatter necesario
           // para el nombre. Pero exportamos el nombre directamente via la FK resolved.
-          is_active: (value) => {
-            if (value === null || value === undefined) return 'Sin asignar';
-            return value ? 'Activo' : 'Inactivo';
-          },
-          created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
+          is_active: (value) => activeStatusLabel(value),
+          created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
         },
       }}
     />
   );
 
-  // Si no tiene permisos de crear/editar, mostrar solo la tabla
-  if (!canCreateOrUpdate) {
-    return table;
-  }
-
-  // Con permisos: layout resizable con formulario a la izquierda y tabla a la derecha
   return (
-    <div className="w-full">
-      <ResizablePanelGroup className="min-h-[400px]" direction="horizontal">
-        <ResizablePanel defaultSize={35}>
-          <div className="overflow-auto h-full pr-2">
-            <EquipmentSubTypesFormWrapper editingItem={editingItem} onReset={handleReset} />
-          </div>
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={65}>
-          <div className="overflow-auto h-full pl-2">{table}</div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    </div>
+    <>
+      <CatalogTableSurface>{table}</CatalogTableSurface>
+      <CatalogFormSheet
+        sheet={sheet}
+        getKey={(subType) => subType.id}
+        title={{ create: 'Nuevo subtipo de unidad', edit: 'Editar subtipo de unidad' }}
+        size="xl"
+      >
+        {() => <EquipmentSubTypesFormWrapper editingItem={editingItem} onReset={handleReset} />}
+      </CatalogFormSheet>
+    </>
   );
 }

@@ -4,11 +4,10 @@
 
 // Componentes
 export { AppSidebar } from './AppSidebar';
-export { DashboardBreadcrumb } from './components/DashboardBreadcrumb';
 export { NavMain } from './components/NavMain';
 
 // Constants
-export { navigationLinks, SUB_ITEM_ICONS } from './constants/navigation';
+export { SUB_ITEM_ICONS, navigationLinks } from './constants/navigation';
 export type { NavigationLink, NavigationSubLink } from './constants/navigation';
 
 // Types

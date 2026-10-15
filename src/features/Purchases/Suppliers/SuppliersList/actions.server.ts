@@ -1,7 +1,6 @@
 'use server';
 
 import { checkPermissionServer } from '@/features/Permissions';
-import { formatCuit } from '../../lib/supplier-ids';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
@@ -17,7 +16,8 @@ import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { CUIT_LENGTH, CUIT_PARTIAL_MATCH_LIMIT, SUPPLIERS_EXPORT_MAX_ROWS } from './constants';
+import { formatCuit } from '../../lib/supplier-ids';
+import { CUIT_LENGTH, SUPPLIERS_EXPORT_MAX_ROWS } from './constants';
 import {
   deriveSupplierDocumentState,
   SUPPLIER_DOCUMENT_STATES,
@@ -102,8 +102,8 @@ function cuitDigits(raw: string): string | null {
 
 /**
  * Condicion sobre el CUIT (BigInt: Prisma no admite `contains`). Con los 11 digitos es una igualdad relacional;
- * con menos, una busqueda parcial por digitos acotada a `CUIT_PARTIAL_MATCH_LIMIT` ids (no admite un where relacional
- * sin cambiar el esquema). Mas de 11 digitos no puede coincidir con ninguno.
+ * con menos, una busqueda parcial por digitos en la BD (filtrada por empresa, sin tope: un tope dejaria proveedores
+ * afuera sin aviso; no admite un where relacional sin cambiar el esquema). Mas de 11 digitos no puede coincidir con ninguno.
  */
 async function cuitWhere(companyId: string, digits: string): Promise<SupplierWhere> {
   if (digits.length > CUIT_LENGTH) return { id: { in: [] } };
@@ -111,7 +111,6 @@ async function cuitWhere(companyId: string, digits: string): Promise<SupplierWhe
   const rows = await prisma.$queryRaw<{ id: string }[]>`
     SELECT id FROM suppliers
     WHERE company_id = ${companyId}::uuid AND cuit::text LIKE ${`%${digits}%`}
-    LIMIT ${CUIT_PARTIAL_MATCH_LIMIT}
   `;
   return { id: { in: rows.map((r) => r.id) } };
 }
@@ -173,7 +172,10 @@ async function buildWhereClause(companyId: string, state: FilterState): Promise<
   if (contact) {
     and.push({
       contacts: {
-        some: { is_primary: true, OR: [{ name: contains(contact) }, { email: contains(contact) }, { phone: contains(contact) }] },
+        some: {
+          is_primary: true,
+          OR: [{ name: contains(contact) }, { email: contains(contact) }, { phone: contains(contact) }],
+        },
       },
     });
   }
@@ -413,7 +415,9 @@ export async function getSuppliersAttention(): Promise<{ expiredDocuments: numbe
     const companyId = await resolveCompanyId();
     if (!companyId) return null;
     const expiredDocuments = await prisma.suppliers.count({
-      where: { AND: [{ company_id: companyId, is_active: true }, documentStateWhere('EXPIRED', supplierDocumentDates())] },
+      where: {
+        AND: [{ company_id: companyId, is_active: true }, documentStateWhere('EXPIRED', supplierDocumentDates())],
+      },
     });
     return { expiredDocuments };
   } catch (error) {

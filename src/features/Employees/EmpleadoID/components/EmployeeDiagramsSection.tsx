@@ -3,18 +3,9 @@ import { DiagramDetailEmployeeView } from '@/features/Employees/Diagrams/Diagram
 import type { DiagramHistoryRow } from '@/features/Employees/Diagrams/table/DiagramDetailTable';
 import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import moment from 'moment';
-import type { EmployeeDetailData } from '../actions.server';
 import { getDiagramTypes, getEmployeeDiagramHistory, getEmployeeDiagrams } from '../actions.server';
 
-interface Props {
-  employeeId: string;
-  /** Ya no se usa: la empresa sale de la sesión en el servidor. Se acepta para no romper al llamador. */
-  companyId?: string;
-  employee: NonNullable<EmployeeDetailData>;
-  searchParams: Record<string, string | undefined>;
-}
-
-export async function EmployeeDiagramsSection({ employeeId, employee, searchParams }: Props) {
+export async function EmployeeDiagramsSection({ employeeId }: { employeeId: string }) {
   const [rawHistory, rawDiagrams, diagramTypes] = await Promise.all([
     getEmployeeDiagramHistory(employeeId),
     getEmployeeDiagrams(employeeId),
@@ -64,8 +55,7 @@ export async function EmployeeDiagramsSection({ employeeId, employee, searchPara
       historyData={historyData}
       diagrams={diagrams}
       diagrams_types={diagramTypes}
-      activeEmploees={[employee]}
-      searchParams={searchParams}
+      employeeId={employeeId}
     />
   );
 }

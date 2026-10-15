@@ -7,6 +7,7 @@ import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { requireConfigTabPermission } from '../lib/config-access.server';
 import { createExternalApiClientSchema, type CreateExternalApiClientValues } from './schemas';
+import type { CreatedExternalApiClient } from './types';
 
 const logger = new Logger('features/Empresa/AccesosExternos');
 
@@ -55,16 +56,6 @@ export async function getExternalApiClients() {
     throw error;
   }
 }
-
-export type ExternalApiClientListItem = Awaited<ReturnType<typeof getExternalApiClients>>[number];
-
-export type CreatedExternalApiClient = {
-  id: string;
-  name: string;
-  clientId: string;
-  /** Se muestra una unica vez: no vuelve a estar disponible */
-  secret: string;
-};
 
 export async function createExternalApiClient(
   values: CreateExternalApiClientValues

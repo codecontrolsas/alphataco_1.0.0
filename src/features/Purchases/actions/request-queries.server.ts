@@ -8,7 +8,14 @@ import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { UUID_RE } from '../lib/action-errors';
 import { orderedByLine, remainingOf } from '../lib/order-progress';
-import { ORDERABLE_REQUEST_STATUSES, canApplyPurchaseRequestAction, canCopyPurchaseRequest, type PurchaseRequestStatus } from '../lib/request-state-machine';
+import { maskAmount } from '../lib/price-visibility';
+import { canViewPurchasePrices } from '../lib/price-visibility.server';
+import {
+  ORDERABLE_REQUEST_STATUSES,
+  canApplyPurchaseRequestAction,
+  canCopyPurchaseRequest,
+  type PurchaseRequestStatus,
+} from '../lib/request-state-machine';
 
 function isOrderableRequest(status: PurchaseRequestStatus): boolean {
   const orderable: readonly PurchaseRequestStatus[] = ORDERABLE_REQUEST_STATUSES;
@@ -43,18 +50,29 @@ export async function getPurchaseRequestsForMaterialRequest(materialRequestId: s
 /** Detalle de una solicitud. Con solo `view`, nada mas las propias. */
 export async function getPurchaseRequestDetail(id: string) {
   if (!UUID_RE.test(id)) return null;
-  const [canView, canViewAll, canCreate, canUpdate, canApprove, canCreateQuote, canCreateOrder, canViewOrders, profile] =
-    await Promise.all([
-      checkPermissionServer('compras', 'solicitudes', 'view'),
-      checkPermissionServer('compras', 'solicitudes', 'view_all_requests'),
-      checkPermissionServer('compras', 'solicitudes', 'create'),
-      checkPermissionServer('compras', 'solicitudes', 'update'),
-      checkPermissionServer('compras', 'solicitudes', 'approve'),
-      checkPermissionServer('compras', 'cotizaciones', 'create'),
-      checkPermissionServer('compras', 'ordenes', 'create'),
-      checkPermissionServer('compras', 'ordenes', 'view'),
-      getServerAuthProfile(),
-    ]);
+  const [
+    canView,
+    canViewAll,
+    canCreate,
+    canUpdate,
+    canApprove,
+    canCreateQuote,
+    canCreateOrder,
+    canViewOrders,
+    canViewPrices,
+    profile,
+  ] = await Promise.all([
+    checkPermissionServer('compras', 'solicitudes', 'view'),
+    checkPermissionServer('compras', 'solicitudes', 'view_all_requests'),
+    checkPermissionServer('compras', 'solicitudes', 'create'),
+    checkPermissionServer('compras', 'solicitudes', 'update'),
+    checkPermissionServer('compras', 'solicitudes', 'approve'),
+    checkPermissionServer('compras', 'cotizaciones', 'create'),
+    checkPermissionServer('compras', 'ordenes', 'create'),
+    checkPermissionServer('compras', 'ordenes', 'view'),
+    canViewPurchasePrices('solicitudes'),
+    getServerAuthProfile(),
+  ]);
   if (!canView || !profile) return null;
   const companyId = await getActiveCompanyId();
 
@@ -114,13 +132,20 @@ export async function getPurchaseRequestDetail(id: string) {
   const orders = canViewOrders
     ? await prisma.purchase_orders.findMany({
         where: { company_id: companyId, lines: { some: { request_line: { request_id: request.id } } } },
-        select: { id: true, number: true, status: true, total: true, created_at: true, supplier: { select: { name: true } } },
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          total: true,
+          created_at: true,
+          supplier: { select: { name: true } },
+        },
         orderBy: { created_at: 'asc' },
       })
     : [];
 
   const userName = (p: { fullname: string | null; email: string | null } | null) =>
-    p ? (p.fullname ?? p.email ?? 'Usuario') : null;
+    p ? p.fullname ?? p.email ?? 'Usuario' : null;
   const status = request.status as PurchaseRequestStatus;
   const isRequester = request.requested_by === profile.id;
   const at = (d: Date | null) => d?.toISOString() ?? null;
@@ -164,11 +189,15 @@ export async function getPurchaseRequestDetail(id: string) {
       number: o.number,
       status: o.status,
       supplierName: o.supplier.name,
-      total: o.total.toFixed(2),
+      // Sin `solicitudes:view_prices` el total no viaja (la UI muestra "Sin permiso").
+      total: maskAmount(o.total.toFixed(2), canViewPrices),
     })),
+    canViewPrices,
     history: [
       { event: 'Creada', at: at(request.created_at), by: userName(request.requester) },
-      ...(request.submitted_at ? [{ event: 'Enviada a aprobación', at: at(request.submitted_at), by: userName(request.requester) }] : []),
+      ...(request.submitted_at
+        ? [{ event: 'Enviada a aprobación', at: at(request.submitted_at), by: userName(request.requester) }]
+        : []),
       ...(request.decided_at
         ? [
             {
@@ -180,7 +209,14 @@ export async function getPurchaseRequestDetail(id: string) {
           ]
         : []),
       ...(request.cancelled_at
-        ? [{ event: 'Anulada', at: at(request.cancelled_at), by: userName(request.canceller), notes: request.cancel_reason }]
+        ? [
+            {
+              event: 'Anulada',
+              at: at(request.cancelled_at),
+              by: userName(request.canceller),
+              notes: request.cancel_reason,
+            },
+          ]
         : []),
       ...(request.closed_at
         ? [{ event: 'Cerrada', at: at(request.closed_at), by: userName(request.closer), notes: request.close_reason }]

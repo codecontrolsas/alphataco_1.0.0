@@ -50,3 +50,24 @@ export function buildTodayReportWhere(companyId: string, targetDate?: string, no
     },
   } as const;
 }
+
+/**
+ * Estado de fila del parte que NO pone a sus recursos "en operación": el servicio no se hizo.
+ * Mismo criterio que los días trabajados de Flota y taller (`drr.status <> 'cancelado'`).
+ */
+export const CANCELLED_ROW_STATUS = 'cancelado' as const;
+
+/** Estados de una fila del parte que cuentan como servicio del día (los cancelados y reprogramados no). */
+export const TODAY_SERVICE_STATUSES = ['pendiente', 'ejecutado'] as const;
+
+/**
+ * WHERE único de "servicios del día": filas del parte de esa fecha (por defecto hoy, hora
+ * argentina) en estado pendiente o ejecutado, de cualquier tipo y con o sin cliente. Lo comparten
+ * la tarjeta, el resumen por tipo y el detalle por cliente, así los tres suman lo mismo.
+ */
+export function buildTodayServicesWhere(companyId: string, targetDate?: string, now: Date = new Date()) {
+  return {
+    status: { in: [...TODAY_SERVICE_STATUSES] },
+    ...buildTodayReportWhere(companyId, targetDate, now),
+  };
+}

@@ -1,12 +1,12 @@
 'use client';
 
-import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { StackedCell } from '@/shared/components/common/StackedCell';
 import { formatArgentinaDateTime, formatDateAr } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import Link from 'next/link';
+import { PriceText } from '../../components/PriceText';
 import { PurchaseOrderStatusBadge } from '../components/PurchaseOrderStatusBadge';
 import type { PurchaseOrderListItem } from './actions.server';
 
@@ -18,7 +18,7 @@ const formatDateTime = (value: Date | string | null) => (value ? formatArgentina
 const formatDateOnly = (value: Date | string | null) =>
   value ? formatDateAr(new Date(value).toISOString().slice(0, 10)) : '-';
 
-export function getColumns(): ColumnDef<PurchaseOrderListItem>[] {
+export function getColumns({ canViewPrices }: { canViewPrices: boolean }): ColumnDef<PurchaseOrderListItem>[] {
   return [
     {
       id: 'number',
@@ -40,10 +40,7 @@ export function getColumns(): ColumnDef<PurchaseOrderListItem>[] {
       meta: { title: 'Proveedor' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Proveedor" />,
       cell: ({ row }) => (
-        <Link
-          href={`/dashboard/purchases/suppliers/${row.original.supplier.id}`}
-          className="block hover:underline"
-        >
+        <Link href={`/dashboard/purchases/suppliers/${row.original.supplier.id}`} className="block hover:underline">
           <StackedCell primary={row.original.supplier.name} secondary={`CUIT ${row.original.supplier.cuit}`} />
         </Link>
       ),
@@ -83,7 +80,9 @@ export function getColumns(): ColumnDef<PurchaseOrderListItem>[] {
       accessorKey: 'total',
       meta: { title: 'Total' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Total" />,
-      cell: ({ row }) => <span className="tabular-nums">{formatMoney(row.original.total)}</span>,
+      // Sin `view_prices` el servidor ignora el orden por total.
+      enableSorting: canViewPrices,
+      cell: ({ row }) => <PriceText value={row.original.total} canViewPrices={canViewPrices} />,
     },
     {
       id: 'requests',

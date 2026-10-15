@@ -126,10 +126,11 @@ const userName = (p: { fullname: string | null; email: string | null } | null) =
 /** Detalle de la orden: lineas, retenciones con certificado, medios, historial y acciones. */
 export async function getPaymentOrderDetail(id: string) {
   if (!UUID_RE.test(id)) return null;
-  const [canView, canUpdate, canApprove] = await Promise.all([
+  const [canView, canUpdate, canApprove, canSend] = await Promise.all([
     checkPermissionServer('compras', 'pagos', 'view'),
     checkPermissionServer('compras', 'pagos', 'update'),
     checkPermissionServer('compras', 'pagos', 'approve'),
+    checkPermissionServer('compras', 'pagos', 'send'),
   ]);
   if (!canView) return null;
   const companyId = await getActiveCompanyId();
@@ -316,7 +317,7 @@ export async function getPaymentOrderDetail(id: string) {
       approve: canApprove && canApplyPaymentOrderAction(status, 'approve'),
       backToDraft: canUpdate && canApplyPaymentOrderAction(status, 'backToDraft'),
       pay: canUpdate && canApplyPaymentOrderAction(status, 'pay'),
-      send: canUpdate && canApplyPaymentOrderAction(status, 'send'),
+      send: canSend && canApplyPaymentOrderAction(status, 'send'),
       cancel: canUpdate && canApplyPaymentOrderAction(status, 'cancel'),
     },
   };

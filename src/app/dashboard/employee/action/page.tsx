@@ -1,16 +1,9 @@
-import { EmployeeDeliveriesTableSkeleton } from '@/features/Clothing/EmployeeDeliveries/EmployeeDeliveriesList/fallback/EmployeeDeliveriesTableSkeleton';
-import { EmployeeDeliveriesTabContent } from '@/features/Clothing/EmployeeDeliveries/EmployeeDeliveriesTabContent';
 import { getEmployeeByIdCached } from '@/features/Employees/EmpleadoID/actions.server';
 import { EmployeeDetailClient } from '@/features/Employees/EmpleadoID/components/EmployeeDetailClient';
-import { EmployeeDiagramsSection } from '@/features/Employees/EmpleadoID/components/EmployeeDiagramsSection';
-import { EmployeeHeaderContent } from '@/features/Employees/EmpleadoID/components/EmployeeHeaderContent';
-import { EmployeeDocumentDetail } from '@/features/Employees/EmpleadoID/components/employee-document-detail';
-import { EmployeeDiagramsSkeleton } from '@/features/Employees/EmpleadoID/components/skeletons/employee-diagrams-skeleton';
+import { EmployeeReadView } from '@/features/Employees/EmpleadoID/components/view/EmployeeReadView';
 import { canViewServer, checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { notFound } from 'next/navigation';
-import { Suspense } from 'react';
 
 const logger = new Logger('EmployeePage');
 
@@ -37,10 +30,6 @@ export default async function EmployeePage({ searchParams }: EmployeePageProps) 
         : await canViewServer('empleados', 'employees');
   if (!allowed) notFound();
 
-  // Empresa activa del request: el claim crudo dejaba `companyId: ''` en toda sesión que la
-  // resuelve por cookie (panel de ropa, QR), sin que se notara.
-  const companyId = await getActiveCompanyId();
-
   // Cargar empleado: única query bloqueante (cached con React.cache)
   let employee: Awaited<ReturnType<typeof getEmployeeByIdCached>> = null;
 
@@ -60,11 +49,6 @@ export default async function EmployeePage({ searchParams }: EmployeePageProps) 
     }
   }
 
-  // Normalizar searchParams para los slots (Record<string, string | undefined>)
-  const searchParamsForSlots: Record<string, string | undefined> = Object.fromEntries(
-    Object.entries(resolvedSearchParams).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v])
-  );
-
   return (
     <EmployeeDetailClient
       // Al cambiar de empleado (o al terminar un alta) el estado interno se reinicia. NO incluye el
@@ -74,29 +58,7 @@ export default async function EmployeePage({ searchParams }: EmployeePageProps) 
       employee={employee}
       employeeId={employeeId}
       initialMode={mode}
-      header={employee ? <EmployeeHeaderContent employee={employee} /> : null}
-      documentsSlot={
-        employeeId ? <EmployeeDocumentDetail employeeId={employeeId} searchParams={resolvedSearchParams} /> : null
-      }
-      diagramsSlot={
-        employeeId && employee ? (
-          <Suspense fallback={<EmployeeDiagramsSkeleton />}>
-            <EmployeeDiagramsSection
-              employeeId={employeeId}
-              companyId={companyId}
-              employee={employee}
-              searchParams={searchParamsForSlots}
-            />
-          </Suspense>
-        ) : null
-      }
-      clothingSlot={
-        employeeId ? (
-          <Suspense fallback={<EmployeeDeliveriesTableSkeleton />}>
-            <EmployeeDeliveriesTabContent employeeId={employeeId} searchParams={resolvedSearchParams} />
-          </Suspense>
-        ) : null
-      }
+      readView={employee ? <EmployeeReadView employee={employee} searchParams={resolvedSearchParams} /> : null}
     />
   );
 }

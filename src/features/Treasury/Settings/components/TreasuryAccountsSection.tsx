@@ -30,6 +30,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
+import { OpeningBalanceDialog } from '../../Movements/components/OpeningBalanceDialog';
 import {
   createTreasuryAccount,
   deleteTreasuryAccount,
@@ -37,14 +38,25 @@ import {
   updateTreasuryAccount,
   type TreasuryAccountRow,
 } from '../../actions/accounts.server';
-import { OpeningBalanceDialog } from '../../Movements/components/OpeningBalanceDialog';
 import { formatDay } from '../../lib/dates';
 import { invalidateTreasury } from '../../lib/invalidate';
-import { TREASURY_ACCOUNT_KIND_LABELS, treasuryAccountFormSchema, type TreasuryAccountFormValues } from '../../schemas/accounts';
+import {
+  TREASURY_ACCOUNT_KIND_LABELS,
+  treasuryAccountFormSchema,
+  type TreasuryAccountFormValues,
+} from '../../schemas/accounts';
 
 const logger = new Logger('Treasury/TreasuryAccountsSection');
 
-const EMPTY: TreasuryAccountFormValues = { kind: 'BANK', name: '', bankName: '', accountNumber: '', cbu: '', openingDate: '', openingAmount: '' };
+const EMPTY: TreasuryAccountFormValues = {
+  kind: 'BANK',
+  name: '',
+  bankName: '',
+  accountNumber: '',
+  cbu: '',
+  openingDate: '',
+  openingAmount: '',
+};
 
 type Opening = { id: string; date: string; amount: string };
 
@@ -55,11 +67,15 @@ type Opening = { id: string; date: string; amount: string };
 export function TreasuryAccountsSection({
   accounts,
   openings,
+  canCreate,
   canUpdate,
+  canDelete,
 }: {
   accounts: TreasuryAccountRow[];
   openings: Record<string, Opening>;
+  canCreate: boolean;
   canUpdate: boolean;
+  canDelete: boolean;
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -68,7 +84,10 @@ export function TreasuryAccountsSection({
   const [confirmDeactivate, setConfirmDeactivate] = useState<TreasuryAccountRow | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<TreasuryAccountRow | null>(null);
 
-  const form = useForm<TreasuryAccountFormValues>({ resolver: zodResolver(treasuryAccountFormSchema), defaultValues: EMPTY });
+  const form = useForm<TreasuryAccountFormValues>({
+    resolver: zodResolver(treasuryAccountFormSchema),
+    defaultValues: EMPTY,
+  });
   const kind = useWatch({ control: form.control, name: 'kind' });
 
   const openForm = (target: TreasuryAccountRow | 'new') => {
@@ -94,7 +113,11 @@ export function TreasuryAccountsSection({
 
   const save = useMutation({
     mutationFn: async (values: TreasuryAccountFormValues) =>
-      unwrapAction(editing && editing !== 'new' ? await updateTreasuryAccount(editing.id, values) : await createTreasuryAccount(values)),
+      unwrapAction(
+        editing && editing !== 'new'
+          ? await updateTreasuryAccount(editing.id, values)
+          : await createTreasuryAccount(values)
+      ),
     onSuccess: (_data, values) => {
       toast.success(editing === 'new' ? `${values.name} creada` : `${values.name} actualizada`);
       setEditing(null);
@@ -107,7 +130,8 @@ export function TreasuryAccountsSection({
   });
 
   const toggle = useMutation({
-    mutationFn: async (account: TreasuryAccountRow) => unwrapAction(await setTreasuryAccountActive(account.id, !account.is_active)),
+    mutationFn: async (account: TreasuryAccountRow) =>
+      unwrapAction(await setTreasuryAccountActive(account.id, !account.is_active)),
     onSuccess: (_data, account) => {
       toast.success(account.is_active ? `${account.name} desactivada` : `${account.name} reactivada`);
       setConfirmDeactivate(null);
@@ -146,7 +170,7 @@ export function TreasuryAccountsSection({
       title="Cuentas y cajas"
       description="Cuentas bancarias y cajas de efectivo, con su saldo inicial. Compras paga desde acá."
       action={
-        canUpdate && (
+        canCreate && (
           <Button type="button" size="sm" variant="outline" onClick={() => openForm('new')}>
             <Plus className="mr-1 h-4 w-4" />
             Agregar
@@ -154,65 +178,79 @@ export function TreasuryAccountsSection({
         )
       }
     >
-        {accounts.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">Todavía no hay cuentas. Hacen falta para registrar movimientos y pagos.</p>
-        ) : (
-          <ul className="divide-y">
-            {accounts.map((a) => {
-              const Icon = a.kind === 'BANK' ? Landmark : a.kind === 'CHECK_PORTFOLIO' ? WalletCards : Wallet;
-              const opening = openings[a.id];
-              return (
-                <li key={a.id} className="flex items-center gap-3 py-2">
-                  <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className={a.is_active ? 'truncate' : 'truncate text-muted-foreground'}>{a.name}</span>
-                      {!a.is_active && <Badge variant="outline">Inactiva</Badge>}
-                    </div>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {TREASURY_ACCOUNT_KIND_LABELS[a.kind]}
-                      {a.bank_name ? ` · ${a.bank_name}` : ''}
-                      {a.account_number ? ` · ${a.account_number}` : ''}
-                      {a.cbu ? ` · CBU ${a.cbu}` : ''}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {a.kind === 'CHECK_PORTFOLIO'
-                        ? 'Cheques en cartera'
-                        : opening
-                          ? `Saldo inicial ${formatMoney(opening.amount)} al ${formatDay(opening.date)}`
-                          : 'Sin saldo inicial'}
-                      {' · '}Saldo hoy <span className="tabular-nums">{formatMoney(a.balance)}</span>
-                    </p>
+      {accounts.length === 0 ? (
+        <p className="py-6 text-center text-sm text-muted-foreground">
+          Todavía no hay cuentas. Hacen falta para registrar movimientos y pagos.
+        </p>
+      ) : (
+        <ul className="divide-y">
+          {accounts.map((a) => {
+            const Icon = a.kind === 'BANK' ? Landmark : a.kind === 'CHECK_PORTFOLIO' ? WalletCards : Wallet;
+            const opening = openings[a.id];
+            return (
+              <li key={a.id} className="flex items-center gap-3 py-2">
+                <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className={a.is_active ? 'truncate' : 'truncate text-muted-foreground'}>{a.name}</span>
+                    {!a.is_active && <Badge variant="outline">Inactiva</Badge>}
                   </div>
-                  {canUpdate && (
-                    <div className="flex shrink-0 items-center">
-                      {a.is_active && a.kind !== 'CHECK_PORTFOLIO' && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          aria-label={`Saldo inicial de ${a.name}`}
-                          title="Saldo inicial"
-                          onClick={() => setOpeningFor(a)}
-                        >
-                          <Scale className="h-4 w-4" />
-                        </Button>
-                      )}
-                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8" aria-label={`Editar ${a.name}`} onClick={() => openForm(a)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {TREASURY_ACCOUNT_KIND_LABELS[a.kind]}
+                    {a.bank_name ? ` · ${a.bank_name}` : ''}
+                    {a.account_number ? ` · ${a.account_number}` : ''}
+                    {a.cbu ? ` · CBU ${a.cbu}` : ''}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {a.kind === 'CHECK_PORTFOLIO'
+                      ? 'Cheques en cartera'
+                      : opening
+                        ? `Saldo inicial ${formatMoney(opening.amount)} al ${formatDay(opening.date)}`
+                        : 'Sin saldo inicial'}
+                    {' · '}Saldo hoy <span className="tabular-nums">{formatMoney(a.balance)}</span>
+                  </p>
+                </div>
+                {(canUpdate || canDelete) && (
+                  <div className="flex shrink-0 items-center">
+                    {canUpdate && a.is_active && a.kind !== 'CHECK_PORTFOLIO' && (
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8"
-                        aria-label={a.is_active ? `Desactivar ${a.name}` : `Reactivar ${a.name}`}
-                        onClick={() => onToggle(a)}
-                        disabled={toggle.isPending}
+                        aria-label={`Saldo inicial de ${a.name}`}
+                        title="Saldo inicial"
+                        onClick={() => setOpeningFor(a)}
                       >
-                        {a.is_active ? <Power className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
+                        <Scale className="h-4 w-4" />
                       </Button>
+                    )}
+                    {canUpdate && (
+                      <>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          aria-label={`Editar ${a.name}`}
+                          onClick={() => openForm(a)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          aria-label={a.is_active ? `Desactivar ${a.name}` : `Reactivar ${a.name}`}
+                          onClick={() => onToggle(a)}
+                          disabled={toggle.isPending}
+                        >
+                          {a.is_active ? <Power className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
+                        </Button>
+                      </>
+                    )}
+                    {canDelete && (
                       <Button
                         type="button"
                         variant="ghost"
@@ -223,13 +261,14 @@ export function TreasuryAccountsSection({
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
       <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
         <DialogContent className="sm:max-w-md">
@@ -267,7 +306,17 @@ export function TreasuryAccountsSection({
                   <FormItem>
                     <FormLabel>Nombre</FormLabel>
                     <FormControl>
-                      <Input autoFocus placeholder={kind === 'BANK' ? 'Banco Galicia CC $' : kind === 'CHECK_PORTFOLIO' ? 'Cartera de cheques' : 'Caja administración'} {...field} />
+                      <Input
+                        autoFocus
+                        placeholder={
+                          kind === 'BANK'
+                            ? 'Banco Galicia CC $'
+                            : kind === 'CHECK_PORTFOLIO'
+                              ? 'Cartera de cheques'
+                              : 'Caja administración'
+                        }
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -318,8 +367,8 @@ export function TreasuryAccountsSection({
               )}
               {editing === 'new' && kind === 'CHECK_PORTFOLIO' && (
                 <p className="text-sm text-muted-foreground">
-                  Una cartera guarda los cheques recibidos de clientes. No lleva saldo inicial: los cheques que ya estén en mano se cargan desde
-                  Tesorería → Cheques → Carga inicial.
+                  Una cartera guarda los cheques recibidos de clientes. No lleva saldo inicial: los cheques que ya estén
+                  en mano se cargan desde Tesorería → Cheques → Carga inicial.
                 </p>
               )}
               {editing === 'new' && kind !== 'CHECK_PORTFOLIO' && (
@@ -358,7 +407,9 @@ export function TreasuryAccountsSection({
                       )}
                     />
                   </div>
-                  <FormDescription>Lo que había el día que se empieza a usar Tesorería. Negativo si arranca en descubierto.</FormDescription>
+                  <FormDescription>
+                    Lo que había el día que se empieza a usar Tesorería. Negativo si arranca en descubierto.
+                  </FormDescription>
                 </>
               )}
               <DialogFooter>
@@ -414,7 +465,9 @@ export function TreasuryAccountsSection({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Borrar {confirmDelete?.name}?</AlertDialogTitle>
-            <AlertDialogDescription>Solo se puede borrar una cuenta sin movimientos ni pagos. Si los tiene, desactivala.</AlertDialogDescription>
+            <AlertDialogDescription>
+              Solo se puede borrar una cuenta sin movimientos ni pagos. Si los tiene, desactivala.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={remove.isPending}>Volver</AlertDialogCancel>

@@ -1,5 +1,10 @@
 import 'server-only';
 
+import {
+  APPROVED_WITHOUT_ORDER_REQUEST_WHERE,
+  PENDING_APPROVAL_REQUEST_WHERE,
+} from '@/features/Mantenimiento/lib/open-requests';
+import { MAINTENANCE_ORDER_TERMINAL_STATUSES } from '@/features/Mantenimiento/lib/order-status';
 import type { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/shared/lib/prisma';
 
@@ -18,8 +23,6 @@ export type MaintenanceResourceKind = 'vehicles' | 'other_equipment';
 
 type MaintenanceClient = Prisma.TransactionClient | typeof prisma;
 
-/** Estados terminales de `maintenance_orders` (ver `Mantenimiento/lib/order-status.ts`). */
-const TERMINAL_ORDER_STATUSES = ['completed', 'rejected'];
 const OPEN_WORK_ORDER_STATUSES = ['pending', 'in_progress', 'paused'] as const;
 
 export interface PendingMaintenanceResult {
@@ -42,13 +45,13 @@ export async function hasPendingMaintenance(
 
   const [openOrders, pendingApproval, approvedWithoutOrder, openWorkOrders] = await Promise.all([
     client.maintenance_orders.count({
-      where: { ...owner, company_id: companyId, status: { notIn: TERMINAL_ORDER_STATUSES } },
+      where: { ...owner, company_id: companyId, status: { notIn: [...MAINTENANCE_ORDER_TERMINAL_STATUSES] } },
     }),
     client.maintenance_requests.count({
-      where: { ...owner, company_id: companyId, status: 'pending_approval' },
+      where: { ...owner, company_id: companyId, ...PENDING_APPROVAL_REQUEST_WHERE },
     }),
     client.maintenance_requests.count({
-      where: { ...owner, company_id: companyId, status: 'approved', maintenance_orders: { none: {} } },
+      where: { ...owner, company_id: companyId, ...APPROVED_WITHOUT_ORDER_REQUEST_WHERE },
     }),
     client.work_orders.count({
       where: { ...owner, company_id: companyId, status: { in: [...OPEN_WORK_ORDER_STATUSES] } },

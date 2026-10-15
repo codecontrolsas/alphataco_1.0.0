@@ -1,18 +1,20 @@
 'use server';
 
-import { requireDashboardView } from '@/features/Dashboard/lib/permissions.server';
+import { canViewDashboard } from '@/features/Dashboard/lib/permissions.server';
 import {
   equipmentDocumentSpec,
-  loadEquipmentDocumentRows,
   type EquipmentDocumentRow,
 } from '@/features/Documentacion/DocumentosEquipos/lib/equipment-document-rows.server';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { Logger } from '@/lib/logger';
 import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { applyTableState, facetCounts, paginate, type InMemoryTableSpec } from '@/shared/lib/in-memory-table';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { selectExpiringRows } from '../lib/expiring-documents.server';
+import type { VehicleExpiringDocListItem } from '../lib/expiring-docs-types';
+import { loadVehicleExpiringRows } from '../lib/expiring-rows.server';
+
+/** Tope de filas por export: más que esto se pide acotar con filtros. */
+const EXPORT_MAX_ROWS = 10_000;
 
 const logger = new Logger('features/Dashboard/Documentacion/Vehiculos');
 
@@ -47,23 +49,6 @@ const SPEC: InMemoryTableSpec<EquipmentDocumentRow> = {
 };
 
 // ============================================================================
-// ROWS
-// ============================================================================
-
-/**
- * Documentos de equipos activos que ya vencieron o vencen en los próximos 30 días: las filas del
- * motor de cumplimiento (estado derivado en hora argentina), sin faltantes ni "ya no aplica".
- */
-async function loadRows() {
-  await requireDashboardView('vehiculos');
-  const [companyId, canViewPrivate] = await Promise.all([
-    getActiveCompanyId(),
-    checkPermissionServer('documentacion', 'documentos-de-equipos', 'view_private'),
-  ]);
-  return selectExpiringRows(await loadEquipmentDocumentRows(companyId, false, canViewPrivate, ''));
-}
-
-// ============================================================================
 // PAGINATED QUERY
 // ============================================================================
 
@@ -72,7 +57,7 @@ export async function getVehicleExpiringDocsPaginated(searchParams: DataTableSea
 
   try {
     const state = parseSearchParams(searchParams);
-    const filtered = applyTableState(await loadRows(), state, SPEC);
+    const filtered = applyTableState(await loadVehicleExpiringRows(), state, SPEC);
     return { data: paginate(filtered, state), total: filtered.length };
   } catch (error) {
     logger.error('Error al obtener documentos de vehículos por vencer', { data: { error } });
@@ -84,15 +69,27 @@ export async function getVehicleExpiringDocsPaginated(searchParams: DataTableSea
 // EXPORT QUERY (sin paginación)
 // ============================================================================
 
-export async function getAllVehicleExpiringDocsForExport(searchParams: DataTableSearchParams) {
+export async function getAllVehicleExpiringDocsForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<VehicleExpiringDocListItem[]>> {
   logger.debug('Exportando documentos de vehículos por vencer');
+
+  if (!(await canViewDashboard('vehiculos')))
+    return { ok: false, message: 'No tenés permiso para exportar esta lista' };
 
   try {
     const state = parseSearchParams(searchParams);
-    return applyTableState(await loadRows(), state, SPEC);
+    const rows = applyTableState(await loadVehicleExpiringRows(), state, SPEC);
+    if (rows.length > EXPORT_MAX_ROWS) {
+      return {
+        ok: false,
+        message: `La exportación supera el máximo de ${EXPORT_MAX_ROWS.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`,
+      };
+    }
+    return { ok: true, data: rows };
   } catch (error) {
     logger.error('Error al exportar documentos de vehículos por vencer', { data: { error } });
-    throw new Error('No se pudo exportar la lista. Intente nuevamente.');
+    return { ok: false, message: 'No se pudo exportar la lista. Intente nuevamente.' };
   }
 }
 
@@ -114,7 +111,7 @@ export async function getVehicleExpiringDocsSingleFacet(
   logger.debug('Obteniendo facet de documentos de vehículos por vencer', { data: { columnId } });
 
   try {
-    const result = facetCounts(await loadRows(), parseSearchParams(searchParams ?? {}), SPEC, columnId);
+    const result = facetCounts(await loadVehicleExpiringRows(), parseSearchParams(searchParams ?? {}), SPEC, columnId);
     if (!result) {
       logger.warn('columnId no reconocido en getVehicleExpiringDocsSingleFacet', { data: { columnId } });
       return null;
@@ -127,9 +124,3 @@ export async function getVehicleExpiringDocsSingleFacet(
     return null;
   }
 }
-
-// ============================================================================
-// TIPOS EXPORTADOS
-// ============================================================================
-
-export type VehicleExpiringDocListItem = Awaited<ReturnType<typeof getVehicleExpiringDocsPaginated>>['data'][number];

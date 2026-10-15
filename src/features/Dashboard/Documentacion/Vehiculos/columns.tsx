@@ -8,7 +8,7 @@ import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers'
 import type { ColumnDef } from '@tanstack/react-table';
 import { AlertTriangle, CheckCircle2, Truck, XCircle } from 'lucide-react';
 import Link from 'next/link';
-import type { VehicleExpiringDocListItem } from './actions.server';
+import type { VehicleExpiringDocListItem } from '../lib/expiring-docs-types';
 
 // ============================================================================
 // LABELS E ICONOS DE ESTADO

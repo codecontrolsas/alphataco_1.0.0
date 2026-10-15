@@ -3,7 +3,11 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { DataTable, DataTableColumnHeader, type DataTableFacetedFilterConfig } from '@/shared/components/common/DataTable';
+import {
+  DataTable,
+  DataTableColumnHeader,
+  type DataTableFacetedFilterConfig,
+} from '@/shared/components/common/DataTable';
 import {
   inMemoryDateSortingFn,
   inMemoryFacetedFilterFn,
@@ -12,7 +16,7 @@ import {
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Check, X } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { fetchMaintenanceGroupsActionType, fetchTypesOfRepairActionType } from './actions/maintenanceGroupActions';
 
 type GroupRow = fetchMaintenanceGroupsActionType['groups'][number] & Record<string, unknown>;
@@ -23,6 +27,8 @@ interface MaintenanceGroupsTableProps {
   types: RepairTypes;
   onEdit: (group: fetchMaintenanceGroupsActionType['groups'][number]) => void;
   canEdit: boolean;
+  /** Botón "Nuevo grupo" en la barra de la tabla. */
+  toolbarActions?: ReactNode;
 }
 
 const DEFAULT_VISIBLE_FILTERS = ['name', 'types', 'is_active'];
@@ -35,7 +41,11 @@ function getTypeNames(row: GroupRow, types: RepairTypes): string[] {
     .filter((name): name is string => !!name);
 }
 
-function getColumns(types: RepairTypes, onEdit: MaintenanceGroupsTableProps['onEdit'], canEdit: boolean): ColumnDef<GroupRow>[] {
+function getColumns(
+  types: RepairTypes,
+  onEdit: MaintenanceGroupsTableProps['onEdit'],
+  canEdit: boolean
+): ColumnDef<GroupRow>[] {
   const columns: ColumnDef<GroupRow>[] = [
     {
       id: 'name',
@@ -60,7 +70,10 @@ function getColumns(types: RepairTypes, onEdit: MaintenanceGroupsTableProps['onE
           <TooltipProvider delayDuration={100}>
             <Tooltip>
               <TooltipTrigger asChild>
-                <button type="button" className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <button
+                  type="button"
+                  className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
                   <Badge variant="default" className="cursor-pointer select-none">
                     {first} +{rest.length}
                   </Badge>
@@ -86,7 +99,9 @@ function getColumns(types: RepairTypes, onEdit: MaintenanceGroupsTableProps['onE
       accessorKey: 'description',
       meta: { title: 'Descripción' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción" />,
-      cell: ({ row }) => <span className="whitespace-pre-line text-muted-foreground">{row.original.description || '-'}</span>,
+      cell: ({ row }) => (
+        <span className="whitespace-pre-line text-muted-foreground">{row.original.description || '-'}</span>
+      ),
       filterFn: inMemoryTextFilterFn,
     },
     {
@@ -96,7 +111,11 @@ function getColumns(types: RepairTypes, onEdit: MaintenanceGroupsTableProps['onE
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
       cell: ({ row }) => (
         <Badge variant={row.original.is_active ? 'success' : 'default'}>
-          {row.original.is_active ? <Check aria-hidden="true" className="mr-1 h-3 w-3" /> : <X aria-hidden="true" className="mr-1 h-3 w-3" />}
+          {row.original.is_active ? (
+            <Check aria-hidden="true" className="mr-1 h-3 w-3" />
+          ) : (
+            <X aria-hidden="true" className="mr-1 h-3 w-3" />
+          )}
           {row.original.is_active ? 'Activo' : 'Inactivo'}
         </Badge>
       ),
@@ -108,7 +127,9 @@ function getColumns(types: RepairTypes, onEdit: MaintenanceGroupsTableProps['onE
       meta: { title: 'Creado' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Creado" />,
       cell: ({ row }) => (
-        <span className="tabular-nums">{row.original.created_at ? formatArgentinaDay(row.original.created_at) : '-'}</span>
+        <span className="tabular-nums">
+          {row.original.created_at ? formatArgentinaDay(row.original.created_at) : '-'}
+        </span>
       ),
       // El modo in-memory no resuelve rangos de fecha: se ordena y se exporta, sin filtro.
       sortingFn: inMemoryDateSortingFn,
@@ -133,7 +154,7 @@ function getColumns(types: RepairTypes, onEdit: MaintenanceGroupsTableProps['onE
   return columns;
 }
 
-function MaintenanceGroupsTable({ groups, types, onEdit, canEdit }: MaintenanceGroupsTableProps) {
+function MaintenanceGroupsTable({ groups, types, onEdit, canEdit, toolbarActions }: MaintenanceGroupsTableProps) {
   const rows = groups as GroupRow[];
   const columns = useMemo(() => getColumns(types, onEdit, canEdit), [types, onEdit, canEdit]);
 
@@ -161,28 +182,22 @@ function MaintenanceGroupsTable({ groups, types, onEdit, canEdit }: MaintenanceG
   );
 
   return (
-    <div className="ml-4">
-      <div className="flex justify-between">
-        <h2 className="text-xl font-bold">Grupos de Reparación</h2>
-      </div>
-      <div className="mt-4">
-        <DataTable
-          columns={columns}
-          data={rows}
-          totalRows={rows.length}
-          searchParams={{}}
-          inMemory
-          tableId="maintenance-groups-table"
-          paramNamespace="maintenance-groups-table"
-          facetedFilters={facetedFilters}
-          initialColumnVisibility={initialColumnVisibility}
-          initialFilterVisibility={initialFilterVisibility}
-          searchPlaceholder="Buscar por nombre o descripción..."
-          showFilterToggle
-          emptyMessage="No hay grupos de reparación cargados"
-        />
-      </div>
-    </div>
+    <DataTable
+      columns={columns}
+      data={rows}
+      totalRows={rows.length}
+      searchParams={{}}
+      inMemory
+      toolbarActions={toolbarActions}
+      tableId="maintenance-groups-table"
+      paramNamespace="maintenance-groups-table"
+      facetedFilters={facetedFilters}
+      initialColumnVisibility={initialColumnVisibility}
+      initialFilterVisibility={initialFilterVisibility}
+      searchPlaceholder="Buscar por nombre o descripción..."
+      showFilterToggle
+      emptyMessage="No hay grupos de reparación cargados"
+    />
   );
 }
 

@@ -1,17 +1,17 @@
 'use server';
 
-import { requireDashboardView } from '@/features/Dashboard/lib/permissions.server';
-import {
-  employeeDocumentSpec,
-  loadEmployeeDocumentRows,
-} from '@/features/Documentacion/DocumentosEmpleados/lib/employee-document-rows.server';
-import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import { canViewDashboard } from '@/features/Dashboard/lib/permissions.server';
+import { employeeDocumentSpec } from '@/features/Documentacion/DocumentosEmpleados/lib/employee-document-rows.server';
 import { Logger } from '@/lib/logger';
 import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { applyTableState, facetCounts, paginate } from '@/shared/lib/in-memory-table';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { selectExpiringRows } from '../lib/expiring-documents.server';
+import type { EmployeeExpiringDocListItem } from '../lib/expiring-docs-types';
+import { loadEmployeeExpiringRows } from '../lib/expiring-rows.server';
+
+/** Tope de filas por export: más que esto se pide acotar con filtros. */
+const EXPORT_MAX_ROWS = 10_000;
 
 const logger = new Logger('features/Dashboard/Documentacion/Empleados');
 
@@ -30,23 +30,6 @@ const SPEC: typeof BASE_SPEC = {
 };
 
 // ============================================================================
-// ROWS
-// ============================================================================
-
-/**
- * Documentos de empleados activos que ya vencieron o vencen en los próximos 30 días: las filas del
- * motor de cumplimiento (estado derivado en hora argentina), sin faltantes ni "ya no aplica".
- */
-async function loadRows() {
-  await requireDashboardView('empleados');
-  const [companyId, canViewPrivate] = await Promise.all([
-    getActiveCompanyId(),
-    checkPermissionServer('documentacion', 'documentos-de-empleados', 'view_private'),
-  ]);
-  return selectExpiringRows(await loadEmployeeDocumentRows(companyId, false, canViewPrivate, ''));
-}
-
-// ============================================================================
 // PAGINATED QUERY
 // ============================================================================
 
@@ -55,7 +38,7 @@ export async function getEmployeeExpiringDocsPaginated(searchParams: DataTableSe
 
   try {
     const state = parseSearchParams(searchParams);
-    const filtered = applyTableState(await loadRows(), state, SPEC);
+    const filtered = applyTableState(await loadEmployeeExpiringRows(), state, SPEC);
     return { data: paginate(filtered, state), total: filtered.length };
   } catch (error) {
     logger.error('Error al obtener documentos de empleados por vencer', { data: { error } });
@@ -67,15 +50,27 @@ export async function getEmployeeExpiringDocsPaginated(searchParams: DataTableSe
 // EXPORT QUERY (sin paginación)
 // ============================================================================
 
-export async function getAllEmployeeExpiringDocsForExport(searchParams: DataTableSearchParams) {
+export async function getAllEmployeeExpiringDocsForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<EmployeeExpiringDocListItem[]>> {
   logger.debug('Exportando documentos de empleados por vencer');
+
+  if (!(await canViewDashboard('empleados')))
+    return { ok: false, message: 'No tenés permiso para exportar esta lista' };
 
   try {
     const state = parseSearchParams(searchParams);
-    return applyTableState(await loadRows(), state, SPEC);
+    const rows = applyTableState(await loadEmployeeExpiringRows(), state, SPEC);
+    if (rows.length > EXPORT_MAX_ROWS) {
+      return {
+        ok: false,
+        message: `La exportación supera el máximo de ${EXPORT_MAX_ROWS.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`,
+      };
+    }
+    return { ok: true, data: rows };
   } catch (error) {
     logger.error('Error al exportar documentos de empleados por vencer', { data: { error } });
-    throw new Error('No se pudo exportar la lista. Intente nuevamente.');
+    return { ok: false, message: 'No se pudo exportar la lista. Intente nuevamente.' };
   }
 }
 
@@ -97,7 +92,7 @@ export async function getEmployeeExpiringDocsSingleFacet(
   logger.debug('Obteniendo facet de documentos de empleados por vencer', { data: { columnId } });
 
   try {
-    const result = facetCounts(await loadRows(), parseSearchParams(searchParams ?? {}), SPEC, columnId);
+    const result = facetCounts(await loadEmployeeExpiringRows(), parseSearchParams(searchParams ?? {}), SPEC, columnId);
     if (!result) {
       logger.warn('columnId no reconocido en getEmployeeExpiringDocsSingleFacet', { data: { columnId } });
       return null;
@@ -110,9 +105,3 @@ export async function getEmployeeExpiringDocsSingleFacet(
     return null;
   }
 }
-
-// ============================================================================
-// TIPOS EXPORTADOS
-// ============================================================================
-
-export type EmployeeExpiringDocListItem = Awaited<ReturnType<typeof getEmployeeExpiringDocsPaginated>>['data'][number];

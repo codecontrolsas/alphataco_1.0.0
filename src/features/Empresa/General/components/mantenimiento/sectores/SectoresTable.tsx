@@ -13,9 +13,8 @@ import {
 } from '@/shared/components/common/DataTable';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Building2, Check, Pencil, X } from 'lucide-react';
-import { use, useMemo } from 'react';
+import { use, useMemo, type ReactNode } from 'react';
 import type { WorkshopSector } from '../../../actions/workshops.server';
-import { useSectoresStore } from './store/sectores.store';
 
 const TABLE_ID = 'workshop-sectors';
 
@@ -109,13 +108,18 @@ export function getSectoresColumns(
 export function SectoresTable({
   workshopSectors,
   preferences,
+  onEdit,
+  toolbarActions,
 }: {
   workshopSectors: Promise<WorkshopSector[]>;
   preferences: Promise<TablePreferences>;
+  /** Abre el Sheet de edición (lo maneja `SectoresTabClient`). */
+  onEdit: (sector: WorkshopSector) => void;
+  /** Botón "Nuevo sector" en la barra de la tabla. */
+  toolbarActions?: ReactNode;
 }) {
   const sectorsData = use(workshopSectors);
   const prefs = use(preferences);
-  const onEdit = useSectoresStore((state) => state.setSector);
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('configuracion', 'sectores_taller', 'update');
 
@@ -148,8 +152,7 @@ export function SectoresTable({
   }, [data]);
 
   return (
-    <div className="flex flex-col gap-4 p-4">
-      <h2 className="text-xl font-bold">Sectores de Taller</h2>
+    <div className="flex flex-col gap-4">
       <DataTable
         columns={columns}
         data={data}
@@ -157,6 +160,7 @@ export function SectoresTable({
         searchParams={{}}
         inMemory
         mobileCards
+        toolbarActions={toolbarActions}
         tableId={TABLE_ID}
         paramNamespace={TABLE_ID}
         facetedFilters={facetedFilters}

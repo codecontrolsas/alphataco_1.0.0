@@ -39,7 +39,7 @@ export async function DepartmentAbsenceCharts() {
   });
 
   return (
-    <Card>
+    <Card className="@container min-w-0">
       <CardHeader className=" pb-0">
         <CardTitle className="text-lg font-semibold">Motivos de Ausencia por Departamento</CardTitle>
         <CardDescription className="text-sm text-muted-foreground">
@@ -53,7 +53,7 @@ export async function DepartmentAbsenceCharts() {
           </p>
         ) : (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6" aria-hidden="true">
+            <div className="grid grid-cols-1 @xl:grid-cols-2 gap-6" aria-hidden="true">
               {filteredData.map((dept, index) => {
                 const deptChartData = dept.data.map((r) => {
                   const key = sanitizeKey(r.name);

@@ -9,6 +9,7 @@ import { DailyReportsSkeleton } from '@/features/Comercial/Comerce/fallback/Dail
 import FacturacionTabContent from '@/features/Comercial/Facturacion/FacturacionTabContent';
 import { InvoicesTableSkeleton } from '@/features/Comercial/Facturacion/fallback/InvoicesTableSkeleton';
 import ReglasPrecioTabContent from '@/features/Comercial/ReglasPrecio/ReglasPrecioTabContent';
+import { MensureUnitsTableSkeleton } from '@/features/Empresa/Clientes/components/meansure_units/fallback/MensureUnitsTableSkeleton';
 import { SectionManagerServer } from '@/features/TabsManager';
 import { ClipboardList, FileSpreadsheet, FileText, Receipt, Ruler, TrendingUp, Users } from 'lucide-react';
 import { Suspense } from 'react';
@@ -70,8 +71,8 @@ export default function ComerceTabContent({
           moduleSlug: 'comercial',
           tabSlug: 'mensure_units',
           content: (
-            <Suspense fallback={<Skeleton className="h-[400px] w-full rounded-md" />}>
-              <MensureUnitsWrapper />
+            <Suspense fallback={<MensureUnitsTableSkeleton />}>
+              <MensureUnitsWrapper searchParams={searchParams} permissions={permissions} />
             </Suspense>
           ),
         },

@@ -51,12 +51,12 @@ export function ClientRankingChart({ data, periodLabel }: ClientRankingChartProp
   const chartHeight = Math.max(180, displayData.length * 40 + 40);
 
   return (
-    <Card className="py-0">
+    <Card className="@container py-0">
       <CardHeader className="pb-2 pt-4 px-6">
         <CardTitle className="text-base">Servicios por cliente</CardTitle>
         <CardDescription>{periodLabel}</CardDescription>
       </CardHeader>
-      <CardContent className="px-2 pb-4 sm:px-6">
+      <CardContent className="px-2 pb-4 @xl:px-6">
         <ChartContainer config={chartConfig} className="w-full" style={{ height: chartHeight }}>
           <BarChart accessibilityLayer data={chartData} layout="vertical" margin={{ left: 0, right: 12 }}>
             <XAxis type="number" hide />

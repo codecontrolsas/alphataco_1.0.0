@@ -8,6 +8,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { invalidateAllMaintenanceQueries } from '@/features/Mantenimiento/utils/queryInvalidation';
+import { useCatalogSheetBusy } from '@/shared/components/common/CatalogFormSheet';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
@@ -54,6 +55,7 @@ function MaintenanceGroupFormBody({ group, baselineTypeIds, types, onDone }: For
   const router = useRouter();
   const queryClient = useQueryClient();
   const [isSaving, setIsSaving] = useState(false);
+  const setBusy = useCatalogSheetBusy();
 
   const form = useForm<MaintenanceGroupFormValues>({
     resolver: zodResolver(maintenanceGroupFormSchema),
@@ -76,13 +78,15 @@ function MaintenanceGroupFormBody({ group, baselineTypeIds, types, onDone }: For
     invalidateAllMaintenanceQueries(queryClient);
     queryClient.invalidateQueries({ queryKey: ['maintenance-group'] });
     queryClient.invalidateQueries({ queryKey: ['datatable-facet'] });
-    router.refresh();
+    // Primero se cierra el Sheet y después se refresca la ruta.
     onDone();
+    router.refresh();
   };
 
   const handleSubmit = async (values: MaintenanceGroupFormValues) => {
     if (isSaving) return;
     setIsSaving(true);
+    setBusy(true);
     try {
       const groupData = { name: values.name, description: values.description, is_active: values.is_active };
       if (!group) {
@@ -100,6 +104,7 @@ function MaintenanceGroupFormBody({ group, baselineTypeIds, types, onDone }: For
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Error al guardar el grupo');
     } finally {
+      setBusy(false);
       setIsSaving(false);
     }
   };
@@ -108,9 +113,7 @@ function MaintenanceGroupFormBody({ group, baselineTypeIds, types, onDone }: For
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 w-[300px] max-w-full">
-        <h2 className="text-xl font-bold mb-4">{isEditing ? 'Editar Grupo de Reparación' : 'Crear Grupo de Reparación'}</h2>
-
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
         <FormField
           control={form.control}
           name="name"
@@ -132,7 +135,12 @@ function MaintenanceGroupFormBody({ group, baselineTypeIds, types, onDone }: For
             <FormItem>
               <FormLabel>Descripción</FormLabel>
               <FormControl>
-                <Textarea {...field} value={field.value ?? ''} placeholder="Descripción del grupo" className="min-h-[60px] resize-y" />
+                <Textarea
+                  {...field}
+                  value={field.value ?? ''}
+                  placeholder="Descripción del grupo"
+                  className="min-h-[60px] resize-y"
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -204,8 +212,8 @@ function MaintenanceGroupFormBody({ group, baselineTypeIds, types, onDone }: For
           <Button variant="brand" type="submit" disabled={isSaving}>
             {isSaving ? 'Guardando...' : isEditing ? 'Editar' : 'Crear'}
           </Button>
-          <Button type="button" onClick={isEditing ? onDone : () => form.reset(EMPTY_VALUES)} variant="outline" disabled={isSaving}>
-            {isEditing ? 'Cancelar' : 'Limpiar'}
+          <Button type="button" onClick={onDone} variant="outline" disabled={isSaving}>
+            Cancelar
           </Button>
         </div>
       </form>
@@ -233,7 +241,7 @@ function MaintenanceGroupForm({ group, types, onDone }: MaintenanceGroupFormProp
 
   if (baselineQuery.isPending) {
     return (
-      <div className="w-[300px] max-w-full space-y-3" aria-busy="true">
+      <div className="space-y-3" aria-busy="true">
         <Skeleton className="h-6 w-48" />
         <Skeleton className="h-9 w-full" />
         <Skeleton className="h-16 w-full" />
@@ -245,7 +253,7 @@ function MaintenanceGroupForm({ group, types, onDone }: MaintenanceGroupFormProp
   const fresh = baselineQuery.data?.group ?? null;
   if (baselineQuery.isError || baselineQuery.data?.error || !fresh) {
     return (
-      <div role="alert" className="w-[300px] max-w-full space-y-2 text-sm">
+      <div role="alert" className="space-y-2 text-sm">
         <p className="text-destructive">No se pudieron cargar los datos actuales del grupo.</p>
         <div className="flex gap-2">
           <Button type="button" variant="outline" size="sm" onClick={() => baselineQuery.refetch()}>

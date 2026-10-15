@@ -71,7 +71,7 @@ export default function ServicesDetailDialog({ open, onOpenChange, initialDate }
 
   const totalMensual = servicesDetail?.reduce((sum, c) => sum + c.mensual_count, 0) ?? 0;
   const totalAdicional = servicesDetail?.reduce((sum, c) => sum + c.adicional_count, 0) ?? 0;
-  const grandTotal = totalMensual + totalAdicional;
+  const grandTotal = servicesDetail?.reduce((sum, c) => sum + c.total_count, 0) ?? 0;
 
   const handleExportImage = useCallback(async () => {
     if (!captureRef.current || !dateString) return;

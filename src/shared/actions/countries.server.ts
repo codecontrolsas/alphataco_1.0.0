@@ -49,7 +49,13 @@ export async function getHierarchyPositions() {
 export async function getWorkDiagrams() {
   const companyId = await activeCompanyOrNull();
   if (!companyId) return [];
-  return prisma.work_diagram.findMany({ where: withCompany({}, companyId), orderBy: { name: 'asc' } });
+  const rows = await prisma.work_diagram.findMany({ where: withCompany({}, companyId), orderBy: { name: 'asc' } });
+  // Los días son Decimal en Prisma: se pasan a number para poder cruzar al store del cliente.
+  return rows.map((row) => ({
+    ...row,
+    active_working_days: row.active_working_days === null ? null : Number(row.active_working_days),
+    inactive_working_days: row.inactive_working_days === null ? null : Number(row.inactive_working_days),
+  }));
 }
 
 /** Clientes (contratistas) de la empresa activa. */

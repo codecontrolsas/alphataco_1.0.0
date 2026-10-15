@@ -1,12 +1,13 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
+import { prisma } from '@/shared/lib/prisma';
+import { getSessionUserId } from '@/shared/lib/session';
 import { callFunction } from '@/shared/lib/sql';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { getSessionUserId } from '@/shared/lib/session';
-import { prisma } from '@/shared/lib/prisma';
 import { z } from 'zod';
 import { findTabDef } from '../lib/permissions-map-utils';
+import { resolveActionCopy, TAB_DESCRIPTIONS } from '../permission-catalog';
 import { PERMISSIONS } from '../permissions-map';
 import { userPermissionRowSchema } from './permissions.schemas';
 import { checkPermissionServer } from './permissions.server';
@@ -174,6 +175,8 @@ export async function getRolePermissionsServer(roleId: number): Promise<Array<{ 
 
 /**
  * Obtiene módulos con tabs y acciones, aplicando allowedActions del permissions-map.
+ * Nombre y descripción salen de la base, salvo lo que define `permission-catalog.ts`: la
+ * descripción de la tab (por id) y el texto puntual de una acción en una tab (override).
  */
 export async function getModulesWithTabsServer() {
   logger.debug('Obteniendo módulos con tabs');
@@ -218,9 +221,14 @@ export async function getModulesWithTabsServer() {
           // acciones custom (upload_private, view_all_requests, etc.) aparezcan en tabs
           // que nunca las declararon, contaminando role_permissions.
           const allowed = (tabDefinition as { allowedActions?: string[] } | null)?.allowedActions;
-          const tabActions = allowed ? actions.filter((a) => allowed.includes(a.slug)) : [];
+          const tabActions = allowed
+            ? actions
+                .filter((a) => allowed.includes(a.slug))
+                .map((a) => ({ ...a, ...resolveActionCopy(moduleSlug, tab.slug, a) }))
+            : [];
           return {
             ...tab,
+            description: TAB_DESCRIPTIONS[tab.id] ?? tab.description,
             actions: tabActions,
             subtabs: buildTabHierarchy(tab.id, moduleId, moduleSlug),
           };
@@ -348,18 +356,32 @@ export async function createRoleWithPermissions(data: {
 }
 
 /**
- * Actualiza un rol existente y reemplaza sus permisos en una sola transacción.
+ * Actualiza un rol existente y aplica el delta EXPLÍCITO de permisos en una sola transacción.
+ *
+ * `permissions.add` / `permissions.remove` son pares (tab, acción): la ausencia de un permiso
+ * en la petición no significa nada, nunca se borra "lo que no vino". El borrado queda acotado
+ * a los pares de `remove`. Devuelve los conteos reales de altas y bajas.
  */
 export async function updateRoleWithPermissions(data: {
   id: number;
   name: string;
   description?: string;
   color?: string;
-  permissions: Array<{ tabId: string; actionId: string }>;
+  permissions: {
+    add: Array<{ tab_id: string; action_id: string }>;
+    remove: Array<{ tab_id: string; action_id: string }>;
+  };
 }) {
   await assertCanManageRoles();
 
-  logger.debug('Actualizando rol con permisos', { data: { id: data.id, name: data.name } });
+  logger.debug('Actualizando rol con permisos', {
+    data: {
+      id: data.id,
+      name: data.name,
+      add: data.permissions.add.length,
+      remove: data.permissions.remove.length,
+    },
+  });
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -383,23 +405,34 @@ export async function updateRoleWithPermissions(data: {
         },
       });
 
-      // Reemplazar permisos: delete + createMany
-      await tx.role_permissions.deleteMany({
-        where: { role_id: BigInt(data.id) },
-      });
-
-      if (data.permissions.length > 0) {
-        await tx.role_permissions.createMany({
-          data: data.permissions.map((perm) => ({
+      let removed = 0;
+      if (data.permissions.remove.length > 0) {
+        const deleted = await tx.role_permissions.deleteMany({
+          where: {
             role_id: updatedRole.id,
-            tab_id: perm.tabId,
-            action_id: perm.actionId,
+            OR: data.permissions.remove.map((perm) => ({
+              tab_id: perm.tab_id,
+              action_id: perm.action_id,
+            })),
+          },
+        });
+        removed = deleted.count;
+      }
+
+      let added = 0;
+      if (data.permissions.add.length > 0) {
+        const created = await tx.role_permissions.createMany({
+          data: data.permissions.add.map((perm) => ({
+            role_id: updatedRole.id,
+            tab_id: perm.tab_id,
+            action_id: perm.action_id,
           })),
           skipDuplicates: true,
         });
+        added = created.count;
       }
 
-      return { ...updatedRole, id: Number(updatedRole.id) };
+      return { ...updatedRole, id: Number(updatedRole.id), added, removed };
     });
 
     return result;

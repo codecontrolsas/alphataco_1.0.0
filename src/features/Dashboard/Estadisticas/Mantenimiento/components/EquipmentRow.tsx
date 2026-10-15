@@ -155,7 +155,7 @@ export function EquipmentRow({ vehicle, daysElapsed }: EquipmentRowProps) {
         </div>
 
         {/* Status chip — slot dedicado, ancho fijo para alinear verticalmente entre filas */}
-        <div className="hidden md:flex w-[170px] shrink-0 justify-center">
+        <div className="hidden @2xl:flex w-[170px] shrink-0 justify-center">
           <span
             className={cn(
               'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium',
@@ -168,7 +168,7 @@ export function EquipmentRow({ vehicle, daysElapsed }: EquipmentRowProps) {
         </div>
 
         {/* Mobile: solo el icono coloreado en una caja minima (el chip completo no entra) */}
-        <div className="md:hidden shrink-0">
+        <div className="@2xl:hidden shrink-0">
           <Tooltip>
             <TooltipTrigger asChild>
               <span
@@ -183,7 +183,7 @@ export function EquipmentRow({ vehicle, daysElapsed }: EquipmentRowProps) {
         </div>
 
         {/* Progress bar */}
-        <div className="hidden sm:flex items-center gap-2 w-[180px] shrink-0">
+        <div className="hidden @xl:flex items-center gap-2 w-[180px] shrink-0">
           <Progress
             value={ratio}
             className={cn('h-2', indicatorClass)}

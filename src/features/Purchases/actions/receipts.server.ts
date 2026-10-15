@@ -1,6 +1,5 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { QUANTITY_SCALE, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { checkPermissionServer } from '@/features/Permissions';
@@ -15,12 +14,13 @@ import { prisma } from '@/shared/lib/prisma';
 import { storageRemove, storageUpload } from '@/shared/lib/storage';
 import { buildStorageFileUrl } from '@/shared/lib/storage-url';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { revalidatePath } from 'next/cache';
 import { NO_PERMISSION, UUID_RE, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import { nextPurchaseDocumentNumber } from '../lib/document-number';
+import { assertReceiptCancellationKeepsInvoicesCovered } from '../lib/invoices';
 import { lockRequestsForLines, recomputeRequestProgress, remainingOf, requestLineLabel } from '../lib/order-progress';
 import { canApplyPurchaseOrderAction, type PurchaseOrderStatus } from '../lib/order-state-machine';
 import { computeOrderLine, computeOrderTotals } from '../lib/order-totals';
-import { assertReceiptCancellationKeepsInvoicesCovered } from '../lib/invoices';
 import { lockPurchaseOrder, receivedByOrderLine, recomputeOrderReceiptStatus } from '../lib/orders';
 import { PurchaseError } from '../lib/purchase-errors';
 import { splitReceived } from '../lib/receipt-math';
@@ -80,7 +80,13 @@ const ORDER_LINE_SELECT = {
 export async function createPurchaseReceipt(
   values: PurchaseReceiptFormValues
 ): Promise<
-  ActionResult<{ id: string; number: string; movementNumber: string | null; warehouseName: string | null; complementNumber: string | null }>
+  ActionResult<{
+    id: string;
+    number: string;
+    movementNumber: string | null;
+    warehouseName: string | null;
+    complementNumber: string | null;
+  }>
 > {
   if (!(await checkPermissionServer('compras', 'recepciones', 'create'))) return fail(NO_PERMISSION);
   const parsed = purchaseReceiptFormSchema.safeParse(values);
@@ -97,7 +103,12 @@ export async function createPurchaseReceipt(
         const order = await lockPurchaseOrder(tx, companyId, input.orderId, 'receive');
         const orderRow = await tx.purchase_orders.findUniqueOrThrow({
           where: { id: order.id },
-          select: { number: true, payment_term_days: true, supplier_id: true, lines: { select: ORDER_LINE_SELECT, orderBy: { position: 'asc' } } },
+          select: {
+            number: true,
+            payment_term_days: true,
+            supplier_id: true,
+            lines: { select: ORDER_LINE_SELECT, orderBy: { position: 'asc' } },
+          },
         });
         const byId = new Map(orderRow.lines.map((line) => [line.id, line]));
         const seen = new Set<string>();
@@ -117,7 +128,8 @@ export async function createPurchaseReceipt(
         const materialLines = input.lines.filter((line) => byId.get(line.orderLineId)!.request_line.material);
         let warehouse: { id: string; name: string } | null = null;
         if (materialLines.length > 0) {
-          if (!input.warehouseId || !UUID_RE.test(input.warehouseId)) throw new PurchaseError('Elegí el depósito donde entra el material');
+          if (!input.warehouseId || !UUID_RE.test(input.warehouseId))
+            throw new PurchaseError('Elegí el depósito donde entra el material');
           const found = await tx.warehouses.findFirst({
             where: { id: input.warehouseId, company_id: companyId },
             select: { id: true, name: true, is_active: true },
@@ -207,7 +219,11 @@ export async function createPurchaseReceipt(
           const withinCount = Number(s.withinOrder);
           const parts: { orderLineId: string; quantity: string; serials: string[] }[] = [];
           if (scaled(s.withinOrder) > ZERO) {
-            parts.push({ orderLineId: s.orderLine.id, quantity: s.withinOrder, serials: s.line.serialNumbers.slice(0, withinCount) });
+            parts.push({
+              orderLineId: s.orderLine.id,
+              quantity: s.withinOrder,
+              serials: s.line.serialNumbers.slice(0, withinCount),
+            });
           }
           if (scaled(s.excess) > ZERO) {
             parts.push({
@@ -276,7 +292,9 @@ export async function createPurchaseReceipt(
       prisma,
       TRANSACTION_OPTIONS
     );
-    logger.info('Recepción registrada', { data: { number: result.number, movement: result.movementNumber, complement: result.complementNumber } });
+    logger.info('Recepción registrada', {
+      data: { number: result.number, movement: result.movementNumber, complement: result.complementNumber },
+    });
     revalidate();
     return ok(result);
   } catch (error) {
@@ -291,16 +309,23 @@ export async function uploadPurchaseReceiptAttachment(id: string, formData: Form
   const file = formData.get('file');
   if (!(file instanceof File) || file.size === 0) return fail('Elegí el archivo');
   if (file.size > RECEIPT_ATTACHMENT_MAX_BYTES) return fail('El archivo supera los 10 MB');
-  if (!(RECEIPT_ATTACHMENT_TYPES as readonly string[]).includes(file.type)) return fail('El archivo tiene que ser PDF o imagen');
+  if (!(RECEIPT_ATTACHMENT_TYPES as readonly string[]).includes(file.type))
+    return fail('El archivo tiene que ser PDF o imagen');
   const companyId = await getActiveCompanyId();
-  const receipt = await prisma.purchase_receipts.findFirst({ where: { id, company_id: companyId }, select: { supplier_id: true } });
+  const receipt = await prisma.purchase_receipts.findFirst({
+    where: { id, company_id: companyId },
+    select: { supplier_id: true },
+  });
   if (!receipt) return fail('La recepción no existe');
 
   const path = `${companyId}/${receipt.supplier_id}/receipts/${Date.now()}-${safeFileName(file.name)}`;
   const uploaded = await storageUpload(SUPPLIER_FILES_BUCKET, path, file);
   if (!uploaded.ok) return fail('No se pudo subir el archivo. Intentá de nuevo.');
   try {
-    await prisma.purchase_receipts.update({ where: { id }, data: { attachment_path: path, attachment_name: file.name } });
+    await prisma.purchase_receipts.update({
+      where: { id },
+      data: { attachment_path: path, attachment_name: file.name },
+    });
     revalidate();
     return ok(null);
   } catch (error) {
@@ -344,7 +369,12 @@ export async function cancelPurchaseReceipt(id: string, reason: string): Promise
             where: { movement_id: receipt.stockMovementId },
             select: { material_id: true },
           });
-          if (await hasTireMaterials(tx, movementLines.map((line) => line.material_id))) {
+          if (
+            await hasTireMaterials(
+              tx,
+              movementLines.map((line) => line.material_id)
+            )
+          ) {
             throw new PurchaseError('Las recepciones con cubiertas no se anulan: se corrigen desde Gomería');
           }
         }
@@ -372,17 +402,33 @@ export async function cancelPurchaseReceipt(id: string, reason: string): Promise
         if (complements.length > 0) {
           await tx.purchase_orders.updateMany({
             where: { id: { in: complements.map((c) => c.id) } },
-            data: { status: 'CANCELLED', cancelled_by: profile.id, cancelled_at: now, cancel_reason: `Se anuló la recepción ${receipt.number}: ${motive.data}` },
+            data: {
+              status: 'CANCELLED',
+              cancelled_by: profile.id,
+              cancelled_at: now,
+              cancel_reason: `Se anuló la recepción ${receipt.number}: ${motive.data}`,
+            },
           });
         }
 
         const reversal = receipt.stockMovementId
-          ? await reverseStockMovement(tx, companyId, profile.id, receipt.stockMovementId, `Anulación de ${receipt.number}: ${motive.data}`)
+          ? await reverseStockMovement(
+              tx,
+              companyId,
+              profile.id,
+              receipt.stockMovementId,
+              `Anulación de ${receipt.number}: ${motive.data}`
+            )
           : null;
 
         await tx.purchase_receipts.update({
           where: { id: receipt.id },
-          data: { cancelled_by: profile.id, cancelled_at: now, cancel_reason: motive.data, reversal_movement_id: reversal?.id ?? null },
+          data: {
+            cancelled_by: profile.id,
+            cancelled_at: now,
+            cancel_reason: motive.data,
+            reversal_movement_id: reversal?.id ?? null,
+          },
         });
 
         await recomputeOrderReceiptStatus(tx, receipt.orderId);
@@ -428,14 +474,23 @@ export async function getReceiptFormData(orderId: string) {
   ]);
 
   return {
-    order: { id: order.id, number: order.number, supplier: order.supplier, canReceive: canApplyPurchaseOrderAction(status, 'receive') },
+    order: {
+      id: order.id,
+      number: order.number,
+      supplier: order.supplier,
+      canReceive: canApplyPurchaseOrderAction(status, 'receive'),
+    },
     warehouses,
     lines: order.lines.map((line) => {
       const material = line.request_line.material;
       return {
         orderLineId: line.id,
         position: line.position,
-        itemLabel: requestLineLabel({ code: material?.code ?? null, name: material?.name ?? null, description: line.request_line.description }),
+        itemLabel: requestLineLabel({
+          code: material?.code ?? null,
+          name: material?.name ?? null,
+          description: line.request_line.description,
+        }),
         isMaterial: material !== null,
         trackingType: material?.tracking_type ?? null,
         unitAbbr: line.request_line.unit.abbreviation,
@@ -451,7 +506,8 @@ export async function getReceiptFormData(orderId: string) {
 
 export type ReceiptFormData = NonNullable<Awaited<ReturnType<typeof getReceiptFormData>>>;
 
-const userName = (p: { fullname: string | null; email: string | null } | null) => (p ? (p.fullname ?? p.email ?? 'Usuario') : null);
+const userName = (p: { fullname: string | null; email: string | null } | null) =>
+  p ? p.fullname ?? p.email ?? 'Usuario' : null;
 
 /** Detalle de la recepcion: OC, deposito, remito, lineas, movimientos, complementaria e historial. */
 export async function getPurchaseReceiptDetail(id: string) {
@@ -487,7 +543,6 @@ export async function getPurchaseReceiptDetail(id: string) {
         select: {
           id: true,
           quantity: true,
-          unit_cost: true,
           batch_number: true,
           batch_expires_on: true,
           serial_numbers: true,
@@ -522,7 +577,10 @@ export async function getPurchaseReceiptDetail(id: string) {
     deliveryNote: receipt.delivery_note,
     notes: receipt.notes,
     attachment: receipt.attachment_path
-      ? { name: receipt.attachment_name ?? 'remito', url: buildStorageFileUrl(SUPPLIER_FILES_BUCKET, receipt.attachment_path) }
+      ? {
+          name: receipt.attachment_name ?? 'remito',
+          url: buildStorageFileUrl(SUPPLIER_FILES_BUCKET, receipt.attachment_path),
+        }
       : null,
     order: receipt.order,
     supplier: receipt.supplier,
@@ -553,7 +611,14 @@ export async function getPurchaseReceiptDetail(id: string) {
     history: [
       { event: 'Registrada', at: at(receipt.created_at), by: userName(receipt.creator), notes: receipt.notes },
       ...(receipt.cancelled_at
-        ? [{ event: 'Anulada', at: at(receipt.cancelled_at), by: userName(receipt.canceller), notes: receipt.cancel_reason }]
+        ? [
+            {
+              event: 'Anulada',
+              at: at(receipt.cancelled_at),
+              by: userName(receipt.canceller),
+              notes: receipt.cancel_reason,
+            },
+          ]
         : []),
     ],
     can: { cancel: !cancelled && canUpdate },

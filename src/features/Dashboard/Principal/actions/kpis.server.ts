@@ -6,7 +6,7 @@ import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { buildTodayReportWhere } from '../lib/dashboard-dates';
+import { buildTodayServicesWhere } from '../lib/dashboard-dates';
 import { summarizeFleet } from '../lib/indicators';
 import { getEquipmentIndicators } from './fleet.server';
 
@@ -79,7 +79,7 @@ export async function getTodayServicesKpi() {
   try {
     const companyId = await getActiveCompanyId();
     const totalServices = await prisma.dailyreportrows.count({
-      where: { status: { in: ['pendiente', 'ejecutado'] }, ...buildTodayReportWhere(companyId) },
+      where: buildTodayServicesWhere(companyId),
     });
     return { totalServices };
   } catch (error) {

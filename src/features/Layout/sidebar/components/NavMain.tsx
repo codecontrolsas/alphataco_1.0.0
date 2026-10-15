@@ -13,12 +13,22 @@ import {
   SidebarMenuSubItem,
 } from '@/components/ui/sidebar';
 import { useUnreadSupportTicketsCount } from '@/features/Ayuda/hooks/useUnreadSupportTicketsCount';
+import { useActiveDashboardBoard } from '@/features/Dashboard/Boards/hooks/useActiveDashboardBoard';
 import { cn } from '@/lib/utils';
 import { ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useMemo } from 'react';
-import { SUB_ITEM_ICONS, navigationLinks, subLinkHref, subLinkKey, type NavBadge } from '../constants/navigation';
+import {
+  SECTION_COUNTER_LABELS,
+  SUB_ITEM_ICONS,
+  navigationLinks,
+  subLinkHref,
+  subLinkKey,
+  type NavBadge,
+} from '../constants/navigation';
+import { useModuleSectionCounts } from '../hooks/useModuleSectionCounts';
+import type { SectionCountsByTab } from '../types/section-counts';
 import { buildSidebarItems, createLinkRegex, findBestMatch, resolveActiveTab } from '../utils/sidebar.utils';
 
 /**
@@ -43,6 +53,22 @@ const BADGE_CLASS = 'bg-destructive text-destructive-foreground pointer-events-n
 
 function badgeLabel(count: number): string {
   return count > 9 ? '9+' : String(count);
+}
+
+/**
+ * Carga los contadores de sección de UN módulo y se los pasa a sus sub-items. Se monta dentro del
+ * `CollapsibleContent` (Radix no monta el contenido cerrado), así que solo consulta el módulo
+ * desplegado. Sin dato (cargando, sin permiso o error) no hay badge.
+ */
+function SectionCountsLoader({
+  moduleSlug,
+  children,
+}: {
+  moduleSlug: string;
+  children: (counts: SectionCountsByTab | undefined) => React.ReactNode;
+}) {
+  const { data } = useModuleSectionCounts(moduleSlug);
+  return <>{children(data)}</>;
 }
 
 interface NavMainProps {
@@ -83,6 +109,9 @@ export function NavMain({ accessibleModuleSlugs, visibleTabs }: NavMainProps) {
     [items, pathname]
   );
 
+  // En el Dashboard el acceso activo sale del tablero que se está viendo (`?tablero=`), no de `?tab=`.
+  const dashboardBoard = useActiveDashboardBoard(pathname === '/dashboard');
+
   if (items.length === 0) {
     return (
       <SidebarGroup>
@@ -107,7 +136,11 @@ export function NavMain({ accessibleModuleSlugs, visibleTabs }: NavMainProps) {
           const badgeCount = item.items?.length
             ? Math.max(0, ...item.items.map((subItem) => countFor(subItem.badge)))
             : countFor(item.badge);
-          const activeTab = isActive ? resolveActiveTab(item, tabParam, subTabParam) : null;
+          const activeTab = !isActive
+            ? null
+            : item.moduleSlug === 'dashboard' && dashboardBoard
+              ? dashboardBoard.navTab
+              : resolveActiveTab(item, tabParam, subTabParam);
 
           // Sin sub-items visibles (modulo de una sola tab, sin tabs, o sin permisos sobre
           // ninguna): link directo, sin desplegable. Al ser la hoja, va con relleno sólido.
@@ -154,32 +187,47 @@ export function NavMain({ accessibleModuleSlugs, visibleTabs }: NavMainProps) {
                 )}
                 <CollapsibleContent>
                   <SidebarMenuSub className="border-sidebar-border/70">
-                    {item.items.map((subItem) => {
-                      const subKey = subLinkKey(subItem);
-                      const SubIcon = SUB_ITEM_ICONS[`${item.moduleSlug}:${subKey}`];
-                      const subCount = countFor(subItem.badge);
+                    <SectionCountsLoader moduleSlug={item.moduleSlug}>
+                      {(sectionCounts) =>
+                        item.items?.map((subItem) => {
+                          const subKey = subLinkKey(subItem);
+                          const SubIcon = SUB_ITEM_ICONS[`${item.moduleSlug}:${subKey}`];
+                          const subCount = countFor(subItem.badge);
+                          const counterLabel = SECTION_COUNTER_LABELS[`${item.moduleSlug}:${subKey}`];
+                          const sectionCount = counterLabel ? sectionCounts?.[subKey] ?? null : null;
 
-                      return (
-                        <SidebarMenuSubItem key={subKey}>
-                          <SidebarMenuSubButton asChild isActive={subKey === activeTab} className={ITEM_BUTTON}>
-                            <Link href={subLinkHref(item.href, subItem)}>
-                              {SubIcon && <SubIcon />}
-                              <span>{subItem.name}</span>
-                              {subCount > 0 && (
-                                <span
-                                  className={cn(
-                                    BADGE_CLASS,
-                                    'ml-auto flex h-5 min-w-5 items-center justify-center px-1 text-xs font-medium tabular-nums'
+                          return (
+                            <SidebarMenuSubItem key={subKey}>
+                              <SidebarMenuSubButton asChild isActive={subKey === activeTab} className={ITEM_BUTTON}>
+                                <Link href={subLinkHref(item.href, subItem)}>
+                                  {SubIcon && <SubIcon />}
+                                  <span>{subItem.name}</span>
+                                  {subCount > 0 && (
+                                    <span
+                                      className={cn(
+                                        BADGE_CLASS,
+                                        'ml-auto flex h-5 min-w-5 items-center justify-center px-1 text-xs font-medium tabular-nums'
+                                      )}
+                                    >
+                                      {badgeLabel(subCount)}
+                                    </span>
                                   )}
-                                >
-                                  {badgeLabel(subCount)}
-                                </span>
-                              )}
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      );
-                    })}
+                                  {sectionCount !== null && sectionCount > 0 && (
+                                    <span
+                                      role="img"
+                                      aria-label={`${sectionCount.toLocaleString('es-AR')} ${counterLabel}`}
+                                      className="bg-brand-subtle text-brand-subtle-foreground ml-auto flex h-5 min-w-5 items-center justify-center rounded-md px-1 text-xs font-medium tabular-nums"
+                                    >
+                                      {sectionCount > 99 ? '99+' : sectionCount.toLocaleString('es-AR')}
+                                    </span>
+                                  )}
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          );
+                        })
+                      }
+                    </SectionCountsLoader>
                   </SidebarMenuSub>
                 </CollapsibleContent>
               </SidebarMenuItem>

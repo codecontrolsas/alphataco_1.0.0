@@ -11,9 +11,16 @@ import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers'
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { formSourceLabels } from '@/shared/utils/mappers';
+import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2, CircleOff, XCircle } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
-import { getAllFormsForExport, getFormsPaginated, getFormsSingleFacet, type FormListItem } from '../actions.server';
+import {
+  getAllFormsForExport,
+  getFormsPaginated,
+  getFormsSingleFacet,
+  getFormsUnionCoverage,
+  type FormListItem,
+} from '../actions.server';
 import { HIDDEN_COLUMNS_BY_DEFAULT, formSourceIcons, getColumns } from '../columns';
 
 // ============================================================================
@@ -88,6 +95,15 @@ export function _FormsDataTable({
   const handleStateChange = useCallback((params: DataTableSearchParams) => setCurrentParams(params), []);
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getFormsPaginated(params), []);
 
+  // La unión de las dos fuentes se arma en memoria con tope por fuente: si los filtros dejan más filas que
+  // el tope, se avisa con el conteo real en vez de truncar en silencio.
+  const { data: coverage } = useQuery({
+    queryKey: ['forms-list', 'coverage', currentParams],
+    queryFn: () => getFormsUnionCoverage(currentParams),
+    staleTime: 30 * 1000,
+  });
+  const isTruncated = coverage != null && coverage.shown < coverage.total;
+
   const mergedColumnVisibility = useMemo(() => {
     const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((col) => [col, false]));
     return { ...defaults, ...initialColumnVisibility };
@@ -141,24 +157,38 @@ export function _FormsDataTable({
   );
 
   return (
-    <DataTable
-      columns={columns}
-      data={data}
-      totalRows={totalRows}
-      searchParams={searchParams}
-      queryFn={tableQueryFn}
-      queryKey={['forms-list']}
-      onStateChange={handleStateChange}
-      searchPlaceholder="Buscar formularios por nombre, descripción o código..."
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={mergedColumnVisibility}
-      initialFilterVisibility={mergedFilterVisibility}
-      tableId={tableId}
-      paramNamespace={tableId}
-      showFilterToggle={true}
-      emptyMessage="No hay formularios registrados"
-      data-testid="forms-table"
-      exportConfig={exportConfig}
-    />
+    <div className="space-y-3">
+      <p
+        role="status"
+        className={
+          isTruncated
+            ? 'text-warn-subtle-foreground bg-warn-subtle border-warn/35 rounded-lg border px-3 py-2 text-sm'
+            : 'sr-only'
+        }
+      >
+        {isTruncated && coverage
+          ? `Se listan los ${coverage.shown.toLocaleString('es-AR')} formularios más recientes de ${coverage.total.toLocaleString('es-AR')}. La búsqueda y los filtros acotan el resto.`
+          : ''}
+      </p>
+      <DataTable
+        columns={columns}
+        data={data}
+        totalRows={totalRows}
+        searchParams={searchParams}
+        queryFn={tableQueryFn}
+        queryKey={['forms-list']}
+        onStateChange={handleStateChange}
+        searchPlaceholder="Buscar formularios por nombre, descripción o código..."
+        facetedFilters={facetedFilters}
+        initialColumnVisibility={mergedColumnVisibility}
+        initialFilterVisibility={mergedFilterVisibility}
+        tableId={tableId}
+        paramNamespace={tableId}
+        showFilterToggle={true}
+        emptyMessage="No hay formularios registrados"
+        data-testid="forms-table"
+        exportConfig={exportConfig}
+      />
+    </div>
   );
 }

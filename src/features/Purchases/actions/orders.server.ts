@@ -6,10 +6,7 @@ import { checkPermissionServer } from '@/features/Permissions';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
-import {
-  sendPurchaseOrderDecisionEmail,
-  sendSupplierDocumentEmail,
-} from '@/shared/lib/mail/templates/purchases';
+import { sendPurchaseOrderDecisionEmail, sendSupplierDocumentEmail } from '@/shared/lib/mail/templates/purchases';
 import { toPdfDownload } from '@/shared/lib/pdf/react-pdf.server';
 import type { PdfDownload } from '@/shared/lib/pdf/types';
 import { prisma } from '@/shared/lib/prisma';
@@ -17,15 +14,12 @@ import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
 import { NO_PERMISSION, UUID_RE, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import { nextPurchaseDocumentNumber } from '../lib/document-number';
-import {
-  lockRequestsForLines,
-  orderedByLine,
-  recomputeRequestProgress,
-  remainingOf,
-} from '../lib/order-progress';
+import { lockRequestsForLines, orderedByLine, recomputeRequestProgress, remainingOf } from '../lib/order-progress';
 import { canApplyPurchaseOrderAction, purchaseOrderStatusAfter } from '../lib/order-state-machine';
 import { computeOrderLine, computeOrderTotals } from '../lib/order-totals';
 import { lockPurchaseOrder, validatePurchaseOrderInput, type ValidatedOrderLine } from '../lib/orders';
+import { NO_PRICES_PERMISSION } from '../lib/price-visibility';
+import { canViewPurchasePrices } from '../lib/price-visibility.server';
 import { PurchaseError } from '../lib/purchase-errors';
 import { lockPurchaseQuote } from '../lib/quotes';
 import { ORDERABLE_REQUEST_STATUSES, type PurchaseRequestStatus } from '../lib/request-state-machine';
@@ -313,6 +307,8 @@ export async function createPurchaseOrderFromQuote(
 /** Edita un borrador: reescribe las lineas y recalcula el avance de las solicitudes viejas y nuevas. */
 export async function updatePurchaseOrderDraft(id: string, values: PurchaseOrderFormValues): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'ordenes', 'update'))) return fail(NO_PERMISSION);
+  // El formulario de edición carga los precios del borrador: editar exige verlos.
+  if (!(await canViewPurchasePrices('ordenes'))) return fail(NO_PRICES_PERMISSION);
   if (!UUID_RE.test(id)) return fail('La orden de compra no existe');
   const parsed = purchaseOrderFormSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
@@ -572,7 +568,9 @@ export async function closePurchaseOrder(id: string, reason: string): Promise<Ac
  * correo bloquearia la OC): se valida, se envia y recien despues se escribe, revalidando el estado.
  */
 export async function sendPurchaseOrder(id: string, values: SendDocumentValues): Promise<ActionResult> {
-  if (!(await checkPermissionServer('compras', 'ordenes', 'update'))) return fail(NO_PERMISSION);
+  if (!(await checkPermissionServer('compras', 'ordenes', 'send'))) return fail(NO_PERMISSION);
+  // Se manda el PDF con los importes: quien lo envía tiene que poder verlos.
+  if (!(await canViewPurchasePrices('ordenes'))) return fail(NO_PRICES_PERMISSION);
   if (!UUID_RE.test(id)) return fail('La orden de compra no existe');
   const parsed = sendDocumentSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
@@ -641,7 +639,7 @@ export async function sendPurchaseOrder(id: string, values: SendDocumentValues):
 
 /** Registra que la OC se le hizo llegar al proveedor por otro medio (sin mail). */
 export async function markPurchaseOrderSent(id: string): Promise<ActionResult> {
-  if (!(await checkPermissionServer('compras', 'ordenes', 'update'))) return fail(NO_PERMISSION);
+  if (!(await checkPermissionServer('compras', 'ordenes', 'send'))) return fail(NO_PERMISSION);
   if (!UUID_RE.test(id)) return fail('La orden de compra no existe');
   const profile = await getServerAuthProfile();
   if (!profile) return fail(SESSION_EXPIRED);
@@ -664,6 +662,7 @@ export async function markPurchaseOrderSent(id: string): Promise<ActionResult> {
 /** PDF de la OC en cualquier estado (con marca de agua hasta que se aprueba). */
 export async function getPurchaseOrderPdf(id: string): Promise<ActionResult<PdfDownload>> {
   if (!(await checkPermissionServer('compras', 'ordenes', 'view'))) return fail(NO_PERMISSION);
+  if (!(await canViewPurchasePrices('ordenes'))) return fail(NO_PRICES_PERMISSION);
   if (!UUID_RE.test(id)) return fail('La orden de compra no existe');
   const companyId = await getActiveCompanyId();
   try {

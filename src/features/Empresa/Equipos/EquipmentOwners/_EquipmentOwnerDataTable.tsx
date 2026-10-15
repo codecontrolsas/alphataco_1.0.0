@@ -1,21 +1,28 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
-import type { DataTableSearchParams } from '@/shared/components/common/DataTable';
+import {
+  CatalogCreateButton,
+  CatalogFormSheet,
+  CatalogTableSurface,
+  useCatalogSheet,
+} from '@/shared/components/common/CatalogFormSheet';
+import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable';
 import { DataTable } from '@/shared/components/common/DataTable';
-import moment from 'moment';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Suspense, useCallback, useMemo, useState } from 'react';
+import { activeStatusLabel, buildActiveFacetResult } from '../../lib/active-status';
 import { EquipmentOwnerForm } from './EquipmentOwnerForm';
 import { VehiclesByOwnerList } from './VehiclesByOwnerList';
-import type { EquipmentOwnerListItem } from './actions.server';
+import { HIDDEN_COLUMNS_BY_DEFAULT, getEquipmentOwnerColumns } from './columns';
+import { VehiclesByOwnerTableSkeleton } from './fallback/EquipmentOwnerTableSkeleton';
+import type { EquipmentOwnerListItem } from './lib/owners-types';
 import {
   getAllEquipmentOwnersForExport,
   getEquipmentOwnerSingleFacet,
   getEquipmentOwnersPaginated,
-} from './actions.server';
-import { HIDDEN_COLUMNS_BY_DEFAULT, getEquipmentOwnerColumns } from './columns';
-import { VehiclesByOwnerTableSkeleton } from './fallback/EquipmentOwnerTableSkeleton';
+} from './owners.server';
 
 // ============================================================================
 // PROPS
@@ -36,6 +43,13 @@ interface EquipmentOwnerDataTableProps {
 // ============================================================================
 
 const DEFAULT_VISIBLE_FILTERS = ['is_active', 'name'];
+
+/** Al montarse el detalle de equipos del titular, lleva la vista hasta él (respeta `prefers-reduced-motion`). */
+function scrollIntoViewOnMount(element: HTMLElement | null) {
+  if (!element) return;
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  element.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+}
 
 // ============================================================================
 // CLIENT COMPONENT — orquesta tabla principal + form + vista equipos del titular
@@ -59,26 +73,28 @@ export function _EquipmentOwnerDataTable({
     [permissionsMap]
   );
 
-  const canCreateOrUpdate =
-    permissions.hasPermission('configuracion', 'titulares', 'create') ||
-    permissions.hasPermission('configuracion', 'titulares', 'update');
+  const canCreate = permissions.hasPermission('configuracion', 'titulares', 'create');
+  const canUpdate = permissions.hasPermission('configuracion', 'titulares', 'update');
 
-  // ── Estado local para edición y vista de equipos ──────────────────────────
+  // ── Estado local: edición (Sheet) y detalle de equipos del titular ────────
   const [editingOwner, setEditingOwner] = useState<EquipmentOwnerListItem | null>(null);
   const [selectedOwner, setSelectedOwner] = useState<{ id: string; name: string } | null>(null);
 
-  const handleEdit = useCallback((item: EquipmentOwnerListItem) => {
-    setEditingOwner(item);
-    setSelectedOwner(null);
+  const handleFormReset = useCallback(() => {
+    setEditingOwner(null);
   }, []);
+
+  const sheet = useCatalogSheet<EquipmentOwnerListItem>({
+    canCreate,
+    canUpdate,
+    onOpenEdit: setEditingOwner,
+    onOpenCreate: handleFormReset,
+    onClosed: handleFormReset,
+  });
+  const handleEdit = sheet.openEdit;
 
   const handleViewEquipment = useCallback((item: EquipmentOwnerListItem) => {
     setSelectedOwner({ id: item.id, name: item.name });
-    setEditingOwner(null);
-  }, []);
-
-  const handleFormReset = useCallback(() => {
-    setEditingOwner(null);
   }, []);
 
   const handleCloseSecondaryTable = useCallback(() => {
@@ -100,22 +116,20 @@ export function _EquipmentOwnerDataTable({
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getEquipmentOwnersPaginated(params), []);
 
   // ── Lazy-load facets ──────────────────────────────────────────────────────
-  const makeFetchFacet = useCallback(
-    (columnId: string) => async (params: DataTableSearchParams) => {
-      const result = await getEquipmentOwnerSingleFacet(columnId, params);
-      return result ?? { options: [], counts: new Map<string, number>() };
-    },
-    []
-  );
+  const fetchIsActiveFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
+    const result = await getEquipmentOwnerSingleFacet('is_active', params);
+    if (!result) return { options: [], counts: new Map<string, number>() };
+    return buildActiveFacetResult(result.counts);
+  }, []);
 
   const facetedFilters = useMemo(
     () => [
-      { columnId: 'is_active', title: 'Estado', fetchFacet: makeFetchFacet('is_active') },
+      { columnId: 'is_active', title: 'Estado', fetchFacet: fetchIsActiveFacet },
       { columnId: 'name', title: 'Nombre', type: 'text' as const },
       { columnId: 'cuit', title: 'CUIT', type: 'text' as const },
       { columnId: 'created_at', title: 'Fecha de creación', type: 'dateRange' as const },
     ],
-    [makeFetchFacet]
+    [fetchIsActiveFacet]
   );
 
   const mergedFilterVisibility = useMemo(() => {
@@ -133,26 +147,6 @@ export function _EquipmentOwnerDataTable({
     [initialColumnVisibility]
   );
 
-  // ── Vista de equipos del titular seleccionado ─────────────────────────────
-  if (selectedOwner) {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold">Equipos de: {selectedOwner.name}</h3>
-            <p className="text-sm text-muted-foreground">Listado de equipos registrados para este titular</p>
-          </div>
-          <Button variant="outline" onClick={handleCloseSecondaryTable}>
-            Volver a Titulares
-          </Button>
-        </div>
-        <Suspense fallback={<VehiclesByOwnerTableSkeleton />}>
-          <VehiclesByOwnerList ownerId={selectedOwner.id} ownerName={selectedOwner.name} searchParams={searchParams} />
-        </Suspense>
-      </div>
-    );
-  }
-
   // ── Tabla principal ───────────────────────────────────────────────────────
   const table = (
     <DataTable
@@ -163,6 +157,7 @@ export function _EquipmentOwnerDataTable({
       queryFn={tableQueryFn}
       queryKey={['equipment-owners-list']}
       onStateChange={handleStateChange}
+      toolbarActions={<CatalogCreateButton sheet={sheet} label="Nuevo titular" />}
       tableId={tableId}
       paramNamespace={tableId}
       facetedFilters={facetedFilters}
@@ -172,7 +167,7 @@ export function _EquipmentOwnerDataTable({
       initialColumnVisibility={mergedColumnVisibility}
       initialFilterVisibility={mergedFilterVisibility}
       exportConfig={{
-        fetchAllData: () => getAllEquipmentOwnersForExport(currentParams),
+        fetchAllData: async () => unwrapExportResult(await getAllEquipmentOwnersForExport(currentParams)),
         options: {
           filename: 'titulares-de-equipos',
           sheetName: 'Titulares de Equipos',
@@ -183,35 +178,47 @@ export function _EquipmentOwnerDataTable({
             if (!Array.isArray(val)) return '';
             return (val as Array<{ contract_type: string }>).map((ct) => ct.contract_type).join(', ');
           },
-          is_active: (val: unknown) => (val === true ? 'Activo' : val === false ? 'Inactivo' : 'Sin asignar'),
-          created_at: (val: unknown) => (val ? moment(val as string | Date).format('DD/MM/YYYY') : '-'),
+          is_active: (val: unknown) => activeStatusLabel(val),
+          created_at: (val: unknown) => (val ? formatArgentinaDay(val as string | Date) : '-'),
         },
       }}
     />
   );
 
-  if (!canCreateOrUpdate) {
-    return table;
-  }
-
   return (
-    <div className="w-full">
-      <ResizablePanelGroup className="min-h-[500px]" direction="horizontal">
-        <ResizablePanel defaultSize={30}>
-          <div className="overflow-auto h-full pr-2">
-            <EquipmentOwnerForm
-              key={editingOwner?.id ?? 'create'}
-              initialData={editingOwner}
-              onReset={handleFormReset}
-              isEditing={!!editingOwner}
-            />
+    <div className="flex min-w-0 flex-col gap-6">
+      <CatalogTableSurface>{table}</CatalogTableSurface>
+
+      {selectedOwner ? (
+        <CatalogTableSurface
+          key={selectedOwner.id}
+          id="equipos-del-titular"
+          title={`Equipos de: ${selectedOwner.name}`}
+          description="Equipos registrados para este titular"
+        >
+          <div ref={scrollIntoViewOnMount} className="mb-3 flex justify-end scroll-mt-20">
+            <Button type="button" variant="outline" size="sm" onClick={handleCloseSecondaryTable}>
+              Cerrar detalle
+            </Button>
           </div>
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={70}>
-          <div className="overflow-auto h-full pl-2">{table}</div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
+          <Suspense fallback={<VehiclesByOwnerTableSkeleton />}>
+            <VehiclesByOwnerList
+              ownerId={selectedOwner.id}
+              ownerName={selectedOwner.name}
+              searchParams={searchParams}
+            />
+          </Suspense>
+        </CatalogTableSurface>
+      ) : null}
+
+      <CatalogFormSheet
+        sheet={sheet}
+        getKey={(owner) => owner.id}
+        title={{ create: 'Nuevo titular', edit: 'Editar titular' }}
+        size="lg"
+      >
+        {({ close }) => <EquipmentOwnerForm initialData={editingOwner} onReset={close} isEditing={!!editingOwner} />}
+      </CatalogFormSheet>
     </div>
   );
 }

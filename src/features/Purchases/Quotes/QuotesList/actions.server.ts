@@ -18,6 +18,7 @@ import { prisma } from '@/shared/lib/prisma';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { computeOrderTotals } from '../../lib/order-totals';
+import { canViewPurchasePrices } from '../../lib/price-visibility.server';
 import { PURCHASE_QUOTE_STATUSES } from '../../lib/quote-state-machine';
 
 const logger = new Logger('features/Purchases/Quotes/QuotesList');
@@ -151,12 +152,13 @@ const QUOTE_SELECT = {
 
 const profileName = (p: { fullname: string | null; email: string | null }) => p.fullname ?? p.email ?? '-';
 
-function shape(rows: Prisma.purchase_quotesGetPayload<{ select: typeof QUOTE_SELECT }>[]) {
+function shape(rows: Prisma.purchase_quotesGetPayload<{ select: typeof QUOTE_SELECT }>[], canViewPrices: boolean) {
   return rows.map((r) => {
     // Total cotizado: solo lineas con precio y alicuota (las "no cotizadas" quedan afuera)
     const priced = r.lines.filter((l) => !l.not_quoted && l.unit_price != null && l.vat_rate_id != null);
+    // Sin `view_prices` no se calcula ni viaja (la UI muestra "Sin permiso").
     const total_quoted =
-      priced.length > 0
+      canViewPrices && priced.length > 0
         ? computeOrderTotals(
             priced.map((l) => ({
               quantity: l.quantity.toFixed(),
@@ -191,7 +193,7 @@ function shape(rows: Prisma.purchase_quotesGetPayload<{ select: typeof QUOTE_SEL
 
 export async function getPurchaseQuotesPaginated(searchParams: DataTableSearchParams) {
   const companyId = await resolveCompanyId();
-  if (!companyId) return { data: [], total: 0 };
+  if (!companyId) return { data: [], total: 0, canViewPrices: false };
 
   try {
     const state = parseListState(searchParams);
@@ -211,7 +213,8 @@ export async function getPurchaseQuotesPaginated(searchParams: DataTableSearchPa
       prisma.purchase_quotes.findMany({ where, orderBy, skip, take, select: QUOTE_SELECT }),
       prisma.purchase_quotes.count({ where }),
     ]);
-    return { data: shape(rows), total };
+    const canViewPrices = await canViewPurchasePrices('cotizaciones');
+    return { data: shape(rows, canViewPrices), total, canViewPrices };
   } catch (error) {
     logger.error('Error al obtener pedidos de cotizacion', { data: { error } });
     throw new Error('No se pudo obtener la lista de pedidos de cotización');
@@ -241,7 +244,7 @@ export async function getAllPurchaseQuotesForExport(
       tooLargeMessage: (maxRows) =>
         `Hay más de ${maxRows.toLocaleString('es-AR')} pedidos de cotización con los filtros actuales. Acote la exportación con filtros.`,
     });
-    return { ok: true, data: shape(rows) };
+    return { ok: true, data: shape(rows, await canViewPurchasePrices('cotizaciones')) };
   } catch (error) {
     logger.error('Error al exportar pedidos de cotizacion', { data: { error } });
     // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
@@ -329,7 +332,9 @@ export async function getPurchaseQuoteSingleFacet(
       // M:M: cuantos pedidos de cotizacion (distintos) tiene cada solicitud de origen
       const quotes = await prisma.purchase_quotes.findMany({
         where,
-        select: { lines: { select: { request_line: { select: { request: { select: { id: true, number: true } } } } } } },
+        select: {
+          lines: { select: { request_line: { select: { request: { select: { id: true, number: true } } } } } },
+        },
       });
       const counts = new Map<string, number>();
       const names = new Map<string, string>();

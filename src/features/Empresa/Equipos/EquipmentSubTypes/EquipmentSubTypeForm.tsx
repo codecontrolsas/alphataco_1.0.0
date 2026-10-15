@@ -6,6 +6,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui/use-toast';
 import { Logger } from '@/lib/logger';
+import { useCatalogSheetBusy } from '@/shared/components/common/CatalogFormSheet';
 import DependencyValidationModal, { DependencyConfig } from '@/shared/components/modal/DependencyValidationModal';
 import {
   fetchDependenciesForValue,
@@ -17,14 +18,15 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { computeIdDelta } from '../EquipmentTypes/lib/id-delta';
+import { useActiveChecklists } from '../hooks/useActiveChecklists';
+import { canHaveCompatibleItems, formatCompatibleItemKey, type CompatibleItem } from '../lib/hitch-compatibility';
 import {
   createEquipmentSubType,
   getAvailableCompatibleItems,
   updateEquipmentSubType,
   type EquipmentSubTypeListItem,
 } from './actions.server';
-import { canHaveCompatibleItems, formatCompatibleItemKey, type CompatibleItem } from '../lib/hitch-compatibility';
-import { useActiveChecklists } from '../hooks/useActiveChecklists';
 
 const logger = new Logger('EquipmentSubTypesForm');
 
@@ -68,6 +70,7 @@ function EquipmentSubTypesForm({
   initialChecklistIds = [],
 }: EquipmentSubTypesFormProps) {
   const [showDependencyModal, setShowDependencyModal] = useState(false);
+  const setBusy = useCatalogSheetBusy();
   const [availableItems, setAvailableItems] = useState<{ subTypes: AvailableSubType[]; types: AvailableType[] }>({
     subTypes: [],
     types: [],
@@ -98,6 +101,11 @@ function EquipmentSubTypesForm({
   });
 
   const queryClient = useQueryClient();
+  // Base leída al abrir el formulario: contra ella se calcula el delta {add, remove} que se envía.
+  const initialCompatibleKeys = useMemo(
+    () => initialCompatibleItems.map(formatCompatibleItemKey),
+    [initialCompatibleItems]
+  );
   const {
     handleSubmit,
     reset,
@@ -199,6 +207,7 @@ function EquipmentSubTypesForm({
   );
 
   const onSubmit = async (data: FormData) => {
+    setBusy(true);
     try {
       if (isEditing && data.id) {
         const prevActive = !!initialData?.is_active;
@@ -209,6 +218,7 @@ function EquipmentSubTypesForm({
           const depData = await fetchDependencies(dependencyConfigs[0], initialData!.id);
 
           if (depData.data.length) {
+            setBusy(false);
             setShowDependencyModal(true);
             return; // No ejecutar update aún, el modal decidirá
           }
@@ -218,11 +228,12 @@ function EquipmentSubTypesForm({
           name: data.name,
           is_active: data.is_active,
           type_id: data.type_id,
-          compatible_item_keys: data.compatible_item_ids,
-          checklist_ids: data.checklist_ids,
+          compatibleItems: computeIdDelta(initialCompatibleKeys, data.compatible_item_ids),
+          checklists: computeIdDelta(initialChecklistIds, data.checklist_ids),
         });
 
         queryClient.invalidateQueries({ queryKey: ['subtype-checklists', data.id] });
+        queryClient.invalidateQueries({ queryKey: ['subtype-compatible-items', data.id] });
         queryClient.invalidateQueries({ queryKey: ['active-checklists'] });
       } else {
         await createEquipmentSubType({
@@ -267,6 +278,7 @@ function EquipmentSubTypesForm({
         errorMessage = 'Error de base de datos: No se pudo completar la operación.';
       }
 
+      setBusy(false);
       toast({
         title: 'Error',
         description: errorMessage,
@@ -318,6 +330,7 @@ function EquipmentSubTypesForm({
 
     // Reemplazo masivo y luego desactivar
     if (action === 'replace') {
+      setBusy(true);
       try {
         await reassignDependencies({
           targetTable: 'vehicles',
@@ -334,16 +347,19 @@ function EquipmentSubTypesForm({
           name: values.name,
           is_active: values.is_active,
           type_id: values.type_id,
-          compatible_item_keys: values.compatible_item_ids,
-          checklist_ids: values.checklist_ids,
+          compatibleItems: computeIdDelta(initialCompatibleKeys, values.compatible_item_ids),
+          checklists: computeIdDelta(initialChecklistIds, values.checklist_ids),
         });
 
         queryClient.invalidateQueries({ queryKey: ['subtype-checklists', values.id] });
+        queryClient.invalidateQueries({ queryKey: ['subtype-compatible-items', values.id] });
         queryClient.invalidateQueries({ queryKey: ['active-checklists'] });
 
         if (onSuccess) onSuccess();
+        onReset();
       } catch (err) {
         logger.error('Error al reemplazar referencias', { data: { error: err } });
+        setBusy(false);
         toast({
           title: 'Error',
           description: 'No se pudieron reemplazar las referencias',
@@ -354,10 +370,9 @@ function EquipmentSubTypesForm({
   };
 
   return (
-    <div className="max-w-md">
+    <div className="w-full">
       <Form {...form}>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 w-full">
-          <h2 className="text-xl font-bold mb-4">{isEditing ? 'Editar' : 'Crear'} Subtipo de Unidad</h2>
           <FormField
             name="name"
             render={() => (
@@ -367,7 +382,7 @@ function EquipmentSubTypesForm({
                   <Input
                     placeholder="Ingrese el nombre del subtipo de equipo"
                     {...form.register('name')}
-                    className={form.formState.errors.name ? 'border-red-500' : ''}
+                    className={form.formState.errors.name ? 'border-danger' : ''}
                   />
                 </FormControl>
                 <FormMessage />

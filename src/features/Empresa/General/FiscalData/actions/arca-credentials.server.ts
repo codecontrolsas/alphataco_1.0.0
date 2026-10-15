@@ -1,11 +1,13 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions';
+import { formatSalesPoint, formatVoucherNumber } from '@/features/Comercial/Facturacion/lib/invoice-type';
 import { errorMessage, fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { isValidCuit } from '@/features/Empresa/General/lib/company-form';
-import type { arca_environment, fiscal_tax_condition } from '@/generated/prisma/enums';
+import { checkPermissionServer } from '@/features/Permissions';
 import { Prisma } from '@/generated/prisma/client';
+import type { arca_environment } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
+import { CBTE_TYPES, EMITTER_LETTERS, cbteTypeFor } from '@/shared/lib/arca/catalogs';
 import { certificateMatchesKey, certificateProblems, inspectCertificate } from '@/shared/lib/arca/certificate';
 import { generateKeyAndCsr } from '@/shared/lib/arca/csr';
 import {
@@ -21,14 +23,12 @@ import { decryptSecret, encryptSecret } from '@/shared/lib/arca/secrets';
 import { getArcaGateway, isArcaMockMode } from '@/shared/lib/arca/server/gateway';
 import { normalizeCompanyCuit, secretAad } from '@/shared/lib/arca/server/session';
 import { isDummyOk } from '@/shared/lib/arca/wsfe';
-import { CBTE_TYPES, cbteTypeFor, EMITTER_LETTERS } from '@/shared/lib/arca/catalogs';
-import { formatSalesPoint, formatVoucherNumber } from '@/features/Comercial/Facturacion/lib/invoice-type';
+import { formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import moment from 'moment';
 import { revalidatePath } from 'next/cache';
-import { certificateAliasSchema, ENVIRONMENT_LABELS } from '../schemas/fiscal-data';
+import { ENVIRONMENT_LABELS, certificateAliasSchema } from '../schemas/fiscal-data';
 import type { ConnectionCheck } from './fiscal-data.server';
 
 const logger = new Logger('features/Empresa/General/FiscalData/arca-credentials');
@@ -88,7 +88,9 @@ export async function generateArcaCsr(env: arca_environment, alias: string): Pro
     revalidatePath(CONFIG_PATH);
     return ok({ csrPem });
   } catch (error) {
-    logger.error('Error al generar la solicitud de certificado', { data: { error: errorMessage(error, ''), companyId, env } });
+    logger.error('Error al generar la solicitud de certificado', {
+      data: { error: errorMessage(error, ''), companyId, env },
+    });
     return fail(errorMessage(error, 'Error al generar la solicitud de certificado'));
   }
 }
@@ -124,7 +126,9 @@ export async function uploadArcaCertificate(
   const companyId = await getActiveCompanyId();
   const pem = certificatePem.trim();
   if (!pem.includes('BEGIN CERTIFICATE')) {
-    return fail('El archivo no es un certificado en formato PEM (tiene que empezar con "-----BEGIN CERTIFICATE-----").');
+    return fail(
+      'El archivo no es un certificado en formato PEM (tiene que empezar con "-----BEGIN CERTIFICATE-----").'
+    );
   }
 
   try {
@@ -148,7 +152,7 @@ export async function uploadArcaCertificate(
     const privateKeyPem = decryptSecret(pending.private_key_enc, secretAad(companyId, env, 'private_key'));
     if (!certificateMatchesKey(pem, privateKeyPem)) {
       return fail(
-        `Este certificado no corresponde a la solicitud generada el ${moment(pending.created_at).format('DD/MM/YYYY')}. ` +
+        `Este certificado no corresponde a la solicitud generada el ${formatArgentinaDay(pending.created_at)}. ` +
           'Cargá el certificado que ARCA devolvió para esa solicitud, o generá una nueva.'
       );
     }
@@ -197,33 +201,42 @@ export async function uploadArcaCertificate(
 
 /** Traduce un error de ARCA a qué hacer, sin perder el mensaje técnico. */
 function describeArcaError(error: unknown): { detail: string; technical: string } {
-  const technical = error instanceof ArcaAuthError ? `${error.faultCode}: ${error.message}` : errorMessage(error, 'Error desconocido');
+  const technical =
+    error instanceof ArcaAuthError ? `${error.faultCode}: ${error.message}` : errorMessage(error, 'Error desconocido');
   if (error instanceof ArcaAuthError) {
     if (/notAuthorized/i.test(error.faultCode)) {
       return {
-        detail: 'El certificado no está autorizado para el servicio de facturación. Volvé al paso 2 y creá la autorización para "wsfe".',
+        detail:
+          'El certificado no está autorizado para el servicio de facturación. Volvé al paso 2 y creá la autorización para "wsfe".',
         technical,
       };
     }
     if (/untrusted/i.test(error.faultCode)) {
       return {
-        detail: 'ARCA no reconoce el certificado en este ambiente. Revisá que sea el certificado de este ambiente y no del otro.',
+        detail:
+          'ARCA no reconoce el certificado en este ambiente. Revisá que sea el certificado de este ambiente y no del otro.',
         technical,
       };
     }
     if (/expired/i.test(error.faultCode)) return { detail: 'ARCA informa que el certificado está vencido.', technical };
     return { detail: 'ARCA rechazó la autenticación con este certificado.', technical };
   }
-  if (error instanceof ArcaTokenUnavailableError || error instanceof ArcaConfigError || error instanceof ArcaBusyError) {
+  if (
+    error instanceof ArcaTokenUnavailableError ||
+    error instanceof ArcaConfigError ||
+    error instanceof ArcaBusyError
+  ) {
     return { detail: error.message, technical };
   }
   if (error instanceof ArcaTransportError || error instanceof ArcaProtocolError) {
-    return { detail: 'ARCA no responde. Tu configuración puede estar bien: probá de nuevo en unos minutos.', technical };
+    return {
+      detail: 'ARCA no responde. Tu configuración puede estar bien: probá de nuevo en unos minutos.',
+      technical,
+    };
   }
   if (error instanceof ArcaServiceError) return { detail: 'ARCA devolvió un error.', technical };
   return { detail: 'No se pudo completar la prueba.', technical };
 }
-
 
 /**
  * Paso 4: prueba real contra ARCA, un chequeo por cosa que se verifica (sin pasos inventados):
@@ -232,7 +245,9 @@ function describeArcaError(error: unknown): { detail: string; technical: string 
  *
  * Con ARCA simulado (`ARCA_MODE=mock`) no hace falta certificado y cada chequeo lo aclara.
  */
-export async function testArcaConnection(env: arca_environment): Promise<ActionResult<{ ok: boolean; checks: ConnectionCheck[] }>> {
+export async function testArcaConnection(
+  env: arca_environment
+): Promise<ActionResult<{ ok: boolean; checks: ConnectionCheck[] }>> {
   const denied = await assertCanUpdate();
   if (denied) return fail(denied);
 
@@ -242,7 +257,8 @@ export async function testArcaConnection(env: arca_environment): Promise<ActionR
     where: { company_id: companyId, environment: env, status: 'activo' },
     select: { id: true },
   });
-  if (!credential && !simulated) return fail(`No hay un certificado de ${ENVIRONMENT_LABELS[env].toLowerCase()} cargado.`);
+  if (!credential && !simulated)
+    return fail(`No hay un certificado de ${ENVIRONMENT_LABELS[env].toLowerCase()} cargado.`);
 
   const suffix = simulated ? ' (simulado)' : '';
   const checks: ConnectionCheck[] = [];
@@ -264,18 +280,26 @@ export async function testArcaConnection(env: arca_environment): Promise<ActionR
             }
       );
     } catch (error) {
-      checks.push({ key: 'servers', ok: false, label: 'Servidores de ARCA: sin respuesta', ...describeArcaError(error) });
+      checks.push({
+        key: 'servers',
+        ok: false,
+        label: 'Servidores de ARCA: sin respuesta',
+        ...describeArcaError(error),
+      });
     }
 
     if (checks[0]?.ok) {
       checks.push({
         key: 'auth',
         ok: true,
-        label: `Autenticación: correcta${suffix}. Ticket de acceso vigente hasta las ${moment(gateway.tokenExpiresAt).format('HH:mm')} del ${moment(gateway.tokenExpiresAt).format('DD/MM')}`,
+        label: `Autenticación: correcta${suffix}. Ticket de acceso vigente hasta el ${formatArgentinaDateTime(gateway.tokenExpiresAt)}`,
       });
 
       const [profile, salesPoints] = await Promise.all([
-        prisma.company_fiscal_profiles.findUnique({ where: { company_id: companyId }, select: { tax_condition: true } }),
+        prisma.company_fiscal_profiles.findUnique({
+          where: { company_id: companyId },
+          select: { tax_condition: true },
+        }),
         prisma.sales_points.findMany({
           where: { company_id: companyId, is_active: true },
           select: { number: true },
@@ -323,7 +347,11 @@ export async function testArcaConnection(env: arca_environment): Promise<ActionR
   if (credential) {
     await prisma.arca_credentials.update({
       where: { id: credential.id },
-      data: { last_test_at: new Date(), last_test_ok: allOk, last_test_result: checks as unknown as Prisma.InputJsonValue },
+      data: {
+        last_test_at: new Date(),
+        last_test_ok: allOk,
+        last_test_result: checks as unknown as Prisma.InputJsonValue,
+      },
     });
   }
 

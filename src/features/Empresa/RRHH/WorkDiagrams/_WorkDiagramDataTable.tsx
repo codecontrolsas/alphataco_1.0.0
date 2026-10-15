@@ -1,6 +1,13 @@
 'use client';
 
 import {
+  CatalogCreateButton,
+  CatalogFormSheet,
+  CatalogTableSurface,
+  useCatalogSheet,
+  type CatalogSheetMode,
+} from '@/shared/components/common/CatalogFormSheet';
+import {
   DataTable,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
@@ -10,8 +17,7 @@ import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers'
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { CircleOff } from 'lucide-react';
-import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
-import { CatalogSplitLayout } from '../../components/CatalogSplitLayout';
+import { useCallback, useMemo, useState } from 'react';
 import { activeStatusLabel, buildActiveFacetResult } from '../../lib/active-status';
 import WorkDiagramForm from './WorkDiagramForm';
 import {
@@ -64,40 +70,29 @@ export default function _WorkDiagramDataTable({
     [permissionsMap]
   );
 
-  const canCreateOrUpdate =
-    permissions.hasPermission('configuracion', 'listado', 'create') ||
-    permissions.hasPermission('configuracion', 'listado', 'update');
+  const canCreate = permissions.hasPermission('configuracion', 'listado', 'create');
+  const canUpdate = permissions.hasPermission('configuracion', 'listado', 'update');
 
-  // ── Store de edición ─────────────────────────────────────────────────────
+  // ── Sheet de alta/edición (el form sigue leyendo el store de edición) ─────
   const setWorkDiagram = useWorkDiagramStore((state) => state.setWorkDiagram);
   const workDiagram = useWorkDiagramStore((state) => state.workDiagram);
+  const handleClearStore = useCallback(() => setWorkDiagram(null), [setWorkDiagram]);
+  const sheet = useCatalogSheet<WorkDiagramListItem>({
+    canCreate,
+    canUpdate,
+    onOpenEdit: setWorkDiagram,
+    onOpenCreate: handleClearStore,
+    onClosed: handleClearStore,
+  });
+  const handleEdit = sheet.openEdit;
+  const { close: closeSheet } = sheet;
 
-  const handleEdit = useCallback(
-    (item: WorkDiagramListItem) => {
-      setWorkDiagram(item);
+  // El form pide volver a 'create' al cancelar: equivale a cerrar el Sheet
+  const handleSetMode = useCallback(
+    (newMode: CatalogSheetMode) => {
+      if (newMode === 'create') closeSheet();
     },
-    [setWorkDiagram]
-  );
-
-  // ── mode para el formulario — derivado del store ──────────────────────────
-  const [mode, setMode] = useState<'create' | 'edit'>('create');
-
-  // Sincronizar mode con el store: si hay diagrama seleccionado → 'edit'
-  const effectiveMode = workDiagram ? 'edit' : mode;
-
-  const handleSetMode: Dispatch<SetStateAction<'create' | 'edit'>> = useCallback(
-    (valueOrUpdater: SetStateAction<'create' | 'edit'>) => {
-      const newMode = typeof valueOrUpdater === 'function' ? valueOrUpdater(effectiveMode) : valueOrUpdater;
-      setMode(newMode);
-      if (newMode === 'create') {
-        setWorkDiagram(null);
-      }
-    },
-    // effectiveMode is referenced but doesn't need to be in deps because
-    // the callback only uses it when valueOrUpdater is a function (rare),
-    // and the store update is always consistent.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [setWorkDiagram]
+    [closeSheet]
   );
 
   // ── Client-side navigation mode ──────────────────────────────────────────
@@ -242,6 +237,7 @@ export default function _WorkDiagramDataTable({
       queryFn={tableQueryFn}
       queryKey={['work-diagrams']}
       onStateChange={handleStateChange}
+      toolbarActions={<CatalogCreateButton sheet={sheet} label="Nuevo diagrama" />}
       tableId={tableId}
       paramNamespace={tableId}
       facetedFilters={facetedFilters}
@@ -273,23 +269,19 @@ export default function _WorkDiagramDataTable({
     />
   );
 
-  // Si no tiene permisos de crear/editar, mostrar solo la tabla
-  if (!canCreateOrUpdate) {
-    return table;
-  }
-
-  // Con permisos: formulario + tabla (apilados en pantallas chicas, paneles redimensionables desde lg)
   return (
-    <CatalogSplitLayout
-      form={
-        <WorkDiagramForm
-          diagram={workDiagram}
-          mode={effectiveMode}
-          diagramsTypes={diagramTypes}
-          setMode={handleSetMode}
-        />
-      }
-      table={table}
-    />
+    <>
+      <CatalogTableSurface>{table}</CatalogTableSurface>
+      <CatalogFormSheet
+        sheet={sheet}
+        getKey={(diagram) => diagram.id}
+        title={{ create: 'Nuevo diagrama', edit: 'Editar diagrama' }}
+        size="xl"
+      >
+        {({ mode }) => (
+          <WorkDiagramForm diagram={workDiagram} mode={mode} diagramsTypes={diagramTypes} setMode={handleSetMode} />
+        )}
+      </CatalogFormSheet>
+    </>
   );
 }

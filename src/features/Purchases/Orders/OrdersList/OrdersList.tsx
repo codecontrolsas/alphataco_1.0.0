@@ -2,10 +2,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { OrdersAttentionSection } from './OrdersAttentionSection';
 import { getPurchaseOrdersAttention, getPurchaseOrdersPaginated } from './actions.server';
 import { _OrdersDataTable } from './components/_OrdersDataTable';
 import { ORDERS_TABLE_ID as TABLE_ID } from './constants';
-import { OrdersAttentionSection } from './OrdersAttentionSection';
 
 export async function OrdersList({ searchParams }: { searchParams: DataTableSearchParams }) {
   const tableParams = stripPrefixFromSearchParams(searchParams, TABLE_ID);
@@ -16,7 +16,7 @@ export async function OrdersList({ searchParams }: { searchParams: DataTableSear
   const serverStatus = typeof statusParam === 'string' ? statusParam : null;
 
   // Los facets se cargan lazy en el cliente (al abrir cada filtro), no en SSR.
-  const [{ data, total }, preferences] = await Promise.all([
+  const [{ data, total, canViewPrices }, preferences] = await Promise.all([
     getPurchaseOrdersPaginated(tableParams),
     getTablePreferences(TABLE_ID),
   ]);
@@ -27,6 +27,7 @@ export async function OrdersList({ searchParams }: { searchParams: DataTableSear
         <_OrdersDataTable
           data={data}
           totalRows={total}
+          canViewPrices={canViewPrices}
           searchParams={tableParams}
           tableId={TABLE_ID}
           topSlot={<OrdersAttentionSection attention={attention} serverStatus={serverStatus} />}

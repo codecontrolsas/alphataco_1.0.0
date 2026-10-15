@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { CreateDiagrams, UpdateDiagramsById } from '@/features/Employees/Diagrams/actions/mutations.server';
 import { getEmployeeDiagramByIdandDate, getEmployeesName } from '@/features/Employees/Diagrams/actions/queries.server';
 import { DiagramCommentFields } from '@/features/Employees/Diagrams/components/DiagramCommentFields';
@@ -13,6 +12,7 @@ import { DuplicateDiagramsCard } from '@/features/Employees/Diagrams/components/
 import { NewDiagramsCard } from '@/features/Employees/Diagrams/components/NewDiagramsCard';
 import { diagramFormSchema, type DiagramFormValues } from '@/features/Employees/Diagrams/schemas/diagram-form-schema';
 import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
+import { CatalogTableSurface } from '@/shared/components/common/CatalogFormSheet';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import moment from 'moment';
@@ -445,155 +445,161 @@ function DiagramFormUpdated({
   const hasResults = errorsDiagrams?.length > 0 || succesDiagrams?.length > 0;
 
   return (
-    <ResizablePanelGroup direction="horizontal">
-      <ResizablePanel defaultSize={30} minSize={24}>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
-            <h2 className="mb-4 text-xl font-bold">{'Generar Diagrama'}</h2>
-            <div className="flex flex-col gap-6 px-2">
-              {/* Identificacion: a quien y que novedad se le carga */}
-              <div className="flex flex-col space-y-3">
-                <FormField
-                  control={form.control}
-                  name="employee_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Empleado</FormLabel>
-                      <MultiSelectCombobox
-                        options={employeesOptions}
-                        placeholder={isLoadingEmployees ? 'Cargando empleados...' : 'Selecciona un empleado'}
-                        emptyMessage={isLoadingEmployees ? 'Cargando...' : 'No hay empleados'}
-                        selectedValues={field.value as string[]}
-                        onChange={field.onChange}
-                        disabled={!!defaultId || isLoadingEmployees}
-                        maxSelections={1}
-                      />
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="diagram_type"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tipo de novedad</FormLabel>
-                      <MultiSelectCombobox
-                        options={diagramsTypeOptions}
-                        placeholder="Selecciona un tipo de novedad"
-                        emptyMessage="No hay tipos de novedades"
-                        selectedValues={field.value as string[]}
-                        onChange={field.onChange}
-                        maxSelections={1}
-                      />
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+    // Generador (no es un ABM): formulario arriba y, desde `@4xl` del contenedor, a la izquierda con los resultados al lado.
+    <div className="@container min-w-0">
+      <div className="grid grid-cols-1 items-start gap-4 @4xl:grid-cols-[22rem_minmax(0,1fr)]">
+        <CatalogTableSurface>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)}>
+              <h2 className="mb-4 text-xl font-bold">{'Generar Diagrama'}</h2>
+              <div className="flex flex-col gap-6 px-2">
+                {/* Identificacion: a quien y que novedad se le carga */}
+                <div className="flex flex-col space-y-3">
+                  <FormField
+                    control={form.control}
+                    name="employee_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Empleado</FormLabel>
+                        <MultiSelectCombobox
+                          options={employeesOptions}
+                          placeholder={isLoadingEmployees ? 'Cargando empleados...' : 'Selecciona un empleado'}
+                          emptyMessage={isLoadingEmployees ? 'Cargando...' : 'No hay empleados'}
+                          selectedValues={field.value as string[]}
+                          onChange={field.onChange}
+                          disabled={!!defaultId || isLoadingEmployees}
+                          maxSelections={1}
+                        />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="diagram_type"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Tipo de novedad</FormLabel>
+                        <MultiSelectCombobox
+                          options={diagramsTypeOptions}
+                          placeholder="Selecciona un tipo de novedad"
+                          emptyMessage="No hay tipos de novedades"
+                          selectedValues={field.value as string[]}
+                          onChange={field.onChange}
+                          maxSelections={1}
+                        />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {/* Periodo: se puede escribir la fecha o elegirla en el calendario */}
+                <div className="flex flex-col space-y-3">
+                  <FormField
+                    control={form.control}
+                    name="date_from"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel>Fecha desde</FormLabel>
+                        <FormControl>
+                          <EnhancedDatePicker
+                            key={`date-from-${datePickersKey}`}
+                            date={field.value}
+                            setDate={(date) => field.onChange(date)}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="date_to"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel>Fecha hasta</FormLabel>
+                        <FormControl>
+                          <EnhancedDatePicker
+                            key={`date-to-${datePickersKey}`}
+                            date={field.value}
+                            setDate={(date) => field.onChange(date)}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Escribí las fechas como DD/MM/AAAA o elegilas en el calendario.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <DiagramCommentFields control={form.control} customizeComments={customizeComments} />
               </div>
 
-              {/* Periodo: se puede escribir la fecha o elegirla en el calendario */}
-              <div className="flex flex-col space-y-3">
-                <FormField
-                  control={form.control}
-                  name="date_from"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel>Fecha desde</FormLabel>
-                      <FormControl>
-                        <EnhancedDatePicker
-                          key={`date-from-${datePickersKey}`}
-                          date={field.value}
-                          setDate={(date) => field.onChange(date)}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="date_to"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel>Fecha hasta</FormLabel>
-                      <FormControl>
-                        <EnhancedDatePicker
-                          key={`date-to-${datePickersKey}`}
-                          date={field.value}
-                          setDate={(date) => field.onChange(date)}
-                        />
-                      </FormControl>
-                      <FormDescription>Escribí las fechas como DD/MM/AAAA o elegilas en el calendario.</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <DiagramCommentFields control={form.control} customizeComments={customizeComments} />
+              {canCreate || canUpdate ? (
+                <Button type="submit" className="mt-6" disabled={form.formState.isSubmitting}>
+                  {form.formState.isSubmitting ? 'Generando...' : 'Generar diagramas'}
+                </Button>
+              ) : (
+                <p className="text-muted-foreground mt-6 text-sm">
+                  No tenés permiso para cargar ni modificar novedades.
+                </p>
+              )}
+            </form>
+          </Form>
+        </CatalogTableSurface>
+        <CatalogTableSurface className="flex min-w-0 flex-col gap-4">
+          {!hasResults && (
+            <div className="text-muted-foreground flex min-h-48 flex-1 flex-col items-center justify-center gap-1 px-6 text-center text-sm">
+              {hasGenerated ? (
+                <>
+                  <p className="font-medium">No quedan diagramas pendientes de esta carga.</p>
+                  <p>Generá un nuevo rango para seguir cargando novedades.</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-medium">Todavía no generaste diagramas.</p>
+                  <p>Completá el formulario y presioná “Generar diagramas” para revisar el detalle día por día.</p>
+                </>
+              )}
             </div>
-
-            {canCreate || canUpdate ? (
-              <Button type="submit" className="mt-6" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Generando...' : 'Generar diagramas'}
-              </Button>
-            ) : (
-              <p className="text-muted-foreground mt-6 text-sm">No tenés permiso para cargar ni modificar novedades.</p>
-            )}
-          </form>
-        </Form>
-      </ResizablePanel>
-      <ResizableHandle withHandle />
-      <ResizablePanel className="flex min-w-[600px] flex-col gap-4 pl-6" defaultSize={70}>
-        {!hasResults && (
-          <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-1 px-6 text-center text-sm">
-            {hasGenerated ? (
-              <>
-                <p className="font-medium">No quedan diagramas pendientes de esta carga.</p>
-                <p>Generá un nuevo rango para seguir cargando novedades.</p>
-              </>
-            ) : (
-              <>
-                <p className="font-medium">Todavía no generaste diagramas.</p>
-                <p>Completá el formulario y presioná “Generar diagramas” para revisar el detalle día por día.</p>
-              </>
-            )}
-          </div>
-        )}
-        {hasResults && (
-          <DiagramLoadSummary employeeLabel={selectedEmployeeLabel} diagramTypeLabel={selectedDiagramTypeLabel} />
-        )}
-        {canUpdate && errorsDiagrams.length > 0 && (
-          <DuplicateDiagramsCard
-            rows={errorsDiagrams}
-            control={form.control}
-            customizeComments={customizeComments}
-            formatDayLabel={formatDayLabel}
-            onCommentChange={setErrorComment}
-            onUpdate={updateDiagram}
-            onUpdateAll={updateAll}
-            onDiscard={(index) => descartarOne(index, 'e')}
-            onDiscardAll={() => descartarAll('e')}
-          />
-        )}
-        {canCreate && succesDiagrams.length > 0 && (
-          <NewDiagramsCard
-            rows={succesDiagrams}
-            control={form.control}
-            customizeComments={customizeComments}
-            isProcessing={isProcessing}
-            formatDayLabel={formatDayLabel}
-            dayKey={dayKey}
-            onCommentChange={setSuccessComment}
-            onCreate={createDiagram}
-            onCreateAll={createAll}
-            onDiscard={(index) => descartarOne(index, 's')}
-            onDiscardAll={() => descartarAll('s')}
-          />
-        )}
-      </ResizablePanel>
-    </ResizablePanelGroup>
+          )}
+          {hasResults && (
+            <DiagramLoadSummary employeeLabel={selectedEmployeeLabel} diagramTypeLabel={selectedDiagramTypeLabel} />
+          )}
+          {canUpdate && errorsDiagrams.length > 0 && (
+            <DuplicateDiagramsCard
+              rows={errorsDiagrams}
+              control={form.control}
+              customizeComments={customizeComments}
+              formatDayLabel={formatDayLabel}
+              onCommentChange={setErrorComment}
+              onUpdate={updateDiagram}
+              onUpdateAll={updateAll}
+              onDiscard={(index) => descartarOne(index, 'e')}
+              onDiscardAll={() => descartarAll('e')}
+            />
+          )}
+          {canCreate && succesDiagrams.length > 0 && (
+            <NewDiagramsCard
+              rows={succesDiagrams}
+              control={form.control}
+              customizeComments={customizeComments}
+              isProcessing={isProcessing}
+              formatDayLabel={formatDayLabel}
+              dayKey={dayKey}
+              onCommentChange={setSuccessComment}
+              onCreate={createDiagram}
+              onCreateAll={createAll}
+              onDiscard={(index) => descartarOne(index, 's')}
+              onDiscardAll={() => descartarAll('s')}
+            />
+          )}
+        </CatalogTableSurface>
+      </div>
+    </div>
   );
 }
 

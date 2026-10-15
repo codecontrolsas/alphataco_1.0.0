@@ -3,15 +3,15 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import {
   inMemoryDateSortingFn,
   inMemoryFacetedFilterFn,
   inMemoryTextFilterFn,
 } from '@/shared/components/common/DataTable/in-memory';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef, FilterFn } from '@tanstack/react-table';
-import { ArrowDown, ArrowRight, ArrowUp, Check, X } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUp, Check, Pencil, Trash2, X } from 'lucide-react';
 import type { TypeOfRepairData } from './actions/actions';
 
 /** Fila de la tabla: el tipo sale del retorno de la action, no de los tipos legacy. */
@@ -41,7 +41,11 @@ function BooleanBadge({ value, activeVariant }: { value: boolean; activeVariant:
   );
 }
 
-export function getRepairTypeColumns(onEdit: (repair: RepairTypeRow) => void, canEdit: boolean): ColumnDef<RepairTypeRow>[] {
+export function getRepairTypeColumns(
+  onEdit: (repair: RepairTypeRow) => void,
+  canEdit: boolean,
+  onDelete?: (repair: RepairTypeRow) => void
+): ColumnDef<RepairTypeRow>[] {
   const columns: ColumnDef<RepairTypeRow>[] = [
     {
       id: 'name',
@@ -84,7 +88,11 @@ export function getRepairTypeColumns(onEdit: (repair: RepairTypeRow) => void, ca
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
       cell: ({ row }) => (
         <Badge variant={row.original.is_active ? 'success' : 'default'}>
-          {row.original.is_active ? <Check aria-hidden="true" className="mr-1 h-3 w-3" /> : <X aria-hidden="true" className="mr-1 h-3 w-3" />}
+          {row.original.is_active ? (
+            <Check aria-hidden="true" className="mr-1 h-3 w-3" />
+          ) : (
+            <X aria-hidden="true" className="mr-1 h-3 w-3" />
+          )}
           {row.original.is_active ? 'Activo' : 'Inactivo'}
         </Badge>
       ),
@@ -140,7 +148,7 @@ export function getRepairTypeColumns(onEdit: (repair: RepairTypeRow) => void, ca
     },
   ];
 
-  if (canEdit) {
+  if (canEdit || onDelete) {
     columns.push({
       id: 'actions',
       header: 'Acciones',
@@ -148,9 +156,33 @@ export function getRepairTypeColumns(onEdit: (repair: RepairTypeRow) => void, ca
       enableSorting: false,
       enableHiding: false,
       cell: ({ row }) => (
-        <Button type="button" size="sm" variant="link" onClick={() => onEdit(row.original)}>
-          Editar
-        </Button>
+        <div className="flex items-center gap-1">
+          {canEdit ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              aria-label={`Editar tipo de reparación ${row.original.name}`}
+              onClick={() => onEdit(row.original)}
+            >
+              <Pencil aria-hidden="true" className="h-4 w-4" />
+              Editar
+            </Button>
+          ) : null}
+          {onDelete ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="text-destructive hover:text-destructive"
+              aria-label={`Eliminar tipo de reparación ${row.original.name}`}
+              onClick={() => onDelete(row.original)}
+            >
+              <Trash2 aria-hidden="true" className="h-4 w-4" />
+              Eliminar
+            </Button>
+          ) : null}
+        </div>
       ),
     });
   }

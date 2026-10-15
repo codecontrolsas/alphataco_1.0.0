@@ -18,13 +18,14 @@
  * Uso: node scripts/seed-company.ts --name "Empresa Demo" [--id <uuid>]
  * Requiere DATABASE_URL=postgresql://... en el entorno.
  */
-import { createHash } from 'node:crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { prismaPgConfig } from '../src/shared/lib/prisma-pg-config.ts';
-import { PrismaClient } from '../src/generated/prisma/client.ts';
+import { createHash } from 'node:crypto';
+import { ACTION_DESCRIPTIONS, TAB_DESCRIPTIONS } from '../src/features/Permissions/permission-catalog.ts';
 import { ACTIONS, PERMISSIONS } from '../src/features/Permissions/permissions-map.ts';
 import { DEFAULT_MEASUREMENT_UNITS } from '../src/features/Warehouses/lib/default-units.ts';
-import { buildPermissionRows, SYSTEM_ROLE_SLUGS } from './seed/permission-rows.ts';
+import { PrismaClient } from '../src/generated/prisma/client.ts';
+import { prismaPgConfig } from '../src/shared/lib/prisma-pg-config.ts';
+import { SYSTEM_ROLE_SLUGS, buildPermissionRows } from './seed/permission-rows.ts';
 
 /** Namespace fijo para derivar UUIDs v5 deterministicos en este seed. No cambiar entre corridas. */
 const SEED_NAMESPACE = 'b6f5a6b0-6b42-4f7e-9a9d-2b8a9d9c9c10';
@@ -156,7 +157,10 @@ async function main(): Promise<void> {
 
     // 3. Catalogo de permisos — GLOBAL, no depende de la empresa creada arriba.
     const actionNames = Object.fromEntries(Object.values(ACTIONS).map((a) => [a.slug, a.name]));
-    const { modules, tabs, actions, rolePermissions } = buildPermissionRows(PERMISSIONS, actionNames);
+    const { modules, tabs, actions, rolePermissions } = buildPermissionRows(PERMISSIONS, actionNames, {
+      tabs: TAB_DESCRIPTIONS,
+      actions: ACTION_DESCRIPTIONS,
+    });
 
     for (const moduleRow of modules) {
       await prisma.modules.upsert({
@@ -184,6 +188,7 @@ async function main(): Promise<void> {
           slug: tabRow.slug,
           name: tabRow.name,
           order_index: tabRow.orderIndex,
+          ...(tabRow.description ? { description: tabRow.description } : {}),
         },
         create: {
           id: tabRow.id,
@@ -192,6 +197,7 @@ async function main(): Promise<void> {
           slug: tabRow.slug,
           name: tabRow.name,
           order_index: tabRow.orderIndex,
+          description: tabRow.description ?? null,
         },
       });
     }
@@ -200,8 +206,8 @@ async function main(): Promise<void> {
     for (const actionRow of actions) {
       const upserted = await prisma.actions.upsert({
         where: { slug: actionRow.slug },
-        update: { name: actionRow.name },
-        create: { slug: actionRow.slug, name: actionRow.name },
+        update: { name: actionRow.name, ...(actionRow.description ? { description: actionRow.description } : {}) },
+        create: { slug: actionRow.slug, name: actionRow.name, description: actionRow.description ?? null },
       });
       actionIdBySlug.set(actionRow.slug, upserted.id);
     }

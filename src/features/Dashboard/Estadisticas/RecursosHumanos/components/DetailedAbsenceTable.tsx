@@ -19,7 +19,7 @@ export async function DetailedAbsenceTable() {
   const [data, companyId] = await Promise.all([getDailyAbsenceTimeseries(), getActiveCompanyId()]);
 
   return (
-    <Card>
+    <Card className="@container min-w-0">
       <CardHeader>
         <CardTitle className="text-lg font-semibold">Ausentismo Diario - {getCurrentMonthYearLabel()}</CardTitle>
         <CardDescription>
@@ -27,7 +27,7 @@ export async function DetailedAbsenceTable() {
           día.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="min-w-0">
         <_DailyAbsenceDataTable data={data} companyId={companyId} />
       </CardContent>
     </Card>

@@ -3,22 +3,23 @@
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { TabsManagerClientSide } from '@/features/TabsManager';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
 import { cn } from '@/lib/utils';
-import InfoComponent from '@/shared/components/common/InfoComponent';
+import { SectionCard } from '@/shared/components/common/SectionCard';
 import { argentinaDate } from '@/shared/lib/argentina-time';
-import { CalendarIcon } from '@radix-ui/react-icons';
-import { FolderOpen, Plus } from 'lucide-react';
+import { CalendarIcon, Plus } from 'lucide-react';
 import moment from 'moment';
 import { useState } from 'react';
-import { DateRange } from 'react-day-picker';
+import type { DateRange } from 'react-day-picker';
 import DiagramFormUpdated from './DiagramFormUpdated';
 import { DiagramDetailTable, type DiagramHistoryRow } from './table/DiagramDetailTable';
 import { DetailDiagramColums } from './table/diagram-detail-colums';
+
 /** Hoy en hora argentina como fecha local a medianoche (lo que espera el calendario). */
 const argentinaToday = () => moment(argentinaDate(), 'YYYY-MM-DD');
 
-type diagram = {
+interface EmployeeDiagramEntry {
   id: string;
   created_at: string;
   employee_id: string;
@@ -35,84 +36,90 @@ type diagram = {
   year: number;
   /** Comentario opcional cargado junto con la novedad */
   comments?: string | null;
-};
+}
 
+/** Día de la novedad como `YYYY-MM-DD` (las partes vienen sueltas de la base). */
+const entryDay = (entry: EmployeeDiagramEntry) =>
+  moment(`${entry.year}-${entry.month}-${entry.day}`, 'YYYY-M-D').format('YYYY-MM-DD');
+
+/**
+ * Diagrama de un empleado en su ficha: novedades del período elegido + historial de cambios.
+ * La carga de novedades se hace en un panel lateral (antes era una pestaña aparte) con el empleado fijo.
+ */
 export function DiagramDetailEmployeeView({
   diagrams,
   diagrams_types,
-  activeEmploees,
+  employeeId,
   historyData,
-  role,
-  searchParams = {},
 }: {
   historyData: DiagramHistoryRow[];
-  diagrams: diagram[] | [];
+  diagrams: EmployeeDiagramEntry[];
   diagrams_types: { id: string; name: string | null }[];
-  activeEmploees: { id: string }[];
-  role?: string | null;
-  searchParams?: { [key: string]: string | string[] | undefined };
+  employeeId: string;
 }) {
   const [date, setDate] = useState<DateRange | undefined>({
     from: argentinaToday().toDate(),
     to: argentinaToday().add(30, 'days').toDate(),
   });
-  const [diagramType, setDiagramType] = useState<{ id: string; name: string } | undefined>(undefined);
+  const [isLoadOpen, setIsLoadOpen] = useState(false);
+  const { canView } = usePermissions();
+  // Misma regla que tenía la pestaña "Nuevo Diagrama": visible con la pestaña de carga de diagramas.
+  const canLoad = canView('empleados', 'new');
+  const canSeeHistory = canView('empleados', 'diagramas-empleado');
 
-  function filterDiagramsByDate(diagrams: diagram[], date: DateRange | undefined) {
-    if (!date) {
-      return diagrams;
-    }
+  const from = date?.from ? moment(date.from).format('YYYY-MM-DD') : null;
+  const to = date?.from ? moment(date.to ?? argentinaToday().toDate()).format('YYYY-MM-DD') : null;
 
-    return diagrams.filter((diagram) => {
-      const diagramDate = new Date(diagram.year, diagram.month - 1, diagram.day);
-      return diagramDate >= (date.from ?? new Date(0)) && diagramDate <= (date.to ?? argentinaToday().toDate());
-    });
-  }
+  const rows = diagrams
+    .filter((entry) => {
+      if (!from || !to) return true;
+      const day = entryDay(entry);
+      return day >= from && day <= to;
+    })
+    .sort((a, b) => moment(b.created_at).valueOf() - moment(a.created_at).valueOf())
+    .map((entry) => ({
+      ...entry,
+      ...entry.diagram_type,
+      diagram_type_id: entry.diagram_type.id,
+      diagram_type_created_at: entry.diagram_type.created_at,
+      created_at: `${entry.year}-${entry.month}-${entry.day}`,
+    }));
 
-  function filterDiagramsByType(diagrams: diagram[], diagramType: { id: string; name: string } | undefined) {
-    if (!diagramType) {
-      return diagrams;
-    }
-
-    return diagrams.filter((diagram) => diagram.diagram_type.id === diagramType.id);
-  }
-
-  const diagramsFilteredByDate = filterDiagramsByDate(diagrams, date);
-  const diagramsFilteredByType = filterDiagramsByType(diagramsFilteredByDate, diagramType);
-
-  const tabs = [
-    {
-      value: 'Diagramas',
-      label: (
-        <span className="flex items-center gap-2">
-          <FolderOpen className="h-4 w-4" />
-          Diagramas
-        </span>
-      ),
-      moduleSlug: 'empleados' as const,
-      tabSlug: 'diagramas-empleado' as const,
-      content: (
-        <div>
-          <div className={cn('gap-2 flex')}>
+  return (
+    <div className="flex min-w-0 flex-col gap-4">
+      {canSeeHistory ? (
+        <SectionCard
+          className="@container min-w-0"
+          title="Novedades del período"
+          action={
+            canLoad ? (
+              <Button type="button" variant="brand" className="min-h-10" onClick={() => setIsLoadOpen(true)}>
+                <Plus aria-hidden="true" className="size-4" />
+                Cargar novedad
+              </Button>
+            ) : null
+          }
+        >
+          <div className="flex min-w-0 flex-col gap-4">
             <Popover>
               <PopoverTrigger asChild>
                 <Button
                   type="button"
-                  id="date"
-                  variant={'outline'}
-                  className={cn('w-[300px] justify-start text-left font-normal', !date && 'text-muted-foreground')}
+                  variant="outline"
+                  aria-label="Período de las novedades"
+                  className={cn(
+                    'min-h-10 w-full justify-start text-left font-normal sm:w-72',
+                    !date && 'text-muted-foreground'
+                  )}
                 >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  <CalendarIcon aria-hidden="true" className="size-4" />
                   {date?.from ? (
-                    date.to ? (
-                      <>
-                        {moment(date.from).format('DD/MM/YYYY')} - {moment(date.to).format('DD/MM/YYYY')}
-                      </>
-                    ) : (
-                      moment(date.from).format('DD/MM/YYYY')
-                    )
+                    <span className="font-mono tabular-nums">
+                      {moment(date.from).format('DD/MM/YYYY')}
+                      {date.to ? ` – ${moment(date.to).format('DD/MM/YYYY')}` : ''}
+                    </span>
                   ) : (
-                    <span>Seleccionar fecha</span>
+                    <span>Elegir período</span>
                   )}
                 </Button>
               </PopoverTrigger>
@@ -127,66 +134,34 @@ export function DiagramDetailEmployeeView({
                 />
               </PopoverContent>
             </Popover>
-            <InfoComponent message="La selección máxima es de 30 días" size="sm" />
-          </div>
-          <div className="gap-4 pr-7 ">
-            <div className=" mt-3">
-              <div className=" w-full">
-                <DiagramDetailTable
-                  columns={DetailDiagramColums}
-                  historyData={historyData}
-                  data={diagramsFilteredByType
-                    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                    .map((diagram) => ({
-                      ...diagram,
-                      ...diagram.diagram_type,
-                      diagram_type_id: diagram.diagram_type.id,
-                      diagram_type_created_at: diagram.diagram_type.created_at,
-                      created_at: `${diagram.year}-${diagram.month}-${diagram.day}`,
-                    }))}
-                />
-              </div>
+
+            <div className="min-w-0 overflow-x-auto">
+              <DiagramDetailTable columns={DetailDiagramColums} historyData={historyData} data={rows} />
             </div>
           </div>
-        </div>
-      ),
-    },
-    {
-      value: 'NuevoDiagrama',
-      label: (
-        <span className="flex items-center gap-2">
-          <Plus className="h-4 w-4" />
-          Nuevo Diagrama
-        </span>
-      ),
-      moduleSlug: 'empleados' as const,
-      tabSlug: 'new' as const, // Hereda de empleados/diagrams/new
-      content: <DiagramFormUpdated diagrams_types={diagrams_types} defaultId={activeEmploees[0].id} />,
-    },
-  ] as const;
+        </SectionCard>
+      ) : (
+        // Sin la vista de novedades pero con la carga: el formulario va directo, como antes.
+        canLoad && (
+          <SectionCard title="Cargar novedad">
+            <DiagramFormUpdated diagrams_types={diagrams_types} defaultId={employeeId} />
+          </SectionCard>
+        )
+      )}
 
-  return <TabsManagerClientSide<'empleados'> paramName="subtab" defaultTab="Diagramas" tabs={tabs} />;
-}
-
-/* TODO
-
-1- Filtrar por fecha 👌 
-2- Filtrar por tipo de diagrama 👌 
-  2.1 - Crear un select con los tipos de diagramas 👌 
-  2.2 - Traer los tipos de diagramas desde la API (no fue necesario, se filtra por las opciones que tenga el usuario) 👌
-  2.3 - Filtrar los diagramas por el tipo seleccionado 👌 
-3- Agregar un botón para descargar los diagramas
-4- Agregar un boton para editar diagramas
-
-*/
-
-{
-  /* <select value={diagramType?.id} onChange={handleDiagramTypeChange} className="mb-4">
-          <option value="">Todos los tipos de diagrama</option>
-          {diagramTypes.map((diagram) => (
-            <option key={diagram.id} value={diagram.id}>
-              {diagram.name}
-            </option>
-          ))}
-        </select> */
+      {canLoad && canSeeHistory ? (
+        <Sheet open={isLoadOpen} onOpenChange={setIsLoadOpen}>
+          <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-3xl">
+            <SheetHeader className="px-4 pt-6 pb-4 sm:px-6">
+              <SheetTitle>Cargar novedad</SheetTitle>
+              <SheetDescription>Para este empleado, uno o varios días.</SheetDescription>
+            </SheetHeader>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 sm:px-6">
+              {isLoadOpen ? <DiagramFormUpdated diagrams_types={diagrams_types} defaultId={employeeId} /> : null}
+            </div>
+          </SheetContent>
+        </Sheet>
+      ) : null}
+    </div>
+  );
 }

@@ -1,9 +1,10 @@
 import 'server-only';
 
-import type { Prisma } from '@/generated/prisma/client';
 import { argentinaDate } from '@/features/Jobs/lib/dates';
+import type { Prisma } from '@/generated/prisma/client';
 import { dateColumnToYmd, daysBetween } from './batch-expiry';
 import { DESTINATION_SELECT, destinationLabel } from './labels';
+import { STALE_LOAN_DAYS } from './loan-rules';
 
 /**
  * Filtro de prestamos abiertos de una empresa: unidades `OUT`, sin las cubiertas (se desmontan desde
@@ -11,6 +12,27 @@ import { DESTINATION_SELECT, destinationLabel } from './labels';
  */
 export function openLoansWhere(companyId: string): Prisma.material_unitsWhereInput {
   return { company_id: companyId, status: 'OUT', material: { tire_combination: null } };
+}
+
+/**
+ * Prestamos abiertos "viejos": los que llevan `STALE_LOAN_DAYS` dias o mas desde la SALIDA original, con
+ * la misma regla que `toLoan` (si el ultimo movimiento es la anulacion de una devolucion, cuenta la
+ * salida a la que apunta esa devolucion). `today` es `YYYY-MM-DD` en hora argentina.
+ */
+export function staleLoansWhere(companyId: string, today: string = argentinaDate()): Prisma.material_unitsWhereInput {
+  const cutoff = new Date(`${today}T00:00:00Z`);
+  cutoff.setUTCDate(cutoff.getUTCDate() - STALE_LOAN_DAYS);
+  return {
+    AND: [
+      openLoansWhere(companyId),
+      {
+        OR: [
+          { last_movement: { type: 'EXIT', occurred_on: { lte: cutoff } } },
+          { last_movement: { type: { not: 'EXIT' }, returned_from: { occurred_on: { lte: cutoff } } } },
+        ],
+      },
+    ],
+  };
 }
 
 /**

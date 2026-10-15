@@ -1,18 +1,19 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { formatMoney, formatQuantity } from '@/features/Warehouses/lib/format';
+import { formatQuantity } from '@/features/Warehouses/lib/format';
 import { DESTINATION_TYPE_LABELS } from '@/features/Warehouses/lib/labels';
-import Link from 'next/link';
-import type { RequestQuoteComparison } from '../../lib/quote-query-types';
-import type { PurchaseRequestDetail } from '../../lib/request-query-types';
-import { HistoryCard } from '../../components/HistoryCard';
-import { PurchaseOrderStatusBadge } from '../../Orders/components/PurchaseOrderStatusBadge';
-import { QuoteComparison } from './QuoteComparison';
-import { PurchaseRequestActions } from './PurchaseRequestActions';
-import { PurchaseRequestStatusBadge } from './PurchaseRequestStatusBadge';
 import { Field, FieldGrid } from '@/shared/components/common/FieldGrid';
 import { RecordHeader } from '@/shared/components/common/RecordHeader';
 import { SectionCard } from '@/shared/components/common/SectionCard';
 import { formatDateAr } from '@/shared/lib/argentina-time';
+import Link from 'next/link';
+import { PurchaseOrderStatusBadge } from '../../Orders/components/PurchaseOrderStatusBadge';
+import { HistoryCard } from '../../components/HistoryCard';
+import { PriceText } from '../../components/PriceText';
+import type { RequestQuoteComparison } from '../../lib/quote-query-types';
+import type { PurchaseRequestDetail } from '../../lib/request-query-types';
+import { PurchaseRequestActions } from './PurchaseRequestActions';
+import { PurchaseRequestStatusBadge } from './PurchaseRequestStatusBadge';
+import { QuoteComparison } from './QuoteComparison';
 
 /** Estados en los que se muestra el avance por linea (pedido en OC y falta). */
 const WITH_PROGRESS = new Set(['APPROVED', 'PARTIALLY_ORDERED', 'ORDERED', 'CLOSED']);
@@ -45,13 +46,22 @@ export function PurchaseRequestDetailView({
       <SectionCard title="Datos de la solicitud">
         <FieldGrid>
           <Field label="Pedida por">{request.requester ?? '—'}</Field>
-          <Field label={request.destinationType ? `Se imputa a (${DESTINATION_TYPE_LABELS[request.destinationType]})` : 'Se imputa a'}>
-            {request.destinationType ? (request.destination ?? '—') : 'Para stock'}
+          <Field
+            label={
+              request.destinationType
+                ? `Se imputa a (${DESTINATION_TYPE_LABELS[request.destinationType]})`
+                : 'Se imputa a'
+            }
+          >
+            {request.destinationType ? request.destination ?? '—' : 'Para stock'}
           </Field>
           <Field label="Se necesita para">{request.neededBy ? formatDateAr(request.neededBy) : 'Sin fecha'}</Field>
           {request.materialRequest && (
             <Field label="Pedido de Almacenes">
-              <Link href={`/dashboard/warehouse/requests/${request.materialRequest.id}`} className="font-mono underline">
+              <Link
+                href={`/dashboard/warehouse/requests/${request.materialRequest.id}`}
+                className="font-mono underline"
+              >
                 {request.materialRequest.number}
               </Link>
             </Field>
@@ -87,7 +97,8 @@ export function PurchaseRequestDetailView({
                   <TableCell>
                     {line.material ? (
                       <span>
-                        <span className="font-mono text-xs text-muted-foreground">{line.material.code}</span> {line.material.name}
+                        <span className="font-mono text-xs text-muted-foreground">{line.material.code}</span>{' '}
+                        {line.material.name}
                       </span>
                     ) : (
                       <span>{line.description}</span>
@@ -108,7 +119,10 @@ export function PurchaseRequestDetailView({
                   )}
                   <TableCell>
                     {line.suggestedSupplier ? (
-                      <Link href={`/dashboard/purchases/suppliers/${line.suggestedSupplier.id}`} className="hover:underline">
+                      <Link
+                        href={`/dashboard/purchases/suppliers/${line.suggestedSupplier.id}`}
+                        className="hover:underline"
+                      >
                         {line.suggestedSupplier.name}
                       </Link>
                     ) : (
@@ -135,7 +149,7 @@ export function PurchaseRequestDetailView({
                 </Link>
                 <PurchaseOrderStatusBadge status={order.status} />
                 <span>{order.supplierName}</span>
-                <span className="ml-auto tabular-nums">{formatMoney(order.total)}</span>
+                <PriceText value={order.total} canViewPrices={request.canViewPrices} className="ml-auto" />
               </li>
             ))}
           </ul>

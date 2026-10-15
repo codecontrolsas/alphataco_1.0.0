@@ -277,10 +277,10 @@ export function OrderManagementClient({ data }: Props) {
 
   return (
     <>
-      <Card className="py-0">
-        <CardHeader className="flex flex-col items-stretch border-b p-0! sm:flex-row">
+      <Card className="@container py-0">
+        <CardHeader className="flex flex-col items-stretch border-b p-0! @3xl:flex-row">
           {/* Left: title + controls */}
-          <div className="flex flex-1 flex-col justify-center gap-1 px-6 pt-4 pb-3 sm:py-4">
+          <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 px-6 pt-4 pb-3 @3xl:py-4">
             <CardTitle className="text-base">Gestion de Pedidos — Sala de Control</CardTitle>
             <CardDescription>
               {periodLabel}
@@ -335,6 +335,7 @@ export function OrderManagementClient({ data }: Props) {
                 }}
                 variant="outline"
                 size="sm"
+                className="max-w-full overflow-x-auto"
               >
                 <ToggleGroupItem value="daily">Diario</ToggleGroupItem>
                 <ToggleGroupItem value="weekly">Semanal</ToggleGroupItem>
@@ -344,7 +345,7 @@ export function OrderManagementClient({ data }: Props) {
               </ToggleGroup>
 
               {/* Client filter */}
-              <div className="w-[220px]">
+              <div className="w-full max-w-[220px]">
                 <MultiSelectCombobox
                   options={data.customers.map((c) => ({ label: c.name, value: c.id }))}
                   placeholder="Todos los clientes"
@@ -358,24 +359,26 @@ export function OrderManagementClient({ data }: Props) {
           </div>
 
           {/* Right: stat buttons (identical pattern to Historico de servicios) */}
-          <div className="flex flex-wrap sm:flex-nowrap">
-            {statButtons.map(({ key, label, value }) => (
-              <button
-                key={key}
-                type="button"
-                aria-pressed={activeView === key}
-                data-active={activeView === key}
-                className="relative z-30 flex flex-1 flex-col justify-center gap-1 border-t px-3 py-4 text-left even:border-l data-[active=true]:bg-muted/50 sm:border-t-0 sm:border-l sm:px-8 sm:py-6 cursor-pointer transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                onClick={() => setActiveView(key)}
-              >
-                <span className="text-xs text-muted-foreground">{label}</span>
-                <span className="text-lg leading-none font-bold sm:text-3xl">{value.toLocaleString('es-AR')}</span>
-              </button>
-            ))}
+          <div className="overflow-hidden @3xl:shrink-0">
+            <div className="-ml-px grid grid-cols-2 @lg:grid-cols-3 @3xl:ml-0 @3xl:flex">
+              {statButtons.map(({ key, label, value }) => (
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={activeView === key}
+                  data-active={activeView === key}
+                  className="relative z-30 flex flex-1 flex-col justify-center gap-1 border-t border-l px-3 py-4 text-left data-[active=true]:bg-muted/50 @3xl:border-t-0 @3xl:px-8 @3xl:py-6 cursor-pointer transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  onClick={() => setActiveView(key)}
+                >
+                  <span className="text-xs text-muted-foreground">{label}</span>
+                  <span className="text-lg leading-none font-bold @3xl:text-3xl">{value.toLocaleString('es-AR')}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </CardHeader>
 
-        <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
+        <CardContent className="px-2 pt-4 @xl:px-6 @xl:pt-6">
           {chartData.length > 0 ? (
             <>
               <OrderManagementChart chartData={chartData} activeView={activeView} />

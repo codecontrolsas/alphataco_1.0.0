@@ -1,13 +1,23 @@
 import { getUserPermissionsMapServer } from '@/features/Permissions';
-import { SectionErrorBoundary } from '@/shared/components/common/SectionErrorBoundary';
 import { SectionManagerServer } from '@/features/TabsManager';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ArrowLeftRight, HandCoins, Landmark, ListChecks, Percent, Repeat, ScrollText, Settings, WalletCards } from 'lucide-react';
+import { SectionErrorBoundary } from '@/shared/components/common/SectionErrorBoundary';
+import {
+  ArrowLeftRight,
+  HandCoins,
+  Landmark,
+  ListChecks,
+  Percent,
+  Repeat,
+  ScrollText,
+  Settings,
+  WalletCards,
+} from 'lucide-react';
 import { Suspense } from 'react';
 import AccountsTabContent from './Accounts/AccountsTabContent';
+import { AccountCardsSkeleton } from './Accounts/fallback/AccountCardsSkeleton';
 import ChecksTabContent from './Checks/ChecksTabContent';
 import CollectionsTabContent from './Collections/CollectionsTabContent';
-import { AccountCardsSkeleton } from './Accounts/fallback/AccountCardsSkeleton';
 import MovementsTabContent from './Movements/MovementsTabContent';
 import OwnChecksTabContent from './OwnChecks/OwnChecksTabContent';
 import ReconciliationTabContent from './Reconciliation/ReconciliationTabContent';
@@ -15,7 +25,6 @@ import SettingsTabContent from './Settings/SettingsTabContent';
 import { TreasurySettingsSkeleton } from './Settings/fallback/TreasurySettingsSkeleton';
 import TransfersTabContent from './Transfers/TransfersTabContent';
 import WithholdingsTabContent from './Withholdings/WithholdingsTabContent';
-import { TreasurySectionCounter } from './components/TreasurySectionCounter';
 import { TreasurySectionSkeleton } from './fallback/TreasurySectionSkeleton';
 
 /**
@@ -42,7 +51,6 @@ export default async function TreasuryComponent({ searchParams }: { searchParams
       searchParams={searchParams}
       defaultTab="cuentas"
       permissions={permissions}
-      sectionNav
       tabs={[
         {
           value: 'cuentas',
@@ -88,11 +96,6 @@ export default async function TreasuryComponent({ searchParams }: { searchParams
           label: label(HandCoins, 'Cobranzas'),
           moduleSlug: 'tesoreria',
           tabSlug: 'cobranzas',
-          navCounter: (
-            <Suspense fallback={null}>
-              <TreasurySectionCounter section="collections" label="Cobros vencidos" />
-            </Suspense>
-          ),
           content: (
             <SectionErrorBoundary title="No se pudo mostrar Cobranzas">
               <Suspense fallback={<TreasurySectionSkeleton />}>
@@ -106,11 +109,6 @@ export default async function TreasuryComponent({ searchParams }: { searchParams
           label: label(WalletCards, 'Cheques'),
           moduleSlug: 'tesoreria',
           tabSlug: 'cheques',
-          navCounter: (
-            <Suspense fallback={null}>
-              <TreasurySectionCounter section="checks" label="Cheques por vencer o vencidos para depositar" />
-            </Suspense>
-          ),
           content: (
             <SectionErrorBoundary title="No se pudo mostrar Cheques">
               <Suspense fallback={<TreasurySectionSkeleton />}>
@@ -124,11 +122,6 @@ export default async function TreasuryComponent({ searchParams }: { searchParams
           label: label(ScrollText, 'Cheques propios'),
           moduleSlug: 'tesoreria',
           tabSlug: 'cheques-propios',
-          navCounter: (
-            <Suspense fallback={null}>
-              <TreasurySectionCounter section="ownChecks" label="Débitos pendientes de confirmar" />
-            </Suspense>
-          ),
           content: (
             <SectionErrorBoundary title="No se pudo mostrar Cheques propios">
               <Suspense fallback={<TreasurySectionSkeleton />}>
@@ -142,11 +135,6 @@ export default async function TreasuryComponent({ searchParams }: { searchParams
           label: label(ListChecks, 'Conciliación'),
           moduleSlug: 'tesoreria',
           tabSlug: 'conciliacion',
-          navCounter: (
-            <Suspense fallback={null}>
-              <TreasurySectionCounter section="reconciliation" label="Líneas de extracto pendientes de conciliar" />
-            </Suspense>
-          ),
           content: (
             <SectionErrorBoundary title="No se pudo mostrar Conciliación">
               <Suspense fallback={<TreasurySectionSkeleton />}>

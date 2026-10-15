@@ -12,8 +12,8 @@ export default async function EmployeeDistributionCharts() {
   ]);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <Card>
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,24rem),1fr))] gap-6">
+      <Card className="@container min-w-0">
         <CardHeader>
           <CardTitle>Distribución de Empleados</CardTitle>
           <CardDescription>Visualización de empleados por género y posición en la empresa</CardDescription>
@@ -23,7 +23,7 @@ export default async function EmployeeDistributionCharts() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="@container min-w-0">
         <CardHeader>
           <CardTitle>Tipos de Contrato</CardTitle>
           <CardDescription>Distribución de empleados según su tipo de contrato</CardDescription>

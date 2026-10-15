@@ -30,7 +30,6 @@ export default async function AyudaComponent({ searchParams }: { searchParams: S
       searchParams={searchParams}
       defaultTab="tickets"
       permissions={permissions}
-      sectionNav
       tabs={[
         {
           value: 'tickets',

@@ -13,7 +13,7 @@ import { computeInvoiceTotals } from './invoice-math';
 export const COMERCIAL_PATH = '/dashboard/comercial';
 
 /** Devuelve el mensaje de rechazo si falta el permiso de Facturación, o `null` si puede seguir. */
-export async function denyUnless(action: 'create' | 'delete'): Promise<string | null> {
+export async function denyUnless(action: 'create' | 'update' | 'delete'): Promise<string | null> {
   const allowed = await checkPermissionServer('comercial', 'facturacion', action);
   return allowed ? null : 'No tenés permiso para esta acción en Facturación';
 }

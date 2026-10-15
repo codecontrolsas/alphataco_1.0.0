@@ -27,7 +27,8 @@ export async function saveInvoiceDraft(
   id: string,
   input: InvoiceDraftInput
 ): Promise<ActionResult<{ total: string | null; cbteType: number }>> {
-  const denied = await denyUnless('create');
+  // Modificar un borrador existente es `update`; crearlo (invoice-drafts-create) sigue siendo `create`.
+  const denied = await denyUnless('update');
   if (denied) return fail(denied);
   const parsed = invoiceDraftSchema.safeParse(input);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos');
@@ -177,7 +178,8 @@ export async function removeCertificationFromDraft(
   id: string,
   certificationId: string
 ): Promise<ActionResult<{ total: string | null }>> {
-  const denied = await denyUnless('create');
+  // Modificar un borrador existente es `update`; crearlo (invoice-drafts-create) sigue siendo `create`.
+  const denied = await denyUnless('update');
   if (denied) return fail(denied);
   const companyId = await getActiveCompanyId();
   try {

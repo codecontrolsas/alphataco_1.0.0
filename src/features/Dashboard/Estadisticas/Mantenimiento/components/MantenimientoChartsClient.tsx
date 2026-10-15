@@ -222,9 +222,9 @@ export function MantenimientoChartsClient({ initialSummary, initialMonthKey }: P
   return (
     <section className="grid grid-cols-1 gap-3 mb-4">
       {/* Donut card */}
-      <Card className="py-0">
-        <CardHeader className="flex flex-col items-stretch border-b p-0! sm:flex-row">
-          <div className="flex flex-1 flex-col justify-center gap-1 px-6 pt-4 pb-3 sm:py-4">
+      <Card className="@container py-0">
+        <CardHeader className="flex flex-col items-stretch border-b p-0! @3xl:flex-row">
+          <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 px-6 pt-4 pb-3 @3xl:py-4">
             <CardTitle className="text-base flex items-center gap-2">
               Mantenimiento de equipos
               {isFetching && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
@@ -270,7 +270,7 @@ export function MantenimientoChartsClient({ initialSummary, initialMonthKey }: P
             </div>
           </div>
         </CardHeader>
-        <CardContent className="px-2 pt-6 pb-6 sm:px-6">
+        <CardContent className="px-2 pt-6 pb-6 @xl:px-6">
           <OwnershipDonutChart
             countsByCategory={effectiveCountsByCategory}
             effectiveConditionCounts={effectiveConditionCounts}

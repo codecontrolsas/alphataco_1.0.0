@@ -25,13 +25,13 @@ export interface ChartSummaryProps {
  */
 export function ChartSummary({ title, summary, columns, rows, className }: ChartSummaryProps) {
   return (
-    <div className={cn('text-sm', className)}>
+    <div className={cn('min-w-0 text-sm', className)}>
       <p className="sr-only">{summary}</p>
-      <details className="group rounded-md border bg-card text-card-foreground">
+      <details className="group min-w-0 rounded-md border bg-card text-card-foreground">
         <summary className="cursor-pointer select-none rounded-md px-3 py-2 text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           Ver datos de «{title}» en tabla
         </summary>
-        <div className="overflow-x-auto px-3 pb-3">
+        <div className="min-w-0 max-w-full overflow-x-auto px-3 pb-3">
           <p className="py-2 text-xs text-muted-foreground">{summary}</p>
           <table className="w-full text-xs tabular-nums">
             <caption className="sr-only">{title}</caption>

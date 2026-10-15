@@ -15,6 +15,7 @@ import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { z } from 'zod';
 import { aptitudeCreateSchema, aptitudeUpdateSchema } from '../../lib/catalog-input-schemas';
 import {
   CATALOG_EXPORT_MAX_ROWS,
@@ -273,6 +274,7 @@ export async function getAptitudesTecnicasSingleFacet(
 // ============================================================================
 
 export async function getActiveCompanyPositions() {
+  await requireConfigTabPermission('aptitudes', 'view');
   try {
     const companyId = await getActiveCompanyId();
     return await prisma.company_positions.findMany({
@@ -316,48 +318,84 @@ export async function createAptitudTecnicaPrisma(data: { nombre: string; puestos
   }
 }
 
+/** Altas y bajas explícitas de puestos de la aptitud: la ausencia de un id nunca implica baja. */
+const aptitudeUpdateWithDeltaSchema = aptitudeUpdateSchema.omit({ puestos: true }).extend({
+  puestos: z.object({
+    add: z.array(z.string().uuid('Identificador inválido')).max(500, 'Demasiados elementos'),
+    remove: z.array(z.string().uuid('Identificador inválido')).max(500, 'Demasiados elementos'),
+  }),
+});
+
+/**
+ * Ids de los puestos que tienen hoy la aptitud, leídos de la pivote.
+ * Es el baseline del formulario de edición: el delta se calcula contra esto, no contra la fila de la tabla.
+ */
+export async function getAptitudePositionIds(aptitudeId: string): Promise<string[]> {
+  await requireConfigTabPermission('aptitudes', 'view');
+  const id = z.string().uuid('Identificador inválido').parse(aptitudeId);
+  try {
+    const companyId = await getActiveCompanyId();
+    const rows = await prisma.aptitudes_tecnicas_puestos.findMany({
+      where: { aptitud_id: id, aptitudes_tecnicas: withCompany({}, companyId) },
+      select: { puesto_id: true },
+    });
+    return rows.map((row) => row.puesto_id);
+  } catch (error) {
+    logger.error('Error al obtener puestos de la aptitud', { data: { error, aptitudeId } });
+    throw new Error('No se pudieron obtener los puestos de la aptitud.');
+  }
+}
+
 export async function updateAptitudTecnicaPrisma(data: {
   id: string;
   nombre: string;
-  puestos: string[];
+  puestos: { add: string[]; remove: string[] };
   is_active: boolean;
 }) {
   await requireConfigTabPermission('aptitudes', 'update');
-  data = aptitudeUpdateSchema.parse(data);
+  const input = aptitudeUpdateWithDeltaSchema.parse(data);
+  const { add, remove } = input.puestos;
+  if (add.some((id) => remove.includes(id))) throw new Error('Un puesto no puede agregarse y quitarse a la vez');
   try {
     // Perímetro sin RLS: la aptitud tiene que ser de la empresa activa antes de escribirla.
     const companyId = await getActiveCompanyId();
     const owned = await prisma.aptitudes_tecnicas.findFirst({
-      where: withCompany({ id: data.id }, companyId),
+      where: withCompany({ id: input.id }, companyId),
       select: { id: true },
     });
     if (!owned) throw new Error('Aptitud técnica no encontrada');
 
-    // Los puestos llegan del cliente: se validan contra la empresa antes de escribir la pivote.
-    await assertPositionsOwned(companyId, data.puestos);
+    // Los puestos a agregar llegan del cliente: se validan contra la empresa antes de escribir la pivote.
+    await assertPositionsOwned(companyId, add);
 
-    // deleteMany + createMany en transacción para reemplazar las relaciones M:M
+    // Una sola transacción: datos de la aptitud + bajas y altas explícitas de la pivote.
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Borrar relaciones existentes
-      await tx.aptitudes_tecnicas_puestos.deleteMany({
-        where: { aptitud_id: data.id },
+      const row = await tx.aptitudes_tecnicas.update({
+        where: { id: input.id },
+        data: { nombre: input.nombre, is_active: input.is_active },
+        select: { id: true },
       });
-
-      // 2. Actualizar aptitud y crear nuevas relaciones
-      return tx.aptitudes_tecnicas.update({
-        where: { id: data.id },
-        data: {
-          nombre: data.nombre,
-          is_active: data.is_active,
-          aptitudes_tecnicas_puestos: {
-            create: data.puestos.map((puestoId) => ({ puesto_id: puestoId })),
-          },
-        },
-        select: aptitudSelect,
-      });
+      const removed =
+        remove.length > 0
+          ? (
+              await tx.aptitudes_tecnicas_puestos.deleteMany({
+                where: { aptitud_id: input.id, puesto_id: { in: remove } },
+              })
+            ).count
+          : 0;
+      const added =
+        add.length > 0
+          ? (
+              await tx.aptitudes_tecnicas_puestos.createMany({
+                data: add.map((puestoId) => ({ aptitud_id: input.id, puesto_id: puestoId })),
+                skipDuplicates: true,
+              })
+            ).count
+          : 0;
+      return { row, added, removed };
     });
 
-    return result;
+    return { ...result.row, added: result.added, removed: result.removed };
   } catch (error) {
     logger.error('Error al actualizar aptitud técnica', { data: { error } });
     throw error instanceof Error ? error : new Error('No se pudo actualizar la aptitud técnica. Intente nuevamente.');

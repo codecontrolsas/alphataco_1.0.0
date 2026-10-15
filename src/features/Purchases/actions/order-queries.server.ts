@@ -5,14 +5,11 @@ import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { UUID_RE } from '../lib/action-errors';
 import { getOrderInvoicesSummary } from '../lib/invoices';
-import {
-  findOrderableRequestLines,
-  orderedByLine,
-  remainingOf,
-  requestLineLabel,
-} from '../lib/order-progress';
+import { findOrderableRequestLines, orderedByLine, remainingOf, requestLineLabel } from '../lib/order-progress';
 import { canApplyPurchaseOrderAction, type PurchaseOrderStatus } from '../lib/order-state-machine';
 import { expiredSupplierDocuments, receivedByOrderLine } from '../lib/orders';
+import { maskAmount } from '../lib/price-visibility';
+import { canViewPurchasePrices } from '../lib/price-visibility.server';
 import { supplierRecipients } from '../lib/supplier-send';
 import { type PurchaseOrderFormValues } from '../schemas/orders';
 
@@ -66,10 +63,12 @@ const userName = (p: { fullname: string | null; email: string | null } | null) =
 /** Detalle de la OC: cabecera, lineas con su solicitud de origen, historial y que se puede hacer. */
 export async function getPurchaseOrderDetail(id: string) {
   if (!UUID_RE.test(id)) return null;
-  const [canView, canUpdate, canApprove, canReceive] = await Promise.all([
+  const [canView, canUpdate, canApprove, canSend, canViewPrices, canReceive] = await Promise.all([
     checkPermissionServer('compras', 'ordenes', 'view'),
     checkPermissionServer('compras', 'ordenes', 'update'),
     checkPermissionServer('compras', 'ordenes', 'approve'),
+    checkPermissionServer('compras', 'ordenes', 'send'),
+    canViewPurchasePrices('ordenes'),
     checkPermissionServer('compras', 'recepciones', 'create'),
   ]);
   if (!canView) return null;
@@ -191,10 +190,11 @@ export async function getPurchaseOrderDetail(id: string) {
       requested,
       available,
       quantity: line.quantity.toString(),
-      unitPrice: line.unit_price.toString(),
+      // Sin `view_prices` los importes no viajan (la UI muestra "Sin permiso").
+      unitPrice: maskAmount(line.unit_price.toString(), canViewPrices),
       vatRateId: line.vat_rate_id,
-      netTotal: line.net_total.toFixed(2),
-      vatAmount: line.vat_amount.toFixed(2),
+      netTotal: maskAmount(line.net_total.toFixed(2), canViewPrices),
+      vatAmount: maskAmount(line.vat_amount.toFixed(2), canViewPrices),
       received: received.get(line.id) ?? '0',
       pendingReceipt: remainingOf(line.quantity.toString(), received.get(line.id) ?? '0'),
       /** Facturado neto (facturas y ND menos NC, sin anulados ni rechazados). */
@@ -212,10 +212,11 @@ export async function getPurchaseOrderDetail(id: string) {
     deliveryPlace: order.delivery_place,
     paymentTermDays: order.payment_term_days,
     notes: order.notes,
+    canViewPrices,
     totals: {
-      subtotal: order.subtotal.toFixed(2),
-      vatTotal: order.vat_total.toFixed(2),
-      total: order.total.toFixed(2),
+      subtotal: maskAmount(order.subtotal.toFixed(2), canViewPrices),
+      vatTotal: maskAmount(order.vat_total.toFixed(2), canViewPrices),
+      total: maskAmount(order.total.toFixed(2), canViewPrices),
     },
     creator: userName(order.creator),
     rejectionNotes: status === 'DRAFT' ? order.rejection_notes : null,
@@ -245,7 +246,8 @@ export async function getPurchaseOrderDetail(id: string) {
         requestLineId: line.requestLineId,
         quoteLineId: line.quoteLineId ?? '',
         quantity: line.quantity,
-        unitPrice: line.unitPrice,
+        // Editar exige `view_prices` (can.edit): sin él el formulario no se usa y el precio no viaja.
+        unitPrice: line.unitPrice ?? '',
         vatRateId: line.vatRateId,
       })),
     } satisfies PurchaseOrderFormValues,
@@ -298,10 +300,13 @@ export async function getPurchaseOrderDetail(id: string) {
         : []),
     ].sort((a, b) => (a.at ?? '').localeCompare(b.at ?? '')),
     can: {
-      edit: canApplyPurchaseOrderAction(status, 'edit') && canUpdate,
+      edit: canApplyPurchaseOrderAction(status, 'edit') && canUpdate && canViewPrices,
       submit: canApplyPurchaseOrderAction(status, 'submit') && canUpdate,
       approve: canApplyPurchaseOrderAction(status, 'approve') && canApprove,
-      send: canApplyPurchaseOrderAction(status, 'send') && canUpdate,
+      // Enviar manda el PDF con importes: exige `send` y `view_prices`. Marcar como enviada, solo `send`.
+      send: canApplyPurchaseOrderAction(status, 'send') && canSend && canViewPrices,
+      markSent: canApplyPurchaseOrderAction(status, 'markSent') && canSend,
+      pdf: canViewPrices,
       cancel:
         canApplyPurchaseOrderAction(status, 'cancel') &&
         canUpdate &&

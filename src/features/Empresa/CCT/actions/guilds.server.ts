@@ -5,7 +5,7 @@ import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { configPermissionError } from '../../lib/config-access.server';
+import { configPermissionError, requireConfigTabPermission } from '../../lib/config-access.server';
 import { covenantScope, guildReadScope, guildWriteScope } from '../lib/cct-scope';
 import type { CctMutationResult } from './types';
 
@@ -31,6 +31,7 @@ function normalizeName(name: string): string {
  * del convenio ya acotado, no necesita filtro propio.
  */
 export async function getGuildsWithCovenants() {
+  await requireConfigTabPermission('convenios', 'view');
   try {
     const companyId = await getActiveCompanyId();
     return await prisma.guild.findMany({

@@ -2,6 +2,8 @@
 
 import { argentinaDayStart } from '@/features/Dashboard/Principal/lib/dashboard-dates';
 import { requireDashboardView } from '@/features/Dashboard/lib/permissions.server';
+import { OPEN_MAINTENANCE_REQUEST_WHERE } from '@/features/Mantenimiento/lib/open-requests';
+import { MAINTENANCE_ORDER_TERMINAL_STATUSES } from '@/features/Mantenimiento/lib/order-status';
 import { type_of_maintenance_ENUM, work_order_item_status, work_order_status } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
@@ -30,9 +32,10 @@ const logger = new Logger('Dashboard/Estadisticas/Mantenimiento');
 // CONSTANTES INTERNAS
 // ============================================================================
 
-// Estados terminales de los workflows. Todo lo no terminal cuenta como "abierto".
-const TERMINAL_REQUEST_STATUSES = ['rejected', 'completed', 'cancelled'];
-const TERMINAL_ORDER_STATUSES = ['cancelled', 'completed'];
+// Solicitudes abiertas: `OPEN_MAINTENANCE_REQUEST_WHERE` (misma regla que la ficha del equipo).
+// Pedidos: la misma constante que la ficha del equipo (`cancelled` no existe para los pedidos;
+// el terminal que faltaba era `rejected`).
+const TERMINAL_ORDER_STATUSES: string[] = [...MAINTENANCE_ORDER_TERMINAL_STATUSES];
 const TERMINAL_WORK_ORDER_STATUSES: work_order_status[] = [
   work_order_status.completed,
   work_order_status.cancelled,
@@ -236,7 +239,7 @@ export async function getMaintenanceCategoryVehicles(
           model_vehicles: { select: { name: true } },
           _count: {
             select: {
-              maintenance_requests: { where: { status: { notIn: TERMINAL_REQUEST_STATUSES } } },
+              maintenance_requests: { where: OPEN_MAINTENANCE_REQUEST_WHERE },
               maintenance_orders: { where: { status: { notIn: TERMINAL_ORDER_STATUSES } } },
               work_orders: { where: { status: { notIn: TERMINAL_WORK_ORDER_STATUSES } } },
             },
@@ -355,7 +358,7 @@ export async function getMaintenanceByTypeForMonth(monthKey: string): Promise<Ma
         type_vehicles_typeTotype: { select: { id: true, name: true } },
         _count: {
           select: {
-            maintenance_requests: { where: { status: { notIn: TERMINAL_REQUEST_STATUSES } } },
+            maintenance_requests: { where: OPEN_MAINTENANCE_REQUEST_WHERE },
             maintenance_orders: { where: { status: { notIn: TERMINAL_ORDER_STATUSES } } },
             work_orders: { where: { status: { notIn: TERMINAL_WORK_ORDER_STATUSES } } },
           },

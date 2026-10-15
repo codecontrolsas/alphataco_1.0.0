@@ -224,6 +224,8 @@ WHERE r.slug IN ('admin', 'administrador', 'full-access-provisional')
 
 Para que la asignación manual funcione, la tab DEBE estar declarada en `permissions-map.ts` con sus `allowedActions`: el editor arma las acciones cruzando `allowedActions` con la tabla `actions`, y una tab ausente del mapa se muestra sin ninguna acción tildeable.
 
+**Excepción — claves NUEVAS que derivan de una existente** (ej. `send` que antes cubría `update`): el usuario decidió que la migración las copie también a TODO rol (incluidos los custom) y a todo ajuste de usuario que ya tenía la clave más cercana, para que nadie pierda una capacidad sin aviso. Ref. `20261022100000_permission_missing_keys`.
+
 ### Legajo: columna separada en DataTables
 
 El legajo (`employees.file`) SIEMPRE debe ser una columna separada con su propio filtro `text`. NUNCA embeber el legajo dentro de la columna de nombre (ej: `[123] Apellido Nombre` está MAL). Columna de legajo ANTES de la columna de nombre. En comboboxes/selectores SÍ se puede combinar.
@@ -617,6 +619,12 @@ Aunque el usuario haya pedido antes "testeos para certificar", cuando dice _"los
 ### Un archivo de acciones importado desde un `'use client'` DEBE llevar `'use server'`
 
 Al reescribir `multi-upload-data.server.ts` se perdió la directiva `'use server'`. `tsc` no se entera, pero `next build` falla con 34 errores _"You're importing a component that needs server-only"_ porque el componente cliente (`NewDocumentMulti`) arrastra al bundle del navegador todo lo que importa el archivo (auth, mail, Prisma). Regla: toda server action consumida por un componente cliente vive en un archivo con `'use server'` en la primera línea; los helpers `server-only` (permisos, scopes) solo los importan archivos de servidor. Tras tocar o mover acciones, correr `npx next build` y no confiar solo en `tsc`.
+
+### Dependencias sin uso: se quitan sin preguntar
+
+Si al refactorizar una dependencia de `package.json` queda sin ningún importador (verificado con grep en `src/` y `scripts/`),
+se desinstala directamente (`npm uninstall <pkg> @types/<pkg>`) y se informa en el reporte. Pregunté antes de quitar `react-modal`
+y el usuario respondió: _"borrarla, eso ni se pregunta"_. Tocar el lockfile por una baja de dependencia muerta no es una decisión del usuario.
 
 ---
 

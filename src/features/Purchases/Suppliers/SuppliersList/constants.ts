@@ -12,8 +12,5 @@ export const EXPIRED_DOCUMENTS_HREF = `/dashboard/purchases?tab=proveedores&${SU
 /** Tope de filas del export. */
 export const SUPPLIERS_EXPORT_MAX_ROWS = 10_000;
 
-/** Máximo de proveedores que devuelve la búsqueda parcial por dígitos de CUIT. */
-export const CUIT_PARTIAL_MATCH_LIMIT = 500;
-
 /** Largo de un CUIT: con todos los dígitos la búsqueda es por igualdad exacta. */
 export const CUIT_LENGTH = 11;

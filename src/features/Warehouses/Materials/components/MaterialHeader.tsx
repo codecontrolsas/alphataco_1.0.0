@@ -40,7 +40,8 @@ export async function MaterialHeader({ materialId }: { materialId: string }) {
           label="Stock total"
           value={
             <>
-              {formatQuantity(material.totalStock)} <span className="text-muted-foreground text-base font-normal">{unit}</span>
+              {formatQuantity(material.totalStock)}{' '}
+              <span className="text-muted-foreground text-base font-normal">{unit}</span>
             </>
           }
           hint={material.stockLevel ? `Mínimo: ${formatQuantity(material.minStock)} ${unit}` : undefined}
@@ -84,9 +85,13 @@ export async function MaterialHeader({ materialId }: { materialId: string }) {
                 {material.stock.map((row, i) => (
                   <TableRow key={`${row.warehouse.id}-${row.batch ?? i}`}>
                     <TableCell>{row.warehouse.name}</TableCell>
-                    {material.trackingType === 'BATCH' && <TableCell className="font-mono text-sm">{row.batch ?? '—'}</TableCell>}
                     {material.trackingType === 'BATCH' && (
-                      <TableCell className="tabular-nums">{row.expiresAt ? formatDateAr(row.expiresAt) : '—'}</TableCell>
+                      <TableCell className="font-mono text-sm">{row.batch ?? '—'}</TableCell>
+                    )}
+                    {material.trackingType === 'BATCH' && (
+                      <TableCell className="tabular-nums">
+                        {row.expiresAt ? formatDateAr(row.expiresAt) : '—'}
+                      </TableCell>
                     )}
                     <TableCell className="text-right tabular-nums">
                       {formatQuantity(row.quantity)} {unit}
@@ -128,66 +133,79 @@ export async function MaterialHeader({ materialId }: { materialId: string }) {
               <div className="space-y-2">
                 <p className="text-sm font-medium tabular-nums">Unidades prestadas ({material.unitsOnLoan.length})</p>
                 <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Serie</TableHead>
-                      <TableHead>En poder de</TableHead>
-                      <TableHead>Desde</TableHead>
-                      <TableHead>Salida</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {material.unitsOnLoan.map((loan) => (
-                      <TableRow key={loan.unitId}>
-                        <TableCell className="font-mono text-sm">{loan.serialNumber}</TableCell>
-                        <TableCell>{loan.holder ?? '—'}</TableCell>
-                        <TableCell className="tabular-nums">
-                          {loan.since ? `${formatDateAr(loan.since)} (${loan.days} días)` : '—'}
-                        </TableCell>
-                        <TableCell>
-                          {loan.exitMovementId ? (
-                            <Link href={`/dashboard/warehouse/movements/${loan.exitMovementId}`} className="font-mono hover:underline">
-                              {loan.exitNumber}
-                            </Link>
-                          ) : (
-                            '—'
-                          )}
-                        </TableCell>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Serie</TableHead>
+                        <TableHead>En poder de</TableHead>
+                        <TableHead>Desde</TableHead>
+                        <TableHead>Salida</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {material.unitsOnLoan.map((loan) => (
+                        <TableRow key={loan.unitId}>
+                          <TableCell className="font-mono text-sm">{loan.serialNumber}</TableCell>
+                          <TableCell>{loan.holder ?? '—'}</TableCell>
+                          <TableCell className="tabular-nums">
+                            {loan.since
+                              ? `${formatDateAr(loan.since)} (${loan.days} ${loan.days === 1 ? 'día' : 'días'})`
+                              : '—'}
+                          </TableCell>
+                          <TableCell>
+                            {loan.exitMovementId ? (
+                              <Link
+                                href={`/dashboard/warehouse/movements/${loan.exitMovementId}`}
+                                className="font-mono hover:underline"
+                              >
+                                {loan.exitNumber}
+                              </Link>
+                            ) : (
+                              '—'
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
             )}
             {material.writeOffs.length > 0 && (
               <div className="space-y-2">
-                <p className="text-sm font-medium tabular-nums">Dadas de baja ({material.writeOffsTotal.toLocaleString('es-AR')}){writeOffsTruncated && <span className="text-muted-foreground font-normal"> · se muestran las últimas {material.writeOffs.length}</span>}</p>
+                <p className="text-sm font-medium tabular-nums">
+                  Dadas de baja ({material.writeOffsTotal.toLocaleString('es-AR')})
+                  {writeOffsTruncated && (
+                    <span className="text-muted-foreground font-normal">
+                      {' '}
+                      · se muestran las últimas {material.writeOffs.length}
+                    </span>
+                  )}
+                </p>
                 <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Serie</TableHead>
-                      <TableHead>Motivo</TableHead>
-                      <TableHead>La tenía</TableHead>
-                      <TableHead>Fecha</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {material.writeOffs.map((w) => (
-                      <TableRow key={w.id}>
-                        <TableCell className="font-mono text-sm">{w.serialNumber}</TableCell>
-                        <TableCell>
-                          {WRITE_OFF_REASON_LABELS[w.reason]}
-                          <span className="block text-xs text-muted-foreground">{w.notes}</span>
-                        </TableCell>
-                        <TableCell>{w.holder ?? '—'}</TableCell>
-                        <TableCell className="tabular-nums">{formatArgentinaDay(w.date)}</TableCell>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Serie</TableHead>
+                        <TableHead>Motivo</TableHead>
+                        <TableHead>La tenía</TableHead>
+                        <TableHead>Fecha</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {material.writeOffs.map((w) => (
+                        <TableRow key={w.id}>
+                          <TableCell className="font-mono text-sm">{w.serialNumber}</TableCell>
+                          <TableCell>
+                            {WRITE_OFF_REASON_LABELS[w.reason]}
+                            <span className="block text-xs text-muted-foreground">{w.notes}</span>
+                          </TableCell>
+                          <TableCell>{w.holder ?? '—'}</TableCell>
+                          <TableCell className="tabular-nums">{formatArgentinaDay(w.date)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
             )}

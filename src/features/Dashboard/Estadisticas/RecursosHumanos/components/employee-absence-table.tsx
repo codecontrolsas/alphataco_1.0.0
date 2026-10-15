@@ -6,7 +6,7 @@ export async function EmployeeAbsenceTable() {
   const result = await getCurrentAbsentEmployees();
 
   return (
-    <Card>
+    <Card className="@container min-w-0">
       <CardHeader>
         <CardTitle className="text-lg font-semibold">Detalle de Ausencias por Empleado</CardTitle>
         <CardDescription>
@@ -14,7 +14,7 @@ export async function EmployeeAbsenceTable() {
           área/turno involucrados.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="min-w-0">
         <_EmployeeAbsenceDataTable data={result?.data ?? []} />
       </CardContent>
     </Card>

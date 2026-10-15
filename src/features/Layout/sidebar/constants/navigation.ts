@@ -33,6 +33,7 @@ import {
   Ruler,
   ScrollText,
   Settings,
+  ShieldCheck,
   TrendingUp,
   TriangleAlert,
   Truck,
@@ -119,10 +120,12 @@ export const navigationLinks: NavigationLink[] = [
     href: '/dashboard',
     icon: MODULE_ICONS.dashboard,
     position: 1,
+    // Accesos a los tableros por defecto: `?tab=` se resuelve al tablero con ese `template`
+    // (`templateKeyFromLegacyParams` en Dashboard/lib/widget-registry.ts).
     items: [
-      { name: 'Principal', tabSlug: 'principal' },
-      { name: 'Documentación', tabSlug: 'documentacion' },
-      { name: 'Estadísticas', tabSlug: 'estadisticas' },
+      { name: 'Resumen', tabSlug: 'principal' },
+      { name: 'Vencimientos', tabSlug: 'documentacion' },
+      { name: 'Análisis', tabSlug: 'estadisticas' },
     ],
   },
   {
@@ -289,11 +292,14 @@ export const navigationLinks: NavigationLink[] = [
     icon: MODULE_ICONS.configuracion,
     position: 14,
     items: [
-      { name: 'General', tabSlug: 'general' },
-      { name: 'RRHH', tabSlug: 'rrhh' },
-      { name: 'Equipos', tabSlug: 'vehicles' },
-      { name: 'Mantenimiento', tabSlug: 'mantenimiento' },
-      { name: 'Documentos', tabSlug: 'documentos' },
+      // Organización no lleva `subTabSlug`: `resolveActiveTab` elige el sub-item cuyo `subTabSlug` coincide con
+      // `?subtab=` y, si ninguno coincide, el primero de la tab (Organización). Por eso va ANTES de Usuarios.
+      { name: 'Organización', tabSlug: 'general' },
+      { name: 'Usuarios y accesos', tabSlug: 'general', subTabSlug: 'users' },
+      { name: 'Personal', tabSlug: 'rrhh' },
+      { name: 'Flota', tabSlug: 'vehicles' },
+      { name: 'Taller', tabSlug: 'mantenimiento' },
+      { name: 'Tipos de documento', tabSlug: 'documentos' },
     ],
   },
 ];
@@ -310,6 +316,7 @@ export const SUB_ITEM_ICONS: Record<string, NavIcon> = {
   'dashboard:documentacion': FileText,
   'dashboard:estadisticas': ChartColumn,
   'configuracion:general': Building2,
+  'configuracion:users': ShieldCheck,
   'configuracion:rrhh': Users,
   'configuracion:vehicles': Truck,
   'configuracion:mantenimiento': Wrench,
@@ -367,3 +374,30 @@ export const SUB_ITEM_ICONS: Record<string, NavIcon> = {
   'ayuda:tickets': LifeBuoy,
   'ayuda:manual': BookOpen,
 };
+
+/**
+ * Sub-items con contador (`moduleSlug:tabSlug`) y el nombre de lo que cuentan (texto accesible del
+ * badge). El valor lo calcula `getModuleSectionCounts`.
+ */
+export const SECTION_COUNTER_LABELS: Record<string, string> = {
+  'mantenimiento:maint_operaciones': 'solicitudes por validar',
+  'mantenimiento:maint_taller': 'pedidos en el circuito de taller',
+  'mantenimiento:equipments_with_deviations': 'equipos con desvíos',
+  'almacenes:stock': 'materiales bajo mínimo y lotes por vencer',
+  'almacenes:prestamos': 'préstamos abiertos',
+  'almacenes:pedidos': 'pedidos pendientes de aprobación',
+  'compras:solicitudes': 'solicitudes pendientes de aprobación',
+  'compras:ordenes': 'órdenes pendientes de aprobación',
+  'compras:recepciones': 'órdenes de compra por recibir',
+  'compras:facturas': 'facturas observadas',
+  'compras:pagos': 'comprobantes vencidos sin pagar',
+  'tesoreria:cobranzas': 'cobros vencidos',
+  'tesoreria:cheques': 'cheques por vencer o vencidos para depositar',
+  'tesoreria:cheques-propios': 'débitos pendientes de confirmar',
+  'tesoreria:conciliacion': 'líneas de extracto pendientes de conciliar',
+};
+
+/** Módulos que tienen al menos un sub-item con contador. */
+export const SECTION_COUNTER_MODULES: ReadonlySet<string> = new Set(
+  Object.keys(SECTION_COUNTER_LABELS).map((key) => key.split(':')[0])
+);

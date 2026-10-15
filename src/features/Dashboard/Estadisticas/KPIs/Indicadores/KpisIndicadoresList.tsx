@@ -16,8 +16,8 @@ interface KpisIndicadoresListProps {
 
 // ============================================================================
 // SERVER COMPONENT
-// NOTE: No Card wrapper here — the parent KpisIndicadoresContent already
-// provides the outer Card via the ResizablePanelGroup container.
+// NOTE: la superficie de la tabla (`CatalogTableSurface`) la pone el cliente
+// `_KpisIndicadoresDataTable`, junto con el Sheet de alta/edición.
 // ============================================================================
 
 const TABLE_ID = 'kpis-indicadores';
@@ -33,16 +33,14 @@ export default async function KpisIndicadoresList({ searchParams, permissionsMap
   ]);
 
   return (
-    <div className="p-4">
-      <_KpisIndicadoresDataTable
-        data={data}
-        totalRows={total}
-        searchParams={tableParams}
-        tableId={TABLE_ID}
-        permissionsMap={permissionsMap}
-        initialColumnVisibility={preferences.columnVisibility ?? {}}
-        initialFilterVisibility={preferences.filterVisibility ?? {}}
-      />
-    </div>
+    <_KpisIndicadoresDataTable
+      data={data}
+      totalRows={total}
+      searchParams={tableParams}
+      tableId={TABLE_ID}
+      permissionsMap={permissionsMap}
+      initialColumnVisibility={preferences.columnVisibility ?? {}}
+      initialFilterVisibility={preferences.filterVisibility ?? {}}
+    />
   );
 }

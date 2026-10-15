@@ -57,6 +57,7 @@ export function PeriodSelector({ granularity, anchor, onChange, label, navSubjec
         type="single"
         variant="outline"
         size="sm"
+        className="max-w-full overflow-x-auto"
         value={granularity}
         onValueChange={handleGranularityChange}
         aria-label="Corte temporal"

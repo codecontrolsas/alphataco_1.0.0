@@ -1,6 +1,12 @@
 'use client';
 
 import {
+  CatalogCreateButton,
+  CatalogFormSheet,
+  CatalogTableSurface,
+  useCatalogSheet,
+} from '@/shared/components/common/CatalogFormSheet';
+import {
   DataTable,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
@@ -10,7 +16,6 @@ import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers'
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { CircleOff } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
-import { CatalogSplitLayout } from '../../components/CatalogSplitLayout';
 import { activeStatusLabel, buildActiveFacetResult } from '../../lib/active-status';
 import { AptitudesForm } from './AptitudesForm';
 import {
@@ -68,18 +73,20 @@ export default function _AptitudesDataTable({
     [permissionsMap]
   );
 
-  const canCreateOrUpdate =
-    permissions.hasPermission('configuracion', 'aptitudes', 'create') ||
-    permissions.hasPermission('configuracion', 'aptitudes', 'update');
+  const canCreate = permissions.hasPermission('configuracion', 'aptitudes', 'create');
+  const canUpdate = permissions.hasPermission('configuracion', 'aptitudes', 'update');
 
-  // ── Store de edición ─────────────────────────────────────────────────────
+  // ── Sheet de alta/edición (el form sigue leyendo el store de edición) ─────
   const setAptitud = useAptitudesStore((state) => state.setAptitud);
-  const handleEdit = useCallback(
-    (item: AptitudTecnicaListItem) => {
-      setAptitud(item);
-    },
-    [setAptitud]
-  );
+  const handleClearStore = useCallback(() => setAptitud(null), [setAptitud]);
+  const sheet = useCatalogSheet<AptitudTecnicaListItem>({
+    canCreate,
+    canUpdate,
+    onOpenEdit: setAptitud,
+    onOpenCreate: handleClearStore,
+    onClosed: handleClearStore,
+  });
+  const handleEdit = sheet.openEdit;
 
   // ── Client-side navigation mode ──────────────────────────────────────────
   const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
@@ -170,6 +177,7 @@ export default function _AptitudesDataTable({
       queryFn={tableQueryFn}
       queryKey={[...QUERY_KEY]}
       onStateChange={handleStateChange}
+      toolbarActions={<CatalogCreateButton sheet={sheet} label="Nueva aptitud" />}
       tableId={tableId}
       paramNamespace={tableId}
       facetedFilters={facetedFilters}
@@ -194,11 +202,17 @@ export default function _AptitudesDataTable({
     />
   );
 
-  // Si no tiene permisos de crear/editar, mostrar solo la tabla
-  if (!canCreateOrUpdate) {
-    return table;
-  }
-
-  // Con permisos: formulario + tabla (apilados en pantallas chicas, paneles redimensionables desde lg)
-  return <CatalogSplitLayout form={<AptitudesForm positions={positions} queryKey={QUERY_KEY} />} table={table} />;
+  return (
+    <>
+      <CatalogTableSurface>{table}</CatalogTableSurface>
+      <CatalogFormSheet
+        sheet={sheet}
+        getKey={(aptitud) => aptitud.id}
+        title={{ create: 'Nueva aptitud técnica', edit: 'Editar aptitud técnica' }}
+        size="md"
+      >
+        {() => <AptitudesForm positions={positions} queryKey={QUERY_KEY} />}
+      </CatalogFormSheet>
+    </>
+  );
 }

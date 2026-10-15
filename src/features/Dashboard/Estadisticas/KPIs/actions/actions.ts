@@ -131,6 +131,9 @@ function toFiltersInput(filters: Record<string, unknown> | null | undefined) {
  * Perímetro: el KPI tiene que ser de la empresa activa.
  */
 export async function fetchKPIRevisions(kpi_id: string): Promise<KPIRevision[]> {
+  if (!(await checkPermissionServer('configuracion', 'indicadores', 'view'))) {
+    throw new Error('No tenés permiso para ver los indicadores');
+  }
   try {
     await assertKpiInActiveCompany(kpi_id);
 

@@ -16,6 +16,7 @@ import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { z } from 'zod';
 import { positionCreateSchema, positionUpdateSchema } from '../../lib/catalog-input-schemas';
 import {
   CATALOG_EXPORT_MAX_ROWS,
@@ -363,6 +364,7 @@ export async function getPositionSingleFacet(
 // ============================================================================
 
 export async function getAllHierarchiesForForm() {
+  await requireConfigTabPermission('positions', 'view');
   try {
     const companyId = await getActiveCompanyId();
     const data = await prisma.hierarchy.findMany({
@@ -378,6 +380,7 @@ export async function getAllHierarchiesForForm() {
 }
 
 export async function getAllAptitudesForForm() {
+  await requireConfigTabPermission('positions', 'view');
   try {
     const companyId = await getActiveCompanyId();
     const data = await prisma.aptitudes_tecnicas.findMany({
@@ -437,56 +440,90 @@ export async function createPositionPrisma(data: {
   }
 }
 
+/** Altas y bajas explícitas de aptitudes del puesto: la ausencia de un id nunca implica baja. */
+const positionUpdateWithDeltaSchema = positionUpdateSchema.omit({ aptitudes_tecnicas_id: true }).extend({
+  aptitudes: z.object({
+    add: z.array(z.string().uuid('Identificador inválido')).max(500, 'Demasiados elementos'),
+    remove: z.array(z.string().uuid('Identificador inválido')).max(500, 'Demasiados elementos'),
+  }),
+});
+
+/**
+ * Ids de las aptitudes técnicas que tiene hoy el puesto, leídos de la pivote.
+ * Es el baseline del formulario de edición: el delta se calcula contra esto, no contra la fila de la tabla.
+ */
+export async function getPositionAptitudeIds(positionId: string): Promise<string[]> {
+  await requireConfigTabPermission('positions', 'view');
+  const id = z.string().uuid('Identificador inválido').parse(positionId);
+  try {
+    const companyId = await getActiveCompanyId();
+    const rows = await prisma.aptitudes_tecnicas_puestos.findMany({
+      where: { puesto_id: id, company_positions: withCompany({}, companyId) },
+      select: { aptitud_id: true },
+    });
+    return rows.map((row) => row.aptitud_id);
+  } catch (error) {
+    logger.error('Error al obtener aptitudes del puesto', { data: { error, positionId } });
+    throw new Error('No se pudieron obtener las aptitudes del puesto.');
+  }
+}
+
 export async function updatePositionPrisma(data: {
   id: string;
   name: string;
   is_active: boolean;
   hierarchical_position_id: string[];
-  aptitudes_tecnicas_id: string[];
+  aptitudes: { add: string[]; remove: string[] };
 }) {
   await requireConfigTabPermission('positions', 'update');
-  data = positionUpdateSchema.parse(data);
+  const input = positionUpdateWithDeltaSchema.parse(data);
+  const { add, remove } = input.aptitudes;
+  if (add.some((id) => remove.includes(id))) throw new Error('Una aptitud no puede agregarse y quitarse a la vez');
   try {
     // Perímetro sin RLS: el puesto tiene que ser de la empresa activa antes de escribirlo.
     const companyId = await getActiveCompanyId();
     const owned = await prisma.company_positions.findFirst({
-      where: withCompany({ id: data.id }, companyId),
+      where: withCompany({ id: input.id }, companyId),
       select: { id: true },
     });
     if (!owned) throw new Error('Puesto no encontrado');
 
-    // Jerarquías y aptitudes llegan del cliente: se validan contra la empresa antes de escribir.
+    // Jerarquías y aptitudes a agregar llegan del cliente: se validan contra la empresa antes de escribir.
     await Promise.all([
-      assertHierarchiesOwned(companyId, data.hierarchical_position_id),
-      assertAptitudesOwned(companyId, data.aptitudes_tecnicas_id),
+      assertHierarchiesOwned(companyId, input.hierarchical_position_id),
+      assertAptitudesOwned(companyId, add),
     ]);
 
-    // Actualizar en transacción: primero eliminar relaciones M:M, luego recrear
-    await prisma.$transaction([
-      // Eliminar relaciones M:M existentes
-      prisma.aptitudes_tecnicas_puestos.deleteMany({
-        where: { puesto_id: data.id },
-      }),
-      // Actualizar el puesto con nuevas relaciones
-      prisma.company_positions.update({
-        where: { id: data.id },
+    // Una sola transacción: datos del puesto + bajas y altas explícitas de la pivote.
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.company_positions.update({
+        where: { id: input.id },
         data: {
-          name: data.name,
-          is_active: data.is_active,
-          hierarchical_position_id: data.hierarchical_position_id,
-          ...(data.aptitudes_tecnicas_id.length > 0
-            ? {
-                aptitudes_tecnicas_puestos: {
-                  create: data.aptitudes_tecnicas_id.map((aptitudId) => ({
-                    aptitud_id: aptitudId,
-                  })),
-                },
-              }
-            : {}),
+          name: input.name,
+          is_active: input.is_active,
+          hierarchical_position_id: input.hierarchical_position_id,
         },
-      }),
-    ]);
-    return { id: data.id };
+      });
+      const removed =
+        remove.length > 0
+          ? (
+              await tx.aptitudes_tecnicas_puestos.deleteMany({
+                where: { puesto_id: input.id, aptitud_id: { in: remove } },
+              })
+            ).count
+          : 0;
+      const added =
+        add.length > 0
+          ? (
+              await tx.aptitudes_tecnicas_puestos.createMany({
+                data: add.map((aptitudId) => ({ puesto_id: input.id, aptitud_id: aptitudId })),
+                skipDuplicates: true,
+              })
+            ).count
+          : 0;
+      return { added, removed };
+    });
+    return { id: input.id, ...result };
   } catch (error) {
     logger.error('Error al actualizar puesto', { data: { error } });
     throw error instanceof Error ? error : new Error('No se pudo actualizar el puesto. Intente nuevamente.');

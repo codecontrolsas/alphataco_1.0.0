@@ -5,6 +5,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
+import { useCatalogSheetBusy, useCatalogSheetClose } from '@/shared/components/common/CatalogFormSheet';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
@@ -42,6 +43,8 @@ export function KpiForm() {
   const editingKpi = useKpiStore((state) => state.kpi);
   const { invalidateKpiChart, invalidateAllKpiCharts } = useInvalidateKpiQueries();
   const queryClient = useQueryClient();
+  const closeSheet = useCatalogSheetClose();
+  const setBusy = useCatalogSheetBusy();
 
   const form = useForm<KpiFormValues>({
     resolver: zodResolver(KpiSchema),
@@ -76,6 +79,7 @@ export function KpiForm() {
   const resetForm = () => {
     reset(DEFAULT_VALUES);
     useKpiStore.getState().setKpi(null);
+    closeSheet();
   };
 
   const invalidateTable = (code?: string | null) => {
@@ -88,6 +92,7 @@ export function KpiForm() {
   };
 
   const onSubmit = async (values: KpiFormValues) => {
+    setBusy(true);
     await toast
       .promise(
         async () => {
@@ -105,11 +110,14 @@ export function KpiForm() {
           loading: 'Creando KPI...',
           success: (result) => {
             invalidateTable(result?.data?.code);
-            router.refresh();
             resetForm();
+            router.refresh();
             return 'KPI creado correctamente';
           },
-          error: (error) => error?.message || 'Error al crear el KPI',
+          error: (error) => {
+            setBusy(false);
+            return error?.message || 'Error al crear el KPI';
+          },
         }
       )
       .unwrap()
@@ -119,6 +127,7 @@ export function KpiForm() {
   };
 
   const onUpdate = async (values: KpiFormValues) => {
+    setBusy(true);
     await toast
       .promise(
         async () => {
@@ -137,11 +146,14 @@ export function KpiForm() {
           loading: 'Actualizando KPI...',
           success: (result) => {
             invalidateTable(editingKpi?.code ?? result?.data?.code);
-            router.refresh();
             resetForm();
+            router.refresh();
             return 'KPI actualizado correctamente';
           },
-          error: (error) => error?.message || 'Error al actualizar el KPI',
+          error: (error) => {
+            setBusy(false);
+            return error?.message || 'Error al actualizar el KPI';
+          },
         }
       )
       .unwrap()
@@ -160,9 +172,7 @@ export function KpiForm() {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 py-4 px-4">
-        <h2 className="text-xl font-bold mb-4">{isEditing ? 'Editar KPI' : 'Crear KPI'}</h2>
-
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
         <FormField
           control={form.control}
           name="name"
@@ -278,11 +288,9 @@ export function KpiForm() {
           <Button type="submit" variant={'brand'} disabled={isSubmitting}>
             {isSubmitting ? (isEditing ? 'Actualizando...' : 'Creando...') : isEditing ? 'Actualizar' : 'Crear'}
           </Button>
-          {isEditing && (
-            <Button type="button" onClick={resetForm} variant="outline" disabled={isSubmitting}>
-              Cancelar
-            </Button>
-          )}
+          <Button type="button" onClick={resetForm} variant="outline" disabled={isSubmitting}>
+            Cancelar
+          </Button>
         </div>
       </form>
     </Form>

@@ -7,6 +7,7 @@ import { ChartSummary } from '@/features/Dashboard/shared/charts/ChartSummary';
 import dynamic from 'next/dynamic';
 import * as React from 'react';
 import { Cell, Label, Pie, PieChart } from 'recharts';
+import { cancelledNote } from '../lib/cancelled-note';
 import { IndicatorStats } from '../shared/IndicatorStats';
 import { RadialGauge } from '../shared/RadialGauge';
 
@@ -22,12 +23,15 @@ interface Props {
   totalActive: number;
   totalNotAvailable: number;
   totalInUse: number;
+  /** Operativos que hoy están solo en servicios cancelados. */
+  totalCancelled: number;
   totalFleet: number;
   operativityPercent: number | null;
   usagePercent: number | null;
   // Motor unit metrics (Chasis & Tractor)
   motorActive: number;
   motorInUse: number;
+  motorCancelled: number;
   motorNotAvailable: number;
   motorFleet: number;
   motorOperativityPercent: number | null;
@@ -46,9 +50,10 @@ const OPERATIVE_DESCRIPTION =
   'Equipos activos que no están fuera de servicio (no operativo, en reparación o en preparación).';
 const OUT_OF_SERVICE_DESCRIPTION =
   'Equipos activos no operativos, en reparación o en preparación. La cifra abre el listado.';
-const IN_USE_DESCRIPTION = 'Equipos operativos cargados en el parte diario de hoy.';
+const IN_USE_DESCRIPTION =
+  'Equipos operativos cargados en el parte diario de hoy. Los servicios cancelados no cuentan: se indican aparte.';
 const AVAILABLE_DESCRIPTION =
-  'Operativos − en operaciones. El listado muestra los equipos con condición operativa u operativa condicionada que no están en el parte de hoy.';
+  'Operativos − en operaciones. El listado muestra los equipos con condición operativa u operativa condicionada que no están en el parte de hoy (o solo en servicios cancelados).';
 
 /** Dona con total al centro, leyenda con valores y alternativa textual. */
 function DonutBlock({
@@ -129,11 +134,13 @@ export const EquipmentFleetClient = React.memo(function EquipmentFleetClient({
   totalActive,
   totalNotAvailable,
   totalInUse,
+  totalCancelled,
   totalFleet,
   operativityPercent,
   usagePercent,
   motorActive,
   motorInUse,
+  motorCancelled,
   motorNotAvailable,
   motorFleet,
   motorOperativityPercent,
@@ -173,7 +180,7 @@ export const EquipmentFleetClient = React.memo(function EquipmentFleetClient({
       { name: 'En operaciones', value: motorInUse, fill: statusColorVar('inUse') },
       { name: 'Disponible / Sin asignar', value: motorActive - motorInUse, fill: statusColorVar('available') },
     ],
-    [motorInUse, motorActive]
+    [motorInUse, motorCancelled, motorActive]
   );
 
   const motorOperativityStats = React.useMemo(
@@ -191,7 +198,12 @@ export const EquipmentFleetClient = React.memo(function EquipmentFleetClient({
 
   const motorUsageStats = React.useMemo(
     () => [
-      { label: 'En operaciones', value: motorInUse, description: IN_USE_DESCRIPTION },
+      {
+        label: 'En operaciones',
+        value: motorInUse,
+        note: cancelledNote(motorCancelled),
+        description: IN_USE_DESCRIPTION,
+      },
       {
         label: 'Disponible / Sin asignar',
         value: motorActive - motorInUse,
@@ -219,7 +231,12 @@ export const EquipmentFleetClient = React.memo(function EquipmentFleetClient({
 
   const usageStats = React.useMemo(
     () => [
-      { label: 'En operaciones', value: totalInUse, description: IN_USE_DESCRIPTION },
+      {
+        label: 'En operaciones',
+        value: totalInUse,
+        note: cancelledNote(totalCancelled),
+        description: IN_USE_DESCRIPTION,
+      },
       {
         label: 'Disponible / Sin asignar',
         value: totalActive - totalInUse,
@@ -228,7 +245,7 @@ export const EquipmentFleetClient = React.memo(function EquipmentFleetClient({
       },
       { label: 'Operativos', value: totalActive, description: OPERATIVE_DESCRIPTION },
     ],
-    [totalInUse, totalActive]
+    [totalInUse, totalCancelled, totalActive]
   );
 
   return (

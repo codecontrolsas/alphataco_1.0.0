@@ -17,8 +17,10 @@ import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { formatCuit } from '../../lib/supplier-ids';
 import { PURCHASE_ORDER_STATUSES } from '../../lib/order-state-machine';
+import { maskAmount } from '../../lib/price-visibility';
+import { canViewPurchasePrices } from '../../lib/price-visibility.server';
+import { formatCuit } from '../../lib/supplier-ids';
 
 const logger = new Logger('features/Purchases/Orders/OrdersList');
 
@@ -92,9 +94,16 @@ async function resolveCompanyId(): Promise<string | null> {
   return getActiveCompanyId();
 }
 
-/** Estado de la tabla ya parseado, con solo los filtros permitidos y sus valores validos. */
-function parseListState(searchParams: DataTableSearchParams) {
+/**
+ * Estado de la tabla ya parseado, con solo los filtros permitidos y sus valores validos. Sin
+ * `view_prices` se descartan el filtro y el orden por total: filtrar por un importe exacto lo revelaria.
+ */
+function parseListState(searchParams: DataTableSearchParams, canViewPrices: boolean) {
   const state = sanitizeFilters(parseSearchParams(searchParams), ALLOWED_FILTER_KEYS);
+  if (!canViewPrices) {
+    delete state.filters[TOTAL_FILTER];
+    state.sorting = state.sorting.filter((s) => s.id !== 'total');
+  }
   for (const [column, isValid] of Object.entries(VALID_VALUES)) {
     const values = state.filters[column];
     if (!values) continue;
@@ -120,7 +129,9 @@ function buildWhereClause(companyId: string, state: FilterState): OrderWhere {
     });
   }
 
-  and.push(buildFiltersWhere(f, COLUMN_MAP, { exclude: [...TEXT_FILTER_COLUMNS, TOTAL_FILTER, REQUESTS_FILTER] }) as OrderWhere);
+  and.push(
+    buildFiltersWhere(f, COLUMN_MAP, { exclude: [...TEXT_FILTER_COLUMNS, TOTAL_FILTER, REQUESTS_FILTER] }) as OrderWhere
+  );
   and.push(buildTextFiltersWhere(f, TEXT_FILTER_COLUMNS) as OrderWhere);
   and.push(buildDateRangeFiltersWhere(f, DATE_RANGE_COLUMNS) as OrderWhere);
 
@@ -158,7 +169,7 @@ const ORDER_SELECT = {
 
 const profileName = (p: { fullname: string | null; email: string | null }) => p.fullname ?? p.email ?? '-';
 
-function shape(rows: Prisma.purchase_ordersGetPayload<{ select: typeof ORDER_SELECT }>[]) {
+function shape(rows: Prisma.purchase_ordersGetPayload<{ select: typeof ORDER_SELECT }>[], canViewPrices: boolean) {
   return rows.map((r) => {
     const requests = new Map<string, { id: string; number: string }>();
     for (const l of r.lines) requests.set(l.request_line.request.id, l.request_line.request);
@@ -170,8 +181,8 @@ function shape(rows: Prisma.purchase_ordersGetPayload<{ select: typeof ORDER_SEL
       created_at: r.created_at,
       delivery_date: r.delivery_date,
       sent_at: r.sent_at,
-      // Decimal -> string (no se serializa a client components)
-      total: r.total.toFixed(2),
+      // Decimal -> string (no se serializa a client components). Sin `view_prices`, null.
+      total: maskAmount(r.total.toFixed(2), canViewPrices),
       supplier: { id: r.supplier.id, name: r.supplier.name, cuit: formatCuit(r.supplier.cuit) },
       creator: { id: r.creator.id, name: profileName(r.creator) },
       approver: r.approver ? { id: r.approver.id, name: profileName(r.approver) } : null,
@@ -186,10 +197,11 @@ function shape(rows: Prisma.purchase_ordersGetPayload<{ select: typeof ORDER_SEL
 
 export async function getPurchaseOrdersPaginated(searchParams: DataTableSearchParams) {
   const companyId = await resolveCompanyId();
-  if (!companyId) return { data: [], total: 0 };
+  if (!companyId) return { data: [], total: 0, canViewPrices: false };
 
   try {
-    const state = parseListState(searchParams);
+    const canViewPrices = await canViewPurchasePrices('ordenes');
+    const state = parseListState(searchParams, canViewPrices);
     const { skip, take } = stateToPrismaParams(state);
     const where = buildWhereClause(companyId, state);
 
@@ -206,7 +218,7 @@ export async function getPurchaseOrdersPaginated(searchParams: DataTableSearchPa
       prisma.purchase_orders.findMany({ where, orderBy, skip, take, select: ORDER_SELECT }),
       prisma.purchase_orders.count({ where }),
     ]);
-    return { data: shape(rows), total };
+    return { data: shape(rows, canViewPrices), total, canViewPrices };
   } catch (error) {
     logger.error('Error al obtener ordenes de compra', { data: { error } });
     throw new Error('No se pudo obtener la lista de órdenes de compra');
@@ -224,7 +236,8 @@ export async function getAllPurchaseOrdersForExport(
   if (!companyId) return { ok: true, data: [] };
 
   try {
-    const state = parseListState(searchParams);
+    const canViewPrices = await canViewPurchasePrices('ordenes');
+    const state = parseListState(searchParams, canViewPrices);
     const where = buildWhereClause(companyId, state);
     const orderBy: OrderOrderBy[] = [{ created_at: 'desc' }, { number: 'desc' }, { id: 'asc' }];
 
@@ -236,7 +249,7 @@ export async function getAllPurchaseOrdersForExport(
       tooLargeMessage: (maxRows) =>
         `Hay más de ${maxRows.toLocaleString('es-AR')} órdenes de compra con los filtros actuales. Acote la exportación con filtros.`,
     });
-    return { ok: true, data: shape(rows) };
+    return { ok: true, data: shape(rows, canViewPrices) };
   } catch (error) {
     logger.error('Error al exportar ordenes de compra', { data: { error } });
     // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
@@ -261,11 +274,13 @@ export async function getPurchaseOrderSingleFacet(
   const companyId = await resolveCompanyId();
   if (!companyId) return null;
 
-  const parsed = searchParams && Object.keys(searchParams).length > 0 ? parseListState(searchParams) : null;
+  const canViewPrices = await canViewPurchasePrices('ordenes');
+  const parsed =
+    searchParams && Object.keys(searchParams).length > 0 ? parseListState(searchParams, canViewPrices) : null;
 
   /** WHERE con todos los filtros activos MENOS el de la columna que se esta abriendo. */
   function crossWhere(excludeColumn: string): OrderWhere {
-    const base: FilterState = parsed ?? parseListState({});
+    const base: FilterState = parsed ?? parseListState({}, canViewPrices);
     const filters = { ...base.filters };
     delete filters[excludeColumn];
     return buildWhereClause(companyId as string, { ...base, filters });
@@ -334,7 +349,9 @@ export async function getPurchaseOrderSingleFacet(
       // M:M: cuantas ordenes (distintas) tiene cada solicitud de origen
       const orders = await prisma.purchase_orders.findMany({
         where,
-        select: { lines: { select: { request_line: { select: { request: { select: { id: true, number: true } } } } } } },
+        select: {
+          lines: { select: { request_line: { select: { request: { select: { id: true, number: true } } } } } },
+        },
       });
       const counts = new Map<string, number>();
       const names = new Map<string, string>();
@@ -369,8 +386,7 @@ export async function getPurchaseOrderSingleFacet(
 
 /**
  * Órdenes que esperan una acción del usuario, con el mismo `where` que la lista filtrada por estado (y que el
- * contador de la sub-navegación): por aprobar (`ordenes:approve`) y por enviar al proveedor (`ordenes:update`,
- * el permiso de enviar). Nunca rechaza: `null` si no corresponde o no se pudo contar (no se muestra la banda).
+ * contador de la sub-navegación): por aprobar (`ordenes:approve`) y por enviar al proveedor (`ordenes:send`). Nunca rechaza: `null` si no corresponde o no se pudo contar (no se muestra la banda).
  */
 export async function getPurchaseOrdersAttention(): Promise<{
   pendingApproval: number | null;
@@ -379,13 +395,15 @@ export async function getPurchaseOrdersAttention(): Promise<{
   try {
     const [canApprove, canSend] = await Promise.all([
       checkPermissionServer('compras', 'ordenes', 'approve'),
-      checkPermissionServer('compras', 'ordenes', 'update'),
+      checkPermissionServer('compras', 'ordenes', 'send'),
     ]);
     if (!canApprove && !canSend) return null;
     if (!(await checkPermissionServer('compras', 'ordenes', 'view'))) return null;
     const companyId = await getActiveCompanyId();
     const [pendingApproval, toSend] = await Promise.all([
-      canApprove ? prisma.purchase_orders.count({ where: { company_id: companyId, status: 'PENDING_APPROVAL' } }) : null,
+      canApprove
+        ? prisma.purchase_orders.count({ where: { company_id: companyId, status: 'PENDING_APPROVAL' } })
+        : null,
       canSend ? prisma.purchase_orders.count({ where: { company_id: companyId, status: 'APPROVED' } }) : null,
     ]);
     return { pendingApproval, toSend };

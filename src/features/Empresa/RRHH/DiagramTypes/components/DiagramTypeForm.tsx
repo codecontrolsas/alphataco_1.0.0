@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
 import { Logger } from '@/lib/logger';
+import { useCatalogSheetBusy, useCatalogSheetClose } from '@/shared/components/common/CatalogFormSheet';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
@@ -49,6 +50,8 @@ export default function DiagramTypeForm() {
   const editingDiagramType = useDiagramTypeStore((state) => state.diagramType);
   const setDiagramType = useDiagramTypeStore((state) => state.setDiagramType);
   const queryClient = useQueryClient();
+  const closeSheet = useCatalogSheetClose();
+  const setBusy = useCatalogSheetBusy();
 
   const isEditing = !!editingDiagramType;
 
@@ -107,6 +110,7 @@ export default function DiagramTypeForm() {
       is_active: 'true',
       computes_absenteeism: false,
     });
+    closeSheet();
   };
 
   const invalidateTable = () => {
@@ -120,6 +124,7 @@ export default function DiagramTypeForm() {
     const computesAbsenteeism = values.work_active ? false : values.computes_absenteeism ?? false;
 
     if (isEditing && editingDiagramType) {
+      setBusy(true);
       toast.promise(
         updateDiagramTypePrisma({
           id: editingDiagramType.id,
@@ -137,10 +142,14 @@ export default function DiagramTypeForm() {
             resetForm();
             return `Novedad ${values.name} editada con éxito`;
           },
-          error: 'No se pudo editar la novedad',
+          error: () => {
+            setBusy(false);
+            return 'No se pudo editar la novedad';
+          },
         }
       );
     } else {
+      setBusy(true);
       toast.promise(
         createDiagramTypePrisma({
           name: values.name,
@@ -157,7 +166,10 @@ export default function DiagramTypeForm() {
             resetForm();
             return `Novedad ${values.name} cargada con éxito`;
           },
-          error: 'No se pudo crear la novedad',
+          error: () => {
+            setBusy(false);
+            return 'No se pudo crear la novedad';
+          },
         }
       );
     }
@@ -167,9 +179,7 @@ export default function DiagramTypeForm() {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4 px-2">
-        <h2 className="text-xl font-bold mb-4">{isEditing ? 'Editar Novedad' : 'Crear Novedad'}</h2>
-
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <FormField
           control={form.control}
           name="name"
@@ -177,12 +187,7 @@ export default function DiagramTypeForm() {
             <FormItem>
               <FormLabel>Nombre de la novedad</FormLabel>
               <FormControl>
-                <Input
-                  type="text"
-                  {...field}
-                  className="w-full max-w-[400px]"
-                  placeholder="Ingresa un nombre para la novedad"
-                />
+                <Input type="text" {...field} className="w-full" placeholder="Ingresa un nombre para la novedad" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -199,7 +204,7 @@ export default function DiagramTypeForm() {
                 <Input
                   type="text"
                   {...field}
-                  className="w-full max-w-[400px]"
+                  className="w-full"
                   placeholder="Máx. 3 caracteres, ej: TD"
                   maxLength={3}
                 />
@@ -306,11 +311,9 @@ export default function DiagramTypeForm() {
                 ? 'Actualizar'
                 : 'Crear'}
           </Button>
-          {isEditing && (
-            <Button type="button" onClick={resetForm} variant="outline">
-              Cancelar
-            </Button>
-          )}
+          <Button type="button" onClick={resetForm} variant="outline">
+            Cancelar
+          </Button>
         </div>
       </form>
     </Form>

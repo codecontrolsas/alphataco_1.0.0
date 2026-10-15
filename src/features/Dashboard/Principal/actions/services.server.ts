@@ -4,7 +4,7 @@ import { requireDashboardView } from '@/features/Dashboard/lib/permissions.serve
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { buildTodayReportWhere } from '../lib/dashboard-dates';
+import { buildTodayServicesWhere } from '../lib/dashboard-dates';
 import { groupServicesByClient, summarizeServicesByType } from '../lib/indicators';
 import type { ServiceDetailByClient, ServicesSummaryResult } from './types';
 
@@ -16,9 +16,9 @@ const logger = new Logger('features/Dashboard/Principal/services');
  */
 
 /**
- * Resumen de servicios por tipo para hoy (hora argentina): partes pendientes o ejecutados que
- * tienen tipo de servicio informado. Los porcentajes son sobre TODOS los del día, incluso los
- * sin tipo, así que pueden no sumar 100.
+ * Resumen de servicios por tipo para hoy (hora argentina), con el mismo criterio que la tarjeta
+ * (`buildTodayServicesWhere`): los que no tienen tipo informado van en «Sin tipo», así el total
+ * coincide con la tarjeta.
  */
 export async function getServicesSummary(): Promise<ServicesSummaryResult[]> {
   await requireDashboardView('principal');
@@ -29,7 +29,7 @@ export async function getServicesSummary(): Promise<ServicesSummaryResult[]> {
 
     const grouped = await prisma.dailyreportrows.groupBy({
       by: ['type_service'],
-      where: { status: { in: ['pendiente', 'ejecutado'] }, ...buildTodayReportWhere(companyId) },
+      where: buildTodayServicesWhere(companyId),
       _count: { id: true },
     });
 
@@ -42,8 +42,9 @@ export async function getServicesSummary(): Promise<ServicesSummaryResult[]> {
 }
 
 /**
- * Detalle de servicios por cliente para una fecha (por defecto, hoy en hora argentina): sólo
- * partes pendientes o ejecutados que tienen cliente; el total cuenta tipos mensual y adicional.
+ * Detalle de servicios por cliente para una fecha (por defecto, hoy en hora argentina), con el
+ * mismo criterio que la tarjeta (`buildTodayServicesWhere`): los servicios sin cliente van en
+ * «Sin cliente» y el total de cada cliente cuenta todos sus servicios.
  */
 export async function getServicesDetailByClient(date?: string): Promise<ServiceDetailByClient[]> {
   await requireDashboardView('principal');
@@ -54,11 +55,7 @@ export async function getServicesDetailByClient(date?: string): Promise<ServiceD
     const companyId = await getActiveCompanyId();
 
     const rows = await prisma.dailyreportrows.findMany({
-      where: {
-        customer_id: { not: null },
-        status: { in: ['pendiente', 'ejecutado'] },
-        ...buildTodayReportWhere(companyId, date),
-      },
+      where: buildTodayServicesWhere(companyId, date),
       select: {
         type_service: true,
         status: true,

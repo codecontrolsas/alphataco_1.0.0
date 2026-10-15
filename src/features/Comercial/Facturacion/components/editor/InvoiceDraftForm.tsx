@@ -49,6 +49,8 @@ const logger = new Logger('features/Comercial/Facturacion/InvoiceDraftForm');
 
 export type InvoicePermissions = {
   canCreate: boolean;
+  /** Modificar o quitar certificaciones de un borrador existente (`comercial:facturacion:update`). */
+  canUpdate: boolean;
   canDelete: boolean;
   canApprove: boolean;
   canViewPrices: boolean;
@@ -78,7 +80,7 @@ export function InvoiceDraftForm({ data, permissions, issueBlockedReason, banner
   const [discardOpen, setDiscardOpen] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
 
-  const canEdit = permissions.canCreate;
+  const canEdit = permissions.canUpdate;
   // Una factura deriva la letra de las condiciones ACTUALES; si no se puede derivar, se conserva la guardada.
   const letter = data.letter.ok ? data.letter.letter : invoice.letter;
   const derivedCbteType = cbteTypeFor(letter, invoice.kind);
@@ -254,7 +256,7 @@ export function InvoiceDraftForm({ data, permissions, issueBlockedReason, banner
       {!canEdit && (
         <p role="note" className="text-muted-foreground flex items-center gap-2 text-sm">
           <Info className="size-4 shrink-0" aria-hidden />
-          Podés ver este borrador pero no modificarlo: necesitás el permiso Crear en Facturación.
+          Podés ver este borrador pero no modificarlo: necesitás el permiso Editar en Facturación.
         </p>
       )}
 

@@ -1,7 +1,7 @@
 import { getUserPermissionsMapServer } from '@/features/Permissions';
-import { SectionErrorBoundary } from '@/shared/components/common/SectionErrorBoundary';
 import { SectionManagerServer } from '@/features/TabsManager';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { SectionErrorBoundary } from '@/shared/components/common/SectionErrorBoundary';
 import { ArrowLeftRight, ClipboardList, HandHelping, Layers, Package, Settings, Warehouse } from 'lucide-react';
 import { Suspense } from 'react';
 import DepotsTabContent from './Depots/DepotsTabContent';
@@ -12,7 +12,6 @@ import RequestsTabContent from './Requests/RequestsTabContent';
 import SettingsTabContent from './Settings/SettingsTabContent';
 import { SettingsSkeleton } from './Settings/fallback/SettingsSkeleton';
 import StockTabContent from './Stock/StockTabContent';
-import { WarehouseSectionCounter } from './components/WarehouseSectionCounter';
 import { WarehouseSectionSkeleton } from './fallback/WarehouseSectionSkeleton';
 
 /**
@@ -37,18 +36,12 @@ export default async function WarehousesComponent({ searchParams }: { searchPara
       searchParams={searchParams}
       defaultTab="stock"
       permissions={permissions}
-      sectionNav
       tabs={[
         {
           value: 'stock',
           label: label(Layers, 'Stock'),
           moduleSlug: 'almacenes',
           tabSlug: 'stock',
-          navCounter: (
-            <Suspense fallback={null}>
-              <WarehouseSectionCounter section="stock" label="Materiales bajo mínimo y lotes por vencer" />
-            </Suspense>
-          ),
           content: (
             <SectionErrorBoundary title="No se pudo mostrar Stock">
               <Suspense fallback={<WarehouseSectionSkeleton />}>
@@ -75,11 +68,6 @@ export default async function WarehousesComponent({ searchParams }: { searchPara
           label: label(HandHelping, 'Préstamos'),
           moduleSlug: 'almacenes',
           tabSlug: 'prestamos',
-          navCounter: (
-            <Suspense fallback={null}>
-              <WarehouseSectionCounter section="loans" label="Préstamos abiertos" />
-            </Suspense>
-          ),
           content: (
             <SectionErrorBoundary title="No se pudo mostrar Préstamos">
               <Suspense fallback={<WarehouseSectionSkeleton />}>
@@ -93,11 +81,6 @@ export default async function WarehousesComponent({ searchParams }: { searchPara
           label: label(ClipboardList, 'Pedidos'),
           moduleSlug: 'almacenes',
           tabSlug: 'pedidos',
-          navCounter: (
-            <Suspense fallback={null}>
-              <WarehouseSectionCounter section="requests" label="Pedidos pendientes de aprobación" />
-            </Suspense>
-          ),
           content: (
             <SectionErrorBoundary title="No se pudo mostrar Pedidos">
               <Suspense fallback={<WarehouseSectionSkeleton />}>

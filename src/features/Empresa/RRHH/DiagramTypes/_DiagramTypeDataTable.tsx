@@ -1,6 +1,12 @@
 'use client';
 
 import {
+  CatalogCreateButton,
+  CatalogFormSheet,
+  CatalogTableSurface,
+  useCatalogSheet,
+} from '@/shared/components/common/CatalogFormSheet';
+import {
   DataTable,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
@@ -11,7 +17,6 @@ import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Check, CircleOff, X } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
-import { CatalogSplitLayout } from '../../components/CatalogSplitLayout';
 import { activeStatusLabel, buildActiveFacetResult } from '../../lib/active-status';
 import {
   getAllDiagramTypesForExport,
@@ -60,18 +65,20 @@ export default function _DiagramTypeDataTable({
     [permissionsMap]
   );
 
-  const canCreateOrUpdate =
-    permissions.hasPermission('configuracion', 'diagrams', 'create') ||
-    permissions.hasPermission('configuracion', 'diagrams', 'update');
+  const canCreate = permissions.hasPermission('configuracion', 'diagrams', 'create');
+  const canUpdate = permissions.hasPermission('configuracion', 'diagrams', 'update');
 
-  // ── Store de edición ─────────────────────────────────────────────────────
+  // ── Sheet de alta/edición (el form sigue leyendo el store de edición) ─────
   const setDiagramType = useDiagramTypeStore((state) => state.setDiagramType);
-  const handleEdit = useCallback(
-    (item: DiagramTypeListItem) => {
-      setDiagramType(item);
-    },
-    [setDiagramType]
-  );
+  const handleClearStore = useCallback(() => setDiagramType(null), [setDiagramType]);
+  const sheet = useCatalogSheet<DiagramTypeListItem>({
+    canCreate,
+    canUpdate,
+    onOpenEdit: setDiagramType,
+    onOpenCreate: handleClearStore,
+    onClosed: handleClearStore,
+  });
+  const handleEdit = sheet.openEdit;
 
   // ── Client-side navigation mode ──────────────────────────────────────────
   const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
@@ -204,6 +211,7 @@ export default function _DiagramTypeDataTable({
       queryFn={tableQueryFn}
       queryKey={['diagram-types']}
       onStateChange={handleStateChange}
+      toolbarActions={<CatalogCreateButton sheet={sheet} label="Nuevo tipo de novedad" />}
       tableId={tableId}
       paramNamespace={tableId}
       facetedFilters={facetedFilters}
@@ -232,11 +240,17 @@ export default function _DiagramTypeDataTable({
     />
   );
 
-  // Si no tiene permisos de crear/editar, mostrar solo la tabla
-  if (!canCreateOrUpdate) {
-    return table;
-  }
-
-  // Con permisos: formulario + tabla (apilados en pantallas chicas, paneles redimensionables desde lg)
-  return <CatalogSplitLayout form={<DiagramTypeForm />} table={table} />;
+  return (
+    <>
+      <CatalogTableSurface>{table}</CatalogTableSurface>
+      <CatalogFormSheet
+        sheet={sheet}
+        getKey={(diagramType) => diagramType.id}
+        title={{ create: 'Nuevo tipo de novedad', edit: 'Editar tipo de novedad' }}
+        size="lg"
+      >
+        {() => <DiagramTypeForm />}
+      </CatalogFormSheet>
+    </>
+  );
 }

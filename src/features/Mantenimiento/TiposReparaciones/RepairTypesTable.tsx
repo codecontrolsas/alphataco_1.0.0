@@ -3,17 +3,17 @@
 import { DataTable, type DataTableFacetedFilterConfig } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { ArrowDown, ArrowRight, ArrowUp, Check, CircleOff, X } from 'lucide-react';
-import { useMemo } from 'react';
-import {
-  REPAIR_TYPE_HIDDEN_COLUMNS,
-  getRepairTypeColumns,
-  type RepairTypeRow,
-} from './repair-type-columns';
+import { useMemo, type ReactNode } from 'react';
+import { REPAIR_TYPE_HIDDEN_COLUMNS, getRepairTypeColumns, type RepairTypeRow } from './repair-type-columns';
 
 interface RepairTypesTableProps {
   rows: RepairTypeRow[];
   onEdit: (repair: RepairTypeRow) => void;
   canEdit: boolean;
+  /** Si se pasa, la fila ofrece "Eliminar" (la confirmación la maneja quien monta la tabla). */
+  onDelete?: (repair: RepairTypeRow) => void;
+  /** Botón "Nuevo tipo" en la barra de la tabla. */
+  toolbarActions?: ReactNode;
 }
 
 const YES_NO = [
@@ -29,8 +29,8 @@ const NULL_OPTION = { value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: Circ
  * Catálogo chico de la empresa: llega completo desde el servidor, así que ordena, filtra y
  * pagina en memoria (`inMemory`).
  */
-export function RepairTypesTable({ rows, onEdit, canEdit }: RepairTypesTableProps) {
-  const columns = useMemo(() => getRepairTypeColumns(onEdit, canEdit), [onEdit, canEdit]);
+export function RepairTypesTable({ rows, onEdit, canEdit, onDelete, toolbarActions }: RepairTypesTableProps) {
+  const columns = useMemo(() => getRepairTypeColumns(onEdit, canEdit, onDelete), [onEdit, canEdit, onDelete]);
 
   const facetedFilters = useMemo<DataTableFacetedFilterConfig[]>(() => {
     const hasNullCriticity = rows.some((row) => row.criticity == null);
@@ -90,6 +90,7 @@ export function RepairTypesTable({ rows, onEdit, canEdit }: RepairTypesTableProp
       totalRows={rows.length}
       searchParams={{}}
       inMemory
+      toolbarActions={toolbarActions}
       tableId="repair-type-table"
       paramNamespace="repair-type-table"
       facetedFilters={facetedFilters}

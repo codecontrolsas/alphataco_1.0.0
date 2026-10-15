@@ -48,9 +48,10 @@ export default function ContractDocuments({ id }: ContractDocumentsProps) {
   const [docDescription, setDocDescription] = useState('');
   const [documentToDelete, setDocumentToDelete] = useState<ContractDocument | null>(null);
   const { toast } = useToast();
-  // `documentos-contrato` solo tiene `view`: subir y eliminar cuelgan de editar el detalle del contrato.
+  // Subir y eliminar tienen su propia acción en `documentos-contrato` (el servidor lo vuelve a verificar).
   const { hasPermission } = usePermissions();
-  const canManageDocuments = hasPermission('comercial', 'detalle-contrato', 'update');
+  const canUpload = hasPermission('comercial', 'documentos-contrato', 'create');
+  const canDelete = hasPermission('comercial', 'documentos-contrato', 'delete');
   const queryClient = useQueryClient();
   const queryKey = ['contract-documents', id] as const;
 
@@ -147,7 +148,7 @@ export default function ContractDocuments({ id }: ContractDocumentsProps) {
       <Card className="w-full">
         <CardContent className="w-full p-4">
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-            {canManageDocuments && (
+            {canUpload && (
               <div className="md:col-span-1">
                 <ContractDocumentUploadForm
                   selectedFiles={selectedFiles}
@@ -163,14 +164,15 @@ export default function ContractDocuments({ id }: ContractDocumentsProps) {
               </div>
             )}
 
-            <div className={canManageDocuments ? 'min-w-0 md:col-span-2' : 'min-w-0 md:col-span-3'}>
+            <div className={canUpload ? 'min-w-0 md:col-span-2' : 'min-w-0 md:col-span-3'}>
               <ContractDocumentsList
                 documents={documentsQuery.data ?? []}
                 isLoading={documentsQuery.isPending}
                 isError={documentsQuery.isError}
                 isRetrying={documentsQuery.isFetching}
                 onRetry={() => documentsQuery.refetch()}
-                canManageDocuments={canManageDocuments}
+                canUpload={canUpload}
+                canDelete={canDelete}
                 onPreview={setPreviewDoc}
                 onDownload={handleDownload}
                 onDelete={setDocumentToDelete}

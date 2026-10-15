@@ -260,7 +260,8 @@ export async function getPaymentOrderPdf(id: string): Promise<ActionResult<PdfDo
  * a quien y cuando se envio. El mail sale fuera de la transaccion.
  */
 export async function sendPaymentOrder(id: string, values: SendDocumentValues): Promise<ActionResult> {
-  if (!(await checkPermissionServer('compras', 'pagos', 'update'))) return fail(NO_PERMISSION);
+  // Pagos no tiene `view_prices` (ver la pestaña implica ver importes): enviar exige solo `send`.
+  if (!(await checkPermissionServer('compras', 'pagos', 'send'))) return fail(NO_PERMISSION);
   if (!UUID_RE.test(id)) return fail(NOT_FOUND);
   const parsed = sendDocumentSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));

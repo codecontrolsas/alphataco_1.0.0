@@ -75,7 +75,7 @@ export function RequestSourceCard() {
   const isEmpty = !isLoading && !isError && total === 0;
 
   return (
-    <Card className="py-0">
+    <Card className="@container py-0">
       <CardHeader className="px-6 pt-4 pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <Inbox className="h-4 w-4 text-muted-foreground" />

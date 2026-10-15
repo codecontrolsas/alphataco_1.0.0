@@ -1,11 +1,11 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import { z } from 'zod';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { failureMessage, requireConfigPermission } from '../lib/access';
+import { z } from 'zod';
+import { ConfigPermissionError, failureMessage, requireConfigPermission } from '../lib/access';
 import {
   idDeltaSchema,
   maintenanceGroupInputSchema,
@@ -164,13 +164,20 @@ export const updateMaintenanceGroupAction = async (
   }
 };
 export type updateMaintenanceGroupActionType = Awaited<ReturnType<typeof updateMaintenanceGroupAction>>;
-/** Grupos activos de la empresa activa, con los ids de sus tipos de reparación. */
-export const fetchMaintenanceGroupsAction = async () => {
+/**
+ * Grupos de la empresa activa, con los ids de sus tipos de reparación. Exige `view`.
+ *
+ * Por defecto lista TODOS (activos e inactivos): la pantalla de configuración tiene que poder
+ * reactivar un grupo inactivo. `onlyActive` deja solo los activos para quien los use de catálogo.
+ * `forbidden` distingue "sin permiso" de un error: la vista no debe mostrar una lista vacía.
+ */
+export const fetchMaintenanceGroupsAction = async ({ onlyActive = false }: { onlyActive?: boolean } = {}) => {
   try {
+    await requireConfigPermission('maintenance_groups', 'view');
     const companyId = await getActiveCompanyId();
 
     const data = await prisma.maintenance_request_groups.findMany({
-      where: { is_active: true, company_id: companyId },
+      where: { ...(onlyActive ? { is_active: true } : {}), company_id: companyId },
       select: {
         id: true,
         name: true,
@@ -182,10 +189,10 @@ export const fetchMaintenanceGroupsAction = async () => {
       orderBy: { created_at: 'desc' },
     });
 
-    return { groups: data, error: null };
+    return { groups: data, error: null, forbidden: false };
   } catch (error) {
     logger.error('Error al obtener los grupos de reparaciones', { data: { error } });
-    return { groups: [], error: errorMessage(error) };
+    return { groups: [], error: errorMessage(error), forbidden: error instanceof ConfigPermissionError };
   }
 };
 export type fetchMaintenanceGroupsActionType = Awaited<ReturnType<typeof fetchMaintenanceGroupsAction>>;
@@ -193,6 +200,7 @@ export type fetchMaintenanceGroupsActionType = Awaited<ReturnType<typeof fetchMa
 /** Tipos de reparación de la empresa activa, para armar los grupos. */
 export const fetchTypesOfRepairAction = async () => {
   try {
+    await requireConfigPermission('maintenance_groups', 'view');
     const companyId = await getActiveCompanyId();
 
     const data = await prisma.types_of_repairs.findMany({
@@ -201,10 +209,10 @@ export const fetchTypesOfRepairAction = async () => {
       orderBy: { created_at: 'desc' },
     });
 
-    return { types: data, error: null };
+    return { types: data, error: null, forbidden: false };
   } catch (error) {
     logger.error('Error al obtener los tipos de reparación', { data: { error } });
-    return { types: [], error: errorMessage(error) };
+    return { types: [], error: errorMessage(error), forbidden: error instanceof ConfigPermissionError };
   }
 };
 export type fetchTypesOfRepairActionType = Awaited<ReturnType<typeof fetchTypesOfRepairAction>>;
@@ -212,6 +220,7 @@ export type fetchTypesOfRepairActionType = Awaited<ReturnType<typeof fetchTypesO
 /** Grupo puntual de la empresa activa, con los ids de sus tipos de reparación. */
 export const fetchMaintenanceGroupByIdAction = async (groupId: string) => {
   try {
+    await requireConfigPermission('maintenance_groups', 'view');
     uuidSchema.parse(groupId);
     const companyId = await getActiveCompanyId();
     await assertGroupInActiveCompany(groupId, companyId);
@@ -228,10 +237,10 @@ export const fetchMaintenanceGroupByIdAction = async (groupId: string) => {
       },
     });
 
-    return { group, error: null };
+    return { group, error: null, forbidden: false };
   } catch (error) {
     logger.error('Error al obtener el grupo de reparaciones', { data: { error, groupId } });
-    return { group: null, error: errorMessage(error) };
+    return { group: null, error: errorMessage(error), forbidden: error instanceof ConfigPermissionError };
   }
 };
 export type fetchMaintenanceGroupByIdActionType = Awaited<ReturnType<typeof fetchMaintenanceGroupByIdAction>>;

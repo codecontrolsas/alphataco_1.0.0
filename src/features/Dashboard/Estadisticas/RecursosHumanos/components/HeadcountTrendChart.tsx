@@ -72,9 +72,9 @@ export function HeadcountTrendChart({ companyId }: HeadcountTrendChartProps) {
       : `Dotación diaria entre ${data[0].date} y ${data[data.length - 1].date}. Último valor: ${currentValue}.`;
 
   return (
-    <Card className="pt-0">
-      <CardHeader className="flex flex-col items-stretch gap-2 space-y-0 border-b py-5 sm:flex-row sm:items-center">
-        <div className="grid flex-1 gap-1">
+    <Card className="@container pt-0">
+      <CardHeader className="flex flex-col items-stretch gap-2 space-y-0 border-b py-5 @xl:flex-row @xl:items-center">
+        <div className="grid min-w-0 flex-1 gap-1">
           <CardTitle className="text-lg font-semibold">Variación de Dotación</CardTitle>
           <CardDescription>{description}</CardDescription>
         </div>

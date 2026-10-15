@@ -58,16 +58,3 @@ export function DistributionSkeleton() {
     </div>
   );
 }
-
-/** Esqueleto de la pestaña completa mientras se resuelven el permiso y la empresa. */
-export function RrhhTabSkeleton() {
-  return (
-    <div className="space-y-8">
-      <SummaryCardsSkeleton />
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        <ChartCardSkeleton />
-        <ChartCardSkeleton />
-      </div>
-    </div>
-  );
-}

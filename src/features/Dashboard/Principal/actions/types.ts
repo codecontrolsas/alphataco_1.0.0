@@ -14,6 +14,10 @@ export interface ServicesSummaryResult {
 export interface EmployeeIndicatorResult {
   employees_operativos: number;
   employees_used: number;
+  /** Con diagrama de trabajo hoy y fuera del parte (nunca negativo). */
+  employees_available: number;
+  /** En el parte de hoy solo en servicios cancelados: no cuentan en operación, se informan aparte. */
+  employees_cancelled: number;
   /** Porcentaje de uso; `null` cuando no hay empleados con diagrama de trabajo (no es 0 %). */
   indicator: number | null;
 }
@@ -43,6 +47,8 @@ export interface EquipmentIndicatorResult {
   available_units: number;
   used_units: number;
   not_available_units: number;
+  /** Operativos que hoy están solo en servicios cancelados (no cuentan en `used_units`). */
+  cancelled_units: number;
 }
 
 export interface VehicleNotInReportResult {

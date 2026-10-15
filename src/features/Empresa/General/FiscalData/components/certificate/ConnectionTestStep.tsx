@@ -3,8 +3,8 @@
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { LoadingSwap } from '@/components/ui/loading-swap';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import { CheckCircle2, ChevronDown, XCircle } from 'lucide-react';
-import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { testArcaConnection } from '../../actions/arca-credentials.server';
@@ -57,7 +57,7 @@ export function ConnectionTestStep({
         </Button>
         {result.testedAt && (
           <p className="text-muted-foreground text-sm tabular-nums">
-            Última prueba: {moment(result.testedAt).format('DD/MM/YYYY HH:mm')}
+            Última prueba: {formatArgentinaDateTime(result.testedAt)}
             {result.ok === true ? ', correcta.' : result.ok === false ? ', con errores.' : '.'}
           </p>
         )}

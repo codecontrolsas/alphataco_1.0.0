@@ -69,9 +69,9 @@ export function AbsenteeismTrendChart({ companyId }: AbsenteeismTrendChartProps)
         `Último valor: ${formatPercentOrDash(currentValue)}; esperado hasta ${EXPECTED_ABSENTEEISM_PERCENTAGE} %.`;
 
   return (
-    <Card className="pt-0">
-      <CardHeader className="flex flex-col items-stretch gap-2 space-y-0 border-b py-5 sm:flex-row sm:items-center">
-        <div className="grid flex-1 gap-1">
+    <Card className="@container pt-0">
+      <CardHeader className="flex flex-col items-stretch gap-2 space-y-0 border-b py-5 @xl:flex-row @xl:items-center">
+        <div className="grid min-w-0 flex-1 gap-1">
           <CardTitle className="text-lg font-semibold">Variación de Ausentismo</CardTitle>
           <CardDescription>{description}</CardDescription>
         </div>

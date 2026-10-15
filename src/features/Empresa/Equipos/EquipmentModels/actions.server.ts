@@ -10,14 +10,23 @@ import {
   parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
+import { ExportTooLargeError } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   equipmentModelCreateSchema,
   equipmentModelUpdateSchema,
   firstIssueMessage,
 } from '../../lib/catalog-input-schemas';
+import {
+  CATALOG_EXPORT_MAX_ROWS,
+  buildIsActiveWhere,
+  catalogExportFailure,
+  catalogTooLargeMessage,
+} from '../../lib/catalog-table.server';
 import { requireConfigTabPermission } from '../../lib/config-access.server';
 import { assertBrandReadable } from '../lib/catalog-guards';
 import { catalogReadScope } from '../lib/catalog-scope';
@@ -46,61 +55,52 @@ const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Record<string, unknow
 // WHERE BUILDER — DRY helper compartido por paginated, export y facets
 // ============================================================================
 
-function buildWhereClause(state: ReturnType<typeof parseSearchParams>) {
-  // Búsqueda global sobre texto
-  const searchWhere = buildSearchWhere(state.search, ['name']);
+/** Claves de filtro que esta tabla realmente usa; el resto de la URL se descarta antes de armar el where. */
+const ALLOWED_FILTER_KEYS = new Set(['is_active', 'brand', 'name', ...dateRangeKeys(['created_at'])]);
 
-  // is_active — booleano nullable, se maneja manualmente
-  const isActiveValues = state.filters['is_active'];
-  const isActiveFilter: Record<string, unknown> = {};
-  if (isActiveValues?.length === 1) {
-    if (isActiveValues[0] === NULL_FILTER_VALUE) {
-      isActiveFilter.is_active = null;
-    } else {
-      isActiveFilter.is_active = isActiveValues[0] === 'true';
-    }
-  } else if (isActiveValues && isActiveValues.length > 1) {
-    const conditions: Array<{ is_active: boolean | null }> = [];
-    for (const v of isActiveValues) {
-      if (v === NULL_FILTER_VALUE) conditions.push({ is_active: null });
-      else conditions.push({ is_active: v === 'true' });
-    }
-    isActiveFilter.OR = conditions;
-  }
-
-  // brand — FK BigInt, viene como string[] con IDs; se convierte a Number
-  const brandValues = state.filters['brand'];
-  const brandFilter: Record<string, unknown> = {};
-  if (brandValues?.length) {
-    const hasNull = brandValues.includes(NULL_FILTER_VALUE);
-    const realIds = brandValues
-      .filter((v) => v !== NULL_FILTER_VALUE)
-      .map(Number)
-      .filter((n) => !isNaN(n));
-
-    if (hasNull && realIds.length > 0) {
-      brandFilter.OR = [{ brand: { in: realIds } }, { brand: null }];
-    } else if (hasNull) {
-      brandFilter.brand = null;
-    } else if (realIds.length > 0) {
-      brandFilter.brand = { in: realIds };
-    }
-  }
-
-  // Filtros de texto libre por columna
-  const textFiltersWhere = buildTextFiltersWhere(state.filters, ['name']);
-
-  // Filtros de rango de fecha
-  const dateFiltersWhere = buildDateRangeFiltersWhere(state.filters, ['created_at']);
-
-  return {
-    ...searchWhere,
-    ...isActiveFilter,
-    ...brandFilter,
-    ...textFiltersWhere,
-    ...dateFiltersWhere,
-  };
+function parseState(searchParams: DataTableSearchParams | undefined) {
+  return sanitizeFilters(parseSearchParams(searchParams ?? {}), ALLOWED_FILTER_KEYS);
 }
+
+/** `where` del filtro facetado de marca (FK Int nullable). */
+function buildBrandWhere(values: string[] | undefined): Record<string, unknown> {
+  if (!values?.length) return {};
+  const hasNull = values.includes(NULL_FILTER_VALUE);
+  const realIds = values
+    .filter((v) => v !== NULL_FILTER_VALUE)
+    .map(Number)
+    .filter((n) => !isNaN(n));
+
+  if (hasNull && realIds.length > 0) return { OR: [{ brand: { in: realIds } }, { brand: null }] };
+  if (hasNull) return { brand: null };
+  if (realIds.length > 0) return { brand: { in: realIds } };
+  return {};
+}
+
+/** Mismo where para lista, export y facets. Los filtros con OR van en AND para que no se pisen. */
+function buildWhereClause(state: ReturnType<typeof parseState>, companyId: string) {
+  return withCompany(
+    {
+      AND: [
+        buildSearchWhere(state.search, ['name']),
+        buildIsActiveWhere(state.filters['is_active']),
+        buildBrandWhere(state.filters['brand']),
+      ],
+      ...buildTextFiltersWhere(state.filters, ['name']),
+      ...buildDateRangeFiltersWhere(state.filters, ['created_at']),
+    },
+    companyId
+  );
+}
+
+const LIST_SELECT = {
+  id: true,
+  name: true,
+  brand: true,
+  is_active: true,
+  created_at: true,
+  brand_vehicles: { select: { id: true, name: true } },
+} as const;
 
 // ============================================================================
 // QUERY PAGINADA
@@ -109,10 +109,10 @@ function buildWhereClause(state: ReturnType<typeof parseSearchParams>) {
 export async function getEquipmentModelsPaginated(searchParams: DataTableSearchParams) {
   await requireConfigTabPermission('modelos', 'view');
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseState(searchParams);
     const { skip, take } = stateToPrismaParams(state);
 
-    const where = withCompany(buildWhereClause(state), await getActiveCompanyId());
+    const where = buildWhereClause(state, await getActiveCompanyId());
 
     // Resolución de multi-sort
     const resolvedSorts: Array<Record<string, unknown>> = [];
@@ -133,16 +133,7 @@ export async function getEquipmentModelsPaginated(searchParams: DataTableSearchP
         take,
         orderBy: safeOrderBy,
         where,
-        select: {
-          id: true,
-          name: true,
-          brand: true,
-          is_active: true,
-          created_at: true,
-          brand_vehicles: {
-            select: { id: true, name: true },
-          },
-        },
+        select: LIST_SELECT,
       }),
       prisma.model_vehicles.count({ where }),
     ]);
@@ -158,11 +149,13 @@ export async function getEquipmentModelsPaginated(searchParams: DataTableSearchP
 // EXPORT COMPLETO — sin skip/take, mismos filtros
 // ============================================================================
 
-export async function getAllEquipmentModelsForExport(searchParams: DataTableSearchParams) {
+export async function getAllEquipmentModelsForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<EquipmentModelListItem[]>> {
   await requireConfigTabPermission('modelos', 'view');
   try {
-    const state = parseSearchParams(searchParams);
-    const where = withCompany(buildWhereClause(state), await getActiveCompanyId());
+    const state = parseState(searchParams);
+    const where = buildWhereClause(state, await getActiveCompanyId());
 
     const resolvedSorts: Array<Record<string, unknown>> = [];
     for (const s of state.sorting) {
@@ -173,25 +166,27 @@ export async function getAllEquipmentModelsForExport(searchParams: DataTableSear
         resolvedSorts.push({ [s.id]: s.desc ? 'desc' : 'asc' });
       }
     }
-    const safeOrderBy = [{ is_active: 'desc' as const }, ...resolvedSorts, { name: 'asc' as const }];
+    const safeOrderBy = [
+      { is_active: 'desc' as const },
+      ...resolvedSorts,
+      { name: 'asc' as const },
+      { id: 'asc' as const },
+    ];
 
-    return await prisma.model_vehicles.findMany({
+    // Catálogo con id numérico: una sola consulta acotada al tope (pide una fila de más para detectarlo).
+    const rows = await prisma.model_vehicles.findMany({
       where,
       orderBy: safeOrderBy,
-      select: {
-        id: true,
-        name: true,
-        brand: true,
-        is_active: true,
-        created_at: true,
-        brand_vehicles: {
-          select: { id: true, name: true },
-        },
-      },
+      select: LIST_SELECT,
+      take: CATALOG_EXPORT_MAX_ROWS + 1,
     });
+    if (rows.length > CATALOG_EXPORT_MAX_ROWS) {
+      throw new ExportTooLargeError(catalogTooLargeMessage('modelos')(CATALOG_EXPORT_MAX_ROWS));
+    }
+    return { ok: true, data: rows };
   } catch (error) {
     logger.error('Error al exportar modelos de equipos', { data: { error } });
-    throw new Error('No se pudo exportar la lista. Intente nuevamente.');
+    return catalogExportFailure(error, 'la lista de modelos');
   }
 }
 
@@ -209,7 +204,7 @@ export async function getEquipmentModelSingleFacet(
 ): Promise<FacetResult | null> {
   await requireConfigTabPermission('modelos', 'view');
   try {
-    const state = searchParams ? parseSearchParams(searchParams) : parseSearchParams({});
+    const state = parseState(searchParams);
 
     // crossWhere: aplica todos los filtros EXCEPTO el de la columna propia
     const crossState = {
@@ -218,7 +213,7 @@ export async function getEquipmentModelSingleFacet(
     };
     delete crossState.filters[columnId];
 
-    const crossWhere = withCompany(buildWhereClause(crossState), await getActiveCompanyId());
+    const crossWhere = buildWhereClause(crossState, await getActiveCompanyId());
 
     switch (columnId) {
       case 'is_active': {
@@ -433,6 +428,7 @@ export async function updateEquipmentModelPrisma(data: {
 // ============================================================================
 
 export async function getActiveBrandsForSelect() {
+  await requireConfigTabPermission('modelos', 'view');
   try {
     const companyId = await getActiveCompanyId();
     return await prisma.brand_vehicles.findMany({

@@ -1,4 +1,3 @@
-import { UserProfileCard } from '@/features/Empresa/Usuarios/components/UserProfileCard';
 import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import {
   getAllRolePermissions,
@@ -8,52 +7,68 @@ import {
   getUserPermissionsForUserServer,
   getUserRolesServer,
 } from '@/features/UserPermissionsManager/actions.server';
+import { UserRecordHeader } from '@/features/UserPermissionsManager/components/user-permissions/UserRecordHeader';
 import { UserPermissionsManager } from '@/features/UserPermissionsManager/UserPermissionsManager';
+import { StateBlock } from '@/shared/components/common/StateBlock';
+import { ArrowLeft, UserX } from 'lucide-react';
+import Link from 'next/link';
+
+const USERS_LIST_HREF = '/dashboard/configuration?tab=general&subtab=users&usertab=usuarios-empleados';
+
+function BackToUsers() {
+  return (
+    <Link
+      href={USERS_LIST_HREF}
+      className="text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-10 items-center gap-1.5 rounded-md text-sm outline-none focus-visible:ring-2"
+    >
+      <ArrowLeft aria-hidden="true" className="size-4" />
+      Usuarios
+    </Link>
+  );
+}
 
 async function User({ params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = await params;
+  const { id } = await params;
 
-  // Verificar permisos de view y update en paralelo con la carga de datos
   const [canView, canUpdate, shareUser] = await Promise.all([
     checkPermissionServer('configuracion', 'detalle-usuario', 'view'),
     checkPermissionServer('configuracion', 'detalle-usuario', 'update'),
-    getUserDetailById(resolvedParams.id),
+    getUserDetailById(id),
   ]);
 
   if (!canView) {
     return (
-      <section className="md:mx-7 py-4">
-        <div className="flex items-center justify-center p-8 text-center">
-          <div className="space-y-2">
-            <p className="text-muted-foreground font-medium">Sin acceso</p>
-            <p className="text-sm text-muted-foreground">No tienes permisos para ver esta sección.</p>
-          </div>
-        </div>
+      <section className="space-y-4 py-4 md:mx-7">
+        <BackToUsers />
+        <StateBlock
+          variant="noperm"
+          title="Sin permiso para ver los accesos de usuarios"
+          description="Lo habilita Configuración › Detalle de usuario › Ver."
+          className="bg-card rounded-xl border"
+        />
       </section>
     );
   }
 
-  if (!shareUser) {
+  if (!shareUser?.profile) {
     return (
-      <section className="md:mx-7 py-4">
-        <div className="flex items-center justify-center p-8 text-center">
-          <div className="space-y-2">
-            <p className="text-muted-foreground font-medium">Usuario no encontrado</p>
-            <p className="text-sm text-muted-foreground">
-              El usuario solicitado no existe o no pertenece a esta empresa.
-            </p>
-          </div>
-        </div>
+      <section className="space-y-4 py-4 md:mx-7">
+        <BackToUsers />
+        <StateBlock
+          variant="empty"
+          icon={UserX}
+          title="Usuario no encontrado"
+          description="No existe o no pertenece a esta empresa."
+          className="bg-card rounded-xl border"
+        />
       </section>
     );
   }
 
   // El ID que se usa en user_roles y user_permissions es el credential_id (UUID de auth)
-  const authUserId = shareUser.profile?.credential_id ?? shareUser.profile?.id ?? resolvedParams.id;
-  const userName = shareUser.profile?.fullname ?? '';
-  const userEmail = shareUser.profile?.email ?? '';
+  const profile = shareUser.profile;
+  const authUserId = profile.credential_id ?? profile.id ?? id;
 
-  // Cargar datos iniciales en paralelo para SSR
   const [initialUserPermissions, initialUserRoles, initialRoles, initialRolePermissions, initialModules] =
     await Promise.all([
       getUserPermissionsForUserServer(authUserId),
@@ -64,12 +79,11 @@ async function User({ params }: { params: Promise<{ id: string }> }) {
     ]);
 
   return (
-    <section className="md:mx-7 py-4 space-y-4">
-      {shareUser.profile && <UserProfileCard profile={shareUser.profile} canEdit={canUpdate} />}
+    <section className="space-y-4 py-4 md:mx-7">
+      <BackToUsers />
+      <UserRecordHeader profile={profile} userId={authUserId} canEdit={canUpdate} initialUserRoles={initialUserRoles} />
       <UserPermissionsManager
         userId={authUserId}
-        userName={userName}
-        userEmail={userEmail}
         canEdit={canUpdate}
         initialUserPermissions={initialUserPermissions}
         initialUserRoles={initialUserRoles}

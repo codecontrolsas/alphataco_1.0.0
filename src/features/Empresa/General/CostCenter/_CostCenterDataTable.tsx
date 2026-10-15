@@ -1,6 +1,12 @@
 'use client';
 
 import {
+  CatalogCreateButton,
+  CatalogFormSheet,
+  CatalogTableSurface,
+  useCatalogSheet,
+} from '@/shared/components/common/CatalogFormSheet';
+import {
   DataTable,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
@@ -9,7 +15,6 @@ import {
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useCallback, useMemo, useState } from 'react';
-import { CatalogSplitLayout } from '../../components/CatalogSplitLayout';
 import { activeStatusLabel, buildActiveFacetResult } from '../../lib/active-status';
 import CostCenterForm from '../components/cost-center/CostCenterForm';
 import { useCostCenterStore } from '../components/cost-center/store/costCenter.store';
@@ -58,18 +63,20 @@ export default function _CostCenterDataTable({
     [permissionsMap]
   );
 
-  const canCreateOrUpdate =
-    permissions.hasPermission('configuracion', 'cost-center', 'create') ||
-    permissions.hasPermission('configuracion', 'cost-center', 'update');
+  const canCreate = permissions.hasPermission('configuracion', 'cost-center', 'create');
+  const canUpdate = permissions.hasPermission('configuracion', 'cost-center', 'update');
 
-  // ── Store de edición ─────────────────────────────────────────────────────
+  // ── Sheet de alta/edición (el form sigue leyendo el store de edición) ─────
   const setCostCenter = useCostCenterStore((state) => state.setCostCenter);
-  const handleEdit = useCallback(
-    (item: CostCenterListItem) => {
-      setCostCenter(item);
-    },
-    [setCostCenter]
-  );
+  const handleClearStore = useCallback(() => setCostCenter(null), [setCostCenter]);
+  const sheet = useCatalogSheet<CostCenterListItem>({
+    canCreate,
+    canUpdate,
+    onOpenEdit: setCostCenter,
+    onOpenCreate: handleClearStore,
+    onClosed: handleClearStore,
+  });
+  const handleEdit = sheet.openEdit;
 
   // ── Client-side navigation mode ──────────────────────────────────────────
   const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
@@ -147,6 +154,7 @@ export default function _CostCenterDataTable({
       queryFn={tableQueryFn}
       queryKey={['cost-centers']}
       onStateChange={handleStateChange}
+      toolbarActions={<CatalogCreateButton sheet={sheet} label="Nuevo centro de costo" />}
       tableId={tableId}
       paramNamespace={tableId}
       facetedFilters={facetedFilters}
@@ -170,11 +178,17 @@ export default function _CostCenterDataTable({
     />
   );
 
-  // Si no tiene permisos de crear/editar, mostrar solo la tabla
-  if (!canCreateOrUpdate) {
-    return table;
-  }
-
-  // Con permisos: formulario + tabla (apilados en pantallas chicas, paneles redimensionables desde lg)
-  return <CatalogSplitLayout form={<CostCenterForm />} table={table} />;
+  return (
+    <>
+      <CatalogTableSurface>{table}</CatalogTableSurface>
+      <CatalogFormSheet
+        sheet={sheet}
+        getKey={(item) => item.id}
+        title={{ create: 'Nuevo centro de costo', edit: 'Editar centro de costo' }}
+        size="md"
+      >
+        {() => <CostCenterForm />}
+      </CatalogFormSheet>
+    </>
+  );
 }

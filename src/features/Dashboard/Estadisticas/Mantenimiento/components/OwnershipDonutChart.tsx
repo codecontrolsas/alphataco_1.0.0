@@ -112,7 +112,7 @@ export function OwnershipDonutChart({
     <div className="flex flex-col gap-6">
       <WorkdaysProgress worked={workdays.worked} possible={workdays.possible} />
 
-      <div className="flex flex-col items-center gap-6 lg:flex-row lg:items-center lg:justify-around">
+      <div className="flex flex-col items-center gap-6 @2xl:flex-row @2xl:items-center @2xl:justify-around">
         {/* Donut chart con total al centro */}
         <ChartContainer config={chartConfig} className="aspect-square h-[220px] w-[220px]">
           <PieChart>
@@ -206,7 +206,7 @@ export function OwnershipDonutChart({
               </Button>
             )}
           </div>
-          <div className={cn('flex flex-wrap items-center gap-2 lg:gap-3', drilledCategory && 'lg:justify-start')}>
+          <div className={cn('flex flex-wrap items-center gap-2 @2xl:gap-3', drilledCategory && '@2xl:justify-start')}>
             {visibleStatuses.map((status) => {
               const meta = STATUS_META[status];
               const count = effectiveConditionCounts[status];

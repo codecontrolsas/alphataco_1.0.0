@@ -10,8 +10,7 @@ import { requireComercialPermission } from '../../Clientes/lib/require-permissio
 
 /**
  * Contactos de la EMPRESA activa (`contacts.company_id`), asociados a un cliente de la misma
- * empresa. El listado vive en `Clientes/actions/contacts.server.ts` (`getContacts`); acá está el
- * detalle y el alta/edición del formulario `ContactComponent`.
+ * empresa. Acá está el detalle y el alta/edición del formulario `ContactComponent`.
  *
  * Perímetro sin RLS: `company_id` sale SIEMPRE de la sesión (el `company_id` del FormData se
  * ignora), la fila se busca por `{ id, company_id }` y el cliente tiene que ser de la empresa.
@@ -26,6 +25,7 @@ export type ContactMutationResult = { status: 200 | 201 | 400 | 403 | 404 | 500;
 
 /** Contacto de la empresa activa por id (bigint del teléfono → string), o null. */
 export async function getContactById(contactId: string) {
+  await requireCustomersView();
   const companyId = await getActiveCompanyId();
   try {
     const row = await prisma.contacts.findFirst({ where: withCompany({ id: contactId }, companyId) });
@@ -42,6 +42,7 @@ export type ContactDetail = NonNullable<Awaited<ReturnType<typeof getContactById
 
 /** Clientes activos de la empresa activa para el selector del formulario. */
 export async function getActiveCustomerOptions() {
+  await requireCustomersView();
   const companyId = await getActiveCompanyId();
   try {
     return await prisma.customers.findMany({
@@ -97,6 +98,15 @@ function parseContactForm(formData: FormData): ParsedContact {
       customer_id: customer,
     },
   };
+}
+
+/**
+ * Lecturas del formulario de contacto: mismo permiso que sus mutaciones (Comercial → Clientes). Sin permiso
+ * lanza: un `null`/`[]` se leería como "contacto no encontrado" o "no hay clientes".
+ */
+async function requireCustomersView(): Promise<void> {
+  const denied = await requireComercialPermission('customers', 'view');
+  if (denied) throw new Error(denied);
 }
 
 async function assertCustomerInCompany(customerId: string, companyId: string): Promise<boolean> {

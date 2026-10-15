@@ -22,6 +22,15 @@ export function isNotOperative(condition: string | null | undefined): boolean {
   return condition != null && (NOT_OPERATIVE_CONDITIONS as readonly string[]).includes(condition);
 }
 
+/**
+ * «Disponible / Sin asignar»: equipos en servicio (condición que no está en
+ * `NOT_OPERATIVE_CONDITIONS`, o sin condición) que no figuran en el parte de hoy. Definición única
+ * para el indicador, el gráfico por tipo y el diálogo de disponibles (`fleet.server.ts`).
+ */
+export function availableUnits(indicator: Pick<EquipmentIndicatorResult, 'available_units' | 'used_units'>): number {
+  return Math.max(0, indicator.available_units - indicator.used_units);
+}
+
 /** Porcentaje entero, con 0 cuando el denominador es 0. */
 export function percentage(numerator: number, denominator: number): number {
   return denominator > 0 ? Math.round((numerator / denominator) * 100) : 0;
@@ -41,16 +50,18 @@ export interface VehicleForIndicator {
  */
 export function aggregateEquipmentIndicators(
   vehicles: readonly VehicleForIndicator[],
-  usedVehicleIds: ReadonlySet<string>
+  usedVehicleIds: ReadonlySet<string>,
+  /** Equipos que hoy están en el parte solo en servicios cancelados (no cuentan como usados). */
+  cancelledVehicleIds: ReadonlySet<string> = new Set()
 ): EquipmentIndicatorResult[] {
-  const typeMap = new Map<string, { available: number; notAvailable: number; used: number }>();
+  const typeMap = new Map<string, { available: number; notAvailable: number; used: number; cancelled: number }>();
 
   for (const vehicle of vehicles) {
     const typeName = vehicle.type_vehicles_typeTotype?.name ?? 'Sin tipo';
 
     let entry = typeMap.get(typeName);
     if (!entry) {
-      entry = { available: 0, notAvailable: 0, used: 0 };
+      entry = { available: 0, notAvailable: 0, used: 0, cancelled: 0 };
       typeMap.set(typeName, entry);
     }
 
@@ -61,6 +72,7 @@ export function aggregateEquipmentIndicators(
 
     entry.available++;
     if (usedVehicleIds.has(vehicle.id)) entry.used++;
+    else if (cancelledVehicleIds.has(vehicle.id)) entry.cancelled++;
   }
 
   return [...typeMap.entries()]
@@ -71,6 +83,7 @@ export function aggregateEquipmentIndicators(
       available_units: counts.available,
       used_units: counts.used,
       not_available_units: counts.notAvailable,
+      cancelled_units: counts.cancelled,
     }))
     .sort((a, b) => b.available_units + b.not_available_units - (a.available_units + a.not_available_units));
 }
@@ -123,7 +136,11 @@ export function aggregateDiagramIndicators(
 
     let entry = typeMap.get(key);
     if (!entry) {
-      entry = { name: diagramType.name ?? 'Sin nombre', color: diagramType.color ?? NO_DIAGRAM_COLOR, employees: new Set() };
+      entry = {
+        name: diagramType.name ?? 'Sin nombre',
+        color: diagramType.color ?? NO_DIAGRAM_COLOR,
+        employees: new Set(),
+      };
       typeMap.set(key, entry);
     }
     entry.employees.add(row.employee_id);
@@ -154,17 +171,21 @@ export interface ServiceTypeGroup {
   _count: { id: number };
 }
 
-/** Resumen de servicios por tipo, con el porcentaje sobre el total del día. */
+/** Clave del grupo de servicios sin tipo informado (la UI lo muestra como «Sin tipo»). */
+export const NO_SERVICE_TYPE = 'sin_tipo';
+
+/**
+ * Resumen de servicios por tipo, con el porcentaje sobre el total del día. Los servicios sin tipo
+ * van en su propio grupo (`NO_SERVICE_TYPE`): el total del resumen es el de la tarjeta.
+ */
 export function summarizeServicesByType(groups: readonly ServiceTypeGroup[]): ServicesSummaryResult[] {
   const totalCount = groups.reduce((sum, group) => sum + group._count.id, 0);
 
-  return groups
-    .filter((group): group is ServiceTypeGroup & { type_service: string } => group.type_service != null)
-    .map((group) => ({
-      type_service: group.type_service,
-      service_count: group._count.id,
-      percentage: percentage(group._count.id, totalCount),
-    }));
+  return groups.map((group) => ({
+    type_service: group.type_service ?? NO_SERVICE_TYPE,
+    service_count: group._count.id,
+    percentage: percentage(group._count.id, totalCount),
+  }));
 }
 
 export interface ServiceRowForClient {
@@ -175,24 +196,42 @@ export interface ServiceRowForClient {
 
 const ADICIONAL_SERVICE_TYPES = new Set(['adicional', 'adicional_permanente']);
 
+/** Grupo de los servicios sin cliente. */
+const NO_CLIENT = { id: '__none__', name: 'Sin cliente' } as const;
+
 /**
- * Detalle de servicios agrupado por cliente: mensuales, adicionales y distribución por
- * estado. Sale ordenado por total descendente. Las filas sin cliente se descartan.
+ * Detalle de servicios agrupado por cliente: mensuales, adicionales, total (todos los servicios
+ * del cliente, también los sin tipo) y distribución por estado. Las filas sin cliente van en
+ * «Sin cliente», así la suma de los clientes es el total del día. Sale ordenado por total descendente.
  */
 export function groupServicesByClient(rows: readonly ServiceRowForClient[]): ServiceDetailByClient[] {
   const clientsMap = new Map<
     string,
-    { client_name: string; mensual_count: number; adicional_count: number; status_counts: Map<string, number> }
+    {
+      client_name: string;
+      mensual_count: number;
+      adicional_count: number;
+      total_count: number;
+      status_counts: Map<string, number>;
+    }
   >();
 
   for (const row of rows) {
-    if (!row.customers) continue;
+    const customer = row.customers ?? NO_CLIENT;
 
-    let client = clientsMap.get(row.customers.id);
+    let client = clientsMap.get(customer.id);
     if (!client) {
-      client = { client_name: row.customers.name, mensual_count: 0, adicional_count: 0, status_counts: new Map() };
-      clientsMap.set(row.customers.id, client);
+      client = {
+        client_name: customer.name,
+        mensual_count: 0,
+        adicional_count: 0,
+        total_count: 0,
+        status_counts: new Map(),
+      };
+      clientsMap.set(customer.id, client);
     }
+
+    client.total_count++;
 
     if (row.type_service === 'mensual') client.mensual_count++;
     else if (row.type_service != null && ADICIONAL_SERVICE_TYPES.has(row.type_service)) client.adicional_count++;
@@ -206,7 +245,7 @@ export function groupServicesByClient(rows: readonly ServiceRowForClient[]): Ser
       client_name: client.client_name,
       mensual_count: client.mensual_count,
       adicional_count: client.adicional_count,
-      total_count: client.mensual_count + client.adicional_count,
+      total_count: client.total_count,
       status_distribution: [...client.status_counts.entries()].map(([status, count]) => ({ status, count })),
     }))
     .sort((a, b) => b.total_count - a.total_count);

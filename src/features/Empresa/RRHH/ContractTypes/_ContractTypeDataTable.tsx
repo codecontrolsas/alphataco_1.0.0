@@ -1,6 +1,12 @@
 'use client';
 
 import {
+  CatalogCreateButton,
+  CatalogFormSheet,
+  CatalogTableSurface,
+  useCatalogSheet,
+} from '@/shared/components/common/CatalogFormSheet';
+import {
   DataTable,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
@@ -9,7 +15,6 @@ import {
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useCallback, useMemo, useState } from 'react';
-import { CatalogSplitLayout } from '../../components/CatalogSplitLayout';
 import { activeStatusLabel, buildActiveFacetResult } from '../../lib/active-status';
 import {
   getAllContractTypesForExport,
@@ -58,18 +63,20 @@ export default function _ContractTypeDataTable({
     [permissionsMap]
   );
 
-  const canCreateOrUpdate =
-    permissions.hasPermission('configuracion', 'contract-types', 'create') ||
-    permissions.hasPermission('configuracion', 'contract-types', 'update');
+  const canCreate = permissions.hasPermission('configuracion', 'contract-types', 'create');
+  const canUpdate = permissions.hasPermission('configuracion', 'contract-types', 'update');
 
-  // ── Store de edición ─────────────────────────────────────────────────────
+  // ── Sheet de alta/edición (el form sigue leyendo el store de edición) ─────
   const setContractType = useContractTypeStore((state) => state.setContractType);
-  const handleEdit = useCallback(
-    (item: ContractTypeListItem) => {
-      setContractType(item);
-    },
-    [setContractType]
-  );
+  const handleClearStore = useCallback(() => setContractType(null), [setContractType]);
+  const sheet = useCatalogSheet<ContractTypeListItem>({
+    canCreate,
+    canUpdate,
+    onOpenEdit: setContractType,
+    onOpenCreate: handleClearStore,
+    onClosed: handleClearStore,
+  });
+  const handleEdit = sheet.openEdit;
 
   // ── Client-side navigation mode ──────────────────────────────────────────
   const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
@@ -155,6 +162,7 @@ export default function _ContractTypeDataTable({
       queryFn={tableQueryFn}
       queryKey={['contract-types']}
       onStateChange={handleStateChange}
+      toolbarActions={<CatalogCreateButton sheet={sheet} label="Nuevo tipo de contrato" />}
       tableId={tableId}
       paramNamespace={tableId}
       facetedFilters={facetedFilters}
@@ -178,11 +186,17 @@ export default function _ContractTypeDataTable({
     />
   );
 
-  // Si no tiene permisos de crear/editar, mostrar solo la tabla
-  if (!canCreateOrUpdate) {
-    return table;
-  }
-
-  // Con permisos: formulario + tabla (apilados en pantallas chicas, paneles redimensionables desde lg)
-  return <CatalogSplitLayout form={<ContractTypeForm />} table={table} />;
+  return (
+    <>
+      <CatalogTableSurface>{table}</CatalogTableSurface>
+      <CatalogFormSheet
+        sheet={sheet}
+        getKey={(contractType) => contractType.id}
+        title={{ create: 'Nuevo tipo de contrato', edit: 'Editar tipo de contrato' }}
+        size="md"
+      >
+        {() => <ContractTypeForm />}
+      </CatalogFormSheet>
+    </>
+  );
 }

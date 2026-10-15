@@ -22,6 +22,15 @@ export const MAINTENANCE_ORDER_STATUSES = [
 ] as const;
 export type MaintenanceOrderStatus = (typeof MAINTENANCE_ORDER_STATUSES)[number];
 
+/**
+ * Estados terminales de `maintenance_orders` (sin transiciones de salida). Todo lo demás es un
+ * pedido abierto: lo usan la ficha del equipo y el Dashboard, así cuentan lo mismo.
+ */
+export const MAINTENANCE_ORDER_TERMINAL_STATUSES = [
+  'completed',
+  'rejected',
+] as const satisfies readonly MaintenanceOrderStatus[];
+
 const MAINTENANCE_ORDER_TRANSITIONS: Record<MaintenanceOrderStatus, readonly MaintenanceOrderStatus[]> = {
   // El taller programa la fecha (`date_confirmed`) o rechaza el pedido sin programarlo.
   pending_scheduling: ['date_confirmed', 'scheduled', 'rejected'],

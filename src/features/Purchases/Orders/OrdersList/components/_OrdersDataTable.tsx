@@ -1,5 +1,6 @@
 'use client';
 
+import { formatMoney } from '@/features/Warehouses/lib/format';
 import {
   DataTable,
   type DataTableExportConfig,
@@ -8,14 +9,13 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { formatMoney } from '@/features/Warehouses/lib/format';
-import { CircleOff, FileText, Truck, User } from 'lucide-react';
 import { formatArgentinaDateTime, formatDateAr } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
+import { CircleOff, FileText, Truck, User } from 'lucide-react';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import {
-  PURCHASE_ORDER_STATUS_LABELS,
   PURCHASE_ORDER_STATUSES,
+  PURCHASE_ORDER_STATUS_LABELS,
   type PurchaseOrderStatus,
 } from '../../../lib/order-state-machine';
 import { PURCHASES_QUERY_KEYS } from '../../../lib/query-keys';
@@ -33,6 +33,8 @@ interface Props {
   totalRows: number;
   searchParams: DataTableSearchParams;
   tableId: string;
+  /** `compras:ordenes:view_prices`, resuelto en el servidor (el servidor enmascara por su cuenta). */
+  canViewPrices: boolean;
   /** Bandas de atención resueltas en el servidor; se muestran sobre la tabla. */
   topSlot?: ReactNode;
   initialColumnVisibility?: Record<string, boolean>;
@@ -48,6 +50,7 @@ export function _OrdersDataTable({
   totalRows,
   searchParams,
   tableId,
+  canViewPrices,
   topSlot,
   initialColumnVisibility,
   initialFilterVisibility,
@@ -56,7 +59,7 @@ export function _OrdersDataTable({
   const handleStateChange = useCallback((params: DataTableSearchParams) => setCurrentParams(params), []);
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getPurchaseOrdersPaginated(params), []);
 
-  const columns = useMemo(() => getColumns(), []);
+  const columns = useMemo(() => getColumns({ canViewPrices }), [canViewPrices]);
 
   const mergedColumnVisibility = useMemo(() => {
     const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((c) => [c, false]));
@@ -138,9 +141,11 @@ export function _OrdersDataTable({
         },
       },
       { columnId: 'number', title: 'Número', type: 'text' as const, placeholder: 'Buscar por número...' },
-      { columnId: 'total', title: 'Total', type: 'text' as const, placeholder: 'Importe exacto (ej. 1250,50)...' },
+      ...(canViewPrices
+        ? [{ columnId: 'total', title: 'Total', type: 'text' as const, placeholder: 'Importe exacto (ej. 1250,50)...' }]
+        : []),
     ],
-    []
+    [canViewPrices]
   );
 
   const mergedFilterVisibility = useMemo(() => {
@@ -158,33 +163,33 @@ export function _OrdersDataTable({
         delivery_date: (value) =>
           value ? formatDateAr(new Date(value as string | Date).toISOString().slice(0, 10)) : '',
         sent_at: (value) => (value ? formatArgentinaDateTime(value as string | Date) : ''),
-        total: (value) => formatMoney(value == null ? null : String(value)),
+        total: (value) => (canViewPrices ? formatMoney(value == null ? null : String(value)) : 'Sin permiso'),
       },
     }),
-    [currentParams]
+    [currentParams, canViewPrices]
   );
 
   return (
     <div className="space-y-4">
       {topSlot}
       <DataTable
-      columns={columns}
-      data={data}
-      totalRows={totalRows}
-      searchParams={searchParams}
-      tableId={tableId}
-      paramNamespace={tableId}
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={mergedColumnVisibility}
-      initialFilterVisibility={mergedFilterVisibility}
-      showFilterToggle
-      queryFn={tableQueryFn}
-      queryKey={[...PURCHASES_QUERY_KEYS.orders]}
-      onStateChange={handleStateChange}
-      searchPlaceholder="Buscar por número o proveedor"
-      emptyMessage="No hay órdenes de compra"
-      exportConfig={exportConfig}
-      data-testid="purchase-orders-table"
+        columns={columns}
+        data={data}
+        totalRows={totalRows}
+        searchParams={searchParams}
+        tableId={tableId}
+        paramNamespace={tableId}
+        facetedFilters={facetedFilters}
+        initialColumnVisibility={mergedColumnVisibility}
+        initialFilterVisibility={mergedFilterVisibility}
+        showFilterToggle
+        queryFn={tableQueryFn}
+        queryKey={[...PURCHASES_QUERY_KEYS.orders]}
+        onStateChange={handleStateChange}
+        searchPlaceholder="Buscar por número o proveedor"
+        emptyMessage="No hay órdenes de compra"
+        exportConfig={exportConfig}
+        data-testid="purchase-orders-table"
       />
     </div>
   );

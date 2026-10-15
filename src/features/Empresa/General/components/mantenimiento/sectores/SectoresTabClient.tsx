@@ -1,13 +1,14 @@
 'use client';
 
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
+import { CatalogCreateButton, CatalogFormSheet, useCatalogSheet } from '@/shared/components/common/CatalogFormSheet';
 import type { TablePreferences } from '@/shared/components/common/DataTable';
-import { Suspense } from 'react';
+import { Suspense, useCallback } from 'react';
 import type { WorkshopSector } from '../../../actions/workshops.server';
 import SectoresForm from './SectoresForm';
 import SectoresTable from './SectoresTable';
+import { useSectoresStore } from './store/sectores.store';
 
 interface SectoresTabClientProps {
   workshopSectors: Promise<WorkshopSector[]>;
@@ -15,32 +16,45 @@ interface SectoresTabClientProps {
   preferences: Promise<TablePreferences>;
 }
 
+/** Tabla de sectores a ancho completo; alta y edición en un Sheet. La superficie la pone quien monta la sección. */
 export function SectoresTabClient({ workshopSectors, internalWorkshops, preferences }: SectoresTabClientProps) {
   const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('configuracion', 'sectores_taller', 'create');
+  const canUpdate = hasPermission('configuracion', 'sectores_taller', 'update');
 
-  // Verificar si tiene permisos de crear o editar
-  const canCreateOrUpdate =
-    hasPermission('configuracion', 'sectores_taller', 'create') ||
-    hasPermission('configuracion', 'sectores_taller', 'update');
+  const setSector = useSectoresStore((state) => state.setSector);
+  const clearSector = useCallback(() => setSector(null), [setSector]);
+  const sheet = useCatalogSheet<WorkshopSector>({
+    canCreate,
+    canUpdate,
+    onOpenEdit: setSector,
+    onOpenCreate: clearSector,
+    onClosed: clearSector,
+  });
 
   return (
-    <div className="w-full">
-      <ResizablePanelGroup className="min-h-[400px]" direction="horizontal">
-        {canCreateOrUpdate && (
-          <>
-            <ResizablePanel defaultSize={30}>
-              <SectoresForm internalWorkshops={internalWorkshops} />
-            </ResizablePanel>
-            <ResizableHandle withHandle />
-          </>
-        )}
-
-        <ResizablePanel defaultSize={canCreateOrUpdate ? 70 : 100}>
-          <Suspense fallback={<Skeleton className="h-[400px] w-full rounded-md" />}>
-            <SectoresTable workshopSectors={workshopSectors} preferences={preferences} />
+    <>
+      <Suspense fallback={<Skeleton className="h-[400px] w-full rounded-md" />}>
+        <SectoresTable
+          workshopSectors={workshopSectors}
+          preferences={preferences}
+          onEdit={sheet.openEdit}
+          toolbarActions={<CatalogCreateButton sheet={sheet} label="Nuevo sector" />}
+        />
+      </Suspense>
+      <CatalogFormSheet
+        sheet={sheet}
+        getKey={(sector) => sector.id}
+        title={{ create: 'Nuevo sector', edit: 'Editar sector' }}
+        size="lg"
+      >
+        {() => (
+          // El form lee la promesa de talleres con `use()`: su propio Suspense evita tumbar toda la sección.
+          <Suspense fallback={<Skeleton className="h-64 w-full rounded-md" />}>
+            <SectoresForm internalWorkshops={internalWorkshops} />
           </Suspense>
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    </div>
+        )}
+      </CatalogFormSheet>
+    </>
   );
 }

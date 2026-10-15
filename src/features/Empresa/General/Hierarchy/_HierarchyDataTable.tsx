@@ -1,6 +1,12 @@
 'use client';
 
 import {
+  CatalogCreateButton,
+  CatalogFormSheet,
+  CatalogTableSurface,
+  useCatalogSheet,
+} from '@/shared/components/common/CatalogFormSheet';
+import {
   DataTable,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
@@ -9,7 +15,6 @@ import {
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useCallback, useMemo, useState } from 'react';
-import { CatalogSplitLayout } from '../../components/CatalogSplitLayout';
 import { activeStatusLabel, buildActiveFacetResult } from '../../lib/active-status';
 import HierarchyForm from './HierarchyForm';
 import {
@@ -58,18 +63,20 @@ export default function _HierarchyDataTable({
     [permissionsMap]
   );
 
-  const canCreateOrUpdate =
-    permissions.hasPermission('configuracion', 'organigrama', 'create') ||
-    permissions.hasPermission('configuracion', 'organigrama', 'update');
+  const canCreate = permissions.hasPermission('configuracion', 'organigrama', 'create');
+  const canUpdate = permissions.hasPermission('configuracion', 'organigrama', 'update');
 
-  // ── Store de edición ─────────────────────────────────────────────────────
+  // ── Sheet de alta/edición (el form sigue leyendo el store de edición) ─────
   const setHierarchy = useHierarchyStore((state) => state.setHierarchy);
-  const handleEdit = useCallback(
-    (item: HierarchyListItem) => {
-      setHierarchy(item);
-    },
-    [setHierarchy]
-  );
+  const handleClearStore = useCallback(() => setHierarchy(null), [setHierarchy]);
+  const sheet = useCatalogSheet<HierarchyListItem>({
+    canCreate,
+    canUpdate,
+    onOpenEdit: setHierarchy,
+    onOpenCreate: handleClearStore,
+    onClosed: handleClearStore,
+  });
+  const handleEdit = sheet.openEdit;
 
   // ── Client-side navigation mode ──────────────────────────────────────────
   const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
@@ -147,6 +154,7 @@ export default function _HierarchyDataTable({
       queryFn={tableQueryFn}
       queryKey={['hierarchy']}
       onStateChange={handleStateChange}
+      toolbarActions={<CatalogCreateButton sheet={sheet} label="Nuevo sector" />}
       tableId={tableId}
       paramNamespace={tableId}
       facetedFilters={facetedFilters}
@@ -170,11 +178,17 @@ export default function _HierarchyDataTable({
     />
   );
 
-  // Si no tiene permisos de crear/editar, mostrar solo la tabla
-  if (!canCreateOrUpdate) {
-    return table;
-  }
-
-  // Con permisos: formulario + tabla (apilados en pantallas chicas, paneles redimensionables desde lg)
-  return <CatalogSplitLayout form={<HierarchyForm />} table={table} />;
+  return (
+    <>
+      <CatalogTableSurface>{table}</CatalogTableSurface>
+      <CatalogFormSheet
+        sheet={sheet}
+        getKey={(item) => item.id}
+        title={{ create: 'Nuevo sector', edit: 'Editar sector' }}
+        size="md"
+      >
+        {() => <HierarchyForm />}
+      </CatalogFormSheet>
+    </>
+  );
 }

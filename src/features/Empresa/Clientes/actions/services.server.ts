@@ -307,7 +307,7 @@ export async function uploadContractDocument(formData: FormData): Promise<Action
   if (!(file instanceof File) || file.size === 0) return fail('No se recibió ningún archivo');
   if (!serviceId) return fail('Contrato no indicado');
 
-  const permissionError = await requireComercialPermission('detalle-contrato', 'update');
+  const permissionError = await requireComercialPermission('documentos-contrato', 'create');
   if (permissionError) return fail(permissionError);
   const companyId = await getActiveCompanyId();
   const service = await findOwnedService(serviceId, companyId);
@@ -355,7 +355,7 @@ async function findOwnedDocument(documentId: string, companyId: string) {
 
 /** Borra metadatos y archivo. Si el archivo no se puede borrar, el registro ya no existe (se loguea). */
 export async function deleteContractDocument(documentId: string): Promise<ActionResult> {
-  const permissionError = await requireComercialPermission('detalle-contrato', 'update');
+  const permissionError = await requireComercialPermission('documentos-contrato', 'delete');
   if (permissionError) return fail(permissionError);
   const companyId = await getActiveCompanyId();
   try {

@@ -18,7 +18,7 @@ import { prisma } from '@/shared/lib/prisma';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { LOAN_UNIT_SELECT, openLoansWhere, toLoan } from '../../../lib/loans';
+import { LOAN_UNIT_SELECT, openLoansWhere, staleLoansWhere, toLoan } from '../../../lib/loans';
 
 const logger = new Logger('features/Warehouses/Loans/LoansList');
 
@@ -113,7 +113,9 @@ function buildWhereClause(companyId: string, state: FilterState): UnitWhere {
   }
 
   // Tipo de destino (faceted, con "Sin asignar")
-  const faceted = buildFiltersWhere(Object.fromEntries(FACETED_COLUMNS.filter((c) => f[c]).map((c) => [c, f[c]]))) as MovementWhere;
+  const faceted = buildFiltersWhere(
+    Object.fromEntries(FACETED_COLUMNS.filter((c) => f[c]).map((c) => [c, f[c]]))
+  ) as MovementWhere;
   if (Object.keys(faceted).length > 0) and.push({ last_movement: faceted });
 
   // Textos
@@ -130,7 +132,11 @@ function buildWhereClause(companyId: string, state: FilterState): UnitWhere {
     and.push({
       last_movement: {
         OR: [
-          { employee: { OR: [{ file: contains(holder) }, { lastname: contains(holder) }, { firstname: contains(holder) }] } },
+          {
+            employee: {
+              OR: [{ file: contains(holder) }, { lastname: contains(holder) }, { firstname: contains(holder) }],
+            },
+          },
           { vehicle: { OR: [{ domain: contains(holder) }, { intern_number: contains(holder) }] } },
           { other_equipment: { intern_number: contains(holder) } },
           { maintenance_order: { order_number: contains(holder) } },
@@ -234,7 +240,9 @@ export async function getAllLoansForExport(
     logger.error('Error al exportar prestamos', { data: { error } });
     // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
     const message =
-      error instanceof ExportTooLargeError ? error.message : 'No se pudo exportar la lista de préstamos. Intente nuevamente.';
+      error instanceof ExportTooLargeError
+        ? error.message
+        : 'No se pudo exportar la lista de préstamos. Intente nuevamente.';
     return { ok: false, message };
   }
 }
@@ -295,18 +303,24 @@ export async function getLoanSingleFacet(
  */
 export async function getLoansAttention(): Promise<{
   open: number;
+  /** Abiertos con `STALE_LOAN_DAYS` dias o mas desde la salida (`staleLoansWhere`). */
+  stale: number;
   oldest: { since: string; days: number | null; serialNumber: string } | null;
 } | null> {
   try {
     if (!(await checkPermissionServer('almacenes', 'prestamos', 'view'))) return null;
-    const where = openLoansWhere(await getActiveCompanyId());
-    const [open, first] = await Promise.all([
+    const companyId = await getActiveCompanyId();
+    const today = argentinaDate();
+    const where = openLoansWhere(companyId);
+    const [open, stale, first] = await Promise.all([
       prisma.material_units.count({ where }),
+      prisma.material_units.count({ where: staleLoansWhere(companyId, today) }),
       prisma.material_units.findFirst({ where, orderBy: DEFAULT_ORDER, select: LOAN_UNIT_SELECT }),
     ]);
-    const loan = first ? toLoan(first) : null;
+    const loan = first ? toLoan(first, today) : null;
     return {
       open,
+      stale,
       oldest: loan?.since ? { since: loan.since, days: loan.days, serialNumber: loan.serialNumber } : null,
     };
   } catch (error) {

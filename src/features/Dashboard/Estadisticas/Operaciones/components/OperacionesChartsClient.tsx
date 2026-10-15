@@ -334,10 +334,10 @@ export function OperacionesChartsClient({ data }: Props) {
   return (
     <section className="grid grid-cols-1 gap-3 mb-4">
       {/* Main area chart card */}
-      <Card className="py-0">
-        <CardHeader className="flex flex-col items-stretch border-b p-0! sm:flex-row">
+      <Card className="@container py-0">
+        <CardHeader className="flex flex-col items-stretch border-b p-0! @3xl:flex-row">
           {/* Left: title + controls */}
-          <div className="flex flex-1 flex-col justify-center gap-1 px-6 pt-4 pb-3 sm:py-4">
+          <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 px-6 pt-4 pb-3 @3xl:py-4">
             <CardTitle className="text-base">Historico de servicios</CardTitle>
             <CardDescription>
               {periodLabel}
@@ -392,6 +392,7 @@ export function OperacionesChartsClient({ data }: Props) {
                 }}
                 variant="outline"
                 size="sm"
+                className="max-w-full overflow-x-auto"
               >
                 <ToggleGroupItem value="daily">Diario</ToggleGroupItem>
                 <ToggleGroupItem value="weekly">Semanal</ToggleGroupItem>
@@ -401,7 +402,7 @@ export function OperacionesChartsClient({ data }: Props) {
               </ToggleGroup>
 
               {/* Client filter */}
-              <div className="w-[220px]">
+              <div className="w-full max-w-[220px]">
                 <MultiSelectCombobox
                   options={data.customers.map((c) => ({ label: c.name, value: c.id }))}
                   placeholder="Todos los clientes"
@@ -413,7 +414,7 @@ export function OperacionesChartsClient({ data }: Props) {
               </div>
 
               {/* Cost center filter — se resuelve por los equipos afectados al parte */}
-              <div className="w-[220px]">
+              <div className="w-full max-w-[220px]">
                 <MultiSelectCombobox
                   options={costCenterOptions}
                   placeholder="Todos los centros de costo"
@@ -427,29 +428,31 @@ export function OperacionesChartsClient({ data }: Props) {
           </div>
 
           {/* Right: stat buttons */}
-          <div className="flex">
-            {(['total', 'mensual', 'adicional'] as const).map((key) => {
-              const value = key === 'total' ? totals.mensual + totals.adicional : totals[key];
-              const label = key === 'total' ? 'Total' : key === 'mensual' ? 'Mensual' : 'Adicional';
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  aria-pressed={activeView === key}
-                  data-active={activeView === key}
-                  className="relative z-30 flex flex-1 flex-col justify-center gap-1 border-t px-4 py-4 text-left even:border-l data-[active=true]:bg-muted/50 sm:border-t-0 sm:border-l sm:px-8 sm:py-6 cursor-pointer transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  onClick={() => setActiveView(key)}
-                >
-                  <span className="text-xs text-muted-foreground">{label}</span>
-                  <span className="text-lg leading-none font-bold tabular-nums sm:text-3xl">
-                    {value.toLocaleString('es-AR')}
-                  </span>
-                </button>
-              );
-            })}
+          <div className="overflow-hidden @3xl:shrink-0">
+            <div className="-ml-px flex @3xl:ml-0">
+              {(['total', 'mensual', 'adicional'] as const).map((key) => {
+                const value = key === 'total' ? totals.mensual + totals.adicional : totals[key];
+                const label = key === 'total' ? 'Total' : key === 'mensual' ? 'Mensual' : 'Adicional';
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-pressed={activeView === key}
+                    data-active={activeView === key}
+                    className="relative z-30 flex flex-1 flex-col justify-center gap-1 border-t border-l px-4 py-4 text-left data-[active=true]:bg-muted/50 @3xl:border-t-0 @3xl:px-8 @3xl:py-6 cursor-pointer transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    onClick={() => setActiveView(key)}
+                  >
+                    <span className="text-xs text-muted-foreground">{label}</span>
+                    <span className="text-lg leading-none font-bold tabular-nums @3xl:text-3xl">
+                      {value.toLocaleString('es-AR')}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </CardHeader>
-        <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
+        <CardContent className="px-2 pt-4 @xl:px-6 @xl:pt-6">
           {chartData.length === 0 && (
             <p role="status" className="py-6 text-center text-sm text-muted-foreground">
               Sin servicios cargados para {periodLabel} con los filtros elegidos.
@@ -481,7 +484,7 @@ export function OperacionesChartsClient({ data }: Props) {
           />
           {/* Un parte con equipos de varios centros suma en la linea de cada uno */}
           {costCenterSeries.length > 1 && (
-            <p className="mt-2 px-2 text-xs text-muted-foreground sm:px-0">
+            <p className="mt-2 px-2 text-xs text-muted-foreground @xl:px-0">
               Cada linea cuenta los servicios en los que participo ese centro de costo. Un servicio con equipos de
               varios centros aparece en la linea de cada uno, por lo que la suma de las lineas puede superar el total.
             </p>

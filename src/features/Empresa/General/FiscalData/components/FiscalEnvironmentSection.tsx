@@ -17,8 +17,8 @@ import { Input } from '@/components/ui/input';
 import { LoadingSwap } from '@/components/ui/loading-swap';
 import { formatCuit } from '@/features/Documentacion/DetalleDocumento/lib/document-detail';
 import { normalizeCuit } from '@/features/Empresa/General/lib/company-form';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import { zodResolver } from '@hookform/resolvers/zod';
-import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
@@ -127,7 +127,7 @@ export function FiscalEnvironmentSection({
         </p>
         {environmentChangedAt && (
           <p className="text-muted-foreground text-sm tabular-nums">
-            Último cambio: {moment(environmentChangedAt).format('DD/MM/YYYY HH:mm')}
+            Último cambio: {formatArgentinaDateTime(environmentChangedAt)}
           </p>
         )}
       </div>

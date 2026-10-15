@@ -20,16 +20,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Logger } from '@/lib/logger';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { useQueryClient } from '@tanstack/react-query';
 import { Ban, KeyRound } from 'lucide-react';
-import moment from 'moment';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import {
-  revokeExternalApiClient,
-  rotateExternalApiClientSecret,
-  type CreatedExternalApiClient,
-} from '../actions.server';
+import { revokeExternalApiClient, rotateExternalApiClientSecret } from '../actions.server';
+import type { CreatedExternalApiClient } from '../types';
 import { SecretRevealPanel } from './SecretRevealPanel';
 
 const logger = new Logger('AccesosExternos/ExternalAccessActionsCell');
@@ -63,7 +60,7 @@ export function ExternalAccessActionsCell({
   const [showCloseGuard, setShowCloseGuard] = useState(false);
 
   if (revokedAt) {
-    return <span className="text-xs text-muted-foreground">Revocado el {moment(revokedAt).format('DD/MM/YYYY')}</span>;
+    return <span className="text-xs text-muted-foreground">Revocado el {formatArgentinaDay(revokedAt)}</span>;
   }
 
   const handleRotate = async () => {

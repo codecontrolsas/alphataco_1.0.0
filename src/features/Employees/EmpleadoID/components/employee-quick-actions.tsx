@@ -25,6 +25,7 @@ import {
 } from '@/features/Employees/components/shared/TerminationFormFields';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import { Logger } from '@/lib/logger';
+import { CatalogFormSheet, useCatalogSheet } from '@/shared/components/common/CatalogFormSheet';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { Mail, MoreHorizontal, UserCheck, UserX } from 'lucide-react';
@@ -54,7 +55,8 @@ interface EmployeeQuickActionsProps {
 
 export function EmployeeQuickActions({ employeeId, isActive, email }: EmployeeQuickActionsProps) {
   const [isPending, startTransition] = useTransition();
-  const [showDeactivateDialog, setShowDeactivateDialog] = useState(false);
+  // La baja pide motivo y fecha: va en un panel lateral (formulario), no en una confirmación.
+  const deactivateSheet = useCatalogSheet<never>({ canCreate: isActive, canUpdate: false });
   const [showActivateDialog, setShowActivateDialog] = useState(false);
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -90,7 +92,7 @@ export function EmployeeQuickActions({ employeeId, isActive, email }: EmployeeQu
         } else {
           toast.success('Empleado dado de baja correctamente');
         }
-        setShowDeactivateDialog(false);
+        deactivateSheet.close();
         form.reset();
         refreshLists();
       } catch (error) {
@@ -129,71 +131,72 @@ export function EmployeeQuickActions({ employeeId, isActive, email }: EmployeeQu
 
   return (
     <>
-      <DropdownMenu>
+      {/* `modal={false}`: el menú abre un Sheet; con el menú modal, Radix deja `pointer-events: none` en el body al cerrarlo. */}
+      <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="icon" aria-label="Más acciones">
-            <MoreHorizontal className="h-4 w-4" />
+          <Button variant="outline" size="icon" className="size-10" aria-label="Más acciones del legajo">
+            <MoreHorizontal className="size-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={handleSendEmail} disabled={!email}>
-            <Mail className="h-4 w-4 mr-2" />
-            Enviar Email
+            <Mail className="mr-2 size-4" />
+            Enviar email
           </DropdownMenuItem>
           {/* Baja y reactivación se atan a la edición del legajo (no existe permiso de borrado). */}
           <PermissionGuard module="empleados" tab="employees" action="update">
             {isActive ? (
-              <DropdownMenuItem onClick={() => setShowDeactivateDialog(true)} className="text-destructive">
-                <UserX className="h-4 w-4 mr-2" />
-                Dar de Baja Empleado
+              <DropdownMenuItem onClick={deactivateSheet.openCreate} className="text-destructive">
+                <UserX className="mr-2 size-4" />
+                Dar de baja
               </DropdownMenuItem>
             ) : (
               <DropdownMenuItem onClick={() => setShowActivateDialog(true)} className="text-ok-subtle-foreground">
-                <UserCheck className="h-4 w-4 mr-2" />
-                Activar Empleado
+                <UserCheck className="mr-2 size-4" />
+                Reactivar
               </DropdownMenuItem>
             )}
           </PermissionGuard>
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Deactivate Dialog */}
-      <AlertDialog open={showDeactivateDialog} onOpenChange={setShowDeactivateDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Dar de baja al empleado?</AlertDialogTitle>
-            <AlertDialogDescription>Podés reactivarlo más tarde si hace falta.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="w-full">
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-                <TerminationFormFields form={form} />
-                <div className="bg-muted text-muted-foreground rounded-lg p-3 text-sm">
-                  <p className="text-foreground font-medium">Al confirmar</p>
-                  <ul className="mt-1 list-disc space-y-0.5 pl-5">
-                    <li>Pasa a Bajas y se actualiza el estado de sus diagramas.</li>
-                    <li>Si tiene usuario en el sistema, se le revoca el acceso y se cierran sus sesiones.</li>
-                  </ul>
-                </div>
-                <div className="flex justify-end gap-2">
-                  <AlertDialogCancel type="button" onClick={() => setShowDeactivateDialog(false)}>
-                    Cancelar
-                  </AlertDialogCancel>
-                  <Button variant="destructive" type="submit" disabled={isPending}>
-                    {isPending ? 'Procesando…' : 'Dar de baja'}
-                  </Button>
-                </div>
-              </form>
-            </Form>
-          </div>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Baja: motivo + fecha en un panel lateral. */}
+      <CatalogFormSheet
+        sheet={deactivateSheet}
+        getKey={() => employeeId}
+        title={{ create: 'Dar de baja', edit: 'Dar de baja' }}
+        description={{ create: 'Podés reactivarlo más tarde si hace falta.' }}
+        size="md"
+      >
+        {({ close }) => (
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+              <TerminationFormFields form={form} />
+              <div className="bg-muted text-muted-foreground rounded-lg p-3 text-sm">
+                <p className="text-foreground font-medium">Al confirmar</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                  <li>Pasa a Bajas y se actualiza el estado de sus diagramas.</li>
+                  <li>Si tiene usuario en el sistema, se le revoca el acceso y se cierran sus sesiones.</li>
+                </ul>
+              </div>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button type="button" variant="outline" className="min-h-10" onClick={close} disabled={isPending}>
+                  Cancelar
+                </Button>
+                <Button variant="destructive" type="submit" className="min-h-10" disabled={isPending}>
+                  {isPending ? 'Procesando…' : 'Dar de baja'}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        )}
+      </CatalogFormSheet>
 
       {/* Activate Dialog */}
       <AlertDialog open={showActivateDialog} onOpenChange={setShowActivateDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Activar empleado?</AlertDialogTitle>
+            <AlertDialogTitle>¿Reactivar al empleado?</AlertDialogTitle>
             <AlertDialogDescription>
               Vuelve a figurar entre los activos y recupera su acceso al sistema.
             </AlertDialogDescription>
@@ -207,7 +210,7 @@ export function EmployeeQuickActions({ employeeId, isActive, email }: EmployeeQu
               }}
               disabled={isPending}
             >
-              {isPending ? 'Activando...' : 'Activar'}
+              {isPending ? 'Reactivando…' : 'Reactivar'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

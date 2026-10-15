@@ -1,14 +1,16 @@
 'use server';
 
-import { argentinaDate } from '@/shared/lib/argentina-time';
 import { checkPermissionServer } from '@/features/Permissions';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { prisma } from '@/shared/lib/prisma';
 import { buildStorageFileUrl } from '@/shared/lib/storage-url';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { UUID_RE } from '../lib/action-errors';
 import { requestLineLabel } from '../lib/order-progress';
 import { comparePrices, computeOrderTotals } from '../lib/order-totals';
+import { maskAmount } from '../lib/price-visibility';
+import { canViewPurchasePrices } from '../lib/price-visibility.server';
 import { canApplyPurchaseQuoteAction, type PurchaseQuoteStatus } from '../lib/quote-state-machine';
 import { ORDERABLE_REQUEST_STATUSES, type PurchaseRequestStatus } from '../lib/request-state-machine';
 import { SUPPLIER_FILES_BUCKET } from '../lib/storage-files';
@@ -22,9 +24,11 @@ const dateOnly = (value: Date | null) => (value ? value.toISOString().slice(0, 1
 /** Detalle del pedido de cotizacion: lineas con su solicitud, respuesta, OC generadas e historial. */
 export async function getPurchaseQuoteDetail(id: string) {
   if (!UUID_RE.test(id)) return null;
-  const [canView, canUpdate, canCreateOrder] = await Promise.all([
+  const [canView, canUpdate, canSend, canViewPrices, canCreateOrder] = await Promise.all([
     checkPermissionServer('compras', 'cotizaciones', 'view'),
     checkPermissionServer('compras', 'cotizaciones', 'update'),
+    checkPermissionServer('compras', 'cotizaciones', 'send'),
+    canViewPurchasePrices('cotizaciones'),
     checkPermissionServer('compras', 'ordenes', 'create'),
   ]);
   if (!canView) return null;
@@ -93,6 +97,8 @@ export async function getPurchaseQuoteDetail(id: string) {
       unitPrice: line.unit_price?.toString() ?? null,
       vatRateId: line.vat_rate_id,
       notQuoted: line.not_quoted,
+      /** Hay precio cotizado (aunque no se pueda ver): distingue "Sin permiso" de "sin respuesta". */
+      quoted: line.unit_price !== null,
     }))
     .sort((a, b) => a.request.number.localeCompare(b.request.number) || a.requestPosition - b.requestPosition);
   const priced = lines.flatMap((line) =>
@@ -121,8 +127,10 @@ export async function getPurchaseQuoteDetail(id: string) {
           url: buildStorageFileUrl(SUPPLIER_FILES_BUCKET, quote.attachment_path),
         }
       : null,
-    totals: priced.length > 0 ? computeOrderTotals(priced) : null,
-    lines,
+    canViewPrices,
+    // Sin `view_prices` los importes no viajan (la UI muestra "Sin permiso").
+    totals: canViewPrices && priced.length > 0 ? computeOrderTotals(priced) : null,
+    lines: lines.map((line) => ({ ...line, unitPrice: maskAmount(line.unitPrice, canViewPrices) })),
     orders: quote.orders,
     recipients,
     requests: [...new Map(lines.map((line) => [line.request.id, line.request])).values()],
@@ -159,8 +167,9 @@ export async function getPurchaseQuoteDetail(id: string) {
     } satisfies PurchaseQuoteFormValues,
     can: {
       edit: canApplyPurchaseQuoteAction(status, 'edit') && canUpdate,
-      send: canApplyPurchaseQuoteAction(status, 'send') && canUpdate,
-      receive: canApplyPurchaseQuoteAction(status, 'receive') && canUpdate && !hasOrders,
+      send: canApplyPurchaseQuoteAction(status, 'send') && canSend,
+      // Cargar o corregir la respuesta precarga los precios cotizados.
+      receive: canApplyPurchaseQuoteAction(status, 'receive') && canUpdate && canViewPrices && !hasOrders,
       decline: canApplyPurchaseQuoteAction(status, 'decline') && canUpdate,
       cancel: canApplyPurchaseQuoteAction(status, 'cancel') && canUpdate,
       attach: status !== 'CANCELLED' && canUpdate,
@@ -170,7 +179,7 @@ export async function getPurchaseQuoteDetail(id: string) {
 }
 
 type ComparisonCell =
-  | { state: 'price'; unitPrice: string; vatRateId: number }
+  | { state: 'price'; unitPrice: string | null; vatRateId: number }
   | { state: 'not_quoted' }
   | { state: 'pending' };
 
@@ -180,11 +189,13 @@ type ComparisonCell =
  */
 export async function getRequestQuoteComparison(requestId: string) {
   if (!UUID_RE.test(requestId)) return null;
-  const [canViewQuotes, canViewRequests, canViewAll, canCreateOrder, profile] = await Promise.all([
+  const [canViewQuotes, canViewRequests, canViewAll, canCreateOrder, canViewPrices, profile] = await Promise.all([
     checkPermissionServer('compras', 'cotizaciones', 'view'),
     checkPermissionServer('compras', 'solicitudes', 'view'),
     checkPermissionServer('compras', 'solicitudes', 'view_all_requests'),
     checkPermissionServer('compras', 'ordenes', 'create'),
+    // Los precios del comparativo son los cotizados.
+    canViewPurchasePrices('cotizaciones'),
     getServerAuthProfile(),
   ]);
   if (!canViewQuotes || !canViewRequests || !profile) return null;
@@ -249,7 +260,7 @@ export async function getRequestQuoteComparison(requestId: string) {
       deliveryDays: quote.delivery_days,
       validUntil,
       expired: validUntil !== null && validUntil < today,
-      total: priced.length > 0 ? computeOrderTotals(priced).total : null,
+      total: canViewPrices && priced.length > 0 ? computeOrderTotals(priced).total : null,
       canOrder: quote.status === 'RECEIVED' && canCreateOrder && requestOrderable,
     };
   });
@@ -269,12 +280,16 @@ export async function getRequestQuoteComparison(requestId: string) {
       } else cells[quote.id] = { state: 'pending' };
     }
     const prices = Object.entries(cells).flatMap(([quoteId, cell]) =>
-      cell.state === 'price' ? [{ quoteId, price: cell.unitPrice }] : []
+      cell.state === 'price' && cell.unitPrice !== null ? [{ quoteId, price: cell.unitPrice }] : []
     );
     const min = prices.reduce<string | null>(
       (acc, entry) => (acc === null || comparePrices(entry.price, acc) < 0 ? entry.price : acc),
       null
     );
+    // Sin `view_prices` no viaja ni el precio ni cuál es el menor (revelaría la comparación).
+    if (!canViewPrices) {
+      for (const cell of Object.values(cells)) if (cell.state === 'price') cell.unitPrice = null;
+    }
     return {
       lineId: line.id,
       position: line.position,
@@ -287,11 +302,11 @@ export async function getRequestQuoteComparison(requestId: string) {
       unitAbbr: line.unit.abbreviation,
       cells,
       bestQuoteIds:
-        min === null
+        min === null || !canViewPrices
           ? []
           : prices.filter((entry) => comparePrices(entry.price, min) === 0).map((entry) => entry.quoteId),
     };
   });
 
-  return { columns, rows };
+  return { canViewPrices, columns, rows };
 }

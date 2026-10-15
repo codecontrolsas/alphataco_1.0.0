@@ -116,6 +116,7 @@ entero) en diseño y revisión. Si no, aplicar este resumen:
 | Presentación de estados                                                                                                             | `Mantenimiento/lib/status-presentation.ts` (`StatusUi`, `TONE_TO_BADGE`) + `Comercial/lib/`, `Warehouses/lib/`, `Purchases/lib/`, `Treasury/lib/status-presentation.ts`                                                                                    |
 | Banda de atención + filtro por clic                                                                                                 | `Mantenimiento/shared/components/AttentionBanner.tsx`; ejemplos `Warehouses/Requests/components/RequestsList/*`, `Purchases/*/*List/*Attention*.tsx`                                                                                                       |
 | Contadores de sub-navegación                                                                                                        | `*/lib/section-counts.ts` + `*SectionCounter.tsx` (con `React.cache`, `null` → "—")                                                                                                                                                                        |
+| Cabecera de página y navegación de vistas (reemplaza TabsManager)                                                                   | `src/shared/components/common/PageHeader.tsx`, `src/features/TabsManager/{SectionManagerServer,ViewManagerServer}.tsx` (`layout` `menu`/`rail`, `preserveParams`)                                                                                          |
 | Panel lateral de detalle                                                                                                            | `Comercial/Certificaciones/components/CertificationDetailSheet.tsx`, `Warehouses/Movements/components/MovementDetailSheet.tsx`                                                                                                                             |
 | Lista/tabla de referencia completa                                                                                                  | `Purchases/Requests/RequestsList/*`, `Comercial/Certificaciones/list/*`, `Treasury/Checks/ChecksList/*`                                                                                                                                                    |
 | Catálogos con formulario + tabla                                                                                                    | `Empresa/components/CatalogSplitLayout.tsx`, `Empresa/lib/{config-access.server,catalog-input-schemas,catalog-table.server,active-status}.ts`                                                                                                              |
@@ -145,6 +146,19 @@ entero) en diseño y revisión. Si no, aplicar este resumen:
 - Con >3 agentes o dos `tsc`, la máquina se queda sin RAM y los agentes acotan su verificación (queda sin cubrir el resto).
 - Los avisos "new-diagnostics" del editor suelen ser caché vieja: la verdad es `tsc`/`next build`.
 - Al renombrar/mover una acción, buscar TODOS los importadores (otros módulos importan acciones de Almacenes, Compras y Tesorería).
+- Layout interno de tarjetas/widgets y de la barra del DataTable: container queries (`@container` + `@xl:`…), no `sm:/lg:` de
+  ventana: una tarjeta angosta (rail, grilla, media pantalla) desborda aunque la ventana sea ancha.
+- `cmdk`: los `CommandItem` van directo en `CommandList`/`CommandGroup`; un `<div>` intermedio rompe el reordenamiento al filtrar
+  (`appendChild … not of type 'Node'`) y tira la sección entera. Solo se ve escribiendo en el buscador.
+- El dev server de Next con webpack crece hasta ~9 GB y el OOM lo mata (y a Chromium): lanzarlo con
+  `NODE_OPTIONS=--max-old-space-size=4096` y bajarlo antes de `tsc`/`next build` completos.
+- Leyendas de recharts (`ChartLegendContent`) sin `flex-wrap` desbordaban a 390 px (ya corregido en `components/ui/chart.tsx`).
+- Para medir desbordes, ignorar elementos recortados por un ancestro `overflow-x: auto|hidden` (si no, la tabla con scroll propio
+  aparece como falso culpable).
+- `pgrep -f "next dev"`/`pkill -f` matan el propio shell (el patrón aparece en la línea de comando): matar por puerto (`lsof -ti tcp:3100`).
+- agent-browser en este contenedor: `export AGENT_BROWSER_EXECUTABLE_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome`
+  en CADA llamada (cada Bash es un shell nuevo). El contenedor puede reiniciarse y bajar Docker/dev server: re-levantar con
+  `dockerd` + `docker compose up -d postgres minio` + script del dev server.
 
 ## 9. Autonomía y criterio de producto (decisión del usuario)
 
@@ -155,6 +169,7 @@ entero) en diseño y revisión. Si no, aplicar este resumen:
   **estandarizarlos y simplificarlos** para que al usuario le resulte más fácil: menos pasos, menos modales, mejores valores por
   defecto, nombres y rótulos consistentes, una sola forma de hacer lo mismo en todos los módulos. Condiciones: mismas reglas de
   negocio, mismos datos, mismos permisos, y se documenta el cambio visible en `ESTADO.md` ("Cambios visibles a avisar").
+- **Dependencias sin uso** (cero importadores en `src/`/`scripts/`): se desinstalan directo y se informa; no se pregunta.
 - **Sí se consulta al usuario**: migraciones, claves nuevas en `permissions-map.ts`, y cualquier cambio que altere cifras, importes
   o quién puede hacer qué. Todo lo demás se decide y se reporta.
 

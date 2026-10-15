@@ -1,10 +1,9 @@
 import { AccesosExternosTabContent } from '@/features/Empresa/AccesosExternos/AccesosExternosTabContent';
 import { ExternalApiClientsTableSkeleton } from '@/features/Empresa/AccesosExternos/list/fallback/ExternalApiClientsTableSkeleton';
-import { TabsManagerServer } from '@/features/TabsManager';
+import { ViewManagerServer } from '@/features/TabsManager';
 import { RoleManagerContent } from '@/features/UserPermissionsManager/components';
 import { RoleManagerSkeleton } from '@/features/UserPermissionsManager/fallback/RoleManagerSkeleton';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable';
-import { KeyRound, Shield, Users } from 'lucide-react';
 import { Suspense } from 'react';
 import { UsersTableSkeleton } from './fallback/UsersTableSkeleton';
 import { UsersTableList } from './table/UsersTableList';
@@ -17,20 +16,19 @@ export default function UsersTabComponent({
   permissions: Record<string, boolean>;
 }) {
   return (
-    <TabsManagerServer
+    <ViewManagerServer
       paramName="usertab"
       searchParams={searchParams}
-      defaultTab="usuarios-empleados"
+      defaultView="usuarios-empleados"
+      layout="menu"
+      ariaLabel="Usuarios y accesos"
+      preserveParams={['tab', 'subtab']}
       permissions={permissions}
-      tabs={[
+      views={[
         {
           value: 'usuarios-empleados',
-          label: (
-            <span className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Usuarios
-            </span>
-          ),
+          description: 'Usuarios con acceso al sistema',
+          label: 'Usuarios',
           moduleSlug: 'configuracion',
           tabSlug: 'usuarios-empleados',
           content: (
@@ -41,12 +39,8 @@ export default function UsersTabComponent({
         },
         {
           value: 'gestion-roles',
-          label: (
-            <span className="flex items-center gap-2">
-              <Shield className="h-4 w-4" />
-              Gestión de Roles
-            </span>
-          ),
+          description: 'Roles y permisos de cada usuario',
+          label: 'Roles y permisos',
           moduleSlug: 'configuracion',
           tabSlug: 'gestion-roles',
           content: (
@@ -57,12 +51,8 @@ export default function UsersTabComponent({
         },
         {
           value: 'accesos-externos',
-          label: (
-            <span className="flex items-center gap-2">
-              <KeyRound className="h-4 w-4" />
-              Accesos Externos
-            </span>
-          ),
+          description: 'Credenciales para integraciones externas',
+          label: 'Accesos externos',
           moduleSlug: 'configuracion',
           tabSlug: 'accesos-externos',
           content: (

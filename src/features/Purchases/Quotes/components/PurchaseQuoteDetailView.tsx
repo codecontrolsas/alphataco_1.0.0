@@ -1,17 +1,18 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { formatMoney, formatQuantity, formatUnitCost } from '@/features/Warehouses/lib/format';
-import { VAT_RATE_LABELS, isVatRateId } from '@/shared/lib/arca/catalogs';
-import { Paperclip } from 'lucide-react';
-import { argentinaDate, formatDateAr } from '@/shared/lib/argentina-time';
-import Link from 'next/link';
-import type { PurchaseQuoteDetail } from '../../lib/quote-query-types';
-import { HistoryCard } from '../../components/HistoryCard';
-import { PurchaseOrderStatusBadge } from '../../Orders/components/PurchaseOrderStatusBadge';
-import { PurchaseQuoteActions } from './PurchaseQuoteActions';
-import { PurchaseQuoteStatusBadge } from './PurchaseQuoteStatusBadge';
+import { formatMoney, formatQuantity } from '@/features/Warehouses/lib/format';
 import { Field, FieldGrid } from '@/shared/components/common/FieldGrid';
 import { RecordHeader } from '@/shared/components/common/RecordHeader';
 import { SectionCard } from '@/shared/components/common/SectionCard';
+import { VAT_RATE_LABELS, isVatRateId } from '@/shared/lib/arca/catalogs';
+import { argentinaDate, formatDateAr } from '@/shared/lib/argentina-time';
+import { Paperclip } from 'lucide-react';
+import Link from 'next/link';
+import { PurchaseOrderStatusBadge } from '../../Orders/components/PurchaseOrderStatusBadge';
+import { HistoryCard } from '../../components/HistoryCard';
+import { PriceText } from '../../components/PriceText';
+import type { PurchaseQuoteDetail } from '../../lib/quote-query-types';
+import { PurchaseQuoteActions } from './PurchaseQuoteActions';
+import { PurchaseQuoteStatusBadge } from './PurchaseQuoteStatusBadge';
 
 const date = (value: string | null) => (value ? formatDateAr(value) : '—');
 
@@ -33,54 +34,65 @@ export function PurchaseQuoteDetailView({ quote }: { quote: PurchaseQuoteDetail 
       />
 
       <SectionCard title="Datos del pedido">
-          <FieldGrid>
-            <Field label="Proveedor">
-              <Link href={`/dashboard/purchases/suppliers/${quote.supplier.id}`} className="hover:underline">
-                {quote.supplier.name}
-              </Link>
-            </Field>
-            <Field label="Solicitudes">
-              <span className="flex flex-wrap gap-2">
-                {quote.requests.map((request) => (
-                  <Link key={request.id} href={`/dashboard/purchases/requests/${request.id}`} className="font-mono underline">
-                    {request.number}
-                  </Link>
-                ))}
+        <FieldGrid>
+          <Field label="Proveedor">
+            <Link href={`/dashboard/purchases/suppliers/${quote.supplier.id}`} className="hover:underline">
+              {quote.supplier.name}
+            </Link>
+          </Field>
+          <Field label="Solicitudes">
+            <span className="flex flex-wrap gap-2">
+              {quote.requests.map((request) => (
+                <Link
+                  key={request.id}
+                  href={`/dashboard/purchases/requests/${request.id}`}
+                  className="font-mono underline"
+                >
+                  {request.number}
+                </Link>
+              ))}
+            </span>
+          </Field>
+          {(answered || quote.status === 'DECLINED') && <Field label="Respondida">{date(quote.receivedAt)}</Field>}
+          {answered && (
+            <Field label="Válida hasta">
+              <span className={expired ? 'text-destructive' : undefined}>
+                {date(quote.validUntil)}
+                {expired && ' (vencida)'}
               </span>
             </Field>
-            {(answered || quote.status === 'DECLINED') && <Field label="Respondida">{date(quote.receivedAt)}</Field>}
-            {answered && (
-              <Field label="Válida hasta">
-                <span className={expired ? 'text-destructive' : undefined}>
-                  {date(quote.validUntil)}
-                  {expired && ' (vencida)'}
-                </span>
+          )}
+          {answered && (
+            <Field label="Plazo de entrega">{quote.deliveryDays === null ? '—' : `${quote.deliveryDays} días`}</Field>
+          )}
+          {quote.attachment && (
+            <Field label="Presupuesto">
+              <a
+                href={quote.attachment.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 underline"
+              >
+                <Paperclip className="h-3.5 w-3.5" aria-hidden="true" />
+                {quote.attachment.name}
+              </a>
+            </Field>
+          )}
+          {quote.notes && (
+            <div className="sm:col-span-2 xl:col-span-3">
+              <Field label="Observaciones para el proveedor">
+                <span className="whitespace-pre-wrap">{quote.notes}</span>
               </Field>
-            )}
-            {answered && <Field label="Plazo de entrega">{quote.deliveryDays === null ? '—' : `${quote.deliveryDays} días`}</Field>}
-            {quote.attachment && (
-              <Field label="Presupuesto">
-                <a href={quote.attachment.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 underline">
-                  <Paperclip className="h-3.5 w-3.5" aria-hidden="true" />
-                  {quote.attachment.name}
-                </a>
+            </div>
+          )}
+          {quote.supplierNotes && (
+            <div className="sm:col-span-2 xl:col-span-3">
+              <Field label="Notas del proveedor">
+                <span className="whitespace-pre-wrap">{quote.supplierNotes}</span>
               </Field>
-            )}
-            {quote.notes && (
-              <div className="sm:col-span-2 xl:col-span-3">
-                <Field label="Observaciones para el proveedor">
-                  <span className="whitespace-pre-wrap">{quote.notes}</span>
-                </Field>
-              </div>
-            )}
-            {quote.supplierNotes && (
-              <div className="sm:col-span-2 xl:col-span-3">
-                <Field label="Notas del proveedor">
-                  <span className="whitespace-pre-wrap">{quote.supplierNotes}</span>
-                </Field>
-              </div>
-            )}
-          </FieldGrid>
+            </div>
+          )}
+        </FieldGrid>
       </SectionCard>
 
       <SectionCard title="Qué se cotiza">
@@ -109,7 +121,13 @@ export function PurchaseQuoteDetailView({ quote }: { quote: PurchaseQuoteDetail 
                     </TableCell>
                     {answered && (
                       <TableCell className="text-right tabular-nums">
-                        {line.notQuoted ? <span className="text-muted-foreground">No cotiza</span> : line.unitPrice ? formatUnitCost(line.unitPrice) : '—'}
+                        {line.notQuoted ? (
+                          <span className="text-muted-foreground">No cotiza</span>
+                        ) : line.quoted ? (
+                          <PriceText value={line.unitPrice} canViewPrices={quote.canViewPrices} unit />
+                        ) : (
+                          '—'
+                        )}
                       </TableCell>
                     )}
                     {answered && (
@@ -122,6 +140,14 @@ export function PurchaseQuoteDetailView({ quote }: { quote: PurchaseQuoteDetail 
               </TableBody>
             </Table>
           </div>
+          {answered && !quote.canViewPrices && (
+            <dl className="ml-auto grid w-full max-w-xs grid-cols-2 gap-1 text-sm">
+              <dt className="font-medium">Total cotizado</dt>
+              <dd className="text-right">
+                <PriceText value={null} canViewPrices={false} />
+              </dd>
+            </dl>
+          )}
           {quote.totals && (
             <dl className="ml-auto grid w-full max-w-xs grid-cols-2 gap-1 text-sm tabular-nums">
               <dt className="text-muted-foreground">Subtotal neto</dt>

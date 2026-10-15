@@ -14,9 +14,11 @@ import { ChartSummary } from '@/features/Dashboard/shared/charts/ChartSummary';
 import dynamic from 'next/dynamic';
 import * as React from 'react';
 import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from 'recharts';
-import { CookieFilter } from '../shared/CookieFilter';
+import { cancelledNote } from '../lib/cancelled-note';
+import { VEHICLE_TYPES_PARAM } from '../lib/url-list';
 import { IndicatorStats } from '../shared/IndicatorStats';
 import { RadialGauge } from '../shared/RadialGauge';
+import { UrlListFilter } from '../shared/UrlListFilter';
 
 // bundle-dynamic-imports — dialog loads only when opened
 const AvailableVehiclesDialog = dynamic(() => import('./AvailableVehiclesDialog'), {
@@ -44,6 +46,8 @@ interface EquipmentChartItem {
   disponibles: number;
   fueraDeServicio: number;
   trabajando: number;
+  /** Operativos que hoy están solo en servicios cancelados (no cuentan en operaciones). */
+  cancelados: number;
 }
 
 interface Props {
@@ -53,6 +57,7 @@ interface Props {
   totalTypes: number;
   totalActive: number;
   totalInUse: number;
+  totalCancelled: number;
   totalAvailable: number;
   totalFleet: number;
   operativityPercentage: number | null;
@@ -67,6 +72,7 @@ export function EquipmentOperationClient({
   totalTypes,
   totalActive,
   totalInUse,
+  totalCancelled,
   totalAvailable,
   totalFleet,
   operativityPercentage,
@@ -86,7 +92,9 @@ export function EquipmentOperationClient({
       {
         label: 'En operaciones',
         value: totalInUse,
-        description: 'Equipos operativos cargados en el parte diario de hoy.',
+        note: cancelledNote(totalCancelled),
+        description:
+          'Equipos operativos cargados en el parte diario de hoy. Los servicios cancelados no cuentan: se indican aparte.',
       },
       {
         label: 'Disponible / Sin asignar',
@@ -96,7 +104,7 @@ export function EquipmentOperationClient({
           'Operativos − en operaciones. El listado muestra los equipos con condición operativa u operativa condicionada que no están en el parte de hoy.',
       },
     ],
-    [totalActive, totalInUse, totalAvailable]
+    [totalActive, totalInUse, totalCancelled, totalAvailable]
   );
 
   const dynamicHeight = React.useMemo(() => {
@@ -120,8 +128,9 @@ export function EquipmentOperationClient({
               <CardTitle className="text-base">Estado de Equipos</CardTitle>
               <CardDescription>{date} · Disponible, fuera de servicio y en operaciones por tipo</CardDescription>
             </div>
-            <CookieFilter
-              cookieName="type-filter"
+            <UrlListFilter
+              key={initialFilterValues.join(',')}
+              paramName={VEHICLE_TYPES_PARAM}
               options={vehicleTypes}
               placeholder="Filtrar por tipo..."
               initialValues={initialFilterValues}
@@ -167,12 +176,14 @@ export function EquipmentOperationClient({
                 columns={[
                   { key: 'type', header: 'Tipo' },
                   { key: 'working', header: 'En operaciones', numeric: true },
+                  { key: 'cancelled', header: 'En servicios cancelados', numeric: true },
                   { key: 'available', header: 'Disponible / Sin asignar', numeric: true },
                   { key: 'out', header: 'Fuera de servicio', numeric: true },
                 ]}
                 rows={chartData.map((d) => ({
                   type: d.name,
                   working: d.trabajando,
+                  cancelled: d.cancelados,
                   available: d.disponibles,
                   out: d.fueraDeServicio,
                 }))}

@@ -119,10 +119,10 @@ export function MaintenanceByTypeCard() {
 
   return (
     <TooltipProvider delayDuration={150}>
-      <Card className="py-0">
+      <Card className="@container py-0">
         <CardHeader className="px-6 pt-4 pb-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
+          <div className="flex flex-col gap-3 @xl:flex-row @xl:items-start @xl:justify-between">
+            <div className="min-w-0">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Wrench className="h-4 w-4 text-muted-foreground" />
                 Equipos en mantenimiento por tipo
@@ -184,7 +184,7 @@ export function MaintenanceByTypeCard() {
               </div>
             </div>
             {typeOptions.length > 0 && (
-              <div className="sm:w-[210px]">
+              <div className="w-full @xl:w-[210px] @xl:shrink-0">
                 <MultiSelectCombobox
                   options={typeOptions}
                   placeholder="Todos los tipos"
@@ -207,7 +207,7 @@ export function MaintenanceByTypeCard() {
           ) : (
             <div className="flex flex-col gap-5">
               {/* Donut + leyenda */}
-              <div className="flex flex-col items-center gap-5 lg:flex-row lg:items-center lg:justify-around">
+              <div className="flex flex-col items-center gap-5 @2xl:flex-row @2xl:items-center @2xl:justify-around">
                 <ChartContainer config={chartConfig} className="aspect-square h-[190px] w-[190px] shrink-0">
                   <PieChart>
                     <Pie
@@ -245,7 +245,7 @@ export function MaintenanceByTypeCard() {
                 </ChartContainer>
 
                 {/* Leyenda clickeable con scroll interno */}
-                <div className="w-full lg:max-w-xs">
+                <div className="w-full @2xl:max-w-xs">
                   <p className="mb-1.5 px-1 text-[11px] uppercase tracking-wide text-muted-foreground/80">
                     Tipos · tocá uno para ver sus equipos
                   </p>
@@ -298,7 +298,7 @@ export function MaintenanceByTypeCard() {
                   <span className="text-xs uppercase tracking-wide text-muted-foreground">
                     Equipos · <span className="normal-case text-foreground/80">{selectedGroup.typeName}</span>
                   </span>
-                  <div className="grid max-h-[240px] grid-cols-1 gap-1 overflow-y-auto pr-1 sm:grid-cols-2">
+                  <div className="grid max-h-[240px] grid-cols-1 gap-1 overflow-y-auto pr-1 @xl:grid-cols-2">
                     {selectedGroup.vehicles.map((v) => (
                       <Tooltip key={v.id}>
                         <TooltipTrigger asChild>

@@ -49,9 +49,9 @@ function EquipmentRowSkeleton() {
         </div>
         <Skeleton className="h-3 w-32" />
       </div>
-      <Skeleton className="hidden md:block h-7 w-[140px] shrink-0 rounded-full" />
-      <Skeleton className="md:hidden h-7 w-7 shrink-0 rounded-full" />
-      <Skeleton className="hidden sm:block h-2 w-[180px] shrink-0 rounded-full" />
+      <Skeleton className="hidden @2xl:block h-7 w-[140px] shrink-0 rounded-full" />
+      <Skeleton className="@2xl:hidden h-7 w-7 shrink-0 rounded-full" />
+      <Skeleton className="hidden @xl:block h-2 w-[180px] shrink-0 rounded-full" />
       <div className="text-right shrink-0 w-[88px] space-y-1">
         <Skeleton className="h-4 w-14 ml-auto" />
         <Skeleton className="h-2.5 w-8 ml-auto" />
@@ -137,8 +137,10 @@ export function CategorySection({
 
   return (
     <Collapsible open={open} onOpenChange={onOpenChange} asChild>
-      <Card className={cn('py-0 transition-shadow duration-300', showRing && 'ring-2 ring-primary/50 shadow-md')}>
-        <CardHeader className="flex flex-col gap-3 px-6 py-3 border-b sm:flex-row sm:items-center sm:justify-between">
+      <Card
+        className={cn('@container py-0 transition-shadow duration-300', showRing && 'ring-2 ring-primary/50 shadow-md')}
+      >
+        <CardHeader className="flex flex-col gap-3 px-6 py-3 border-b @3xl:flex-row @3xl:items-center @3xl:justify-between">
           <CollapsibleTrigger asChild>
             <Button
               type="button"
@@ -168,7 +170,7 @@ export function CategorySection({
                 </Badge>
               )}
               {open && vehicles && daysElapsed > 0 && filteredVehicles.length > 0 && (
-                <span className="ml-2 text-xs text-muted-foreground hidden md:inline tabular-nums">
+                <span className="ml-2 text-xs text-muted-foreground hidden @3xl:inline tabular-nums">
                   {workdays.worked.toLocaleString('es-AR')}
                   <span className="text-muted-foreground/60"> / </span>
                   {workdays.possible.toLocaleString('es-AR')} días
@@ -178,16 +180,16 @@ export function CategorySection({
           </CollapsibleTrigger>
 
           <div
-            className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2"
+            className="flex flex-col gap-2 @xl:flex-row @xl:items-center @xl:gap-2"
             onClick={(e) => e.stopPropagation()}
           >
             <PatenteSearchInput
               value={patenteFilter}
               onChange={onPatenteFilterChange}
               disabled={!open}
-              className="sm:w-[160px]"
+              className="@xl:w-[160px]"
             />
-            <div className="sm:w-[200px]">
+            <div className="@xl:w-[200px]">
               <MultiSelectCombobox
                 options={types.map((t) => ({ label: t.name, value: t.id }))}
                 placeholder={types.length === 0 ? 'Sin tipos' : 'Todos los tipos'}

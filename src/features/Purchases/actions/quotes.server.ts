@@ -1,11 +1,11 @@
 'use server';
 
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
-import { argentinaDate } from '@/shared/lib/argentina-time';
 import { checkPermissionServer } from '@/features/Permissions';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { sendSupplierDocumentEmail } from '@/shared/lib/mail/templates/purchases';
 import { toPdfDownload } from '@/shared/lib/pdf/react-pdf.server';
 import type { PdfDownload } from '@/shared/lib/pdf/types';
@@ -15,12 +15,9 @@ import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
 import { NO_PERMISSION, UUID_RE, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import { nextPurchaseDocumentNumber } from '../lib/document-number';
-import {
-  assertWithinRemaining,
-  lockRequestsForLines,
-  orderedByLine,
-  remainingOf,
-} from '../lib/order-progress';
+import { assertWithinRemaining, lockRequestsForLines, orderedByLine, remainingOf } from '../lib/order-progress';
+import { NO_PRICES_PERMISSION } from '../lib/price-visibility';
+import { canViewPurchasePrices } from '../lib/price-visibility.server';
 import { PurchaseError } from '../lib/purchase-errors';
 import { canApplyPurchaseQuoteAction } from '../lib/quote-state-machine';
 import { lockPurchaseQuote, quoteHasOrders } from '../lib/quotes';
@@ -206,7 +203,8 @@ export async function updatePurchaseQuoteDraft(id: string, values: PurchaseQuote
  * no cruza el SMTP; solo si el mail salio queda ENVIADO.
  */
 export async function sendPurchaseQuote(id: string, values: SendDocumentValues): Promise<ActionResult> {
-  if (!(await checkPermissionServer('compras', 'cotizaciones', 'update'))) return fail(NO_PERMISSION);
+  // El pedido de cotización no lleva importes: enviarlo exige `send`, no `view_prices`.
+  if (!(await checkPermissionServer('compras', 'cotizaciones', 'send'))) return fail(NO_PERMISSION);
   if (!UUID_RE.test(id)) return fail('La cotización no existe');
   const parsed = sendDocumentSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
@@ -261,7 +259,8 @@ export async function sendPurchaseQuote(id: string, values: SendDocumentValues):
 }
 
 export async function markPurchaseQuoteSent(id: string): Promise<ActionResult> {
-  if (!(await checkPermissionServer('compras', 'cotizaciones', 'update'))) return fail(NO_PERMISSION);
+  // El pedido de cotización no lleva importes: enviarlo exige `send`, no `view_prices`.
+  if (!(await checkPermissionServer('compras', 'cotizaciones', 'send'))) return fail(NO_PERMISSION);
   if (!UUID_RE.test(id)) return fail('La cotización no existe');
   const companyId = await getActiveCompanyId();
   try {
@@ -279,6 +278,8 @@ export async function markPurchaseQuoteSent(id: string): Promise<ActionResult> {
 /** Carga (o corrige, si todavia no tiene OC) la respuesta del proveedor. */
 export async function recordPurchaseQuoteResponse(id: string, values: QuoteResponseValues): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'cotizaciones', 'update'))) return fail(NO_PERMISSION);
+  // Cargar o corregir la respuesta muestra los precios cotizados: exige verlos.
+  if (!(await canViewPurchasePrices('cotizaciones'))) return fail(NO_PRICES_PERMISSION);
   if (!UUID_RE.test(id)) return fail('La cotización no existe');
   const parsed = quoteResponseSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
