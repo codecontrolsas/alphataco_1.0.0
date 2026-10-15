@@ -6,9 +6,11 @@ import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { conditionLabels, otherEquipmentStatusLabels } from '@/shared/utils/mappers';
 import type { ColumnDef } from '@tanstack/react-table';
+import type { LucideIcon } from 'lucide-react';
 import { AlertCircle, AlertTriangle, CheckCircle2, Settings2, Wrench, XCircle } from 'lucide-react';
 import Link from 'next/link';
-import type { VehicleByOwnerListItem } from './actions.server';
+import { ActiveStatusBadge } from '../../components/ActiveStatusBadge';
+import type { VehicleByOwnerListItem } from './lib/owners-types';
 
 // ============================================================================
 // HIDDEN COLUMNS BY DEFAULT
@@ -41,7 +43,7 @@ export const conditionBadgeVariant: Record<string, BadgeVariant> = {
   en_preparacion: 'secondary',
 };
 
-export const conditionIcons: Record<string, React.ComponentType<{ className?: string }>> = {
+export const conditionIcons: Record<string, LucideIcon> = {
   operativo: CheckCircle2,
   no_operativo: XCircle,
   en_reparacion: Wrench,
@@ -57,7 +59,7 @@ export const statusBadgeVariant: Record<string, BadgeVariant> = {
   Completo_con_doc_vencida: 'yellow',
 };
 
-export const statusIcons: Record<string, React.ComponentType<{ className?: string }>> = {
+export const statusIcons: Record<string, LucideIcon> = {
   Avalado: CheckCircle2,
   No_avalado: XCircle,
   Incompleto: AlertCircle,
@@ -274,7 +276,7 @@ export function getVehicleByOwnerColumns(): ColumnDef<VehicleByOwnerListItem>[] 
                   {first} +{rest.length}
                 </Badge>
               </TooltipTrigger>
-              <TooltipContent className="text-white bg-black rounded-lg p-2">
+              <TooltipContent className="p-2">
                 <div className="flex flex-col gap-1">
                   {rest.map((name) => (
                     <p key={name}>{name}</p>
@@ -293,11 +295,7 @@ export function getVehicleByOwnerColumns(): ColumnDef<VehicleByOwnerListItem>[] 
       accessorKey: 'is_active',
       meta: { title: 'Estado' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
-      cell: ({ row }) => {
-        const val = row.original.is_active;
-        if (val === null || val === undefined) return <Badge variant="default">Sin asignar</Badge>;
-        return <Badge variant={val ? 'success' : 'secondary'}>{val ? 'Activo' : 'Inactivo'}</Badge>;
-      },
+      cell: ({ row }) => <ActiveStatusBadge value={row.original.is_active} />,
       filterFn: (row, id, value: string[]) => {
         const val = row.getValue(id);
         if (val === null || val === undefined) return value.includes(NULL_FILTER_VALUE);

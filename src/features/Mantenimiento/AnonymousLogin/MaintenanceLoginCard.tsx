@@ -55,15 +55,20 @@ export function MaintenanceLoginCard() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-white  bg-cover bg-center p-4 ">
-      <Card className="w-full max-w-md shadow-lg h-full">
+    <div className="flex min-h-dvh items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="space-y-1">
           <div className="flex items-center justify-center mb-4">
             <span className="text-brand-ink text-3xl font-bold tracking-tight lowercase">{BRAND_NAME}</span>
           </div>
-          <CardDescription className="text-center text-gray-600">
+          <CardDescription className="text-center text-base text-muted-foreground">
             Sistema de Checklist y Mantenimiento de Equipos
           </CardDescription>
+          {/* Progreso del ingreso: el equipo que llega por QR ya cuenta como paso 1 resuelto */}
+          <p className="text-center text-sm text-muted-foreground tabular-nums" aria-live="polite">
+            Paso {step === 'equipment-selection' ? 1 : step === 'selection' ? 2 : 3} de 3{' · '}
+            {step === 'equipment-selection' ? 'Equipo' : step === 'selection' ? 'Tipo de usuario' : 'Credenciales'}
+          </p>
         </CardHeader>
         <CardContent className="space-y-4">
           {step === 'equipment-selection' ? (
@@ -80,8 +85,8 @@ export function MaintenanceLoginCard() {
         </CardContent>
         {(step === 'login' || step === 'selection') && (
           <CardFooter>
-            <Button variant="outline" className="w-full  hover:bg-[#E6F7FF]" onClick={handleBack}>
-              <ArrowLeft className="mr-2 h-4 w-4" /> Regresar
+            <Button type="button" variant="outline" className="h-12 w-full text-base" onClick={handleBack}>
+              <ArrowLeft aria-hidden="true" className="mr-2 h-4 w-4" /> Regresar
             </Button>
           </CardFooter>
         )}

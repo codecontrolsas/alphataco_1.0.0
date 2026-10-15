@@ -36,7 +36,8 @@ export function toServiceItemFormValues(
     item_description: item.item_description,
     code_item: item.code_item,
     item_number: item.item_number,
-    item_price: item.item_price,
+    // Sin `view_prices` el precio llega null: se envía '0' y el servidor conserva el vigente.
+    item_price: item.item_price ?? '0',
     item_measure_units: String(item.item_measure_units),
     vat_rate_id: String(item.vat_rate_id),
     is_active: item.is_active ?? true,

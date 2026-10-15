@@ -19,7 +19,7 @@ function DownloadButton({ path, fileName }: { path: string; fileName: string }) 
 
         // Extrae la extensión del archivo del path
         const extension = path.split('.').pop();
-        saveAs(new Blob([blob], { type: 'application/octet-stream' }), `${fileName}CodeControl.${extension}`);
+        saveAs(new Blob([blob], { type: 'application/octet-stream' }), `${fileName}.${extension}`);
       },
       {
         loading: 'Descargando documento...',

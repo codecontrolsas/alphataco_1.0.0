@@ -1,19 +1,33 @@
 'use server';
 
+import { refreshResourceStatus } from '@/features/Documentacion/shared/compliance/server/document-status.server';
 import { Prisma } from '@/generated/prisma/client';
 import { condition_enum } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
 import { withActor } from '@/shared/lib/actor';
+import { argentinaDate } from '@/shared/lib/argentina-time';
+import { fromDateOnly, toDateOnly } from '@/shared/lib/date-only';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getSessionUserId } from '@/shared/lib/session';
-import { callVoid } from '@/shared/lib/sql';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
-import { fromDateOnly, toDateOnly } from '@/shared/lib/date-only';
-import { pickDuplicateRaceWinner, raceWindowStart } from '../duplicate-domain';
-import { buildVehicleStatusUpdate, canChangeConditionFromHeader } from '../vehicle-status';
-import { vehicleInputSchema, type ParsedVehicleInput, type VehicleInput } from '../../schemas/vehicle';
+import {
+  vehicleInputSchema,
+  type AllocationChanges,
+  type ParsedVehicleInput,
+  type VehicleInput,
+} from '../../schemas/vehicle';
+import { companyOrGlobal } from '../catalog-scope';
+import { hasPendingMaintenance } from '../pending-maintenance';
+import {
+  requireEquipmentConditionUpdate,
+  requireVehicleCreate,
+  requireVehicleUpdate,
+  requireVehicleView,
+  requireVehicleWrite,
+} from '../vehicle-permissions';
+import { allowedSourceConditions, buildEquipmentStatusUpdate, buildVehicleStatusUpdate } from '../vehicle-status';
 
 const logger = new Logger('features/Equipos/vehicle-actions');
 
@@ -100,6 +114,7 @@ const vehicleDetailSelect = {
  * resultado sea serializable hacia el cliente.
  */
 export async function getVehicleById(id: string) {
+  await requireVehicleView();
   const companyId = await getActiveCompanyId();
 
   const vehicle = await prisma.vehicles.findFirst({
@@ -133,15 +148,16 @@ export async function getVehicleById(id: string) {
 export type VehicleDetail = Awaited<ReturnType<typeof getVehicleById>>;
 
 /**
- * `true` si ya existe un vehículo con ese dominio (índice único global de `vehicles.domain`).
- * Se acota a la empresa activa: un dominio ajeno igual falla al crear (P2002) con el mismo mensaje.
+ * `true` si ya existe un vehículo con ese dominio. El índice único de `vehicles.domain` es GLOBAL
+ * (todas las empresas), así que la búsqueda no se acota a la empresa activa; sólo se devuelve un
+ * booleano para no revelar datos de otra empresa.
  */
 export async function isVehicleDomainTaken(domain: string, excludeId?: string): Promise<boolean> {
+  await requireVehicleWrite();
   const value = domain.trim().toUpperCase();
   if (!value) return false;
-  const companyId = await getActiveCompanyId();
   const existing = await prisma.vehicles.findFirst({
-    where: withCompany({ domain: value, ...(excludeId ? { id: { not: excludeId } } : {}) }, companyId),
+    where: { domain: value, ...(excludeId ? { id: { not: excludeId } } : {}) },
     select: { id: true },
   });
   return existing !== null;
@@ -152,25 +168,38 @@ export async function isVehicleDomainTaken(domain: string, excludeId?: string): 
 // ────────────────────────────────────────────────────────────────────────────
 
 /**
- * Baja (con motivo y fecha) o reintegro de un vehículo de la empresa activa.
- * `updateMany` acotado por `company_id`: si no afecta filas, el equipo no es de la empresa.
+ * Baja (con motivo y fecha `YYYY-MM-DD`) o reintegro de un vehículo de la empresa activa.
+ * La condición la decide el SERVIDOR: la baja deja el equipo `no_operativo`; el reintegro no la
+ * toca (conserva la que tenía). `updateMany` acotado por `company_id`: si no afecta filas, el
+ * equipo no es de la empresa.
  */
 export async function toggleVehicleStatus(
   id: string,
   activate: boolean,
-  condition: string,
   reason_for_termination?: string,
-  termination_date?: Date | string
+  termination_date?: string
 ) {
+  await requireVehicleUpdate();
   const [companyId, actor] = await Promise.all([getActiveCompanyId(), requireActor()]);
+
+  if (!activate && termination_date && termination_date > argentinaDate()) {
+    throw new Error('La fecha de baja no puede ser futura');
+  }
   const data = activate
-    ? buildVehicleStatusUpdate({ activate: true, condition })
-    : buildVehicleStatusUpdate({ activate: false, condition, reason: reason_for_termination, terminationDate: termination_date });
+    ? buildEquipmentStatusUpdate({ activate: true })
+    : buildVehicleStatusUpdate({
+        activate: false,
+        condition: condition_enum.no_operativo,
+        reason: reason_for_termination,
+        terminationDate: termination_date,
+      });
 
   try {
     await withActor(actor, async (tx) => {
       const result = await tx.vehicles.updateMany({ where: withCompany({ id }, companyId), data });
       if (result.count === 0) throw new Error('El vehículo no pertenece a la empresa activa');
+      // Baja/reintegro: `is_active` cambia qué documentos se exigen (los de baja). Refresca el cache de status.
+      await refreshResourceStatus(tx, 'Equipos', companyId, id);
     });
   } catch (error) {
     logger.error('Error toggling vehicle status', { data: { error, id, activate } });
@@ -179,48 +208,6 @@ export async function toggleVehicleStatus(
 
   revalidatePath('/dashboard/equipment');
   return { id, is_active: data.is_active };
-}
-
-/**
- * Resuelve la carrera entre dos altas simultaneas del mismo vehiculo (doble click,
- * reintento del navegador). La validacion de dominio vive en el resolver del formulario y
- * es async, asi que dos requests en paralelo la pasan las dos.
- *
- * Si aparecio otro vehiculo activo con el mismo dominio dentro de la ventana de duplicados,
- * el registro mas nuevo se elimina a si mismo (regla pura en `lib/duplicate-domain.ts`).
- * Solo mira altas recientes: los dominios repetidos que ya existian en la base no se tocan.
- */
-async function discardVehicleIfDuplicateRace(
-  client: VehicleClient,
-  companyId: string,
-  created: { id: string; created_at: Date; domain: string | null }
-): Promise<boolean> {
-  if (!created.domain) return false;
-
-  const siblings = await client.vehicles.findMany({
-    where: withCompany(
-      { domain: created.domain, is_active: true, created_at: { gte: raceWindowStart(created.created_at) } },
-      companyId
-    ),
-    select: { id: true, created_at: true },
-  });
-
-  const winner = pickDuplicateRaceWinner(siblings);
-  if (!winner || winner.id === created.id) return false;
-
-  try {
-    await client.vehicles.delete({ where: { id: created.id } });
-  } catch (error) {
-    logger.error('No se pudo descartar el vehiculo duplicado por request simultanea', {
-      data: { id: created.id, error },
-    });
-    throw new Error('Se creo un equipo duplicado y no se pudo revertir. Revisa el listado antes de reintentar.');
-  }
-
-  logger.warn('Vehiculo duplicado descartado por request simultanea', {
-    data: { descartado: created.id, conservado: winner.id, domain: created.domain },
-  });
-  return true;
 }
 
 /** Columnas escalares que escribe el formulario (sin `allocated_to`, `condition` ni `company_id`). */
@@ -266,16 +253,56 @@ function toVehicleScalarData(input: ParsedVehicleInput): VehicleScalarData {
   };
 }
 
+/**
+ * Los ids de catálogo que manda el cliente deben existir y ser de la empresa activa (o globales
+ * en los catálogos que lo admiten): sin esto se podía colgar un equipo de un titular, centro de
+ * costo o sector de otra empresa.
+ */
+async function assertCatalogReferences(client: VehicleClient, companyId: string, input: ParsedVehicleInput) {
+  if (!input.type) throw new Error('El tipo es requerido');
+  const brandId = Number(input.brand);
+  const modelId = input.model === null || input.model === undefined ? null : Number(input.model);
+
+  const [brand, model, type, subType, owner, costCenter, sector] = await Promise.all([
+    client.brand_vehicles.count({ where: { id: brandId, ...companyOrGlobal(companyId) } }),
+    modelId === null
+      ? Promise.resolve(1)
+      : client.model_vehicles.count({ where: withCompany({ id: modelId }, companyId) }),
+    client.type.count({ where: { id: input.type, ...companyOrGlobal(companyId) } }),
+    input.subType
+      ? client.sub_type.count({ where: { id: input.subType, ...companyOrGlobal(companyId) } })
+      : Promise.resolve(1),
+    input.owner_id
+      ? client.equipment_owners.count({ where: { id: input.owner_id, ...companyOrGlobal(companyId) } })
+      : Promise.resolve(1),
+    input.cost_center_id
+      ? client.cost_center.count({ where: withCompany({ id: input.cost_center_id }, companyId) })
+      : Promise.resolve(1),
+    input.sector ? client.hierarchy.count({ where: withCompany({ id: input.sector }, companyId) }) : Promise.resolve(1),
+  ]);
+
+  if (!brand) throw new Error('La marca seleccionada no es válida');
+  if (!model) throw new Error('El modelo seleccionado no es válido');
+  if (!type) throw new Error('El tipo seleccionado no es válido');
+  if (!subType) throw new Error('El subtipo seleccionado no es válido');
+  if (!owner) throw new Error('El titular seleccionado no es válido');
+  if (!costCenter) throw new Error('El centro de costo seleccionado no es válido');
+  if (!sector) throw new Error('El sector seleccionado no es válido');
+}
+
+const DOMAIN_TAKEN_MESSAGE = 'El dominio ya está registrado';
+
 function isUniqueViolation(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 }
 
 /**
  * Alta de vehículo en la empresa activa. Transacción con `withActor` (`vehicles.user_id`
- * tiene `DEFAULT app_current_user_id()`); afectaciones a contratistas por diff explícito y
- * recálculo de documentos requeridos al final.
+ * tiene `DEFAULT app_current_user_id()`); las afectaciones a clientes son todas altas y al final
+ * se recalculan los documentos requeridos.
  */
 export async function createVehicle(vehicleData: VehicleInput) {
+  await requireVehicleCreate();
   const input = vehicleInputSchema.parse(vehicleData);
   const [companyId, actor] = await Promise.all([getActiveCompanyId(), requireActor()]);
 
@@ -284,162 +311,215 @@ export async function createVehicle(vehicleData: VehicleInput) {
     where: { id: BigInt(input.type_of_vehicle) },
     select: { name: true },
   });
-  const condition = typeOfVehicle?.name === VEHICLES_TYPE_OF_VEHICLE_NAME ? condition_enum.en_preparacion : undefined;
+  if (!typeOfVehicle) throw new Error('El tipo de equipo seleccionado no es válido');
+  const condition = typeOfVehicle.name === VEHICLES_TYPE_OF_VEHICLE_NAME ? condition_enum.en_preparacion : undefined;
 
-  let created: { id: string; created_at: Date; domain: string | null };
+  // En el alta no hay afectaciones previas: todo es alta.
+  const allocationAdds = [...new Set([...(input.allocated_to ?? []), ...(input.allocation_changes?.add ?? [])])];
+
+  let created: { id: string; domain: string | null };
+  let allocation = { added: 0, removed: 0 };
   try {
     created = await withActor(actor, async (tx) => {
+      await assertCatalogReferences(tx, companyId, input);
       const vehicle = await tx.vehicles.create({
         data: {
           ...toVehicleScalarData(input),
           company_id: companyId,
           condition,
-          // El trigger add_contractor_equipment_after_insert copiaría allocated_to a la pivot:
-          // las afectaciones se manejan explícitamente abajo.
+          // La pivote contractor_equipment se escribe explícitamente abajo (ya no hay trigger que
+          // la derive de la columna). La columna denormalizada arranca vacía, como siempre.
           allocated_to: [],
         },
-        select: { id: true, created_at: true, domain: true },
+        select: { id: true, domain: true },
       });
 
-      // Si otra request simultanea inserto el mismo equipo, descartar el sobrante antes de
-      // asociar contratistas (asi no queda basura en la tabla pivot).
-      const wasRaced = await discardVehicleIfDuplicateRace(tx, companyId, vehicle);
-      if (wasRaced) {
-        throw new Error(`El equipo con el dominio ${vehicle.domain} ya fue creado. No se generó un duplicado.`);
+      if (allocationAdds.length > 0) {
+        allocation = await applyAllocationChanges(tx, vehicle.id, companyId, { add: allocationAdds, remove: [] });
       }
 
-      if (input.allocated_to && input.allocated_to.length > 0) {
-        await updateContractorRelationships(tx, vehicle.id, input.allocated_to, companyId);
-      }
-
-      await callVoid('controlar_alertas_documentos_single_vehicle', [{ uuid: vehicle.id }, { uuid: companyId }], tx);
+      // Cache de status con el estado final (afectaciones incluidas); va ultimo en la transaccion.
+      await refreshResourceStatus(tx, 'Equipos', companyId, vehicle.id);
       return vehicle;
     });
   } catch (error) {
-    if (isUniqueViolation(error)) {
-      throw new Error(`El equipo con el dominio ${input.domain ?? ''} ya fue creado. No se generó un duplicado.`);
-    }
+    if (isUniqueViolation(error)) throw new Error(DOMAIN_TAKEN_MESSAGE);
     logger.error('Error creating vehicle', { data: { error } });
     throw error instanceof Error ? error : new Error('Failed to create vehicle');
   }
 
   revalidatePath('/dashboard/equipment');
-  return { id: created.id, domain: created.domain };
+  return { id: created.id, domain: created.domain, added: allocation.added };
 }
 
 /**
  * Edición de un vehículo de la empresa activa (`update` con `where { id, company_id }`).
- * 358 / M:M: al final re-evalúa los documentos requeridos con el estado FINAL (incluye las
- * afectaciones, que se actualizan después del update).
+ * Las afectaciones a clientes llegan como altas y bajas EXPLÍCITAS (`allocation_changes`): lo que
+ * no figura en ninguna lista no se toca. Al final re-evalúa los documentos requeridos con el
+ * estado FINAL y devuelve cuántas afectaciones se agregaron y quitaron de verdad.
  */
 export async function updateVehicle(id: string, vehicleData: VehicleInput) {
+  await requireVehicleUpdate();
   const input = vehicleInputSchema.parse(vehicleData);
   const [companyId, actor] = await Promise.all([getActiveCompanyId(), requireActor()]);
 
+  let allocation = { added: 0, removed: 0 };
   try {
     await withActor(actor, async (tx) => {
+      await assertCatalogReferences(tx, companyId, input);
       const result = await tx.vehicles.updateMany({
         where: withCompany({ id }, companyId),
         data: toVehicleScalarData(input),
       });
       if (result.count === 0) throw new Error('El vehículo no pertenece a la empresa activa');
 
-      if (input.allocated_to !== undefined) {
-        await updateContractorRelationships(tx, id, input.allocated_to, companyId);
+      if (input.allocation_changes) {
+        allocation = await applyAllocationChanges(tx, id, companyId, input.allocation_changes);
       }
 
-      await callVoid('controlar_alertas_documentos_single_vehicle', [{ uuid: id }, { uuid: companyId }], tx);
+      // Cache de status con el estado final (condicion, tipo, marca y afectaciones); va ultimo.
+      await refreshResourceStatus(tx, 'Equipos', companyId, id);
     });
   } catch (error) {
-    if (isUniqueViolation(error)) {
-      throw new Error(`El dominio ${input.domain ?? ''} ya pertenece a otro equipo.`);
-    }
+    if (isUniqueViolation(error)) throw new Error(DOMAIN_TAKEN_MESSAGE);
     logger.error('Error updating vehicle', { data: { error, id } });
     throw error instanceof Error ? error : new Error('Failed to update vehicle');
   }
 
   revalidatePath('/dashboard/equipment');
-  return { id };
+  return { id, added: allocation.added, removed: allocation.removed };
 }
 
 /**
- * Afectaciones a contratistas con diff explícito (sólo se tocan las que cambian). Los ids
- * se filtran a clientes de la empresa activa: un id ajeno se ignora.
+ * Aplica altas y bajas EXPLÍCITAS de afectaciones a clientes: el DELETE se acota a
+ * `equipment_id = X AND contractor_id IN (remove)` y el INSERT a `add`. Un id ausente de ambas
+ * listas nunca se toca. Las altas deben ser clientes de la empresa activa. Devuelve los conteos
+ * reales (los ya existentes / ya quitados no cuentan).
  */
-async function updateContractorRelationships(
+async function applyAllocationChanges(
   client: VehicleClient,
   vehicleId: string,
-  newContractorIds: string[],
-  companyId: string
+  companyId: string,
+  changes: AllocationChanges
 ) {
-  const owned = await client.customers.findMany({
-    where: withCompany({ id: { in: newContractorIds } }, companyId),
-    select: { id: true },
-  });
-  const wanted = new Set(owned.map((c) => c.id));
+  const add = [...new Set(changes.add)];
+  const remove = [...new Set(changes.remove)];
 
-  const current = await client.contractor_equipment.findMany({
-    where: { equipment_id: vehicleId },
-    select: { contractor_id: true },
-  });
-  const currentIds = new Set(current.map((r) => r.contractor_id).filter((v): v is string => !!v));
-
-  const toAdd = [...wanted].filter((cid) => !currentIds.has(cid));
-  const toRemove = [...currentIds].filter((cid) => !wanted.has(cid));
-
-  if (toRemove.length > 0) {
-    await client.contractor_equipment.deleteMany({
-      where: { equipment_id: vehicleId, contractor_id: { in: toRemove } },
-    });
+  if (add.length > 0) {
+    const owned = await client.customers.count({ where: withCompany({ id: { in: add } }, companyId) });
+    if (owned !== add.length) throw new Error('Hay clientes que no pertenecen a la empresa activa');
   }
-  if (toAdd.length > 0) {
-    await client.contractor_equipment.createMany({
-      data: toAdd.map((contractorId) => ({ equipment_id: vehicleId, contractor_id: contractorId })),
+
+  let removed = 0;
+  let added = 0;
+  if (remove.length > 0) {
+    const result = await client.contractor_equipment.deleteMany({
+      where: { equipment_id: vehicleId, contractor_id: { in: remove } },
+    });
+    removed = result.count;
+  }
+  if (add.length > 0) {
+    const result = await client.contractor_equipment.createMany({
+      data: add.map((contractorId) => ({ equipment_id: vehicleId, contractor_id: contractorId })),
       skipDuplicates: true,
     });
+    added = result.count;
   }
+  return { added, removed };
 }
+
+type EquipmentConditionResult = { ok: true } | { ok: false; message: string };
 
 /**
  * Cambia la condición de un vehículo (`vehicles`) o equipamiento (`other_equipment`) desde el
- * header de la ficha. Sólo admite las transiciones de `HEADER_CONDITION_TRANSITIONS`
- * ("en preparación" → "operativo"); el resto las administra Mantenimiento.
+ * header de la ficha. Admite las transiciones de `HEADER_CONDITION_TRANSITIONS` ("en preparación" →
+ * "operativo") y la reactivación `no_operativo` → cualquier otra condición, solo si el equipo no tiene
+ * mantenimiento pendiente. El resto las administra Mantenimiento. Devuelve `{ ok:false, message }` en
+ * los rechazos de negocio para que el mensaje llegue al cliente aunque en producción se enmascaren los errores lanzados.
  */
 export async function updateEquipmentCondition(
   equipmentId: string,
   newCondition: condition_enum,
   table: 'vehicles' | 'other_equipment' = 'vehicles'
-) {
+): Promise<EquipmentConditionResult> {
   logger.info('Actualizando condición de equipo', { data: { equipmentId, newCondition, table } });
-  const companyId = await getActiveCompanyId();
+  try {
+    await requireEquipmentConditionUpdate(table);
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : 'No tenés permiso para realizar esta acción',
+    };
+  }
+  if (newCondition === condition_enum.no_operativo) {
+    return { ok: false, message: 'Transición de condición no permitida desde la ficha' };
+  }
+  const allowedFrom = allowedSourceConditions(newCondition);
+  const [companyId, actor] = await Promise.all([getActiveCompanyId(), requireActor()]);
 
   try {
-    const current =
-      table === 'vehicles'
-        ? await prisma.vehicles.findFirst({ where: withCompany({ id: equipmentId }, companyId), select: { condition: true } })
-        : await prisma.other_equipment.findFirst({
-            where: withCompany({ id: equipmentId }, companyId),
-            select: { condition: true },
-          });
+    const result = await withActor(actor, async (tx): Promise<EquipmentConditionResult> => {
+      // Atómico: la condición de origen va en el `where`, así dos cambios simultáneos no se pisan.
+      const update = async (from: condition_enum[]) =>
+        table === 'vehicles'
+          ? tx.vehicles.updateMany({
+              where: withCompany({ id: equipmentId, condition: { in: from } }, companyId),
+              data: { condition: newCondition },
+            })
+          : tx.other_equipment.updateMany({
+              where: withCompany({ id: equipmentId, condition: { in: from } }, companyId),
+              data: { condition: newCondition },
+            });
 
-    if (!current) throw new Error('El equipo no pertenece a la empresa activa');
-    if (!canChangeConditionFromHeader(current.condition, newCondition)) {
-      throw new Error('Transición de condición no permitida desde la ficha');
-    }
+      let changed = allowedFrom.length > 0 ? (await update(allowedFrom)).count : 0;
+      if (changed === 0) {
+        // Reactivación desde `no_operativo`: solo sin mantenimiento pendiente.
+        const pending = await hasPendingMaintenance(tx, companyId, table, equipmentId);
+        if (pending.pending) {
+          return { ok: false, message: `No se puede cambiar la condición. ${pending.reasons.join('. ')}.` };
+        }
+        changed = (await update([condition_enum.no_operativo])).count;
+      }
+      if (changed === 0) {
+        return {
+          ok: false,
+          message: 'La condición del equipo cambió o el equipo no pertenece a la empresa activa. Actualizá la página.',
+        };
+      }
+      // `condition` es una condición registrada de los tipos de documento de equipos: al cambiarla
+      // se refresca el cache de status en la misma transacción.
+      if (table === 'vehicles') await refreshResourceStatus(tx, 'Equipos', companyId, equipmentId);
+      return { ok: true };
+    });
 
-    if (table === 'vehicles') {
-      await prisma.vehicles.updateMany({ where: withCompany({ id: equipmentId }, companyId), data: { condition: newCondition } });
-    } else {
-      await prisma.other_equipment.updateMany({
-        where: withCompany({ id: equipmentId }, companyId),
-        data: { condition: newCondition },
-      });
-    }
-
-    revalidatePath('/dashboard/equipment');
-    return { success: true };
+    if (result.ok) revalidatePath('/dashboard/equipment');
+    return result;
   } catch (error) {
     logger.error('Error al actualizar condición de equipo', { data: { error, equipmentId, newCondition, table } });
-    throw error;
+    return { ok: false, message: 'No se pudo actualizar la condición del equipo' };
   }
+}
+
+type ConditionChangeAvailability = { canChange: boolean; reason?: string };
+
+/**
+ * ¿Se puede reactivar la condición de un equipo `no_operativo`? Lectura para la ficha: si hay
+ * mantenimiento pendiente devuelve el motivo para mostrarlo en el control deshabilitado.
+ */
+export async function getConditionChangeAvailability(
+  table: 'vehicles' | 'other_equipment',
+  equipmentId: string
+): Promise<ConditionChangeAvailability> {
+  await requireEquipmentConditionUpdate(table);
+  const companyId = await getActiveCompanyId();
+  const where = withCompany({ id: equipmentId }, companyId);
+  const row =
+    table === 'vehicles'
+      ? await prisma.vehicles.findFirst({ where, select: { condition: true } })
+      : await prisma.other_equipment.findFirst({ where, select: { condition: true } });
+  if (!row) return { canChange: false, reason: 'El equipo no pertenece a la empresa activa' };
+  if (row.condition !== condition_enum.no_operativo) return { canChange: false };
+  const pending = await hasPendingMaintenance(prisma, companyId, table, equipmentId);
+  if (pending.pending) return { canChange: false, reason: `${pending.reasons.join('. ')}.` };
+  return { canChange: true };
 }

@@ -1,45 +1,53 @@
 import { fetchActiveCustomersForChecklist, fetchActiveEmployeesForChecklist } from '@/features/Checklists';
+import {
+  fetchChecklistTemplateById,
+  fetchFilteredEquipmentForChecklist,
+} from '@/features/Checklists/actions/checklist-queries';
 import { NormalizedChecklistForm } from '@/features/Checklists/components/NormalizedChecklistForm';
-import { fetchChecklistTemplateById, fetchFilteredEquipmentForChecklist } from '@/features/Checklists/actions/checklist-queries';
 import { fetchCustomFormById, getCurrentProfile } from '@/features/Formularios/actions/form-actions';
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { mapEquipmentToChecklistFormat } from '@/lib/utils';
 import BackButton from '@/shared/components/common/BackButton';
+import { StateBlock } from '@/shared/components/common/StateBlock';
+
+function Shell({ children }: { children: React.ReactNode }) {
+  return <div className="space-y-6 px-4 py-4 sm:px-7">{children}</div>;
+}
 
 async function page({ params }: { params: Promise<{ id: string }> }) {
-  // En Next.js 15+, params es una Promise, necesitamos hacer await
-  const resolvedParams = await params;
+  const { id } = await params;
 
-  const currentUserProfile = await getCurrentProfile();
-  const currentUser = currentUserProfile && currentUserProfile.length > 0 ? currentUserProfile[0] : null;
+  const [canView, canSubmit] = await Promise.all([
+    checkPermissionServer('formularios', 'formularios', 'view'),
+    checkPermissionServer('formularios', 'formularios', 'create'),
+  ]);
 
-  // Intentar obtener el checklist desde la nueva estructura normalizada
-  const checklistTemplate = await fetchChecklistTemplateById(resolvedParams.id);
-
-  // Si no existe en la nueva estructura, intentar con la antigua
-  const formInfo = checklistTemplate ? null : await fetchCustomFormById(resolvedParams.id);
-
-  // Obtener equipos filtrados optimizados (solo si es checklist normalizado)
-  let equipments: Awaited<ReturnType<typeof mapEquipmentToChecklistFormat>>[] = [];
-  let customers: { id: string; name: string }[] = [];
-  let employees: { id: string; fullName: string; document: string | null }[] = [];
-
-  if (checklistTemplate) {
-    // Usar función optimizada que filtra directamente en la base de datos
-    const [filteredEquipments, activeCustomers, activeEmployees] = await Promise.all([
-      fetchFilteredEquipmentForChecklist(resolvedParams.id),
-      fetchActiveCustomersForChecklist(),
-      fetchActiveEmployeesForChecklist(),
-    ]);
-    equipments = filteredEquipments.map(mapEquipmentToChecklistFormat);
-    customers = activeCustomers;
-    employees = activeEmployees;
+  if (!canView) {
+    return (
+      <Shell>
+        <BackButton />
+        <StateBlock variant="noperm" title="No tenés permiso para ver formularios" />
+      </Shell>
+    );
   }
 
-  // Si es un checklist de la nueva estructura
+  // Todo depende solo del id de la URL: plantilla normalizada, formulario legacy y opciones del form en paralelo.
+  const [currentUserProfile, checklistTemplate, formInfo, filteredEquipments, customers, employees] = await Promise.all(
+    [
+      getCurrentProfile(),
+      fetchChecklistTemplateById(id),
+      fetchCustomFormById(id),
+      fetchFilteredEquipmentForChecklist(id),
+      fetchActiveCustomersForChecklist(),
+      fetchActiveEmployeesForChecklist(),
+    ]
+  );
+  const currentUser = currentUserProfile.length > 0 ? currentUserProfile[0] : null;
+
   if (checklistTemplate) {
     return (
-      <div className="px-7 py-4">
-        <div className="flex items-center gap-4 mb-6">
+      <Shell>
+        <div className="flex items-center gap-4">
           <BackButton />
           <div className="flex-1">
             <h1 className="text-2xl font-bold">{checklistTemplate.name}</h1>
@@ -49,36 +57,35 @@ async function page({ params }: { params: Promise<{ id: string }> }) {
         <NormalizedChecklistForm
           shouldDisabledInputs={false}
           template={checklistTemplate}
-          equipments={equipments}
+          equipments={filteredEquipments.map(mapEquipmentToChecklistFormat)}
           customers={customers}
           employees={employees}
           currentUser={currentUser}
+          canSubmit={canSubmit}
         />
-      </div>
+      </Shell>
     );
   }
 
-  // Si es un formulario de la estructura antigua
-  if (formInfo && formInfo.length > 0) {
+  // Formulario de la estructura antigua: todavía no se pueden cargar respuestas desde acá.
+  if (formInfo.length > 0) {
     return (
-      <div className="px-7">
-        <div className="p-4 border rounded-lg">
-          <p className="text-muted-foreground">
-            Formulario de estructura antigua detectado. La nueva implementación de checklists está en desarrollo.
-          </p>
-          <p className="text-sm text-gray-500 mt-2">Formulario: {formInfo[0].name}</p>
-        </div>
-      </div>
+      <Shell>
+        <BackButton />
+        <StateBlock
+          variant="empty"
+          title={formInfo[0].name}
+          description="Este formulario es de la estructura anterior y todavía no admite cargar respuestas."
+        />
+      </Shell>
     );
   }
 
-  // Si no se encuentra ningún formulario
   return (
-    <div className="px-7">
-      <div className="p-4 border rounded-lg">
-        <p className="text-red-600">No se encontró el formulario con ID: {resolvedParams.id}</p>
-      </div>
-    </div>
+    <Shell>
+      <BackButton />
+      <StateBlock variant="error" title="No se encontró el formulario" description={`ID: ${id}`} />
+    </Shell>
   );
 }
 

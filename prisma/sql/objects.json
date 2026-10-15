@@ -2,17 +2,13 @@
   {
     "kind": "function",
     "name": "actualizar_estado_daily_reports",
-    "statement": "CREATE OR REPLACE FUNCTION public.actualizar_estado_daily_reports()\n RETURNS void\n LANGUAGE plpgsql\nAS $function$\nDECLARE\n    report_record RECORD;\n    row_record RECORD;\n    tiene_filas BOOLEAN;\n    todas_completas BOOLEAN;\n    tiene_recursos BOOLEAN;\nBEGIN\n    -- Parte 1: Actualizar filas 'sin_recursos_asignados' que ya tienen recursos asignados\n    FOR row_record IN\n        SELECT dr.id\n        FROM dailyreportrows dr\n        WHERE dr.status = 'sin_recursos_asignados'\n    LOOP\n        SELECT EXISTS (\n            SELECT 1 FROM dailyreportemployeerelations\n            WHERE daily_report_row_id = row_record.id\n            UNION\n            SELECT 1 FROM dailyreportequipmentrelations\n            WHERE daily_report_row_id = row_record.id\n        ) INTO tiene_recursos;\n\n        IF tiene_recursos THEN\n            UPDATE dailyreportrows\n            SET status = 'pendiente',\n                updated_at = (NOW() AT TIME ZONE 'America/Argentina/Buenos_Aires')\n            WHERE id = row_record.id;\n        END IF;\n    END LOOP;\n\n    -- Parte 2: Cierre de reportes con fecha pasada\n    FOR report_record IN\n        SELECT id\n        FROM dailyreport\n        WHERE date < ( (NOW() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date )\n        AND status IN ('abierto', 'cerrado_incompleto')\n    LOOP\n        SELECT EXISTS (SELECT 1 FROM dailyreportrows WHERE daily_report_id = report_record.id) INTO tiene_filas;\n\n        IF NOT tiene_filas THEN\n            UPDATE dailyreport\n            SET status = 'cerrado_completo',\n                updated_at = (NOW() AT TIME ZONE 'America/Argentina/Buenos_Aires')\n            WHERE id = report_record.id;\n        ELSE\n            -- Estados completos: ejecutado, reprogramado, cancelado, en_certificacion\n            -- NO se verifica document_path (el remito no es requisito para cierre)\n            SELECT NOT EXISTS (\n                SELECT 1\n                FROM dailyreportrows\n                WHERE daily_report_id = report_record.id\n                AND status NOT IN ('ejecutado', 'reprogramado', 'cancelado', 'en_certificacion')\n            ) INTO todas_completas;\n\n            IF todas_completas THEN\n                UPDATE dailyreport\n                SET status = 'cerrado_completo',\n                    updated_at = (NOW() AT TIME ZONE 'America/Argentina/Buenos_Aires')\n                WHERE id = report_record.id;\n            ELSE\n                UPDATE dailyreport\n                SET status = 'cerrado_incompleto',\n                    updated_at = (NOW() AT TIME ZONE 'America/Argentina/Buenos_Aires')\n                WHERE id = report_record.id;\n            END IF;\n        END IF;\n    END LOOP;\nEND;\n$function$",
+    "statement": "CREATE OR REPLACE FUNCTION public.actualizar_estado_daily_reports()\n RETURNS void\n LANGUAGE plpgsql\n SET \"TimeZone\" TO 'America/Argentina/Buenos_Aires'\nAS $function$\nDECLARE\n    report_record RECORD;\n    tiene_filas BOOLEAN;\n    todas_completas BOOLEAN;\nBEGIN\n    -- Parte 1: reconciliar el estado de las lineas de los partes abiertos (sube y baja segun recursos y flags)\n    PERFORM public.reconcile_daily_report_rows_status(ARRAY(\n        SELECT dr.id\n        FROM dailyreportrows dr\n        JOIN dailyreport d ON d.id = dr.daily_report_id\n        WHERE d.status = 'abierto'\n          AND dr.status IN ('pendiente', 'sin_recursos_asignados')\n    ));\n\n    -- Parte 2: Cierre de reportes con fecha pasada\n    FOR report_record IN\n        SELECT id\n        FROM dailyreport\n        WHERE date < ( (NOW() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date )\n        AND status IN ('abierto', 'cerrado_incompleto')\n    LOOP\n        SELECT EXISTS (SELECT 1 FROM dailyreportrows WHERE daily_report_id = report_record.id) INTO tiene_filas;\n\n        IF NOT tiene_filas THEN\n            UPDATE dailyreport\n            SET status = 'cerrado_completo',\n                updated_at = (NOW() AT TIME ZONE 'America/Argentina/Buenos_Aires')\n            WHERE id = report_record.id;\n        ELSE\n            -- Estados completos: ejecutado, reprogramado, cancelado, en_certificacion\n            -- NO se verifica document_path (el remito no es requisito para cierre)\n            SELECT NOT EXISTS (\n                SELECT 1\n                FROM dailyreportrows\n                WHERE daily_report_id = report_record.id\n                AND status NOT IN ('ejecutado', 'reprogramado', 'cancelado', 'en_certificacion')\n            ) INTO todas_completas;\n\n            IF todas_completas THEN\n                UPDATE dailyreport\n                SET status = 'cerrado_completo',\n                    updated_at = (NOW() AT TIME ZONE 'America/Argentina/Buenos_Aires')\n                WHERE id = report_record.id;\n            ELSE\n                UPDATE dailyreport\n                SET status = 'cerrado_incompleto',\n                    updated_at = (NOW() AT TIME ZONE 'America/Argentina/Buenos_Aires')\n                WHERE id = report_record.id;\n            END IF;\n        END IF;\n    END LOOP;\nEND;\n$function$\n;",
     "source": "supabase/migrations/20260304035040_sinc-2.sql",
     "domain": "daily-report",
     "callers": [
       {
-        "kind": "function",
-        "ref": "after_dailyreportrows_update"
-      },
-      {
-        "kind": "function",
-        "ref": "after_dailyreportrows_update_optimized"
+        "kind": "src",
+        "ref": "src/features/Jobs/jobs/daily-indicators.ts"
       }
     ],
     "commentMentions": [],
@@ -57,12 +53,7 @@
     "statement": "CREATE OR REPLACE FUNCTION public.add_to_companies_employees()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$DECLARE\n  contractor_id UUID;\nBEGIN\n  -- Insertar en companies_employees\n  INSERT INTO companies_employees (company_id, employee_id)\n  VALUES (NEW.company_id, NEW.id);\n\n  -- Verificar si NEW.allocated_to no está vacío\n  IF NEW.allocated_to IS NOT NULL AND array_length(NEW.allocated_to, 1) > 0 THEN\n    -- Insertar en contractor_employee para cada ID en allocated_to\n    FOREACH contractor_id IN ARRAY NEW.allocated_to\n    LOOP\n      INSERT INTO contractor_employee (contractor_id, employee_id)\n      VALUES (contractor_id, NEW.id);\n    END LOOP;\n  END IF;\n\n  RETURN NEW;\nEND;$function$",
     "source": "supabase/migrations/20251103211302_initial_structure.sql",
     "domain": "misc",
-    "callers": [
-      {
-        "kind": "trigger",
-        "ref": "after_employee_insert ON employees"
-      }
-    ],
+    "callers": [],
     "commentMentions": [],
     "supabaseRefs": []
   },
@@ -83,12 +74,7 @@
     "statement": "CREATE OR REPLACE FUNCTION public.after_dailyreportrows_update_optimized()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nDECLARE\n    affected_reports UUID[];\n    v_report_id UUID;\nBEGIN\n    -- Recopilar todos los report_ids únicos afectados en esta transacción\n    SELECT ARRAY_AGG(DISTINCT daily_report_id)\n    INTO affected_reports\n    FROM (\n        SELECT NEW.daily_report_id AS daily_report_id\n        UNION\n        SELECT OLD.daily_report_id AS daily_report_id WHERE TG_OP = 'UPDATE'\n    ) reports\n    WHERE daily_report_id IS NOT NULL;\n\n    IF affected_reports IS NOT NULL AND array_length(affected_reports, 1) > 0 THEN\n        FOREACH v_report_id IN ARRAY affected_reports\n        LOOP\n            -- Actualizar filas 'sin_recursos_asignados' que ahora tienen los recursos requeridos\n            -- Respeta los flags needs_personnel y needs_equipment de service_items\n            UPDATE dailyreportrows dr\n            SET status = 'pendiente',\n                updated_at = (NOW() AT TIME ZONE 'America/Argentina/Buenos_Aires')\n            FROM service_items si\n            WHERE dr.item_id = si.id\n              AND dr.status = 'sin_recursos_asignados'\n              AND dr.daily_report_id = v_report_id\n              AND (\n                (NOT COALESCE(si.needs_personnel, true) OR EXISTS (\n                  SELECT 1 FROM dailyreportemployeerelations WHERE daily_report_row_id = dr.id\n                ))\n                AND\n                (NOT COALESCE(si.needs_equipment, true) OR EXISTS (\n                  SELECT 1 FROM dailyreportequipmentrelations WHERE daily_report_row_id = dr.id\n                ))\n              );\n\n            -- NOTA: La lógica de cierre de partes fue removida\n            -- El cierre ahora es responsabilidad exclusiva del cronjob\n            -- que ejecuta actualizar_estado_daily_reports() a las 00:00 Argentina\n        END LOOP;\n    END IF;\n\n    RETURN COALESCE(NEW, OLD);\nEND;\n$function$",
     "source": "supabase/migrations/20260304035040_sinc-2.sql",
     "domain": "daily-report",
-    "callers": [
-      {
-        "kind": "trigger",
-        "ref": "tr_after_dailyreportrows_update_optimized ON dailyreportrows"
-      }
-    ],
+    "callers": [],
     "commentMentions": [],
     "supabaseRefs": []
   },
@@ -115,9 +101,7 @@
         "ref": "assign_owner_role_trigger ON company"
       }
     ],
-    "commentMentions": [
-      "src/features/Empresa/General/actions/actions.ts:92"
-    ],
+    "commentMentions": ["src/features/Empresa/General/actions/actions.ts:92"],
     "supabaseRefs": []
   },
   {
@@ -279,9 +263,7 @@
       }
     ],
     "commentMentions": [],
-    "supabaseRefs": [
-      "auth.jwt()"
-    ]
+    "supabaseRefs": ["auth.jwt()"]
   },
   {
     "kind": "function",
@@ -306,9 +288,7 @@
       }
     ],
     "commentMentions": [],
-    "supabaseRefs": [
-      "auth.jwt()"
-    ]
+    "supabaseRefs": ["auth.jwt()"]
   },
   {
     "kind": "function",
@@ -384,16 +364,7 @@
     "statement": "CREATE OR REPLACE FUNCTION public.deactivate_service_items()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n    UPDATE service_items\n    SET is_active = NEW.is_active\n    WHERE customer_service_id = NEW.id;\n    RETURN NEW;\nEND;\n$function$",
     "source": "supabase/migrations/20251103211302_initial_structure.sql",
     "domain": "misc",
-    "callers": [
-      {
-        "kind": "trigger",
-        "ref": "after_service_update ON customer_services"
-      },
-      {
-        "kind": "trigger",
-        "ref": "after_service_update ON service_items"
-      }
-    ],
+    "callers": [],
     "commentMentions": [],
     "supabaseRefs": []
   },
@@ -479,9 +450,7 @@
     "domain": "documents",
     "callers": [],
     "commentMentions": [],
-    "supabaseRefs": [
-      "net.http_post"
-    ],
+    "supabaseRefs": ["net.http_post"],
     "orphan": true
   },
   {
@@ -492,9 +461,7 @@
     "domain": "documents",
     "callers": [],
     "commentMentions": [],
-    "supabaseRefs": [
-      "net.http_post"
-    ],
+    "supabaseRefs": ["net.http_post"],
     "orphan": true
   },
   {
@@ -534,12 +501,7 @@
     "statement": "CREATE OR REPLACE FUNCTION public.equipment_allocated_to()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nDECLARE\n  contractor_id UUID;\nBEGIN\n  IF NEW.allocated_to IS NOT NULL AND array_length(NEW.allocated_to, 1) > 0 THEN\n    -- Insertar en contractor_employee para cada ID en allocated_to\n    FOREACH contractor_id IN ARRAY NEW.allocated_to\n    LOOP\n      INSERT INTO contractor_equipment(contractor_id, equipment_id)\n      VALUES (contractor_id, NEW.id);\n    END LOOP;\n  END IF;\n\n  RETURN NEW;\nEND;\n$function$",
     "source": "supabase/migrations/20251103211302_initial_structure.sql",
     "domain": "misc",
-    "callers": [
-      {
-        "kind": "trigger",
-        "ref": "add_contractor_equipment_after_insert ON vehicles"
-      }
-    ],
+    "callers": [],
     "commentMentions": [],
     "supabaseRefs": []
   },
@@ -656,19 +618,30 @@
   {
     "kind": "function",
     "name": "get_daily_report_deviations",
-    "statement": "CREATE OR REPLACE FUNCTION public.get_daily_report_deviations(p_daily_report_id uuid, p_report_date date)\n RETURNS jsonb\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\nAS $function$\nDECLARE\n  v_day INT;\n  v_month INT;\n  v_year INT;\n  v_rows_with_deviations JSONB;\n  v_summary JSONB;\n  v_total_employee_deviations INT := 0;\n  v_total_equipment_deviations INT := 0;\n  v_total_duplicated_employees INT := 0;\n  v_total_duplicated_equipment INT := 0;\nBEGIN\n  v_day   := EXTRACT(DAY   FROM p_report_date)::INT;\n  v_month := EXTRACT(MONTH FROM p_report_date)::INT;\n  v_year  := EXTRACT(YEAR  FROM p_report_date)::INT;\n\n  WITH employee_devs AS (\n    SELECT\n      der.daily_report_row_id AS row_id,\n      der.employee_id,\n      COALESCE(e.firstname || ' ' || e.lastname, '—') AS employee_name,\n      COALESCE(e.cuil, '—') AS employee_cuil,\n      der.role::text AS role,\n      dr.customer_id,\n      (COUNT(*) OVER (PARTITION BY der.employee_id)) > 1 AS is_duplicated,\n      NOT EXISTS (\n        SELECT 1 FROM contractor_employee ce\n        WHERE ce.employee_id = der.employee_id\n          AND ce.contractor_id = dr.customer_id\n      ) AS is_unassigned_to_client,\n      ed.id IS NULL AS has_no_diagram,\n      CASE\n        WHEN ed.id IS NOT NULL THEN COALESCE(dt.work_active, true) = false\n        ELSE false\n      END AS is_non_work_day,\n      dt.name AS diagram_type_name\n    FROM dailyreportemployeerelations der\n    INNER JOIN dailyreportrows dr ON dr.id = der.daily_report_row_id\n    LEFT JOIN employees e ON e.id = der.employee_id\n    LEFT JOIN employees_diagram ed\n      ON ed.employee_id = der.employee_id\n      AND ed.day = v_day AND ed.month = v_month AND ed.year = v_year\n      AND (ed.is_active = true OR ed.is_active IS NULL)\n    LEFT JOIN diagram_type dt ON dt.id = ed.diagram_type\n    WHERE dr.daily_report_id = p_daily_report_id\n  ),\n  equipment_devs AS (\n    SELECT\n      deq.daily_report_row_id AS row_id,\n      -- Id efectivo de la relacion polimorfica: vehiculo XOR otro equipo.\n      COALESCE(deq.equipment_id, deq.other_equipment_id) AS equipment_id,\n      deq.other_equipment_id IS NOT NULL AS is_other_equipment,\n      -- Los otros equipos no tienen patente; se los identifica por serie/interno.\n      COALESCE(v.domain, '—') AS equipment_domain,\n      COALESCE(v.intern_number, oe.intern_number, '—') AS equipment_intern_number,\n      COALESCE(v.domain, oe.serial_number, oe.intern_number, '—') AS equipment_label,\n      -- Varios tipos vienen cargados con espacios al principio (\" Contenedor\")\n      NULLIF(TRIM(t.name), '') AS equipment_type,\n      COALESCE(v.condition::text, oe.condition::text) AS condition,\n      dr.customer_id,\n      (COUNT(*) OVER (PARTITION BY COALESCE(deq.equipment_id, deq.other_equipment_id))) > 1 AS is_duplicated,\n      -- Cada tipo de equipo tiene su propia pivote de afectacion a cliente.\n      CASE\n        WHEN deq.other_equipment_id IS NOT NULL THEN NOT EXISTS (\n          SELECT 1 FROM contractor_other_equipment coe\n          WHERE coe.equipment_id = deq.other_equipment_id\n            AND coe.contractor_id = dr.customer_id\n        )\n        ELSE NOT EXISTS (\n          SELECT 1 FROM contractor_equipment ce\n          WHERE ce.equipment_id = deq.equipment_id\n            AND ce.contractor_id = dr.customer_id\n        )\n      END AS is_unassigned_to_client\n    FROM dailyreportequipmentrelations deq\n    INNER JOIN dailyreportrows dr ON dr.id = deq.daily_report_row_id\n    LEFT JOIN vehicles v ON v.id = deq.equipment_id\n    LEFT JOIN other_equipment oe ON oe.id = deq.other_equipment_id\n    LEFT JOIN type t ON t.id = oe.type_id\n    WHERE dr.daily_report_id = p_daily_report_id\n      -- Ticket 698: otros equipos excluidos temporalmente de los desvios.\n      AND deq.other_equipment_id IS NULL\n  ),\n  emp_by_row AS (\n    SELECT\n      row_id,\n      jsonb_agg(\n        jsonb_build_object(\n          'employee_id', employee_id,\n          'employee_name', employee_name,\n          'employee_cuil', employee_cuil,\n          'role', COALESCE(role, 'sin_rol'),\n          'is_duplicated', is_duplicated,\n          'is_unassigned_to_client', is_unassigned_to_client,\n          'has_no_diagram', has_no_diagram,\n          'is_non_work_day', is_non_work_day,\n          'diagram_type_name', diagram_type_name\n        )\n      ) AS employee_deviations\n    FROM employee_devs\n    WHERE is_duplicated OR is_unassigned_to_client OR has_no_diagram OR is_non_work_day\n    GROUP BY row_id\n  ),\n  equip_by_row AS (\n    SELECT\n      row_id,\n      jsonb_agg(\n        jsonb_build_object(\n          'equipment_id', equipment_id,\n          'equipment_domain', equipment_domain,\n          'equipment_intern_number', equipment_intern_number,\n          'equipment_label', equipment_label,\n          'equipment_type', equipment_type,\n          'is_other_equipment', is_other_equipment,\n          'condition', COALESCE(condition, 'desconocido'),\n          'is_duplicated', is_duplicated,\n          'is_unassigned_to_client', is_unassigned_to_client\n        )\n      ) AS equipment_deviations\n    FROM equipment_devs\n    WHERE is_duplicated OR is_unassigned_to_client OR (condition IS NOT NULL AND condition <> 'operativo')\n    GROUP BY row_id\n  ),\n  -- Customer equipment per row\n  cust_equip_by_row AS (\n    SELECT\n      dcer.daily_report_row_id AS row_id,\n      jsonb_agg(\n        jsonb_build_object(\n          'name', COALESCE(ec.name, '—'),\n          'type', COALESCE(ec.type::text, '—')\n        )\n      ) AS customer_equipment\n    FROM dailyreport_customer_equipment_relations dcer\n    LEFT JOIN equipos_clientes ec ON ec.id = dcer.customer_equipment_id\n    INNER JOIN dailyreportrows dr ON dr.id = dcer.daily_report_row_id\n    WHERE dr.daily_report_id = p_daily_report_id\n    GROUP BY dcer.daily_report_row_id\n  ),\n  rows_data AS (\n    SELECT\n      dr.id AS row_id,\n      dr.customer_id,\n      c.name AS customer_name,\n      cs.service_name AS service_name,\n      si.item_name AS item_name,\n      dr.start_time,\n      dr.end_time,\n      dr.working_day,\n      dr.type_service::text AS type_service,\n      dr.status::text AS status,\n      dr.description,\n      sec.name AS sector_name,\n      ac.descripcion_corta AS area_name,\n      COALESCE(ebr.employee_deviations, '[]'::jsonb) AS employee_deviations,\n      COALESCE(eqr.equipment_deviations, '[]'::jsonb) AS equipment_deviations,\n      COALESCE(cer.customer_equipment, '[]'::jsonb) AS customer_equipment\n    FROM dailyreportrows dr\n    LEFT JOIN customers c ON c.id = dr.customer_id\n    LEFT JOIN customer_services cs ON cs.id = dr.service_id\n    LEFT JOIN service_items si ON si.id = dr.item_id\n    LEFT JOIN service_sectors ss ON ss.id = dr.sector_service_id\n    LEFT JOIN sectors sec ON sec.id = ss.sector_id\n    LEFT JOIN service_areas sa ON sa.id = dr.areas_service_id\n    LEFT JOIN areas_cliente ac ON ac.id = sa.area_id\n    LEFT JOIN emp_by_row ebr ON ebr.row_id = dr.id\n    LEFT JOIN equip_by_row eqr ON eqr.row_id = dr.id\n    LEFT JOIN cust_equip_by_row cer ON cer.row_id = dr.id\n    WHERE dr.daily_report_id = p_daily_report_id\n      AND (ebr.row_id IS NOT NULL OR eqr.row_id IS NOT NULL)\n  )\n  SELECT COALESCE(jsonb_agg(\n    jsonb_build_object(\n      'row_id', rd.row_id,\n      'customer_id', rd.customer_id,\n      'customer_name', COALESCE(rd.customer_name, '—'),\n      'service_name', COALESCE(rd.service_name, '—'),\n      'item_name', COALESCE(rd.item_name, '—'),\n      'start_time', rd.start_time,\n      'end_time', rd.end_time,\n      'working_day', rd.working_day,\n      'type_service', rd.type_service,\n      'status', rd.status,\n      'description', rd.description,\n      'sector_name', rd.sector_name,\n      'area_name', rd.area_name,\n      'customer_equipment', rd.customer_equipment,\n      'employee_deviations', rd.employee_deviations,\n      'equipment_deviations', rd.equipment_deviations\n    )\n    ORDER BY rd.customer_name, rd.service_name\n  ), '[]'::jsonb)\n  INTO v_rows_with_deviations\n  FROM rows_data rd;\n\n  -- CONTADORES\n  SELECT COUNT(*) INTO v_total_employee_deviations\n  FROM (\n    SELECT der.employee_id\n    FROM dailyreportemployeerelations der\n    INNER JOIN dailyreportrows dr ON dr.id = der.daily_report_row_id\n    LEFT JOIN employees_diagram ed\n      ON ed.employee_id = der.employee_id\n      AND ed.day = v_day AND ed.month = v_month AND ed.year = v_year\n      AND (ed.is_active = true OR ed.is_active IS NULL)\n    LEFT JOIN diagram_type dt ON dt.id = ed.diagram_type\n    WHERE dr.daily_report_id = p_daily_report_id\n      AND (\n        NOT EXISTS (\n          SELECT 1 FROM contractor_employee ce\n          WHERE ce.employee_id = der.employee_id AND ce.contractor_id = dr.customer_id\n        )\n        OR ed.id IS NULL\n        OR (ed.id IS NOT NULL AND COALESCE(dt.work_active, true) = false)\n      )\n  ) sub;\n\n  SELECT COUNT(*) INTO v_total_equipment_deviations\n  FROM (\n    SELECT deq.id\n    FROM dailyreportequipmentrelations deq\n    INNER JOIN dailyreportrows dr ON dr.id = deq.daily_report_row_id\n    LEFT JOIN vehicles v ON v.id = deq.equipment_id\n    LEFT JOIN other_equipment oe ON oe.id = deq.other_equipment_id\n    WHERE dr.daily_report_id = p_daily_report_id\n      -- Ticket 698: otros equipos excluidos temporalmente de los desvios.\n      AND deq.other_equipment_id IS NULL\n      AND (\n        CASE\n          WHEN deq.other_equipment_id IS NOT NULL THEN NOT EXISTS (\n            SELECT 1 FROM contractor_other_equipment coe\n            WHERE coe.equipment_id = deq.other_equipment_id AND coe.contractor_id = dr.customer_id\n          )\n          ELSE NOT EXISTS (\n            SELECT 1 FROM contractor_equipment ce\n            WHERE ce.equipment_id = deq.equipment_id AND ce.contractor_id = dr.customer_id\n          )\n        END\n        OR (\n          COALESCE(v.condition::text, oe.condition::text) IS NOT NULL\n          AND COALESCE(v.condition::text, oe.condition::text) <> 'operativo'\n        )\n      )\n  ) sub;\n\n  SELECT COUNT(DISTINCT employee_id) INTO v_total_duplicated_employees\n  FROM (\n    SELECT der.employee_id\n    FROM dailyreportemployeerelations der\n    INNER JOIN dailyreportrows dr ON dr.id = der.daily_report_row_id\n    WHERE dr.daily_report_id = p_daily_report_id\n    GROUP BY der.employee_id\n    HAVING COUNT(*) > 1\n  ) sub;\n\n  SELECT COUNT(DISTINCT equipment_id) INTO v_total_duplicated_equipment\n  FROM (\n    SELECT COALESCE(deq.equipment_id, deq.other_equipment_id) AS equipment_id\n    FROM dailyreportequipmentrelations deq\n    INNER JOIN dailyreportrows dr ON dr.id = deq.daily_report_row_id\n    WHERE dr.daily_report_id = p_daily_report_id\n      -- Ticket 698: otros equipos excluidos temporalmente de los desvios.\n      AND deq.other_equipment_id IS NULL\n    GROUP BY COALESCE(deq.equipment_id, deq.other_equipment_id)\n    HAVING COUNT(*) > 1\n  ) sub;\n\n  v_summary := jsonb_build_object(\n    'total_employee_deviations', v_total_employee_deviations,\n    'total_equipment_deviations', v_total_equipment_deviations,\n    'total_duplicated_employees', v_total_duplicated_employees,\n    'total_duplicated_equipment', v_total_duplicated_equipment,\n    'total_rows_with_deviations', jsonb_array_length(v_rows_with_deviations)\n  );\n\n  RETURN jsonb_build_object(\n    'rows_with_deviations', v_rows_with_deviations,\n    'summary', v_summary\n  );\nEND;\n$function$",
-    "source": "prisma/migrations/20260915190000_exclude_other_equipment_from_deviations/migration.sql",
+    "statement": "CREATE OR REPLACE FUNCTION public.get_daily_report_deviations(\n  p_daily_report_id uuid,\n  p_report_date date,\n  p_include_context boolean\n)\nRETURNS jsonb\nLANGUAGE plpgsql\nSTABLE\nSET \"TimeZone\" TO 'America/Argentina/Buenos_Aires'\nAS $function$\nDECLARE\n  v_day INT := EXTRACT(DAY FROM p_report_date)::INT;\n  v_month INT := EXTRACT(MONTH FROM p_report_date)::INT;\n  v_year INT := EXTRACT(YEAR FROM p_report_date)::INT;\n  v_result JSONB;\nBEGIN\n  WITH employee_devs AS (\n    SELECT\n      der.daily_report_row_id AS row_id,\n      der.employee_id,\n      COALESCE(e.firstname || ' ' || e.lastname, '—') AS employee_name,\n      COALESCE(e.cuil, '—') AS employee_cuil,\n      der.role::text AS role,\n      (COUNT(*) OVER (PARTITION BY der.employee_id)) > 1 AS is_duplicated,\n      NOT EXISTS (\n        SELECT 1 FROM contractor_employee ce\n        WHERE ce.employee_id = der.employee_id\n          AND ce.contractor_id = dr.customer_id\n      ) AS is_unassigned_to_client,\n      ed.id IS NULL AS has_no_diagram,\n      CASE\n        WHEN ed.id IS NOT NULL THEN COALESCE(dt.work_active, true) = false\n        ELSE false\n      END AS is_non_work_day,\n      dt.name AS diagram_type_name\n    FROM dailyreportemployeerelations der\n    INNER JOIN dailyreportrows dr ON dr.id = der.daily_report_row_id\n    LEFT JOIN employees e ON e.id = der.employee_id\n    LEFT JOIN employees_diagram ed\n      ON ed.employee_id = der.employee_id\n      AND ed.day = v_day AND ed.month = v_month AND ed.year = v_year\n      AND (ed.is_active = true OR ed.is_active IS NULL)\n    LEFT JOIN diagram_type dt ON dt.id = ed.diagram_type\n    WHERE dr.daily_report_id = p_daily_report_id\n  ),\n  equipment_devs AS (\n    SELECT\n      deq.daily_report_row_id AS row_id,\n      -- Id efectivo de la relacion polimorfica: vehiculo XOR otro equipo.\n      COALESCE(deq.equipment_id, deq.other_equipment_id) AS equipment_id,\n      deq.other_equipment_id IS NOT NULL AS is_other_equipment,\n      -- Los otros equipos no tienen patente; se los identifica por serie/interno.\n      COALESCE(v.domain, '—') AS equipment_domain,\n      COALESCE(v.intern_number, oe.intern_number, '—') AS equipment_intern_number,\n      COALESCE(v.domain, oe.serial_number, oe.intern_number, '—') AS equipment_label,\n      -- Varios tipos vienen cargados con espacios al principio (\" Contenedor\")\n      NULLIF(TRIM(t.name), '') AS equipment_type,\n      COALESCE(v.condition::text, oe.condition::text) AS condition,\n      (COUNT(*) OVER (PARTITION BY COALESCE(deq.equipment_id, deq.other_equipment_id))) > 1 AS is_duplicated,\n      -- Cada tipo de equipo tiene su propia pivote de afectacion a cliente.\n      CASE\n        WHEN deq.other_equipment_id IS NOT NULL THEN NOT EXISTS (\n          SELECT 1 FROM contractor_other_equipment coe\n          WHERE coe.equipment_id = deq.other_equipment_id\n            AND coe.contractor_id = dr.customer_id\n        )\n        ELSE NOT EXISTS (\n          SELECT 1 FROM contractor_equipment ce\n          WHERE ce.equipment_id = deq.equipment_id\n            AND ce.contractor_id = dr.customer_id\n        )\n      END AS is_unassigned_to_client\n    FROM dailyreportequipmentrelations deq\n    INNER JOIN dailyreportrows dr ON dr.id = deq.daily_report_row_id\n    LEFT JOIN vehicles v ON v.id = deq.equipment_id\n    LEFT JOIN other_equipment oe ON oe.id = deq.other_equipment_id\n    LEFT JOIN type t ON t.id = oe.type_id\n    WHERE dr.daily_report_id = p_daily_report_id\n      -- Ticket 698: otros equipos excluidos temporalmente de los desvios.\n      AND deq.other_equipment_id IS NULL\n  ),\n  emp_flagged AS (\n    SELECT * FROM employee_devs\n    WHERE is_duplicated OR is_unassigned_to_client OR has_no_diagram OR is_non_work_day\n  ),\n  equip_flagged AS (\n    SELECT * FROM equipment_devs\n    WHERE is_duplicated OR is_unassigned_to_client OR (condition IS NOT NULL AND condition <> 'operativo')\n  ),\n  emp_by_row AS (\n    SELECT\n      row_id,\n      jsonb_agg(\n        jsonb_build_object(\n          'employee_id', employee_id,\n          'employee_name', employee_name,\n          'employee_cuil', employee_cuil,\n          'role', COALESCE(role, 'sin_rol'),\n          'is_duplicated', is_duplicated,\n          'is_unassigned_to_client', is_unassigned_to_client,\n          'has_no_diagram', has_no_diagram,\n          'is_non_work_day', is_non_work_day,\n          'diagram_type_name', diagram_type_name\n        )\n      ) AS employee_deviations\n    FROM emp_flagged\n    GROUP BY row_id\n  ),\n  equip_by_row AS (\n    SELECT\n      row_id,\n      jsonb_agg(\n        jsonb_build_object(\n          'equipment_id', equipment_id,\n          'equipment_domain', equipment_domain,\n          'equipment_intern_number', equipment_intern_number,\n          'equipment_label', equipment_label,\n          'equipment_type', equipment_type,\n          'is_other_equipment', is_other_equipment,\n          'condition', COALESCE(condition, 'desconocido'),\n          'is_duplicated', is_duplicated,\n          'is_unassigned_to_client', is_unassigned_to_client\n        )\n      ) AS equipment_deviations\n    FROM equip_flagged\n    GROUP BY row_id\n  ),\n  -- Equipos del cliente por fila: solo los usa el mail (p_include_context = true).\n  cust_equip_by_row AS (\n    SELECT\n      dcer.daily_report_row_id AS row_id,\n      jsonb_agg(\n        jsonb_build_object(\n          'name', COALESCE(ec.name, '—'),\n          'type', COALESCE(ec.type::text, '—')\n        )\n      ) AS customer_equipment\n    FROM dailyreport_customer_equipment_relations dcer\n    LEFT JOIN equipos_clientes ec ON ec.id = dcer.customer_equipment_id\n    INNER JOIN dailyreportrows dr ON dr.id = dcer.daily_report_row_id\n    WHERE p_include_context\n      AND dr.daily_report_id = p_daily_report_id\n    GROUP BY dcer.daily_report_row_id\n  ),\n  -- Filas con algún desvío (de personal o de equipos).\n  flagged_rows AS (\n    SELECT row_id FROM emp_by_row\n    UNION\n    SELECT row_id FROM equip_by_row\n  ),\n  rows_data AS (\n    SELECT\n      dr.id AS row_id,\n      dr.customer_id,\n      c.name AS customer_name,\n      cs.service_name AS service_name,\n      si.item_name AS item_name,\n      dr.start_time,\n      dr.end_time,\n      dr.working_day,\n      dr.type_service::text AS type_service,\n      dr.status::text AS status,\n      dr.description,\n      sec.name AS sector_name,\n      ac.descripcion_corta AS area_name,\n      COALESCE(ebr.employee_deviations, '[]'::jsonb) AS employee_deviations,\n      COALESCE(eqr.equipment_deviations, '[]'::jsonb) AS equipment_deviations,\n      COALESCE(cer.customer_equipment, '[]'::jsonb) AS customer_equipment\n    FROM flagged_rows fr\n    INNER JOIN dailyreportrows dr ON dr.id = fr.row_id\n    -- Los joins de catálogos son solo de nombres: con p_include_context = false no se ejecutan.\n    LEFT JOIN customers c ON p_include_context AND c.id = dr.customer_id\n    LEFT JOIN customer_services cs ON p_include_context AND cs.id = dr.service_id\n    LEFT JOIN service_items si ON p_include_context AND si.id = dr.item_id\n    LEFT JOIN service_sectors ss ON p_include_context AND ss.id = dr.sector_service_id\n    LEFT JOIN sectors sec ON sec.id = ss.sector_id\n    LEFT JOIN service_areas sa ON p_include_context AND sa.id = dr.areas_service_id\n    LEFT JOIN areas_cliente ac ON ac.id = sa.area_id\n    LEFT JOIN emp_by_row ebr ON ebr.row_id = dr.id\n    LEFT JOIN equip_by_row eqr ON eqr.row_id = dr.id\n    LEFT JOIN cust_equip_by_row cer ON cer.row_id = dr.id\n  ),\n  counters AS (\n    SELECT\n      -- Mismas definiciones que los CTE de arriba; antes se repetían en 4 subconsultas.\n      (SELECT COUNT(*) FROM employee_devs\n        WHERE is_unassigned_to_client OR has_no_diagram OR is_non_work_day) AS total_employee_deviations,\n      (SELECT COUNT(*) FROM equipment_devs\n        WHERE is_unassigned_to_client OR (condition IS NOT NULL AND condition <> 'operativo')) AS total_equipment_deviations,\n      (SELECT COUNT(DISTINCT employee_id) FROM employee_devs WHERE is_duplicated) AS total_duplicated_employees,\n      (SELECT COUNT(DISTINCT equipment_id) FROM equipment_devs WHERE is_duplicated) AS total_duplicated_equipment\n  ),\n  rows_json AS (\n    SELECT COALESCE(jsonb_agg(\n      (jsonb_build_object(\n        'row_id', rd.row_id,\n        'employee_deviations', rd.employee_deviations,\n        'equipment_deviations', rd.equipment_deviations\n      ) || CASE WHEN p_include_context THEN jsonb_build_object(\n        'customer_id', rd.customer_id,\n        'customer_name', COALESCE(rd.customer_name, '—'),\n        'service_name', COALESCE(rd.service_name, '—'),\n        'item_name', COALESCE(rd.item_name, '—'),\n        'start_time', rd.start_time,\n        'end_time', rd.end_time,\n        'working_day', rd.working_day,\n        'type_service', rd.type_service,\n        'status', rd.status,\n        'description', rd.description,\n        'sector_name', rd.sector_name,\n        'area_name', rd.area_name,\n        'customer_equipment', rd.customer_equipment\n      ) ELSE '{}'::jsonb END)\n      -- El orden solo se usa en el mail; la UI indexa por row_id.\n      ORDER BY CASE WHEN p_include_context THEN rd.customer_name END,\n               CASE WHEN p_include_context THEN rd.service_name END\n    ), '[]'::jsonb) AS rows_with_deviations\n    FROM rows_data rd\n  )\n  SELECT jsonb_build_object(\n    'rows_with_deviations', rj.rows_with_deviations,\n    'summary', jsonb_build_object(\n      'total_employee_deviations', ct.total_employee_deviations,\n      'total_equipment_deviations', ct.total_equipment_deviations,\n      'total_duplicated_employees', ct.total_duplicated_employees,\n      'total_duplicated_equipment', ct.total_duplicated_equipment,\n      'total_rows_with_deviations', jsonb_array_length(rj.rows_with_deviations)\n    )\n  )\n  INTO v_result\n  FROM rows_json rj, counters ct;\n\n  RETURN v_result;\nEND;\n$function$",
+    "source": "prisma/migrations/20261020100000_deviations_single_pass/migration.sql",
     "domain": "daily-report",
     "callers": [
       {
         "kind": "src",
-        "ref": "src/features/Operaciones/PartesDiarios/actions/actions.ts:1089",
-        "via": "rpc"
-      },
+        "ref": "src/features/Operaciones/PartesDiarios/actions/validation.server.ts",
+        "via": "raw"
+      }
+    ],
+    "commentMentions": [],
+    "supabaseRefs": []
+  },
+  {
+    "kind": "function",
+    "name": "get_daily_report_deviations",
+    "statement": "CREATE OR REPLACE FUNCTION public.get_daily_report_deviations(p_daily_report_id uuid, p_report_date date)\nRETURNS jsonb\nLANGUAGE sql\nSTABLE\nSET \"TimeZone\" TO 'America/Argentina/Buenos_Aires'\nAS $function$\n  SELECT public.get_daily_report_deviations(p_daily_report_id, p_report_date, true);\n$function$",
+    "source": "prisma/migrations/20261020100000_deviations_single_pass/migration.sql",
+    "domain": "daily-report",
+    "callers": [
       {
-        "kind": "edge",
-        "ref": "supabase/functions/send-deviations-email/index.ts:555",
-        "via": "rpc"
+        "kind": "src",
+        "ref": "src/features/Jobs/jobs/daily-report-deviations.ts",
+        "via": "raw"
       }
     ],
     "commentMentions": [],
@@ -691,9 +664,7 @@
         "ref": "run_daily_indicators_for_all_companies"
       }
     ],
-    "commentMentions": [
-      "src/features/Dashboard/Estadisticas/SalaDeControl/actions/actions.server.ts:37"
-    ],
+    "commentMentions": ["src/features/Dashboard/Estadisticas/SalaDeControl/actions/actions.server.ts:37"],
     "supabaseRefs": []
   },
   {
@@ -814,9 +785,7 @@
     "source": "supabase/migrations/20251103211302_initial_structure.sql",
     "domain": "daily-report",
     "callers": [],
-    "commentMentions": [
-      "src/features/Dashboard/Principal/actions/actions.server.ts:425"
-    ],
+    "commentMentions": ["src/features/Dashboard/Principal/actions/actions.server.ts:425"],
     "supabaseRefs": [],
     "orphan": true
   },
@@ -879,9 +848,7 @@
         "ref": "collect_daily_indicators"
       }
     ],
-    "commentMentions": [
-      "src/features/Operaciones/PartesDiarios/actions/actions.ts:1979"
-    ],
+    "commentMentions": ["src/features/Operaciones/PartesDiarios/actions/actions.ts:1979"],
     "supabaseRefs": []
   },
   {
@@ -940,9 +907,7 @@
         "ref": "user_has_permission"
       }
     ],
-    "commentMentions": [
-      "src/features/UserPermissionsManager/actions.server.ts:468"
-    ],
+    "commentMentions": ["src/features/UserPermissionsManager/actions.server.ts:468"],
     "supabaseRefs": []
   },
   {
@@ -986,9 +951,7 @@
     "source": "supabase/migrations/20251103211302_initial_structure.sql",
     "domain": "misc",
     "callers": [],
-    "commentMentions": [
-      "src/features/Dashboard/Principal/actions/actions.server.ts:737"
-    ],
+    "commentMentions": ["src/features/Dashboard/Principal/actions/actions.server.ts:737"],
     "supabaseRefs": [],
     "orphan": true
   },
@@ -999,9 +962,7 @@
     "source": "supabase/migrations/20251103211302_initial_structure.sql",
     "domain": "daily-report",
     "callers": [],
-    "commentMentions": [
-      "src/features/Dashboard/Principal/actions/actions.server.ts:678"
-    ],
+    "commentMentions": ["src/features/Dashboard/Principal/actions/actions.server.ts:678"],
     "supabaseRefs": [],
     "orphan": true
   },
@@ -1062,9 +1023,7 @@
         "ref": "run_daily_indicators_for_all_companies"
       }
     ],
-    "commentMentions": [
-      "src/features/Dashboard/Estadisticas/RecursosHumanos/actions.server.ts:83"
-    ],
+    "commentMentions": ["src/features/Dashboard/Estadisticas/RecursosHumanos/actions.server.ts:83"],
     "supabaseRefs": []
   },
   {
@@ -1109,9 +1068,7 @@
         "ref": "run_daily_indicators_for_all_companies"
       }
     ],
-    "commentMentions": [
-      "src/features/Dashboard/Estadisticas/RecursosHumanos/actions.server.ts:113"
-    ],
+    "commentMentions": ["src/features/Dashboard/Estadisticas/RecursosHumanos/actions.server.ts:113"],
     "supabaseRefs": []
   },
   {
@@ -1214,9 +1171,7 @@
         "ref": "run_daily_indicators_for_all_companies"
       }
     ],
-    "commentMentions": [
-      "src/features/Dashboard/Estadisticas/RecursosHumanos/actions.server.ts:167"
-    ],
+    "commentMentions": ["src/features/Dashboard/Estadisticas/RecursosHumanos/actions.server.ts:167"],
     "supabaseRefs": []
   },
   {
@@ -1256,9 +1211,7 @@
         "ref": "run_daily_indicators_for_all_companies"
       }
     ],
-    "commentMentions": [
-      "src/features/Dashboard/Estadisticas/RecursosHumanos/actions.server.ts:195"
-    ],
+    "commentMentions": ["src/features/Dashboard/Estadisticas/RecursosHumanos/actions.server.ts:195"],
     "supabaseRefs": []
   },
   {
@@ -1298,9 +1251,7 @@
         "ref": "run_daily_indicators_for_all_companies"
       }
     ],
-    "commentMentions": [
-      "src/features/Dashboard/Estadisticas/RecursosHumanos/actions.server.ts:219"
-    ],
+    "commentMentions": ["src/features/Dashboard/Estadisticas/RecursosHumanos/actions.server.ts:219"],
     "supabaseRefs": []
   },
   {
@@ -1324,20 +1275,7 @@
     "statement": "CREATE OR REPLACE FUNCTION public.log_dailyreport_changes()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$DECLARE\n    user_id UUID;\n    changed_fields JSONB;\n    readable_data JSONB;\n    row_exists BOOLEAN;\n    v_reassignment_reason TEXT; -- Variable para capturar el motivo de reasignación\nBEGIN\n    -- Intentar obtener el motivo de reasignación (si existe)\n    BEGIN\n        v_reassignment_reason := current_setting('myapp.reassignment_reason', true);\n        -- Agregar log para depuración\n        RAISE NOTICE 'Valor de reassignment_reason obtenido: %', v_reassignment_reason;\n    EXCEPTION WHEN OTHERS THEN\n        v_reassignment_reason := NULL;\n        RAISE NOTICE 'Error al obtener reassignment_reason, establecido a NULL';\n    END;\n\n    -- Get the current user ID from the request context\n    BEGIN\n        user_id := (current_setting('request.jwt.claims', true)::json->>'sub')::UUID;\n        RAISE NOTICE 'ID de usuario obtenido: %', user_id;\n    EXCEPTION WHEN OTHERS THEN\n        user_id := NULL;\n        RAISE NOTICE 'Error al obtener ID de usuario, establecido a NULL';\n    END;\n    \n    IF TG_OP = 'UPDATE' THEN\n        -- Verify the row exists before proceeding\n        SELECT EXISTS(SELECT 1 FROM dailyreportrows WHERE id = NEW.id) INTO row_exists;\n        \n        IF NOT row_exists THEN\n            -- Skip logging if row doesn't exist\n            RAISE NOTICE 'Fila no existe, omitiendo';\n            RETURN NEW;\n        END IF;\n    \n        changed_fields := '{}'::JSONB;\n        \n        IF NEW.customer_id IS DISTINCT FROM OLD.customer_id THEN\n            changed_fields := jsonb_set(changed_fields, '{customer_id}', \n                jsonb_build_object('old', OLD.customer_id, 'new', NEW.customer_id));\n        END IF;\n        \n        IF NEW.service_id IS DISTINCT FROM OLD.service_id THEN\n            changed_fields := jsonb_set(changed_fields, '{service_id}', \n                jsonb_build_object('old', OLD.service_id, 'new', NEW.service_id));\n        END IF;\n\n        IF NEW.completed_night IS DISTINCT FROM OLD.completed_night THEN\n            changed_fields := jsonb_set(changed_fields, '{completed_night}', \n                jsonb_build_object('old', OLD.completed_night, 'new', NEW.completed_night));\n        END IF;\n\n        IF NEW.completed_day IS DISTINCT FROM OLD.completed_day THEN\n            changed_fields := jsonb_set(changed_fields, '{completed_day}', \n                jsonb_build_object('old', OLD.completed_day, 'new', NEW.completed_day));\n        END IF;\n        \nIF NEW.item_id IS DISTINCT FROM OLD.item_id THEN\n    changed_fields := jsonb_set(changed_fields, '{item_id}', \n        jsonb_build_object(\n            'old',(SELECT item_name FROM service_items WHERE id = OLD.item_id),\n            'new', (SELECT item_name FROM service_items WHERE id = NEW.item_id)\n        ));\nEND IF;\n        \n        IF NEW.working_day IS DISTINCT FROM OLD.working_day THEN\n            changed_fields := jsonb_set(changed_fields, '{working_day}', \n                jsonb_build_object('old', OLD.working_day, 'new', NEW.working_day));\n        END IF;\n        \n        IF NEW.start_time IS DISTINCT FROM OLD.start_time THEN\n            changed_fields := jsonb_set(changed_fields, '{start_time}', \n                jsonb_build_object('old', OLD.start_time::TEXT, 'new', NEW.start_time::TEXT));\n        END IF;\n        \n        IF NEW.end_time IS DISTINCT FROM OLD.end_time THEN\n            changed_fields := jsonb_set(changed_fields, '{end_time}', \n                jsonb_build_object('old', OLD.end_time::TEXT, 'new', NEW.end_time::TEXT));\n        END IF;\n        \n        IF NEW.description IS DISTINCT FROM OLD.description THEN\n            changed_fields := jsonb_set(changed_fields, '{description}', \n                jsonb_build_object('old', OLD.description, 'new', NEW.description));\n        END IF;\n        \n        IF NEW.status IS DISTINCT FROM OLD.status THEN\n            changed_fields := jsonb_set(changed_fields, '{status}', \n                jsonb_build_object('old', OLD.status::TEXT, 'new', NEW.status::TEXT));\n        END IF;\n\n        -- Eliminados los bloques que comparan employee_id y equipment_id porque no existen en esta tabla\n        \n        IF NEW.sector_service_id IS DISTINCT FROM OLD.sector_service_id THEN\n            changed_fields := jsonb_set(changed_fields, '{sector_service_id}', \n                jsonb_build_object('old', OLD.sector_service_id, 'new', NEW.sector_service_id));\n        END IF;\n        \n        IF NEW.areas_service_id IS DISTINCT FROM OLD.areas_service_id THEN\n            changed_fields := jsonb_set(changed_fields, '{areas_service_id}', \n                jsonb_build_object('old', OLD.areas_service_id, 'new', NEW.areas_service_id));\n        END IF;\n        \n        IF NEW.remit_number IS DISTINCT FROM OLD.remit_number THEN\n            changed_fields := jsonb_set(changed_fields, '{remit_number}', \n                jsonb_build_object('old', OLD.remit_number, 'new', NEW.remit_number));\n        END IF;\n        \n        IF NEW.cancel_reason IS DISTINCT FROM OLD.cancel_reason THEN\n            changed_fields := jsonb_set(changed_fields, '{cancel_reason}', \n                jsonb_build_object('old', OLD.cancel_reason, 'new', NEW.cancel_reason));\n        END IF;\n        \n        IF NEW.type_service IS DISTINCT FROM OLD.type_service THEN\n            changed_fields := jsonb_set(changed_fields, '{type_service}', \n                jsonb_build_object('old', OLD.type_service::TEXT, 'new', NEW.type_service::TEXT));\n        END IF;\n        \n        IF changed_fields != '{}'::JSONB THEN\n            BEGIN\n                SELECT jsonb_build_object(\n                    'customer_name', (SELECT name FROM customers WHERE id = NEW.customer_id),\n                    'service_name', (SELECT service_name FROM customer_services WHERE id = NEW.service_id),\n                    'item_name', (SELECT item_name FROM service_items WHERE id = NEW.item_id),\n                    'working_day', NEW.working_day,\n                    'status', NEW.status,\n                    'type_service', NEW.type_service\n                ) INTO readable_data;\n                \n                RAISE NOTICE 'Insertando en dailyreportrows_history. Action: UPDATE, Reason: %', v_reassignment_reason;\n                \n                INSERT INTO dailyreportrows_history (\n                    daily_report_row_id,\n                    related_table,\n                    related_id,\n                    action_type,\n                    changed_fields,\n                    changed_data,\n                    changed_by,\n                    reassignment_reason\n                ) VALUES (\n                    NEW.id,\n                    TG_TABLE_NAME,\n                    NEW.id,\n                    'UPDATE',\n                    changed_fields,\n                    readable_data,\n                    user_id,\n                    v_reassignment_reason\n                );\n                \n                -- Limpiar la variable de sesión después de usarla\n                IF v_reassignment_reason IS NOT NULL THEN\n                    PERFORM set_config('myapp.reassignment_reason', NULL, false);\n                    RAISE NOTICE 'Variable de sesión de motivo de reasignación limpiada';\n                END IF;\n                \n            EXCEPTION WHEN foreign_key_violation THEN\n                RAISE NOTICE 'Excepción de clave foránea en INSERT';\n                NULL;\n            WHEN OTHERS THEN\n                RAISE NOTICE 'Error durante la inserción: %', SQLERRM;\n            END;\n        END IF;\n        \n    ELSIF TG_OP = 'INSERT' THEN\n        BEGIN\n            SELECT jsonb_build_object(\n                'customer_name', (SELECT name FROM customers WHERE id = NEW.customer_id),\n                'service_name', (SELECT service_name FROM customer_services WHERE id = NEW.service_id),\n                'item_name', (SELECT item_name FROM service_items WHERE id = NEW.item_id),\n                'working_day', NEW.working_day,\n                'status', NEW.status,\n                'type_service', NEW.type_service\n            ) INTO readable_data;\n            \n            RAISE NOTICE 'Insertando en dailyreportrows_history. Action: CREATE';\n            \n            INSERT INTO dailyreportrows_history (\n                daily_report_row_id,\n                related_table,\n                related_id,\n                action_type,\n                changed_fields,\n                changed_data,\n                changed_by,\n                reassignment_reason\n            ) VALUES (\n                NEW.id,\n                TG_TABLE_NAME,\n                NEW.id,\n                'CREATE',\n                '{}'::JSONB,\n                readable_data,\n                user_id,\n                NULL -- No hay motivo de reasignación para nuevas filas\n            );\n        EXCEPTION WHEN foreign_key_violation THEN\n            RAISE NOTICE 'Excepción de clave foránea en INSERT para CREATE';\n            NULL;\n        END;\n        \n    ELSIF TG_OP = 'DELETE' THEN\n        BEGIN\n            SELECT EXISTS(SELECT 1 FROM dailyreportrows_history WHERE daily_report_row_id = OLD.id) INTO row_exists;\n            \n            IF row_exists THEN\n                SELECT jsonb_build_object(\n                    'customer_name', (SELECT name FROM customers WHERE id = OLD.customer_id),\n                    'service_name', (SELECT service_name FROM customer_services WHERE id = OLD.service_id),\n                    'item_name', (SELECT item_name FROM service_items WHERE id = OLD.item_id),\n                    'working_day', OLD.working_day,\n                    'status', OLD.status,\n                    'type_service', OLD.type_service\n                ) INTO readable_data;\n                \n                RAISE NOTICE 'Insertando en dailyreportrows_history. Action: DELETE';\n                \n                INSERT INTO dailyreportrows_history (\n                    daily_report_row_id,\n                    related_table,\n                    related_id,\n                    action_type,\n                    changed_fields,\n                    changed_data,\n                    changed_by,\n                    reassignment_reason\n                ) VALUES (\n                    OLD.id,\n                    TG_TABLE_NAME,\n                    OLD.id,\n                    'DELETE',\n                    '{}'::JSONB,\n                    readable_data,\n                    user_id,\n                    NULL -- No hay motivo de reasignación para eliminaciones\n                );\n            END IF;\n        EXCEPTION WHEN foreign_key_violation THEN\n            RAISE NOTICE 'Excepción de clave foránea en INSERT para DELETE';\n            NULL;\n        END;\n    END IF;\n    \n    RETURN COALESCE(NEW, OLD);\nEND;$function$",
     "source": "supabase/migrations/20260202113926_fixing-maintenance-flow.sql",
     "domain": "daily-report",
-    "callers": [
-      {
-        "kind": "trigger",
-        "ref": "tr_dailyreportrows_history_after_insert ON dailyreportrows"
-      },
-      {
-        "kind": "trigger",
-        "ref": "tr_dailyreportrows_history_before_delete ON dailyreportrows"
-      },
-      {
-        "kind": "trigger",
-        "ref": "tr_dailyreportrows_history_before_update ON dailyreportrows"
-      }
-    ],
+    "callers": [],
     "commentMentions": [],
     "supabaseRefs": []
   },
@@ -1413,12 +1351,8 @@
         "ref": "trigger_log_maintenance_order_activity ON maintenance_orders"
       }
     ],
-    "commentMentions": [
-      "src/features/Mantenimiento/MaintenanceOrders/pdf/report-data.ts:460"
-    ],
-    "supabaseRefs": [
-      "auth.uid()"
-    ]
+    "commentMentions": ["src/features/Mantenimiento/MaintenanceOrders/pdf/report-data.ts:460"],
+    "supabaseRefs": ["auth.uid()"]
   },
   {
     "kind": "function",
@@ -1426,12 +1360,7 @@
     "statement": "CREATE OR REPLACE FUNCTION public.log_reassignment_reason_before_update()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nDECLARE\n    reason TEXT;\nBEGIN\n    BEGIN\n        reason := current_setting('myapp.reassignment_reason', true);\n        RAISE LOG 'BEFORE UPDATE: reassignment_reason = %', reason;\n    EXCEPTION WHEN OTHERS THEN\n        RAISE LOG 'BEFORE UPDATE: Error obteniendo reassignment_reason';\n    END;\n    \n    RETURN NEW;\nEND;\n$function$",
     "source": "supabase/migrations/20260202113926_fixing-maintenance-flow.sql",
     "domain": "misc",
-    "callers": [
-      {
-        "kind": "trigger",
-        "ref": "before_update_log_reason ON dailyreportrows"
-      }
-    ],
+    "callers": [],
     "commentMentions": [],
     "supabaseRefs": []
   },
@@ -1448,9 +1377,7 @@
       }
     ],
     "commentMentions": [],
-    "supabaseRefs": [
-      "auth.uid()"
-    ]
+    "supabaseRefs": ["auth.uid()"]
   },
   {
     "kind": "function",
@@ -1586,9 +1513,7 @@
     "domain": "misc",
     "callers": [],
     "commentMentions": [],
-    "supabaseRefs": [
-      "net.http_post"
-    ],
+    "supabaseRefs": ["net.http_post"],
     "orphan": true
   },
   {
@@ -1616,9 +1541,7 @@
         "ref": "update_status_trigger"
       }
     ],
-    "commentMentions": [
-      "src/features/Documentacion/TiposDocumentos/actions/actions.server.ts:1302"
-    ],
+    "commentMentions": ["src/features/Documentacion/TiposDocumentos/actions/actions.server.ts:1302"],
     "supabaseRefs": []
   },
   {
@@ -1790,16 +1713,7 @@
     "statement": "CREATE OR REPLACE FUNCTION public.trg_controlar_alertas_employees()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  IF current_setting('myapp.inside_controlar_alertas', true) = 'true' THEN\n    RETURN NEW;\n  END IF;\n  \n  PERFORM set_config('myapp.inside_controlar_alertas', 'true', true);\n  PERFORM controlar_alertas_documentos_single_employee(NEW.id, NEW.company_id);\n  PERFORM set_config('myapp.inside_controlar_alertas', 'false', true);\n  \n  RETURN NEW;\nEND;\n$function$",
     "source": "supabase/migrations/20260202113926_fixing-maintenance-flow.sql",
     "domain": "documents",
-    "callers": [
-      {
-        "kind": "trigger",
-        "ref": "controlar_alertas_employees ON employees"
-      },
-      {
-        "kind": "trigger",
-        "ref": "controlar_alertas_employees_insert ON employees"
-      }
-    ],
+    "callers": [],
     "commentMentions": [],
     "supabaseRefs": []
   },
@@ -1809,16 +1723,7 @@
     "statement": "CREATE OR REPLACE FUNCTION public.trg_controlar_alertas_vehicles()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  IF current_setting('myapp.inside_controlar_alertas_vehicles', true) = 'true' THEN\n    RETURN NEW;\n  END IF;\n  \n  PERFORM set_config('myapp.inside_controlar_alertas_vehicles', 'true', true);\n  PERFORM controlar_alertas_documentos_single_vehicle(NEW.id, NEW.company_id);\n  PERFORM set_config('myapp.inside_controlar_alertas_vehicles', 'false', true);\n  \n  RETURN NEW;\nEND;\n$function$",
     "source": "supabase/migrations/20260202113926_fixing-maintenance-flow.sql",
     "domain": "documents",
-    "callers": [
-      {
-        "kind": "trigger",
-        "ref": "controlar_alertas_vehicles ON vehicles"
-      },
-      {
-        "kind": "trigger",
-        "ref": "controlar_alertas_vehicles_insert ON vehicles"
-      }
-    ],
+    "callers": [],
     "commentMentions": [],
     "supabaseRefs": []
   },
@@ -1828,12 +1733,7 @@
     "statement": "CREATE OR REPLACE FUNCTION public.trg_document_types_insert()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  IF NEW.mandatory THEN\n    IF NEW.applies = 'Persona' THEN\n      PERFORM controlar_alertas_single_document_all_employees(NEW.id);\n    ELSIF NEW.applies = 'Equipos' THEN\n      PERFORM controlar_alertas_single_document_all_vehicles(NEW.id);\n    END IF;\n  END IF;\n  RETURN NEW;\nEND;\n$function$",
     "source": "supabase/migrations/20260202113926_fixing-maintenance-flow.sql",
     "domain": "documents",
-    "callers": [
-      {
-        "kind": "trigger",
-        "ref": "document_types_after_insert ON document_types"
-      }
-    ],
+    "callers": [],
     "commentMentions": [],
     "supabaseRefs": []
   },
@@ -1843,12 +1743,7 @@
     "statement": "CREATE OR REPLACE FUNCTION trg_document_types_update()\nRETURNS trigger AS $$\nBEGIN\n  -- Si se esta desactivando, no reconciliar (la app maneja la limpieza)\n  IF NEW.is_active = false THEN\n    RETURN NEW;\n  END IF;\n  -- Si se esta reactivando, no reconciliar (la app maneja la creacion de alertas)\n  IF OLD.is_active = false AND NEW.is_active = true THEN\n    RETURN NEW;\n  END IF;\n  -- Reconciliacion normal: solo si tipo esta activo y cambio mandatory/conditions\n  IF NEW.mandatory OR (OLD.mandatory AND NEW.conditions IS DISTINCT FROM OLD.conditions) THEN\n    IF NEW.applies = 'Persona' THEN\n      PERFORM controlar_alertas_single_document_all_employees(NEW.id);\n    ELSIF NEW.applies = 'Equipos' THEN\n      PERFORM controlar_alertas_single_document_all_vehicles(NEW.id);\n    END IF;\n  END IF;\n  RETURN NEW;\nEND;\n$$ LANGUAGE plpgsql",
     "source": "prisma/migrations/20260313120000_fix_document_types_triggers/migration.sql",
     "domain": "documents",
-    "callers": [
-      {
-        "kind": "trigger",
-        "ref": "document_types_after_update ON document_types"
-      }
-    ],
+    "callers": [],
     "commentMentions": [],
     "supabaseRefs": []
   },
@@ -1858,12 +1753,7 @@
     "statement": "CREATE OR REPLACE FUNCTION public.update_company_by_defect()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n    IF NEW.by_defect = true THEN\n        UPDATE company\n        SET by_defect = false\n        WHERE owner_id = NEW.owner_id AND id <> NEW.id;\n    END IF;\n    RETURN NEW;\nEND;\n$function$",
     "source": "supabase/migrations/20251103211302_initial_structure.sql",
     "domain": "misc",
-    "callers": [
-      {
-        "kind": "trigger",
-        "ref": "update_company_by_defect_trigger ON company"
-      }
-    ],
+    "callers": [],
     "commentMentions": [],
     "supabaseRefs": []
   },
@@ -1899,32 +1789,7 @@
     "statement": "CREATE OR REPLACE FUNCTION public.update_status_trigger()\nRETURNS trigger\nLANGUAGE plpgsql\nAS $function$\nDECLARE\n  ids uuid[];\nBEGIN\n  SELECT array_agg(DISTINCT applies) INTO ids\n  FROM affected_rows\n  WHERE applies IS NOT NULL;\n\n  IF ids IS NULL THEN\n    RETURN NULL;\n  END IF;\n\n  IF TG_TABLE_NAME = 'documents_employees' THEN\n    PERFORM public.recalcular_status_documentacion(ids, 'Persona');\n  ELSIF TG_TABLE_NAME = 'documents_equipment' THEN\n    PERFORM public.recalcular_status_documentacion(ids, 'Equipos');\n  END IF;\n\n  RETURN NULL;\nEND;\n$function$",
     "source": "prisma/migrations/20260917120000_ticket_712_unificar_status_documentacion/migration.sql",
     "domain": "documents",
-    "callers": [
-      {
-        "kind": "trigger",
-        "ref": "trg_update_documents_employees ON documents_employees"
-      },
-      {
-        "kind": "trigger",
-        "ref": "trg_update_documents_employees_del ON documents_employees"
-      },
-      {
-        "kind": "trigger",
-        "ref": "trg_update_documents_employees_ins ON documents_employees"
-      },
-      {
-        "kind": "trigger",
-        "ref": "trg_update_documents_equipment ON documents_equipment"
-      },
-      {
-        "kind": "trigger",
-        "ref": "trg_update_documents_equipment_del ON documents_equipment"
-      },
-      {
-        "kind": "trigger",
-        "ref": "trg_update_documents_equipment_ins ON documents_equipment"
-      }
-    ],
+    "callers": [],
     "commentMentions": [],
     "supabaseRefs": []
   },
@@ -1934,20 +1799,7 @@
     "statement": "CREATE OR REPLACE FUNCTION public.update_updated_at_column()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  NEW.updated_at = NOW();\n  RETURN NEW;\nEND;\n$function$",
     "source": "supabase/migrations/20260202113926_fixing-maintenance-flow.sql",
     "domain": "misc",
-    "callers": [
-      {
-        "kind": "trigger",
-        "ref": "update_empleado_aptitudes_updated_at ON empleado_aptitudes"
-      },
-      {
-        "kind": "trigger",
-        "ref": "update_maintenance_orders_updated_at ON maintenance_orders"
-      },
-      {
-        "kind": "trigger",
-        "ref": "update_maintenance_requests_updated_at ON maintenance_requests"
-      }
-    ],
+    "callers": [],
     "commentMentions": [],
     "supabaseRefs": []
   },
@@ -1968,12 +1820,7 @@
     "statement": "CREATE OR REPLACE FUNCTION public.update_work_order_item_repairs_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  NEW.updated_at = now();\n  RETURN NEW;\nEND;\n$function$",
     "source": "supabase/migrations/20260202113926_fixing-maintenance-flow.sql",
     "domain": "maintenance",
-    "callers": [
-      {
-        "kind": "trigger",
-        "ref": "trigger_update_work_order_item_repairs_updated_at ON work_order_item_repairs"
-      }
-    ],
+    "callers": [],
     "commentMentions": [],
     "supabaseRefs": []
   },
@@ -1983,16 +1830,7 @@
     "statement": "CREATE OR REPLACE FUNCTION public.update_work_orders_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n    NEW.updated_at = NOW();\n    RETURN NEW;\nEND;\n$function$",
     "source": "supabase/migrations/20260202113926_fixing-maintenance-flow.sql",
     "domain": "maintenance",
-    "callers": [
-      {
-        "kind": "trigger",
-        "ref": "trigger_work_order_items_updated_at ON work_order_items"
-      },
-      {
-        "kind": "trigger",
-        "ref": "trigger_work_orders_updated_at ON work_orders"
-      }
-    ],
+    "callers": [],
     "commentMentions": [],
     "supabaseRefs": []
   },
@@ -2061,30 +1899,6 @@
   },
   {
     "kind": "trigger",
-    "name": "update_company_by_defect_trigger",
-    "table": "company",
-    "triggerFunction": "update_company_by_defect",
-    "statement": "CREATE TRIGGER update_company_by_defect_trigger AFTER INSERT OR UPDATE OF by_defect ON public.company FOR EACH ROW EXECUTE FUNCTION update_company_by_defect()",
-    "source": "supabase/migrations/20251103211302_initial_structure.sql",
-    "domain": "misc",
-    "callers": [],
-    "commentMentions": [],
-    "supabaseRefs": []
-  },
-  {
-    "kind": "trigger",
-    "name": "after_service_update",
-    "table": "customer_services",
-    "triggerFunction": "deactivate_service_items",
-    "statement": "CREATE TRIGGER after_service_update AFTER UPDATE OF is_active ON public.customer_services FOR EACH ROW WHEN ((old.is_active IS DISTINCT FROM new.is_active)) EXECUTE FUNCTION deactivate_service_items()",
-    "source": "supabase/migrations/20251103211302_initial_structure.sql",
-    "domain": "misc",
-    "callers": [],
-    "commentMentions": [],
-    "supabaseRefs": []
-  },
-  {
-    "kind": "trigger",
     "name": "tr_dailyreport_customer_equipment_relations_history",
     "table": "dailyreport_customer_equipment_relations",
     "triggerFunction": "log_customer_equipment_relations_changes",
@@ -2121,46 +1935,10 @@
   },
   {
     "kind": "trigger",
-    "name": "before_update_log_reason",
-    "table": "dailyreportrows",
-    "triggerFunction": "log_reassignment_reason_before_update",
-    "statement": "CREATE TRIGGER before_update_log_reason BEFORE UPDATE ON public.dailyreportrows FOR EACH ROW EXECUTE FUNCTION log_reassignment_reason_before_update()",
-    "source": "supabase/migrations/20251103211302_initial_structure.sql",
-    "domain": "daily-report",
-    "callers": [],
-    "commentMentions": [],
-    "supabaseRefs": []
-  },
-  {
-    "kind": "trigger",
-    "name": "tr_after_dailyreportrows_update_optimized",
-    "table": "dailyreportrows",
-    "triggerFunction": "after_dailyreportrows_update_optimized",
-    "statement": "CREATE TRIGGER tr_after_dailyreportrows_update_optimized AFTER INSERT OR DELETE OR UPDATE ON public.dailyreportrows FOR EACH ROW EXECUTE FUNCTION after_dailyreportrows_update_optimized()",
-    "source": "supabase/migrations/20251104195732_confirmed_by_and_dailyreport_perfomance.sql",
-    "domain": "daily-report",
-    "callers": [],
-    "commentMentions": [],
-    "supabaseRefs": []
-  },
-  {
-    "kind": "trigger",
     "name": "tr_dailyreportrows_history_after_insert",
     "table": "dailyreportrows",
-    "triggerFunction": "log_dailyreport_changes",
-    "statement": "CREATE TRIGGER tr_dailyreportrows_history_after_insert AFTER INSERT ON public.dailyreportrows FOR EACH ROW EXECUTE FUNCTION log_dailyreport_changes()",
-    "source": "supabase/migrations/20251103211302_initial_structure.sql",
-    "domain": "daily-report",
-    "callers": [],
-    "commentMentions": [],
-    "supabaseRefs": []
-  },
-  {
-    "kind": "trigger",
-    "name": "tr_dailyreportrows_history_before_delete",
-    "table": "dailyreportrows",
-    "triggerFunction": "log_dailyreport_changes",
-    "statement": "CREATE TRIGGER tr_dailyreportrows_history_before_delete BEFORE DELETE ON public.dailyreportrows FOR EACH ROW EXECUTE FUNCTION log_dailyreport_changes()",
+    "triggerFunction": "log_dailyreportrows_insert_history",
+    "statement": "CREATE TRIGGER tr_dailyreportrows_history_after_insert AFTER INSERT ON public.dailyreportrows REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION public.log_dailyreportrows_insert_history()",
     "source": "supabase/migrations/20251103211302_initial_structure.sql",
     "domain": "daily-report",
     "callers": [],
@@ -2171,34 +1949,10 @@
     "kind": "trigger",
     "name": "tr_dailyreportrows_history_before_update",
     "table": "dailyreportrows",
-    "triggerFunction": "log_dailyreport_changes",
-    "statement": "CREATE TRIGGER tr_dailyreportrows_history_before_update BEFORE UPDATE ON public.dailyreportrows FOR EACH ROW EXECUTE FUNCTION log_dailyreport_changes()",
+    "triggerFunction": "log_dailyreportrows_update_history",
+    "statement": "CREATE TRIGGER tr_dailyreportrows_history_before_update AFTER UPDATE ON public.dailyreportrows REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION public.log_dailyreportrows_update_history()",
     "source": "supabase/migrations/20251103211302_initial_structure.sql",
     "domain": "daily-report",
-    "callers": [],
-    "commentMentions": [],
-    "supabaseRefs": []
-  },
-  {
-    "kind": "trigger",
-    "name": "document_types_after_insert",
-    "table": "document_types",
-    "triggerFunction": "trg_document_types_insert",
-    "statement": "CREATE TRIGGER document_types_after_insert AFTER INSERT ON public.document_types FOR EACH ROW EXECUTE FUNCTION trg_document_types_insert()",
-    "source": "supabase/migrations/20251103211302_initial_structure.sql",
-    "domain": "documents",
-    "callers": [],
-    "commentMentions": [],
-    "supabaseRefs": []
-  },
-  {
-    "kind": "trigger",
-    "name": "document_types_after_update",
-    "table": "document_types",
-    "triggerFunction": "trg_document_types_update",
-    "statement": "CREATE TRIGGER document_types_after_update AFTER UPDATE ON public.document_types FOR EACH ROW EXECUTE FUNCTION trg_document_types_update()",
-    "source": "supabase/migrations/20251103211302_initial_structure.sql",
-    "domain": "documents",
     "callers": [],
     "commentMentions": [],
     "supabaseRefs": []
@@ -2209,42 +1963,6 @@
     "table": "documents_employees",
     "triggerFunction": "log_document_employee_changes",
     "statement": "CREATE TRIGGER document_employee_changes_trigger\n  AFTER INSERT ON public.documents_employees\n  REFERENCING NEW TABLE AS affected_rows\n  FOR EACH STATEMENT EXECUTE FUNCTION public.log_document_employee_changes()",
-    "source": "prisma/migrations/20260629120100_optimize_document_triggers/migration.sql",
-    "domain": "documents",
-    "callers": [],
-    "commentMentions": [],
-    "supabaseRefs": []
-  },
-  {
-    "kind": "trigger",
-    "name": "trg_update_documents_employees",
-    "table": "documents_employees",
-    "triggerFunction": "update_status_trigger",
-    "statement": "CREATE TRIGGER trg_update_documents_employees\n  AFTER UPDATE ON public.documents_employees\n  REFERENCING NEW TABLE AS affected_rows\n  FOR EACH STATEMENT EXECUTE FUNCTION public.update_status_trigger()",
-    "source": "prisma/migrations/20260629120100_optimize_document_triggers/migration.sql",
-    "domain": "documents",
-    "callers": [],
-    "commentMentions": [],
-    "supabaseRefs": []
-  },
-  {
-    "kind": "trigger",
-    "name": "trg_update_documents_employees_del",
-    "table": "documents_employees",
-    "triggerFunction": "update_status_trigger",
-    "statement": "CREATE TRIGGER trg_update_documents_employees_del\n  AFTER DELETE ON public.documents_employees\n  REFERENCING OLD TABLE AS affected_rows\n  FOR EACH STATEMENT EXECUTE FUNCTION public.update_status_trigger()",
-    "source": "prisma/migrations/20260917120000_ticket_712_unificar_status_documentacion/migration.sql",
-    "domain": "documents",
-    "callers": [],
-    "commentMentions": [],
-    "supabaseRefs": []
-  },
-  {
-    "kind": "trigger",
-    "name": "trg_update_documents_employees_ins",
-    "table": "documents_employees",
-    "triggerFunction": "update_status_trigger",
-    "statement": "CREATE TRIGGER trg_update_documents_employees_ins\n  AFTER INSERT ON public.documents_employees\n  REFERENCING NEW TABLE AS affected_rows\n  FOR EACH STATEMENT EXECUTE FUNCTION public.update_status_trigger()",
     "source": "prisma/migrations/20260629120100_optimize_document_triggers/migration.sql",
     "domain": "documents",
     "callers": [],
@@ -2265,84 +1983,12 @@
   },
   {
     "kind": "trigger",
-    "name": "trg_update_documents_equipment",
-    "table": "documents_equipment",
-    "triggerFunction": "update_status_trigger",
-    "statement": "CREATE TRIGGER trg_update_documents_equipment\n  AFTER UPDATE ON public.documents_equipment\n  REFERENCING NEW TABLE AS affected_rows\n  FOR EACH STATEMENT EXECUTE FUNCTION public.update_status_trigger()",
-    "source": "prisma/migrations/20260629120100_optimize_document_triggers/migration.sql",
-    "domain": "documents",
-    "callers": [],
-    "commentMentions": [],
-    "supabaseRefs": []
-  },
-  {
-    "kind": "trigger",
-    "name": "trg_update_documents_equipment_del",
-    "table": "documents_equipment",
-    "triggerFunction": "update_status_trigger",
-    "statement": "CREATE TRIGGER trg_update_documents_equipment_del\n  AFTER DELETE ON public.documents_equipment\n  REFERENCING OLD TABLE AS affected_rows\n  FOR EACH STATEMENT EXECUTE FUNCTION public.update_status_trigger()",
-    "source": "prisma/migrations/20260917120000_ticket_712_unificar_status_documentacion/migration.sql",
-    "domain": "documents",
-    "callers": [],
-    "commentMentions": [],
-    "supabaseRefs": []
-  },
-  {
-    "kind": "trigger",
-    "name": "trg_update_documents_equipment_ins",
-    "table": "documents_equipment",
-    "triggerFunction": "update_status_trigger",
-    "statement": "CREATE TRIGGER trg_update_documents_equipment_ins\n  AFTER INSERT ON public.documents_equipment\n  REFERENCING NEW TABLE AS affected_rows\n  FOR EACH STATEMENT EXECUTE FUNCTION public.update_status_trigger()",
-    "source": "prisma/migrations/20260629120100_optimize_document_triggers/migration.sql",
-    "domain": "documents",
-    "callers": [],
-    "commentMentions": [],
-    "supabaseRefs": []
-  },
-  {
-    "kind": "trigger",
     "name": "update_empleado_aptitudes_updated_at",
     "table": "empleado_aptitudes",
-    "triggerFunction": "update_updated_at_column",
-    "statement": "CREATE TRIGGER update_empleado_aptitudes_updated_at BEFORE UPDATE ON public.empleado_aptitudes FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()",
-    "source": "supabase/migrations/20251103211302_initial_structure.sql",
+    "triggerFunction": "set_updated_at",
+    "statement": "CREATE TRIGGER update_empleado_aptitudes_updated_at BEFORE UPDATE ON public.empleado_aptitudes FOR EACH ROW EXECUTE FUNCTION set_updated_at()",
+    "source": "prisma/migrations/20261019100100_narrow_trigger_guards",
     "domain": "misc",
-    "callers": [],
-    "commentMentions": [],
-    "supabaseRefs": []
-  },
-  {
-    "kind": "trigger",
-    "name": "after_employee_insert",
-    "table": "employees",
-    "triggerFunction": "add_to_companies_employees",
-    "statement": "CREATE TRIGGER after_employee_insert AFTER INSERT ON public.employees FOR EACH ROW EXECUTE FUNCTION add_to_companies_employees()",
-    "source": "supabase/migrations/20251103211302_initial_structure.sql",
-    "domain": "misc",
-    "callers": [],
-    "commentMentions": [],
-    "supabaseRefs": []
-  },
-  {
-    "kind": "trigger",
-    "name": "controlar_alertas_employees",
-    "table": "employees",
-    "triggerFunction": "trg_controlar_alertas_employees",
-    "statement": "CREATE TRIGGER controlar_alertas_employees\n  AFTER UPDATE ON public.employees\n  FOR EACH ROW\n  WHEN (\n    old.is_active            IS DISTINCT FROM new.is_active\n    OR old.company_id        IS DISTINCT FROM new.company_id\n    OR old.company_position  IS DISTINCT FROM new.company_position\n    OR old.category_id       IS DISTINCT FROM new.category_id\n    OR old.cost_center_id    IS DISTINCT FROM new.cost_center_id\n    OR old.covenants_id      IS DISTINCT FROM new.covenants_id\n    OR old.guild_id          IS DISTINCT FROM new.guild_id\n    OR old.hierarchical_position IS DISTINCT FROM new.hierarchical_position\n  )\n  EXECUTE FUNCTION public.trg_controlar_alertas_employees()",
-    "source": "prisma/migrations/20260629150000_ampliar_guarda_controlar_alertas/migration.sql",
-    "domain": "documents",
-    "callers": [],
-    "commentMentions": [],
-    "supabaseRefs": []
-  },
-  {
-    "kind": "trigger",
-    "name": "controlar_alertas_employees_insert",
-    "table": "employees",
-    "triggerFunction": "trg_controlar_alertas_employees",
-    "statement": "CREATE TRIGGER controlar_alertas_employees_insert AFTER INSERT ON public.employees FOR EACH ROW EXECUTE FUNCTION public.trg_controlar_alertas_employees()",
-    "source": "supabase/migrations/20251204151557_adding-documents-triggers.sql",
-    "domain": "documents",
     "callers": [],
     "commentMentions": [],
     "supabaseRefs": []
@@ -2352,33 +1998,9 @@
     "name": "format_employee_names_trigger",
     "table": "employees",
     "triggerFunction": "format_employee_names",
-    "statement": "CREATE TRIGGER format_employee_names_trigger BEFORE INSERT OR UPDATE ON public.employees FOR EACH ROW EXECUTE FUNCTION format_employee_names()",
-    "source": "supabase/migrations/20251103211302_initial_structure.sql",
+    "statement": "CREATE TRIGGER format_employee_names_trigger BEFORE INSERT OR UPDATE OF firstname, lastname ON public.employees FOR EACH ROW EXECUTE FUNCTION format_employee_names()",
+    "source": "prisma/migrations/20261019100100_narrow_trigger_guards",
     "domain": "misc",
-    "callers": [],
-    "commentMentions": [],
-    "supabaseRefs": []
-  },
-  {
-    "kind": "trigger",
-    "name": "trg_employees_diagram_changes",
-    "table": "employees_diagram",
-    "triggerFunction": "handle_employees_diagram_changes",
-    "statement": "CREATE TRIGGER trg_employees_diagram_changes AFTER INSERT OR UPDATE ON public.employees_diagram FOR EACH ROW EXECUTE FUNCTION handle_employees_diagram_changes()",
-    "source": "supabase/migrations/20251103211302_initial_structure.sql",
-    "domain": "diagrams",
-    "callers": [],
-    "commentMentions": [],
-    "supabaseRefs": []
-  },
-  {
-    "kind": "trigger",
-    "name": "trigger_log_maintenance_order_activity",
-    "table": "maintenance_orders",
-    "triggerFunction": "log_maintenance_order_activity",
-    "statement": "CREATE TRIGGER trigger_log_maintenance_order_activity AFTER INSERT OR UPDATE ON public.maintenance_orders FOR EACH ROW EXECUTE FUNCTION public.log_maintenance_order_activity()",
-    "source": "supabase/migrations/20260202113926_fixing-maintenance-flow.sql",
-    "domain": "maintenance",
     "callers": [],
     "commentMentions": [],
     "supabaseRefs": []
@@ -2387,9 +2009,9 @@
     "kind": "trigger",
     "name": "update_maintenance_orders_updated_at",
     "table": "maintenance_orders",
-    "triggerFunction": "update_updated_at_column",
-    "statement": "CREATE TRIGGER update_maintenance_orders_updated_at BEFORE UPDATE ON public.maintenance_orders FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column()",
-    "source": "supabase/migrations/20260117002627_adding-form-config.sql",
+    "triggerFunction": "set_updated_at",
+    "statement": "CREATE TRIGGER update_maintenance_orders_updated_at BEFORE UPDATE ON public.maintenance_orders FOR EACH ROW EXECUTE FUNCTION set_updated_at()",
+    "source": "prisma/migrations/20261019100100_narrow_trigger_guards",
     "domain": "maintenance",
     "callers": [],
     "commentMentions": [],
@@ -2399,58 +2021,10 @@
     "kind": "trigger",
     "name": "update_maintenance_requests_updated_at",
     "table": "maintenance_requests",
-    "triggerFunction": "update_updated_at_column",
-    "statement": "CREATE TRIGGER update_maintenance_requests_updated_at BEFORE UPDATE ON public.maintenance_requests FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column()",
-    "source": "supabase/migrations/20260117002627_adding-form-config.sql",
+    "triggerFunction": "set_updated_at",
+    "statement": "CREATE TRIGGER update_maintenance_requests_updated_at BEFORE UPDATE ON public.maintenance_requests FOR EACH ROW EXECUTE FUNCTION set_updated_at()",
+    "source": "prisma/migrations/20261019100100_narrow_trigger_guards",
     "domain": "maintenance",
-    "callers": [],
-    "commentMentions": [],
-    "supabaseRefs": []
-  },
-  {
-    "kind": "trigger",
-    "name": "after_service_update",
-    "table": "service_items",
-    "triggerFunction": "deactivate_service_items",
-    "statement": "CREATE TRIGGER after_service_update AFTER UPDATE OF is_active ON public.service_items FOR EACH ROW WHEN ((old.is_active IS DISTINCT FROM new.is_active)) EXECUTE FUNCTION deactivate_service_items()",
-    "source": "supabase/migrations/20251103211302_initial_structure.sql",
-    "domain": "misc",
-    "callers": [],
-    "commentMentions": [],
-    "supabaseRefs": []
-  },
-  {
-    "kind": "trigger",
-    "name": "add_contractor_equipment_after_insert",
-    "table": "vehicles",
-    "triggerFunction": "equipment_allocated_to",
-    "statement": "CREATE TRIGGER add_contractor_equipment_after_insert AFTER INSERT ON public.vehicles FOR EACH ROW EXECUTE FUNCTION equipment_allocated_to()",
-    "source": "supabase/migrations/20251103211302_initial_structure.sql",
-    "domain": "misc",
-    "callers": [],
-    "commentMentions": [],
-    "supabaseRefs": []
-  },
-  {
-    "kind": "trigger",
-    "name": "controlar_alertas_vehicles",
-    "table": "vehicles",
-    "triggerFunction": "trg_controlar_alertas_vehicles",
-    "statement": "CREATE TRIGGER controlar_alertas_vehicles\n  AFTER UPDATE ON public.vehicles\n  FOR EACH ROW\n  WHEN (\n    old.is_active        IS DISTINCT FROM new.is_active\n    OR old.company_id    IS DISTINCT FROM new.company_id\n    OR old.type          IS DISTINCT FROM new.type\n    OR old.type_of_vehicle IS DISTINCT FROM new.type_of_vehicle\n    OR old.\"subType\"     IS DISTINCT FROM new.\"subType\"\n  )\n  EXECUTE FUNCTION public.trg_controlar_alertas_vehicles()",
-    "source": "prisma/migrations/20260629150000_ampliar_guarda_controlar_alertas/migration.sql",
-    "domain": "documents",
-    "callers": [],
-    "commentMentions": [],
-    "supabaseRefs": []
-  },
-  {
-    "kind": "trigger",
-    "name": "controlar_alertas_vehicles_insert",
-    "table": "vehicles",
-    "triggerFunction": "trg_controlar_alertas_vehicles",
-    "statement": "CREATE TRIGGER controlar_alertas_vehicles_insert AFTER INSERT ON public.vehicles FOR EACH ROW EXECUTE FUNCTION public.trg_controlar_alertas_vehicles()",
-    "source": "supabase/migrations/20251204151557_adding-documents-triggers.sql",
-    "domain": "documents",
     "callers": [],
     "commentMentions": [],
     "supabaseRefs": []
@@ -2459,9 +2033,9 @@
     "kind": "trigger",
     "name": "trigger_update_work_order_item_repairs_updated_at",
     "table": "work_order_item_repairs",
-    "triggerFunction": "update_work_order_item_repairs_updated_at",
-    "statement": "CREATE TRIGGER trigger_update_work_order_item_repairs_updated_at BEFORE UPDATE ON public.work_order_item_repairs FOR EACH ROW EXECUTE FUNCTION public.update_work_order_item_repairs_updated_at()",
-    "source": "supabase/migrations/20260127143252_maintenance-fix-2.sql",
+    "triggerFunction": "set_updated_at",
+    "statement": "CREATE TRIGGER trigger_update_work_order_item_repairs_updated_at BEFORE UPDATE ON public.work_order_item_repairs FOR EACH ROW EXECUTE FUNCTION set_updated_at()",
+    "source": "prisma/migrations/20261019100100_narrow_trigger_guards",
     "domain": "maintenance",
     "callers": [],
     "commentMentions": [],
@@ -2471,21 +2045,9 @@
     "kind": "trigger",
     "name": "trigger_work_order_items_updated_at",
     "table": "work_order_items",
-    "triggerFunction": "update_work_orders_updated_at",
-    "statement": "CREATE TRIGGER trigger_work_order_items_updated_at BEFORE UPDATE ON public.work_order_items FOR EACH ROW EXECUTE FUNCTION public.update_work_orders_updated_at()",
-    "source": "supabase/migrations/20260123202856_add_maintenance_flow_changes.sql",
-    "domain": "maintenance",
-    "callers": [],
-    "commentMentions": [],
-    "supabaseRefs": []
-  },
-  {
-    "kind": "trigger",
-    "name": "trigger_log_work_order_activity",
-    "table": "work_orders",
-    "triggerFunction": "log_work_order_activity",
-    "statement": "CREATE TRIGGER trigger_log_work_order_activity AFTER INSERT OR UPDATE ON public.work_orders FOR EACH ROW EXECUTE FUNCTION public.log_work_order_activity()",
-    "source": "supabase/migrations/20260202113926_fixing-maintenance-flow.sql",
+    "triggerFunction": "set_updated_at",
+    "statement": "CREATE TRIGGER trigger_work_order_items_updated_at BEFORE UPDATE ON public.work_order_items FOR EACH ROW EXECUTE FUNCTION set_updated_at()",
+    "source": "prisma/migrations/20261019100100_narrow_trigger_guards",
     "domain": "maintenance",
     "callers": [],
     "commentMentions": [],
@@ -2495,11 +2057,167 @@
     "kind": "trigger",
     "name": "trigger_work_orders_updated_at",
     "table": "work_orders",
-    "triggerFunction": "update_work_orders_updated_at",
-    "statement": "CREATE TRIGGER trigger_work_orders_updated_at BEFORE UPDATE ON public.work_orders FOR EACH ROW EXECUTE FUNCTION public.update_work_orders_updated_at()",
-    "source": "supabase/migrations/20260123202856_add_maintenance_flow_changes.sql",
+    "triggerFunction": "set_updated_at",
+    "statement": "CREATE TRIGGER trigger_work_orders_updated_at BEFORE UPDATE ON public.work_orders FOR EACH ROW EXECUTE FUNCTION set_updated_at()",
+    "source": "prisma/migrations/20261019100100_narrow_trigger_guards",
     "domain": "maintenance",
     "callers": [],
+    "commentMentions": [],
+    "supabaseRefs": []
+  },
+  {
+    "kind": "trigger",
+    "name": "trg_employees_diagram_changes_insert",
+    "table": "employees_diagram",
+    "triggerFunction": "handle_employees_diagram_changes",
+    "statement": "CREATE TRIGGER trg_employees_diagram_changes_insert AFTER INSERT ON public.employees_diagram FOR EACH ROW EXECUTE FUNCTION handle_employees_diagram_changes()",
+    "source": "prisma/migrations/20261019100100_narrow_trigger_guards",
+    "domain": "diagrams",
+    "callers": [],
+    "commentMentions": [],
+    "supabaseRefs": []
+  },
+  {
+    "kind": "trigger",
+    "name": "trg_employees_diagram_changes_update",
+    "table": "employees_diagram",
+    "triggerFunction": "handle_employees_diagram_changes",
+    "statement": "CREATE TRIGGER trg_employees_diagram_changes_update AFTER UPDATE OF diagram_type, day, month, year, employee_id ON public.employees_diagram FOR EACH ROW WHEN (OLD.diagram_type IS DISTINCT FROM NEW.diagram_type OR OLD.day IS DISTINCT FROM NEW.day OR OLD.month IS DISTINCT FROM NEW.month OR OLD.year IS DISTINCT FROM NEW.year OR OLD.employee_id IS DISTINCT FROM NEW.employee_id) EXECUTE FUNCTION handle_employees_diagram_changes()",
+    "source": "prisma/migrations/20261019100100_narrow_trigger_guards",
+    "domain": "diagrams",
+    "callers": [],
+    "commentMentions": [],
+    "supabaseRefs": []
+  },
+  {
+    "kind": "trigger",
+    "name": "trigger_log_maintenance_order_activity_insert",
+    "table": "maintenance_orders",
+    "triggerFunction": "log_maintenance_order_activity",
+    "statement": "CREATE TRIGGER trigger_log_maintenance_order_activity_insert AFTER INSERT ON public.maintenance_orders FOR EACH ROW EXECUTE FUNCTION log_maintenance_order_activity()",
+    "source": "prisma/migrations/20261019100100_narrow_trigger_guards",
+    "domain": "maintenance",
+    "callers": [],
+    "commentMentions": [],
+    "supabaseRefs": []
+  },
+  {
+    "kind": "trigger",
+    "name": "trigger_log_maintenance_order_activity_update",
+    "table": "maintenance_orders",
+    "triggerFunction": "log_maintenance_order_activity",
+    "statement": "CREATE TRIGGER trigger_log_maintenance_order_activity_update AFTER UPDATE OF status ON public.maintenance_orders FOR EACH ROW WHEN (old.status IS DISTINCT FROM new.status) EXECUTE FUNCTION log_maintenance_order_activity()",
+    "source": "prisma/migrations/20261019100100_narrow_trigger_guards",
+    "domain": "maintenance",
+    "callers": [],
+    "commentMentions": [],
+    "supabaseRefs": []
+  },
+  {
+    "kind": "trigger",
+    "name": "trigger_log_work_order_activity_insert",
+    "table": "work_orders",
+    "triggerFunction": "log_work_order_activity",
+    "statement": "CREATE TRIGGER trigger_log_work_order_activity_insert AFTER INSERT ON public.work_orders FOR EACH ROW EXECUTE FUNCTION log_work_order_activity()",
+    "source": "prisma/migrations/20261019100100_narrow_trigger_guards",
+    "domain": "maintenance",
+    "callers": [],
+    "commentMentions": [],
+    "supabaseRefs": []
+  },
+  {
+    "kind": "trigger",
+    "name": "trigger_log_work_order_activity_update",
+    "table": "work_orders",
+    "triggerFunction": "log_work_order_activity",
+    "statement": "CREATE TRIGGER trigger_log_work_order_activity_update AFTER UPDATE OF status ON public.work_orders FOR EACH ROW WHEN (old.status IS DISTINCT FROM new.status) EXECUTE FUNCTION log_work_order_activity()",
+    "source": "prisma/migrations/20261019100100_narrow_trigger_guards",
+    "domain": "maintenance",
+    "callers": [],
+    "commentMentions": [],
+    "supabaseRefs": []
+  },
+  {
+    "kind": "function",
+    "name": "set_updated_at",
+    "statement": "CREATE OR REPLACE FUNCTION public.set_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  NEW.updated_at = now();\n  RETURN NEW;\nEND;\n$function$",
+    "source": "prisma/migrations/20261019100100_narrow_trigger_guards",
+    "domain": "misc",
+    "callers": [
+      {
+        "kind": "trigger",
+        "ref": "update_empleado_aptitudes_updated_at ON empleado_aptitudes"
+      },
+      {
+        "kind": "trigger",
+        "ref": "update_maintenance_orders_updated_at ON maintenance_orders"
+      },
+      {
+        "kind": "trigger",
+        "ref": "update_maintenance_requests_updated_at ON maintenance_requests"
+      },
+      {
+        "kind": "trigger",
+        "ref": "trigger_update_work_order_item_repairs_updated_at ON work_order_item_repairs"
+      },
+      {
+        "kind": "trigger",
+        "ref": "trigger_work_order_items_updated_at ON work_order_items"
+      },
+      {
+        "kind": "trigger",
+        "ref": "trigger_work_orders_updated_at ON work_orders"
+      }
+    ],
+    "commentMentions": [],
+    "supabaseRefs": []
+  },
+  {
+    "kind": "function",
+    "name": "reconcile_daily_report_rows_status",
+    "statement": "CREATE OR REPLACE FUNCTION public.reconcile_daily_report_rows_status(p_row_ids uuid[])\n RETURNS integer\n LANGUAGE sql\nAS $function$\n  WITH calc AS (\n    SELECT r.id,\n           CASE\n             WHEN (NOT COALESCE(si.needs_personnel, true) OR EXISTS (\n                     SELECT 1 FROM public.dailyreportemployeerelations e WHERE e.daily_report_row_id = r.id))\n              AND (NOT COALESCE(si.needs_equipment, true) OR EXISTS (\n                     SELECT 1 FROM public.dailyreportequipmentrelations q WHERE q.daily_report_row_id = r.id))\n             THEN 'pendiente'::daily_report_status\n             ELSE 'sin_recursos_asignados'::daily_report_status\n           END AS new_status\n    FROM public.dailyreportrows r\n    JOIN public.service_items si ON si.id = r.item_id\n    WHERE r.id = ANY (p_row_ids)\n      AND r.status IN ('pendiente', 'sin_recursos_asignados')\n  ),\n  upd AS (\n    UPDATE public.dailyreportrows dr\n    SET status = calc.new_status,\n        updated_at = now()\n    FROM calc\n    WHERE dr.id = calc.id\n      AND dr.status IS DISTINCT FROM calc.new_status\n    RETURNING 1\n  )\n  SELECT count(*)::integer FROM upd;\n$function$\n;",
+    "source": "prisma/migrations/20261019100300_daily_report_rows_status_and_history",
+    "callers": [
+      {
+        "kind": "src",
+        "ref": "src/features/Operaciones/PartesDiarios/lib/row-resource-status.ts"
+      },
+      {
+        "kind": "function",
+        "ref": "actualizar_estado_daily_reports"
+      }
+    ],
+    "domain": "daily-report",
+    "commentMentions": [],
+    "supabaseRefs": []
+  },
+  {
+    "kind": "function",
+    "name": "log_dailyreportrows_insert_history",
+    "statement": "CREATE OR REPLACE FUNCTION public.log_dailyreportrows_insert_history()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nDECLARE\n    v_user uuid := public.app_current_user_id();\nBEGIN\n    -- Un trigger de sentencia se dispara aunque no afecte filas: no hacer nada en ese caso\n    IF NOT EXISTS (SELECT 1 FROM new_rows) THEN\n        RETURN NULL;\n    END IF;\n    INSERT INTO dailyreportrows_history (\n        daily_report_row_id, related_table, related_id, action_type,\n        changed_fields, changed_data, changed_by, reassignment_reason\n    )\n    SELECT n.id, TG_TABLE_NAME, n.id, 'CREATE',\n           '{}'::jsonb,\n           jsonb_build_object(\n               'customer_name', c.name,\n               'service_name', cs.service_name,\n               'item_name', si.item_name,\n               'working_day', n.working_day,\n               'status', n.status,\n               'type_service', n.type_service\n           ),\n           (SELECT p.credential_id FROM profile p WHERE p.credential_id = v_user),\n           NULL\n    FROM new_rows n\n    LEFT JOIN customers c ON c.id = n.customer_id\n    LEFT JOIN customer_services cs ON cs.id = n.service_id\n    LEFT JOIN service_items si ON si.id = n.item_id;\n    RETURN NULL;\nEND;\n$function$\n;",
+    "source": "prisma/migrations/20261019100300_daily_report_rows_status_and_history",
+    "callers": [
+      {
+        "kind": "trigger",
+        "ref": "tr_dailyreportrows_history_after_insert ON dailyreportrows"
+      }
+    ],
+    "domain": "daily-report",
+    "commentMentions": [],
+    "supabaseRefs": []
+  },
+  {
+    "kind": "function",
+    "name": "log_dailyreportrows_update_history",
+    "statement": "CREATE OR REPLACE FUNCTION public.log_dailyreportrows_update_history()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nDECLARE\n    v_user uuid := public.app_current_user_id();\n    v_reason text := NULLIF(current_setting('myapp.reassignment_reason', true), '');\n    v_logged integer;\nBEGIN\n    IF NOT EXISTS (SELECT 1 FROM new_rows) THEN\n        RETURN NULL;\n    END IF;\n    INSERT INTO dailyreportrows_history (\n        daily_report_row_id, related_table, related_id, action_type,\n        changed_fields, changed_data, changed_by, reassignment_reason\n    )\n    SELECT d.id, TG_TABLE_NAME, d.id, 'UPDATE', d.changed_fields,\n           jsonb_build_object(\n               'customer_name', c.name,\n               'service_name', cs.service_name,\n               'item_name', si.item_name,\n               'working_day', d.working_day,\n               'status', d.status,\n               'type_service', d.type_service\n           ),\n           (SELECT p.credential_id FROM profile p WHERE p.credential_id = v_user),\n           v_reason\n    FROM (\n        SELECT n.id, n.customer_id, n.service_id, n.item_id, n.working_day, n.status, n.type_service,\n               (CASE WHEN n.customer_id IS DISTINCT FROM o.customer_id THEN jsonb_build_object('customer_id', jsonb_build_object('old', o.customer_id, 'new', n.customer_id)) ELSE '{}'::jsonb END)\n            || (CASE WHEN n.service_id IS DISTINCT FROM o.service_id THEN jsonb_build_object('service_id', jsonb_build_object('old', o.service_id, 'new', n.service_id)) ELSE '{}'::jsonb END)\n            || (CASE WHEN n.completed_night IS DISTINCT FROM o.completed_night THEN jsonb_build_object('completed_night', jsonb_build_object('old', o.completed_night, 'new', n.completed_night)) ELSE '{}'::jsonb END)\n            || (CASE WHEN n.completed_day IS DISTINCT FROM o.completed_day THEN jsonb_build_object('completed_day', jsonb_build_object('old', o.completed_day, 'new', n.completed_day)) ELSE '{}'::jsonb END)\n            || (CASE WHEN n.item_id IS DISTINCT FROM o.item_id THEN jsonb_build_object('item_id', jsonb_build_object(\n                    'old', (SELECT item_name FROM service_items WHERE id = o.item_id),\n                    'new', (SELECT item_name FROM service_items WHERE id = n.item_id))) ELSE '{}'::jsonb END)\n            || (CASE WHEN n.working_day IS DISTINCT FROM o.working_day THEN jsonb_build_object('working_day', jsonb_build_object('old', o.working_day, 'new', n.working_day)) ELSE '{}'::jsonb END)\n            || (CASE WHEN n.start_time IS DISTINCT FROM o.start_time THEN jsonb_build_object('start_time', jsonb_build_object('old', o.start_time::text, 'new', n.start_time::text)) ELSE '{}'::jsonb END)\n            || (CASE WHEN n.end_time IS DISTINCT FROM o.end_time THEN jsonb_build_object('end_time', jsonb_build_object('old', o.end_time::text, 'new', n.end_time::text)) ELSE '{}'::jsonb END)\n            || (CASE WHEN n.description IS DISTINCT FROM o.description THEN jsonb_build_object('description', jsonb_build_object('old', o.description, 'new', n.description)) ELSE '{}'::jsonb END)\n            || (CASE WHEN n.status IS DISTINCT FROM o.status THEN jsonb_build_object('status', jsonb_build_object('old', o.status::text, 'new', n.status::text)) ELSE '{}'::jsonb END)\n            || (CASE WHEN n.sector_service_id IS DISTINCT FROM o.sector_service_id THEN jsonb_build_object('sector_service_id', jsonb_build_object('old', o.sector_service_id, 'new', n.sector_service_id)) ELSE '{}'::jsonb END)\n            || (CASE WHEN n.areas_service_id IS DISTINCT FROM o.areas_service_id THEN jsonb_build_object('areas_service_id', jsonb_build_object('old', o.areas_service_id, 'new', n.areas_service_id)) ELSE '{}'::jsonb END)\n            || (CASE WHEN n.remit_number IS DISTINCT FROM o.remit_number THEN jsonb_build_object('remit_number', jsonb_build_object('old', o.remit_number, 'new', n.remit_number)) ELSE '{}'::jsonb END)\n            || (CASE WHEN n.cancel_reason IS DISTINCT FROM o.cancel_reason THEN jsonb_build_object('cancel_reason', jsonb_build_object('old', o.cancel_reason, 'new', n.cancel_reason)) ELSE '{}'::jsonb END)\n            || (CASE WHEN n.type_service IS DISTINCT FROM o.type_service THEN jsonb_build_object('type_service', jsonb_build_object('old', o.type_service::text, 'new', n.type_service::text)) ELSE '{}'::jsonb END)\n            AS changed_fields\n        FROM new_rows n\n        JOIN old_rows o ON o.id = n.id\n    ) d\n    LEFT JOIN customers c ON c.id = d.customer_id\n    LEFT JOIN customer_services cs ON cs.id = d.service_id\n    LEFT JOIN service_items si ON si.id = d.item_id\n    WHERE d.changed_fields <> '{}'::jsonb;\n\n    GET DIAGNOSTICS v_logged = ROW_COUNT;\n    -- El motivo de reasignacion se consume una sola vez (igual que antes)\n    IF v_logged > 0 AND v_reason IS NOT NULL THEN\n        PERFORM set_config('myapp.reassignment_reason', NULL, false);\n    END IF;\n    RETURN NULL;\nEND;\n$function$\n;",
+    "source": "prisma/migrations/20261019100300_daily_report_rows_status_and_history",
+    "callers": [
+      {
+        "kind": "trigger",
+        "ref": "tr_dailyreportrows_history_before_update ON dailyreportrows"
+      }
+    ],
+    "domain": "daily-report",
     "commentMentions": [],
     "supabaseRefs": []
   }

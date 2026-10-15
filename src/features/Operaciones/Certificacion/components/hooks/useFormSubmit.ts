@@ -5,35 +5,29 @@ import {
 import { createRemito } from '@/features/Operaciones/PartesDiarios/remitManager/actions/remitos.server';
 import { logger } from '@/lib/logger';
 import { QueryClient } from '@tanstack/react-query';
-import { format } from 'date-fns';
+import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useCallback } from 'react';
 import { toast } from 'sonner';
+import { DETAIL_QUERY_PREFIX } from '@/features/Operaciones/PartesDiarios/detail/constants';
+import { CERTIFICATION_DETAIL_QUERY_KEY, CERTIFICATION_QUERY_KEY } from '../../list/constants';
+import type { DailyReportRowFormValues } from '../form-types';
+
+/**
+ * Refresca todo lo que depende de las líneas: la tabla, los conteos de sus filtros (`datatable-facet`),
+ * el historial de cambios y el detalle personal del modal.
+ */
+function invalidateCertificationQueries(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: [...CERTIFICATION_QUERY_KEY] });
+  queryClient.invalidateQueries({ queryKey: ['datatable-facet'] });
+  queryClient.invalidateQueries({ queryKey: [DETAIL_QUERY_PREFIX, 'row-history'] });
+  queryClient.invalidateQueries({ queryKey: [CERTIFICATION_DETAIL_QUERY_KEY] });
+}
 
 type ServiceItemFlag = {
   id: string;
   needs_personnel?: boolean | null;
   needs_equipment?: boolean | null;
-};
-
-type FormData = {
-  date?: Date;
-  customer: string;
-  services: string;
-  item: string;
-  working_day: string;
-  employees?: string[];
-  equipment?: string[];
-  equipos_cliente?: string[];
-  start_time?: string;
-  end_time?: string;
-  status?: string;
-  remit_number?: string;
-  description?: string;
-  observations?: string; // Campo del formulario
-  sector_service_id?: string;
-  areas_service_id?: string;
-  type_service?: 'mensual' | 'adicional' | 'adicional_permanente';
 };
 
 export function useFormSubmit(
@@ -47,13 +41,13 @@ export function useFormSubmit(
   const router = useRouter();
 
   const handleCreate = useCallback(
-    async (data: FormData) => {
+    async (data: DailyReportRowFormValues) => {
       if (!data.date) {
         toast.error('Debe seleccionar una fecha.');
         return;
       }
 
-      const formattedDate = format(data.date, 'yyyy-MM-dd');
+      const formattedDate = moment(data.date).format('YYYY-MM-DD');
 
       // Determinar completed_day y completed_night según la jornada
       const is24Hours = data.working_day === 'jornada 24 horas';
@@ -106,15 +100,12 @@ export function useFormSubmit(
 
       toast.success('Línea creada exitosamente.');
       // Primero invalidar para marcar como stale
-      queryClient.invalidateQueries({
-        queryKey: [`filtered-daily-report-rows`],
-      });
+      invalidateCertificationQueries(queryClient);
       // Luego forzar refetch
       await queryClient.refetchQueries({
-        queryKey: [`filtered-daily-report-rows`],
+        queryKey: [...CERTIFICATION_QUERY_KEY],
         type: 'active',
       });
-      // }
       onClose();
 
       // Refetch de los datos de la tabla
@@ -126,7 +117,7 @@ export function useFormSubmit(
   );
 
   const handleUpdate = useCallback(
-    async (data: FormData) => {
+    async (data: DailyReportRowFormValues) => {
       if (!selectedRow?.id) {
         toast.error('No se encontró la línea del parte diario.');
         return;
@@ -198,20 +189,8 @@ export function useFormSubmit(
 
       toast.success('Parte diario actualizado exitosamente.');
 
-      // Invalidar y refetch inmediato de las queries para actualizar la tabla
-      // const dailyReportId = selectedRow?.daily_report_id;
-
-      // // if (dailyReportId) {
-      // // Primero invalidar para marcar como stale
-      queryClient.invalidateQueries({
-        queryKey: [`filtered-daily-report-rows`],
-      });
-      // // Luego forzar refetch
-      // await queryClient.refetchQueries({
-      //     queryKey: [`filtered-daily-report-rows`],
-      //     type: 'active',
-      // });
-      // // }
+      // Refrescar la tabla, sus filtros y el historial
+      invalidateCertificationQueries(queryClient);
 
       onClose();
       // refetchDailyReport();
@@ -221,7 +200,7 @@ export function useFormSubmit(
   );
 
   const onSubmit = useCallback(
-    async (data: FormData) => {
+    async (data: DailyReportRowFormValues) => {
       try {
         if (isCreating) {
           await handleCreate(data);

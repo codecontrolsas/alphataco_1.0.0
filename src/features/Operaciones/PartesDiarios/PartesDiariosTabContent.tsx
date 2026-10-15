@@ -1,6 +1,7 @@
 import { checkPermissionServer, getUserPermissionsMapServer } from '@/features/Permissions';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { Suspense } from 'react';
+import { NewDailyReportDialog } from './components/NewDailyReportDialog';
 import { DailyReportList } from './list/DailyReportList';
 import { DailyReportTableSkeleton } from './list/fallback/DailyReportTableSkeleton';
 
@@ -23,8 +24,12 @@ export default async function PartesDiariosTabContent({ searchParams = {} }: Pro
   ]);
 
   return (
-    <Suspense fallback={<DailyReportTableSkeleton />}>
-      <DailyReportList searchParams={searchParams} permissionsMap={permissionsMap} canCreate={canCreate} />
-    </Suspense>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-end gap-4">{canCreate && <NewDailyReportDialog />}</div>
+
+      <Suspense fallback={<DailyReportTableSkeleton />}>
+        <DailyReportList searchParams={searchParams} permissionsMap={permissionsMap} />
+      </Suspense>
+    </div>
   );
 }

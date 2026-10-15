@@ -1,68 +1,36 @@
 'use client';
 
-import type { VisibilityState } from '@tanstack/react-table';
-import type { ProvinceOption } from './area_clientes/AreaFormDialog';
-import { useState } from 'react';
-import type { AreaRow } from '../actions/areas.server';
-import type { MeasureUnitRow } from '../actions/measure-units.server';
-import type { SectorRow } from '../actions/sectors.server';
-import type { CustomerServiceRow } from '../actions/services.server';
-import type { CustomerRow } from '../lib/serializers';
+import { useCallback, useMemo, useState } from 'react';
 import { CustomerDetail, type CustomerDetailPreferences } from './CustomerDetail/CustomerDetail';
-import { CustomersList } from './CustomersList';
+import { CustomerSelectionProvider } from './CustomerSelectionContext';
 
 interface CustomersPanelProps {
-  customers: CustomerRow[];
-  services: CustomerServiceRow[];
-  areas: AreaRow[];
-  sectors: SectorRow[];
-  measureUnits: MeasureUnitRow[];
-  provinces: ProvinceOption[];
-  listVisibility: VisibilityState;
-  listFilters: string[];
-  preferences: CustomerDetailPreferences;
+  /** El listado, renderizado en el servidor (`CustomersList`). */
+  children: React.ReactNode;
+  permissionsMap: Record<string, boolean>;
+  contractsPreferences: CustomerDetailPreferences;
 }
 
 /**
  * Pestaña "Clientes" de Comercial: listado y, al elegir una fila, la ficha del cliente.
- * Los datos de las pestañas de la ficha (empleados/equipos) se cargan con React Query al abrirla.
+ * El listado llega del servidor; la ficha pide sus datos con React Query al abrirse.
  */
-export function CustomersPanel({
-  customers,
-  services,
-  areas,
-  sectors,
-  measureUnits,
-  provinces,
-  listVisibility,
-  listFilters,
-  preferences,
-}: CustomersPanelProps) {
+export function CustomersPanel({ children, permissionsMap, contractsPreferences }: CustomersPanelProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  // Siempre se toma el cliente de la lista (que el servidor refresca tras cada guardado).
-  const selectedCustomer = selectedId ? (customers.find((customer) => customer.id === selectedId) ?? null) : null;
 
-  if (selectedCustomer) {
+  const selectCustomer = useCallback((customerId: string) => setSelectedId(customerId), []);
+  const selection = useMemo(() => ({ selectCustomer }), [selectCustomer]);
+
+  if (selectedId) {
     return (
       <CustomerDetail
-        customer={selectedCustomer}
-        services={services}
-        areas={areas}
-        sectors={sectors}
-        measureUnits={measureUnits}
-      provinces={provinces}
-        preferences={preferences}
+        customerId={selectedId}
+        permissionsMap={permissionsMap}
+        contractsPreferences={contractsPreferences}
         onClose={() => setSelectedId(null)}
       />
     );
   }
 
-  return (
-    <CustomersList
-      customers={customers}
-      savedVisibility={listVisibility}
-      savedFilters={listFilters}
-      onSelect={(customer) => setSelectedId(customer.id)}
-    />
-  );
+  return <CustomerSelectionProvider value={selection}>{children}</CustomerSelectionProvider>;
 }

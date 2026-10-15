@@ -4,6 +4,7 @@ import { Prisma } from '@/generated/prisma/client';
 import type { treasury_movement_kind } from '@/generated/prisma/enums';
 import { isFuture } from './movement-rules';
 import { indicatorsFromBuckets, withRunningBalance, type AccountIndicators } from './statement-math';
+import { isoDay } from './dates';
 
 /**
  * Única lectura de saldos (spec Tesorería etapa 1 §3). La clasificación pasado/futuro vive acá:
@@ -61,7 +62,6 @@ export async function getIssuedOwnChecks(db: Pick<Prisma.TransactionClient, 'own
   }));
 }
 
-const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
 /** Extracto de una cuenta entre `from` y `to` (inclusive): saldo anterior, filas con acumulado y saldo final. */
 export async function getAccountStatement(db: BalancesDb, companyId: string, accountId: string, from: string, to: string, today: string) {

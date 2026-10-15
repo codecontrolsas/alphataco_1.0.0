@@ -3,11 +3,11 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DataTablePagination } from '@/features/Formularios/components/tables/data-table-pagination';
-import { DatePicker } from '@/features/Operaciones/PartesDiarios/components/DatePicker';
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -66,6 +66,7 @@ export function DiagramDetailTable<TData extends DiagramRowBase, TValue>({
     { id: 'Fecha', desc: true }, // id del campo de fecha
   ]);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [datePickerKey, setDatePickerKey] = useState(0);
 
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   // Historial filtrado por la fecha elegida y por las novedades seleccionadas en la grilla:
@@ -234,13 +235,25 @@ export function DiagramDetailTable<TData extends DiagramRowBase, TValue>({
             </div>
             {/* Date Picker */}
             <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-              <DatePicker
+              {/* `key`: el picker guarda su texto internamente; al limpiar se remonta para vaciarlo. */}
+              <EnhancedDatePicker
+                key={datePickerKey}
                 date={selectedDate || undefined}
                 setDate={(date) => setSelectedDate(date ?? null)}
-                label="Filtrar por fecha"
+                aria-label="Filtrar por fecha"
+                placeholder="Filtrar por fecha (DD/MM/YYYY)"
+                className="w-[260px]"
               />
               {selectedDate && (
-                <Button variant="ghost" size="sm" onClick={() => setSelectedDate(null)}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedDate(null);
+                    setDatePickerKey((key) => key + 1);
+                  }}
+                >
                   Limpiar
                 </Button>
               )}

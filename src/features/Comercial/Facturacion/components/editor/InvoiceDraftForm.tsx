@@ -13,12 +13,13 @@ import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { LoadingSwap } from '@/components/ui/loading-swap';
 import { Textarea } from '@/components/ui/textarea';
+import { CertificationAmount } from '@/features/Comercial/Certificaciones/components/CertificationAmount';
 import { Logger } from '@/lib/logger';
 import { CBTE_TYPES, cbteTypeFor } from '@/shared/lib/arca/catalogs';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import { formatAmountText } from '@/shared/utils/amount-text';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft, Info } from 'lucide-react';
-import moment from 'moment';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState, useTransition, type ReactNode } from 'react';
@@ -28,7 +29,7 @@ import {
   deleteInvoiceDraft,
   removeCertificationFromDraft,
   saveInvoiceDraft,
-} from '../../actions/invoice-drafts.server';
+} from '../../actions/invoice-drafts-edit.server';
 import { validateInvoiceForIssueAction } from '../../actions/invoice-emission.server';
 import type { InvoiceEditorData } from '../../actions/invoices.server';
 import type { IssueProblem } from '../../lib/invoice-validation';
@@ -36,19 +37,20 @@ import { INVOICING_TAB_HREF, countLabel, invoiceHref } from '../../utils/invoice
 import { InvoiceEnvironmentNotice } from '../InvoiceEnvironmentNotice';
 import { InvoiceLetterBox } from '../InvoiceLetterBox';
 import { InvoiceStatusBadge } from '../InvoiceStatusBadge';
-import { CertificationAmount } from '@/features/Comercial/Certificaciones/components/CertificationAmount';
-import { buildEditorSchema, toDraftInput, toEditorValues, type EditorValues } from './editor-form';
 import { IncludedCertifications } from './IncludedCertifications';
 import { InvoiceHeaderFields } from './InvoiceHeaderFields';
 import { InvoiceLinesEditor } from './InvoiceLinesEditor';
 import { InvoiceReceiver } from './InvoiceReceiver';
 import { InvoiceTotals } from './InvoiceTotals';
 import { MobileIssueBar } from './MobileIssueBar';
+import { buildEditorSchema, toDraftInput, toEditorValues, type EditorValues } from './editor-form';
 
 const logger = new Logger('features/Comercial/Facturacion/InvoiceDraftForm');
 
 export type InvoicePermissions = {
   canCreate: boolean;
+  /** Modificar o quitar certificaciones de un borrador existente (`comercial:facturacion:update`). */
+  canUpdate: boolean;
   canDelete: boolean;
   canApprove: boolean;
   canViewPrices: boolean;
@@ -78,7 +80,7 @@ export function InvoiceDraftForm({ data, permissions, issueBlockedReason, banner
   const [discardOpen, setDiscardOpen] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
 
-  const canEdit = permissions.canCreate;
+  const canEdit = permissions.canUpdate;
   // Una factura deriva la letra de las condiciones ACTUALES; si no se puede derivar, se conserva la guardada.
   const letter = data.letter.ok ? data.letter.letter : invoice.letter;
   const derivedCbteType = cbteTypeFor(letter, invoice.kind);
@@ -110,21 +112,25 @@ export function InvoiceDraftForm({ data, permissions, issueBlockedReason, banner
   }, [invoice.lines]);
 
   /** Guarda y devuelve el total guardado, o `null` si falló (el error ya se mostró). */
-  const persist = async (values: EditorValues): Promise<string | null> => {
+  const persist = async (values: EditorValues): Promise<{ total: string | null } | null> => {
     const result = await saveInvoiceDraft(invoice.id, toDraftInput(values));
     if (!result.ok) {
       logger.warn('No se guardó el borrador', { data: { id: invoice.id, error: result.error } });
       toast.error(`No se guardó el borrador: ${result.error}`);
       return null;
     }
-    return result.data.total;
+    return { total: result.data.total };
   };
 
   const onSave = (values: EditorValues) => {
     startBusy(async () => {
-      const total = await persist(values);
-      if (total === null) return;
-      toast.success(`Borrador guardado. Total ${invoice.currency} ${formatAmountText(total)}.`);
+      const saved = await persist(values);
+      if (saved === null) return;
+      toast.success(
+        saved.total === null
+          ? 'Borrador guardado.'
+          : `Borrador guardado. Total ${invoice.currency} ${formatAmountText(saved.total)}.`
+      );
       router.refresh();
     });
   };
@@ -136,8 +142,8 @@ export function InvoiceDraftForm({ data, permissions, issueBlockedReason, banner
         startBusy(async () => {
           // Lo que se emite es lo guardado: primero se guardan los cambios pendientes.
           if (form.formState.isDirty) {
-            const total = await persist(values);
-            if (total === null) return;
+            const saved = await persist(values);
+            if (saved === null) return;
             router.refresh();
           }
           const check = await validateInvoiceForIssueAction(invoice.id);
@@ -172,7 +178,11 @@ export function InvoiceDraftForm({ data, permissions, issueBlockedReason, banner
       toast.error(`No se quitó la certificación: ${result.error}`);
       return false;
     }
-    toast.success(`${number} quitada y disponible para facturar. Nuevo total ${invoice.currency} ${formatAmountText(result.data.total)}.`);
+    toast.success(
+      result.data.total === null
+        ? `${number} quitada y disponible para facturar.`
+        : `${number} quitada y disponible para facturar. Nuevo total ${invoice.currency} ${formatAmountText(result.data.total)}.`
+    );
     router.refresh();
     return true;
   };
@@ -227,9 +237,13 @@ export function InvoiceDraftForm({ data, permissions, issueBlockedReason, banner
             </div>
           </div>
           <div className="flex flex-col items-end gap-1">
-            <InvoiceStatusBadge status={invoice.status} simulated={invoice.simulated} environment={invoice.environment} />
+            <InvoiceStatusBadge
+              status={invoice.status}
+              simulated={invoice.simulated}
+              environment={invoice.environment}
+            />
             <p className="text-muted-foreground text-xs tabular-nums" aria-live="polite">
-              {isDirty ? 'Cambios sin guardar' : `Guardado ${moment(invoice.updatedAt).format('DD/MM/YYYY HH:mm')}`}
+              {isDirty ? 'Cambios sin guardar' : `Guardado ${formatArgentinaDateTime(invoice.updatedAt)}`}
             </p>
           </div>
         </div>
@@ -242,7 +256,7 @@ export function InvoiceDraftForm({ data, permissions, issueBlockedReason, banner
       {!canEdit && (
         <p role="note" className="text-muted-foreground flex items-center gap-2 text-sm">
           <Info className="size-4 shrink-0" aria-hidden />
-          Podés ver este borrador pero no modificarlo: necesitás el permiso Crear en Facturación.
+          Podés ver este borrador pero no modificarlo: necesitás el permiso Editar en Facturación.
         </p>
       )}
 
@@ -250,7 +264,10 @@ export function InvoiceDraftForm({ data, permissions, issueBlockedReason, banner
         <div className="bg-muted/40 flex flex-col gap-1 border px-4 py-3 text-sm">
           <p>
             {invoice.cbteLabel} asociada a{' '}
-            <Link href={invoiceHref(invoice.associatedInvoice.id)} className="font-medium tabular-nums underline underline-offset-4">
+            <Link
+              href={invoiceHref(invoice.associatedInvoice.id)}
+              className="font-medium tabular-nums underline underline-offset-4"
+            >
               {invoice.associatedInvoice.label}
             </Link>
             {permissions.canViewPrices && (
@@ -348,16 +365,22 @@ export function InvoiceDraftForm({ data, permissions, issueBlockedReason, banner
                 <InvoiceLetterBox letter={letter} />
                 <div>
                   <p className="font-semibold">{CBTE_TYPES[derivedCbteType].label}</p>
-                  <p className="text-muted-foreground text-xs tabular-nums">Código {String(derivedCbteType).padStart(2, '0')}</p>
+                  <p className="text-muted-foreground text-xs tabular-nums">
+                    Código {String(derivedCbteType).padStart(2, '0')}
+                  </p>
                 </div>
               </div>
-              <p className={data.letter.ok ? 'text-muted-foreground text-sm text-pretty' : 'text-destructive text-sm text-pretty'}>
+              <p
+                className={
+                  data.letter.ok ? 'text-muted-foreground text-sm text-pretty' : 'text-destructive text-sm text-pretty'
+                }
+              >
                 {data.letter.ok ? data.letter.reason : data.letter.error}
               </p>
               {letterChanged && (
-                <p role="note" className="text-sm text-amber-800 text-pretty dark:text-amber-300">
-                  Al guardar pasa de {invoice.cbteLabel} a {CBTE_TYPES[derivedCbteType].label}: cambiaron las condiciones
-                  frente al IVA.
+                <p role="note" className="text-sm text-warn-subtle-foreground text-pretty">
+                  Al guardar pasa de {invoice.cbteLabel} a {CBTE_TYPES[derivedCbteType].label}: cambiaron las
+                  condiciones frente al IVA.
                 </p>
               )}
             </div>
@@ -458,7 +481,9 @@ export function InvoiceDraftForm({ data, permissions, issueBlockedReason, banner
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Salir sin guardar?</AlertDialogTitle>
-            <AlertDialogDescription>Tenés cambios sin guardar en el borrador. Si salís, se pierden.</AlertDialogDescription>
+            <AlertDialogDescription>
+              Tenés cambios sin guardar en el borrador. Si salís, se pierden.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Seguir editando</AlertDialogCancel>

@@ -2,13 +2,14 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { DocumentExpiryCell } from '@/features/Documentacion/shared/components/DocumentCells';
+import { formatArgentinaDay } from '@/features/Treasury/lib/today';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type { ColumnDef } from '@tanstack/react-table';
-import { AlertTriangle, CheckCircle2, CircleDot, Clock, HelpCircle, XCircle } from 'lucide-react';
-import moment from 'moment';
+import { AlertTriangle, CheckCircle2, HelpCircle, XCircle } from 'lucide-react';
 import Link from 'next/link';
-import type { EmployeeExpiringDocListItem } from './actions.server';
+import type { EmployeeExpiringDocListItem } from '../lib/expiring-docs-types';
 
 // ============================================================================
 // LABELS E ICONOS DE ESTADO
@@ -19,7 +20,6 @@ export const stateLabels: Record<string, string> = {
   rechazado: 'Rechazado',
   aprobado: 'Aprobado',
   vencido: 'Vencido',
-  pendiente: 'Pendiente',
 };
 
 export const stateIcons: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -27,7 +27,6 @@ export const stateIcons: Record<string, React.ComponentType<{ className?: string
   aprobado: CheckCircle2,
   rechazado: XCircle,
   vencido: AlertTriangle,
-  pendiente: Clock,
 };
 
 // Badge variants por estado
@@ -36,7 +35,6 @@ const stateBadgeVariants: Record<string, 'default' | 'success' | 'destructive' |
   aprobado: 'success',
   rechazado: 'destructive',
   vencido: 'yellow',
-  pendiente: 'secondary',
 };
 
 // ============================================================================
@@ -125,37 +123,7 @@ export const columns: ColumnDef<EmployeeExpiringDocListItem>[] = [
     accessorKey: 'validity',
     meta: { title: 'Vencimiento' },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Vencimiento" />,
-    cell: ({ row }) => {
-      const validity = row.original.validity;
-      if (!validity) return <span className="text-muted-foreground">—</span>;
-
-      const expirationDate = moment(validity);
-      const daysDifference = expirationDate.diff(moment(), 'days');
-
-      let icon: React.ReactNode = null;
-      if (daysDifference < 0) {
-        icon = <AlertTriangle className="h-4 w-4 text-destructive flex-shrink-0" />;
-      } else if (daysDifference <= 7) {
-        icon = <CircleDot className="h-4 w-4 text-orange-500 flex-shrink-0" />;
-      }
-
-      return (
-        <div className="flex items-center gap-2">
-          {icon}
-          <span
-            className={
-              daysDifference < 0
-                ? 'text-destructive font-medium'
-                : daysDifference <= 7
-                  ? 'text-orange-600 font-medium'
-                  : ''
-            }
-          >
-            {expirationDate.format('DD/MM/YYYY')}
-          </span>
-        </div>
-      );
-    },
+    cell: ({ row }) => <DocumentExpiryCell validity={row.original.validity} state={row.original.state} />,
   },
 
   // ── Estado del documento ─────────────────────────────────────────────────
@@ -193,7 +161,7 @@ export const columns: ColumnDef<EmployeeExpiringDocListItem>[] = [
     cell: ({ row }) => {
       const createdAt = row.original.created_at;
       return createdAt ? (
-        <span>{moment(createdAt).format('DD/MM/YYYY')}</span>
+        <span>{formatArgentinaDay(createdAt)}</span>
       ) : (
         <span className="text-muted-foreground">—</span>
       );

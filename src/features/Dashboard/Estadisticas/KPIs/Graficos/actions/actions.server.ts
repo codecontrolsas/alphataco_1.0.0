@@ -4,6 +4,7 @@ import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { assertCanViewKpiCharts } from '../lib/kpi-permissions.server';
 import type { KpiCode } from './getKpiChartData';
 
 const logger = new Logger('features/Dashboard/KPIs/Graficos');
@@ -33,6 +34,7 @@ const KPI_DESCRIPTION_MAP: Record<KpiCode, string> = {
  */
 export async function getAllKpisMetadata() {
   logger.debug('Obteniendo metadata de todos los KPIs');
+  await assertCanViewKpiCharts();
 
   try {
     const companyId = await getActiveCompanyId();

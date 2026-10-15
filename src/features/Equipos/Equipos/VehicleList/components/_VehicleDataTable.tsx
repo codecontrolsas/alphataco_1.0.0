@@ -1,6 +1,13 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import {
+  buildBooleanFacetResult,
+  buildEnumFacetResult,
+  buildFkFacetResult,
+  formatDbDate,
+  formatTimestampDay,
+} from '@/features/Equipos/lib/vehicle-list-client';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import {
   condition_enum,
@@ -8,16 +15,14 @@ import {
   cost_type_enum,
   currency_enum,
   status_type,
-  termination_reason_enum,
 } from '@/generated/prisma/enums';
 import {
   DataTable,
   type DataTableFacetedFilterConfig,
-  type DataTableFilterOption,
   type DataTableSearchParams,
   type FacetResult,
 } from '@/shared/components/common/DataTable';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import {
   conditionLabels,
   contractTypeVehiclesLabels,
@@ -27,8 +32,7 @@ import {
   terminationReasonEquipmentLabels,
 } from '@/shared/utils/mappers';
 import type { LucideIcon } from 'lucide-react';
-import { Check, CircleOff, Plus, X } from 'lucide-react';
-import moment from 'moment';
+import { Check, Plus, X } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
 import {
@@ -51,57 +55,6 @@ interface Props {
   permissionsMap: Record<string, boolean>;
   initialColumnVisibility: Record<string, boolean>;
   initialFilterVisibility: Record<string, boolean>;
-}
-
-// ============================================================================
-// HELPERS — FacetResult builders
-// ============================================================================
-
-function buildFkFacetResult(
-  resolvedOptions: { value: string; label: string }[] | undefined,
-  counts: Map<string, number>,
-  nullLabel = 'Sin asignar'
-): FacetResult {
-  const options: DataTableFilterOption[] = (resolvedOptions ?? []).map((o) => ({ value: o.value, label: o.label }));
-  if (counts.has(NULL_FILTER_VALUE)) {
-    options.push({ value: NULL_FILTER_VALUE, label: nullLabel, icon: CircleOff });
-  }
-  return { options, counts };
-}
-
-function buildEnumFacetResult(
-  enumValues: string[],
-  labels: Record<string, string>,
-  counts: Map<string, number>,
-  icons?: Record<string, LucideIcon | undefined>,
-  nullLabel = 'Sin asignar'
-): FacetResult {
-  const options: DataTableFilterOption[] = enumValues.map((v) => ({
-    value: v,
-    label: labels[v] ?? v,
-    ...(icons?.[v] ? { icon: icons[v] } : {}),
-  }));
-  if (counts.has(NULL_FILTER_VALUE)) {
-    options.push({ value: NULL_FILTER_VALUE, label: nullLabel, icon: CircleOff });
-  }
-  return { options, counts };
-}
-
-/** Construye FacetResult para booleanos con labels e iconos custom */
-function buildBooleanFacetResult(
-  trueLabel: string,
-  falseLabel: string,
-  trueIcon: LucideIcon,
-  falseIcon: LucideIcon,
-  counts: Map<string, number>
-): FacetResult {
-  return {
-    options: [
-      { value: 'true', label: trueLabel, icon: trueIcon },
-      { value: 'false', label: falseLabel, icon: falseIcon },
-    ],
-    counts,
-  };
 }
 
 const DEFAULT_VISIBLE_FILTERS = ['condition', 'type', 'contractor_equipment'];
@@ -274,17 +227,6 @@ export function _VehicleDataTable({
         fetchFacet: makeEnumFetchFacet('currency', Object.values(currency_enum), currencyLabels),
       },
 
-      // reason_for_termination (enum nullable)
-      {
-        columnId: 'reason_for_termination',
-        title: 'Motivo de baja',
-        fetchFacet: makeEnumFetchFacet(
-          'reason_for_termination',
-          Object.values(termination_reason_enum),
-          terminationReasonEquipmentLabels
-        ),
-      },
-
       // has_certification (boolean)
       {
         columnId: 'has_certification',
@@ -378,11 +320,6 @@ export function _VehicleDataTable({
         type: 'dateRange' as const,
       },
       {
-        columnId: 'termination_date',
-        title: 'Fecha de baja',
-        type: 'dateRange' as const,
-      },
-      {
         columnId: 'created_at',
         title: 'Creado',
         type: 'dateRange' as const,
@@ -447,7 +384,7 @@ export function _VehicleDataTable({
       data-testid="vehicles-table"
       exportConfig={{
         // Usar currentParams (no searchParams) para respetar filtros activos post-SSR
-        fetchAllData: () => getAllVehiclesForExport(currentParams),
+        fetchAllData: async () => unwrapExportResult(await getAllVehiclesForExport(currentParams)),
         options: {
           filename: 'vehiculos',
           title: 'Listado de Vehículos',
@@ -460,14 +397,14 @@ export function _VehicleDataTable({
           cost_type: (val) => costTypeLabels[val as string] ?? String(val ?? ''),
           currency: (val) => currencyLabels[val as string] ?? String(val ?? ''),
           reason_for_termination: (val) => terminationReasonEquipmentLabels[val as string] ?? String(val ?? ''),
-          contract_expiration_date: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
-          contract_start_date: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
-          termination_date: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
-          created_at: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
+          contract_expiration_date: formatDbDate,
+          contract_start_date: formatDbDate,
+          termination_date: formatDbDate,
+          created_at: formatTimestampDay,
           price: (val) => (val != null ? String(val) : ''),
-          last_checklist_date: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
+          last_checklist_date: formatTimestampDay,
           has_certification: (val) => (val ? 'Sí' : 'No'),
-          certification_expiration_date: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
+          certification_expiration_date: formatDbDate,
         },
       }}
     />

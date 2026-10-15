@@ -128,12 +128,12 @@ export function KpiChart({ kpiCode, kpiName, kpiDescription, expectedPercentage 
     <Card className="@container/card w-full">
       {/* Header se renderiza INMEDIATAMENTE con metadata del servidor */}
       <CardHeader className="border-b">
-        <div className="grid gap-1">
+        <div className="grid min-w-0 gap-1">
           <CardTitle>{kpiName}</CardTitle>
           <CardDescription>{kpiDescription}</CardDescription>
         </div>
-        <CardAction>
-          <div className="flex items-center gap-2">
+        <CardAction className="col-start-1 row-span-1 row-start-2 justify-self-start @2xl/card:col-start-2 @2xl/card:row-span-2 @2xl/card:row-start-1 @2xl/card:justify-self-end">
+          <div className="flex flex-wrap items-center gap-2">
             <Select
               value={isCustomRange ? undefined : timeRange}
               onValueChange={(v) => handleTimeRangeChange(v as TimeRange)}
@@ -151,14 +151,14 @@ export function KpiChart({ kpiCode, kpiName, kpiDescription, expectedPercentage 
             </Select>
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" className="w-[260px]" disabled={loading}>
+                <Button variant="outline" className="w-[260px] max-w-full" disabled={loading}>
                   <CalendarIcon className="mr-2 h-4 w-4" />
                   {dateRange.from && dateRange.to
                     ? `${moment(dateRange.from).format('DD/MM/YYYY')} - ${moment(dateRange.to).format('DD/MM/YYYY')}`
                     : 'Seleccionar rango'}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto overflow-hidden p-0" align="end">
+              <PopoverContent className="w-auto max-w-[calc(100vw-2rem)] overflow-auto p-0" align="end">
                 <Calendar
                   className="w-full"
                   mode="range"

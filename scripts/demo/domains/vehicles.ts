@@ -3,17 +3,24 @@
  * cisternas) y los equipos varios (generadores, torres, compresores, bombas).
  *
  * Los tipos Tractor y Chasis usan los ids fijos de `get_kpi_range`, asi los KPIs de flota
- * tienen datos. Al insertarlos, los triggers generan los documentos pendientes y las filas de
- * `contractor_equipment` (desde `allocated_to`).
+ * tienen datos. Al insertarlos, los triggers generan los documentos pendientes. Las filas de
+ * `contractor_equipment` se insertan acá, explícitas (desde `allocated_to`): ya no hay trigger.
  */
 import type { Prisma } from '../../../src/generated/prisma/client.ts';
+import {
+  BRANDS,
+  EQUIPMENT_OWNERS,
+  EQUIPMENT_TYPES,
+  OTHER_EQUIPMENT_TYPES,
+  SUB_TYPES,
+  type EquipmentTypeKey,
+} from '../data/catalog.ts';
 import type { Ctx } from '../lib/ctx.ts';
 import { insertMany } from '../lib/ctx.ts';
 import { demoId } from '../lib/ids.ts';
 import { pick, weighted } from '../lib/random.ts';
-import { BRANDS, EQUIPMENT_OWNERS, EQUIPMENT_TYPES, OTHER_EQUIPMENT_TYPES, SUB_TYPES, type EquipmentTypeKey } from '../data/catalog.ts';
-import { assignCustomers } from './employees.ts';
 import { brandId, equipmentTypeId, modelId } from './catalogs.ts';
+import { assignCustomers } from './employees.ts';
 
 export interface DemoVehicle {
   id: string;
@@ -54,7 +61,9 @@ function plate(ctx: Ctx, year: number, used: Set<string>): string {
 }
 
 function modelsFor(type: string): Array<{ brand: string; model: string }> {
-  return BRANDS.flatMap((b) => b.models.filter((m) => m.types.includes(type)).map((m) => ({ brand: b.key, model: m.key })));
+  return BRANDS.flatMap((b) =>
+    b.models.filter((m) => m.types.includes(type)).map((m) => ({ brand: b.key, model: m.key }))
+  );
 }
 
 export async function seedVehicles(ctx: Ctx): Promise<{ vehicles: DemoVehicle[]; others: DemoOtherEquipment[] }> {
@@ -83,10 +92,18 @@ export async function seedVehicles(ctx: Ctx): Promise<{ vehicles: DemoVehicle[];
             ['no_operativo', 3],
             ['en_preparacion', 4],
           ] as const);
-      const contract = weighted(faker, [['Propio', 62], ['Leasing', 20], ['Alquiler', 13], ['Prendado', 5]] as const);
+      const contract = weighted(faker, [
+        ['Propio', 62],
+        ['Leasing', 20],
+        ['Alquiler', 13],
+        ['Prendado', 5],
+      ] as const);
       const owner = contract === 'Propio' ? null : EQUIPMENT_OWNERS.find((o) => o.type === contract) ?? null;
       const ageYears = Number(cal.today.slice(0, 4)) - year;
-      const kilometer = type.key === 'semirremolque' ? 0 : ageYears * faker.number.int({ min: 45_000, max: 95_000 }) + faker.number.int({ min: 0, max: 30_000 });
+      const kilometer =
+        type.key === 'semirremolque'
+          ? 0
+          : ageYears * faker.number.int({ min: 45_000, max: 95_000 }) + faker.number.int({ min: 0, max: 30_000 });
       const customers = type.operative && active ? assignCustomers(ctx, type.key) : [];
       const contractStart = contract === 'Propio' ? null : -faker.number.int({ min: 120, max: 900 });
 
@@ -120,22 +137,45 @@ export async function seedVehicles(ctx: Ctx): Promise<{ vehicles: DemoVehicle[];
         model: modelId(brand, model),
         is_active: active,
         termination_date: active ? null : cal.day(-faker.number.int({ min: 20, max: 400 })),
-        reason_for_termination: active ? null : weighted(faker, [['venta', 60], ['devoluci_n', 25], ['destrucci_n_total', 15]] as const),
+        reason_for_termination: active
+          ? null
+          : weighted(faker, [
+              ['venta', 60],
+              ['devoluci_n', 25],
+              ['destrucci_n_total', 15],
+            ] as const),
         company_id: company.id,
         user_id: actorId,
         condition,
         kilometer: String(kilometer),
         engine_hours: type.key === 'hidrogrua' ? String(faker.number.int({ min: 2000, max: 18000 })) : '0',
-        cost_center_id: demoId('cost_center', weighted(faker, [['anelo', 60], ['rincon', 40]])),
+        cost_center_id: demoId(
+          'cost_center',
+          weighted(faker, [
+            ['anelo', 60],
+            ['rincon', 40],
+          ])
+        ),
         type_operative_id: demoId('type_operative', type.operativeKind),
         owner_id: owner ? demoId('owner', owner.key) : null,
         type_of_contract: contract,
-        contract_number: contract === 'Propio' ? null : `${contract.slice(0, 3).toUpperCase()}-${faker.string.numeric(5)}`,
+        contract_number:
+          contract === 'Propio' ? null : `${contract.slice(0, 3).toUpperCase()}-${faker.string.numeric(5)}`,
         contract_start_date: contractStart === null ? null : cal.day(contractStart),
-        contract_expiration_date: contractStart === null ? null : cal.day(contractStart + weighted(faker, [[730, 60], [1095, 40]])),
+        contract_expiration_date:
+          contractStart === null
+            ? null
+            : cal.day(
+                contractStart +
+                  weighted(faker, [
+                    [730, 60],
+                    [1095, 40],
+                  ])
+              ),
         has_certification: type.key === 'hidrogrua',
         certification_number: type.key === 'hidrogrua' ? `IZ-${faker.string.numeric(6)}` : null,
-        certification_expiration_date: type.key === 'hidrogrua' ? cal.day(faker.number.int({ min: -20, max: 300 })) : null,
+        certification_expiration_date:
+          type.key === 'hidrogrua' ? cal.day(faker.number.int({ min: -20, max: 300 })) : null,
         currency: 'USD',
         price: faker.number.int({ min: 25, max: 180 }) * 1000,
         cost_type: 'Directo',
@@ -146,6 +186,16 @@ export async function seedVehicles(ctx: Ctx): Promise<{ vehicles: DemoVehicle[];
     }
   }
   await insertMany(rows, (chunk) => tx.vehicles.createMany({ data: chunk }), 40);
+
+  // Afectaciones a clientes: pivote explícita, en sincronía con `allocated_to`.
+  const contractorLinks = vehicles.flatMap((v) =>
+    v.customers.map((contractorId) => ({ equipment_id: v.id, contractor_id: contractorId }))
+  );
+  await insertMany(
+    contractorLinks,
+    (chunk) => tx.contractor_equipment.createMany({ data: chunk, skipDuplicates: true }),
+    500
+  );
 
   // Equipos varios (no son vehiculos: no llevan patente ni documentos de equipo).
   const others: DemoOtherEquipment[] = [];
@@ -158,7 +208,13 @@ export async function seedVehicles(ctx: Ctx): Promise<{ vehicles: DemoVehicle[];
       const id = demoId('other_equipment', `${type.key}:${i}`);
       const { brand, model } = pick(faker, modelsFor(type.key));
       const serial = `${type.key.slice(0, 3).toUpperCase()}-${faker.string.numeric(7)}`;
-      others.push({ id, type: type.key, typeName: type.name, internNumber: `EQ-${String(oe).padStart(3, '0')}`, serial });
+      others.push({
+        id,
+        type: type.key,
+        typeName: type.name,
+        internNumber: `EQ-${String(oe).padStart(3, '0')}`,
+        serial,
+      });
       otherRows.push({
         id,
         company_id: company.id,
@@ -167,7 +223,11 @@ export async function seedVehicles(ctx: Ctx): Promise<{ vehicles: DemoVehicle[];
         model_id: modelId(brand, model),
         serial_number: serial,
         year: String(faker.number.int({ min: 2015, max: 2025 })),
-        condition: weighted(faker, [['operativo', 85], ['en_reparacion', 10], ['no_operativo', 5]] as const),
+        condition: weighted(faker, [
+          ['operativo', 85],
+          ['en_reparacion', 10],
+          ['no_operativo', 5],
+        ] as const),
         intern_number: `EQ-${String(oe).padStart(3, '0')}`,
         horometer: faker.number.int({ min: 800, max: 22000 }),
         manufacturer_plate: `${BRANDS.find((b) => b.key === brand)!.name} ${serial}`,
@@ -188,9 +248,13 @@ export async function seedVehicles(ctx: Ctx): Promise<{ vehicles: DemoVehicle[];
   await tx.other_equipment.createMany({ data: otherRows });
   await tx.contractor_other_equipment.createMany({
     // Asignados segun la demanda (torres y generadores a quien los pide en sus contratos).
-    data: others.flatMap((o) => assignCustomers(ctx, `other:${o.type}`).map((contractor_id) => ({ equipment_id: o.id, contractor_id }))),
+    data: others.flatMap((o) =>
+      assignCustomers(ctx, `other:${o.type}`).map((contractor_id) => ({ equipment_id: o.id, contractor_id }))
+    ),
   });
 
-  ctx.log(`${vehicles.length} vehículos (${vehicles.filter((v) => !v.active).length} de baja) y ${others.length} equipos varios`);
+  ctx.log(
+    `${vehicles.length} vehículos (${vehicles.filter((v) => !v.active).length} de baja) y ${others.length} equipos varios`
+  );
   return { vehicles, others };
 }

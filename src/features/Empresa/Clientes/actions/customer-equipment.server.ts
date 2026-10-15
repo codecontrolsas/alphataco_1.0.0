@@ -1,11 +1,13 @@
 'use server';
 
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { type type_equipment } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
 import { errorMessage, fail, ok, type ActionResult } from '../lib/action-result';
+import { assertComercialView, requireComercialPermission } from '../lib/require-permission.server';
 import {
   CUSTOMER_EQUIPMENT_TYPES,
   customerEquipmentFormSchema,
@@ -36,6 +38,7 @@ function toTypeLabel(value: type_equipment): CustomerEquipmentTypeLabel {
 
 /** Equipos de los clientes de la empresa activa (`type` como etiqueta de la UI). */
 export async function getCustomerEquipments() {
+  await assertComercialView(['equipos-cliente']);
   const companyId = await getActiveCompanyId();
   try {
     const rows = await prisma.equipos_clientes.findMany({
@@ -62,6 +65,9 @@ export type CustomerEquipmentRow = Awaited<ReturnType<typeof getCustomerEquipmen
 /** Equipos de UN cliente de la empresa activa (la ficha del cliente). */
 export async function getCustomerEquipmentsByCustomer(customerId: string) {
   if (!customerId) return [];
+  if (!(await checkPermissionServer('comercial', 'equipos-cliente', 'view'))) {
+    throw new Error('No tenés permiso para ver los equipos del cliente');
+  }
   const companyId = await getActiveCompanyId();
   try {
     const rows = await prisma.equipos_clientes.findMany({
@@ -84,15 +90,22 @@ export async function getCustomerEquipmentsByCustomer(customerId: string) {
 }
 
 async function assertCustomerOwned(customerId: string, companyId: string): Promise<void> {
-  const customer = await prisma.customers.findFirst({ where: { id: customerId, company_id: companyId }, select: { id: true } });
+  const customer = await prisma.customers.findFirst({
+    where: { id: customerId, company_id: companyId },
+    select: { id: true },
+  });
   if (!customer) throw new Error('Cliente no encontrado');
 }
 
-export async function createCustomerEquipment(input: CustomerEquipmentFormValues): Promise<ActionResult<{ id: string }>> {
+export async function createCustomerEquipment(
+  input: CustomerEquipmentFormValues
+): Promise<ActionResult<{ id: string }>> {
   const parsed = customerEquipmentFormSchema.safeParse(input);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos');
   const values = parsed.data;
 
+  const permissionError = await requireComercialPermission('equipos-cliente', 'create');
+  if (permissionError) return fail(permissionError);
   const companyId = await getActiveCompanyId();
   try {
     await assertCustomerOwned(values.customer_id, companyId);
@@ -116,6 +129,8 @@ export async function updateCustomerEquipment(
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos');
   const values = parsed.data;
 
+  const permissionError = await requireComercialPermission('equipos-cliente', 'update');
+  if (permissionError) return fail(permissionError);
   const companyId = await getActiveCompanyId();
   try {
     await assertCustomerOwned(values.customer_id, companyId);

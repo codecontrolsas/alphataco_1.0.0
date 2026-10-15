@@ -83,6 +83,13 @@ export function AssignRepairTypesDialog({ item, repairTypes, open, onClose, onUp
     onClose();
   };
 
+  // Vista previa de bajas respecto de lo que el diálogo mostró al abrirse.
+  const removedTypes = initialIds
+    .filter((id) => !selectedIds.includes(id))
+    .map((id) => repairTypes.find((rt) => rt.id === id)?.name ?? 'Tipo')
+    .join(', ');
+  const removedCount = initialIds.filter((id) => !selectedIds.includes(id)).length;
+
   const totalCount = repairTypes.length;
   const selectedCount = selectedIds.length;
   const filteredCount = filteredRepairTypes.length;
@@ -164,6 +171,12 @@ export function AssignRepairTypesDialog({ item, repairTypes, open, onClose, onUp
                 )}
               </ScrollArea>
 
+              {removedCount > 0 && (
+                <p className="text-xs font-medium text-destructive" role="status">
+                  Se quitan {removedCount}: {removedTypes}
+                </p>
+              )}
+
               {selectedCount > 0 && (
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-muted-foreground">Seleccionados ({selectedCount})</p>
@@ -195,10 +208,10 @@ export function AssignRepairTypesDialog({ item, repairTypes, open, onClose, onUp
         </div>
 
         <DialogFooter className="gap-2 shrink-0">
-          <Button variant="outline" onClick={handleClose}>
+          <Button type="button" variant="outline" onClick={handleClose}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={selectedCount === 0}>
+          <Button type="button" onClick={handleSubmit} disabled={selectedCount === 0}>
             Guardar
             {selectedCount > 0 && (
               <span className="ml-1.5 text-xs opacity-80">

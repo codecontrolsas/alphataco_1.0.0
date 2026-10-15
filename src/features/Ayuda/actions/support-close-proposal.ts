@@ -5,6 +5,7 @@ import { taskAppClient } from '@/shared/lib/taskapp/client';
 import { TaskAppError } from '@/shared/lib/taskapp/errors';
 import type { CloseProposalTarget, Ticket } from '@/shared/lib/taskapp/types';
 import { canProposeClose, closeReasonError } from '../constants/ticket-copy';
+import { requireSupportTickets } from '../lib/access.server';
 import { getReporterEmail } from './getReporterEmail';
 import { getSupportTicketById } from './support-tickets';
 
@@ -30,6 +31,7 @@ export async function proposeSupportTicketClose(
   target: CloseProposalTarget,
   reason: string
 ): Promise<Ticket> {
+  await requireSupportTickets();
   // Lo que no depende del ticket se valida ANTES de ir a buscarlo: un input
   // inválido no tiene por qué pagar la sesión, el GET del ticket y el listado
   // de aprobadores que hace getSupportTicketById.
@@ -43,10 +45,7 @@ export async function proposeSupportTicketClose(
   // En paralelo, como en la confirmación: la sesión y el ticket no dependen
   // uno del otro. getSupportTicketById ya resuelve el permiso de lectura
   // (reporter o aprobador) y devuelve null si no corresponde.
-  const [reporter, ticket] = await Promise.all([
-    getReporterEmail(),
-    getSupportTicketById(ticketId),
-  ]);
+  const [reporter, ticket] = await Promise.all([getReporterEmail(), getSupportTicketById(ticketId)]);
   if (!reporter) throw new Error('No hay usuario autenticado');
   if (!ticket) throw new Error('No tenés acceso a este ticket');
 

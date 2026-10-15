@@ -10,6 +10,31 @@ import { INVALIDATION_MAP } from '@/shared/constants/cache-invalidation-map';
 import { prisma } from '@/shared/lib/prisma';
 import { invalidateCacheTags } from '@/shared/utils/cache-invalidation';
 import {
+  lockEditableOrder,
+  requireOrderManagementPermission,
+  requireOrderManagementPermissions,
+  requireOrderNumberAccess,
+  toFailure,
+} from './access';
+import {
+  applyChiefCommentUpdates,
+  applyDescriptionUpdates,
+  applyItemAdds,
+  applyItemDeletes,
+  applyRepairTypeDelta,
+  applyRepairTypeUpdates,
+  requiredActionsForChanges,
+} from './item-changes';
+import {
+  assignSectorInputSchema,
+  orderChangeSetSchema,
+  orderIdSchema,
+  repairTypeDeltaSchema,
+  type OrderChangeSet,
+  type RepairTypeDelta,
+} from '../schemas/order-changes';
+import { z } from 'zod';
+import {
   assertOrderInActiveCompany,
   assertOrderItemInActiveCompany,
   assertSectorInCompany,
@@ -33,7 +58,10 @@ export interface AssignSectorInput {
  * Ademas, crea automaticamente un item DIAGNOSTICO para cada sector asignado.
  */
 export async function assignItemsToSectors(maintenanceOrderId: string, assignments: AssignSectorInput[]) {
-  // Perímetro: el registro tiene que ser de la empresa activa.
+  // Permiso: asignar sectores es una edición. Perímetro: el registro tiene que ser de la empresa activa.
+  await requireOrderManagementPermission('update');
+  orderIdSchema.parse(maintenanceOrderId);
+  assignments = assignSectorInputSchema.parse(assignments);
   await assertOrderInActiveCompany(maintenanceOrderId);
 
   const profile = await requireServerAuthProfile();
@@ -44,6 +72,7 @@ export async function assignItemsToSectors(maintenanceOrderId: string, assignmen
 
   try {
     await withMaintenanceActor(profile.id, async (tx) => {
+      await lockEditableOrder(tx, maintenanceOrderId);
       const companyId = await getMaintenanceOrderCompanyId(tx, maintenanceOrderId);
       for (const assignment of assignments) {
         // El sector llega del cliente: tiene que ser de la empresa del pedido.
@@ -124,13 +153,21 @@ export async function addItemToOrder(
     repairTypeIds?: string[];
   }
 ) {
-  // Perímetro: el registro tiene que ser de la empresa activa.
+  // Permiso: alta de ítem. Perímetro: el registro tiene que ser de la empresa activa.
+  await requireOrderManagementPermission('create');
+  orderIdSchema.parse(maintenanceOrderId);
+  const input = orderChangeSetSchema.shape.adds.element.parse({
+    description: data.description,
+    repairTypeIds: data.repairTypeIds ?? [],
+  });
+  data = { description: input.description, repairTypeIds: input.repairTypeIds };
   await assertOrderInActiveCompany(maintenanceOrderId);
 
   const profile = await requireServerAuthProfile();
 
   try {
     const newItem = await withMaintenanceActor(profile.id, async (tx) => {
+      await lockEditableOrder(tx, maintenanceOrderId);
       const companyId = await getMaintenanceOrderCompanyId(tx, maintenanceOrderId);
       // Los tipos llegan del cliente: se descartan los que no son de la empresa del pedido.
       const repairTypeIds = await filterRepairTypeIdsForCompany(data.repairTypeIds ?? [], companyId);
@@ -179,10 +216,13 @@ export async function addItemToOrder(
 }
 
 /**
- * Actualiza los tipos de reparacion asignados a un item.
- * Actualiza tanto el campo legacy como la tabla pivot.
+ * Aplica ALTAS y BAJAS de tipos de reparación a un ítem (no el conjunto final).
+ * Devuelve cuántos se agregaron y cuántos se quitaron realmente.
  */
-export async function updateItemRepairTypes(maintenanceOrderItemId: string, repairTypeIds: string[]) {
+export async function updateItemRepairTypes(maintenanceOrderItemId: string, delta: RepairTypeDelta) {
+  await requireOrderManagementPermission('update');
+  z.string().uuid().parse(maintenanceOrderItemId);
+  const parsedDelta = repairTypeDeltaSchema.parse(delta);
   // Perímetro: el registro tiene que ser de la empresa activa.
   await assertOrderItemInActiveCompany(maintenanceOrderItemId);
 
@@ -196,48 +236,28 @@ export async function updateItemRepairTypes(maintenanceOrderItemId: string, repa
     if (!item?.maintenance_order_id) {
       throw new Error('Item no encontrado o sin orden asociada');
     }
+    const orderId = item.maintenance_order_id;
 
-    // Los tipos llegan del cliente: se descartan los que no son de la empresa del ítem.
-    const validRepairTypeIds = await filterRepairTypeIdsForCompany(repairTypeIds, item.company_id);
-
-    await withMaintenanceActor(profile.id, async (tx) => {
-      // Actualizar campo legacy con el primer tipo
-      await tx.maintenance_order_items.update({
-        where: { id: maintenanceOrderItemId },
-        data: { repair_type_id: validRepairTypeIds[0] ?? null },
-      });
-
-      // Eliminar registros anteriores de la tabla pivot
-      await tx.maintenance_order_item_repair_types.deleteMany({
-        where: { maintenance_order_item_id: maintenanceOrderItemId },
-      });
-
-      // Insertar nuevos registros en la tabla pivot
-      if (validRepairTypeIds.length > 0) {
-        await tx.maintenance_order_item_repair_types.createMany({
-          data: validRepairTypeIds.map((repairTypeId) => ({
-            maintenance_order_item_id: maintenanceOrderItemId,
-            repair_type_id: repairTypeId,
-          })),
-          skipDuplicates: true,
-        });
-      }
+    const result = await withMaintenanceActor(profile.id, async (tx) => {
+      await lockEditableOrder(tx, orderId);
+      const applied = await applyRepairTypeDelta(tx, orderId, item.company_id, maintenanceOrderItemId, parsedDelta);
+      if (!applied) throw new Error('Item no encontrado en el pedido');
 
       await logActivity(tx, {
-        maintenanceOrderId: item.maintenance_order_id,
+        maintenanceOrderId: orderId,
         actionType: ACTIVITY_LOG.ORDER_ITEM_REPAIR_TYPES_UPDATED,
         performedBy: profile.id,
-        metadata: { itemId: maintenanceOrderItemId, repairTypeIds: validRepairTypeIds },
+        metadata: { itemId: maintenanceOrderItemId, added: parsedDelta.add, removed: parsedDelta.remove },
       });
+      return applied;
     });
 
-    logger.info('Tipos de reparacion actualizados', {
-      data: { maintenanceOrderItemId, repairTypeCount: validRepairTypeIds.length },
-    });
+    logger.info('Tipos de reparacion actualizados', { data: { maintenanceOrderItemId, ...result } });
 
     await invalidateCacheTags(INVALIDATION_MAP.saveOrderChanges);
+    return result;
   } catch (error) {
-    logger.error('Error actualizando repair_type_id', { data: { error } });
+    logger.error('Error actualizando tipos de reparacion', { data: { error } });
     throw new Error(
       `Error al actualizar tipo de reparacion: ${error instanceof Error ? error.message : String(error)}`
     );
@@ -248,7 +268,9 @@ export async function updateItemRepairTypes(maintenanceOrderItemId: string, repa
  * Elimina un item que fue agregado manualmente (no tiene maintenance_request_item_id)
  */
 export async function removeManualItem(itemId: string) {
-  // Perímetro: el registro tiene que ser de la empresa activa.
+  // Permiso: baja de ítem. Perímetro: el registro tiene que ser de la empresa activa.
+  await requireOrderManagementPermission('delete');
+  z.string().uuid().parse(itemId);
   await assertOrderItemInActiveCompany(itemId);
 
   const profile = await requireServerAuthProfile();
@@ -270,6 +292,7 @@ export async function removeManualItem(itemId: string) {
 
     // Las relaciones tienen ON DELETE CASCADE, por lo que el delete borra el pivot automáticamente
     await withMaintenanceActor(profile.id, async (tx) => {
+      if (item.maintenance_order_id) await lockEditableOrder(tx, item.maintenance_order_id);
       await tx.maintenance_order_items.delete({ where: { id: itemId } });
       if (item.maintenance_order_id) {
         await logActivity(tx, {
@@ -302,7 +325,10 @@ export type AddItemResult = Awaited<ReturnType<typeof addItemToOrder>>;
  * Called when the OM enters the workshop (status = 'in_workshop').
  */
 export async function generateMaintenanceOrderNumber(orderId: string) {
-  // Perímetro: el registro tiene que ser de la empresa activa.
+  // Permiso: lo llama también la aprobación de entrada a taller (tabs de pedidos), por eso
+  // alcanza `update` en cualquiera de las tabs del circuito. Perímetro: empresa activa.
+  await requireOrderNumberAccess();
+  orderIdSchema.parse(orderId);
   await assertOrderInActiveCompany(orderId);
 
   const profile = await requireServerAuthProfile();
@@ -348,116 +374,51 @@ export async function generateMaintenanceOrderNumber(orderId: string) {
 // BATCH SAVE
 // =============================================================================
 
-export interface OrderChangeSet {
-  /** Items to delete (only manual items, not from request) */
-  deletes: string[];
-  /** Items to add */
-  adds: Array<{ description: string; repairTypeIds: string[] }>;
-  /** Sector assignments (item -> sector + sequence) */
-  sectorAssignments: Array<{
-    itemIds: string[];
-    sectorId: string;
-    sequenceOrder: number;
-  }>;
-  /** Repair type updates per item */
-  repairTypeUpdates: Array<{
-    itemId: string;
-    repairTypeIds: string[];
-  }>;
-  /** Sequence order updates for already-assigned items */
-  sequenceUpdates: Array<{
-    itemId: string;
-    sequenceOrder: number;
-  }>;
-  /** Description updates per item */
-  descriptionUpdates: Array<{
-    itemId: string;
-    description: string;
-  }>;
-  /** Workshop chief comment updates per item */
-  chiefCommentUpdates: Array<{
-    itemId: string;
-    comment: string;
-  }>;
-  /** External workshop assignments (no sector) */
-  workshopAssignments: Array<{
-    itemIds: string[];
-    workshopId: string;
-  }>;
-  /** Items rejected by workshop chief (won't travel to WO) */
-  rejections?: Array<{
-    itemId: string;
-    reason: string;
-  }>;
-  /** Items restored from rejected state */
-  restorations?: string[];
-}
+export type SaveOrderChangesResult =
+  | { ok: true; repairTypes: { added: number; removed: number } }
+  | { ok: false; message: string };
 
 /**
  * Batch save: procesa todos los cambios pendientes en una sola accion.
  * Procesa en orden: deletes -> adds -> sector assignments -> repair type updates -> sequence updates.
+ *
+ * Permisos: cada tipo de cambio exige su acción (alta `create`, baja `delete`, resto `update`).
+ * No admite edición en pedidos en estado terminal. Devuelve `{ ok: false, message }` ante rechazos
+ * esperados (permisos/estado) para que el mensaje llegue al cliente aun en producción.
  */
-export async function saveOrderChanges(orderId: string, changes: OrderChangeSet) {
-  // Perímetro: el registro tiene que ser de la empresa activa.
-  await assertOrderInActiveCompany(orderId);
-
-  const profile = await requireServerAuthProfile();
-
-  logger.info('Guardando cambios batch en orden', {
-    data: {
-      orderId,
-      deletes: changes.deletes.length,
-      adds: changes.adds.length,
-      sectorAssignments: changes.sectorAssignments.length,
-      repairTypeUpdates: changes.repairTypeUpdates.length,
-      sequenceUpdates: changes.sequenceUpdates.length,
-      descriptionUpdates: changes.descriptionUpdates.length,
-      chiefCommentUpdates: changes.chiefCommentUpdates.length,
-      workshopAssignments: changes.workshopAssignments.length,
-    },
-  });
-
+export async function saveOrderChanges(orderId: string, rawChanges: OrderChangeSet): Promise<SaveOrderChangesResult> {
   try {
-    await withMaintenanceActor(profile.id, async (tx) => {
-      const companyId = await getMaintenanceOrderCompanyId(tx, orderId);
-      // 1. DELETES - Eliminar items manuales.
-      //    Todo id que llega del cliente se lee y se escribe ATADO al pedido ya validado:
-      //    sin el `maintenance_order_id` un id de otro pedido (u otra empresa) pasaba.
-      for (const itemId of changes.deletes) {
-        const item = await tx.maintenance_order_items.findFirst({
-          where: { id: itemId, maintenance_order_id: orderId },
-          select: { id: true, maintenance_request_item_id: true, is_diagnostico: true },
-        });
+    orderIdSchema.parse(orderId);
+    const changes = orderChangeSetSchema.parse(rawChanges);
+    await requireOrderManagementPermissions(requiredActionsForChanges(changes));
+    // Perímetro: el registro tiene que ser de la empresa activa.
+    await assertOrderInActiveCompany(orderId);
 
-        if (item && (!item.maintenance_request_item_id || item.is_diagnostico)) {
-          // ON DELETE CASCADE elimina el pivot automáticamente
-          await tx.maintenance_order_items.delete({ where: { id: item.id } });
-        }
-      }
+    const profile = await requireServerAuthProfile();
+
+    logger.info('Guardando cambios batch en orden', {
+      data: {
+        orderId,
+        deletes: changes.deletes.length,
+        adds: changes.adds.length,
+        sectorAssignments: changes.sectorAssignments.length,
+        repairTypeUpdates: changes.repairTypeUpdates.length,
+        sequenceUpdates: changes.sequenceUpdates.length,
+        descriptionUpdates: changes.descriptionUpdates.length,
+        chiefCommentUpdates: changes.chiefCommentUpdates.length,
+        workshopAssignments: changes.workshopAssignments.length,
+      },
+    });
+
+    const repairTypes = await withMaintenanceActor(profile.id, async (tx) => {
+      await lockEditableOrder(tx, orderId);
+      const companyId = await getMaintenanceOrderCompanyId(tx, orderId);
+
+      // 1. DELETES - Eliminar items manuales (atados al pedido validado).
+      await applyItemDeletes(tx, orderId, changes.deletes);
 
       // 2. ADDS - Agregar nuevos items
-      for (const add of changes.adds) {
-        const addRepairTypeIds = await filterRepairTypeIdsForCompany(add.repairTypeIds, companyId);
-
-        const newItem = await tx.maintenance_order_items.create({
-          data: {
-            maintenance_order_id: orderId,
-            company_id: companyId,
-            description: add.description,
-            repair_type_id: addRepairTypeIds[0] ?? null,
-          },
-        });
-
-        if (addRepairTypeIds.length > 0) {
-          await tx.maintenance_order_item_repair_types.createMany({
-            data: addRepairTypeIds.map((repairTypeId) => ({
-              maintenance_order_item_id: newItem.id,
-              repair_type_id: repairTypeId,
-            })),
-            skipDuplicates: true,
-          });
-        }
-      }
+      await applyItemAdds(tx, orderId, companyId, changes.adds);
 
       // 3. SECTOR ASSIGNMENTS
       // Backend safeguard: normalize sequence orders to avoid duplicates
@@ -522,32 +483,8 @@ export async function saveOrderChanges(orderId: string, changes: OrderChangeSet)
         }
       }
 
-      // 4. REPAIR TYPE UPDATES
-      for (const update of changes.repairTypeUpdates) {
-        const updateRepairTypeIds = await filterRepairTypeIdsForCompany(update.repairTypeIds, companyId);
-
-        // Actualizar campo legacy (`updateMany` para poder atar el ítem al pedido validado)
-        const { count } = await tx.maintenance_order_items.updateMany({
-          where: { id: update.itemId, maintenance_order_id: orderId },
-          data: { repair_type_id: updateRepairTypeIds[0] ?? null },
-        });
-        if (count === 0) continue;
-
-        // Reemplazar pivot records
-        await tx.maintenance_order_item_repair_types.deleteMany({
-          where: { maintenance_order_item_id: update.itemId },
-        });
-
-        if (updateRepairTypeIds.length > 0) {
-          await tx.maintenance_order_item_repair_types.createMany({
-            data: updateRepairTypeIds.map((repairTypeId) => ({
-              maintenance_order_item_id: update.itemId,
-              repair_type_id: repairTypeId,
-            })),
-            skipDuplicates: true,
-          });
-        }
-      }
+      // 4. REPAIR TYPE UPDATES (altas y bajas explícitas)
+      const repairTypeTotals = await applyRepairTypeUpdates(tx, orderId, companyId, changes.repairTypeUpdates);
 
       // 5. SEQUENCE ORDER UPDATES
       for (const seqUpdate of changes.sequenceUpdates) {
@@ -558,23 +495,10 @@ export async function saveOrderChanges(orderId: string, changes: OrderChangeSet)
       }
 
       // 6. DESCRIPTION UPDATES
-      for (const descUpdate of changes.descriptionUpdates) {
-        await tx.maintenance_order_items.updateMany({
-          where: { id: descUpdate.itemId, maintenance_order_id: orderId },
-          data: { description: descUpdate.description },
-        });
-      }
+      await applyDescriptionUpdates(tx, orderId, changes.descriptionUpdates);
 
       // 7. CHIEF COMMENT UPDATES
-      for (const commentUpdate of changes.chiefCommentUpdates) {
-        await tx.maintenance_order_items.updateMany({
-          where: { id: commentUpdate.itemId, maintenance_order_id: orderId },
-          data: {
-            workshop_chief_comment: commentUpdate.comment,
-            workshop_chief_comment_by: profile.id,
-          },
-        });
-      }
+      await applyChiefCommentUpdates(tx, orderId, profile.id, changes.chiefCommentUpdates);
 
       // 8. EXTERNAL WORKSHOP ASSIGNMENTS (no sector, no diagnostico)
       for (const wsAssignment of changes.workshopAssignments) {
@@ -696,14 +620,20 @@ export async function saveOrderChanges(orderId: string, changes: OrderChangeSet)
           metadata: groupedMetadata,
         });
       }
+
+      return repairTypeTotals;
     });
 
-    logger.info('Cambios batch guardados exitosamente', { data: { orderId } });
+    logger.info('Cambios batch guardados exitosamente', { data: { orderId, ...repairTypes } });
 
     await invalidateCacheTags(INVALIDATION_MAP.saveOrderChanges);
+    return { ok: true, repairTypes };
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { ok: false, message: error.issues[0]?.message ?? 'Los datos enviados son inválidos' };
+    }
     logger.error('Error guardando cambios batch', { data: { error, orderId } });
-    throw error;
+    return toFailure(error);
   }
 }
 

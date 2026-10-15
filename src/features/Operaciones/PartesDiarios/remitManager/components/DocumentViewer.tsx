@@ -1,7 +1,19 @@
 'use client';
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { formatArgentinaDay } from '@/features/Treasury/lib/today';
+import { useState } from 'react';
 import { Download, Eye, FileText, FileType, ImageIcon, Trash2 } from 'lucide-react';
 import { useDeleteDocument, useDocumentUrl, useDownloadDocument } from '../hooks/useDocuments';
 import { DocumentViewerProps } from '../types';
@@ -11,9 +23,15 @@ export function DocumentViewer({ document, dailyReportRowId }: DocumentViewerPro
   const downloadDocument = useDownloadDocument();
   const { data: documentUrl } = useDocumentUrl(document.document_path);
 
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
   const handleDelete = async () => {
-    if (confirm(`¿Eliminar documento ${document.document_name}?`)) {
+    try {
       await deleteDocument.mutateAsync(document.id);
+    } catch {
+      // El error ya se informa con toast en el hook.
+    } finally {
+      setConfirmOpen(false);
     }
   };
 
@@ -65,13 +83,9 @@ export function DocumentViewer({ document, dailyReportRowId }: DocumentViewerPro
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
               Subido el{' '}
-              {document.created_at
-                ? new Date(document.created_at).toLocaleDateString('es-ES', {
-                    day: '2-digit',
-                    month: 'short',
-                    year: 'numeric',
-                  })
-                : '-'}
+              <span className="font-mono tabular-nums">
+                {document.created_at ? formatArgentinaDay(document.created_at) : '-'}
+              </span>
             </p>
           </div>
 
@@ -79,7 +93,9 @@ export function DocumentViewer({ document, dailyReportRowId }: DocumentViewerPro
             <Button
               variant="ghost"
               size="sm"
+              type="button"
               onClick={handleView}
+              aria-label="Ver documento"
               className="hover:bg-primary/10 hover:text-primary"
               title="Ver documento"
             >
@@ -88,7 +104,9 @@ export function DocumentViewer({ document, dailyReportRowId }: DocumentViewerPro
             <Button
               variant="ghost"
               size="sm"
+              type="button"
               onClick={handleDownload}
+              aria-label="Descargar"
               disabled={downloadDocument.isPending}
               className="hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-950/20"
               title="Descargar"
@@ -98,7 +116,9 @@ export function DocumentViewer({ document, dailyReportRowId }: DocumentViewerPro
             <Button
               variant="ghost"
               size="sm"
-              onClick={handleDelete}
+              type="button"
+              onClick={() => setConfirmOpen(true)}
+              aria-label="Eliminar"
               disabled={deleteDocument.isPending}
               className="hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/20"
               title="Eliminar"
@@ -108,6 +128,29 @@ export function DocumentViewer({ document, dailyReportRowId }: DocumentViewerPro
           </div>
         </div>
       </CardContent>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar documento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminará {document.document_name} de este remito. Esta acción no se puede deshacer. Si el mismo archivo está vinculado a otra línea, ahí se conserva.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteDocument.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleteDocument.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleDelete();
+              }}
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

@@ -7,6 +7,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/use-toast';
 import { Logger } from '@/lib/logger';
+import { useCatalogSheetBusy } from '@/shared/components/common/CatalogFormSheet';
 import DependencyValidationModal, { DependencyConfig } from '@/shared/components/modal/DependencyValidationModal';
 import {
   fetchDependenciesForValue,
@@ -18,8 +19,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { createEquipmentType, updateEquipmentType } from './actions.server';
 import { useActiveChecklists } from '../hooks/useActiveChecklists';
+import { createEquipmentType, updateEquipmentType } from './actions.server';
+import { computeIdDelta } from './lib/id-delta';
 
 const logger = new Logger('EquipmentTypesForm');
 
@@ -69,6 +71,7 @@ function EquipmentTypesForm({
   initialChecklistIds = [],
 }: EquipmentTypesFormProps) {
   const [showDependencyModal, setShowDependencyModal] = useState(false);
+  const setBusy = useCatalogSheetBusy();
   const queryClient = useQueryClient();
 
   // Hook para obtener checklists activos
@@ -151,6 +154,7 @@ function EquipmentTypesForm({
   };
 
   const onSubmit = async (data: FormData) => {
+    setBusy(true);
     try {
       if (isEditing && initialData) {
         const prevActive = !!initialData.is_active;
@@ -162,6 +166,7 @@ function EquipmentTypesForm({
           const depData = await fetchDependencies(dependencyConfigs[0], initialData.id);
 
           if (depData.data.length) {
+            setBusy(false);
             setShowDependencyModal(true);
             return; // No ejecutar update aún, el modal decidirá
           }
@@ -174,11 +179,12 @@ function EquipmentTypesForm({
           is_operative: data.is_operative,
           is_tractor_unit: data.is_tractor_unit,
           has_hitch: data.has_hitch,
-          hitch_type_ids: data.hitch_type_ids,
-          checklist_ids: data.checklist_ids,
+          hitches: computeIdDelta(initialHitchTypeIds, data.hitch_type_ids),
+          checklists: computeIdDelta(initialChecklistIds, data.checklist_ids),
         });
         // Invalidar queries de React Query para refrescar los datos
         queryClient.invalidateQueries({ queryKey: ['type-checklists', data.id] });
+        queryClient.invalidateQueries({ queryKey: ['type-hitch-types', data.id] });
         queryClient.invalidateQueries({ queryKey: ['active-checklists'] });
         queryClient.invalidateQueries({ queryKey: ['equipment-types'] });
       } else {
@@ -233,6 +239,7 @@ function EquipmentTypesForm({
         errorMessage = 'Error de base de datos: No se pudo completar la operación.';
       }
 
+      setBusy(false);
       toast({
         title: 'Error',
         description: errorMessage,
@@ -285,6 +292,7 @@ function EquipmentTypesForm({
 
     // Reemplazo masivo y luego desactivar
     if (action === 'replace') {
+      setBusy(true);
       try {
         // El modal sólo elige el reemplazo: la reasignación la hace el servidor. Sin esto el
         // tipo se desactivaba igual y los equipos quedaban apuntando a un tipo inactivo, con
@@ -307,16 +315,19 @@ function EquipmentTypesForm({
           is_operative: values.is_operative,
           is_tractor_unit: values.is_tractor_unit,
           has_hitch: values.has_hitch,
-          hitch_type_ids: values.hitch_type_ids,
-          checklist_ids: values.checklist_ids,
+          hitches: computeIdDelta(initialHitchTypeIds, values.hitch_type_ids),
+          checklists: computeIdDelta(initialChecklistIds, values.checklist_ids),
         });
         // Invalidar queries de React Query para refrescar los datos
         queryClient.invalidateQueries({ queryKey: ['type-checklists', values.id] });
+        queryClient.invalidateQueries({ queryKey: ['type-hitch-types', values.id] });
         queryClient.invalidateQueries({ queryKey: ['active-checklists'] });
         queryClient.invalidateQueries({ queryKey: ['equipment-types'] });
         if (onSuccess) onSuccess();
+        onReset();
       } catch (err) {
         logger.error('Error al reemplazar referencias', { data: { err } });
+        setBusy(false);
         toast({
           title: 'Error',
           description: 'No se pudieron reemplazar las referencias',
@@ -326,10 +337,9 @@ function EquipmentTypesForm({
     }
   };
   return (
-    <div className="flex space-y-8 max-w-[400px]">
+    <div className="w-full">
       <Form {...form}>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          <h2 className="text-xl font-bold mb-4">{isEditing ? 'Editar' : 'Crear'} Tipo de Unidad</h2>
           <FormField
             name="name"
             render={() => (
@@ -339,7 +349,7 @@ function EquipmentTypesForm({
                   <Input
                     placeholder="Ingrese el nombre del tipo de vehículo"
                     {...form.register('name')}
-                    className={`w-[400px] ${form.formState.errors.name ? 'border-red-500' : ''}`}
+                    className={`w-full ${form.formState.errors.name ? 'border-danger' : ''}`}
                   />
                 </FormControl>
                 <FormMessage />

@@ -1,7 +1,7 @@
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { getActiveMoneyAccountOptions } from '../actions/accounts.server';
 import { Suspense } from 'react';
-import { NoPermission } from '../fallback/NoPermission';
+import { StateBlock } from '@/shared/components/common/StateBlock';
 import { NewTransferButton } from './components/NewTransferButton';
 import { TransfersTableSkeleton } from './TransfersList/fallback/TransfersTableSkeleton';
 import { TransfersList } from './TransfersList/TransfersList';
@@ -14,7 +14,7 @@ export default async function TransfersTabContent({
   searchParams: DataTableSearchParams;
   permissions: Record<string, boolean>;
 }) {
-  if (permissions['tesoreria:transferencias:view'] !== true) return <NoPermission />;
+  if (permissions['tesoreria:transferencias:view'] !== true) return <StateBlock variant="noperm" title="No tenés permiso para ver esta información" />;
   const canCreate = permissions['tesoreria:transferencias:create'] === true;
   const canUpdate = permissions['tesoreria:transferencias:update'] === true;
   const accounts = canCreate ? await getActiveMoneyAccountOptions() : [];

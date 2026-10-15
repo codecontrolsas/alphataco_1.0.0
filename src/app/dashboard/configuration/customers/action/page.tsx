@@ -1,11 +1,7 @@
 import { Skeleton } from '@/components/ui/skeleton';
-import { fetchAllProvinces } from '@/features/Comercial/actions/location-actions';
-import { getAreasWithProvinces } from '@/features/Empresa/Clientes/actions/areas.server';
 import { getCustomerById } from '@/features/Empresa/Clientes/actions/customers.server';
-import { getMeasureUnits } from '@/features/Empresa/Clientes/actions/measure-units.server';
-import { getSectors } from '@/features/Empresa/Clientes/actions/sectors.server';
-import { getCustomerServices } from '@/features/Empresa/Clientes/actions/services.server';
 import CustomerComponent from '@/features/Empresa/Clientes/components/CustomerComponent';
+import { getUserPermissionsMapServer } from '@/features/Permissions';
 import { cn } from '@/lib/utils';
 import BackButton from '@/shared/components/common/BackButton';
 import { cookies } from 'next/headers';
@@ -15,19 +11,23 @@ interface PageProps {
   searchParams: Promise<{ id?: string; action?: string }>;
 }
 
+function readCookieJson<T>(raw: string | undefined, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 export default async function CustomerFormAction({ searchParams }: PageProps) {
   const { id, action } = await searchParams;
   const cookiesStore = await cookies();
-  const savedVisibility = cookiesStore.get('equipment-table-equipment')?.value;
-  const savedFilters = cookiesStore.get('equipment-table-equipment-filters')?.value;
 
-  const [customer, services, areas, sectors, measureUnits, provinces] = await Promise.all([
+  // La ficha pide sus propios datos (áreas, sectores, contratos, empleados, equipos) al abrir cada pestaña.
+  const [customer, permissionsMap] = await Promise.all([
     id ? getCustomerById(id) : Promise.resolve(null),
-    getCustomerServices(),
-    getAreasWithProvinces(),
-    getSectors(),
-    getMeasureUnits(),
-    fetchAllProvinces(),
+    getUserPermissionsMapServer(),
   ]);
 
   return (
@@ -40,13 +40,13 @@ export default async function CustomerFormAction({ searchParams }: PageProps) {
         <Suspense fallback={<Skeleton className="h-[400px] w-full rounded-md" />}>
           <CustomerComponent
             customer={customer}
-            services={services}
-            areas={areas}
-            sectors={sectors}
-            measureUnits={measureUnits}
-            provinces={provinces}
-            savedFilters={savedFilters ? JSON.parse(savedFilters) : []}
-            savedVisibility={savedVisibility ? JSON.parse(savedVisibility) : {}}
+            permissionsMap={permissionsMap}
+            contractsPreferences={{
+              servicesFilters: readCookieJson(cookiesStore.get('services-table-filters')?.value, []),
+              servicesVisibility: readCookieJson(cookiesStore.get('services-table')?.value, {}),
+              serviceItemsFilters: readCookieJson(cookiesStore.get('service-items-table-filters')?.value, []),
+              serviceItemsVisibility: readCookieJson(cookiesStore.get('service-items-table')?.value, {}),
+            }}
           />
         </Suspense>
       </div>

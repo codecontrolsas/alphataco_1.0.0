@@ -1,6 +1,7 @@
 'use server';
 
 import { withSessionActor } from '@/features/Operaciones/lib/with-session-actor';
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
@@ -24,6 +25,11 @@ export interface BulkCertifyResult {
 export async function bulkCertifyRows(rowIds: string[]): Promise<BulkCertifyResult> {
   if (!rowIds.length) {
     throw new Error('No hay registros seleccionados.');
+  }
+
+  // Misma clave que usa el cliente para mostrar la acción (`comercial:daily_reports:update`).
+  if (!(await checkPermissionServer('comercial', 'daily_reports', 'update'))) {
+    throw new Error('No tenés permiso para certificar líneas.');
   }
 
   try {

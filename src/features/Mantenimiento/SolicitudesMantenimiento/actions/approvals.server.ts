@@ -14,11 +14,30 @@ import { requireServerAuthProfile } from '@/shared/actions/auth.actions';
 import { INVALIDATION_MAP } from '@/shared/constants/cache-invalidation-map';
 import { prisma } from '@/shared/lib/prisma';
 import { invalidateCacheTags } from '@/shared/utils/cache-invalidation';
-import type { ApproveRequestItemsInput, RejectRequestInput } from '../../types';
-import { assertRequestInActiveCompany, assertRequestTransition } from './request-perimeter';
+import type { ApproveRequestItemsInput } from '../../types';
+import { assertRequestInActiveCompany, resolveRequestFromPending } from './request-perimeter';
 import { withMaintenanceActor } from '@/features/Mantenimiento/shared/maintenance-actor';
+import { requireMaintenancePermission } from '@/features/Mantenimiento/shared/permissions.server';
+import { assertSupervisorInCompany } from '@/features/Mantenimiento/shared/supervisor-perimeter';
+import { z } from 'zod';
 
 const serverLogger = new Logger('SolicitudesMantenimiento/approvals');
+
+const idSchema = z.string().uuid('Identificador inválido');
+
+const approveItemsSchema = z.object({
+  requestId: idSchema,
+  approvedItems: z.array(z.object({ itemId: idSchema, validatorComment: z.string().max(2000).optional() })).max(500),
+  rejectedItems: z
+    .array(z.object({ itemId: idSchema, reason: z.string().max(2000), validatorComment: z.string().max(2000).optional() }))
+    .max(500),
+});
+
+const rejectItemsSchema = z.object({
+  requestId: idSchema,
+  itemIds: z.array(idSchema).max(500),
+  reason: z.string().trim().min(1, 'El motivo del rechazo es obligatorio').max(2000),
+});
 
 /**
  * Aprueba items de una solicitud y crea el pedido de mantenimiento.
@@ -35,9 +54,14 @@ export async function approveMaintenanceRequestItems(input: ApproveRequestItemsI
     },
   });
 
+  // Permiso: aprobar/denegar solicitudes es `update` de la tab de solicitudes.
+  await requireMaintenancePermission('maintenance_requests', 'update');
+  const parsedInput = approveItemsSchema.safeParse(input);
+  if (!parsedInput.success) throw new Error(parsedInput.error.issues[0]?.message ?? 'Los datos enviados son inválidos');
+
   const profile = await requireServerAuthProfile();
   // Perímetro: la solicitud tiene que ser de la empresa activa.
-  await assertRequestInActiveCompany(input.requestId);
+  const companyId = await assertRequestInActiveCompany(input.requestId);
 
   // Descripción que verá el taller. Es obligatoria siempre que la aprobación
   // genere un pedido; la validación de longitud se repite acá porque el modal
@@ -57,8 +81,8 @@ export async function approveMaintenanceRequestItems(input: ApproveRequestItemsI
     // Una aprobación preventiva siempre genera pedido.
     assertDescription();
 
-    const request = await prisma.maintenance_requests.findUniqueOrThrow({
-      where: { id: input.requestId },
+    const request = await prisma.maintenance_requests.findFirstOrThrow({
+      where: { id: input.requestId, company_id: companyId },
       select: {
         equipment_id: true,
         company_id: true,
@@ -70,14 +94,9 @@ export async function approveMaintenanceRequestItems(input: ApproveRequestItemsI
     });
 
     await withMaintenanceActor(profile.id, async (tx) => {
-      await assertRequestTransition(tx, input.requestId, 'approved');
-      await tx.maintenance_requests.update({
-        where: { id: input.requestId },
-        data: {
-          status: 'approved',
-          approved_by: profile.id,
-          approved_at: new Date(),
-        },
+      await resolveRequestFromPending(tx, input.requestId, companyId, 'approved', {
+        approved_by: profile.id,
+        approved_at: new Date(),
       });
 
       await tx.maintenance_orders.create({
@@ -142,8 +161,8 @@ export async function approveMaintenanceRequestItems(input: ApproveRequestItemsI
       );
 
       // 3. Obtener la solicitud para crear el pedido
-      const request = await tx.maintenance_requests.findUniqueOrThrow({
-        where: { id: input.requestId },
+      const request = await tx.maintenance_requests.findFirstOrThrow({
+        where: { id: input.requestId, company_id: companyId },
         select: { id: true, equipment_id: true, company_id: true, kilometer: true },
       });
 
@@ -199,26 +218,16 @@ export async function approveMaintenanceRequestItems(input: ApproveRequestItemsI
         assertDescription();
       }
 
-      await assertRequestTransition(tx, input.requestId, outcome.requestStatus);
-
       if (outcome.requestStatus === 'rejected') {
-        await tx.maintenance_requests.update({
-          where: { id: input.requestId },
-          data: {
-            status: 'rejected',
-            rejection_reason: outcome.rejectionReason,
-            rejected_by: profile.id,
-            rejected_at: new Date(),
-          },
+        await resolveRequestFromPending(tx, input.requestId, companyId, 'rejected', {
+          rejection_reason: outcome.rejectionReason,
+          rejected_by: profile.id,
+          rejected_at: new Date(),
         });
       } else {
-        await tx.maintenance_requests.update({
-          where: { id: input.requestId },
-          data: {
-            status: 'approved',
-            approved_by: profile.id,
-            approved_at: new Date(),
-          },
+        await resolveRequestFromPending(tx, input.requestId, companyId, 'approved', {
+          approved_by: profile.id,
+          approved_at: new Date(),
         });
       }
 
@@ -240,14 +249,17 @@ export async function approveMaintenanceRequestItems(input: ApproveRequestItemsI
         // 7. Actualizar el kilometraje del vehículo si la solicitud tiene km.
         //    Solo aplica a vehículos: los equipamientos no llevan kilometraje.
         if (request.kilometer && request.equipment_id) {
-          try {
+          // Un try/catch dentro de la transacción no sirve: tras un error SQL la transacción queda
+          // abortada. El contador solo avanza (nunca retrocede) y se ata a la empresa.
+          const vehicle = await tx.vehicles.findFirst({
+            where: { id: request.equipment_id, company_id: request.company_id },
+            select: { kilometer: true },
+          });
+          const requested = Number(request.kilometer);
+          if (vehicle && Number.isFinite(requested) && requested > Number(vehicle.kilometer ?? 0)) {
             await tx.vehicles.update({
               where: { id: request.equipment_id },
               data: { kilometer: request.kilometer },
-            });
-          } catch (vehicleError) {
-            serverLogger.warn('No se pudo actualizar kilometraje del vehículo al generar pedido', {
-              data: { error: vehicleError },
             });
           }
         }
@@ -279,18 +291,28 @@ export async function approveMaintenanceRequestItems(input: ApproveRequestItemsI
  * Solo aplica a solicitudes en estado 'pending_approval'.
  */
 export async function reassignRequestSupervisor(requestId: string, newSupervisorId: string) {
+  await requireMaintenancePermission('maintenance_requests', 'update');
+  const parsedIds = z.object({ requestId: idSchema, newSupervisorId: idSchema }).safeParse({ requestId, newSupervisorId });
+  if (!parsedIds.success) throw new Error('Los datos enviados son inválidos');
+
   serverLogger.info('Reasignando supervisor de solicitud', {
     data: { requestId, newSupervisorId },
   });
 
-  // Perímetro: la solicitud tiene que ser de la empresa activa.
-  await assertRequestInActiveCompany(requestId);
+  // Perímetro: la solicitud tiene que ser de la empresa activa y el supervisor, un usuario de ella.
+  const companyId = await assertRequestInActiveCompany(requestId);
+  await assertSupervisorInCompany(newSupervisorId, companyId);
 
   try {
-    await prisma.maintenance_requests.update({
-      where: { id: requestId },
+    // Solo una solicitud pendiente de aprobación se reasigna (con el estado en el `where`).
+    const result = await prisma.maintenance_requests.updateMany({
+      where: { id: requestId, company_id: companyId, status: 'pending_approval' },
       data: { supervisor_id: newSupervisorId },
     });
+
+    if (result.count !== 1) {
+      throw new Error('Solo se puede reasignar el supervisor de una solicitud pendiente de aprobación');
+    }
 
     serverLogger.info('Supervisor reasignado exitosamente', { data: { requestId, newSupervisorId } });
 
@@ -304,65 +326,6 @@ export async function reassignRequestSupervisor(requestId: string, newSupervisor
 }
 
 /**
- * Rechaza una solicitud de mantenimiento completa.
- * @deprecated Usar rejectMaintenanceRequestItems para rechazar items específicos
- */
-export async function rejectMaintenanceRequest(input: RejectRequestInput) {
-  serverLogger.info('Rechazando solicitud de mantenimiento', {
-    data: { requestId: input.requestId, reason: input.reason },
-  });
-
-  const profile = await requireServerAuthProfile();
-  // Perímetro: la solicitud tiene que ser de la empresa activa.
-  await assertRequestInActiveCompany(input.requestId);
-
-  try {
-    await withMaintenanceActor(profile.id, async (tx) => {
-      // Actualizar todos los items como rechazados
-      await tx.maintenance_request_items.updateMany({
-        where: { maintenance_request_id: input.requestId },
-        data: {
-          status: 'rejected',
-          rejection_reason: input.reason,
-        },
-      });
-
-      // Actualizar estado de la solicitud
-      await assertRequestTransition(tx, input.requestId, 'rejected');
-      await tx.maintenance_requests.update({
-        where: { id: input.requestId },
-        data: {
-          status: 'rejected',
-          rejection_reason: input.reason,
-          rejected_by: profile.id,
-          rejected_at: new Date(),
-        },
-      });
-
-      // Mismo hueco que tenía `rejectMaintenanceRequestItems`: el rechazo completo tampoco
-      // dejaba registro de actividad.
-      await logActivity(tx, {
-        maintenanceRequestId: input.requestId,
-        actionType: ACTIVITY_LOG.REJECTED,
-        performedBy: profile.id,
-        newStatus: 'rejected',
-        rejectionReason: input.reason,
-        notes: 'Solicitud rechazada',
-      });
-    });
-
-    serverLogger.info('Solicitud rechazada exitosamente', { data: { requestId: input.requestId } });
-
-    await invalidateCacheTags(INVALIDATION_MAP.rejectMaintenanceRequest);
-
-    return { success: true };
-  } catch (error) {
-    serverLogger.error('Error al rechazar solicitud', { data: { error, requestId: input.requestId } });
-    throw error;
-  }
-}
-
-/**
  * Rechaza items específicos de una solicitud de mantenimiento.
  * Permite rechazo selectivo (item por item) con un motivo común.
  */
@@ -371,23 +334,27 @@ export async function rejectMaintenanceRequestItems(input: { requestId: string; 
     data: { requestId: input.requestId, itemCount: input.itemIds.length, reason: input.reason },
   });
 
+  await requireMaintenancePermission('maintenance_requests', 'update');
+  const parsedReject = rejectItemsSchema.safeParse(input);
+  if (!parsedReject.success) throw new Error(parsedReject.error.issues[0]?.message ?? 'Los datos enviados son inválidos');
+
   const profile = await requireServerAuthProfile();
   // Perímetro: la solicitud tiene que ser de la empresa activa.
-  await assertRequestInActiveCompany(input.requestId);
+  const companyId = await assertRequestInActiveCompany(input.requestId);
 
   // --- PREVENTIVE REJECTION BRANCH ---
   if (input.itemIds.length === 0 && input.reason) {
-    const request = await prisma.maintenance_requests.findUniqueOrThrow({
-      where: { id: input.requestId },
+    const request = await prisma.maintenance_requests.findFirstOrThrow({
+      where: { id: input.requestId, company_id: companyId },
       select: { source: true, preventive_type: true },
     });
 
     if (request.source === 'preventive') {
       await withMaintenanceActor(profile.id, async (tx) => {
-        await assertRequestTransition(tx, input.requestId, 'rejected');
-        await tx.maintenance_requests.update({
-          where: { id: input.requestId },
-          data: { status: 'rejected' },
+        await resolveRequestFromPending(tx, input.requestId, companyId, 'rejected', {
+          rejection_reason: input.reason,
+          rejected_by: profile.id,
+          rejected_at: new Date(),
         });
 
         await logActivity(tx, {
@@ -430,15 +397,10 @@ export async function rejectMaintenanceRequestItems(input: { requestId: string; 
 
       // Si todos los items están rechazados, actualizar el estado de la solicitud
       if (everyRejected) {
-        await assertRequestTransition(tx, input.requestId, 'rejected');
-        await tx.maintenance_requests.update({
-          where: { id: input.requestId },
-          data: {
-            status: 'rejected',
-            rejection_reason: input.reason,
-            rejected_by: profile.id,
-            rejected_at: new Date(),
-          },
+        await resolveRequestFromPending(tx, input.requestId, companyId, 'rejected', {
+          rejection_reason: input.reason,
+          rejected_by: profile.id,
+          rejected_at: new Date(),
         });
       }
 

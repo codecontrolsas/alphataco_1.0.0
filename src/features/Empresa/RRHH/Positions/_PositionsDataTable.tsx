@@ -1,6 +1,11 @@
 'use client';
 
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import {
+  CatalogCreateButton,
+  CatalogFormSheet,
+  CatalogTableSurface,
+  useCatalogSheet,
+} from '@/shared/components/common/CatalogFormSheet';
 import {
   DataTable,
   type DataTableFacetedFilterConfig,
@@ -8,9 +13,11 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { Check, CircleOff, X } from 'lucide-react';
-import moment from 'moment';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
+import { CircleOff } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
+import { activeStatusLabel, buildActiveFacetResult } from '../../lib/active-status';
 import PositionsFormNew from './PositionsFormNew';
 import {
   getAllPositionsForExport,
@@ -57,20 +64,20 @@ export default function _PositionsDataTable({
     [permissionsMap]
   );
 
-  const canCreateOrUpdate =
-    permissions.hasPermission('configuracion', 'positions', 'create') ||
-    permissions.hasPermission('configuracion', 'positions', 'update');
+  const canCreate = permissions.hasPermission('configuracion', 'positions', 'create');
+  const canUpdate = permissions.hasPermission('configuracion', 'positions', 'update');
 
-  // ── Estado de edición ─────────────────────────────────────────────────────
+  // ── Sheet de alta/edición (el puesto en edición vive en estado local) ─────
   const [selectedPosition, setSelectedPosition] = useState<PositionListItem | null>(null);
-
-  const handleEdit = useCallback((item: PositionListItem) => {
-    setSelectedPosition(item);
-  }, []);
-
-  const handleFormDone = useCallback(() => {
-    setSelectedPosition(null);
-  }, []);
+  const handleClearSelected = useCallback(() => setSelectedPosition(null), []);
+  const sheet = useCatalogSheet<PositionListItem>({
+    canCreate,
+    canUpdate,
+    onOpenEdit: setSelectedPosition,
+    onOpenCreate: handleClearSelected,
+    onClosed: handleClearSelected,
+  });
+  const handleEdit = sheet.openEdit;
 
   // ── Client-side navigation mode ──────────────────────────────────────────
   const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
@@ -94,12 +101,12 @@ export default function _PositionsDataTable({
   }, [initialColumnVisibility]);
 
   // ── Filter visibility — 3 visibles por defecto ────────────────────────────
-  const DEFAULT_VISIBLE_FILTERS = ['is_active', 'aptitudes', 'name'];
+  const DEFAULT_VISIBLE_FILTERS = ['is_active', 'aptitudes', 'hierarchy'];
   const mergedFilterVisibility = useMemo(() => {
     if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
       return initialFilterVisibility;
     }
-    const allFilterIds = ['name', 'is_active', 'aptitudes', 'created_at'];
+    const allFilterIds = ['name', 'is_active', 'hierarchy', 'aptitudes', 'created_at'];
     return Object.fromEntries(allFilterIds.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
   }, [initialFilterVisibility]);
 
@@ -107,14 +114,7 @@ export default function _PositionsDataTable({
   const fetchIsActiveFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
     const result = await getPositionSingleFacet('is_active', params);
     if (!result) return { options: [], counts: new Map() };
-    const options = [
-      { value: 'true', label: 'Activo', icon: Check },
-      { value: 'false', label: 'Inactivo', icon: X },
-      ...(result.counts.has(NULL_FILTER_VALUE)
-        ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-        : []),
-    ];
-    return { options, counts: result.counts };
+    return buildActiveFacetResult(result.counts);
   }, []);
 
   // ── Lazy-load facet: aptitudes (M:M) ──────────────────────────────────────
@@ -131,6 +131,19 @@ export default function _PositionsDataTable({
     return { options, counts: result.counts };
   }, []);
 
+  // ── Lazy-load facet: hierarchy (sectores — array de UUIDs) ─────────────────
+  const fetchHierarchyFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
+    const result = await getPositionSingleFacet('hierarchy', params);
+    if (!result) return { options: [], counts: new Map() };
+    const options = [
+      ...result.options,
+      ...(result.counts.has(NULL_FILTER_VALUE)
+        ? [{ value: NULL_FILTER_VALUE, label: 'Sin sector', icon: CircleOff }]
+        : []),
+    ];
+    return { options, counts: result.counts };
+  }, []);
+
   // ── Faceted filters ───────────────────────────────────────────────────────
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
     () => [
@@ -139,6 +152,13 @@ export default function _PositionsDataTable({
         columnId: 'is_active',
         title: 'Estado',
         fetchFacet: fetchIsActiveFacet,
+      },
+
+      // ── hierarchy (sectores) ───────────────────────────────────────────────
+      {
+        columnId: 'hierarchy',
+        title: 'Sector/Departamento',
+        fetchFacet: fetchHierarchyFacet,
       },
 
       // ── aptitudes (M:M) ────────────────────────────────────────────────────
@@ -163,7 +183,7 @@ export default function _PositionsDataTable({
         type: 'dateRange' as const,
       },
     ],
-    [fetchIsActiveFacet, fetchAptitudesFacet]
+    [fetchIsActiveFacet, fetchHierarchyFacet, fetchAptitudesFacet]
   );
 
   // ── DataTable ─────────────────────────────────────────────────────────────
@@ -176,6 +196,7 @@ export default function _PositionsDataTable({
       queryFn={tableQueryFn}
       queryKey={['positions']}
       onStateChange={handleStateChange}
+      toolbarActions={<CatalogCreateButton sheet={sheet} label="Nuevo puesto" />}
       tableId={tableId}
       paramNamespace={tableId}
       facetedFilters={facetedFilters}
@@ -185,19 +206,16 @@ export default function _PositionsDataTable({
       searchPlaceholder="Buscar puestos..."
       emptyMessage="No se encontraron puestos"
       exportConfig={{
-        fetchAllData: () => getAllPositionsForExport(currentParams),
+        fetchAllData: async () => unwrapExportResult(await getAllPositionsForExport(currentParams)),
         options: {
           filename: 'puestos',
           sheetName: 'Puestos',
           title: 'Puestos de Trabajo',
         },
         formatters: {
-          is_active: (value) => {
-            if (value === null || value === undefined) return 'Sin asignar';
-            return value ? 'Activo' : 'Inactivo';
-          },
-          created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
-          hierarchyNames: (value) => (Array.isArray(value) ? value.join(', ') : String(value ?? '-')),
+          is_active: (value) => activeStatusLabel(value),
+          created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
+          hierarchy: (value) => (Array.isArray(value) ? value.join(', ') : String(value ?? '-')),
           aptitudes: (value) => {
             // accessorFn retorna string con nombres separados por coma
             return value ? String(value) : 'Sin aptitudes';
@@ -207,25 +225,17 @@ export default function _PositionsDataTable({
     />
   );
 
-  // Sin permisos de editar/crear: solo la tabla
-  if (!canCreateOrUpdate) {
-    return table;
-  }
-
-  // Con permisos: layout resizable con formulario a la izquierda y tabla a la derecha
   return (
-    <div className="w-full">
-      <ResizablePanelGroup className="min-h-[400px]" direction="horizontal">
-        <ResizablePanel defaultSize={30}>
-          <div className="overflow-auto h-full pr-2">
-            <PositionsFormNew selectedPosition={selectedPosition} onDone={handleFormDone} />
-          </div>
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={70}>
-          <div className="overflow-auto h-full pl-2">{table}</div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    </div>
+    <>
+      <CatalogTableSurface>{table}</CatalogTableSurface>
+      <CatalogFormSheet
+        sheet={sheet}
+        getKey={(position) => position.id}
+        title={{ create: 'Nuevo puesto', edit: 'Editar puesto' }}
+        size="lg"
+      >
+        {({ close }) => <PositionsFormNew selectedPosition={selectedPosition} onDone={close} />}
+      </CatalogFormSheet>
+    </>
   );
 }

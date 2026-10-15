@@ -6,6 +6,12 @@ import type {
   work_order_status,
   work_orders,
 } from '@/generated/prisma/client';
+import {
+  REPAIR_STATUS_UI,
+  TONE_TO_BADGE,
+  WORK_ORDER_STATUS_UI,
+  type BadgeVariant,
+} from '../lib/status-presentation';
 
 // Tipos base de la BD (modelos y enums generados por Prisma)
 export type WorkOrder = work_orders;
@@ -123,26 +129,23 @@ export interface WorkOrderDetail extends WorkOrderRowData {
   pausedBy: string | null;
 }
 
-// Constantes de estados
+// Constantes de estados (derivadas de la fuente única `lib/status-presentation.ts`)
 export const WORK_ORDER_STATUS_LABELS: Record<WorkOrderStatus, string> = {
-  pending: 'Pendiente',
-  in_progress: 'En Proceso',
-  paused: 'Pausada',
-  completed: 'Completada',
-  completed_partial: 'Completada Parcial',
-  cancelled: 'Cancelada',
+  pending: WORK_ORDER_STATUS_UI.pending.label,
+  in_progress: WORK_ORDER_STATUS_UI.in_progress.label,
+  paused: WORK_ORDER_STATUS_UI.paused.label,
+  completed: WORK_ORDER_STATUS_UI.completed.label,
+  completed_partial: WORK_ORDER_STATUS_UI.completed_partial.label,
+  cancelled: WORK_ORDER_STATUS_UI.cancelled.label,
 };
 
-export const WORK_ORDER_STATUS_VARIANTS: Record<
-  WorkOrderStatus,
-  'secondary' | 'warning' | 'success' | 'destructive' | 'default' | 'yellow'
-> = {
-  pending: 'secondary',
-  in_progress: 'warning',
-  paused: 'default',
-  completed: 'success',
-  completed_partial: 'yellow',
-  cancelled: 'destructive',
+export const WORK_ORDER_STATUS_VARIANTS: Record<WorkOrderStatus, BadgeVariant> = {
+  pending: TONE_TO_BADGE[WORK_ORDER_STATUS_UI.pending.tone],
+  in_progress: TONE_TO_BADGE[WORK_ORDER_STATUS_UI.in_progress.tone],
+  paused: TONE_TO_BADGE[WORK_ORDER_STATUS_UI.paused.tone],
+  completed: TONE_TO_BADGE[WORK_ORDER_STATUS_UI.completed.tone],
+  completed_partial: TONE_TO_BADGE[WORK_ORDER_STATUS_UI.completed_partial.tone],
+  cancelled: TONE_TO_BADGE[WORK_ORDER_STATUS_UI.cancelled.tone],
 };
 
 // Constantes de prioridad
@@ -164,11 +167,11 @@ export const WORK_ORDER_PRIORITY_VARIANTS: Record<
 };
 
 export const WORK_ORDER_ITEM_STATUS_LABELS: Record<WorkOrderItemStatus, string> = {
-  pending: 'Pendiente',
-  in_progress: 'En Proceso',
-  completed: 'Completado',
-  cancelled: 'Cancelado',
-  pending_approval: 'Pendiente Aprobación',
-  reassignment_requested: 'Reasignación',
-  rejected: 'Rechazado',
+  pending: REPAIR_STATUS_UI.pending.label,
+  in_progress: REPAIR_STATUS_UI.in_progress.label,
+  completed: REPAIR_STATUS_UI.completed.label,
+  cancelled: REPAIR_STATUS_UI.cancelled.label,
+  pending_approval: REPAIR_STATUS_UI.pending_approval.label,
+  reassignment_requested: REPAIR_STATUS_UI.reassignment_requested.label,
+  rejected: REPAIR_STATUS_UI.rejected.label,
 };

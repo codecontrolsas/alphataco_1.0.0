@@ -15,21 +15,6 @@ export type MaintenanceRequestItemStatus = 'pending' | 'approved' | 'rejected';
 // Estados de pedidos de mantenimiento
 export type MaintenanceOrderStatus = 'pending_scheduling' | 'scheduled' | 'in_workshop' | 'completed' | 'rejected';
 
-// Tipos para filtros
-export interface MaintenanceRequestFilters {
-  status?: MaintenanceRequestStatus;
-  equipment_id?: string;
-  from_date?: string;
-  to_date?: string;
-}
-
-export interface MaintenanceOrderFilters {
-  status?: MaintenanceOrderStatus;
-  equipment_id?: string;
-  scheduled_from?: string;
-  scheduled_to?: string;
-}
-
 // Tipos para acciones
 export interface ApproveRequestItemsInput {
   requestId: string;
@@ -54,11 +39,6 @@ export interface ApproveRequestItemsInput {
    * Se persiste en `maintenance_orders.description` y es lo que ve el taller.
    */
   description?: string;
-}
-
-export interface RejectRequestInput {
-  requestId: string;
-  reason: string;
 }
 
 export interface ScheduleOrderInput {

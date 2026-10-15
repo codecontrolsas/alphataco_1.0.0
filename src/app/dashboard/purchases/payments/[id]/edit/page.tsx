@@ -1,4 +1,8 @@
-import { getPaymentOrderDetail, getPaymentOrderEditValues, getPaymentOrderFormData } from '@/features/Purchases/actions/payment-orders.server';
+import {
+  getPaymentOrderDetail,
+  getPaymentOrderEditValues,
+  getPaymentOrderFormData,
+} from '@/features/Purchases/actions/payment-queries.server';
 import { EditPaymentOrderPage } from '@/features/Purchases/Payments/PaymentPages';
 import { notFound } from 'next/navigation';
 

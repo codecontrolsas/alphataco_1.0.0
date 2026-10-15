@@ -10,8 +10,8 @@ export function DiagramReportsSkeleton() {
       <CardContent>
         <div className="space-y-4">
           {/* Toolbar */}
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-9 w-64" />
+          <div className="flex flex-wrap items-center gap-2">
+            <Skeleton className="h-9 w-full max-w-64" />
             <Skeleton className="h-9 w-28" />
             <Skeleton className="h-9 w-28" />
           </div>
@@ -38,7 +38,7 @@ export function DiagramReportsSkeleton() {
           {/* Pagination */}
           <div className="flex items-center justify-between">
             <Skeleton className="h-4 w-32" />
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Skeleton className="h-8 w-8" />
               <Skeleton className="h-8 w-8" />
               <Skeleton className="h-8 w-8" />

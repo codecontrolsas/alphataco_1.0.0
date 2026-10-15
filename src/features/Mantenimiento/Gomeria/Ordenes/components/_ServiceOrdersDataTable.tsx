@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { buildEnumFacetResult, buildFkFacetResult } from '@/features/Mantenimiento/Gomeria/shared/facet-helpers';
 import { tireServiceOrderStatusLabels } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
+import { TIRE_SERVICE_ORDER_STATUS_UI } from '@/features/Mantenimiento/Gomeria/shared/tire-status-presentation';
 import { TireServiceOrderStatus } from '@/generated/prisma/enums';
 import {
   DataTable,
@@ -21,28 +22,36 @@ import {
   type DataTableSearchParams,
   type FacetResult,
 } from '@/shared/components/common/DataTable';
+import { formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
+import { useQueryClient } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
 import { Plus } from 'lucide-react';
-import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { cancelServiceOrder, closeServiceOrder } from '../actions/service-order-lifecycle.server';
 import {
-  cancelServiceOrder,
-  closeServiceOrder,
+  getOpenServiceOrdersSummary,
   getServiceOrderSingleFacet,
   getServiceOrdersForExport,
   getServiceOrdersPaginated,
   type ServiceOrderListItem,
-} from '../actions/actions.server';
+} from '../actions/service-order-list.server';
+import { OpenOrdersBand } from './OpenOrdersBand';
 import { ServiceOrderDetailView } from './ServiceOrderDetailView';
 import { ServiceOrderWizard } from './ServiceOrderWizard';
-import { getColumns } from './columns';
+import { SERVICE_ORDER_HIDDEN_COLUMNS_BY_DEFAULT, getColumns } from './columns';
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
 
-const TABLE_ID = 'tire-service-orders';
+/** Prefijo de los params de la URL: no cambia con el rediseño (las preferencias sí van con `tableId` `-v2`). */
+const STATUS_ICONS: Record<string, LucideIcon> = Object.fromEntries(
+  Object.entries(TIRE_SERVICE_ORDER_STATUS_UI).map(([status, ui]) => [status, ui.icon])
+);
+
+const PARAM_NAMESPACE = 'tire-service-orders';
 const DEFAULT_VISIBLE_FILTERS = ['status', 'vehicle_id', 'created_by'];
 
 const ALL_FILTER_IDS = [
@@ -65,6 +74,7 @@ interface ServiceOrdersDataTableProps {
   searchParams: DataTableSearchParams;
   tableId: string;
   permissionsMap: Record<string, boolean>;
+  openSummary: Awaited<ReturnType<typeof getOpenServiceOrdersSummary>>;
   initialColumnVisibility?: Record<string, boolean>;
   initialFilterVisibility?: Record<string, boolean>;
 }
@@ -79,6 +89,7 @@ export default function _ServiceOrdersDataTable({
   searchParams,
   tableId,
   permissionsMap,
+  openSummary,
   initialColumnVisibility,
   initialFilterVisibility,
 }: ServiceOrdersDataTableProps) {
@@ -92,13 +103,23 @@ export default function _ServiceOrdersDataTable({
   );
 
   const canCreate = permissions.hasPermission('mantenimiento', 'ordenes_gomeria', 'create');
+  const canUpdate = permissions.hasPermission('mantenimiento', 'ordenes_gomeria', 'update');
+
+  const queryClient = useQueryClient();
+  const refreshTable = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['tire-service-orders'] });
+    queryClient.invalidateQueries({ queryKey: ['datatable-facet'] });
+  }, [queryClient]);
 
   // ─── Dialog state ─────────────────────────────────────────────────────────
   const [closingOrder, setClosingOrder] = useState<ServiceOrderListItem | null>(null);
   const [cancellingOrder, setCancellingOrder] = useState<ServiceOrderListItem | null>(null);
   const [isActionPending, setIsActionPending] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
-  const [continuingOrder, setContinuingOrder] = useState<ServiceOrderListItem | null>(null);
+  const [continuingOrder, setContinuingOrder] = useState<Pick<
+    ServiceOrderListItem,
+    'id' | 'vehicle_id' | 'trailer_vehicle_id'
+  > | null>(null);
   const [detailOrderId, setDetailOrderId] = useState<string | null>(null);
 
   // ─── Client-side navigation ───────────────────────────────────────────────
@@ -121,6 +142,15 @@ export default function _ServiceOrdersDataTable({
         (order) => setContinuingOrder(order)
       ),
     [permissions]
+  );
+
+  // ─── Column visibility: las preferencias guardadas ganan; sin ellas, las atómicas arrancan ocultas ──
+  const mergedColumnVisibility = useMemo(
+    () =>
+      initialColumnVisibility && Object.keys(initialColumnVisibility).length > 0
+        ? initialColumnVisibility
+        : SERVICE_ORDER_HIDDEN_COLUMNS_BY_DEFAULT,
+    [initialColumnVisibility]
   );
 
   // ─── Filter visibility ────────────────────────────────────────────────────
@@ -164,7 +194,12 @@ export default function _ServiceOrdersDataTable({
       {
         columnId: 'status',
         title: 'Estado',
-        fetchFacet: makeEnumFetchFacet('status', Object.values(TireServiceOrderStatus), tireServiceOrderStatusLabels),
+        fetchFacet: makeEnumFetchFacet(
+          'status',
+          Object.values(TireServiceOrderStatus),
+          tireServiceOrderStatusLabels,
+          STATUS_ICONS
+        ),
       },
 
       // ── Vehicle (FK UUID) ──────────────────────────────────────────────────
@@ -218,6 +253,7 @@ export default function _ServiceOrdersDataTable({
     try {
       await closeServiceOrder(closingOrder.id);
       toast.success('Orden finalizada correctamente');
+      refreshTable();
       setClosingOrder(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Error al finalizar la orden');
@@ -237,6 +273,7 @@ export default function _ServiceOrdersDataTable({
         return;
       }
       toast.success('Orden anulada, cubiertas revertidas y movimientos de stock anulados');
+      refreshTable();
       setCancellingOrder(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Error al anular la orden');
@@ -247,26 +284,35 @@ export default function _ServiceOrdersDataTable({
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <>
+    <div className="space-y-4">
+      <OpenOrdersBand
+        initialSummary={openSummary}
+        canContinue={canUpdate}
+        onContinue={(order) =>
+          setContinuingOrder({ id: order.id, vehicle_id: order.vehicleId, trailer_vehicle_id: order.trailerId })
+        }
+      />
+
       <DataTable
         columns={columns}
         data={data}
         totalRows={totalRows}
         searchParams={searchParams}
         tableId={tableId}
-        paramNamespace={TABLE_ID}
+        paramNamespace={PARAM_NAMESPACE}
         facetedFilters={facetedFilters}
-        initialColumnVisibility={initialColumnVisibility}
+        initialColumnVisibility={mergedColumnVisibility}
         initialFilterVisibility={mergedFilterVisibility}
         toolbarActions={toolbarActions}
         showFilterToggle
         queryFn={tableQueryFn}
         queryKey={['tire-service-orders']}
         onStateChange={handleStateChange}
-        emptyMessage="No hay órdenes de gomería"
+        mobileCards
+        emptyMessage="No hay órdenes de gomería para mostrar. Si hay filtros aplicados, quitalos; si no, aparecen al crear la primera orden."
         searchPlaceholder="Buscar por kilómetros..."
         exportConfig={{
-          fetchAllData: () => getServiceOrdersForExport(currentParams),
+          fetchAllData: async () => unwrapExportResult(await getServiceOrdersForExport(currentParams)),
           options: {
             filename: 'ordenes-gomeria',
             sheetName: 'Órdenes',
@@ -274,8 +320,8 @@ export default function _ServiceOrdersDataTable({
           },
           formatters: {
             status: (value) => tireServiceOrderStatusLabels[value as string] ?? String(value),
-            service_date: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
-            created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
+            service_date: (value) => (value ? formatArgentinaDateTime(value as string | Date) : '-'),
+            created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
             vehicle_id: (_value, row) => row.vehicle?.domain ?? '-',
             trailer_vehicle_id: (_value, row) => row.trailer?.domain ?? 'Sin asignar',
             created_by: (_value, row) => row.creator?.fullname ?? '-',
@@ -371,6 +417,6 @@ export default function _ServiceOrdersDataTable({
           if (!open) setDetailOrderId(null);
         }}
       />
-    </>
+    </div>
   );
 }

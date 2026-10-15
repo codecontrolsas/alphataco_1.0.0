@@ -5,9 +5,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
 import { Logger } from '@/lib/logger';
+import { useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle, CheckCircle2, Info, XCircle } from 'lucide-react';
 import moment from 'moment';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { processMassiveDiagramCreation, processMassiveNoveltyCreation } from './actions/diagram-massive-actions';
@@ -24,8 +27,16 @@ interface Props {
 
 export function ConflictResolutionModal({ conflicts, formData, onCancel, onProcessingComplete }: Props) {
   const [processing, setProcessing] = useState(false);
+  const queryClient = useQueryClient();
+  const router = useRouter();
+  const { hasPermission } = usePermissions();
 
   const totalConflicts = conflicts.operationConflicts.length + conflicts.simpleConflicts.length;
+  // Sobrescribir novedades existentes es una edición (`massive_diagram:update`); sin conflictos no se pisa nada.
+  const canUpdate = hasPermission('empleados', 'massive_diagram', 'update');
+  const canCreate = hasPermission('empleados', 'massive_diagram', 'create');
+  const canContinue = canCreate && (totalConflicts === 0 || canUpdate);
+  const conflictResolution = totalConflicts === 0 ? 'skip' : 'update';
 
   const handleContinue = async () => {
     setProcessing(true);
@@ -49,23 +60,28 @@ export function ConflictResolutionModal({ conflicts, formData, onCancel, onProce
               activeNoveltyId: formData.activeNoveltyId || '',
               dateFrom,
               dateTo,
-              conflictResolution: 'update',
+              conflictResolution,
             })
           : await processMassiveNoveltyCreation({
               employeeIds: formData.employeeIds,
               diagramTypeId: formData.diagramTypeId,
               dateFrom,
               dateTo,
-              conflictResolution: 'update',
+              conflictResolution,
             });
 
+      queryClient.invalidateQueries({ queryKey: ['diagram-search'] });
+      queryClient.invalidateQueries({ queryKey: ['diagram-reports-paginated'] });
+      queryClient.invalidateQueries({ queryKey: ['datatable-facet'] });
+      router.refresh();
       onProcessingComplete(result);
       toast.success(
         formData.mode === 'diagram' ? 'Diagramas procesados correctamente' : 'Novedad cargada correctamente'
       );
     } catch (error) {
       logger.error('Error in creation', { data: { error } });
-      toast.error('Error en la creación');
+      // Se muestra el motivo que devolvió el servidor (tope de empleados, rango inválido, etc.)
+      toast.error(error instanceof Error && error.message ? error.message : 'Error en la creación');
     } finally {
       setProcessing(false);
     }
@@ -283,10 +299,10 @@ export function ConflictResolutionModal({ conflicts, formData, onCancel, onProce
 
       {/* Botones de acción */}
       <div className="flex justify-between space-x-4">
-        <Button variant="outline" onClick={onCancel} disabled={processing} className="flex-1">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={processing} className="flex-1">
           Cancelar
         </Button>
-        <Button onClick={handleContinue} disabled={processing} className="flex-1">
+        <Button type="button" onClick={handleContinue} disabled={processing || !canContinue} className="flex-1">
           {processing ? (
             <>
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>

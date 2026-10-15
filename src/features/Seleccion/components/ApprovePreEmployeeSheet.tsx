@@ -7,9 +7,10 @@ import { Logger } from '@/lib/logger';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import { employeeWorkDataSchema, type EmployeeWorkDataValues } from '@/features/Employees/EmpleadoID/components/forms/employee-form';
+import { employeeWorkDataSchema, type EmployeeWorkDataValues } from '@/features/Employees/EmpleadoID/schemas/employee-schema';
 import { EmployeeWorkDataForm } from '@/features/Employees/EmpleadoID/components/forms/employee-work-data-form';
 import { approvePreEmployee } from '../actions/approve-pre-employee.server';
+import { useInvalidatePreEmployeeLists } from '../hooks/useInvalidatePreEmployeeLists';
 
 const logger = new Logger('PreLegajos/ApproveSheet');
 
@@ -36,6 +37,7 @@ export function ApprovePreEmployeeSheet({
   onOpenChange,
   onApproved,
 }: ApprovePreEmployeeSheetProps) {
+  const invalidateLists = useInvalidatePreEmployeeLists();
   const form = useForm<EmployeeWorkDataValues>({
     resolver: zodResolver(employeeWorkDataSchema),
     defaultValues: {
@@ -58,12 +60,18 @@ export function ApprovePreEmployeeSheet({
           ? `${result.transferredDocuments} de ${result.transferredDocuments + result.skippedDocuments} documentos se incorporaron al legajo. ${result.skippedDocuments} no aplican a la función asignada y quedaron en el historial del candidato.`
           : `${result.transferredDocuments} documentos se incorporaron al legajo.`;
 
-      toast.success('Legajo creado', { description: documentsMessage });
+      toast.success('Legajo creado', {
+        description: result.skippedPicture
+          ? `${documentsMessage} La foto del candidato no se copió porque su formato o tamaño no es válido: cargala de nuevo desde el legajo.`
+          : documentsMessage,
+      });
+      invalidateLists({ includeEmployees: true });
       onOpenChange(false);
       onApproved?.(result.employeeId);
     } catch (error) {
       logger.error('Error al aprobar el candidato', { data: { error, preEmployeeId } });
-      toast.error(error instanceof Error ? error.message : 'No se pudo crear el legajo');
+      // El servidor devuelve mensajes claros en español (p. ej. legajo duplicado): se muestran tal cual.
+      toast.error(error instanceof Error && error.message ? error.message : 'No se pudo crear el legajo');
     }
   };
 

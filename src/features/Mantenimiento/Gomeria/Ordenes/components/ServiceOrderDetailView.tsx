@@ -1,13 +1,15 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   TireDiagramRenderer,
   type DiagramAxle,
   type DiagramPosition,
+  type TireDiagramHitch,
 } from '@/features/Mantenimiento/Gomeria/shared/TireDiagramRenderer';
 import {
   tireOldDestinationLabels,
@@ -18,7 +20,8 @@ import {
 } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
 import { useQuery } from '@tanstack/react-query';
 import moment from 'moment';
-import { getServiceOrderById, getVehicleTirePositions } from '../actions/actions.server';
+import { getServiceOrderById } from '../actions/actions.server';
+import { getVehicleTirePositions } from '../actions/service-order-queries.server';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -31,7 +34,12 @@ interface ServiceOrderDetailViewProps {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function ServiceOrderDetailView({ orderId, open, onOpenChange }: ServiceOrderDetailViewProps) {
-  const { data: order, isLoading } = useQuery({
+  const {
+    data: order,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ['service-order-detail', orderId],
     queryFn: () => getServiceOrderById(orderId),
     enabled: open,
@@ -60,6 +68,9 @@ export function ServiceOrderDetailView({ orderId, open, onOpenChange }: ServiceO
       <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Detalle de Orden de Gomería</DialogTitle>
+          <DialogDescription className="sr-only">
+            Datos, intervenciones y diagrama de cubiertas de la orden.
+          </DialogDescription>
         </DialogHeader>
 
         {isLoading ? (
@@ -67,6 +78,16 @@ export function ServiceOrderDetailView({ orderId, open, onOpenChange }: ServiceO
             <Skeleton className="h-6 w-48" />
             <Skeleton className="h-24 w-full" />
             <Skeleton className="h-48 w-full" />
+          </div>
+        ) : isError ? (
+          <div
+            role="alert"
+            className="flex flex-wrap items-center gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm"
+          >
+            <p className="flex-1 text-destructive">No se pudo cargar la orden.</p>
+            <Button type="button" variant="outline" size="sm" onClick={() => void refetch()}>
+              Reintentar
+            </Button>
           </div>
         ) : !order ? (
           <p className="text-muted-foreground text-sm">Orden no encontrada.</p>
@@ -193,7 +214,11 @@ export function ServiceOrderDetailView({ orderId, open, onOpenChange }: ServiceO
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   Diagrama — {order.vehicle?.domain}
                 </p>
-                <VehicleDiagramReadonly positions={vehiclePositions} />
+                <VehicleDiagramReadonly
+                  positions={vehiclePositions}
+                  cabinLabel="Cabina"
+                  hitch={order.trailer_vehicle_id ? { label: 'Enganche', position: 'rear' } : undefined}
+                />
               </div>
             ) : null}
 
@@ -216,7 +241,10 @@ export function ServiceOrderDetailView({ orderId, open, onOpenChange }: ServiceO
                     <p className="text-xs text-muted-foreground whitespace-nowrap">Enganche: {order.trailer?.domain}</p>
                     <div className="flex-1 border-t border-dashed" />
                   </div>
-                  <VehicleDiagramReadonly positions={trailerPositions} />
+                  <VehicleDiagramReadonly
+                    positions={trailerPositions}
+                    hitch={{ label: 'Tractor', position: 'front' }}
+                  />
                 </div>
               )
             )}
@@ -240,7 +268,17 @@ function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
 
 type PositionWithAxle = Awaited<ReturnType<typeof getVehicleTirePositions>>[number];
 
-function VehicleDiagramReadonly({ positions, label }: { positions: PositionWithAxle[]; label?: string | null }) {
+function VehicleDiagramReadonly({
+  positions,
+  label,
+  cabinLabel,
+  hitch,
+}: {
+  positions: PositionWithAxle[];
+  label?: string | null;
+  cabinLabel?: string;
+  hitch?: TireDiagramHitch;
+}) {
   const axleMap = new Map<string, DiagramAxle>();
   for (const pos of positions) {
     if (!pos.template_axle) continue;
@@ -269,7 +307,14 @@ function VehicleDiagramReadonly({ positions, label }: { positions: PositionWithA
   }));
 
   return (
-    <TireDiagramRenderer axles={axles} positions={diagramPositions} interactive={false} label={label ?? undefined} />
+    <TireDiagramRenderer
+      axles={axles}
+      positions={diagramPositions}
+      interactive={false}
+      label={label ?? undefined}
+      cabinLabel={cabinLabel}
+      hitch={hitch}
+    />
   );
 }
 

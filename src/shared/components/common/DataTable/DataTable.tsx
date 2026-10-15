@@ -21,6 +21,7 @@ import {
   saveTableViewPreferences,
 } from '@/shared/actions/table-preferences';
 
+import { DataTableError } from './DataTableError';
 import { DataTablePagination } from './DataTablePagination';
 import { DataTablePendingProvider } from './DataTablePendingContext';
 import { DataTableToolbar } from './DataTableToolbar';
@@ -138,6 +139,7 @@ export function DataTable<TData extends Record<string, unknown>, TValue = unknow
   // Client-side mode props
   queryFn,
   queryKey: queryKeyProp,
+  queryStaleTimeMs = 30 * 1000,
   onStateChange,
   inMemory = false,
 }: DataTableProps<TData, TValue>) {
@@ -295,14 +297,20 @@ export function DataTable<TData extends Record<string, unknown>, TValue = unknow
   }
   const isInitialQueryState = stateSearchParamsKey === initialQueryStateKeyRef.current && hasRealInitialData;
 
-  const { data: queryResult, isPlaceholderData } = useQuery({
+  const {
+    data: queryResult,
+    isPlaceholderData,
+    isError: isQueryError,
+    isFetching: isQueryFetching,
+    refetch,
+  } = useQuery({
     queryKey: [...(queryKeyProp ?? ['data-table']), stateSearchParams],
     queryFn: () => queryFn!(stateSearchParams),
     placeholderData: keepPreviousData,
     enabled: isRemoteQuery,
     // Acotado (no Infinity): pasado este tiempo, volver a esta key (incluida la inicial)
     // dispara un refetch normal en vez de confiar para siempre en el dato sembrado/cacheado.
-    staleTime: 30 * 1000,
+    staleTime: queryStaleTimeMs,
     ...(isInitialQueryState
       ? {
           initialData: () => ({ data: propData, total: propTotalRows }),
@@ -312,8 +320,18 @@ export function DataTable<TData extends Record<string, unknown>, TValue = unknow
   });
 
   // Datos finales para la tabla
-  const tableData = isRemoteQuery ? queryResult?.data ?? propData : propData;
-  const tableTotalRows = isRemoteQuery ? queryResult?.total ?? propTotalRows : propTotalRows;
+  // Error de carga (solo client-side mode con queryFn). Si no hay datos nuevos NO se cae al SSR
+  // inicial (`propData`): serían datos de otro estado de filtros presentados como actuales.
+  const hasLoadError = isRemoteQuery && isQueryError;
+  const hasNoResultOnError = hasLoadError && queryResult === undefined;
+  const hasStaleDataOnError = hasLoadError && queryResult !== undefined;
+  const emptyData = React.useMemo<TData[]>(() => [], []);
+  const tableData = isRemoteQuery ? (hasNoResultOnError ? emptyData : queryResult?.data ?? propData) : propData;
+  const tableTotalRows = isRemoteQuery
+    ? hasNoResultOnError
+      ? 0
+      : queryResult?.total ?? propTotalRows
+    : propTotalRows;
   // isPlaceholderData = true SOLO cuando se muestra data stale de un query key anterior
   // (mientras se fetch data nueva). false cuando se muestra data real del cache → sin efecto disabled.
   // En in-memory nunca hay fetch ni navegación: el estado se resuelve de forma síncrona.
@@ -524,7 +542,17 @@ export function DataTable<TData extends Record<string, unknown>, TValue = unknow
           showSearch={showSearch}
         />
 
+        {/* Error de carga: conserva toolbar y filtros para poder cambiarlos o reintentar */}
+        {hasLoadError && (
+          <DataTableError
+            onRetry={() => void refetch()}
+            isRetrying={isQueryFetching}
+            hasStaleData={hasStaleDataOnError}
+          />
+        )}
+
         {/* Table */}
+        {!hasNoResultOnError && (
         <div className={cn('overflow-auto rounded-md border max-h-[60vh]', mobileCards && MOBILE_CARDS_WRAPPER)}>
           <Table containerClassName="overflow-x-visible overflow-y-visible min-w-fit max-md:min-w-0">
             <TableHeader>
@@ -542,7 +570,14 @@ export function DataTable<TData extends Record<string, unknown>, TValue = unknow
                 </TableRow>
               ))}
             </TableHeader>
-            <TableBody className={cn('transition-opacity duration-150', isPending && 'opacity-50 pointer-events-none')}>
+            <TableBody
+              className={cn(
+                'transition-opacity duration-150',
+                isPending && 'opacity-50 pointer-events-none',
+                hasStaleDataOnError && !isPending && 'opacity-60'
+              )}
+              data-stale={hasStaleDataOnError ? 'true' : undefined}
+            >
               {table.getRowModel().rows?.length ? (
                 table.getRowModel().rows.map((row) => (
                   <TableRow
@@ -571,6 +606,7 @@ export function DataTable<TData extends Record<string, unknown>, TValue = unknow
             </TableBody>
           </Table>
         </div>
+        )}
 
         {/* Pagination */}
         <DataTablePagination

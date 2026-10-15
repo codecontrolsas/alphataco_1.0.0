@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   createRemito,
@@ -17,6 +17,20 @@ export const remitoQueryKeys = {
   byRowId: (rowId: string) => ['remitos', rowId] as const,
 };
 
+/**
+ * Refresca todo lo que muestra remitos además del propio gestor: el detalle del parte en Operaciones
+ * (tabla y franja), el tablero de partes diarios de Comercial y la lista de remitos para vincular.
+ * El gestor se abre desde las dos pantallas, así que cualquier cambio tiene que verse en ambas.
+ */
+export function invalidateRemitConsumers(queryClient: QueryClient, dailyReportRowId: string) {
+  queryClient.invalidateQueries({ queryKey: remitoQueryKeys.byRowId(dailyReportRowId) });
+  queryClient.invalidateQueries({ queryKey: ['available-remitos'] });
+  queryClient.invalidateQueries({ queryKey: ['daily-report-detail'] });
+  queryClient.invalidateQueries({ queryKey: ['daily-report-row-detail'] });
+  queryClient.invalidateQueries({ queryKey: ['daily-report-row-history'] });
+  queryClient.invalidateQueries({ queryKey: ['filtered-daily-report-rows'] });
+}
+
 export function useRemitos(dailyReportRowId: string) {
   return useQuery({
     queryKey: remitoQueryKeys.byRowId(dailyReportRowId),
@@ -32,9 +46,7 @@ export function useCreateRemito(dailyReportRowId: string) {
   return useMutation({
     mutationFn: (remitNumber: string) => createRemito(dailyReportRowId, remitNumber),
     onSuccess: (newRemito) => {
-      queryClient.invalidateQueries({
-        queryKey: remitoQueryKeys.byRowId(dailyReportRowId),
-      });
+      invalidateRemitConsumers(queryClient, dailyReportRowId);
       toast.success(`Remito ${newRemito.remit_number} creado`);
     },
     onError: (error: Error) => {
@@ -50,9 +62,7 @@ export function useUpdateRemitoNumber(dailyReportRowId: string) {
     mutationFn: ({ remitId, newNumber }: { remitId: string; newNumber: string }) =>
       updateRemitoNumber(remitId, newNumber),
     onSuccess: (updatedRemito) => {
-      queryClient.invalidateQueries({
-        queryKey: remitoQueryKeys.byRowId(dailyReportRowId),
-      });
+      invalidateRemitConsumers(queryClient, dailyReportRowId);
       toast.success(`Remito actualizado a ${updatedRemito.remit_number}`);
     },
     onError: (error: Error) => {
@@ -67,9 +77,7 @@ export function useDeleteRemito(dailyReportRowId: string) {
   return useMutation({
     mutationFn: (remitId: string) => deleteRemito(remitId),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: remitoQueryKeys.byRowId(dailyReportRowId),
-      });
+      invalidateRemitConsumers(queryClient, dailyReportRowId);
       toast.success('Remito eliminado');
     },
     onError: (error: Error) => {
@@ -84,9 +92,7 @@ export function useUnlinkRemito(dailyReportRowId: string) {
   return useMutation({
     mutationFn: (remitId: string) => unlinkRemito(remitId),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: remitoQueryKeys.byRowId(dailyReportRowId),
-      });
+      invalidateRemitConsumers(queryClient, dailyReportRowId);
       toast.success('Remito desvinculado');
     },
     onError: (error: Error) => {
@@ -121,9 +127,7 @@ export function useLinkExistingRemito(targetDailyReportRowId: string) {
   return useMutation({
     mutationFn: (sourceRemitId: string) => linkExistingRemito(sourceRemitId, targetDailyReportRowId),
     onSuccess: (newRemito) => {
-      queryClient.invalidateQueries({
-        queryKey: remitoQueryKeys.byRowId(targetDailyReportRowId),
-      });
+      invalidateRemitConsumers(queryClient, targetDailyReportRowId);
       toast.success(`Remito ${newRemito.remit_number} vinculado exitosamente`);
     },
     onError: (error: Error) => {

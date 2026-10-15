@@ -10,14 +10,17 @@ import {
 } from '@/shared/components/common/DataTable';
 import { useQuery } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
-import { Clock, HourglassIcon, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import moment from 'moment';
+import dynamic from 'next/dynamic';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useCallback, useMemo, useState } from 'react';
 
 import { ActivityHistoryModal } from '@/features/Mantenimiento/components/ActivityHistoryModal';
+import { LEGACY_HISTORY_LABELS } from '@/features/Mantenimiento/lib/status-presentation';
+import { getResourceInternNumber, getResourceLabel } from '../../../shared/maintenance-resource';
 import { getMaintenanceOrderById, type MaintenanceOrderData } from '../../actions/actionsServer';
-import { PedidoDetailDialog } from '../../components/PedidoDetailDialog';
-import { PlanificarPedidoDialog } from '../../components/PlanificarPedidoDialog';
 import {
   getAllPendingOrdersForExport,
   getPendingOrdersPaginated,
@@ -29,15 +32,18 @@ import {
   PENDING_STATUS_LABELS,
   SOURCE_ICONS,
   SOURCE_LABELS,
+  STATUS_ICONS,
   getPendingOrderColumns,
 } from '../columns';
-import { RechazarPedidoDialog } from './RechazarPedidoDialog';
 
-// ── Íconos de estado para filtros ─────────────────────────────────────────────
-const STATUS_ICONS: Record<string, LucideIcon> = {
-  pending_scheduling: HourglassIcon,
-  scheduled: Clock,
-};
+// Los diálogos se abren a demanda: no pesan en la carga inicial de la tabla.
+const PedidoDetailDialog = dynamic(() =>
+  import('../../components/PedidoDetailDialog').then((m) => m.PedidoDetailDialog)
+);
+const PlanificarPedidoDialog = dynamic(() =>
+  import('../../components/PlanificarPedidoDialog').then((m) => m.PlanificarPedidoDialog)
+);
+const RechazarPedidoDialog = dynamic(() => import('./RechazarPedidoDialog').then((m) => m.RechazarPedidoDialog));
 
 const DEFAULT_VISIBLE_FILTERS = ['status', 'vehicle', 'source'];
 
@@ -45,7 +51,12 @@ interface Props {
   data: PendingOrderListItem[];
   totalRows: number;
   searchParams: DataTableSearchParams;
+  /** Clave de las preferencias guardadas de la tabla (`-v2`). */
   tableId: string;
+  /** Prefijo de los parámetros de la URL: el mismo que usan las tarjetas de métricas para filtrar. */
+  paramNamespace: string;
+  /** `pedidos_pendientes:update`, resuelto en el servidor: habilita Planificar y Rechazar. */
+  canUpdate: boolean;
   initialColumnVisibility?: Record<string, boolean>;
   initialFilterVisibility?: Record<string, boolean>;
 }
@@ -86,6 +97,8 @@ export function _PendingOrderDataTable({
   totalRows,
   searchParams,
   tableId,
+  paramNamespace,
+  canUpdate,
   initialColumnVisibility: savedColumnVisibility,
   initialFilterVisibility,
 }: Props) {
@@ -138,17 +151,13 @@ export function _PendingOrderDataTable({
     []
   );
 
-  const columns = useMemo(() => getPendingOrderColumns(callbacks), [callbacks]);
+  const columns = useMemo(() => getPendingOrderColumns(callbacks, { canUpdate }), [callbacks, canUpdate]);
 
-  // ── Visibilidad inicial ───────────────────────────────────────────────────
-  const defaultColumnVisibility = useMemo(
-    () => Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((col) => [col, false])),
-    []
-  );
-  const initialColumnVisibility =
-    savedColumnVisibility && Object.keys(savedColumnVisibility).length > 0
-      ? savedColumnVisibility
-      : defaultColumnVisibility;
+  // ── Visibilidad inicial: lo que el usuario guardó manda sobre las ocultas por defecto ──
+  const initialColumnVisibility = useMemo(() => {
+    const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((col) => [col, false]));
+    return { ...defaults, ...savedColumnVisibility };
+  }, [savedColumnVisibility]);
 
   // ── fetchFacet factories: cada filtro carga sus opciones+counts bajo demanda ──────
 
@@ -195,7 +204,7 @@ export function _PendingOrderDataTable({
       },
       {
         columnId: 'order_number',
-        title: 'Nro. Pedido',
+        title: 'N° Orden',
         type: 'text' as const,
       },
       {
@@ -230,19 +239,28 @@ export function _PendingOrderDataTable({
     () => ({
       // Usa currentParams (estado reactivo del client-side mode), NO searchParams (prop inicial de SSR),
       // para que la exportación respete los filtros activos en el momento del click.
-      fetchAllData: () => getAllPendingOrdersForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllPendingOrdersForExport(currentParams)),
       options: {
         filename: 'pedidos-pendientes',
         title: 'Pedidos Pendientes de Mantenimiento',
         sheetName: 'Pendientes',
       },
       formatters: {
-        status: (val) => PENDING_STATUS_LABELS[val as string] || String(val),
+        vehicle: (_val, row) => {
+          const label = getResourceLabel(row);
+          const internNumber = getResourceInternNumber(row);
+          return internNumber ? `${label} (#${internNumber})` : label;
+        },
+        status: (val, row) => {
+          const label = PENDING_STATUS_LABELS[val as string] || String(val);
+          const dateRejected = row.status === 'pending_scheduling' && row.date_rejected_at != null;
+          return dateRejected ? `${label} · ${LEGACY_HISTORY_LABELS.date_rejected}` : label;
+        },
         source: (val) => SOURCE_LABELS[val as string] || String(val ?? ''),
         order_number: (val) => String(val ?? ''),
         description: (val) => String(val ?? ''),
-        created_at: (val) => (val ? moment(val as string).format('DD/MM/YYYY HH:mm') : ''),
-        scheduled_date: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
+        created_at: (val) => (val ? formatArgentinaDateTime(val as string) : ''),
+        scheduled_date: (val) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
         items: (val) => (val != null ? String(val) : ''),
       },
     }),
@@ -262,9 +280,10 @@ export function _PendingOrderDataTable({
         data={data}
         totalRows={totalRows}
         searchParams={searchParams}
-        paramNamespace={tableId}
+        paramNamespace={paramNamespace}
         tableId={tableId}
-        searchPlaceholder="Buscar por equipo (dominio, serie) o nro. pedido..."
+        mobileCards
+        searchPlaceholder="Buscar por dominio, serie, N° interno o N° de orden…"
         facetedFilters={facetedFilters}
         exportConfig={exportConfig}
         showFilterToggle={true}

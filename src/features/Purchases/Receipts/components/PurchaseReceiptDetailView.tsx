@@ -1,57 +1,50 @@
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { AttentionBanner } from '@/features/Mantenimiento/shared/components/AttentionBanner';
 import { formatQuantity } from '@/features/Warehouses/lib/format';
-import { Paperclip, TriangleAlert } from 'lucide-react';
-import moment from 'moment';
+import { Field, FieldGrid } from '@/shared/components/common/FieldGrid';
+import { RecordHeader } from '@/shared/components/common/RecordHeader';
+import { SectionCard } from '@/shared/components/common/SectionCard';
+import { formatDateAr } from '@/shared/lib/argentina-time';
+import { Paperclip } from 'lucide-react';
 import Link from 'next/link';
 import type { PurchaseReceiptDetail } from '../../actions/receipts.server';
 import { HistoryCard } from '../../components/HistoryCard';
 import { PurchaseOrderStatusBadge } from '../../Orders/components/PurchaseOrderStatusBadge';
 import { PurchaseReceiptActions } from './PurchaseReceiptActions';
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="text-sm">{children}</dd>
-    </div>
-  );
-}
+import { PurchaseReceiptStatusBadge } from './PurchaseReceiptStatusBadge';
 
 /** Detalle de la recepcion: OC, deposito, remito, lineas, movimientos de stock y OC complementaria. */
 export function PurchaseReceiptDetailView({ receipt }: { receipt: PurchaseReceiptDetail }) {
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="font-mono text-2xl font-semibold">{receipt.number}</h1>
-        {receipt.cancelled ? <Badge variant="destructive">Anulada</Badge> : <Badge className="bg-green-600 text-white hover:bg-green-600/90">Vigente</Badge>}
-        <div className="ml-auto">
-          <PurchaseReceiptActions receipt={receipt} />
-        </div>
-      </div>
+      <RecordHeader
+        identity={
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="font-mono text-2xl font-semibold">{receipt.number}</h1>
+            <PurchaseReceiptStatusBadge cancelled={receipt.cancelled} />
+          </div>
+        }
+        actions={<PurchaseReceiptActions receipt={receipt} />}
+      />
 
       {receipt.excessWithoutOrder && (
-        <Alert className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-          <TriangleAlert className="h-4 w-4" />
-          <AlertTitle>Excedente sin OC</AlertTitle>
-          <AlertDescription>
-            La OC complementaria del excedente se anuló: lo recibido de más sigue en el depósito sin orden que lo respalde. Resolvelo con una
-            devolución o un ajuste en Almacenes.
-          </AlertDescription>
-        </Alert>
+        <AttentionBanner
+          tone="warn"
+          title="Excedente sin OC"
+          description="La OC complementaria del excedente se anuló: lo recibido de más sigue en el depósito sin orden que lo respalde. Resolvelo con una devolución o un ajuste en Almacenes."
+        />
       )}
       {receipt.cancelled && receipt.cancelReason && (
-        <Alert variant="destructive">
-          <AlertTitle>Anulada</AlertTitle>
-          <AlertDescription className="whitespace-pre-wrap">{receipt.cancelReason}</AlertDescription>
-        </Alert>
+        <AttentionBanner
+          tone="danger"
+          title="Anulada"
+          description={<span className="whitespace-pre-wrap">{receipt.cancelReason}</span>}
+        />
       )}
 
-      <Card>
-        <CardContent className="pt-6">
-          <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <SectionCard title="Datos de la recepción">
+        <FieldGrid>
             <Field label="Orden de compra">
               <Link href={`/dashboard/purchases/orders/${receipt.order.id}`} className="font-mono underline">
                 {receipt.order.number}
@@ -62,12 +55,12 @@ export function PurchaseReceiptDetailView({ receipt }: { receipt: PurchaseReceip
                 {receipt.supplier.name}
               </Link>
             </Field>
-            <Field label="Fecha de recepción">{moment(receipt.receivedOn, 'YYYY-MM-DD').format('DD/MM/YYYY')}</Field>
+            <Field label="Fecha de recepción">{formatDateAr(receipt.receivedOn)}</Field>
             <Field label="Remito">
-              {receipt.deliveryNote ?? '—'}
+              {receipt.deliveryNote}
               {receipt.attachment && (
                 <a href={receipt.attachment.url} target="_blank" rel="noreferrer" className="ml-2 inline-flex items-center gap-1 underline">
-                  <Paperclip className="h-3.5 w-3.5" />
+                  <Paperclip className="h-3.5 w-3.5" aria-hidden="true" />
                   {receipt.attachment.name}
                 </a>
               )}
@@ -105,15 +98,10 @@ export function PurchaseReceiptDetailView({ receipt }: { receipt: PurchaseReceip
                 </span>
               </Field>
             )}
-          </dl>
-        </CardContent>
-      </Card>
+        </FieldGrid>
+      </SectionCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Qué llegó</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <SectionCard title="Qué llegó">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -129,7 +117,7 @@ export function PurchaseReceiptDetailView({ receipt }: { receipt: PurchaseReceip
                   <TableRow key={line.id}>
                     <TableCell>
                       {line.itemLabel}
-                      {line.isExcess && <span className="ml-2 text-xs text-amber-700 dark:text-amber-300">excedente</span>}
+                      {line.isExcess && <Badge variant="warning" className="ml-2">excedente</Badge>}
                     </TableCell>
                     <TableCell>
                       <Link href={`/dashboard/purchases/requests/${line.request.id}`} className="font-mono text-xs underline">
@@ -141,7 +129,7 @@ export function PurchaseReceiptDetailView({ receipt }: { receipt: PurchaseReceip
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {line.batchNumber
-                        ? `Lote ${line.batchNumber}${line.batchExpiresOn ? ` · vence ${moment(line.batchExpiresOn, 'YYYY-MM-DD').format('DD/MM/YYYY')}` : ''}`
+                        ? `Lote ${line.batchNumber}${line.batchExpiresOn ? ` · vence ${formatDateAr(line.batchExpiresOn)}` : ''}`
                         : line.serialNumbers.length > 0
                           ? line.serialNumbers.join(', ')
                           : '—'}
@@ -151,8 +139,7 @@ export function PurchaseReceiptDetailView({ receipt }: { receipt: PurchaseReceip
               </TableBody>
             </Table>
           </div>
-        </CardContent>
-      </Card>
+      </SectionCard>
 
       <HistoryCard history={receipt.history} />
     </div>

@@ -1,37 +1,29 @@
 'use client';
 
-import { useState } from 'react';
+import { createContext, useContext, useState } from 'react';
 import type { EmployeeDetailData } from '../actions.server';
 import { EmployeeFormView } from './form/EmployeeFormView';
-import { EmployeeReadView } from './view/EmployeeReadView';
+
+/** Abre el formulario de edición del legajo desde cualquier botón de la ficha (renderizada en el servidor). */
+const EmployeeEditContext = createContext<(() => void) | null>(null);
+
+export function useStartEmployeeEdit() {
+  return useContext(EmployeeEditContext);
+}
 
 interface EmployeeDetailClientProps {
   employee: EmployeeDetailData | null;
   employeeId: string;
   initialMode: 'view' | 'edit' | 'new';
-  /** Identidad pre-renderizada en el servidor. */
-  header: React.ReactNode;
-  /** Slot de documentos (Server Component pre-renderizado) */
-  documentsSlot: React.ReactNode;
-  /** Slot de diagramas envuelto en Suspense (Server Component pre-renderizado) */
-  diagramsSlot: React.ReactNode;
-  /** Slot de indumentaria/EPP envuelto en Suspense (Server Component pre-renderizado) */
-  clothingSlot: React.ReactNode;
+  /** Ficha en lectura, ya armada en el servidor (cabecera + secciones). */
+  readView: React.ReactNode;
 }
 
 /**
- * Legajo del empleado: alterna entre la lectura y el formulario sin navegar (el `?action=` de la
+ * Legajo del empleado: alterna entre la ficha y el formulario sin navegar (el `?action=` de la
  * URL se actualiza con `replaceState` para que el enlace siga siendo compartible).
  */
-export function EmployeeDetailClient({
-  employee,
-  employeeId,
-  initialMode,
-  header,
-  documentsSlot,
-  diagramsSlot,
-  clothingSlot,
-}: EmployeeDetailClientProps) {
+export function EmployeeDetailClient({ employee, employeeId, initialMode, readView }: EmployeeDetailClientProps) {
   const [mode, setMode] = useState<'view' | 'edit' | 'new'>(initialMode);
 
   const showMode = (next: 'view' | 'edit') => {
@@ -49,15 +41,5 @@ export function EmployeeDetailClient({
     return <EmployeeFormView employee={employee} mode="edit" onClose={() => showMode('view')} />;
   }
 
-  return (
-    <EmployeeReadView
-      employee={employee}
-      employeeId={employeeId}
-      header={header}
-      documentsSlot={documentsSlot}
-      diagramsSlot={diagramsSlot}
-      clothingSlot={clothingSlot}
-      onEdit={() => showMode('edit')}
-    />
-  );
+  return <EmployeeEditContext.Provider value={() => showMode('edit')}>{readView}</EmployeeEditContext.Provider>;
 }

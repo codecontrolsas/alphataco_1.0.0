@@ -80,6 +80,19 @@ export async function assertTireCatalogRefsInCompany(
   if (!tireType) throw new Error('El tipo de cubierta no pertenece a la empresa');
 }
 
+/** Lanza si el depósito no pertenece a `companyId` (el id llega del formulario). */
+export async function assertWarehouseInCompany(
+  client: PrismaLike,
+  warehouseId: string,
+  companyId: string
+): Promise<void> {
+  const warehouse = await client.warehouses.findFirst({
+    where: { id: warehouseId, company_id: companyId },
+    select: { id: true },
+  });
+  if (!warehouse) throw new Error('El depósito no pertenece a la empresa');
+}
+
 // ============================================================================
 // PERÍMETRO DE SESIÓN (dashboard)
 // ============================================================================

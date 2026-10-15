@@ -1,4 +1,5 @@
 import 'server-only';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 
 import { AMOUNT_SCALE, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { Prisma } from '@/generated/prisma/client';
@@ -238,7 +239,7 @@ export async function expiredSupplierDocuments(
   tx: Pick<Prisma.TransactionClient, 'supplier_documents'>,
   supplierId: string
 ): Promise<ExpiredSupplierDocument[]> {
-  const today = new Date(`${moment().format('YYYY-MM-DD')}T00:00:00.000Z`);
+  const today = new Date(`${argentinaDate()}T00:00:00.000Z`);
   const documents = await tx.supplier_documents.findMany({
     where: { supplier_id: supplierId, replaced_by_id: null, expires_at: { lt: today } },
     select: { id: true, name: true, expires_at: true },

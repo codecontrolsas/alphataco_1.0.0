@@ -3,11 +3,11 @@
 import { Badge } from '@/components/ui/badge';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Ban, CheckCircle2 } from 'lucide-react';
-import moment from 'moment';
 import { ExternalAccessActionsCell } from '../components/ExternalAccessActionsCell';
-import type { ExternalApiClientListItem } from './actions.server';
+import type { ExternalApiClientListItem } from './lib/clients-types';
 
 // ============================================================================
 // STATUS CONFIG (derivado de revoked_at — no es un enum de la BD)
@@ -90,7 +90,7 @@ export function getColumns({ canUpdate, canDelete }: ColumnPermissions): ColumnD
       header: ({ column }) => <DataTableColumnHeader column={column} title="Última consulta" />,
       cell: ({ row }) =>
         row.original.last_used_at ? (
-          <span>{moment(row.original.last_used_at).format('DD/MM/YYYY HH:mm')}</span>
+          <span>{formatArgentinaDateTime(row.original.last_used_at)}</span>
         ) : (
           <span className="text-muted-foreground">Nunca</span>
         ),
@@ -101,7 +101,7 @@ export function getColumns({ canUpdate, canDelete }: ColumnPermissions): ColumnD
       accessorKey: 'created_at',
       meta: { title: 'Creado' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Creado" />,
-      cell: ({ row }) => <span>{moment(row.original.created_at).format('DD/MM/YYYY')}</span>,
+      cell: ({ row }) => <span>{formatArgentinaDay(row.original.created_at)}</span>,
     },
 
     // ─── Creado por (FK nullable a profile) ───────────────────────────────────

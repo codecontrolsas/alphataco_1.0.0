@@ -110,10 +110,10 @@ export function SelectableCard<T extends string>({
         <Icon aria-hidden="true" className="h-5 w-5 mt-0.5 shrink-0 text-muted-foreground" />
         <div className="min-w-0">
           <p className="font-medium text-sm">{title}</p>
-          <p className="text-xs text-muted-foreground text-pretty">{description}</p>
+          <p className="text-sm text-muted-foreground text-pretty">{description}</p>
           {/* Motivo visible, no tooltip: tiene que poder leerse sin hover */}
           {isDisabled && (
-            <p id={reasonId} className="mt-1.5 flex items-start gap-1.5 text-xs text-muted-foreground text-pretty">
+            <p id={reasonId} className="mt-1.5 flex items-start gap-1.5 text-sm text-muted-foreground text-pretty">
               <Lock aria-hidden="true" className="mt-0.5 h-3 w-3 shrink-0" />
               {disabledReason}
             </p>

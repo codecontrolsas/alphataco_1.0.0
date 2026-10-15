@@ -1,6 +1,5 @@
 'use server';
 
-import { pickFilters } from '../../../lib/filters';
 import { checkPermissionServer } from '@/features/Permissions';
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
@@ -14,7 +13,10 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { DESTINATION_SELECT, destinationLabel } from '../../../lib/labels';
 
@@ -25,7 +27,7 @@ export type MovementReversalStatus = 'VALID' | 'REVERSED' | 'REVERSAL';
 
 type MovementWhere = Prisma.stock_movementsWhereInput;
 type MovementOrderBy = Prisma.stock_movementsOrderByWithRelationInput;
-type FilterState = ReturnType<typeof parseSearchParams>;
+type FilterState = ReturnType<typeof parseListState>;
 
 // ============================================================================
 // CONSTANTS
@@ -54,8 +56,26 @@ const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => MovementOrderBy> = {
 const TEXT_FILTER_COLUMNS = ['number', 'reference', 'notes'];
 const DATE_RANGE_COLUMNS = ['occurred_on', 'created_at'];
 
-/** Unicas columnas que pasan por `buildFiltersWhere` (lista de permitidas, ver `lib/filters.ts`). */
 const FACETED_COLUMNS = ['type', 'warehouse', 'target_warehouse', 'destination_type', 'created_by'] as const;
+
+/** Filtros de la URL que se manejan a mano (no pasan por `buildFiltersWhere`). */
+const MANUAL_FILTER_COLUMNS = ['destination', 'status', 'total_cost'];
+
+/** Lista blanca: cualquier otra clave de la URL se descarta antes de armar el `where`. */
+const ALLOWED_FILTER_KEYS: ReadonlySet<string> = new Set([
+  ...FACETED_COLUMNS,
+  ...TEXT_FILTER_COLUMNS,
+  ...MANUAL_FILTER_COLUMNS,
+  ...dateRangeKeys(DATE_RANGE_COLUMNS),
+]);
+
+/** Estado de la tabla ya parseado y con solo los filtros permitidos. */
+function parseListState(searchParams: DataTableSearchParams) {
+  return sanitizeFilters(parseSearchParams(searchParams), ALLOWED_FILTER_KEYS);
+}
+
+/** Tope de filas de un export de movimientos. */
+const EXPORT_MAX_MOVEMENTS = 10_000;
 
 /** columnId (URL) -> campo Prisma, solo donde difieren. */
 const COLUMN_MAP: Record<string, string> = {
@@ -84,7 +104,9 @@ function buildWhereClause(
 
   and.push(buildSearchWhere(state.search, ['number', 'reference']) as MovementWhere);
   and.push(
-    buildFiltersWhere(pickFilters(f, FACETED_COLUMNS), COLUMN_MAP) as MovementWhere
+    buildFiltersWhere(f, COLUMN_MAP, {
+      exclude: [...TEXT_FILTER_COLUMNS, ...MANUAL_FILTER_COLUMNS, ...DATE_RANGE_COLUMNS],
+    }) as MovementWhere
   );
   and.push(buildTextFiltersWhere(f, TEXT_FILTER_COLUMNS) as MovementWhere);
   and.push(buildDateRangeFiltersWhere(f, DATE_RANGE_COLUMNS) as MovementWhere);
@@ -180,7 +202,7 @@ export async function getMovementsPaginated(searchParams: DataTableSearchParams)
   const [companyId, withPrices] = await Promise.all([getActiveCompanyId(), canViewPrices()]);
 
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseListState(searchParams);
     const { skip, take } = stateToPrismaParams(state);
     const where = buildWhereClause(companyId, state, { canViewPrices: withPrices });
 
@@ -208,22 +230,45 @@ export async function getMovementsPaginated(searchParams: DataTableSearchParams)
 // EXPORT (sin paginacion)
 // ============================================================================
 
-export async function getAllMovementsForExport(searchParams: DataTableSearchParams) {
-  if (!(await checkPermissionServer('almacenes', 'movimientos', 'view'))) return [];
-  const [companyId, withPrices] = await Promise.all([getActiveCompanyId(), canViewPrices()]);
+export async function getAllMovementsForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<MovementListItem[]>> {
+  if (!(await checkPermissionServer('almacenes', 'movimientos', 'view'))) {
+    return { ok: false, message: 'No tenés permiso para exportar movimientos.' };
+  }
 
   try {
-    const state = parseSearchParams(searchParams);
+    const [companyId, withPrices] = await Promise.all([getActiveCompanyId(), canViewPrices()]);
+    const state = parseListState(searchParams);
     const where = buildWhereClause(companyId, state, { canViewPrices: withPrices });
-    const rows = await prisma.stock_movements.findMany({
-      where,
-      orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
-      select: MOVEMENT_SELECT(withPrices),
+    const rows = await fetchExportRowsInBatches({
+      listIds: (take) =>
+        prisma.stock_movements.findMany({
+          where,
+          orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+          select: { id: true },
+          take,
+        }),
+      fetchByIds: (ids) =>
+        prisma.stock_movements.findMany({
+          where: { id: { in: ids }, company_id: companyId },
+          select: MOVEMENT_SELECT(withPrices),
+        }),
+      maxRows: EXPORT_MAX_MOVEMENTS,
+      tooLargeMessage: (maxRows) =>
+        `Hay más de ${maxRows.toLocaleString('es-AR')} movimientos con los filtros actuales. Acote la exportación con filtros.`,
     });
-    return shape(rows, withPrices);
+    return { ok: true, data: shape(rows, withPrices) };
   } catch (error) {
     logger.error('Error al exportar movimientos', { data: { error } });
-    throw new Error('No se pudo exportar la lista de movimientos');
+    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en producción.
+    return {
+      ok: false,
+      message:
+        error instanceof ExportTooLargeError
+          ? error.message
+          : 'No se pudo exportar la lista de movimientos. Intente nuevamente.',
+    };
   }
 }
 
@@ -238,11 +283,11 @@ export async function getMovementSingleFacet(
   if (!(await checkPermissionServer('almacenes', 'movimientos', 'view'))) return null;
   const companyId = await getActiveCompanyId();
 
-  const parsed = searchParams && Object.keys(searchParams).length > 0 ? parseSearchParams(searchParams) : null;
+  const parsed = searchParams && Object.keys(searchParams).length > 0 ? parseListState(searchParams) : null;
 
   /** WHERE con todos los filtros activos MENOS el de la columna que se esta abriendo. */
   function crossWhere(excludeColumn: string): MovementWhere {
-    const base: FilterState = parsed ?? parseSearchParams({});
+    const base: FilterState = parsed ?? parseListState({});
     const filters = { ...base.filters };
     delete filters[excludeColumn];
     return buildWhereClause(companyId, { ...base, filters }, { canViewPrices: false });

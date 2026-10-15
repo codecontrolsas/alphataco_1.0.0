@@ -3,7 +3,7 @@ import type { DataTableSearchParams } from '@/shared/components/common/DataTable
 import { Plus } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense } from 'react';
-import { NoPermission } from '../fallback/NoPermission';
+import { StateBlock } from '@/shared/components/common/StateBlock';
 import { QuotesList } from './QuotesList/QuotesList';
 import { QuotesTableSkeleton } from './QuotesList/fallback/QuotesTableSkeleton';
 
@@ -15,7 +15,7 @@ export default async function QuotesTabContent({
   searchParams: DataTableSearchParams;
   permissions: Record<string, boolean>;
 }) {
-  if (permissions['compras:cotizaciones:view'] !== true) return <NoPermission />;
+  if (permissions['compras:cotizaciones:view'] !== true) return <StateBlock variant="noperm" title="No tenés permiso para ver esta información" />;
 
   return (
     <div className="space-y-4">

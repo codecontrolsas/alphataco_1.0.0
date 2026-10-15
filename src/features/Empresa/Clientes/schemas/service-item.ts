@@ -1,5 +1,5 @@
-import { z } from 'zod';
 import { isVatRateId } from '@/shared/lib/arca/catalogs';
+import { z } from 'zod';
 
 /**
  * Item de contrato (`service_items`). `item_measure_units` y `vat_rate_id` viajan como string
@@ -14,7 +14,15 @@ export const serviceItemFormSchema = z.object({
   item_description: z.string().nullable().optional(),
   code_item: z.string().nullable().optional(),
   item_number: z.string().nullable().optional(),
-  item_price: z.preprocess((val) => Number(val), z.number().min(0, { message: 'Debe ingresar un precio válido' })),
+  // Texto en todo el camino (`Decimal(15,4)`): pasarlo por `number` le comería decimales. El servidor lo
+  // convierte con `new Prisma.Decimal(string)`. Acepta coma o punto y se normaliza a punto.
+  item_price: z
+    .string()
+    .trim()
+    .regex(/^\d{1,11}([.,]\d{1,4})?$/, {
+      message: 'Ingresá un precio válido (hasta 4 decimales, sin separador de miles)',
+    })
+    .transform((value) => value.replace(',', '.')),
   item_measure_units: z.string().min(1, { message: 'Debe seleccionar la unidad de medida' }),
   is_active: z.boolean().default(true),
   needs_personnel: z.boolean().default(true),

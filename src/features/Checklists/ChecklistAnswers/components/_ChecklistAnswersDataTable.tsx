@@ -4,19 +4,40 @@ import {
   DataTable,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
+  type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { useQuery } from '@tanstack/react-query';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
+import type { LucideIcon } from 'lucide-react';
 import { Building2, CheckCircle2, CircleOff, Clock, Truck, User, XCircle } from 'lucide-react';
-import moment from 'moment';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   getAllChecklistAnswersForExport,
-  getChecklistAnswersFacets,
+  getChecklistAnswersSingleFacet,
   type ChecklistAnswerListItem,
 } from '../actions.server';
 import { HIDDEN_COLUMNS_BY_DEFAULT, checklistResultLabels, getColumns } from '../columns';
 import { normalizeResult } from '../utils';
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+/** Filtros visibles por defecto — máximo 3 (las preferencias guardadas tienen prioridad). */
+const DEFAULT_VISIBLE_FILTERS = ['created_at', 'result', 'equipment_id'];
+const ALL_FILTER_IDS = [
+  'created_at',
+  'result',
+  'equipment_id',
+  'user_id',
+  'chofer',
+  'fileNumber',
+  'customer_id',
+  'observations',
+];
+
+const EMPTY_FACET: FacetResult = { options: [], counts: new Map() };
 
 // ============================================================================
 // PROPS
@@ -45,179 +66,78 @@ export function _ChecklistAnswersDataTable({
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
-  // Extraer solo los params relevantes para facets (sin page/sort/pageSize)
-  const facetParams = useMemo(() => {
-    const { page, pageSize, sort, sortBy, sortOrder, ...rest } = searchParams;
-    return rest as DataTableSearchParams;
-  }, [searchParams]);
-
-  // Facets con cross-filtering
-  const { data: facets, isFetching: isFetchingFacets } = useQuery({
-    queryKey: ['checklist-answers-facets', templateId, facetParams],
-    queryFn: () => getChecklistAnswersFacets(facetParams, templateId),
-    staleTime: 5 * 60 * 1000,
-  });
-
   // Columnas ocultas por defecto
   const mergedColumnVisibility = useMemo(() => {
     const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((col) => [col, false]));
     return { ...defaults, ...initialColumnVisibility };
   }, [initialColumnVisibility]);
 
-  // Filtros visibles por defecto — máximo 3
-  const DEFAULT_VISIBLE_FILTERS = ['created_at', 'result', 'equipment_id'];
   const mergedFilterVisibility = useMemo(() => {
     if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
       return initialFilterVisibility;
     }
-    const allFilterIds = ['created_at', 'result', 'equipment_id', 'user_id', 'chofer', 'customer_id', 'observations'];
-    return Object.fromEntries(allFilterIds.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
+    return Object.fromEntries(ALL_FILTER_IDS.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
   }, [initialFilterVisibility]);
 
-  // ─── Opciones de equipos desde facets ──────────────────────────────────────
-  const equipmentOptions = useMemo(() => {
-    if (!facets?.equipment_id || !facets?.vehicleNames) return [];
-    const options: { value: string; label: string; icon: typeof Truck }[] = [];
-    for (const [id, count] of facets.equipment_id.entries()) {
-      if (id === NULL_FILTER_VALUE || count === 0) continue;
-      const label = facets.vehicleNames.get(id) ?? id;
-      options.push({ value: id, label, icon: Truck });
-    }
-    return options.sort((a, b) => a.label.localeCompare(b.label));
-  }, [facets]);
+  // ─── fetchFacet (lazy-load: se pide al abrir cada filtro, con cross-filter en el servidor) ───
 
-  // ─── Opciones de usuarios desde facets ─────────────────────────────────────
-  const userOptions = useMemo(() => {
-    if (!facets?.user_id || !facets?.userNames) return [];
-    const options: { value: string; label: string; icon: typeof User }[] = [];
-    for (const [id] of facets.user_id.entries()) {
-      if (id === NULL_FILTER_VALUE) continue;
-      const label = facets.userNames.get(id) ?? id;
-      options.push({ value: id, label, icon: User });
-    }
-    return options.sort((a, b) => a.label.localeCompare(b.label));
-  }, [facets]);
+  /** Resultado: opciones fijas (con iconos) y counts normalizados; "pendiente" viaja como `NULL_FILTER_VALUE`. */
+  const fetchResultFacet = useCallback(
+    async (params: DataTableSearchParams): Promise<FacetResult> => {
+      const result = await getChecklistAnswersSingleFacet('result', params, templateId);
+      if (!result) return EMPTY_FACET;
+      return {
+        options: [
+          { value: 'passed', label: checklistResultLabels['passed'], icon: CheckCircle2 },
+          { value: 'failed', label: checklistResultLabels['failed'], icon: XCircle },
+          { value: NULL_FILTER_VALUE, label: checklistResultLabels['pending'], icon: Clock },
+        ],
+        counts: result.counts,
+      };
+    },
+    [templateId]
+  );
 
-  // ─── Opciones de choferes desde facets (empleados con legajo) ──────────────
-  const choferOptions = useMemo(() => {
-    if (!facets?.chofer_employee_id || !facets?.choferNames) return [];
-    const options: { value: string; label: string; icon: typeof User }[] = [];
-    for (const [id, count] of facets.chofer_employee_id.entries()) {
-      if (id === NULL_FILTER_VALUE || count === 0) continue;
-      const label = facets.choferNames.get(id) ?? id;
-      options.push({ value: id, label, icon: User });
-    }
-    return options.sort((a, b) => a.label.localeCompare(b.label));
-  }, [facets]);
-
-  // ─── Opciones de clientes desde facets ─────────────────────────────────────
-  const customerOptions = useMemo(() => {
-    if (!facets?.customer_id || !facets?.customerNames) return [];
-    const options: { value: string; label: string; icon: typeof Building2 }[] = [];
-    for (const [id, count] of facets.customer_id.entries()) {
-      if (id === NULL_FILTER_VALUE || count === 0) continue;
-      const label = facets.customerNames.get(id) ?? id;
-      options.push({ value: id, label, icon: Building2 });
-    }
-    return options.sort((a, b) => a.label.localeCompare(b.label));
-  }, [facets]);
+  /** FK con nombres resueltos por el servidor; todas las opciones comparten el icono del tipo de recurso. */
+  const makeFkFetchFacet = useCallback(
+    (columnId: string, icon: LucideIcon, nullLabel: string) => {
+      return async (params: DataTableSearchParams): Promise<FacetResult> => {
+        const result = await getChecklistAnswersSingleFacet(columnId, params, templateId);
+        if (!result) return EMPTY_FACET;
+        const options = (result.resolvedOptions ?? [])
+          .map((o) => ({ value: o.id, label: o.name ?? '', icon }))
+          .sort((a, b) => a.label.localeCompare(b.label));
+        if (result.counts.has(NULL_FILTER_VALUE)) {
+          options.push({ value: NULL_FILTER_VALUE, label: nullLabel, icon: CircleOff });
+        }
+        return { options, counts: result.counts };
+      };
+    },
+    [templateId]
+  );
 
   // ─── Filtros facetados ──────────────────────────────────────────────────────
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
     () => [
-      // Fecha de respuesta (dateRange)
+      { columnId: 'created_at', title: 'Fecha', type: 'dateRange' as const },
+      { columnId: 'result', title: 'Resultado', fetchFacet: fetchResultFacet },
+      { columnId: 'equipment_id', title: 'Equipo', fetchFacet: makeFkFetchFacet('equipment_id', Truck, 'Sin equipo') },
+      { columnId: 'user_id', title: 'Usuario', fetchFacet: makeFkFetchFacet('user_id', User, 'Sin usuario') },
+      { columnId: 'chofer', title: 'Chofer', fetchFacet: makeFkFetchFacet('chofer', User, 'Sin chofer') },
       {
-        columnId: 'created_at',
-        title: 'Fecha',
-        type: 'dateRange' as const,
+        columnId: 'fileNumber',
+        title: 'Legajo',
+        type: 'text' as const,
+        placeholder: 'Legajo exacto del chofer...',
       },
-
-      // Resultado (enum normalizado, con iconos)
-      {
-        columnId: 'result',
-        title: 'Resultado',
-        options: [
-          { value: 'passed', label: checklistResultLabels['passed'], icon: CheckCircle2 },
-          { value: 'failed', label: checklistResultLabels['failed'], icon: XCircle },
-          // 'pending' usa NULL_FILTER_VALUE para representar ausencia de resultado
-          { value: NULL_FILTER_VALUE, label: checklistResultLabels['pending'], icon: Clock },
-        ],
-        externalCounts: facets?.result
-          ? (() => {
-              // Remapear el Map: el key 'pending' se expone como NULL_FILTER_VALUE en el filtro
-              const remapped = new Map<string, number>();
-              for (const [key, count] of facets.result.entries()) {
-                if (key === 'pending') {
-                  remapped.set(NULL_FILTER_VALUE, (remapped.get(NULL_FILTER_VALUE) ?? 0) + count);
-                } else {
-                  remapped.set(key, count);
-                }
-              }
-              return remapped;
-            })()
-          : undefined,
-      },
-
-      // Equipo (FK UUID, con nombres de vehículos)
-      {
-        columnId: 'equipment_id',
-        title: 'Equipo',
-        options: [
-          ...equipmentOptions,
-          ...(facets?.equipment_id?.has(NULL_FILTER_VALUE)
-            ? [{ value: NULL_FILTER_VALUE, label: 'Sin equipo', icon: CircleOff }]
-            : []),
-        ],
-        externalCounts: facets?.equipment_id,
-      },
-
-      // Usuario (FK UUID → profile)
-      {
-        columnId: 'user_id',
-        title: 'Usuario',
-        options: [
-          ...userOptions,
-          ...(facets?.user_id?.has(NULL_FILTER_VALUE)
-            ? [{ value: NULL_FILTER_VALUE, label: 'Sin usuario', icon: CircleOff }]
-            : []),
-        ],
-        externalCounts: facets?.user_id,
-      },
-
-      // Chofer (FK UUID → employees, con legajo)
-      {
-        columnId: 'chofer',
-        title: 'Chofer',
-        options: [
-          ...choferOptions,
-          ...(facets?.chofer_employee_id?.has(NULL_FILTER_VALUE)
-            ? [{ value: NULL_FILTER_VALUE, label: 'Sin chofer', icon: CircleOff }]
-            : []),
-        ],
-        externalCounts: facets?.chofer_employee_id,
-      },
-
-      // Cliente (columna GENERATED desde JSONB → customers)
       {
         columnId: 'customer_id',
         title: 'Cliente',
-        options: [
-          ...customerOptions,
-          ...(facets?.customer_id?.has(NULL_FILTER_VALUE)
-            ? [{ value: NULL_FILTER_VALUE, label: 'Sin cliente', icon: CircleOff }]
-            : []),
-        ],
-        externalCounts: facets?.customer_id,
+        fetchFacet: makeFkFetchFacet('customer_id', Building2, 'Sin cliente'),
       },
-
-      // Observaciones (filtro de texto)
-      {
-        columnId: 'observations',
-        title: 'Observaciones',
-        type: 'text' as const,
-      },
+      { columnId: 'observations', title: 'Observaciones', type: 'text' as const },
     ],
-    [facets, equipmentOptions, userOptions, choferOptions, customerOptions]
+    [fetchResultFacet, makeFkFetchFacet]
   );
 
   // ─── Columnas ────────────────────────────────────────────────────────────────
@@ -237,18 +157,17 @@ export function _ChecklistAnswersDataTable({
       tableId={tableId}
       paramNamespace={tableId}
       showFilterToggle={true}
-      isFetchingFacets={isFetchingFacets}
       emptyMessage="No hay respuestas registradas para este checklist"
       data-testid="checklist-answers-table"
       exportConfig={{
-        fetchAllData: () => getAllChecklistAnswersForExport(searchParams, templateId),
+        fetchAllData: async () => unwrapExportResult(await getAllChecklistAnswersForExport(searchParams, templateId)),
         options: {
           filename: 'respuestas-checklist',
           title: 'Respuestas de Checklist',
           sheetName: 'Respuestas',
         },
         formatters: {
-          created_at: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
+          created_at: (val) => (val ? formatArgentinaDay(val as string | Date) : ''),
           result: (val) => {
             const normalized = normalizeResult(val as string | null);
             return checklistResultLabels[normalized] ?? String(val ?? '');
@@ -256,7 +175,11 @@ export function _ChecklistAnswersDataTable({
           observations: (val) => String(val ?? ''),
           kilometraje: (val) => (val != null ? String(val) : ''),
           horometro: (val) => (val != null ? String(val) : ''),
-          customer_id: (val) => String(val ?? ''),
+          // El export lleva el nombre del cliente (como la celda), no el UUID.
+          customer_id: (_val, row) => {
+            const answerData = row.answer_data as Record<string, string> | null;
+            return answerData?.customer_name ?? '';
+          },
         },
       }}
     />

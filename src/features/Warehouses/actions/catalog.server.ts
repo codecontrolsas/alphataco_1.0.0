@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { checkPermissionServer } from '@/features/Permissions';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
+import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
@@ -108,32 +109,56 @@ export async function updateWarehouse(id: string, values: WarehouseFormValues): 
   }
 }
 
-/** Borra un deposito sin historial o lo desactiva; con stock, se rechaza. */
+/** Violacion de FK (P2003): otro registro todavia apunta al que se quiere borrar. */
+function isForeignKeyError(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003';
+}
+
+/**
+ * Borra un deposito sin historial o lo desactiva; con stock, se rechaza.
+ *
+ * Todo en una transaccion que PRIMERO lockea el deposito (FOR UPDATE) y recien despues mira
+ * saldos y movimientos. El motor de stock lo lee con FOR SHARE (paso 3 del orden de locks de
+ * `lib/stock-engine.ts`), asi que un movimiento en curso termina antes de que se evalue la baja,
+ * y uno nuevo espera a que la baja confirme y ve el deposito inactivo o borrado. Este camino no
+ * toma otro lock antes del deposito: no puede cerrar un ciclo con el motor.
+ */
 export async function removeWarehouse(id: string): Promise<ActionResult<{ mode: RemovalMode }>> {
   if (!(await checkPermissionServer('almacenes', 'depositos', 'delete'))) return fail(NO_PERMISSION);
   const companyId = await getActiveCompanyId();
   try {
-    const warehouse = await prisma.warehouses.findFirst({ where: { id, company_id: companyId }, select: { id: true } });
-    if (!warehouse) return fail('El depósito no existe');
+    const result = await prisma.$transaction(async (tx): Promise<ActionResult<{ mode: RemovalMode }>> => {
+      const locked = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM warehouses
+        WHERE id = ${id}::uuid AND company_id = ${companyId}::uuid
+        FOR UPDATE
+      `;
+      if (locked.length === 0) return fail('El depósito no existe');
 
-    const [stock, movementCount] = await Promise.all([
-      prisma.stock_balances.aggregate({ where: { warehouse_id: id }, _sum: { quantity: true } }),
-      prisma.stock_movements.count({ where: { OR: [{ warehouse_id: id }, { target_warehouse_id: id }] } }),
-    ]);
-    const decision = warehouseRemoval(Number(stock._sum.quantity ?? 0), movementCount);
-    if ('error' in decision) return fail(decision.error);
+      // Sentencias separadas despues del lock: cada una ve lo que confirmo un movimiento que se esperaba.
+      const stock = await tx.stock_balances.aggregate({ where: { warehouse_id: id }, _sum: { quantity: true } });
+      const movementCount = await tx.stock_movements.count({
+        where: { OR: [{ warehouse_id: id }, { target_warehouse_id: id }] },
+      });
+      const decision = warehouseRemoval(Number(stock._sum.quantity ?? 0), movementCount);
+      if ('error' in decision) return fail(decision.error);
 
-    if (decision.mode === 'delete') {
-      await prisma.$transaction([
-        prisma.stock_balances.deleteMany({ where: { warehouse_id: id } }),
-        prisma.warehouses.delete({ where: { id } }),
-      ]);
-    } else {
-      await prisma.warehouses.update({ where: { id }, data: { is_active: false } });
-    }
-    revalidatePath(WAREHOUSE_PATH);
-    return ok({ mode: decision.mode });
+      if (decision.mode === 'delete') {
+        await tx.stock_balances.deleteMany({ where: { warehouse_id: id } });
+        await tx.warehouses.delete({ where: { id } });
+      } else {
+        await tx.warehouses.update({ where: { id }, data: { is_active: false } });
+      }
+      return ok({ mode: decision.mode });
+    });
+    if (result.ok) revalidatePath(WAREHOUSE_PATH);
+    return result;
   } catch (error) {
+    if (isForeignKeyError(error)) {
+      return fail(
+        'El depósito tiene registros asociados (recepciones de compra, entregas de ropa o unidades): no se puede borrar. Desactivalo.'
+      );
+    }
     return toActionError(error, logger, 'dar de baja el depósito');
   }
 }
@@ -302,31 +327,46 @@ export async function removeMaterial(id: string): Promise<ActionResult<{ mode: R
   if (!(await checkPermissionServer('almacenes', 'materiales', 'delete'))) return fail(NO_PERMISSION);
   const companyId = await getActiveCompanyId();
   try {
-    const material = await prisma.materials.findFirst({
-      where: { id, company_id: companyId },
-      select: {
-        clothing_combination: { select: { id: true } },
-        tire_combination: { select: { id: true } },
-        _count: { select: { movement_lines: true } },
-      },
-    });
-    if (!material) return fail('El material no existe');
-    const managed = managedBy(material);
-    if (managed === 'clothing') return fail(`${MANAGED_MESSAGES.clothing}: se da de baja quitando la combinación`);
-    if (managed === 'tires') return fail(`${MANAGED_MESSAGES.tires}: se da de baja desactivando el tipo o la marca`);
+    // Mismo patron que `removeWarehouse`: primero el lock del material (FOR UPDATE, el que toma
+    // el motor en su paso 4), despues contar movimientos y borrar o desactivar. Este camino no
+    // lockea depositos ni nada antes del material.
+    const result = await prisma.$transaction(async (tx): Promise<ActionResult<{ mode: RemovalMode }>> => {
+      const locked = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM materials
+        WHERE id = ${id}::uuid AND company_id = ${companyId}::uuid
+        FOR UPDATE
+      `;
+      if (locked.length === 0) return fail('El material no existe');
 
-    const mode = materialRemovalMode(material._count.movement_lines);
-    if (mode === 'delete') {
-      await prisma.$transaction([
-        prisma.stock_balances.deleteMany({ where: { material_id: id } }),
-        prisma.materials.delete({ where: { id } }),
-      ]);
-    } else {
-      await prisma.materials.update({ where: { id }, data: { is_active: false } });
-    }
-    revalidatePath(WAREHOUSE_PATH);
-    return ok({ mode });
+      const material = await tx.materials.findUniqueOrThrow({
+        where: { id },
+        select: {
+          clothing_combination: { select: { id: true } },
+          tire_combination: { select: { id: true } },
+          _count: { select: { movement_lines: true } },
+        },
+      });
+      const managed = managedBy(material);
+      if (managed === 'clothing') return fail(`${MANAGED_MESSAGES.clothing}: se da de baja quitando la combinación`);
+      if (managed === 'tires') return fail(`${MANAGED_MESSAGES.tires}: se da de baja desactivando el tipo o la marca`);
+
+      const mode = materialRemovalMode(material._count.movement_lines);
+      if (mode === 'delete') {
+        await tx.stock_balances.deleteMany({ where: { material_id: id } });
+        await tx.materials.delete({ where: { id } });
+      } else {
+        await tx.materials.update({ where: { id }, data: { is_active: false } });
+      }
+      return ok({ mode });
+    });
+    if (result.ok) revalidatePath(WAREHOUSE_PATH);
+    return result;
   } catch (error) {
+    if (isForeignKeyError(error)) {
+      return fail(
+        'El material está referenciado por otros registros (pedidos, compras u otro módulo): no se puede borrar. Desactivalo.'
+      );
+    }
     return toActionError(error, logger, 'dar de baja el material');
   }
 }

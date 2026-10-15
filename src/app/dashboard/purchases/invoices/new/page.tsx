@@ -1,4 +1,4 @@
-import { getSupplierInvoiceFormData } from '@/features/Purchases/actions/invoices.server';
+import { getSupplierInvoiceFormData } from '@/features/Purchases/actions/invoice-queries.server';
 import { NewSupplierInvoicePage } from '@/features/Purchases/Invoices/InvoicePages';
 import { notFound } from 'next/navigation';
 

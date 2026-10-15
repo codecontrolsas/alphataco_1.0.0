@@ -76,6 +76,8 @@ export interface TabDefinition<M extends ModuleSlug = ModuleSlug> {
    * título (ej. el Centro de Ayuda del módulo de TaskApp). Sin esto quedaban dos títulos.
    */
   hideTitle?: boolean;
+  /** Texto corto bajo el título de la sección (`PageHeader`). */
+  description?: string;
 }
 
 /**
@@ -216,3 +218,43 @@ export interface TabsManagerClientProps<M extends ModuleSlug = ModuleSlug> {
  */
 export interface SectionManagerServerProps<M extends ModuleSlug = ModuleSlug>
   extends Omit<TabsManagerServerProps<M>, 'variant' | 'dependentParams'> {}
+
+/** Una vista dentro de una sección (`ViewManagerServer`): contenido alternativo de la misma pantalla. */
+export interface ViewDefinition<M extends ModuleSlug = ModuleSlug>
+  extends Pick<TabDefinition<M>, 'value' | 'content' | 'moduleSlug' | 'tabSlug'> {
+  /** Texto plano: se usa también como `aria-label` del selector. */
+  label: string;
+  description?: string;
+  /**
+   * Contador junto al nombre de la vista. Se renderiza solo para la vista activa; su carga se comparte
+   * con la lista vía `React.cache`, así las otras vistas no ejecutan su consulta solo para un número.
+   */
+  counter?: React.ReactNode;
+  /** Otros valores de la URL que también abren esta vista (enlaces viejos o marcadores). */
+  aliases?: string[];
+  /**
+   * Opt-in (default `false`): `ViewManagerServer` envuelve el contenido de la vista activa en una superficie
+   * (`SectionCard`, `bg-card` + borde). NO usar donde el contenido ya trae su Card o es una grilla de widgets / ficha.
+   */
+  surface?: boolean;
+  /**
+   * La vista es visible si el usuario puede ver ALGUNA de estas pestañas (mismo checker que `moduleSlug`/`tabSlug`).
+   * Se evalúa además de `moduleSlug`/`tabSlug` cuando también están presentes.
+   */
+  visibleWhenAny?: Array<{ moduleSlug: M; tabSlug: AllTabSlugsUnion<M> }>;
+}
+
+export interface ViewManagerServerProps<M extends ModuleSlug = ModuleSlug> {
+  /** Parámetro de URL que guarda la vista activa (ej. `view`). */
+  paramName: string;
+  views: ViewDefinition<M>[];
+  defaultView: string;
+  searchParams: SectionManagerServerProps<M>['searchParams'];
+  permissions: Record<string, boolean>;
+  /** Parámetros que se conservan al cambiar de vista (default `['tab']`); el resto se descarta. */
+  preserveParams?: string[];
+  /** `menu`: desplegable en todos los anchos. `rail`: columna lateral desde `2xl`, desplegable debajo. */
+  layout?: 'rail' | 'menu';
+  ariaLabel: string;
+  actions?: React.ReactNode;
+}

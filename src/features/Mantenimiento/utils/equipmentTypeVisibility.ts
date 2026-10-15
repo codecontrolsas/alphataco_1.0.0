@@ -1,4 +1,4 @@
-'use server';
+import 'server-only';
 
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
@@ -18,6 +18,7 @@ const logger = new Logger('Mantenimiento/equipmentTypeVisibility');
  * - Por usuario: la excepción de `user_equipment_type_visibility` manda sobre los roles.
  * - Sin configuración, no se oculta nada.
  *
+ * Módulo server-only (no es una Server Action). Si la consulta falla, lanza (falla cerrado).
  * Devuelve los ids ordenados para que sirvan de argumento estable a funciones
  * `'use cache'`. Memoizada por request: la consultan todas las tablas y contadores
  * del módulo en el mismo render.
@@ -62,11 +63,11 @@ const loadHiddenEquipmentTypeIds = cache(async (): Promise<string[]> => {
 
     return [...hidden].sort();
   } catch (error) {
-    // Si falla la consulta no se oculta nada: es preferible mostrar de más a que el
-    // taller deje de ver pedidos que tiene que atender.
+    // Falla cerrado: si no se puede resolver qué tipos están ocultos, se propaga el error en
+    // vez de mostrar de más (devolver [] exponía equipos que el usuario no debe ver).
     logger.error('Error al resolver los tipos de equipamiento ocultos', {
       data: { error, profileId: profile.id },
     });
-    return [];
+    throw error;
   }
 });

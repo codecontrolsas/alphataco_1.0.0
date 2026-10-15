@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import { Check, ChevronsUpDown, LogOut, Wrench } from 'lucide-react';
 import { useState, useTransition } from 'react';
+import { toast } from 'sonner';
 
 const logger = new Logger('OperatorPanel/OperatorHeader');
 
@@ -47,6 +48,7 @@ export function OperatorHeader() {
       const result = await setActiveOperatorSector(sectorId);
       if (result.error) {
         logger.error('Error al cambiar sector activo', { data: { error: result.error } });
+        toast.error('No se pudo cambiar de sector. Probá de nuevo.');
         return;
       }
       setPopoverOpen(false);
@@ -73,14 +75,15 @@ export function OperatorHeader() {
                 </Badge>
               )}
             </div>
-            <div className="flex items-center gap-1 text-xs text-muted-foreground sm:text-sm">
+            <div className="flex items-center gap-1 text-sm text-muted-foreground">
               {hasMultipleSectors ? (
                 <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
                   <PopoverTrigger asChild>
                     <button
                       type="button"
                       disabled={isSwitching}
-                      className="inline-flex items-center gap-1 rounded-md hover:bg-accent hover:text-accent-foreground px-1.5 py-0.5 -ml-1.5 transition-colors disabled:opacity-50"
+                      aria-label={`Sector activo: ${context.sectorName}. Cambiar de sector`}
+                      className="inline-flex min-h-11 items-center gap-1 rounded-md hover:bg-accent hover:text-accent-foreground px-1.5 py-0.5 -ml-1.5 transition-colors disabled:opacity-50"
                     >
                       <span>{context.sectorName}</span>
                       <span className="hidden sm:inline"> · {context.workshopName}</span>
@@ -95,6 +98,7 @@ export function OperatorHeader() {
                         <CommandGroup>
                           {context.sectors.map((sector) => (
                             <CommandItem
+                              className="min-h-11"
                               key={sector.sectorId}
                               value={`${sector.sectorName} ${sector.workshopName}`}
                               onSelect={() => handleSelectSector(sector.sectorId)}
@@ -107,7 +111,7 @@ export function OperatorHeader() {
                               />
                               <div className="flex flex-col">
                                 <span className="text-sm">{sector.sectorName}</span>
-                                <span className="text-xs text-muted-foreground">{sector.workshopName}</span>
+                                <span className="text-sm text-muted-foreground">{sector.workshopName}</span>
                               </div>
                             </CommandItem>
                           ))}
@@ -126,8 +130,15 @@ export function OperatorHeader() {
           </div>
         </div>
 
-        <Button variant="ghost" size="sm" onClick={handleLogout} disabled={isLoggingOut} className="gap-2 h-10">
-          <LogOut className="h-4 w-4" />
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={handleLogout}
+          disabled={isLoggingOut}
+          aria-label="Salir"
+          className="h-11 min-w-11 gap-2"
+        >
+          <LogOut aria-hidden="true" className="h-4 w-4" />
           <span className="hidden sm:inline">Salir</span>
         </Button>
       </div>

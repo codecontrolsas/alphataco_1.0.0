@@ -246,6 +246,18 @@ export async function buildPaymentOrder(
 
   const invoiceIds = invoiceLines.map((l) => l.invoiceId);
   if (invoiceIds.some((id) => !UUID_RE.test(id))) throw new PurchaseError('El comprobante no existe');
+  // Con el proveedor ya lockeado: los comprobantes se lockean FOR SHARE, en orden de id, ANTES de
+  // leerlos. Asi una anulacion, un rechazo o una edicion en curso (FOR UPDATE sobre el comprobante)
+  // termina primero y se lee el estado ya confirmado. Esos circuitos lockean OC -> comprobante y
+  // nunca esperan al proveedor ni a la orden de pago, asi que no se forma ciclo.
+  if (invoiceIds.length > 0) {
+    await tx.$queryRaw`
+      SELECT id FROM supplier_invoices
+      WHERE id = ANY(${[...new Set(invoiceIds)]}::uuid[]) AND company_id = ${companyId}::uuid
+      ORDER BY id
+      FOR SHARE
+    `;
+  }
   const invoices = invoiceIds.length
     ? await tx.supplier_invoices.findMany({
         where: { id: { in: invoiceIds }, company_id: companyId },

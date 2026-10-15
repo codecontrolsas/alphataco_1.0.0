@@ -1,14 +1,5 @@
 import type { DocumentStateCounts } from '@/features/Documentacion/shared/components/DocumentStateMetrics';
 
-/** Convierte el resultado de un `groupBy(['state'])` en los conteos que consumen las tarjetas por estado. */
-export function toDocumentStateCounts(rows: { state: string | null; _count: { _all: number } }[]): DocumentStateCounts {
-  const counts: DocumentStateCounts = {};
-  for (const row of rows) {
-    if (row.state && row.state in STATE_KEYS) counts[row.state as keyof DocumentStateCounts] = row._count._all;
-  }
-  return counts;
-}
-
 const STATE_KEYS: Record<keyof DocumentStateCounts, true> = {
   aprobado: true,
   presentado: true,
@@ -16,3 +7,20 @@ const STATE_KEYS: Record<keyof DocumentStateCounts, true> = {
   vencido: true,
   rechazado: true,
 };
+
+/**
+ * Conteos por estado para las tarjetas, sacados de las MISMAS filas calculadas de la lista (sin los
+ * filtros del usuario). `pendiente` cuenta las filas faltantes ("Faltantes" en la UI). Las filas
+ * "ya no aplica" (sólo existen en la ficha de un recurso) no cuentan.
+ */
+export function countRowStates(
+  rows: ReadonlyArray<{ state: string | null; notApplicable?: boolean }>
+): DocumentStateCounts {
+  const counts: DocumentStateCounts = {};
+  for (const row of rows) {
+    if (row.notApplicable || !row.state || !(row.state in STATE_KEYS)) continue;
+    const key = row.state as keyof DocumentStateCounts;
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts;
+}

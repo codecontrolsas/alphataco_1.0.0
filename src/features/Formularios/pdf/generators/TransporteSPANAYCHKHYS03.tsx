@@ -440,7 +440,7 @@ export const TransporteSPANAYCHKHYS03 = ({
     link.href = url;
     // Generar nombre personalizado
     const fileName =
-      `${title}_${data?.dominio || ''}-(${moment(data?.fecha).format('DD-MM-YYYY') ? moment(data?.fecha).format('DD-MM-YYYY') : ''}).pdf`.replace(
+      `${title}_${data?.dominio || ''}-(${data?.fecha && moment(data.fecha).isValid() ? moment(data.fecha).format('DD-MM-YYYY') : ''}).pdf`.replace(
         /\s+/g,
         '_'
       );

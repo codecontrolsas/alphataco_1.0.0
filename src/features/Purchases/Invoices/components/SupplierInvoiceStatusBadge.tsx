@@ -1,38 +1,20 @@
 import { Badge } from '@/components/ui/badge';
-import { Ban, BadgeCheck, CircleCheck, CircleX, TriangleAlert, type LucideIcon } from 'lucide-react';
-import { SUPPLIER_INVOICE_STATUS_LABELS, type SupplierInvoiceStatus } from '../../lib/invoice-status';
+import type { SupplierInvoiceStatus } from '../../lib/invoice-status';
+import type { LucideIcon } from 'lucide-react';
+import { INVOICE_STATUS_UI, TONE_TO_BADGE } from '../../lib/status-presentation';
 
 /** Icono por estado: lo comparten la celda, el filtro de la tabla y el detalle. */
-export const supplierInvoiceStatusIcons: Record<SupplierInvoiceStatus, LucideIcon> = {
-  CONFORMING: CircleCheck,
-  OBSERVED: TriangleAlert,
-  APPROVED: BadgeCheck,
-  REJECTED: CircleX,
-  CANCELLED: Ban,
-};
-
-const VARIANTS: Record<SupplierInvoiceStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  CONFORMING: 'default',
-  OBSERVED: 'secondary',
-  APPROVED: 'default',
-  REJECTED: 'destructive',
-  CANCELLED: 'outline',
-};
-
-const CLASSES: Record<SupplierInvoiceStatus, string> = {
-  CONFORMING: 'bg-green-600 text-white hover:bg-green-600/90',
-  OBSERVED: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
-  APPROVED: 'bg-blue-600 text-white hover:bg-blue-600/90',
-  REJECTED: '',
-  CANCELLED: 'text-muted-foreground',
-};
+export const supplierInvoiceStatusIcons = Object.fromEntries(
+  Object.entries(INVOICE_STATUS_UI).map(([status, ui]) => [status, ui.icon])
+) as Record<SupplierInvoiceStatus, LucideIcon>;
 
 export function SupplierInvoiceStatusBadge({ status }: { status: SupplierInvoiceStatus }) {
-  const Icon = supplierInvoiceStatusIcons[status];
+  const ui = INVOICE_STATUS_UI[status];
+  const Icon = ui.icon;
   return (
-    <Badge variant={VARIANTS[status]} className={`gap-1 ${CLASSES[status]}`}>
-      <Icon className="h-3 w-3" />
-      {SUPPLIER_INVOICE_STATUS_LABELS[status]}
+    <Badge variant={TONE_TO_BADGE[ui.tone]} className="gap-1 whitespace-nowrap">
+      <Icon className="h-3 w-3" aria-hidden="true" />
+      {ui.label}
     </Badge>
   );
 }

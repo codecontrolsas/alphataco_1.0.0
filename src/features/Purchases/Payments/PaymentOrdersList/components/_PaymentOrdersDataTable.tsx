@@ -11,8 +11,9 @@ import {
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { Banknote, CircleOff, Landmark, Truck, User, Wallet, WalletCards, type LucideIcon } from 'lucide-react';
-import moment from 'moment';
-import { useCallback, useMemo, useState } from 'react';
+import { formatArgentinaDay, formatDateAr } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { PAYMENT_ORDER_STATUS_LABELS } from '../../../lib/payment-order-state-machine';
 import { PURCHASES_QUERY_KEYS } from '../../../lib/query-keys';
 import { paymentOrderStatusIcons } from '../../components/PaymentOrderStatusBadge';
@@ -22,13 +23,16 @@ import {
   getPaymentOrdersPaginated,
   type PaymentOrderListItem,
 } from '../actions.server';
-import { HIDDEN_COLUMNS_BY_DEFAULT, NO_PAYMENT_LABEL, PAYMENT_METHOD_LABELS, getColumns } from '../columns';
+import { getColumns } from '../columns';
+import { HIDDEN_COLUMNS_BY_DEFAULT, NO_PAYMENT_LABEL, PAYMENT_METHOD_LABELS } from '../constants';
 
 interface Props {
   data: PaymentOrderListItem[];
   totalRows: number;
   searchParams: DataTableSearchParams;
   tableId: string;
+  /** Banda de atención resuelta en el servidor; se muestra sobre la tabla. */
+  topSlot?: ReactNode;
   initialColumnVisibility?: Record<string, boolean>;
   initialFilterVisibility?: Record<string, boolean>;
 }
@@ -47,7 +51,9 @@ const methodIcons: Record<payment_method, LucideIcon> = {
   THIRD_PARTY_CHECK: WalletCards,
 };
 
-const dateOnly = (value: unknown) => (value ? moment.utc(value as string | Date).format('DD/MM/YYYY') : '');
+/** Columnas DATE (sin hora): medianoche UTC, se leen como fecha para no correr un día. */
+const dateOnly = (value: unknown) =>
+  value ? formatDateAr(new Date(value as string | Date).toISOString().slice(0, 10)) : '';
 const money = (value: unknown) => formatMoney(value as string);
 
 export function _PaymentOrdersDataTable({
@@ -55,6 +61,7 @@ export function _PaymentOrdersDataTable({
   totalRows,
   searchParams,
   tableId,
+  topSlot,
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
@@ -136,12 +143,12 @@ export function _PaymentOrdersDataTable({
 
   const exportConfig: DataTableExportConfig<PaymentOrderListItem> = useMemo(
     () => ({
-      fetchAllData: () => getAllPaymentOrdersForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllPaymentOrdersForExport(currentParams)),
       options: { filename: 'ordenes-de-pago', title: 'Órdenes de pago', sheetName: 'Órdenes de pago' },
       formatters: {
         planned_on: dateOnly,
         paid_on: dateOnly,
-        created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : ''),
+        created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : ''),
         invoices_total: money,
         credits_total: money,
         advance_total: money,
@@ -153,24 +160,27 @@ export function _PaymentOrdersDataTable({
   );
 
   return (
-    <DataTable
-      columns={columns}
-      data={data}
-      totalRows={totalRows}
-      searchParams={searchParams}
-      tableId={tableId}
-      paramNamespace={tableId}
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={mergedColumnVisibility}
-      initialFilterVisibility={mergedFilterVisibility}
-      showFilterToggle
-      queryFn={tableQueryFn}
-      queryKey={[...PURCHASES_QUERY_KEYS.payments]}
-      onStateChange={handleStateChange}
-      searchPlaceholder="Buscar por número o proveedor"
-      emptyMessage="No hay órdenes de pago"
-      exportConfig={exportConfig}
-      data-testid="payment-orders-table"
-    />
+    <div className="space-y-4">
+      {topSlot}
+      <DataTable
+        columns={columns}
+        data={data}
+        totalRows={totalRows}
+        searchParams={searchParams}
+        tableId={tableId}
+        paramNamespace={tableId}
+        facetedFilters={facetedFilters}
+        initialColumnVisibility={mergedColumnVisibility}
+        initialFilterVisibility={mergedFilterVisibility}
+        showFilterToggle
+        queryFn={tableQueryFn}
+        queryKey={[...PURCHASES_QUERY_KEYS.payments]}
+        onStateChange={handleStateChange}
+        searchPlaceholder="Buscar por número o proveedor"
+        emptyMessage="No hay órdenes de pago"
+        exportConfig={exportConfig}
+        data-testid="payment-orders-table"
+      />
+    </div>
   );
 }

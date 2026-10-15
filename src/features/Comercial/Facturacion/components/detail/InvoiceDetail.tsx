@@ -2,6 +2,7 @@ import { CertificationAmount } from '@/features/Comercial/Certificaciones/compon
 import { CertificationStatusBadge } from '@/features/Comercial/Certificaciones/components/CertificationStatusBadge';
 import { formatInCurrency } from '@/features/Treasury/lib/currency-format';
 import { CONCEPTS, VAT_RATE_LABELS, isVatRateId, type ConceptId } from '@/shared/lib/arca/catalogs';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { AlertTriangle, ArrowLeft, CheckCircle2, Clock, SearchCheck } from 'lucide-react';
 import moment from 'moment';
 import Link from 'next/link';
@@ -25,7 +26,7 @@ import { ReconcileInvoicePanel } from './ReconcileInvoicePanel';
 /** Si el comprobante se autorizó hace menos que esto, el PDF puede estar generándose todavía. */
 const PDF_GRACE_MS = 3 * 60 * 1000;
 
-const date = (value: string | null) => (value ? moment(value).format('DD/MM/YYYY') : '—');
+const date = (value: string | null) => (value ? moment.utc(value).format('DD/MM/YYYY') : '—');
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -101,10 +102,7 @@ export function InvoiceDetail({
               <p className="text-muted-foreground text-sm">
                 <span className="break-words">{receiverName}</span>
                 {invoice.authorizedAt && (
-                  <span className="tabular-nums">
-                    {' '}
-                    · Emitida el {moment(invoice.authorizedAt).format('DD/MM/YYYY')}
-                  </span>
+                  <span className="tabular-nums"> · Emitida el {formatArgentinaDay(invoice.authorizedAt)}</span>
                 )}
               </p>
             </div>
@@ -172,7 +170,7 @@ export function InvoiceDetail({
             </p>
           )}
           {invoice.arcaObservations.length > 0 && (
-            <div className="flex flex-col gap-1 border border-amber-300 bg-amber-100/40 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+            <div className="flex flex-col gap-1 border border-warn/35 bg-warn-subtle text-warn-subtle-foreground px-3 py-2 text-sm">
               <p className="flex items-center gap-2 font-medium">
                 <AlertTriangle className="size-4 shrink-0" aria-hidden />
                 ARCA la autorizó con observaciones:
@@ -211,13 +209,13 @@ export function InvoiceDetail({
       {isPending && (
         <section
           aria-labelledby="invoice-result-title"
-          className="flex flex-col gap-3 border border-amber-300 bg-amber-100/40 px-4 py-4 text-sm dark:border-amber-800 dark:bg-amber-950/40"
+          className="flex flex-col gap-3 border border-warn/35 bg-warn-subtle text-warn-subtle-foreground px-4 py-4 text-sm"
         >
           <FocusOnMountHeading
             id="invoice-result-title"
             focus={result === 'pendiente'}
             documentTitle={`${voucherLabel} pendiente · Facturación`}
-            className="flex items-center gap-2 font-semibold text-amber-900 dark:text-amber-200"
+            className="flex items-center gap-2 font-semibold text-warn-subtle-foreground"
           >
             <Clock className="size-5 shrink-0" aria-hidden />
             ARCA no confirmó si autorizó el comprobante.

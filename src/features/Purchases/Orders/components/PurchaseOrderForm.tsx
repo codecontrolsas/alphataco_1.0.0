@@ -23,11 +23,10 @@ import { useFieldArray, useForm, useWatch, type UseFormReturn } from 'react-hook
 import { toast } from 'sonner';
 import {
   createPurchaseOrder,
-  getSupplierPurchaseContext,
-  searchOrderableRequestLines,
   updatePurchaseOrderDraft,
-  type OrderableRequestLineOption,
 } from '../../actions/orders.server';
+import { getSupplierPurchaseContext, searchOrderableRequestLines } from '../../actions/order-queries.server';
+import type { OrderableRequestLineOption } from '../../lib/order-query-types';
 import { searchSupplierOptions } from '../../actions/suppliers.server';
 import { ExpiredSupplierDocumentsAlert } from '../../components/ExpiredSupplierDocumentsAlert';
 import { invalidatePurchases } from '../../lib/invalidate';

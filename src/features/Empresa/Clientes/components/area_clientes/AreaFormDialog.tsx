@@ -20,7 +20,6 @@ import { Logger } from '@/lib/logger';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Info, Loader2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -32,6 +31,7 @@ import {
   type AreaRow,
 } from '../../actions/areas.server';
 import { getActiveContractsByCustomer } from '../../actions/services.server';
+import { customerKey } from '../../lib/query-keys';
 import { areaFormSchema, type AreaFormValues } from '../../schemas/area';
 
 const logger = new Logger('features/Empresa/Clientes/AreaFormDialog');
@@ -82,7 +82,6 @@ export function AreaFormDialog({
   triggerVariant = 'brand',
 }: AreaFormDialogProps) {
   const [open, setOpen] = useState(false);
-  const router = useRouter();
   const queryClient = useQueryClient();
   const isEditing = !!area;
 
@@ -141,9 +140,10 @@ export function AreaFormDialog({
       }
 
       queryClient.invalidateQueries({ queryKey: ['area-linked-contracts'] });
+      // La ficha lee por React Query: la pestaña Áreas, los contratos (usan las áreas) y el resumen.
+      queryClient.invalidateQueries({ queryKey: customerKey(customerId) });
       setOpen(false);
       if (!isEditing) form.reset(toFormValues(customerId, null));
-      router.refresh();
     } catch (error) {
       logger.error('Error al guardar el área', { data: { error, areaId: area?.id } });
       toast.error('Error inesperado al procesar la solicitud');

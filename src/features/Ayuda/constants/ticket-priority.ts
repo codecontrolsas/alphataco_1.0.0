@@ -1,46 +1,50 @@
-import { ArrowDown, ArrowUp, Equal, Flame, type LucideIcon } from 'lucide-react';
+import {
+  TONE_TO_BADGE,
+  type BadgeVariant,
+  type StatusTone,
+  type StatusUi,
+} from '@/features/Mantenimiento/lib/status-presentation';
 import type { TicketPriority } from '@/shared/lib/taskapp/types';
+import { ArrowDown, ArrowUp, Equal, Flame, type LucideIcon } from 'lucide-react';
 
 export type PrioritySlug = TicketPriority;
 
-export interface PriorityDef {
+/** Color del ícono por tono (clases completas, sobre tokens de `globals.css`). */
+const ICON_CLASS_BY_TONE: Partial<Record<StatusTone, string>> = {
+  neutral: 'text-muted-foreground',
+  info: 'text-info',
+  warn: 'text-warn',
+  danger: 'text-danger',
+};
+
+export interface PriorityDef extends StatusUi {
   slug: PrioritySlug;
-  label: string;
   icon: LucideIcon;
-  badgeClass: string;
+  badgeVariant: BadgeVariant;
   iconClass: string;
 }
 
-export const PRIORITY_BY_SLUG: Record<PrioritySlug, PriorityDef> = {
-  low: {
-    slug: 'low',
-    label: 'Baja',
-    icon: ArrowDown,
-    badgeClass: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200',
-    iconClass: 'text-slate-500',
-  },
-  medium: {
-    slug: 'medium',
-    label: 'Media',
-    icon: Equal,
-    badgeClass: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-    iconClass: 'text-blue-500',
-  },
-  high: {
-    slug: 'high',
-    label: 'Alta',
-    icon: ArrowUp,
-    badgeClass: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
-    iconClass: 'text-amber-500',
-  },
-  critical: {
-    slug: 'critical',
-    label: 'Crítica',
-    icon: Flame,
-    badgeClass: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-    iconClass: 'text-red-600',
-  },
+const PRIORITY_UI: Record<PrioritySlug, StatusUi> = {
+  low: { label: 'Baja', tone: 'neutral', icon: ArrowDown },
+  medium: { label: 'Media', tone: 'info', icon: Equal },
+  high: { label: 'Alta', tone: 'warn', icon: ArrowUp },
+  critical: { label: 'Crítica', tone: 'danger', icon: Flame },
 };
+
+export const PRIORITY_BY_SLUG: Record<PrioritySlug, PriorityDef> = Object.fromEntries(
+  (Object.keys(PRIORITY_UI) as PrioritySlug[]).map((slug) => {
+    const ui = PRIORITY_UI[slug];
+    return [
+      slug,
+      {
+        ...ui,
+        slug,
+        badgeVariant: TONE_TO_BADGE[ui.tone],
+        iconClass: ICON_CLASS_BY_TONE[ui.tone] ?? 'text-muted-foreground',
+      },
+    ];
+  })
+) as Record<PrioritySlug, PriorityDef>;
 
 export const PRIORITIES: PriorityDef[] = Object.values(PRIORITY_BY_SLUG);
 

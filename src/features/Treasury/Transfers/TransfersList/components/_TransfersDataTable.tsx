@@ -9,7 +9,9 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { Landmark } from 'lucide-react';
-import { formatArgentinaDay } from '../../../lib/today';
+import { unwrapExportResult } from '@/shared/lib/export-result';
+import { formatArgentinaDateTime } from '../../../lib/today';
+import { TRANSFER_STATE_UI } from '../../../lib/status-presentation';
 import { useCallback, useMemo, useState } from 'react';
 import { TREASURY_QUERY_KEYS } from '../../../lib/query-keys';
 import {
@@ -18,7 +20,7 @@ import {
   getTreasuryTransfersPaginated,
   type TreasuryTransferListItem,
 } from '../actions.server';
-import { HIDDEN_COLUMNS_BY_DEFAULT, formatValueDate, getColumns, transferStateIcons } from '../columns';
+import { HIDDEN_COLUMNS_BY_DEFAULT, formatValueDate, getColumns } from '../columns';
 import { TRANSFER_STATE_LABELS } from '../constants';
 
 interface Props {
@@ -83,7 +85,7 @@ export function _TransfersDataTable({
             options: STATE_VALUES.map((value) => ({
               value,
               label: TRANSFER_STATE_LABELS[value],
-              icon: transferStateIcons[value],
+              icon: TRANSFER_STATE_UI[value].icon,
             })),
             counts: result.counts,
           };
@@ -104,11 +106,11 @@ export function _TransfersDataTable({
 
   const exportConfig: DataTableExportConfig<TreasuryTransferListItem> = useMemo(
     () => ({
-      fetchAllData: () => getAllTreasuryTransfersForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllTreasuryTransfersForExport(currentParams)),
       options: { filename: 'transferencias-tesoreria', title: 'Transferencias', sheetName: 'Transferencias' },
       formatters: {
         date: (value) => formatValueDate(value as string),
-        created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : ''),
+        created_at: (value) => (value ? formatArgentinaDateTime(value as string | Date) : ''),
         amount: (value) => formatMoney(value as string),
       },
     }),

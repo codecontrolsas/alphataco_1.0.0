@@ -5,6 +5,8 @@ import { Prisma } from '@/generated/prisma/client';
 import { createMovement, dateOnly } from './movements';
 import { nextOwnCheckStatus, normalizeCheckNumber, ownCheckTransitionError, type OwnCheckAction, type OwnCheckStatus } from './own-check-transitions';
 import { TreasuryError } from './treasury-errors';
+import { UUID_RE } from '../schemas/shared';
+import { formatDay } from './dates';
 
 /**
  * Cheques propios (spec Tesorería etapa 3b §3): ÚNICA escritura de `own_checks.status` y de su
@@ -16,7 +18,6 @@ import { TreasuryError } from './treasury-errors';
 type OwnChecksTx = Pick<Prisma.TransactionClient, '$queryRaw' | 'own_checks' | 'own_check_events'>;
 type RawTx = Pick<Prisma.TransactionClient, '$queryRaw'>;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const NUMBER_KEY = 'own_checks_number_key';
 
 export type OwnCheckKind = 'PHYSICAL' | 'ECHECK';
@@ -151,7 +152,11 @@ export type LockedCheckbook = {
   retired: boolean;
 };
 
-/** Toma la chequera con `FOR UPDATE` (dos pagos no toman el mismo número). */
+/**
+ * Toma la chequera con `FOR UPDATE` (dos pagos no toman el mismo número) y la cuenta con `FOR SHARE`: así una
+ * desactivación concurrente (`setTreasuryAccountActive`, que la toma con `FOR UPDATE`) espera a la emisión en curso
+ * en vez de no verla. Orden de locks: chequera → cuenta; la desactivación solo toma la cuenta, no hay ciclo.
+ */
 export async function lockCheckbook(tx: RawTx, companyId: string, checkbookId: string): Promise<LockedCheckbook> {
   if (!UUID_RE.test(checkbookId)) throw new TreasuryError('La chequera no existe');
   const rows = await tx.$queryRaw<
@@ -160,7 +165,7 @@ export async function lockCheckbook(tx: RawTx, companyId: string, checkbookId: s
     SELECT cb.id, cb.account_id, a.name AS account_name, a.is_active, cb.first_number, cb.last_number, cb.retired_at IS NOT NULL AS retired
     FROM checkbooks cb JOIN treasury_accounts a ON a.id = cb.account_id
     WHERE cb.id = ${checkbookId}::uuid AND cb.company_id = ${companyId}::uuid
-    FOR UPDATE OF cb
+    FOR UPDATE OF cb FOR SHARE OF a
   `;
   const row = rows[0];
   if (!row) throw new TreasuryError('La chequera no existe');
@@ -303,7 +308,6 @@ export async function voidCheckNumber(
   return { id: created.id, number };
 }
 
-const dmy = (value: string) => `${value.slice(8, 10)}/${value.slice(5, 7)}/${value.slice(0, 4)}`;
 
 /**
  * Confirma el débito de UN cheque emitido (spec etapa 3b §3.3): la fecha no puede ser anterior a su
@@ -317,7 +321,7 @@ export async function debitOwnCheck(
   const { check } = input;
   assertOwnTransition(check, 'DEBIT');
   if (check.paymentDate && input.date < check.paymentDate) {
-    throw new TreasuryError(`Cheque Nº ${check.number}: su fecha de pago es el ${dmy(check.paymentDate)}; el débito no puede ser anterior`);
+    throw new TreasuryError(`Cheque Nº ${check.number}: su fecha de pago es el ${formatDay(check.paymentDate)}; el débito no puede ser anterior`);
   }
   const extra = await tx.own_checks.findUniqueOrThrow({
     where: { id: check.id },

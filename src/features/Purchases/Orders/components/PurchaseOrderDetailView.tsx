@@ -1,26 +1,20 @@
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { AttentionBanner } from '@/features/Mantenimiento/shared/components/AttentionBanner';
 import { formatCuit } from '@/features/Purchases/lib/supplier-ids';
-import { formatMoney, formatQuantity, formatUnitCost } from '@/features/Warehouses/lib/format';
+import { formatMoney, formatQuantity } from '@/features/Warehouses/lib/format';
+import { Field, FieldGrid } from '@/shared/components/common/FieldGrid';
+import { RecordHeader } from '@/shared/components/common/RecordHeader';
+import { SectionCard } from '@/shared/components/common/SectionCard';
 import { VAT_RATE_LABELS, isVatRateId } from '@/shared/lib/arca/catalogs';
-import moment from 'moment';
+import { formatDateAr } from '@/shared/lib/argentina-time';
 import Link from 'next/link';
-import type { PurchaseOrderDetail } from '../../actions/orders.server';
+import { SupplierInvoiceStatusBadge } from '../../Invoices/components/SupplierInvoiceStatusBadge';
 import { ExpiredSupplierDocumentsAlert } from '../../components/ExpiredSupplierDocumentsAlert';
 import { HistoryCard } from '../../components/HistoryCard';
-import { SupplierInvoiceStatusBadge } from '../../Invoices/components/SupplierInvoiceStatusBadge';
+import { PriceText } from '../../components/PriceText';
+import type { PurchaseOrderDetail } from '../../lib/order-query-types';
 import { PurchaseOrderActions } from './PurchaseOrderActions';
 import { PurchaseOrderStatusBadge } from './PurchaseOrderStatusBadge';
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="text-sm">{children}</dd>
-    </div>
-  );
-}
 
 /** Estados en los que se muestra lo recibido por linea. */
 const WITH_RECEIPTS = new Set(['SENT', 'PARTIALLY_RECEIVED', 'RECEIVED', 'CLOSED']);
@@ -30,90 +24,99 @@ export function PurchaseOrderDetailView({ order }: { order: PurchaseOrderDetail 
   const showReceipts = WITH_RECEIPTS.has(order.status);
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="font-mono text-2xl font-semibold">{order.number}</h1>
-        <PurchaseOrderStatusBadge status={order.status} />
-        <div className="ml-auto">
-          <PurchaseOrderActions order={order} />
-        </div>
-      </div>
+      <RecordHeader
+        identity={
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="font-mono text-2xl font-semibold">{order.number}</h1>
+            <PurchaseOrderStatusBadge status={order.status} />
+          </div>
+        }
+        actions={<PurchaseOrderActions order={order} />}
+      />
 
       {order.rejectionNotes && (
-        <Alert variant="destructive">
-          <AlertTitle>Rechazada: hay que corregirla</AlertTitle>
-          <AlertDescription className="whitespace-pre-wrap">{order.rejectionNotes}</AlertDescription>
-        </Alert>
+        <AttentionBanner
+          tone="danger"
+          title="Rechazada: hay que corregirla"
+          description={<span className="whitespace-pre-wrap">{order.rejectionNotes}</span>}
+        />
       )}
       {order.complements && (
-        <Alert>
-          <AlertTitle>OC complementaria</AlertTitle>
-          <AlertDescription>
-            Regulariza el excedente recibido en{' '}
-            {order.complements.receipt ? (
-              <Link href={`/dashboard/purchases/receipts/${order.complements.receipt.id}`} className="font-mono underline">
-                {order.complements.receipt.number}
+        <AttentionBanner
+          tone="info"
+          title="OC complementaria"
+          description={
+            <>
+              Regulariza el excedente recibido en{' '}
+              {order.complements.receipt ? (
+                <Link
+                  href={`/dashboard/purchases/receipts/${order.complements.receipt.id}`}
+                  className="font-mono underline"
+                >
+                  {order.complements.receipt.number}
+                </Link>
+              ) : (
+                'una recepción'
+              )}{' '}
+              de la orden{' '}
+              <Link href={`/dashboard/purchases/orders/${order.complements.id}`} className="font-mono underline">
+                {order.complements.number}
               </Link>
-            ) : (
-              'una recepción'
-            )}{' '}
-            de la orden{' '}
-            <Link href={`/dashboard/purchases/orders/${order.complements.id}`} className="font-mono underline">
-              {order.complements.number}
-            </Link>
-            . Lo recibido ya está en el depósito: al aprobarla queda recibida.
-          </AlertDescription>
-        </Alert>
+              . Lo recibido ya está en el depósito: al aprobarla queda recibida.
+            </>
+          }
+        />
       )}
       {order.closeReason && order.status === 'CLOSED' && (
-        <Alert>
-          <AlertTitle>Cerrada sin recibir lo que faltaba</AlertTitle>
-          <AlertDescription className="whitespace-pre-wrap">{order.closeReason}</AlertDescription>
-        </Alert>
+        <AttentionBanner
+          tone="info"
+          title="Cerrada sin recibir lo que faltaba"
+          description={<span className="whitespace-pre-wrap">{order.closeReason}</span>}
+        />
       )}
       {!['CANCELLED', 'SENT', 'PARTIALLY_RECEIVED', 'RECEIVED', 'CLOSED'].includes(order.status) && (
         <ExpiredSupplierDocumentsAlert supplierId={order.supplier.id} documents={order.expiredDocuments} />
       )}
 
-      <Card>
-        <CardContent className="pt-6">
-          <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Proveedor">
-              <Link href={`/dashboard/purchases/suppliers/${order.supplier.id}`} className="hover:underline">
-                {order.supplier.name}
+      <SectionCard title="Datos de la orden">
+        <FieldGrid>
+          <Field label="Proveedor">
+            <Link href={`/dashboard/purchases/suppliers/${order.supplier.id}`} className="hover:underline">
+              {order.supplier.name}
+            </Link>
+            <span className="block text-xs font-normal text-muted-foreground tabular-nums">
+              {formatCuit(order.supplier.cuit)}
+            </span>
+          </Field>
+          <Field label="Fecha de entrega">{order.deliveryDate ? formatDateAr(order.deliveryDate) : 'Sin fecha'}</Field>
+          <Field label="Lugar de entrega" value={order.deliveryPlace} />
+          <Field label="Plazo de pago">
+            {order.paymentTermDays === null
+              ? 'Sin plazo'
+              : order.paymentTermDays === 0
+                ? 'Contado'
+                : `${order.paymentTermDays} días`}
+          </Field>
+          <Field label="Creada por" value={order.creator} />
+          {order.quote && (
+            <Field label="Cotización">
+              <Link href={`/dashboard/purchases/quotes/${order.quote.id}`} className="font-mono underline">
+                {order.quote.number}
               </Link>
-              <span className="block text-xs text-muted-foreground tabular-nums">{formatCuit(order.supplier.cuit)}</span>
             </Field>
-            <Field label="Fecha de entrega">
-              {order.deliveryDate ? moment(order.deliveryDate, 'YYYY-MM-DD').format('DD/MM/YYYY') : 'Sin fecha'}
-            </Field>
-            <Field label="Lugar de entrega">{order.deliveryPlace ?? '—'}</Field>
-            <Field label="Plazo de pago">
-              {order.paymentTermDays === null ? 'Sin plazo' : order.paymentTermDays === 0 ? 'Contado' : `${order.paymentTermDays} días`}
-            </Field>
-            <Field label="Creada por">{order.creator ?? '—'}</Field>
-            {order.quote && (
-              <Field label="Cotización">
-                <Link href={`/dashboard/purchases/quotes/${order.quote.id}`} className="font-mono underline">
-                  {order.quote.number}
-                </Link>
+          )}
+          {order.notes && (
+            <div className="sm:col-span-2 xl:col-span-3">
+              <Field label="Observaciones">
+                <span className="whitespace-pre-wrap">{order.notes}</span>
               </Field>
-            )}
-            {order.notes && (
-              <div className="sm:col-span-2 lg:col-span-4">
-                <Field label="Observaciones">
-                  <span className="whitespace-pre-wrap">{order.notes}</span>
-                </Field>
-              </div>
-            )}
-          </dl>
-        </CardContent>
-      </Card>
+            </div>
+          )}
+        </FieldGrid>
+      </SectionCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Qué se compra</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <SectionCard title="Qué se compra">
+        <div className="space-y-4">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -136,7 +139,10 @@ export function PurchaseOrderDetailView({ order }: { order: PurchaseOrderDetail 
                     <TableCell className="tabular-nums text-muted-foreground">{i + 1}</TableCell>
                     <TableCell>{line.itemLabel}</TableCell>
                     <TableCell>
-                      <Link href={`/dashboard/purchases/requests/${line.request.id}`} className="font-mono text-xs underline">
+                      <Link
+                        href={`/dashboard/purchases/requests/${line.request.id}`}
+                        className="font-mono text-xs underline"
+                      >
                         {line.request.number}
                       </Link>
                       <span className="text-xs text-muted-foreground"> · línea {line.requestPosition}</span>
@@ -144,9 +150,15 @@ export function PurchaseOrderDetailView({ order }: { order: PurchaseOrderDetail 
                     <TableCell className="text-right tabular-nums">
                       {formatQuantity(line.quantity)} {line.unitAbbr}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">{formatUnitCost(line.unitPrice)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{isVatRateId(line.vatRateId) ? VAT_RATE_LABELS[line.vatRateId] : ''}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatMoney(line.netTotal)}</TableCell>
+                    <TableCell className="text-right">
+                      <PriceText value={line.unitPrice} canViewPrices={order.canViewPrices} unit />
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {isVatRateId(line.vatRateId) ? VAT_RATE_LABELS[line.vatRateId] : ''}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <PriceText value={line.netTotal} canViewPrices={order.canViewPrices} />
+                    </TableCell>
                     {showReceipts && (
                       <TableCell className="text-right tabular-nums">
                         {formatQuantity(line.received)} {line.unitAbbr}
@@ -154,7 +166,9 @@ export function PurchaseOrderDetailView({ order }: { order: PurchaseOrderDetail 
                     )}
                     {showReceipts && (
                       <TableCell className="text-right tabular-nums">
-                        {Number(line.pendingReceipt) > 0 ? `${formatQuantity(line.pendingReceipt)} ${line.unitAbbr}` : '—'}
+                        {Number(line.pendingReceipt) > 0
+                          ? `${formatQuantity(line.pendingReceipt)} ${line.unitAbbr}`
+                          : '—'}
                       </TableCell>
                     )}
                     {showReceipts && (
@@ -169,28 +183,31 @@ export function PurchaseOrderDetailView({ order }: { order: PurchaseOrderDetail 
           </div>
           <dl className="ml-auto grid w-full max-w-xs grid-cols-2 gap-1 text-sm tabular-nums">
             <dt className="text-muted-foreground">Subtotal neto</dt>
-            <dd className="text-right">{formatMoney(order.totals.subtotal)}</dd>
+            <dd className="text-right">
+              <PriceText value={order.totals.subtotal} canViewPrices={order.canViewPrices} />
+            </dd>
             <dt className="text-muted-foreground">IVA</dt>
-            <dd className="text-right">{formatMoney(order.totals.vatTotal)}</dd>
+            <dd className="text-right">
+              <PriceText value={order.totals.vatTotal} canViewPrices={order.canViewPrices} />
+            </dd>
             <dt className="font-medium">Total</dt>
-            <dd className="text-right font-medium">{formatMoney(order.totals.total)}</dd>
+            <dd className="text-right font-medium">
+              <PriceText value={order.totals.total} canViewPrices={order.canViewPrices} />
+            </dd>
           </dl>
-        </CardContent>
-      </Card>
+        </div>
+      </SectionCard>
 
       {(order.receipts.length > 0 || order.complementedBy.length > 0) && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Recepciones</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
+        <SectionCard title="Recepciones">
+          <div className="space-y-3">
             <ul className="divide-y">
               {order.receipts.map((receipt) => (
                 <li key={receipt.id} className="flex flex-wrap items-center gap-3 py-2 text-sm">
                   <Link href={`/dashboard/purchases/receipts/${receipt.id}`} className="font-mono underline">
                     {receipt.number}
                   </Link>
-                  <span>{moment(receipt.receivedOn, 'YYYY-MM-DD').format('DD/MM/YYYY')}</span>
+                  <span className="tabular-nums">{formatDateAr(receipt.receivedOn)}</span>
                   {receipt.deliveryNote && <span className="text-muted-foreground">Remito {receipt.deliveryNote}</span>}
                   {receipt.cancelled && <span className="text-destructive">Anulada</span>}
                 </li>
@@ -209,33 +226,29 @@ export function PurchaseOrderDetailView({ order }: { order: PurchaseOrderDetail 
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </SectionCard>
       )}
 
       {order.invoices.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Comprobantes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="divide-y">
-              {order.invoices.map((invoice) => (
-                <li key={invoice.id} className="flex flex-wrap items-center gap-3 py-2 text-sm">
-                  <Link href={`/dashboard/purchases/invoices/${invoice.id}`} className="underline">
-                    {invoice.label}
-                  </Link>
-                  <span>{moment(invoice.issueDate, 'YYYY-MM-DD').format('DD/MM/YYYY')}</span>
-                  <span className="tabular-nums">{formatMoney(invoice.total)}</span>
-                  <SupplierInvoiceStatusBadge status={invoice.status} />
-                </li>
-              ))}
-            </ul>
-            <p className="mt-2 text-xs text-muted-foreground">
-              «Facturado» suma facturas y notas de débito y resta notas de crédito; no cuenta los comprobantes anulados ni rechazados.
-            </p>
-          </CardContent>
-        </Card>
+        <SectionCard title="Comprobantes">
+          <ul className="divide-y">
+            {order.invoices.map((invoice) => (
+              <li key={invoice.id} className="flex flex-wrap items-center gap-3 py-2 text-sm">
+                <Link href={`/dashboard/purchases/invoices/${invoice.id}`} className="underline">
+                  {invoice.label}
+                </Link>
+                <span className="tabular-nums">{formatDateAr(invoice.issueDate)}</span>
+                <span className="tabular-nums">{formatMoney(invoice.total)}</span>
+                <SupplierInvoiceStatusBadge status={invoice.status} />
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-muted-foreground">
+            «Facturado» suma facturas y notas de débito y resta notas de crédito; no cuenta los comprobantes anulados ni
+            rechazados.
+          </p>
+        </SectionCard>
       )}
 
       <HistoryCard history={order.history} />

@@ -1,31 +1,44 @@
 'use server';
 
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
   buildDateRangeFiltersWhere,
-  buildFiltersWhere,
   buildSearchWhere,
   buildTextFiltersWhere,
   NULL_FILTER_VALUE,
   parseSearchParams,
-  stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
+import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
+import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { normalizeResult } from './utils';
 
 const logger = new Logger('ChecklistAnswers/actions.server');
 
+/** Permiso de la pantalla de respuestas de un checklist (módulo `formularios`, tab `formularios`). */
+const MODULE_SLUG = 'formularios';
+const TAB_SLUG = 'formularios';
+
+/** Tope de filas de un export: más que esto no se descarga entero (se pide acotar con filtros). */
+const EXPORT_MAX_ROWS = 10_000;
+
 /**
- * Empresa activa, tras comprobar que la plantilla pedida le pertenece.
+ * Empresa activa, tras comprobar el permiso de lectura y que la plantilla pedida le pertenece.
  *
- * `templateId` llega del cliente en las tres actions de esta tabla (son endpoints públicos
+ * `templateId` llega del cliente en las actions de esta tabla (son endpoints públicos
  * sin RLS): sin esta verificación, cualquier UUID de plantilla dejaba consultar las
- * respuestas de otra empresa. Devuelve `null` si la plantilla no es de la empresa activa.
+ * respuestas de otra empresa. Devuelve `null` si no hay permiso o la plantilla no es de la empresa activa.
  */
 async function resolveTemplateCompanyId(templateId: string): Promise<string | null> {
+  if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) return null;
+
   const company_id = await getActiveCompanyId();
   const template = await prisma.checklist_templates.findFirst({
     where: withCompany({ id: templateId }, company_id),
@@ -45,30 +58,25 @@ async function resolveTemplateCompanyId(templateId: string): Promise<string | nu
 /** Campos directos de checklist_answers que se pueden ordenar server-side */
 const VALID_SORT_FIELDS = new Set(['created_at', 'result', 'kilometraje', 'horometro']);
 
-/** Params de URL de navegación que NO son filtros de la tabla */
-const IGNORED_PARAMS = new Set(['tab', 'subtab']);
-
 /** Columnas con filtro de rango de fechas */
 const DATE_RANGE_COLUMNS = ['created_at'];
-
-/**
- * Columnas manejadas manualmente en buildWhereClause (no pasar a buildFiltersWhere).
- * result: valores inconsistentes (B/M/passed/failed/null)
- * equipment_id: FK con soporte null
- * user_id: FK con soporte null
- * customer_id: columna GENERATED desde JSONB — FK a customers
- * chofer_employee_id: FK a employees (columna directa)
- */
-const MANUALLY_HANDLED_COLUMNS = ['result', 'equipment_id', 'user_id', 'customer_id', 'chofer_employee_id'];
 
 /** Columnas con filtro de texto individual */
 const TEXT_FILTER_COLUMNS = ['observations'];
 
-/**
- * Mapping de columnId (URL) → campo real en Prisma.
- * Solo columnas procesadas genéricamente por buildFiltersWhere.
- */
-const COLUMN_MAP: Record<string, string> = {};
+/** Columnas facetadas (cada una se resuelve a mano en `buildWhereClause`). */
+const FACET_COLUMNS = ['result', 'equipment_id', 'user_id', 'chofer', 'customer_id'];
+
+/** `fileNumber` = legajo del chofer (coincidencia exacta). */
+const ALLOWED_FILTER_KEYS = new Set([
+  ...FACET_COLUMNS,
+  ...TEXT_FILTER_COLUMNS,
+  'fileNumber',
+  ...dateRangeKeys(DATE_RANGE_COLUMNS),
+]);
+
+/** Relación del chofer (FK `chofer_employee_id` → employees). */
+const CHOFER_RELATION = 'employees_checklist_answers_chofer_employee_idToemployees' as const;
 
 // ============================================================================
 // SELECT COMÚN
@@ -82,11 +90,13 @@ const CHECKLIST_ANSWER_SELECT = {
   observations: true,
   equipment_id: true,
   user_id: true,
-  // Nuevas columnas: FK directa de chofer y columnas GENERATED desde JSONB
+  // FK directa de chofer y columnas GENERATED desde JSONB
   chofer_employee_id: true,
   customer_id: true,
   kilometraje: true,
   horometro: true,
+  // Legajo del chofer (columna separada + filtro propio)
+  [CHOFER_RELATION]: { select: { file: true } },
   // Relación equipo (vehicle)
   vehicles: {
     select: {
@@ -111,126 +121,71 @@ const CHECKLIST_ANSWER_SELECT = {
 // HELPERS INTERNOS
 // ============================================================================
 
+type ListState = ReturnType<typeof parseSearchParams>;
+
+function parseListState(searchParams: DataTableSearchParams): ListState {
+  return sanitizeFilters(parseSearchParams(searchParams), ALLOWED_FILTER_KEYS);
+}
+
+/** FK UUID nullable con "Sin asignar": `{ campo: { in } }`, `{ campo: null }` o ambos en un OR. */
+function buildNullableFkCondition(
+  field: 'equipment_id' | 'user_id' | 'customer_id' | 'chofer_employee_id',
+  values: string[] | undefined
+): Prisma.checklist_answersWhereInput | null {
+  if (!values?.length) return null;
+  const realValues = values.filter((v) => v !== NULL_FILTER_VALUE);
+  const includesNull = values.includes(NULL_FILTER_VALUE);
+  if (includesNull && realValues.length > 0) {
+    return { OR: [{ [field]: { in: realValues } }, { [field]: null }] } as Prisma.checklist_answersWhereInput;
+  }
+  if (includesNull) return { [field]: null } as Prisma.checklist_answersWhereInput;
+  return { [field]: { in: realValues } } as Prisma.checklist_answersWhereInput;
+}
+
+/** Resultado con valores inconsistentes en la base (B/M/passed/failed/null). */
+function buildResultCondition(values: string[] | undefined): Prisma.checklist_answersWhereInput | null {
+  if (!values?.length) return null;
+  const nonNullValues: string[] = [];
+  let includesNull = false;
+  for (const v of values) {
+    if (v === NULL_FILTER_VALUE) includesNull = true;
+    else if (v === 'passed') nonNullValues.push('B', 'passed');
+    else if (v === 'failed') nonNullValues.push('M', 'failed');
+  }
+  if (includesNull && nonNullValues.length > 0) return { OR: [{ result: { in: nonNullValues } }, { result: null }] };
+  if (includesNull) return { result: null };
+  return { result: { in: nonNullValues } };
+}
+
+/** Legajo del chofer: coincidencia EXACTA (el legajo es corto; `contains` mezclaría 1, 10, 100...). */
+function buildFileNumberCondition(values: string[] | undefined): Prisma.checklist_answersWhereInput | null {
+  const file = values?.[0]?.trim();
+  if (!file) return null;
+  return { [CHOFER_RELATION]: { is: { file: { equals: file } } } };
+}
+
 /**
- * Construye el WHERE clause compartido entre paginated, export y facets.
- * Filtra SIEMPRE por `template_id` + `company_id` (sin RLS, el perímetro va explícito).
+ * WHERE compartido entre paginado, export y facetas. Todo (perímetro `template_id` + `company_id`, búsqueda,
+ * filtros) va dentro de UN solo `AND`: sin RLS el perímetro va explícito y ningún filtro puede pisarlo.
  */
-function buildWhereClause(templateId: string, companyId: string, state: ReturnType<typeof parseSearchParams>) {
-  const searchWhere = buildSearchWhere(state.search, []);
+function buildWhereClause(templateId: string, companyId: string, state: ListState) {
+  return composeConditions(
+    withCompany({ template_id: templateId }, companyId),
+    buildSearchWhere(state.search, []),
+    buildTextFiltersWhere(state.filters, TEXT_FILTER_COLUMNS),
+    buildDateRangeFiltersWhere(state.filters, DATE_RANGE_COLUMNS),
+    buildResultCondition(state.filters.result),
+    buildNullableFkCondition('equipment_id', state.filters.equipment_id),
+    buildNullableFkCondition('user_id', state.filters.user_id),
+    buildNullableFkCondition('customer_id', state.filters.customer_id),
+    buildNullableFkCondition('chofer_employee_id', state.filters.chofer),
+    buildFileNumberCondition(state.filters.fileNumber)
+  );
+}
 
-  const filtersWhere = buildFiltersWhere(state.filters, COLUMN_MAP, {
-    exclude: [
-      ...MANUALLY_HANDLED_COLUMNS,
-      ...DATE_RANGE_COLUMNS.flatMap((c) => [`${c}_from`, `${c}_to`]),
-      ...TEXT_FILTER_COLUMNS,
-    ],
-  });
-
-  const dateFiltersWhere = buildDateRangeFiltersWhere(state.filters, DATE_RANGE_COLUMNS);
-
-  const textFiltersWhere = buildTextFiltersWhere(state.filters, TEXT_FILTER_COLUMNS);
-
-  // Manejo manual de result (valores inconsistentes: B/passed/M/failed/null)
-  const manualFilters: Record<string, unknown> = {};
-  const resultValues = state.filters['result'];
-  if (resultValues?.length) {
-    const rawValues: (string | null)[] = [];
-    for (const v of resultValues) {
-      if (v === NULL_FILTER_VALUE) {
-        rawValues.push(null);
-      } else if (v === 'passed') {
-        rawValues.push('B', 'passed');
-      } else if (v === 'failed') {
-        rawValues.push('M', 'failed');
-      }
-    }
-    // Prisma OR para manejar null y múltiples valores
-    const nonNullValues = rawValues.filter((v): v is string => v !== null);
-    const includesNull = rawValues.includes(null);
-    if (includesNull && nonNullValues.length > 0) {
-      manualFilters.OR = [{ result: { in: nonNullValues } }, { result: null }];
-    } else if (includesNull) {
-      manualFilters.result = null;
-    } else {
-      manualFilters.result = { in: nonNullValues };
-    }
-  }
-
-  // Manejo manual de equipment_id (FK UUID — buildFiltersWhere lo pone en el map pero
-  // necesitamos asegurarnos que no se duplique)
-  const equipmentValues = state.filters['equipment_id'];
-  const manualEquipment: Record<string, unknown> = {};
-  if (equipmentValues?.length) {
-    const realValues = equipmentValues.filter((v) => v !== NULL_FILTER_VALUE);
-    const includesNull = equipmentValues.includes(NULL_FILTER_VALUE);
-    if (includesNull && realValues.length > 0) {
-      manualEquipment.OR = [{ equipment_id: { in: realValues } }, { equipment_id: null }];
-    } else if (includesNull) {
-      manualEquipment.equipment_id = null;
-    } else {
-      manualEquipment.equipment_id = { in: realValues };
-    }
-  }
-
-  // Manejo manual de user_id (FK UUID con soporte null)
-  const userValues = state.filters['user_id'];
-  const manualUser: Record<string, unknown> = {};
-  if (userValues?.length) {
-    const realValues = userValues.filter((v) => v !== NULL_FILTER_VALUE);
-    const includesNull = userValues.includes(NULL_FILTER_VALUE);
-    if (includesNull && realValues.length > 0) {
-      manualUser.OR = [{ user_id: { in: realValues } }, { user_id: null }];
-    } else if (includesNull) {
-      manualUser.user_id = null;
-    } else {
-      manualUser.user_id = { in: realValues };
-    }
-  }
-
-  // Manejo manual de customer_id (columna GENERATED desde JSONB — FK a customers)
-  const customerValues = state.filters['customer_id'];
-  const manualCustomer: Record<string, unknown> = {};
-  if (customerValues?.length) {
-    const realValues = customerValues.filter((v) => v !== NULL_FILTER_VALUE);
-    const includesNull = customerValues.includes(NULL_FILTER_VALUE);
-    if (includesNull && realValues.length > 0) {
-      manualCustomer.OR = [{ customer_id: { in: realValues } }, { customer_id: null }];
-    } else if (includesNull) {
-      manualCustomer.customer_id = null;
-    } else {
-      manualCustomer.customer_id = { in: realValues };
-    }
-  }
-
-  // Manejo manual de chofer_employee_id (FK directa a employees)
-  const choferValues = state.filters['chofer_employee_id'];
-  const manualChofer: Record<string, unknown> = {};
-  if (choferValues?.length) {
-    const realValues = choferValues.filter((v) => v !== NULL_FILTER_VALUE);
-    const includesNull = choferValues.includes(NULL_FILTER_VALUE);
-    if (includesNull && realValues.length > 0) {
-      manualChofer.OR = [{ chofer_employee_id: { in: realValues } }, { chofer_employee_id: null }];
-    } else if (includesNull) {
-      manualChofer.chofer_employee_id = null;
-    } else {
-      manualChofer.chofer_employee_id = { in: realValues };
-    }
-  }
-
-  const baseFilters = withCompany({ template_id: templateId }, companyId);
-
-  return {
-    ...baseFilters,
-    ...searchWhere,
-    ...filtersWhere,
-    ...dateFiltersWhere,
-    ...textFiltersWhere,
-    ...(Object.keys(manualFilters).length > 0 ? manualFilters : {}),
-    ...(Object.keys(manualEquipment).length > 0 ? manualEquipment : {}),
-    ...(Object.keys(manualUser).length > 0 ? manualUser : {}),
-    ...(Object.keys(manualCustomer).length > 0 ? manualCustomer : {}),
-    ...(Object.keys(manualChofer).length > 0 ? manualChofer : {}),
-  };
+function composeConditions(...parts: ReadonlyArray<object | null | undefined>) {
+  const conditions = parts.filter((part): part is object => part != null && Object.keys(part).length > 0);
+  return { AND: conditions as Prisma.checklist_answersWhereInput[] };
 }
 
 // ============================================================================
@@ -242,24 +197,18 @@ export async function getChecklistAnswersPaginated(searchParams: DataTableSearch
     const companyId = await resolveTemplateCompanyId(templateId);
     if (!companyId) return { data: [], total: 0 };
 
-    const state = parseSearchParams(searchParams);
-    for (const key of IGNORED_PARAMS) {
-      delete state.filters[key];
-    }
-
-    const { skip, take } = stateToPrismaParams(state);
+    const state = parseListState(searchParams);
+    const { skip, take } = clampedPageParams(state);
     const where = buildWhereClause(templateId, companyId, state);
 
     // Multi-sort — solo campos válidos
     const resolvedSorts: Record<string, unknown>[] = [];
     for (const s of state.sorting) {
       if (VALID_SORT_FIELDS.has(s.id)) {
-        const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-        resolvedSorts.push({ [s.id]: dir });
+        resolvedSorts.push({ [s.id]: s.desc ? 'desc' : 'asc' });
       }
     }
-
-    const safeOrderBy = resolvedSorts.length > 0 ? resolvedSorts : [{ created_at: 'desc' as const }];
+    const safeOrderBy = [...resolvedSorts, { created_at: 'desc' as const }, { id: 'asc' as const }];
 
     const [data, total] = await Promise.all([
       prisma.checklist_answers.findMany({
@@ -282,222 +231,151 @@ export async function getChecklistAnswersPaginated(searchParams: DataTableSearch
 export type ChecklistAnswerListItem = Awaited<ReturnType<typeof getChecklistAnswersPaginated>>['data'][number];
 
 // ============================================================================
-// EXPORT QUERY (sin paginación)
-// ============================================================================
-
-export async function getAllChecklistAnswersForExport(searchParams: DataTableSearchParams, templateId: string) {
-  try {
-    const companyId = await resolveTemplateCompanyId(templateId);
-    if (!companyId) return [];
-
-    const state = parseSearchParams(searchParams);
-    for (const key of IGNORED_PARAMS) {
-      delete state.filters[key];
-    }
-
-    const where = buildWhereClause(templateId, companyId, state);
-
-    return await prisma.checklist_answers.findMany({
-      where,
-      orderBy: [{ created_at: 'desc' as const }],
-      select: CHECKLIST_ANSWER_SELECT,
-    });
-  } catch (error) {
-    logger.error('Error al exportar respuestas de checklist', { data: { error } });
-    throw new Error('No se pudo exportar la lista de respuestas. Intente nuevamente.');
-  }
-}
-
-// ============================================================================
-// FACETS (con cross-filtering)
+// EXPORT QUERY (sin paginación, con tope)
 // ============================================================================
 
 /**
- * Facets con cross-filtering: los counts de cada columna excluyen su propio filtro,
- * mostrando cuántos registros tendría cada opción si se cambiara solo ese filtro.
+ * Filas del export con los mismos filtros de la tabla, hasta `EXPORT_MAX_ROWS`. Si se supera (o no hay
+ * permiso) devuelve `{ ok: false, message }`: Next enmascara el mensaje de un error lanzado desde una
+ * server action. El cliente lo abre con `unwrapExportResult`.
  */
-export async function getChecklistAnswersFacets(searchParams?: DataTableSearchParams, templateId?: string) {
-  if (!templateId) return null;
-
-  const resolvedCompanyId = await resolveTemplateCompanyId(templateId);
-  if (!resolvedCompanyId) return null;
-  // Copia con tipo estrecho: `crossWhere` es una function declaration y no ve el narrowing.
-  const companyId: string = resolvedCompanyId;
-
-  const baseWhere = withCompany({ template_id: templateId }, companyId);
-
-  let parsedState: ReturnType<typeof parseSearchParams> | null = null;
-  if (searchParams && Object.keys(searchParams).length > 0) {
-    parsedState = parseSearchParams(searchParams);
-    for (const key of IGNORED_PARAMS) {
-      delete parsedState.filters[key];
-    }
-  }
-
-  const hasActiveFilters = parsedState && (Object.keys(parsedState.filters).length > 0 || parsedState.search);
-
-  // Helper: WHERE con todos los filtros EXCEPTO el de la columna indicada
-  function crossWhere(excludeColumn: string) {
-    if (!parsedState || !hasActiveFilters) return baseWhere;
-    const modified = { ...parsedState, filters: { ...parsedState.filters } };
-    delete modified.filters[excludeColumn];
-    delete modified.filters[`${excludeColumn}_from`];
-    delete modified.filters[`${excludeColumn}_to`];
-    return buildWhereClause(templateId!, companyId, modified);
-  }
-
-  // Helper: construye Map<string, number> con soporte para null → NULL_FILTER_VALUE
-  function toFacetMap(rows: { key: string | null | undefined; count: number }[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const { key, count } of rows) {
-      if (key == null) {
-        map.set(NULL_FILTER_VALUE, (map.get(NULL_FILTER_VALUE) ?? 0) + count);
-      } else {
-        map.set(String(key), count);
-      }
-    }
-    return map;
-  }
-
+export async function getAllChecklistAnswersForExport(
+  searchParams: DataTableSearchParams,
+  templateId: string
+): Promise<ExportResult<ChecklistAnswerListItem[]>> {
   try {
-    // Counts de resultado (raw — B, M, passed, failed, null) → normalizados
-    const [rawResultCounts, equipmentCounts, userCounts, choferCounts, customerCounts] = await Promise.all([
-      prisma.checklist_answers.groupBy({
-        by: ['result'],
-        where: crossWhere('result'),
-        _count: true,
-      }),
-      prisma.checklist_answers.groupBy({
-        by: ['equipment_id'],
-        where: crossWhere('equipment_id'),
-        _count: true,
-      }),
-      prisma.checklist_answers.groupBy({
-        by: ['user_id'],
-        where: crossWhere('user_id'),
-        _count: true,
-      }),
-      // chofer_employee_id — FK directa a employees
-      prisma.checklist_answers.groupBy({
-        by: ['chofer_employee_id'],
-        where: crossWhere('chofer_employee_id'),
-        _count: true,
-      }),
-      // customer_id — columna GENERATED desde JSONB
-      prisma.checklist_answers.groupBy({
-        by: ['customer_id'],
-        where: crossWhere('customer_id'),
-        _count: true,
-      }),
-    ]);
+    const companyId = await resolveTemplateCompanyId(templateId);
+    if (!companyId) return { ok: false, message: 'No tenés permiso para exportar las respuestas de este checklist' };
 
-    // Normalizar result counts (B/passed → passed, M/failed → failed, null → pending)
-    const normalizedResultMap = new Map<string, number>();
-    for (const { result, _count } of rawResultCounts) {
-      const normalized = normalizeResult(result);
-      normalizedResultMap.set(normalized, (normalizedResultMap.get(normalized) ?? 0) + _count);
+    const where = buildWhereClause(templateId, companyId, parseListState(searchParams));
+
+    const data = await prisma.checklist_answers.findMany({
+      where,
+      orderBy: [{ created_at: 'desc' as const }, { id: 'asc' as const }],
+      select: CHECKLIST_ANSWER_SELECT,
+      take: EXPORT_MAX_ROWS + 1,
+    });
+
+    if (data.length > EXPORT_MAX_ROWS) {
+      return {
+        ok: false,
+        message: `La exportación supera el máximo de ${EXPORT_MAX_ROWS.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`,
+      };
     }
-
-    // Para equipment, cargar nombres de los vehículos
-    const equipmentIds = equipmentCounts.map((r) => r.equipment_id).filter((id): id is string => id != null);
-
-    const vehicles =
-      equipmentIds.length > 0
-        ? await prisma.vehicles.findMany({
-            where: { id: { in: equipmentIds } },
-            select: {
-              id: true,
-              domain: true,
-              serie: true,
-              intern_number: true,
-            },
-          })
-        : [];
-
-    const vehicleMap = new Map(
-      vehicles.map((v) => [
-        v.id,
-        v.domain
-          ? `${v.domain}${v.intern_number ? ` - ${v.intern_number}` : ''}`
-          : `${v.serie ?? ''}${v.intern_number ? ` - ${v.intern_number}` : ''}`,
-      ])
-    );
-
-    // Map de equipment_id → count (para externalCounts)
-    const equipmentFacetMap = toFacetMap(equipmentCounts.map((r) => ({ key: r.equipment_id, count: r._count })));
-
-    // Para users, cargar nombres de perfil
-    const userIds = userCounts.map((r) => r.user_id).filter((id): id is string => id != null);
-
-    const profiles =
-      userIds.length > 0
-        ? await prisma.profile.findMany({
-            where: { id: { in: userIds } },
-            select: { id: true, fullname: true },
-          })
-        : [];
-
-    const profileMap = new Map(profiles.map((p) => [p.id, p.fullname ?? p.id]));
-
-    // Map de user_id → count (para externalCounts)
-    const userFacetMap = toFacetMap(userCounts.map((r) => ({ key: r.user_id, count: r._count })));
-
-    // Para chofer_employee_id, cargar nombres desde employees con legajo (obligatorio por estándar)
-    const choferIds = choferCounts.map((r) => r.chofer_employee_id).filter((id): id is string => id != null);
-
-    const choferEmployees =
-      choferIds.length > 0
-        ? await prisma.employees.findMany({
-            where: { id: { in: choferIds } },
-            select: {
-              id: true,
-              firstname: true,
-              lastname: true,
-              // El campo 'file' es el número de legajo en este proyecto
-              file: true,
-            },
-          })
-        : [];
-
-    // Label: [legajo] Apellido Nombre — legajo obligatorio por estándar del proyecto
-    const choferNameMap = new Map(
-      choferEmployees.map((e) => [e.id, `[${e.file ?? '—'}] ${e.lastname ?? ''} ${e.firstname ?? ''}`.trim()])
-    );
-
-    // Map de chofer_employee_id → count (para externalCounts)
-    const choferFacetMap = toFacetMap(choferCounts.map((r) => ({ key: r.chofer_employee_id, count: r._count })));
-
-    // Para customer_id, cargar nombres desde customers
-    const customerIds = customerCounts.map((r) => r.customer_id).filter((id): id is string => id != null);
-
-    const customersList =
-      customerIds.length > 0
-        ? await prisma.customers.findMany({
-            where: { id: { in: customerIds } },
-            select: { id: true, name: true },
-          })
-        : [];
-
-    const customerNameMap = new Map(customersList.map((c) => [c.id, c.name]));
-
-    // Map de customer_id → count (para externalCounts)
-    const customerFacetMap = toFacetMap(customerCounts.map((r) => ({ key: r.customer_id, count: r._count })));
-
-    return {
-      result: normalizedResultMap,
-      equipment_id: equipmentFacetMap,
-      vehicleNames: vehicleMap,
-      user_id: userFacetMap,
-      userNames: profileMap,
-      chofer_employee_id: choferFacetMap,
-      choferNames: choferNameMap,
-      customer_id: customerFacetMap,
-      customerNames: customerNameMap,
-    };
+    return { ok: true, data };
   } catch (error) {
-    logger.error('Error al obtener facets de respuestas de checklist', { data: { error } });
-    return null;
+    logger.error('Error al exportar respuestas de checklist', { data: { error } });
+    return { ok: false, message: 'No se pudo exportar la lista de respuestas. Intente nuevamente.' };
   }
 }
 
-export type ChecklistAnswersFacets = Awaited<ReturnType<typeof getChecklistAnswersFacets>>;
+// ============================================================================
+// SINGLE FACET (lazy-load, con cross-filtering)
+// ============================================================================
+
+type FacetOption = { id: string; name: string | null };
+type FacetResponse = { counts: Map<string, number>; resolvedOptions?: FacetOption[] };
+
+/**
+ * Counts (y opciones) de UNA columna facetada, sin su propio filtro (cross-filter).
+ * `result` devuelve las claves normalizadas `passed`/`failed` y `NULL_FILTER_VALUE` para "pendiente".
+ */
+export async function getChecklistAnswersSingleFacet(
+  columnId: string,
+  searchParams: DataTableSearchParams | undefined,
+  templateId: string
+): Promise<FacetResponse | null> {
+  if (!FACET_COLUMNS.includes(columnId)) {
+    logger.warn('getChecklistAnswersSingleFacet: columnId desconocido', { data: { columnId } });
+    return null;
+  }
+
+  try {
+    const companyId = await resolveTemplateCompanyId(templateId);
+    if (!companyId) return { counts: new Map() };
+
+    const state = withoutOwnFilter(parseListState(searchParams ?? {}), columnId);
+    const where = buildWhereClause(templateId, companyId, state);
+
+    switch (columnId) {
+      case 'result': {
+        const rows = await prisma.checklist_answers.groupBy({ by: ['result'], where, _count: true });
+        const counts = new Map<string, number>();
+        for (const { result, _count } of rows) {
+          const normalized = normalizeResult(result);
+          const key = normalized === 'pending' ? NULL_FILTER_VALUE : normalized;
+          counts.set(key, (counts.get(key) ?? 0) + _count);
+        }
+        return { counts };
+      }
+
+      case 'equipment_id': {
+        const rows = await prisma.checklist_answers.groupBy({ by: ['equipment_id'], where, _count: true });
+        const counts = toFacetMap(rows.map((r) => ({ key: r.equipment_id, count: r._count })));
+        const ids = rows.map((r) => r.equipment_id);
+        const vehicles =
+          ids.length > 0
+            ? await prisma.vehicles.findMany({
+                where: { id: { in: ids }, company_id: companyId },
+                select: { id: true, domain: true, serie: true, intern_number: true },
+              })
+            : [];
+        const resolvedOptions = vehicles.map((v) => ({
+          id: v.id,
+          name: v.domain
+            ? `${v.domain}${v.intern_number ? ` - ${v.intern_number}` : ''}`
+            : `${v.serie ?? ''}${v.intern_number ? ` - ${v.intern_number}` : ''}`,
+        }));
+        return { counts, resolvedOptions };
+      }
+
+      case 'user_id': {
+        const rows = await prisma.checklist_answers.groupBy({ by: ['user_id'], where, _count: true });
+        const counts = toFacetMap(rows.map((r) => ({ key: r.user_id, count: r._count })));
+        const ids = rows.map((r) => r.user_id).filter((id): id is string => id != null);
+        const profiles =
+          ids.length > 0
+            ? await prisma.profile.findMany({ where: { id: { in: ids } }, select: { id: true, fullname: true } })
+            : [];
+        return { counts, resolvedOptions: profiles.map((p) => ({ id: p.id, name: p.fullname ?? p.id })) };
+      }
+
+      case 'chofer': {
+        const rows = await prisma.checklist_answers.groupBy({ by: ['chofer_employee_id'], where, _count: true });
+        const counts = toFacetMap(rows.map((r) => ({ key: r.chofer_employee_id, count: r._count })));
+        const ids = rows.map((r) => r.chofer_employee_id).filter((id): id is string => id != null);
+        const employees =
+          ids.length > 0
+            ? await prisma.employees.findMany({
+                where: { id: { in: ids }, company_id: companyId },
+                select: { id: true, firstname: true, lastname: true, file: true },
+              })
+            : [];
+        // Etiqueta [legajo] Apellido Nombre (el legajo identifica a la persona; el nombre puede repetirse)
+        const resolvedOptions = employees.map((e) => ({
+          id: e.id,
+          name: `[${e.file ?? '—'}] ${e.lastname ?? ''} ${e.firstname ?? ''}`.trim(),
+        }));
+        return { counts, resolvedOptions };
+      }
+
+      default: {
+        // customer_id — columna GENERATED desde JSONB
+        const rows = await prisma.checklist_answers.groupBy({ by: ['customer_id'], where, _count: true });
+        const counts = toFacetMap(rows.map((r) => ({ key: r.customer_id, count: r._count })));
+        const ids = rows.map((r) => r.customer_id).filter((id): id is string => id != null);
+        const customers =
+          ids.length > 0
+            ? await prisma.customers.findMany({
+                where: { id: { in: ids }, company_id: companyId },
+                select: { id: true, name: true },
+              })
+            : [];
+        return { counts, resolvedOptions: customers.map((c) => ({ id: c.id, name: c.name })) };
+      }
+    }
+  } catch (error) {
+    logger.error('Error al obtener facet de respuestas de checklist', { data: { error, columnId } });
+    return { counts: new Map() };
+  }
+}

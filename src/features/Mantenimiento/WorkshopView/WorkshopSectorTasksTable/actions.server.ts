@@ -1,19 +1,24 @@
 'use server';
 
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
+import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
   NULL_FILTER_VALUE,
   buildDateRangeFiltersWhere,
   parseSearchParams,
-  stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { withoutOwnFilter } from '@/shared/lib/table-facets';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
+import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { visibleEquipmentTypeCondition } from '../../shared/maintenance-resource';
 import { getHiddenEquipmentTypeIds } from '../../utils/equipmentTypeVisibility';
-import { OPEN_WORK_ORDERS_ONLY } from '../workshop-view-filters';
+import { OPEN_WORK_ORDERS_ONLY, OPEN_WORK_ORDER_STATUSES } from '../workshop-view-filters';
 
 const logger = new Logger('features/WorkshopView/WorkshopSectorTasksTable');
 
@@ -55,6 +60,27 @@ const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Record<string, unknow
 /** Columnas con filtro de rango de fechas (campos directos de work_orders) */
 const DATE_RANGE_COLUMNS = ['planned_start_date', 'planned_end_date', 'started_at', 'created_at'];
 
+/** Lista blanca de filtros: todo lo demás que venga en la URL se descarta. */
+const ALLOWED_FILTERS = new Set([
+  'work_order',
+  'wo_status',
+  'maintenance_order',
+  'mo_status',
+  'vehicle',
+  'repair_type',
+  'is_critical',
+  'is_rejected',
+  'is_diagnostico',
+  ...dateRangeKeys(DATE_RANGE_COLUMNS),
+]);
+
+/** La Vista Taller es la tab `workshop_view` del módulo de mantenimiento. */
+const MODULE_SLUG = 'mantenimiento';
+const TAB_SLUG = 'workshop_view';
+
+/** Tope de filas de un export: más que esto no se descarga entero (se pide acotar con filtros). */
+const EXPORT_MAX_ROWS = 10_000;
+
 /** Select con todo lo que la tabla de OT necesita */
 const SECTOR_WORK_ORDERS_SELECT = {
   id: true,
@@ -67,17 +93,40 @@ const SECTOR_WORK_ORDERS_SELECT = {
   started_at: true,
   created_at: true,
   // Ticket 596: la OT puede ser de un vehiculo O de un equipamiento
-  vehicles: { select: { id: true, domain: true, serie: true, intern_number: true } },
-  other_equipment: { select: { id: true, serial_number: true, intern_number: true } },
-  // Cantidad de tareas de la OT (la columna que pidió el ticket 678)
-  _count: { select: { maintenance_order_items: true } },
-  // OM de la que salieron las tareas — en la práctica siempre una sola
-  maintenance_order_items: {
+  // El subtipo (o el tipo) es la segunda línea de la celda "Equipo".
+  vehicles: {
     select: {
-      maintenance_orders: { select: { id: true, order_number: true, status: true } },
+      id: true,
+      domain: true,
+      serie: true,
+      intern_number: true,
+      sub_type: { select: { name: true } },
+      type_vehicles_typeTotype: { select: { name: true } },
     },
   },
-};
+  other_equipment: {
+    select: {
+      id: true,
+      serial_number: true,
+      intern_number: true,
+      sub_type: { select: { name: true } },
+      type: { select: { name: true } },
+    },
+  },
+  // Cantidad de tareas de la OT (la columna que pidió el ticket 678)
+  _count: { select: { maintenance_order_items: true } },
+  // OM de la que salieron las tareas — en la práctica siempre una sola. Además de cada tarea salen:
+  // si es crítica y el estado de sus trabajos de reparación (de ahí el avance "2/4" de la columna Tareas).
+  maintenance_order_items: {
+    select: {
+      is_critical: true,
+      maintenance_orders: { select: { id: true, order_number: true, status: true } },
+      work_order_items: {
+        select: { work_order_id: true, work_order_item_repairs: { select: { status: true } } },
+      },
+    },
+  },
+} as const;
 
 // ============================================================================
 // INTERNAL HELPERS
@@ -89,25 +138,23 @@ const SECTOR_WORK_ORDERS_SELECT = {
  * Las OM se deduplican: una OT puede tener varias tareas y todas apuntan a la
  * misma OM, así que sin deduplicar la celda repetiría el mismo número N veces.
  */
-function mapWorkOrderRow(row: {
-  id: string;
-  order_number: string;
-  status: string;
-  planned_start_date: Date;
-  planned_end_date: Date;
-  started_at: Date | null;
-  created_at: Date | null;
-  vehicles: { id: string; domain: string | null; serie: string | null; intern_number: string | null } | null;
-  other_equipment: { id: string; serial_number: string | null; intern_number: string | null } | null;
-  _count: { maintenance_order_items: number };
-  maintenance_order_items: Array<{
-    maintenance_orders: { id: string; order_number: string | null; status: string };
-  }>;
-}) {
+function mapWorkOrderRow(row: Prisma.work_ordersGetPayload<{ select: typeof SECTOR_WORK_ORDERS_SELECT }>) {
   const ordersById = new Map<string, { id: string; order_number: string | null; status: string }>();
+  let completedTaskCount = 0;
+  let hasCriticalTask = false;
   for (const item of row.maintenance_order_items) {
     if (item.maintenance_orders) ordersById.set(item.maintenance_orders.id, item.maintenance_orders);
+    if (item.is_critical) hasCriticalTask = true;
+    // Una tarea está completa cuando todos SUS trabajos de reparación de ESTA OT lo están (ver `deriveTaskStatus`).
+    const repairStatuses = item.work_order_items
+      .filter((woItem) => woItem.work_order_id === row.id)
+      .flatMap((woItem) => woItem.work_order_item_repairs.map((repair) => repair.status));
+    if (deriveTaskStatus(repairStatuses) === 'completed') completedTaskCount += 1;
   }
+  // Segunda línea de la celda "Equipo": subtipo del vehículo o del equipamiento (o su tipo si no tiene subtipo).
+  const resourceSubtitle = row.other_equipment
+    ? (row.other_equipment.sub_type?.name ?? row.other_equipment.type?.name ?? null)
+    : (row.vehicles?.sub_type?.name ?? row.vehicles?.type_vehicles_typeTotype?.name ?? null);
 
   return {
     id: row.id,
@@ -122,6 +169,9 @@ function mapWorkOrderRow(row: {
     vehicles: row.vehicles,
     other_equipment: row.other_equipment,
     taskCount: row._count.maintenance_order_items,
+    completedTaskCount,
+    hasCriticalTask,
+    resourceSubtitle,
     maintenanceOrders: Array.from(ordersById.values()),
   };
 }
@@ -135,10 +185,11 @@ function mapWorkOrderRow(row: {
  */
 function buildWhereClause(
   sectorId: string,
-  state: ReturnType<typeof parseSearchParams>,
+  rawState: ReturnType<typeof parseSearchParams>,
   hiddenTypeIds: readonly string[],
   companyId: string
 ) {
+  const state = sanitizeFilters(rawState, ALLOWED_FILTERS);
   const and: Record<string, unknown>[] = [];
 
   // Recorte fijo: la Vista Taller no muestra OT cerradas (ticket 650)
@@ -172,7 +223,9 @@ function buildWhereClause(
   }
 
   // ─── Estado OT (enum, nunca null) ─────────────────────────────────────────
-  const woStatusValues = state.filters['wo_status']?.filter((v) => v !== NULL_FILTER_VALUE);
+  const woStatusValues = state.filters['wo_status']?.filter((v): v is (typeof OPEN_WORK_ORDER_STATUSES)[number] =>
+    (OPEN_WORK_ORDER_STATUSES as string[]).includes(v)
+  );
   if (woStatusValues?.length) {
     and.push({ status: { in: woStatusValues } });
   }
@@ -255,9 +308,13 @@ function buildWhereClause(
 // ============================================================================
 
 export async function getWorkshopSectorWorkOrdersPaginated(sectorId: string, searchParams: DataTableSearchParams) {
+  if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) {
+    throw new Error('No tenés permiso para ver la Vista Taller');
+  }
+
   try {
     const state = parseSearchParams(searchParams);
-    const { skip, take } = stateToPrismaParams(state);
+    const { skip, take } = clampedPageParams(state);
     const [hiddenTypeIds, companyId] = await Promise.all([getHiddenEquipmentTypeIds(), getActiveCompanyId()]);
     const where = buildWhereClause(sectorId, state, hiddenTypeIds, companyId);
 
@@ -277,6 +334,7 @@ export async function getWorkshopSectorWorkOrdersPaginated(sectorId: string, sea
       ...resolvedSorts,
       { status: 'asc' as const },
       { planned_start_date: 'asc' as const },
+      { id: 'asc' as const },
     ];
 
     const [rows, total] = await Promise.all([
@@ -305,22 +363,37 @@ export type WorkshopSectorWorkOrderListItem = Awaited<
 // EXPORT QUERY (sin paginación)
 // ============================================================================
 
-export async function getAllWorkshopSectorWorkOrdersForExport(sectorId: string, searchParams: DataTableSearchParams) {
+export async function getAllWorkshopSectorWorkOrdersForExport(
+  sectorId: string,
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<WorkshopSectorWorkOrderListItem[]>> {
+  if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) {
+    return { ok: false, message: 'No tenés permiso para exportar la Vista Taller' };
+  }
+
   try {
     const state = parseSearchParams(searchParams);
     const [hiddenTypeIds, companyId] = await Promise.all([getHiddenEquipmentTypeIds(), getActiveCompanyId()]);
     const where = buildWhereClause(sectorId, state, hiddenTypeIds, companyId);
 
     const rows = await prisma.work_orders.findMany({
-      orderBy: [{ status: 'asc' as const }, { planned_start_date: 'asc' as const }],
+      orderBy: [{ status: 'asc' as const }, { planned_start_date: 'asc' as const }, { id: 'asc' as const }],
       where,
       select: SECTOR_WORK_ORDERS_SELECT,
+      take: EXPORT_MAX_ROWS + 1,
     });
 
-    return rows.map(mapWorkOrderRow);
+    if (rows.length > EXPORT_MAX_ROWS) {
+      return {
+        ok: false,
+        message: `La exportación supera el máximo de ${EXPORT_MAX_ROWS.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`,
+      };
+    }
+
+    return { ok: true, data: rows.map(mapWorkOrderRow) };
   } catch (error) {
     logger.error('Error al exportar las OT del sector', { data: { error, sectorId } });
-    throw new Error('Error al exportar las órdenes de trabajo del sector');
+    return { ok: false, message: 'Error al exportar las órdenes de trabajo del sector' };
   }
 }
 
@@ -354,6 +427,10 @@ function deriveTaskStatus(repairStatuses: string[]): 'pending' | 'in_progress' |
  * empezó y qué no — con el detalle de cada trabajo de reparación.
  */
 export async function getWorkOrderTasks(workOrderId: string) {
+  if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) {
+    throw new Error('No tenés permiso para ver las tareas de la orden de trabajo');
+  }
+
   try {
     const companyId = await getActiveCompanyId();
     const [workOrder, items] = await Promise.all([
@@ -469,24 +546,14 @@ export async function getWorkshopSectorWorkOrdersSingleFacet(
   counts: Map<string, number>;
   resolvedOptions?: Array<{ id: string; name: string | null }>;
 } | null> {
-  let parsedState: ReturnType<typeof parseSearchParams> | null = null;
-  if (searchParams && Object.keys(searchParams).length > 0) {
-    parsedState = parseSearchParams(searchParams);
-  }
+  if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) return null;
 
-  const hasActiveFilters = parsedState && (Object.keys(parsedState.filters).length > 0 || parsedState.search);
+  const parsedState = parseSearchParams(searchParams || {});
   const [hiddenTypeIds, companyId] = await Promise.all([getHiddenEquipmentTypeIds(), getActiveCompanyId()]);
 
   /** Construye el WHERE excluyendo el filtro de la columna propia (cross-filter). */
   function crossWhere(excludeColumn: string) {
-    if (!parsedState || !hasActiveFilters) {
-      return buildWhereClause(sectorId, parseSearchParams({}), hiddenTypeIds, companyId);
-    }
-    const modified = { ...parsedState, filters: { ...parsedState.filters } };
-    delete modified.filters[excludeColumn];
-    delete modified.filters[`${excludeColumn}_from`];
-    delete modified.filters[`${excludeColumn}_to`];
-    return buildWhereClause(sectorId, modified, hiddenTypeIds, companyId);
+    return buildWhereClause(sectorId, withoutOwnFilter(parsedState, excludeColumn), hiddenTypeIds, companyId);
   }
 
   try {
@@ -629,6 +696,6 @@ export async function getWorkshopSectorWorkOrdersSingleFacet(
     return null;
   } catch (error) {
     logger.error('Error al obtener facet individual de las OT del sector', { data: { error, columnId, sectorId } });
-    return null;
+    return { counts: new Map() };
   }
 }

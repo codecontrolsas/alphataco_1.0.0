@@ -878,16 +878,17 @@ END;
 $function$;
 
 -- ============================================================================
--- TRIGGERS (14)
+-- TRIGGERS (2)
 -- ============================================================================
-
--- trigger document_types_after_insert ON document_types (origen: supabase/migrations/20251103211302_initial_structure.sql)
-DROP TRIGGER IF EXISTS document_types_after_insert ON public.document_types;
-CREATE TRIGGER document_types_after_insert AFTER INSERT ON public.document_types FOR EACH ROW EXECUTE FUNCTION public.trg_document_types_insert();
-
--- trigger document_types_after_update ON document_types (origen: supabase/migrations/20251103211302_initial_structure.sql)
-DROP TRIGGER IF EXISTS document_types_after_update ON public.document_types;
-CREATE TRIGGER document_types_after_update AFTER UPDATE ON public.document_types FOR EACH ROW EXECUTE FUNCTION public.trg_document_types_update();
+-- M1 (20261019100400_documents_derived_model): se eliminaron los 12 triggers que mantenian el modelo
+-- materializado: controlar_alertas_employees, controlar_alertas_employees_insert, controlar_alertas_vehicles,
+-- controlar_alertas_vehicles_insert, document_types_after_insert, document_types_after_update,
+-- trg_update_documents_employees (+_ins, _del) y trg_update_documents_equipment (+_ins, _del).
+-- El faltante se deriva de los tipos obligatorios y el status de employees/vehicles lo escribe solo el motor
+-- (refreshDocumentStatus + job documents-status). Las funciones de arriba quedan DEPRECADAS y sin trigger
+-- (controlar_alertas_*, trg_controlar_alertas_*, trg_document_types_*, update_status_trigger,
+-- recalcular_status_documentacion): se conservan para el rollback y las retira M2.
+-- Se conservan solo los de auditoria. Rollback: prisma/rollbacks/20261019100400_documents_derived_model/.
 
 -- trigger document_employee_changes_trigger ON documents_employees (origen: prisma/migrations/20260629120100_optimize_document_triggers/migration.sql)
 DROP TRIGGER IF EXISTS document_employee_changes_trigger ON public.documents_employees;
@@ -896,90 +897,9 @@ CREATE TRIGGER document_employee_changes_trigger
   REFERENCING NEW TABLE AS affected_rows
   FOR EACH STATEMENT EXECUTE FUNCTION public.log_document_employee_changes();
 
--- trigger trg_update_documents_employees ON documents_employees (origen: prisma/migrations/20260629120100_optimize_document_triggers/migration.sql)
-DROP TRIGGER IF EXISTS trg_update_documents_employees ON public.documents_employees;
-CREATE TRIGGER trg_update_documents_employees
-  AFTER UPDATE ON public.documents_employees
-  REFERENCING NEW TABLE AS affected_rows
-  FOR EACH STATEMENT EXECUTE FUNCTION public.update_status_trigger();
-
--- trigger trg_update_documents_employees_del ON documents_employees (origen: prisma/migrations/20260917120000_ticket_712_unificar_status_documentacion/migration.sql)
-DROP TRIGGER IF EXISTS trg_update_documents_employees_del ON public.documents_employees;
-CREATE TRIGGER trg_update_documents_employees_del
-  AFTER DELETE ON public.documents_employees
-  REFERENCING OLD TABLE AS affected_rows
-  FOR EACH STATEMENT EXECUTE FUNCTION public.update_status_trigger();
-
--- trigger trg_update_documents_employees_ins ON documents_employees (origen: prisma/migrations/20260629120100_optimize_document_triggers/migration.sql)
-DROP TRIGGER IF EXISTS trg_update_documents_employees_ins ON public.documents_employees;
-CREATE TRIGGER trg_update_documents_employees_ins
-  AFTER INSERT ON public.documents_employees
-  REFERENCING NEW TABLE AS affected_rows
-  FOR EACH STATEMENT EXECUTE FUNCTION public.update_status_trigger();
-
 -- trigger document_equipment_changes_trigger ON documents_equipment (origen: prisma/migrations/20260629120100_optimize_document_triggers/migration.sql)
 DROP TRIGGER IF EXISTS document_equipment_changes_trigger ON public.documents_equipment;
 CREATE TRIGGER document_equipment_changes_trigger
   AFTER INSERT ON public.documents_equipment
   REFERENCING NEW TABLE AS affected_rows
   FOR EACH STATEMENT EXECUTE FUNCTION public.log_document_equipment_changes();
-
--- trigger trg_update_documents_equipment ON documents_equipment (origen: prisma/migrations/20260629120100_optimize_document_triggers/migration.sql)
-DROP TRIGGER IF EXISTS trg_update_documents_equipment ON public.documents_equipment;
-CREATE TRIGGER trg_update_documents_equipment
-  AFTER UPDATE ON public.documents_equipment
-  REFERENCING NEW TABLE AS affected_rows
-  FOR EACH STATEMENT EXECUTE FUNCTION public.update_status_trigger();
-
--- trigger trg_update_documents_equipment_del ON documents_equipment (origen: prisma/migrations/20260917120000_ticket_712_unificar_status_documentacion/migration.sql)
-DROP TRIGGER IF EXISTS trg_update_documents_equipment_del ON public.documents_equipment;
-CREATE TRIGGER trg_update_documents_equipment_del
-  AFTER DELETE ON public.documents_equipment
-  REFERENCING OLD TABLE AS affected_rows
-  FOR EACH STATEMENT EXECUTE FUNCTION public.update_status_trigger();
-
--- trigger trg_update_documents_equipment_ins ON documents_equipment (origen: prisma/migrations/20260629120100_optimize_document_triggers/migration.sql)
-DROP TRIGGER IF EXISTS trg_update_documents_equipment_ins ON public.documents_equipment;
-CREATE TRIGGER trg_update_documents_equipment_ins
-  AFTER INSERT ON public.documents_equipment
-  REFERENCING NEW TABLE AS affected_rows
-  FOR EACH STATEMENT EXECUTE FUNCTION public.update_status_trigger();
-
--- trigger controlar_alertas_employees ON employees (origen: prisma/migrations/20260629150000_ampliar_guarda_controlar_alertas/migration.sql)
-DROP TRIGGER IF EXISTS controlar_alertas_employees ON public.employees;
-CREATE TRIGGER controlar_alertas_employees
-  AFTER UPDATE ON public.employees
-  FOR EACH ROW
-  WHEN (
-    old.is_active            IS DISTINCT FROM new.is_active
-    OR old.company_id        IS DISTINCT FROM new.company_id
-    OR old.company_position  IS DISTINCT FROM new.company_position
-    OR old.category_id       IS DISTINCT FROM new.category_id
-    OR old.cost_center_id    IS DISTINCT FROM new.cost_center_id
-    OR old.covenants_id      IS DISTINCT FROM new.covenants_id
-    OR old.guild_id          IS DISTINCT FROM new.guild_id
-    OR old.hierarchical_position IS DISTINCT FROM new.hierarchical_position
-  )
-  EXECUTE FUNCTION public.trg_controlar_alertas_employees();
-
--- trigger controlar_alertas_employees_insert ON employees (origen: supabase/migrations/20251204151557_adding-documents-triggers.sql)
-DROP TRIGGER IF EXISTS controlar_alertas_employees_insert ON public.employees;
-CREATE TRIGGER controlar_alertas_employees_insert AFTER INSERT ON public.employees FOR EACH ROW EXECUTE FUNCTION public.trg_controlar_alertas_employees();
-
--- trigger controlar_alertas_vehicles ON vehicles (origen: prisma/migrations/20260629150000_ampliar_guarda_controlar_alertas/migration.sql)
-DROP TRIGGER IF EXISTS controlar_alertas_vehicles ON public.vehicles;
-CREATE TRIGGER controlar_alertas_vehicles
-  AFTER UPDATE ON public.vehicles
-  FOR EACH ROW
-  WHEN (
-    old.is_active        IS DISTINCT FROM new.is_active
-    OR old.company_id    IS DISTINCT FROM new.company_id
-    OR old.type          IS DISTINCT FROM new.type
-    OR old.type_of_vehicle IS DISTINCT FROM new.type_of_vehicle
-    OR old."subType"     IS DISTINCT FROM new."subType"
-  )
-  EXECUTE FUNCTION public.trg_controlar_alertas_vehicles();
-
--- trigger controlar_alertas_vehicles_insert ON vehicles (origen: supabase/migrations/20251204151557_adding-documents-triggers.sql)
-DROP TRIGGER IF EXISTS controlar_alertas_vehicles_insert ON public.vehicles;
-CREATE TRIGGER controlar_alertas_vehicles_insert AFTER INSERT ON public.vehicles FOR EACH ROW EXECUTE FUNCTION public.trg_controlar_alertas_vehicles();

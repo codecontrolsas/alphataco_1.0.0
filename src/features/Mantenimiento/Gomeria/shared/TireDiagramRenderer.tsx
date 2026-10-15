@@ -2,6 +2,7 @@
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { Check, CircleDashed, Circle } from 'lucide-react';
 import type { ComputedPosition, DiagramAxle, DiagramPosition } from './tire-diagram-utils';
 import { calculatePositions } from './tire-diagram-utils';
 
@@ -9,14 +10,43 @@ import { calculatePositions } from './tire-diagram-utils';
 export { calculatePositions } from './tire-diagram-utils';
 export type { ComputedPosition, DiagramAxle, DiagramPosition } from './tire-diagram-utils';
 
+export interface TireDiagramHitch {
+  /** Texto del extremo del chasis, p. ej. "Enganche AB730HJ" o "Tractor AF023BN". */
+  label: string;
+  /** Extremo donde se conecta: la cabina está adelante, el enganche atrás. */
+  position: 'front' | 'rear';
+}
+
 export interface TireDiagramRendererProps {
   axles: DiagramAxle[];
   positions?: DiagramPosition[];
   interactive?: boolean;
   onPositionClick?: (positionNumber: number) => void;
   highlightedPositions?: number[];
+  /** Posición abierta en el panel: se marca con `aria-pressed` y un anillo de foco fijo. */
+  selectedPosition?: number | null;
   /** e.g. vehicle domain/plate */
   label?: string;
+  /** Texto del bloque de cabina (vista superior). Si no viene, no se dibuja. */
+  cabinLabel?: string;
+  /** Extremo de conexión con otro vehículo. */
+  hitch?: TireDiagramHitch;
+}
+
+// ─── Helpers de texto ──────────────────────────────────────────────────────
+
+/** "Posición 3 · Eje 2 · izquierda exterior" (o "Posición 9 · Auxilio"). */
+export function describePosition(position: ComputedPosition): string {
+  if (position.side === 'SPARE') return `Posición ${position.position_number} · Auxilio`;
+  const side = position.side === 'LEFT' ? 'izquierda' : 'derecha';
+  const role = position.dual_role === 'INNER' ? ' interior' : position.dual_role === 'OUTER' ? ' exterior' : '';
+  return `Posición ${position.position_number} · Eje ${position.axle_number} · ${side}${role}`;
+}
+
+/** Descripción de una posición por número, a partir de los ejes del vehículo. */
+export function describePositionNumber(positionNumber: number, axles: DiagramAxle[]): string {
+  const found = calculatePositions(axles).find((p) => p.position_number === positionNumber);
+  return found ? describePosition(found) : `Posición ${positionNumber}`;
 }
 
 // ─── Internal helpers ──────────────────────────────────────────────────────
@@ -43,14 +73,45 @@ function mergePositions(computed: ComputedPosition[], positions: DiagramPosition
   });
 }
 
+type PositionState = 'empty' | 'tire' | 'done';
+
+const stateText: Record<PositionState, string> = {
+  empty: 'sin cubierta',
+  tire: 'con cubierta',
+  done: 'intervenida en esta orden',
+};
+
+/** Clases por estado: tokens del sistema, el significado nunca va solo por color (ícono + texto). */
+const stateClasses: Record<PositionState, { body: string; cap: string }> = {
+  empty: {
+    body: 'bg-background border-dashed border-muted-foreground/60 text-muted-foreground',
+    cap: 'bg-background border-muted-foreground/60',
+  },
+  tire: {
+    body: 'bg-muted border-foreground/40 text-foreground',
+    cap: 'bg-muted-foreground/30 border-foreground/40',
+  },
+  done: {
+    body: 'bg-primary/15 border-primary text-primary',
+    cap: 'bg-primary/30 border-primary',
+  },
+};
+
+function StateGlyph({ state, className }: { state: PositionState; className?: string }) {
+  if (state === 'done') return <Check className={className} aria-hidden="true" strokeWidth={3} />;
+  if (state === 'empty') return <CircleDashed className={className} aria-hidden="true" />;
+  return <Circle className={className} aria-hidden="true" />;
+}
+
 // ─── TireDrum ──────────────────────────────────────────────────────────────
-// Renders a single tire as a horizontal drum (bird's-eye schematic view).
-// Oriented horizontally: left-cap → body → right-cap (wider than tall).
+// Una cubierta vista desde arriba. En modo interactivo es un <button>: foco con
+// teclado, Enter/Espacio nativos y nombre accesible completo.
 
 interface TireDrumProps {
   position: MergedPosition;
   interactive: boolean;
   highlighted: boolean;
+  selected: boolean;
   onClick?: () => void;
   /** Slightly shorter for dual axles */
   compact?: boolean;
@@ -58,125 +119,80 @@ interface TireDrumProps {
   circular?: boolean;
 }
 
-function TireDrum({ position, interactive, highlighted, onClick, compact = false, circular = false }: TireDrumProps) {
-  const hasTire = position.tire_id !== null;
+function TireDrum({ position, interactive, highlighted, selected, onClick, compact = false, circular = false }: TireDrumProps) {
+  const state: PositionState = highlighted ? 'done' : position.tire_id !== null ? 'tire' : 'empty';
+  const colors = stateClasses[state];
 
-  const interactiveClass = interactive
-    ? 'cursor-pointer hover:ring-2 hover:ring-offset-1 hover:ring-blue-400 transition-all'
-    : '';
+  const tireDetail = [
+    position.tire_serial ? `cubierta ${position.tire_serial}` : null,
+    position.tire_brand,
+    position.tire_size,
+  ].filter(Boolean);
+  const ariaLabel = `${describePosition(position)}: ${
+    tireDetail.length > 0 ? tireDetail.join(' ') : stateText[state]
+  }${state === 'done' ? ', ' + stateText[state] : ''}${selected ? ', seleccionada' : ''}`;
 
   const tooltipLines: string[] = [];
   if (position.tire_brand) tooltipLines.push(`Marca: ${position.tire_brand}`);
   if (position.tire_size) tooltipLines.push(`Medida: ${position.tire_size}`);
   if (position.tire_serial) tooltipLines.push(`Serie: ${position.tire_serial}`);
+  tooltipLines.push(`Estado: ${stateText[state]}`);
 
-  // Colors for the drum
-  const bodyBg = highlighted ? 'bg-amber-500' : hasTire ? 'bg-gray-600' : 'bg-white';
-  const bodyBorder = highlighted ? 'border-amber-600' : hasTire ? 'border-gray-700' : 'border-gray-400 border-dashed';
-  const capBg = highlighted ? 'bg-amber-400' : hasTire ? 'bg-gray-400' : 'bg-gray-100';
-  const capBorder = highlighted ? 'border-amber-600' : hasTire ? 'border-gray-600' : 'border-gray-400';
-  const textColor = highlighted ? 'text-white' : hasTire ? 'text-white' : 'text-gray-400';
+  const focusClass =
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
+  const interactiveClass = interactive ? cn('cursor-pointer hover:ring-2 hover:ring-primary/50 transition-shadow', focusClass) : '';
+  const selectedClass = selected ? 'ring-2 ring-ring ring-offset-2 ring-offset-background' : '';
 
-  // Sizing — horizontal orientation (wider than tall)
-  const drumHeight = compact ? 'h-5' : 'h-7';
-  const drumBodyWidth = 'w-10';
-  const capWidth = 'w-2';
-  const fontSize = compact ? 'text-[9px]' : 'text-xs';
-
-  if (circular) {
-    // Spare: render as a circle
-    const circleEl = (
-      <div
-        role={interactive ? 'button' : undefined}
-        tabIndex={interactive ? 0 : undefined}
-        onClick={interactive ? onClick : undefined}
-        onKeyDown={
-          interactive
-            ? (e) => {
-                if (e.key === 'Enter' || e.key === ' ') onClick?.();
-              }
-            : undefined
-        }
-        className={cn(
-          'flex flex-col items-center justify-center rounded-full border-2 font-mono select-none w-10 h-10',
-          bodyBorder,
-          bodyBg,
-          textColor,
-          interactiveClass
-        )}
-      >
-        <span className="font-bold text-xs leading-none">{position.position_number}</span>
-      </div>
-    );
-
-    const wrapped = circleEl;
-
-    if (tooltipLines.length === 0) return wrapped;
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>{wrapped}</TooltipTrigger>
-        <TooltipContent side="top">
-          <div className="space-y-0.5">
-            <p className="font-semibold text-xs">Posición {position.position_number}</p>
-            {tooltipLines.map((line) => (
-              <p key={line} className="text-xs">
-                {line}
-              </p>
-            ))}
-          </div>
-        </TooltipContent>
-      </Tooltip>
-    );
-  }
-
-  // Drum: 3 sections — left cap, body, right cap (horizontal orientation)
   const serialSuffix = position.tire_serial ? position.tire_serial.slice(-4) : null;
+  const wrapperClass = circular
+    ? cn(
+        'flex size-11 select-none flex-col items-center justify-center gap-0.5 rounded-full border-2 font-mono',
+        colors.body,
+        interactiveClass,
+        selectedClass
+      )
+    : cn(
+        'flex select-none flex-row items-center rounded-lg',
+        interactive ? (compact ? 'h-8' : 'h-10') : compact ? 'h-5' : 'h-7',
+        interactiveClass,
+        selectedClass
+      );
 
-  const drumEl = (
-    <div
-      role={interactive ? 'button' : undefined}
-      tabIndex={interactive ? 0 : undefined}
-      onClick={interactive ? onClick : undefined}
-      onKeyDown={
-        interactive
-          ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') onClick?.();
-            }
-          : undefined
-      }
-      className={cn('flex flex-row items-center select-none', drumHeight, interactiveClass)}
-    >
-      {/* Left cap — rounded left, straight right */}
-      <div className={cn('h-full rounded-l-lg border-2 border-r-0', capWidth, capBg, capBorder)} />
-      {/* Body — center section with position number + optional serial */}
-      <div
-        className={cn(
-          'h-full border-y-2 flex flex-col items-center justify-center font-mono gap-0',
-          drumBodyWidth,
-          bodyBg,
-          bodyBorder,
-          'border-x-0',
-          textColor
-        )}
-      >
-        <span className={cn('font-bold leading-none', fontSize)}>{position.position_number}</span>
-        {serialSuffix && (
-          <span className={cn('leading-none opacity-70', compact ? 'text-[5px]' : 'text-[6px]')}>{serialSuffix}</span>
-        )}
-      </div>
-      {/* Right cap — straight left, rounded right */}
-      <div className={cn('h-full rounded-r-lg border-2 border-l-0', capWidth, capBg, capBorder)} />
+  const inner = circular ? (
+    <>
+      <span className="text-xs font-bold leading-none">{position.position_number}</span>
+      <StateGlyph state={state} className="size-2.5" />
+    </>
+  ) : (
+    <>
+      <span className={cn('h-full w-2 rounded-l-lg border-2 border-r-0', colors.cap)} aria-hidden="true" />
+      <span className={cn('flex h-full w-11 flex-col items-center justify-center border-y-2 font-mono', colors.body)} aria-hidden="true">
+        <span className="flex items-center gap-0.5 leading-none">
+          <span className={cn('font-bold', compact ? 'text-[10px]' : 'text-xs')}>{position.position_number}</span>
+          <StateGlyph state={state} className="size-2.5" />
+        </span>
+        {serialSuffix && <span className="text-[8px] leading-none opacity-80">{serialSuffix}</span>}
+      </span>
+      <span className={cn('h-full w-2 rounded-r-lg border-2 border-l-0', colors.cap)} aria-hidden="true" />
+    </>
+  );
+
+  const content = interactive ? (
+    <button type="button" data-position={position.position_number} onClick={onClick} aria-label={ariaLabel} aria-pressed={selected} className={wrapperClass}>
+      {inner}
+    </button>
+  ) : (
+    <div role="img" aria-label={ariaLabel} className={wrapperClass}>
+      {inner}
     </div>
   );
 
-  if (tooltipLines.length === 0) return drumEl;
-
   return (
     <Tooltip>
-      <TooltipTrigger asChild>{drumEl}</TooltipTrigger>
+      <TooltipTrigger asChild>{content}</TooltipTrigger>
       <TooltipContent side="top">
         <div className="space-y-0.5">
-          <p className="font-semibold text-xs">Posición {position.position_number}</p>
+          <p className="text-xs font-semibold">{describePosition(position)}</p>
           {tooltipLines.map((line) => (
             <p key={line} className="text-xs">
               {line}
@@ -189,9 +205,7 @@ function TireDrum({ position, interactive, highlighted, onClick, compact = false
 }
 
 // ─── AxleColumn ─────────────────────────────────────────────────────────────
-// Renders one axle as a vertical column: top tires — axle bar — bottom tires.
-// The diagram is oriented horizontally (vehicle moves left→right).
-// "LEFT" side appears on top, "RIGHT" side appears on bottom.
+// Un eje como columna vertical: cubiertas izquierdas arriba, barra, derechas abajo.
 
 interface AxleColumnProps {
   axle: DiagramAxle;
@@ -199,6 +213,7 @@ interface AxleColumnProps {
   rightPositions: MergedPosition[];
   interactive: boolean;
   highlightedPositions: number[];
+  selectedPosition: number | null;
   onPositionClick?: (positionNumber: number) => void;
 }
 
@@ -208,61 +223,47 @@ function AxleColumn({
   rightPositions,
   interactive,
   highlightedPositions,
+  selectedPosition,
   onPositionClick,
 }: AxleColumnProps) {
   const isDual = axle.tires_per_side === 2;
 
+  const renderRow = (list: MergedPosition[]) => (
+    <div className={cn('flex flex-col items-center', isDual ? 'gap-1' : '')}>
+      {list.map((pos) => (
+        <TireDrum
+          key={pos.position_number}
+          position={pos}
+          interactive={interactive}
+          highlighted={highlightedPositions.includes(pos.position_number)}
+          selected={selectedPosition === pos.position_number}
+          onClick={() => onPositionClick?.(pos.position_number)}
+          compact={isDual}
+        />
+      ))}
+    </div>
+  );
+
   return (
     <div className="flex flex-col items-center gap-0">
-      {/* Axle label */}
-      <span className="text-[9px] text-muted-foreground mb-1 font-medium whitespace-nowrap">
-        {axle.is_drive_axle ? '⚙ ' : ''}Eje {axle.axle_number}
+      <span className="mb-1 whitespace-nowrap text-[10px] font-medium text-muted-foreground">
+        {axle.is_drive_axle ? 'Tracción · ' : ''}Eje {axle.axle_number}
       </span>
-
-      {/* TOP row (LEFT side) */}
-      <div className={cn('flex flex-col items-center', isDual ? 'gap-0.5' : '')}>
-        {leftPositions.map((pos) => (
-          <TireDrum
-            key={pos.position_number}
-            position={pos}
-            interactive={interactive}
-            highlighted={highlightedPositions.includes(pos.position_number)}
-            onClick={() => onPositionClick?.(pos.position_number)}
-            compact={isDual}
-          />
-        ))}
-      </div>
-
-      {/* Axle bar connecting top and bottom tires */}
-      <div className="w-1 bg-gray-500 flex-1 min-h-[12px] rounded-full" />
-
-      {/* BOTTOM row (RIGHT side) */}
-      <div className={cn('flex flex-col items-center', isDual ? 'gap-0.5' : '')}>
-        {rightPositions.map((pos) => (
-          <TireDrum
-            key={pos.position_number}
-            position={pos}
-            interactive={interactive}
-            highlighted={highlightedPositions.includes(pos.position_number)}
-            onClick={() => onPositionClick?.(pos.position_number)}
-            compact={isDual}
-          />
-        ))}
-      </div>
+      {renderRow(leftPositions)}
+      <div className="min-h-[12px] w-1 flex-1 rounded-full bg-muted-foreground/50" aria-hidden="true" />
+      {renderRow(rightPositions)}
     </div>
   );
 }
 
-// ─── Main Component ────────────────────────────────────────────────────────
-
 // ─── SpareAxleColumn ────────────────────────────────────────────────────────
-// Renders a spare axle inline with regular axles inside the chassis.
 
 interface SpareAxleColumnProps {
   axle: DiagramAxle;
   sparePosition: MergedPosition;
   interactive: boolean;
   highlightedPositions: number[];
+  selectedPosition: number | null;
   onPositionClick?: (positionNumber: number) => void;
 }
 
@@ -271,29 +272,51 @@ function SpareAxleColumn({
   sparePosition,
   interactive,
   highlightedPositions,
+  selectedPosition,
   onPositionClick,
 }: SpareAxleColumnProps) {
   return (
     <div className="flex flex-col items-center gap-0">
-      {/* Axle label */}
-      <span className="text-[9px] text-muted-foreground mb-1 font-medium whitespace-nowrap">
-        Eje {axle.axle_number}
-      </span>
-
-      {/* Spare circle centered vertically */}
-      <div className="flex flex-col items-center justify-center flex-1 py-2">
+      <span className="mb-1 whitespace-nowrap text-[10px] font-medium text-muted-foreground">Eje {axle.axle_number}</span>
+      <div className="flex flex-1 flex-col items-center justify-center py-2">
         <TireDrum
           position={sparePosition}
           interactive={interactive}
           highlighted={highlightedPositions.includes(sparePosition.position_number)}
+          selected={selectedPosition === sparePosition.position_number}
           onClick={() => onPositionClick?.(sparePosition.position_number)}
           circular
         />
-        <span className="text-[9px] text-muted-foreground mt-1 whitespace-nowrap">Auxilio</span>
+        <span className="mt-1 whitespace-nowrap text-[10px] text-muted-foreground">Auxilio</span>
       </div>
     </div>
   );
 }
+
+// ─── Extremos del chasis ────────────────────────────────────────────────────
+
+function CabinBlock({ label }: { label: string }) {
+  return (
+    <div className="flex shrink-0 items-stretch self-stretch py-5">
+      <div className="flex w-8 items-center justify-center rounded-l-xl border-2 border-r-0 bg-muted text-[10px] font-medium text-muted-foreground">
+        <span className="[writing-mode:vertical-rl] rotate-180 whitespace-nowrap">{label}</span>
+      </div>
+    </div>
+  );
+}
+
+function HitchEnd({ hitch }: { hitch: TireDiagramHitch }) {
+  return (
+    <div className="flex shrink-0 items-center gap-1 self-center px-1">
+      <span className="h-0.5 w-3 bg-muted-foreground/60" aria-hidden="true" />
+      <span className="[writing-mode:vertical-rl] whitespace-nowrap rounded border border-dashed bg-background px-0.5 py-1 text-[10px] font-medium text-muted-foreground">
+        {hitch.label}
+      </span>
+    </div>
+  );
+}
+
+// ─── Main Component ────────────────────────────────────────────────────────
 
 export function TireDiagramRenderer({
   axles,
@@ -301,7 +324,10 @@ export function TireDiagramRenderer({
   interactive = false,
   onPositionClick,
   highlightedPositions = [],
+  selectedPosition = null,
   label,
+  cabinLabel,
+  hitch,
 }: TireDiagramRendererProps) {
   const computed = calculatePositions(axles);
   const merged = mergePositions(computed, positions);
@@ -330,52 +356,58 @@ export function TireDiagramRenderer({
     }
   }
 
+  const withTire = positions.filter((p) => p.tire_id !== null).length;
+
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="flex flex-col gap-2 max-w-3xl mx-auto">
+      <div className="mx-auto flex max-w-3xl flex-col gap-2" role="group" aria-label={label ?? 'Diagrama de cubiertas'}>
         {label && <div className="text-sm font-medium text-muted-foreground">{label}</div>}
 
-        {/* Legend */}
-        <div className="flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap">
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-4 h-3 rounded-sm border-2 bg-gray-600 border-gray-700" />
-            Con cubierta
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-4 h-3 rounded-sm border-2 border-dashed bg-white border-gray-400" />
-            Vacío
-          </span>
-          {highlightedPositions.length > 0 && (
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-4 h-3 rounded-sm border-2 bg-amber-500 border-amber-600" />
-              Intervenido
+        {/* Leyenda: ícono + texto, nunca solo color */}
+        <ul className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+          <li className="flex items-center gap-1">
+            <span className={cn('inline-flex h-4 w-6 items-center justify-center rounded-sm border-2', stateClasses.tire.body)}>
+              <StateGlyph state="tire" className="size-2.5" />
             </span>
+            Con cubierta
+          </li>
+          <li className="flex items-center gap-1">
+            <span className={cn('inline-flex h-4 w-6 items-center justify-center rounded-sm border-2', stateClasses.empty.body)}>
+              <StateGlyph state="empty" className="size-2.5" />
+            </span>
+            Sin cubierta
+          </li>
+          {highlightedPositions.length > 0 && (
+            <li className="flex items-center gap-1">
+              <span className={cn('inline-flex h-4 w-6 items-center justify-center rounded-sm border-2', stateClasses.done.body)}>
+                <StateGlyph state="done" className="size-2.5" />
+              </span>
+              Intervenida
+            </li>
           )}
-        </div>
+        </ul>
 
-        {/* Diagram — fills 100% width of parent */}
-        <div className="flex flex-row items-center w-full">
-          {/* Direction indicator */}
-          <div className="flex flex-col items-center justify-center shrink-0 pr-2">
-            <span className="text-xs text-muted-foreground font-medium">→</span>
-            <span className="text-xs text-muted-foreground whitespace-nowrap">Frente</span>
+        {/* Diagrama (vista superior, el vehículo avanza hacia la izquierda: cabina primero) */}
+        <div className="flex w-full flex-row items-center overflow-x-auto pb-1">
+          <div className="flex shrink-0 flex-col items-center justify-center pr-2 text-xs text-muted-foreground">
+            <span aria-hidden="true">←</span>
+            <span className="whitespace-nowrap">Frente</span>
           </div>
 
-          {/* Side labels — only if there are regular axles */}
           {regularAxles.length > 0 && (
-            <div className="flex flex-col justify-between text-[10px] text-muted-foreground pr-1.5 py-6 shrink-0">
+            <div className="flex shrink-0 flex-col justify-between py-6 pr-1.5 text-[10px] text-muted-foreground">
               <span className="whitespace-nowrap">Izq</span>
               <span className="whitespace-nowrap">Der</span>
             </div>
           )}
 
-          {/* Vehicle chassis frame — ALL axles sorted by axle_number, spare inline */}
+          {cabinLabel && <CabinBlock label={cabinLabel} />}
+          {hitch?.position === 'front' && <HitchEnd hitch={hitch} />}
+
           {sortedAxles.length > 0 && (
-            <div className="relative flex flex-row items-stretch border-2 border-slate-300 rounded-xl bg-slate-50 px-3 py-5 flex-1 min-w-0 min-h-[11rem] justify-around">
-              {/* Chassis top rail */}
-              <div className="absolute top-0 left-4 right-4 h-0.5 bg-slate-300 rounded-full" />
-              {/* Chassis bottom rail */}
-              <div className="absolute bottom-0 left-4 right-4 h-0.5 bg-slate-300 rounded-full" />
+            <div className="relative flex min-h-[11rem] min-w-0 flex-1 flex-row items-stretch justify-around rounded-xl border-2 bg-muted/40 px-3 py-5">
+              <div className="absolute left-4 right-4 top-0 h-0.5 rounded-full bg-border" aria-hidden="true" />
+              <div className="absolute bottom-0 left-4 right-4 h-0.5 rounded-full bg-border" aria-hidden="true" />
 
               {sortedAxles.map((axle) => {
                 if (axle.is_spare) {
@@ -388,6 +420,7 @@ export function TireDiagramRenderer({
                       sparePosition={sparePos}
                       interactive={interactive}
                       highlightedPositions={highlightedPositions}
+                      selectedPosition={selectedPosition}
                       onPositionClick={onPositionClick}
                     />
                   );
@@ -401,20 +434,21 @@ export function TireDiagramRenderer({
                     rightPositions={group.right}
                     interactive={interactive}
                     highlightedPositions={highlightedPositions}
+                    selectedPosition={selectedPosition}
                     onPositionClick={onPositionClick}
                   />
                 );
               })}
             </div>
           )}
+
+          {hitch?.position === 'rear' && <HitchEnd hitch={hitch} />}
         </div>
 
-        {/* Position count summary */}
-        <div className="text-[10px] text-muted-foreground">
-          {computed.filter((p) => p.side !== 'SPARE').length} posiciones ·{' '}
-          {positions.filter((p) => p.tire_id !== null).length} con cubierta ·{' '}
+        <p className="text-[11px] text-muted-foreground">
+          {computed.filter((p) => p.side !== 'SPARE').length} posiciones · {withTire} con cubierta ·{' '}
           {computed.filter((p) => p.side === 'SPARE').length} auxilio
-        </div>
+        </p>
       </div>
     </TooltipProvider>
   );

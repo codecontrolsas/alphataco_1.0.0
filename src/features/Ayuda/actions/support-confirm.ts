@@ -4,6 +4,7 @@ import { Logger } from '@/lib/logger';
 import { taskAppClient } from '@/shared/lib/taskapp/client';
 import { TaskAppError } from '@/shared/lib/taskapp/errors';
 import type { Ticket, TicketTimeline } from '@/shared/lib/taskapp/types';
+import { canSupportTickets, requireSupportTickets } from '../lib/access.server';
 import { getReporterEmail } from './getReporterEmail';
 import { getSupportTicketById } from './support-tickets';
 
@@ -22,14 +23,12 @@ const logger = new Logger('features/Ayuda/support-confirm');
  * un 403 pelado.
  */
 export async function confirmSupportTicket(ticketId: number): Promise<Ticket> {
+  await requireSupportTickets();
   // En paralelo: la sesión y el ticket no dependen uno del otro, y encadenar
   // los dos awaits duplicaba la latencia de la confirmación.
   // getSupportTicketById ya resuelve el permiso de lectura (reporter o
   // aprobador) y devuelve null si no corresponde.
-  const [reporter, ticket] = await Promise.all([
-    getReporterEmail(),
-    getSupportTicketById(ticketId),
-  ]);
+  const [reporter, ticket] = await Promise.all([getReporterEmail(), getSupportTicketById(ticketId)]);
   if (!reporter) throw new Error('No hay usuario autenticado');
   if (!ticket) throw new Error('No tenés acceso a este ticket');
 
@@ -60,6 +59,7 @@ export async function confirmSupportTicket(ticketId: number): Promise<Ticket> {
  */
 export async function getSupportTicketTimeline(ticketId: number): Promise<TicketTimeline> {
   const empty: TicketTimeline = { ticket_id: ticketId, milestones: [] };
+  if (!(await canSupportTickets())) return empty;
 
   const ticket = await getSupportTicketById(ticketId);
   if (!ticket) return empty;

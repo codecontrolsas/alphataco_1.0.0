@@ -1,4 +1,9 @@
 import {
+  EQUIPMENT_CONDITION_LABELS,
+  normalizeEquipmentCondition,
+  type EquipmentConditionKey,
+} from '@/features/Operaciones/PartesDiarios/lib/equipment-condition';
+import {
   appUrl,
   badge,
   ctaBlock,
@@ -9,7 +14,13 @@ import {
   tableHeaderRow,
 } from '@/shared/lib/mail/shell';
 import { formatLongDateAr } from '../lib/dates';
-import type { CustomerEquipment, DeviationsResult, EmployeeDeviation, EquipmentDeviation, RowWithDeviations } from '../schemas/deviations';
+import type {
+  CustomerEquipment,
+  DeviationsResult,
+  EmployeeDeviation,
+  EquipmentDeviation,
+  RowWithDeviations,
+} from '../schemas/deviations';
 
 /**
  * Correo de desvíos del parte diario. Portado de `supabase/functions/send-deviations-email`.
@@ -28,13 +39,13 @@ const ROLE_LABELS: Record<string, string> = {
   sin_rol: 'Sin rol',
 };
 
-const CONDITION_LABELS: Record<string, { label: string; bg: string; text: string }> = {
-  operativo: { label: 'Operativo', bg: '#f0fdf4', text: '#15803d' },
-  'no operativo': { label: 'No operativo', bg: '#fef2f2', text: '#b91c1c' },
-  'en reparacion': { label: 'En reparación', bg: '#fefce8', text: '#a16207' },
-  'operativo condicionado': { label: 'Operativo condicionado', bg: '#fff7ed', text: '#c2410c' },
-  'en preparacion': { label: 'En preparación', bg: '#eff6ff', text: '#1d4ed8' },
-  desconocido: { label: 'Desconocido', bg: '#f1f5f9', text: '#475569' },
+const CONDITION_COLORS: Record<EquipmentConditionKey, { bg: string; text: string }> = {
+  operativo: { bg: '#f0fdf4', text: '#15803d' },
+  'no operativo': { bg: '#fef2f2', text: '#b91c1c' },
+  'en reparacion': { bg: '#fefce8', text: '#a16207' },
+  'operativo condicionado': { bg: '#fff7ed', text: '#c2410c' },
+  'en preparacion': { bg: '#eff6ff', text: '#1d4ed8' },
+  desconocido: { bg: '#f1f5f9', text: '#475569' },
 };
 
 const TYPE_SERVICE_LABELS: Record<string, string> = {
@@ -88,9 +99,12 @@ function equipmentInternCell(deviation: EquipmentDeviation): string {
 function equipmentDeviationBadges(deviation: EquipmentDeviation): string {
   const badges: string[] = [];
   if (deviation.is_unassigned_to_client) badges.push(badge('No afectado', '#fff7ed', '#c2410c'));
-  if (deviation.condition && deviation.condition !== 'operativo') {
-    const condition = CONDITION_LABELS[deviation.condition] ?? CONDITION_LABELS.desconocido;
-    badges.push(badge(condition.label, condition.bg, condition.text));
+  if (deviation.condition) {
+    const key = normalizeEquipmentCondition(deviation.condition);
+    if (key !== 'operativo') {
+      const colors = CONDITION_COLORS[key];
+      badges.push(badge(EQUIPMENT_CONDITION_LABELS[key], colors.bg, colors.text));
+    }
   }
   if (deviation.is_duplicated) badges.push(badge('Duplicado', '#f5f3ff', '#7c3aed'));
   return badges.join(' ');

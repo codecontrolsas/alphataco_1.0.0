@@ -12,6 +12,7 @@ import { formatQuantity } from '@/features/Warehouses/lib/format';
 import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { parseSerialNumbers } from '@/features/Warehouses/schemas/stock-movement';
 import { Logger } from '@/lib/logger';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { TriangleAlert } from 'lucide-react';
@@ -26,6 +27,7 @@ import { invalidatePurchases } from '../../lib/invalidate';
 import { trimDecimals } from '../../lib/quantity-format';
 import { splitReceived } from '../../lib/receipt-math';
 import { RECEIPT_ATTACHMENT_MAX_BYTES, RECEIPT_ATTACHMENT_TYPES, purchaseReceiptFormSchema } from '../../schemas/receipts';
+import { invalidateWarehouseAfterReceipt } from '../lib/invalidate-warehouse';
 
 const logger = new Logger('Purchases/PurchaseReceiptForm');
 
@@ -59,7 +61,7 @@ export function PurchaseReceiptForm({ data }: { data: ReceiptFormData }) {
     defaultValues: {
       orderId: data.order.id,
       warehouseId: data.warehouses.length === 1 ? data.warehouses[0]!.id : '',
-      receivedOn: moment().format('YYYY-MM-DD'),
+      receivedOn: argentinaDate(),
       deliveryNote: '',
       notes: '',
       lines: data.lines.map((line) => ({
@@ -93,6 +95,7 @@ export function PurchaseReceiptForm({ data }: { data: ReceiptFormData }) {
       });
       if (created.attachError) toast.warning('La recepción quedó registrada, pero no se pudo subir el remito', { description: created.attachError });
       invalidatePurchases(queryClient);
+      invalidateWarehouseAfterReceipt(queryClient);
       router.push(`/dashboard/purchases/receipts/${created.id}`);
       router.refresh();
     },
@@ -328,8 +331,8 @@ function ReceiptLineFields({ form, index, line }: { form: UseFormReturn<FormValu
         )}
       </div>
       {hasExcess && (
-        <Alert className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-          <TriangleAlert className="h-4 w-4" />
+        <Alert className="border-warn/35 bg-warn-subtle text-warn-subtle-foreground">
+          <TriangleAlert className="h-4 w-4" aria-hidden="true" />
           <AlertDescription>
             Se reciben {formatQuantity(excess)} {line.unitAbbr} de más: se va a crear una OC complementaria en borrador por el excedente.
           </AlertDescription>

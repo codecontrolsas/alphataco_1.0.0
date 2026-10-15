@@ -31,7 +31,7 @@ import {
   getSubTypesForTemplateAssign,
   unassignTemplateFromSubType,
   type SubTypeForAssign,
-} from '../actions/actions.server';
+} from '../actions/template-crud.server';
 
 const logger = new Logger('TemplateAssignDialog');
 

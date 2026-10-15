@@ -4,6 +4,7 @@ import { Logger } from '@/lib/logger';
 import { taskAppClient } from '@/shared/lib/taskapp/client';
 import { TaskAppError } from '@/shared/lib/taskapp/errors';
 import type { Comment } from '@/shared/lib/taskapp/types';
+import { canSupportTickets, requireSupportTickets } from '../lib/access.server';
 import type { CreateSupportCommentInput } from '../types';
 import { getReporterEmail } from './getReporterEmail';
 import { getSupportTicketById } from './support-tickets';
@@ -11,6 +12,7 @@ import { getSupportTicketById } from './support-tickets';
 const logger = new Logger('features/Ayuda/support-comments');
 
 export async function listSupportTicketComments(ticketId: number): Promise<Comment[]> {
+  if (!(await canSupportTickets())) return [];
   const ticket = await getSupportTicketById(ticketId);
   if (!ticket) {
     logger.warn('listSupportTicketComments sin acceso', { data: { ticketId } });
@@ -27,6 +29,7 @@ export async function listSupportTicketComments(ticketId: number): Promise<Comme
 }
 
 export async function createSupportTicketComment(input: CreateSupportCommentInput): Promise<Comment> {
+  await requireSupportTickets();
   const reporter = await getReporterEmail();
   if (!reporter) {
     logger.warn('createSupportTicketComment sin usuario autenticado');

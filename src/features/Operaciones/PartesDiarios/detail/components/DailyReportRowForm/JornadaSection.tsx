@@ -23,12 +23,16 @@ interface JornadaSectionProps {
 
 export function JornadaSection({ form, disabled = false }: JornadaSectionProps) {
   return (
+    <section aria-labelledby="row-form-jornada" className="space-y-4 rounded-lg border bg-card p-4">
+      <h3 id="row-form-jornada" className="text-sm font-semibold text-foreground">
+        Jornada
+      </h3>
     <FormField
       control={form.control}
       name="working_day"
       render={({ field }) => (
         <FormItem className="flex flex-col">
-          <FormLabel>Jornada</FormLabel>
+          <FormLabel>Tipo de jornada</FormLabel>
           <Popover>
             <PopoverTrigger asChild>
               <FormControl>
@@ -87,5 +91,6 @@ export function JornadaSection({ form, disabled = false }: JornadaSectionProps) 
         </FormItem>
       )}
     />
+    </section>
   );
 }

@@ -13,16 +13,14 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { MaintenanceStatusPill } from '@/features/Mantenimiento/shared/components/MaintenanceStatusPill';
+import { StateBlock } from '@/shared/components/common/StateBlock';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Eye, Stethoscope, Wrench, XCircle } from 'lucide-react';
 import moment from 'moment';
-import { useState } from 'react';
-// Los textos y colores del estado de cada tarea salen del mapa que ya usan las
-// tarjetas de sector y el detalle de orden — está exportado justamente para que
-// no existan dos vocabularios para el mismo estado.
-import { statusBadgeVariants, statusLabels } from '../../../MaintenanceOrders/components/SectorCard';
+import { useState, type ReactNode } from 'react';
 import { getWorkOrderTasks } from '../actions.server';
-import { getWoStatusConfig } from '../work-order-status';
 
 interface WorkOrderTasksDialogProps {
   workOrderId: string;
@@ -30,6 +28,8 @@ interface WorkOrderTasksDialogProps {
   /** Estado de la OT (enum work_order_status) */
   status: string;
   taskCount: number;
+  /** Disparador propio (por ejemplo el N° OT de la fila). Sin él se muestra el botón "Ver". Debe ser un solo elemento clickeable. */
+  trigger?: ReactNode;
 }
 
 /**
@@ -42,37 +42,45 @@ interface WorkOrderTasksDialogProps {
  * sector y decenas de OT por sector, traerlas de entrada sería traer todo el
  * taller para mirar una sola orden.
  */
-export function WorkOrderTasksDialog({ workOrderId, orderNumber, status, taskCount }: WorkOrderTasksDialogProps) {
+export function WorkOrderTasksDialog({
+  workOrderId,
+  orderNumber,
+  status,
+  taskCount,
+  trigger,
+}: WorkOrderTasksDialogProps) {
   const [open, setOpen] = useState(false);
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['work-order-tasks', workOrderId],
     queryFn: () => getWorkOrderTasks(workOrderId),
     enabled: open,
     staleTime: 60 * 1000,
   });
 
-  const woConfig = getWoStatusConfig(status);
-  const WoStatusIcon = woConfig.icon;
-
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs">
-          <Eye className="h-3.5 w-3.5" />
-          Ver
-        </Button>
+        {trigger ?? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 px-2 text-xs"
+            aria-label={`Ver las tareas de la orden de trabajo ${orderNumber}`}
+          >
+            <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+            Ver
+          </Button>
+        )}
       </DialogTrigger>
 
       <DialogContent className="flex max-h-[85vh] max-w-3xl flex-col">
         <DialogHeader>
           <DialogTitle className="flex flex-wrap items-center gap-2">
-            <Wrench className="h-4 w-4 opacity-60" />
+            <Wrench className="h-4 w-4 opacity-60" aria-hidden="true" />
             <span className="font-mono">{orderNumber}</span>
-            <Badge variant={woConfig.variant} className="gap-1">
-              <WoStatusIcon className="h-3 w-3" />
-              {woConfig.label}
-            </Badge>
+            <MaintenanceStatusPill entity="workOrder" status={status} />
           </DialogTitle>
           <DialogDescription>
             {taskCount === 1 ? '1 tarea en esta orden de trabajo' : `${taskCount} tareas en esta orden de trabajo`}
@@ -87,11 +95,18 @@ export function WorkOrderTasksDialog({ workOrderId, orderNumber, status, taskCou
               ))}
             </div>
           ) : isError ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No se pudieron cargar las tareas de la orden de trabajo.
-            </p>
+            <StateBlock
+              variant="error"
+              title="No se pudieron cargar las tareas de la orden de trabajo"
+              description="Revisá tu conexión e intentá nuevamente."
+              action={
+                <Button type="button" variant="outline" size="sm" onClick={() => refetch()}>
+                  Reintentar
+                </Button>
+              }
+            />
           ) : !data || data.tasks.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">Esta orden de trabajo no tiene tareas.</p>
+            <StateBlock variant="empty" title="Esta orden de trabajo no tiene tareas" />
           ) : (
             <div className="space-y-3">
               {data.tasks.map((task, index) => (
@@ -112,9 +127,7 @@ export function WorkOrderTasksDialog({ workOrderId, orderNumber, status, taskCou
                           {task.completedRepairs}/{task.totalRepairs} trabajos
                         </span>
                       ) : null}
-                      <Badge variant={statusBadgeVariants[task.taskStatus] ?? 'secondary'}>
-                        {statusLabels[task.taskStatus] ?? task.taskStatus}
-                      </Badge>
+                      <MaintenanceStatusPill entity="repair" status={task.taskStatus} />
                     </div>
                   </div>
 
@@ -155,8 +168,8 @@ export function WorkOrderTasksDialog({ workOrderId, orderNumber, status, taskCou
                   {task.plannedStartDate || task.plannedEndDate ? (
                     <p className="mt-2 pl-6 text-xs text-muted-foreground">
                       Planificada:{' '}
-                      {task.plannedStartDate ? moment(task.plannedStartDate).format('DD/MM/YYYY') : 'sin inicio'} →{' '}
-                      {task.plannedEndDate ? moment(task.plannedEndDate).format('DD/MM/YYYY') : 'sin fin'}
+                      {task.plannedStartDate ? moment.utc(task.plannedStartDate).format('DD/MM/YYYY') : 'sin inicio'} →{' '}
+                      {task.plannedEndDate ? moment.utc(task.plannedEndDate).format('DD/MM/YYYY') : 'sin fin'}
                     </p>
                   ) : null}
 
@@ -176,16 +189,11 @@ export function WorkOrderTasksDialog({ workOrderId, orderNumber, status, taskCou
                       <ul className="space-y-1 pl-6">
                         {task.repairs.map((repair) => (
                           <li key={repair.id} className="flex flex-wrap items-center gap-2 text-xs">
-                            <Badge
-                              variant={statusBadgeVariants[repair.status] ?? 'secondary'}
-                              className="px-1.5 py-0 text-[10px]"
-                            >
-                              {statusLabels[repair.status] ?? repair.status}
-                            </Badge>
+                            <MaintenanceStatusPill entity="repair" status={repair.status} size="sm" />
                             <span className="text-foreground">{repair.name ?? 'Sin tipo'}</span>
                             {repair.completedAt ? (
                               <span className="text-muted-foreground">
-                                · {moment(repair.completedAt).format('DD/MM/YYYY HH:mm')}
+                                · {formatArgentinaDateTime(repair.completedAt)}
                               </span>
                             ) : null}
                             {repair.technicianNotes ? (

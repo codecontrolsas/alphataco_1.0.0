@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
  */
 export default function Loading() {
   return (
-    <div className="flex items-center justify-center min-h-screen bg-white bg-cover bg-center p-4">
+    <div className="flex items-center justify-center min-h-screen bg-background bg-cover bg-center p-4">
       <div className="w-full max-w-md rounded-xl border bg-card shadow-lg">
         {/* CardHeader */}
         <div className="p-6 pb-2 space-y-1">

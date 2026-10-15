@@ -1,28 +1,27 @@
 'use client';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import moment from 'moment';
+import { AttentionBanner } from '@/features/Mantenimiento/shared/components/AttentionBanner';
+import { Field, FieldGrid } from '@/shared/components/common/FieldGrid';
+import { RecordHeader } from '@/shared/components/common/RecordHeader';
+import { SectionCard } from '@/shared/components/common/SectionCard';
+import { Timeline, type TimelineItem } from '@/shared/components/common/Timeline';
 import Link from 'next/link';
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { undoOwnCheckDebit, undoOwnCheckRejection, type OwnCheckDetail } from '../../actions/own-checks.server';
 import { CancelReasonDialog } from '../../components/CancelReasonDialog';
+import { TreasuryStatusBadge } from '../../components/TreasuryStatusBadge';
 import { formatInCurrency } from '../../lib/currency-format';
-import { OWN_CHECK_ALERT_LABEL, OWN_CHECK_KIND_LABELS, OWN_CHECK_STATUS_LABELS } from '../../lib/own-check-transitions';
+import { formatDay } from '../../lib/dates';
+import { OWN_CHECK_KIND_LABELS } from '../../lib/own-check-transitions';
+import { OWN_CHECK_ALERT_UI, OWN_CHECK_STATUS_UI } from '../../lib/status-presentation';
 import { formatArgentinaDateTime } from '../../lib/today';
 import { DebitOwnChecksDialog } from './DebitOwnChecksDialog';
 import { RejectOwnCheckDialog } from './RejectOwnCheckDialog';
 
-const dmy = (value: string | null) => (value ? moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY') : '—');
+const dmy = (value: string | null) => formatDay(value) || '—';
 
-const STATUS_BADGE: Record<OwnCheckDetail['status'], 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  ISSUED: 'default',
-  DEBITED: 'secondary',
-  REJECTED: 'destructive',
-  CANCELLED: 'outline',
-};
+const TIMELINE_TONE: Record<string, TimelineItem['tone']> = { danger: 'danger', warn: 'warn', ok: 'ok' };
 
 type Dialogs = 'debit' | 'undo-debit' | 'reject' | 'undo-rejection' | null;
 
@@ -33,42 +32,47 @@ export function OwnCheckDetailView({ detail, can }: { detail: OwnCheckDetail; ca
   const voided = detail.voidReason !== null;
   const pending = detail.paymentDate !== null && detail.paymentDate > detail.today;
 
-  const facts: [string, ReactNode][] = [
-    ['Tipo', OWN_CHECK_KIND_LABELS[detail.kind]],
-    ...(detail.amount
-      ? ([['Importe', <span key="amount" className="font-semibold tabular-nums">{formatInCurrency(detail.amount, 'ARS')}</span>]] as [string, ReactNode][])
-      : []),
-    ['Cuenta', detail.account.name],
-    ...(detail.checkbook ? ([['Chequera', `Del ${detail.checkbook.range}`]] as [string, ReactNode][]) : []),
-    ...(detail.supplier ? ([['Proveedor', detail.supplier.name]] as [string, ReactNode][]) : []),
-    [voided ? 'Inutilizado' : 'Emisión', dmy(detail.issueDate)],
-    ...(detail.paymentDate ? ([['Fecha de pago', dmy(detail.paymentDate)]] as [string, ReactNode][]) : []),
-    ...(detail.debitedOn ? ([['Débito', dmy(detail.debitedOn)]] as [string, ReactNode][]) : []),
-    ...(detail.paymentOrder
-      ? ([
-          [
-            'Orden de pago',
-            <Link key="order" href={`/dashboard/purchases/payments/${detail.paymentOrder.id}`} className="underline underline-offset-2">
-              {detail.paymentOrder.number}
-            </Link>,
-          ],
-        ] as [string, ReactNode][])
-      : []),
-  ];
+  const alert = detail.alert === 'PENDING_CONFIRMATION' ? OWN_CHECK_ALERT_UI.PENDING_CONFIRMATION : null;
+
+  const timeline: TimelineItem[] = detail.events.map((e) => {
+    const ui = OWN_CHECK_STATUS_UI[e.toStatus];
+    return {
+      tone: TIMELINE_TONE[ui.tone] ?? 'brand',
+      title: `${e.fromStatus ? `${OWN_CHECK_STATUS_UI[e.fromStatus].label} → ` : ''}${ui.label}`,
+      meta: (
+        <>
+          <span className="tabular-nums">{dmy(e.date)}</span>
+          {e.user ? ` · ${e.user}` : ''} · registrado <span className="tabular-nums">{formatArgentinaDateTime(e.createdAt)}</span>
+        </>
+      ),
+      children:
+        e.paymentOrder || e.reason ? (
+          <p className="text-sm">
+            {e.paymentOrder && (
+              <Link href={`/dashboard/purchases/payments/${e.paymentOrder.id}`} className="underline underline-offset-2">
+                {e.paymentOrder.number}
+              </Link>
+            )}
+            {e.paymentOrder && e.reason ? ' · ' : null}
+            {e.reason}
+          </p>
+        ) : null,
+    };
+  });
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={STATUS_BADGE[detail.status]}>{OWN_CHECK_STATUS_LABELS[detail.status]}</Badge>
-            {detail.alert === 'PENDING_CONFIRMATION' && (
-              <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-400">
-                {OWN_CHECK_ALERT_LABEL}
-              </Badge>
-            )}
+    <div className="mx-auto max-w-5xl space-y-4">
+      <RecordHeader
+        identity={
+          <div className="space-y-2">
+            <h1 className="text-2xl font-semibold">
+              {OWN_CHECK_KIND_LABELS[detail.kind]} propio Nº {detail.number} · {detail.account.name}
+            </h1>
+            <TreasuryStatusBadge ui={OWN_CHECK_STATUS_UI[detail.status]} />
           </div>
-          <div className="flex flex-wrap gap-2">
+        }
+        actions={
+          <>
             {can.update && detail.status === 'ISSUED' && (
               <>
                 <Button type="button" size="sm" onClick={() => setDialog('debit')} disabled={pending} title={pending ? 'Todavía no llegó su fecha de pago' : undefined}>
@@ -89,85 +93,58 @@ export function OwnCheckDetailView({ detail, can }: { detail: OwnCheckDetail; ca
                 Anular el rechazo
               </Button>
             )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
-            {facts.map(([label, value]) => (
-              <div key={label}>
-                <dt className="text-xs text-muted-foreground">{label}</dt>
-                <dd>{value}</dd>
-              </div>
-            ))}
-          </dl>
-          {detail.status === 'REJECTED' && (
-            <p className="mt-3 text-sm text-muted-foreground">
-              Rechazado el {dmy(detail.rejectedOn)}: {detail.rejectReason}
-            </p>
+          </>
+        }
+      />
+
+      {alert && <AttentionBanner tone="warn" title={alert.label} />}
+
+      <SectionCard title="Datos del cheque">
+        <FieldGrid>
+          <Field label="Tipo" value={OWN_CHECK_KIND_LABELS[detail.kind]} />
+          {detail.amount && (
+            <Field label="Importe">
+              <span className="tabular-nums">{formatInCurrency(detail.amount, 'ARS')}</span>
+            </Field>
           )}
-          {voided && <p className="mt-3 text-sm text-muted-foreground">Número inutilizado: {detail.voidReason}</p>}
-        </CardContent>
-      </Card>
+          <Field label="Cuenta" value={detail.account.name} />
+          {detail.checkbook && <Field label="Chequera" value={`Del ${detail.checkbook.range}`} />}
+          {detail.supplier && <Field label="Proveedor" value={detail.supplier.name} />}
+          <Field label={voided ? 'Inutilizado' : 'Emisión'} value={dmy(detail.issueDate)} mono />
+          {detail.paymentDate && <Field label="Fecha de pago" value={dmy(detail.paymentDate)} mono />}
+          {detail.debitedOn && <Field label="Débito" value={dmy(detail.debitedOn)} mono />}
+          {detail.paymentOrder && (
+            <Field label="Orden de pago">
+              <Link href={`/dashboard/purchases/payments/${detail.paymentOrder.id}`} className="underline underline-offset-2">
+                {detail.paymentOrder.number}
+              </Link>
+            </Field>
+          )}
+        </FieldGrid>
+        {detail.status === 'REJECTED' && (
+          <p className="mt-4 text-sm text-muted-foreground">
+            Rechazado el {dmy(detail.rejectedOn)}: {detail.rejectReason}
+          </p>
+        )}
+        {voided && <p className="mt-4 text-sm text-muted-foreground">Número inutilizado: {detail.voidReason}</p>}
+      </SectionCard>
 
       {detail.debt && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Deuda por el rechazo</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm">
-            <p>
-              Se le debe a {detail.supplier?.name ?? 'el proveedor'}{' '}
-              <span className="font-semibold tabular-nums">{formatInCurrency(detail.debt.pending, 'ARS')}</span>
-              {detail.debt.reserved !== '0.00' && (
-                <span className="text-muted-foreground"> · {formatInCurrency(detail.debt.reserved, 'ARS')} en una orden sin pagar</span>
-              )}
-              <span className="text-muted-foreground"> · se paga con una orden de pago en Compras</span>
-            </p>
-          </CardContent>
-        </Card>
+        <SectionCard title="Deuda por el rechazo">
+          <p className="text-sm">
+            Se le debe a {detail.supplier?.name ?? 'el proveedor'}{' '}
+            <span className="font-semibold tabular-nums">{formatInCurrency(detail.debt.pending, 'ARS')}</span>
+            {detail.debt.reserved !== '0.00' && (
+              <span className="text-muted-foreground"> · {formatInCurrency(detail.debt.reserved, 'ARS')} en una orden sin pagar</span>
+            )}
+            <span className="text-muted-foreground"> · se paga con una orden de pago en Compras</span>
+          </p>
+        </SectionCard>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Historial</CardTitle>
-        </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Documento o motivo</TableHead>
-                <TableHead>Usuario</TableHead>
-                <TableHead>Registrado</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {detail.events.map((e) => (
-                <TableRow key={e.id}>
-                  <TableCell className="tabular-nums">{dmy(e.date)}</TableCell>
-                  <TableCell>
-                    {e.fromStatus ? `${OWN_CHECK_STATUS_LABELS[e.fromStatus]} → ` : ''}
-                    {OWN_CHECK_STATUS_LABELS[e.toStatus]}
-                  </TableCell>
-                  <TableCell>
-                    {e.paymentOrder ? (
-                      <Link href={`/dashboard/purchases/payments/${e.paymentOrder.id}`} className="underline underline-offset-2">
-                        {e.paymentOrder.number}
-                      </Link>
-                    ) : null}
-                    {e.paymentOrder && e.reason ? ' · ' : null}
-                    {e.reason}
-                    {!e.paymentOrder && !e.reason ? '—' : null}
-                  </TableCell>
-                  <TableCell>{e.user}</TableCell>
-                  <TableCell className="tabular-nums text-muted-foreground">{formatArgentinaDateTime(e.createdAt)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <SectionCard title="Historial">
+        {timeline.length > 0 ? <Timeline items={timeline} /> : <p className="text-sm text-muted-foreground">Sin movimientos registrados.</p>}
+      </SectionCard>
 
       {dialog === 'debit' && detail.amount && (
         <DebitOwnChecksDialog

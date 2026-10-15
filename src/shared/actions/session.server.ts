@@ -4,8 +4,7 @@ import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getSessionUser, getSessionUserId } from '@/shared/lib/session';
-import { assertCompanyAccess, getActiveCompanyId } from '@/shared/lib/tenant';
-import type { EmployeeDocumentInput, EquipmentDocumentInput } from '@/shared/store/lib/document-buckets';
+import { assertCompanyAccess } from '@/shared/lib/tenant';
 
 /**
  * Datos que consume el store `useLoggedUserStore` (antes los pedía con PostgREST y realtime
@@ -88,144 +87,22 @@ export async function getStoreCompanies() {
 
 export type StoreSharedCompany = Awaited<ReturnType<typeof getStoreCompanies>>['sharedCompanies'][number];
 
-const documentTypeSelect = {
-  id: true,
-  name: true,
-  multiresource: true,
-  mandatory: true,
-  is_it_montlhy: true,
-  applies: true,
-  private: true,
-  down_document: true,
-} as const;
+/**
+ * Equipos de la compañía para el único consumidor del store (la vista previa de campos
+ * "Vehículos" del diseñador de formularios): sólo los identificadores que se listan, sin
+ * documentos ni relaciones, y acotado para que una flota grande no viaje entera al navegador.
+ */
+const STORE_VEHICLES_LIMIT = 500;
 
-/** Documentos de empleados, equipos y empresa de una compañía, en el shape de `document-buckets`. */
-export async function getStoreDocuments(companyId: string) {
-  await assertCompanyAccess(companyId);
-  try {
-    const [employees, vehicles, company] = await Promise.all([
-      prisma.documents_employees.findMany({
-        where: { employees: { company_id: companyId } },
-        select: {
-          id: true,
-          created_at: true,
-          validity: true,
-          state: true,
-          period: true,
-          document_path: true,
-          employees: {
-            select: {
-              id: true,
-              firstname: true,
-              lastname: true,
-              document_number: true,
-              is_active: true,
-              termination_date: true,
-              contractor_employee: { select: { customers: { select: { name: true } } } },
-            },
-          },
-          document_types: { select: documentTypeSelect },
-        },
-      }),
-      prisma.documents_equipment.findMany({
-        where: { vehicles: { company_id: companyId } },
-        select: {
-          id: true,
-          created_at: true,
-          validity: true,
-          state: true,
-          period: true,
-          document_path: true,
-          vehicles: {
-            select: {
-              id: true,
-              domain: true,
-              intern_number: true,
-              serie: true,
-              is_active: true,
-              termination_date: true,
-              types_of_vehicles: { select: { name: true } },
-            },
-          },
-          document_types: { select: documentTypeSelect },
-        },
-      }),
-      prisma.documents_company.findMany({
-        where: { applies: companyId },
-        include: { document_types: true, profile: true },
-      }),
-    ]);
-
-    // `validity` es timestamptz; los buckets comparan 'DD/MM/YYYY' como hacía el legacy.
-    const toValidity = (value: Date | null) =>
-      value ? `${String(value.getDate()).padStart(2, '0')}/${String(value.getMonth() + 1).padStart(2, '0')}/${value.getFullYear()}` : null;
-
-    const employeeDocs: EmployeeDocumentInput[] = employees.map((doc) => ({
-      ...doc,
-      validity: toValidity(doc.validity),
-      document_types: doc.document_types && { ...doc.document_types, applies: String(doc.document_types.applies) },
-    }));
-    const equipmentDocs: EquipmentDocumentInput[] = vehicles.map((doc) => ({
-      ...doc,
-      validity: toValidity(doc.validity),
-      document_types: doc.document_types && { ...doc.document_types, applies: String(doc.document_types.applies) },
-    }));
-    const companyDocs = company.map(({ document_types, profile, ...doc }) => ({
-      ...doc,
-      id_document_types: document_types,
-      user_id: profile,
-    }));
-
-    return { employees: employeeDocs, vehicles: equipmentDocs, company: companyDocs };
-  } catch (error) {
-    logger.error('Error al obtener documentos para el store', { data: { error, companyId } });
-    return { employees: [], vehicles: [], company: [] };
-  }
-}
-
-export type StoreCompanyDocument = Awaited<ReturnType<typeof getStoreDocuments>>['company'][number];
-
-/** Empleados de la compañía con las relaciones que usa `employeesToShow`. */
-export async function getStoreEmployees(companyId: string) {
-  await assertCompanyAccess(companyId);
-  try {
-    return await prisma.employees.findMany({
-      where: withCompany({}, companyId),
-      include: {
-        cities: { select: { name: true } },
-        provinces: { select: { name: true } },
-        work_diagram: { select: { name: true } },
-        hierarchy: { select: { name: true } },
-        countries: { select: { name: true } },
-        guild: { select: { id: true, name: true } },
-        covenant: { select: { id: true, name: true } },
-        category: { select: { id: true, name: true } },
-        documents_employees: { include: { document_types: { select: { down_document: true } } } },
-        contractor_employee: { select: { customers: { select: { id: true, name: true } } } },
-      },
-      orderBy: [{ lastname: 'asc' }, { firstname: 'asc' }],
-    });
-  } catch (error) {
-    logger.error('Error al obtener empleados para el store', { data: { error, companyId } });
-    return [];
-  }
-}
-
-export type StoreEmployee = Awaited<ReturnType<typeof getStoreEmployees>>[number];
-
-/** Equipos de la compañía con tipo, marca y modelo resueltos. */
 export async function getStoreVehicles(companyId: string) {
   await assertCompanyAccess(companyId);
   try {
-    const rows = await prisma.vehicles.findMany({
+    return await prisma.vehicles.findMany({
       where: withCompany({}, companyId),
-      include: {
-        types_of_vehicles: { select: { name: true } },
-        brand_vehicles: { select: { name: true } },
-        model_vehicles: { select: { name: true } },
-      },
+      select: { id: true, domain: true, serie: true, intern_number: true },
+      orderBy: { domain: 'asc' },
+      take: STORE_VEHICLES_LIMIT,
     });
-    return rows.map(({ type_of_vehicle, ...rest }) => ({ ...rest, type_of_vehicle: Number(type_of_vehicle) }));
   } catch (error) {
     logger.error('Error al obtener equipos para el store', { data: { error, companyId } });
     return [];
@@ -265,41 +142,3 @@ export async function getStoreSharedUsers(companyId: string) {
 }
 
 export type StoreSharedUser = Awaited<ReturnType<typeof getStoreSharedUsers>>[number];
-
-/** Documentos de un empleado (de la empresa activa) por número de documento (drawer de `SimpleDocument`). */
-export async function getEmployeeDocumentsByDocumentNumber(documentNumber: string) {
-  try {
-    const companyId = await getActiveCompanyId();
-    return await prisma.documents_employees.findMany({
-      where: { employees: { document_number: documentNumber, company_id: companyId } },
-      include: { employees: true, document_types: true },
-    });
-  } catch (error) {
-    logger.error('Error al obtener documentos del empleado', { data: { error, documentNumber } });
-    return null;
-  }
-}
-
-/** Documentos de un equipo (de la empresa activa) por id (drawer de `SimpleDocument`). */
-export async function getVehicleDocumentsByVehicleId(vehicleId: string) {
-  try {
-    const companyId = await getActiveCompanyId();
-    return await prisma.documents_equipment.findMany({
-      where: { applies: vehicleId, vehicles: { company_id: companyId } },
-      include: {
-        document_types: true,
-        vehicles: {
-          include: {
-            type_vehicles_typeTotype: true,
-            types_of_vehicles: true,
-            model_vehicles: true,
-            brand_vehicles: true,
-          },
-        },
-      },
-    });
-  } catch (error) {
-    logger.error('Error al obtener documentos del equipo', { data: { error, vehicleId } });
-    return null;
-  }
-}

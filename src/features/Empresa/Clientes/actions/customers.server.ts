@@ -7,6 +7,7 @@ import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
 import { errorMessage, fail, ok, type ActionResult } from '../lib/action-result';
+import { assertComercialView, requireComercialPermission } from '../lib/require-permission.server';
 import { serializeCustomer, type CustomerRow } from '../lib/serializers';
 import { customerFormSchema, type CustomerFormValues } from '../schemas/customer';
 
@@ -16,6 +17,7 @@ const COMERCIAL_PATH = '/dashboard/comercial';
 
 /** Clientes de la empresa activa ordenados por nombre. */
 export async function getCustomers(): Promise<CustomerRow[]> {
+  await assertComercialView(['customers', 'service']);
   const companyId = await getActiveCompanyId();
   try {
     const rows = await prisma.customers.findMany({
@@ -31,6 +33,7 @@ export async function getCustomers(): Promise<CustomerRow[]> {
 
 /** Un cliente de la empresa activa, o null si no existe / no pertenece. */
 export async function getCustomerById(customerId: string): Promise<CustomerRow | null> {
+  await assertComercialView(['customers', 'detalle-cliente']);
   const companyId = await getActiveCompanyId();
   try {
     const row = await prisma.customers.findFirst({ where: { id: customerId, company_id: companyId } });
@@ -58,7 +61,7 @@ function toCustomerData(values: CustomerFormValues, companyId: string) {
     company_id: companyId,
     // Si el cliente está activo se limpian los campos de baja.
     reason_for_termination: isActive ? null : values.reason_for_termination || null,
-    termination_date: isActive ? null : (values.termination_date ?? null),
+    termination_date: isActive ? null : values.termination_date ?? null,
   };
 }
 
@@ -72,6 +75,12 @@ export async function saveCustomer(
 ): Promise<ActionResult<{ id: string }>> {
   const parsed = customerFormSchema.safeParse(input);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos');
+
+  // Alta exige customers:create; edición, detalle-cliente:update.
+  const permissionError = await (customerId
+    ? requireComercialPermission('detalle-cliente', 'update')
+    : requireComercialPermission('customers', 'create'));
+  if (permissionError) return fail(permissionError);
 
   const companyId = await getActiveCompanyId();
   const data = toCustomerData(parsed.data, companyId);

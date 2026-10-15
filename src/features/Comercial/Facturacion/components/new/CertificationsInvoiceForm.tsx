@@ -18,7 +18,7 @@ import { useMemo, useState, useTransition } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { createInvoiceDraftFromCertifications } from '../../actions/invoice-drafts.server';
+import { createInvoiceDraftFromCertifications } from '../../actions/invoice-drafts-create.server';
 import { getInvoiceableCertifications } from '../../actions/invoices.server';
 import { sumAmounts } from '../../lib/invoice-math';
 import {
@@ -46,7 +46,7 @@ const LINK_CLASS =
 
 function formatPeriod(from: string | null, to: string | null): string {
   if (!from || !to) return '—';
-  return `${moment(from).format('DD/MM/YYYY')}–${moment(to).format('DD/MM/YYYY')}`;
+  return `${moment.utc(from).format('DD/MM/YYYY')}–${moment.utc(to).format('DD/MM/YYYY')}`;
 }
 
 /**
@@ -82,13 +82,16 @@ export function CertificationsInvoiceForm({ customers }: { customers: Customer[]
     return [...byCurrency.entries()].map(([currency, rows]) => ({
       currency,
       rows,
-      subtotal: sumAmounts(rows.map((r) => r.total)),
+      subtotal: rows.every((r) => r.total !== null) ? sumAmounts(rows.map((r) => r.total ?? '0')) : null,
     }));
   }, [certifications]);
 
   const selected = certifications.filter((c) => selectedIds.includes(c.id));
   const selectedCurrency = selected[0]?.currency ?? null;
-  const selectedTotal = selected.length > 0 ? sumAmounts(selected.map((c) => c.total)) : null;
+  const selectedTotal =
+    selected.length > 0 && selected.every((c) => c.total !== null)
+      ? sumAmounts(selected.map((c) => c.total ?? '0'))
+      : null;
   const customer = customers.find((c) => c.id === customerId) ?? null;
 
   const handleCustomerChange = (values: string[]) => {
@@ -117,7 +120,9 @@ export function CertificationsInvoiceForm({ customers }: { customers: Customer[]
         void certificationsQuery.refetch();
         return;
       }
-      toast.success(`Borrador creado con ${countLabel(values.certificationIds.length, 'certificación', 'certificaciones')}.`);
+      toast.success(
+        `Borrador creado con ${countLabel(values.certificationIds.length, 'certificación', 'certificaciones')}.`
+      );
       router.push(invoiceHref(result.data.id));
     });
   };
@@ -127,7 +132,8 @@ export function CertificationsInvoiceForm({ customers }: { customers: Customer[]
       <div className="flex flex-col items-start gap-3 border px-6 py-8">
         <p className="font-medium">No hay certificaciones confirmadas para facturar.</p>
         <p className="text-muted-foreground text-sm text-pretty">
-          Las certificaciones se confirman en Comercial → Certificaciones. Cuando haya alguna confirmada sin facturar, aparece acá.
+          Las certificaciones se confirman en Comercial → Certificaciones. Cuando haya alguna confirmada sin facturar,
+          aparece acá.
         </p>
         <Button asChild variant="outline">
           <Link href={CERTIFICATIONS_TAB_HREF}>Ir a Certificaciones</Link>
@@ -192,7 +198,10 @@ export function CertificationsInvoiceForm({ customers }: { customers: Customer[]
                 <Skeleton className="h-10 w-full" />
               </div>
             ) : certificationsQuery.isError ? (
-              <div role="alert" className="border-destructive/40 text-destructive flex flex-col items-start gap-3 border px-4 py-3 text-sm">
+              <div
+                role="alert"
+                className="border-destructive/40 text-destructive flex flex-col items-start gap-3 border px-4 py-3 text-sm"
+              >
                 <p>No se pudieron cargar las certificaciones. Revisá la conexión y probá de nuevo.</p>
                 <Button type="button" variant="outline" size="sm" onClick={() => void certificationsQuery.refetch()}>
                   <RefreshCw aria-hidden />
@@ -252,7 +261,10 @@ export function CertificationsInvoiceForm({ customers }: { customers: Customer[]
                                   />
                                   <label htmlFor={checkboxId} className="flex min-w-0 cursor-pointer flex-col gap-0.5">
                                     <span className="font-medium tabular-nums">{cert.number}</span>
-                                    <span className="text-muted-foreground truncate text-sm" title={cert.contract ?? undefined}>
+                                    <span
+                                      className="text-muted-foreground truncate text-sm"
+                                      title={cert.contract ?? undefined}
+                                    >
                                       {cert.contract ?? 'Sin contrato'}
                                       {cert.contractNumber ? ` · N° ${cert.contractNumber}` : ''}
                                     </span>

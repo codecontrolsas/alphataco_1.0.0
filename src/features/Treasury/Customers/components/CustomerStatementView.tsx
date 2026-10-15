@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { StateBlock } from '@/shared/components/common/StateBlock';
 import { exportToExcel, type ExcelColumn } from '@/shared/lib/excel-export';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { ArrowLeft, FileSpreadsheet, Plus } from 'lucide-react';
@@ -15,9 +16,9 @@ import { toast } from 'sonner';
 import { getCustomerStatementData, type CustomerStatementData } from '../../actions/customer-statement.server';
 import { formatInCurrency } from '../../lib/currency-format';
 import { TREASURY_QUERY_KEYS } from '../../lib/query-keys';
+import { formatDay } from '../../lib/dates';
 
-const day = (value: string) => moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY');
-const tone = (value: string) => (value.startsWith('-') ? 'text-green-700 dark:text-green-400' : value === '0.00' ? '' : 'text-red-600 dark:text-red-400');
+const tone = (value: string) => (value.startsWith('-') ? 'text-ok' : value === '0.00' ? '' : 'text-danger');
 
 const KIND_LABELS: Record<CustomerStatementData['currencies'][number]['rows'][number]['kind'], string> = {
   INVOICE: 'Factura',
@@ -39,15 +40,16 @@ export function CustomerStatementView({ initial, canCreate }: { initial: Custome
   const validRange = range.from !== '' && range.to !== '' && range.to >= range.from;
   const isInitialRange = range.from === initial.from && range.to === initial.to;
 
-  const { data, isFetching } = useQuery({
+  const { data, isFetching, refetch } = useQuery({
     queryKey: [...TREASURY_QUERY_KEYS.customerStatement, initial.customer.id, range.from, range.to],
     queryFn: () => getCustomerStatementData(initial.customer.id, range.from, range.to),
     initialData: isInitialRange ? initial : undefined,
     enabled: validRange,
     staleTime: 30 * 1000,
   });
-  const statement = data ?? initial;
-  const credit = Object.entries(statement.creditBalance);
+  // Sin `?? initial`: si el rango nuevo falla (o aún carga) no se muestra ni se exporta el rango anterior.
+  const statement = data ?? null;
+  const credit = statement ? Object.entries(statement.creditBalance) : [];
 
   const excel = useMutation({
     mutationFn: async (current: CustomerStatementData) => {
@@ -62,22 +64,22 @@ export function CustomerStatementView({ initial, canCreate }: { initial: Custome
         { key: 'balance', title: 'Saldo', width: 16, formatter: money },
       ];
       const rows = current.currencies.flatMap((c) => [
-        { currency: c.currency, date: day(current.from), kind: '', label: 'Saldo anterior', debit: '', credit: '', balance: c.previous },
+        { currency: c.currency, date: formatDay(current.from), kind: '', label: 'Saldo anterior', debit: '', credit: '', balance: c.previous },
         ...c.rows.map((r) => ({
           currency: c.currency,
-          date: day(r.date),
+          date: formatDay(r.date),
           kind: KIND_LABELS[r.kind],
           label: r.label,
           debit: r.debit === '0.00' ? '' : r.debit,
           credit: r.credit === '0.00' ? '' : r.credit,
           balance: r.balance,
         })),
-        { currency: c.currency, date: day(current.to), kind: '', label: 'Saldo final', debit: '', credit: '', balance: c.closing },
+        { currency: c.currency, date: formatDay(current.to), kind: '', label: 'Saldo final', debit: '', credit: '', balance: c.closing },
       ]);
       await exportToExcel(rows, columns, {
         filename: `Cuenta corriente ${current.customer.name} ${current.from} a ${current.to}`,
         sheetName: 'Cuenta corriente',
-        title: `Cuenta corriente · ${current.customer.name} · ${day(current.from)} a ${day(current.to)}`,
+        title: `Cuenta corriente · ${current.customer.name} · ${formatDay(current.from)} a ${formatDay(current.to)}`,
       });
     },
     onError: () => toast.error('No se pudo exportar el Excel'),
@@ -90,12 +92,12 @@ export function CustomerStatementView({ initial, canCreate }: { initial: Custome
           <Link href="/dashboard/treasury?tab=cobranzas" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:underline">
             <ArrowLeft className="h-4 w-4" /> Cobranzas
           </Link>
-          <h1 className="truncate text-xl font-semibold">{statement.customer.name}</h1>
-          <p className="text-sm text-muted-foreground">CUIT {statement.customer.cuit} · cuenta corriente</p>
+          <h1 className="truncate text-xl font-semibold">{initial.customer.name}</h1>
+          <p className="text-sm text-muted-foreground">CUIT {initial.customer.cuit} · cuenta corriente</p>
         </div>
         {canCreate && (
           <Button asChild size="sm">
-            <Link href={`/dashboard/treasury/receipts/new?customerId=${statement.customer.id}`}>
+            <Link href={`/dashboard/treasury/receipts/new?customerId=${initial.customer.id}`}>
               <Plus className="mr-1 h-4 w-4" />
               Nuevo recibo
             </Link>
@@ -103,11 +105,12 @@ export function CustomerStatementView({ initial, canCreate }: { initial: Custome
         )}
       </div>
 
+      {statement && (
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {statement.currencies.map((c) => (
           <Card key={c.currency}>
             <CardContent className="pt-6">
-              <p className="text-xs text-muted-foreground">Saldo al {day(statement.to)} en {c.currency === 'ARS' ? 'pesos' : c.currency}</p>
+              <p className="text-xs text-muted-foreground">Saldo al {formatDay(statement.to)} en {c.currency === 'ARS' ? 'pesos' : c.currency}</p>
               <p className={`text-lg font-semibold tabular-nums ${tone(c.closing)}`}>{formatInCurrency(c.closing, c.currency)}</p>
             </CardContent>
           </Card>
@@ -127,12 +130,13 @@ export function CustomerStatementView({ initial, canCreate }: { initial: Custome
           </Card>
         )}
       </div>
+      )}
 
       <Card>
         <CardHeader className="flex flex-col gap-3 space-y-0 md:flex-row md:items-end md:justify-between">
           <div className="space-y-1">
             <CardTitle className="text-base">Movimientos</CardTitle>
-            <CardDescription>{isFetching ? 'Actualizando…' : `Del ${day(statement.from)} al ${day(statement.to)}`}</CardDescription>
+            <CardDescription>{isFetching ? 'Actualizando…' : statement ? `Del ${formatDay(statement.from)} al ${formatDay(statement.to)}` : 'Sin datos para el período'}</CardDescription>
           </div>
           <div className="flex flex-wrap items-end gap-2">
             <div className="space-y-1">
@@ -151,18 +155,34 @@ export function CustomerStatementView({ initial, canCreate }: { initial: Custome
                 placeholder="DD/MM/AAAA"
               />
             </div>
-            <Button type="button" variant="outline" size="sm" disabled={excel.isPending} onClick={() => excel.mutate(statement)}>
+            <Button type="button" variant="outline" size="sm" disabled={excel.isPending || isFetching || !statement} onClick={() => statement && excel.mutate(statement)}>
               <FileSpreadsheet className="mr-1 h-4 w-4" />
               Excel
             </Button>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          {!validRange && <p className="text-sm text-red-600 dark:text-red-400">Elegí un período válido: «Hasta» no puede ser anterior a «Desde».</p>}
-          {statement.currencies.length === 0 && <p className="text-sm text-muted-foreground">El cliente no tiene comprobantes ni cobros.</p>}
-          {statement.currencies.map((c) => (
+          {!validRange && <p className="text-sm text-danger">Elegí un período válido: «Hasta» no puede ser anterior a «Desde».</p>}
+          {!statement && validRange && (
+            isFetching ? (
+              <p className="py-6 text-center text-sm text-muted-foreground" aria-busy="true">Cargando el período…</p>
+            ) : (
+              <StateBlock
+              variant="error"
+              title="No se pudo cargar el período"
+              description="La consulta falló o devolvió un período inválido. El Excel queda deshabilitado hasta que carguen los datos."
+              action={
+                <Button type="button" variant="outline" size="sm" onClick={() => refetch()}>
+                  Reintentar
+                </Button>
+              }
+            />
+            )
+          )}
+          {statement && statement.currencies.length === 0 && <p className="text-sm text-muted-foreground">El cliente no tiene comprobantes ni cobros.</p>}
+          {statement?.currencies.map((c) => (
             <div key={c.currency} className="space-y-2">
-              {statement.currencies.length > 1 && <p className="text-sm font-medium">{c.currency === 'ARS' ? 'Pesos' : c.currency}</p>}
+              {(statement?.currencies.length ?? 0) > 1 && <p className="text-sm font-medium">{c.currency === 'ARS' ? 'Pesos' : c.currency}</p>}
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -184,7 +204,7 @@ export function CustomerStatementView({ initial, canCreate }: { initial: Custome
                     </TableRow>
                     {c.rows.map((r) => (
                       <TableRow key={`${r.kind}-${r.id}`}>
-                        <TableCell className="tabular-nums">{day(r.date)}</TableCell>
+                        <TableCell className="tabular-nums">{formatDay(r.date)}</TableCell>
                         <TableCell>{KIND_LABELS[r.kind]}</TableCell>
                         <TableCell>
                           <Link href={r.href} className="underline underline-offset-4">

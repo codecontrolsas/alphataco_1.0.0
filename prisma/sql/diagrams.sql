@@ -1678,9 +1678,13 @@ END;
 $$;
 
 -- ============================================================================
--- TRIGGERS (1)
+-- TRIGGERS (2)
 -- ============================================================================
 
--- trigger trg_employees_diagram_changes ON employees_diagram (origen: supabase/migrations/20251103211302_initial_structure.sql)
-DROP TRIGGER IF EXISTS trg_employees_diagram_changes ON public.employees_diagram;
-CREATE TRIGGER trg_employees_diagram_changes AFTER INSERT OR UPDATE ON public.employees_diagram FOR EACH ROW EXECUTE FUNCTION public.handle_employees_diagram_changes();
+-- trigger trg_employees_diagram_changes_insert ON employees_diagram (origen: prisma/migrations/20261019100100_narrow_trigger_guards)
+DROP TRIGGER IF EXISTS trg_employees_diagram_changes_insert ON public.employees_diagram;
+CREATE TRIGGER trg_employees_diagram_changes_insert AFTER INSERT ON public.employees_diagram FOR EACH ROW EXECUTE FUNCTION public.handle_employees_diagram_changes();
+
+-- trigger trg_employees_diagram_changes_update ON employees_diagram (origen: prisma/migrations/20261019100100_narrow_trigger_guards)
+DROP TRIGGER IF EXISTS trg_employees_diagram_changes_update ON public.employees_diagram;
+CREATE TRIGGER trg_employees_diagram_changes_update AFTER UPDATE OF diagram_type, day, month, year, employee_id ON public.employees_diagram FOR EACH ROW WHEN (OLD.diagram_type IS DISTINCT FROM NEW.diagram_type OR OLD.day IS DISTINCT FROM NEW.day OR OLD.month IS DISTINCT FROM NEW.month OR OLD.year IS DISTINCT FROM NEW.year OR OLD.employee_id IS DISTINCT FROM NEW.employee_id) EXECUTE FUNCTION public.handle_employees_diagram_changes();

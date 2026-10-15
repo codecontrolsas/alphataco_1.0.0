@@ -1,11 +1,8 @@
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatMoney } from '@/features/Warehouses/lib/format';
-import moment from 'moment';
 import Link from 'next/link';
-import type { PaymentOrderDetail } from '../../actions/payment-orders.server';
+import type { PaymentOrderDetail } from '../../lib/payment-query-types';
 import type { TreasuryAccountRow } from '@/features/Treasury/actions/accounts.server';
 import { HistoryCard } from '../../components/HistoryCard';
 import { OWN_CHECK_STATUS_LABELS } from '@/features/Treasury/lib/own-check-transitions';
@@ -13,17 +10,13 @@ import { PAYMENT_METHOD_LABELS } from '../../schemas/payment-orders';
 import { WITHHOLDING_TAX_LABELS } from '../../schemas/payment-settings';
 import { PaymentOrderActions } from './PaymentOrderActions';
 import { PaymentOrderStatusBadge } from './PaymentOrderStatusBadge';
+import { AttentionBanner } from '@/features/Mantenimiento/shared/components/AttentionBanner';
+import { Field, FieldGrid } from '@/shared/components/common/FieldGrid';
+import { RecordHeader } from '@/shared/components/common/RecordHeader';
+import { SectionCard } from '@/shared/components/common/SectionCard';
+import { formatDateAr } from '@/shared/lib/argentina-time';
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="text-sm">{children}</dd>
-    </div>
-  );
-}
-
-const day = (value: string | null) => (value ? moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY') : '—');
+const day = (value: string | null) => (value ? formatDateAr(value) : '—');
 
 const KIND_LABELS = {
   INVOICE: 'Comprobante',
@@ -38,30 +31,26 @@ export function PaymentOrderDetailView({ order, accounts }: { order: PaymentOrde
   const t = order.totals;
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="font-mono text-2xl font-semibold">{order.number}</h1>
-        <PaymentOrderStatusBadge status={order.status} />
-        <div className="w-full sm:ml-auto sm:w-auto">
-          <PaymentOrderActions order={order} accounts={accounts} />
-        </div>
-      </div>
+      <RecordHeader
+        identity={
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="font-mono text-2xl font-semibold">{order.number}</h1>
+            <PaymentOrderStatusBadge status={order.status} />
+          </div>
+        }
+        actions={<PaymentOrderActions order={order} accounts={accounts} />}
+      />
 
       {order.rejectionNotes && (
-        <Alert className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-          <AlertTitle>Rechazada</AlertTitle>
-          <AlertDescription className="whitespace-pre-wrap">{order.rejectionNotes}</AlertDescription>
-        </Alert>
+        <AttentionBanner tone="warn" title="Rechazada" description={<span className="whitespace-pre-wrap">{order.rejectionNotes}</span>} />
       )}
       {order.status === 'CANCELLED' && order.cancelReason && (
-        <Alert variant="destructive">
-          <AlertTitle>Anulada</AlertTitle>
-          <AlertDescription className="whitespace-pre-wrap">{order.cancelReason}</AlertDescription>
-        </Alert>
+        <AttentionBanner tone="danger" title="Anulada" description={<span className="whitespace-pre-wrap">{order.cancelReason}</span>} />
       )}
 
-      <Card>
-        <CardContent className="pt-6">
-          <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <SectionCard title="Datos de la orden">
+        <div>
+          <FieldGrid>
             <Field label="Proveedor">
               <Link href={`/dashboard/purchases/suppliers/${order.supplier.id}`} className="hover:underline">
                 {order.supplier.name}
@@ -73,16 +62,12 @@ export function PaymentOrderDetailView({ order, accounts }: { order: PaymentOrde
             <Field label="Neto a pagar">
               <span className="text-base font-semibold tabular-nums">{formatMoney(t.netTotal)}</span>
             </Field>
-          </dl>
+          </FieldGrid>
           {order.notes && <p className="mt-4 whitespace-pre-wrap text-sm text-muted-foreground">{order.notes}</p>}
-        </CardContent>
-      </Card>
+        </div>
+      </SectionCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Qué se paga</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <SectionCard title="Qué se paga">
           <div className="overflow-x-auto">
             <Table className="min-w-[520px]">
               <TableHeader>
@@ -126,7 +111,7 @@ export function PaymentOrderDetailView({ order, accounts }: { order: PaymentOrde
                         )}
                       </TableCell>
                       <TableCell>{l.invoice ? day(l.invoice.dueDate) : '—'}</TableCell>
-                      <TableCell className={`text-right tabular-nums ${subtracts ? 'text-red-600 dark:text-red-400' : ''}`}>
+                      <TableCell className={`text-right tabular-nums ${subtracts ? 'text-danger-subtle-foreground' : ''}`}>
                         {subtracts ? '−' : ''}
                         {formatMoney(l.amount)}
                       </TableCell>
@@ -156,14 +141,10 @@ export function PaymentOrderDetailView({ order, accounts }: { order: PaymentOrde
             <dt className="text-base font-semibold">Neto a pagar</dt>
             <dd className="text-right text-base font-semibold">{formatMoney(t.netTotal)}</dd>
           </dl>
-        </CardContent>
-      </Card>
+      </SectionCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Retenciones</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
+      <SectionCard title="Retenciones">
+        <div className="space-y-2">
           {order.withholdings.length === 0 ? (
             <p className="text-sm text-muted-foreground">No se practicaron retenciones.</p>
           ) : (
@@ -176,7 +157,7 @@ export function PaymentOrderDetailView({ order, accounts }: { order: PaymentOrde
                   </span>
                   {w.certificateNumber && <span className="font-mono text-xs">{w.certificateNumber}</span>}
                   {w.cancelled && <span className="text-xs text-destructive">Anulado</span>}
-                  {w.manual && <span className="rounded bg-amber-100 px-1.5 text-xs text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">corregida</span>}
+                  {w.manual && <span className="rounded bg-warn-subtle px-1.5 text-xs text-warn-subtle-foreground">corregida</span>}
                   <span className="ml-auto font-medium tabular-nums">{formatMoney(w.amount)}</span>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">{w.detail}</p>
@@ -186,15 +167,11 @@ export function PaymentOrderDetailView({ order, accounts }: { order: PaymentOrde
           {order.status === 'PAID' && order.withholdings.length > 0 && (
             <p className="text-xs text-muted-foreground">Los certificados van en el PDF de la orden, uno por hoja.</p>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </SectionCard>
 
       {order.payments.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Medios de pago</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <SectionCard title="Medios de pago">
             <ul className="divide-y">
               {order.payments.map((p) => (
                 <li key={p.id} className="flex flex-wrap items-center gap-3 py-2 text-sm">
@@ -233,8 +210,7 @@ export function PaymentOrderDetailView({ order, accounts }: { order: PaymentOrde
                 </li>
               ))}
             </ul>
-          </CardContent>
-        </Card>
+        </SectionCard>
       )}
 
       <HistoryCard history={order.history} />

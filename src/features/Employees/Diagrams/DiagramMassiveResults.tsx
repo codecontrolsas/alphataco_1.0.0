@@ -2,12 +2,13 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Logger } from '@/lib/logger';
-import { CheckCircle2, Download, RefreshCw, RotateCcw } from 'lucide-react';
+import { MetricCard } from '@/shared/components/common/MetricCard';
+import { argentinaDate, formatArgentinaDateTime } from '@/shared/lib/argentina-time';
+import { ChevronDown, Download, RotateCcw } from 'lucide-react';
 import moment from 'moment';
+import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import type {
@@ -72,7 +73,7 @@ export function DiagramMassiveResults({ results, onStartOver }: Props) {
   const details = getDetails();
 
   const generateTxtReport = () => {
-    const timestamp = new Date().toLocaleString('es-ES');
+    const timestamp = formatArgentinaDateTime(new Date());
 
     let report = `REPORTE DE CARGA MASIVA\n`;
     report += `Fecha y Hora: ${timestamp}\n`;
@@ -138,7 +139,7 @@ export function DiagramMassiveResults({ results, onStartOver }: Props) {
 
       const a = document.createElement('a');
       a.href = url;
-      a.download = `reporte-diagramas-masivos-${new Date().toISOString().split('T')[0]}.txt`;
+      a.download = `reporte-diagramas-masivos-${argentinaDate()}.txt`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -153,259 +154,172 @@ export function DiagramMassiveResults({ results, onStartOver }: Props) {
     }
   };
 
-  const getSuccessRate = () => {
-    const summary = getSummary();
-    const successfulRecords = summary.total_created + summary.total_updated;
-    return summary.total_processed > 0 ? Math.round((successfulRecords / summary.total_processed) * 100) : 0;
-  };
-
   const summary = getSummary();
 
   return (
-    <div className="space-y-6">
-      {/* Header con estado general */}
-      <div className="text-center">
-        <div className="flex items-center justify-center space-x-2 mb-2">
-          {getSummary().total_errors === 0 ? (
-            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-              <CheckCircle2 className="w-8 h-8 text-green-600" />
-            </div>
-          ) : (
-            <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
-              <CheckCircle2 className="w-8 h-8 text-yellow-600" />
-            </div>
-          )}
-        </div>
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">Operación Completada</h2>
-      </div>
-
-      {/* Resumen visual con métricas */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Resumen de Resultados</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
-              <div className="text-3xl font-bold text-green-600">{summary.total_created}</div>
-              <div className="text-sm text-green-700 font-medium">Creados</div>
-              <div className="text-xs text-green-600 mt-1">Nuevos registros</div>
-            </div>
-
-            <div className="text-center p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <div className="text-3xl font-bold text-blue-600">{summary.total_updated}</div>
-              <div className="text-sm text-blue-700 font-medium">Actualizados</div>
-              <div className="text-xs text-blue-600 mt-1">Registros modificados</div>
-            </div>
-
-            <div className="text-center p-4 bg-red-50 rounded-lg border border-red-200">
-              <div className="text-3xl font-bold text-red-600">{summary.total_errors}</div>
-              <div className="text-sm text-red-700 font-medium">Errores</div>
-              <div className="text-xs text-red-600 mt-1">Registros fallidos</div>
-            </div>
-
-            <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <div className="text-3xl font-bold text-gray-600">{summary.total_processed}</div>
-              <div className="text-sm text-gray-700 font-medium">Total</div>
-              <div className="text-xs text-gray-600 mt-1">Registros procesados</div>
-            </div>
-
-            {/* {results.processing_time && (
-              <div className="mt-4 text-center text-sm text-muted-foreground">
-                Tiempo de procesamiento: {results.processing_time.toFixed(2)} segundos
-              </div>
-            )} */}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Detalles por categoría */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Detalles de la Operación</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Tabs defaultValue="created" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 m-4 mb-0">
-              <TabsTrigger value="created" className="flex items-center space-x-2">
-                <span>Creados</span>
-                <Badge variant="secondary">{details.created_records.length}</Badge>
-              </TabsTrigger>
-              <TabsTrigger value="updated" className="flex items-center space-x-2">
-                <span>Actualizados</span>
-                <Badge variant="secondary">{details.updated_records.length}</Badge>
-              </TabsTrigger>
-              <TabsTrigger value="errors" className="flex items-center space-x-2">
-                <span>Errores</span>
-                <Badge variant="secondary">{details.error_records.length}</Badge>
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="created" className="mt-4">
-              {details.created_records && details.created_records.length > 0 ? (
-                <div className="max-h-80 overflow-y-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Empleado</TableHead>
-                        <TableHead>Fecha</TableHead>
-                        <TableHead>Novedad</TableHead>
-                        <TableHead>Estado</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {details.created_records.map((record, index) => (
-                        <TableRow key={index}>
-                          <TableCell className="font-medium">{record.employee_name || record.employee_id}</TableCell>
-                          <TableCell>{moment(record.date).format('DD/MM/YYYY')}</TableCell>
-                          <TableCell>
-                            {record.novelty_name ? (
-                              <Badge
-                                variant="outline"
-                                className="text-white border-0"
-                                style={{ backgroundColor: record.novelty_color || '#6b7280' }}
-                              >
-                                {record.novelty_name}
-                              </Badge>
-                            ) : (
-                              <span className="text-muted-foreground text-sm">N/A</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary" className="bg-green-100 text-green-700 flex items-center">
-                              <CheckCircle2 className="w-4 h-4 mr-1" />
-                              Creado
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              ) : (
-                <div className="p-8 text-center text-muted-foreground">No se crearon nuevos registros</div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="updated" className="mt-4">
-              {details.updated_records && details.updated_records.length > 0 ? (
-                <div className="max-h-80 overflow-y-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Empleado</TableHead>
-                        <TableHead>Fecha</TableHead>
-                        <TableHead>Novedad Anterior</TableHead>
-                        <TableHead>Novedad Nueva</TableHead>
-                        <TableHead>Estado</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {details.updated_records.map((record, index) => (
-                        <TableRow key={index}>
-                          <TableCell className="font-medium">{record.employee_name || record.employee_id}</TableCell>
-                          <TableCell>{moment(record.date).format('DD/MM/YYYY')}</TableCell>
-                          <TableCell>
-                            {record.previous_novelty_name ? (
-                              <Badge
-                                variant="outline"
-                                className="text-white border-0"
-                                style={{ backgroundColor: record.previous_novelty_color || '#6b7280' }}
-                              >
-                                {record.previous_novelty_name}
-                              </Badge>
-                            ) : (
-                              <span className="text-muted-foreground text-sm">N/A</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {record.novelty_name ? (
-                              <Badge
-                                variant="outline"
-                                className="text-white border-0"
-                                style={{ backgroundColor: record.novelty_color || '#6b7280' }}
-                              >
-                                {record.novelty_name}
-                              </Badge>
-                            ) : (
-                              <span className="text-muted-foreground text-sm">N/A</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary" className="bg-blue-100 text-blue-700 flex items-center">
-                              <RefreshCw className="w-4 h-4 mr-1" />
-                              Actualizado
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              ) : (
-                <div className="p-8 text-center text-muted-foreground">No se actualizaron registros</div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="errors" className="mt-4">
-              {details.error_records && details.error_records.length > 0 ? (
-                <div className="max-h-80 overflow-y-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Empleado</TableHead>
-                        <TableHead>Fecha</TableHead>
-                        <TableHead>Tipo de Error</TableHead>
-                        <TableHead>Descripción</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {details.error_records.map((record, index) => (
-                        <TableRow key={index} className="bg-red-25">
-                          <TableCell className="font-medium">{record.employee_name}</TableCell>
-                          <TableCell>{record.date ? moment(record.date).format('DD/MM/YYYY') : 'N/A'}</TableCell>
-                          <TableCell>
-                            <Badge variant="destructive">{record.error_type}</Badge>
-                          </TableCell>
-                          <TableCell className="text-sm text-red-600">{record.error_message}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              ) : (
-                <div className="p-8 text-center text-muted-foreground">No se encontraron errores</div>
-              )}
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
-
-      {/* Botones de acción */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <Button
-          onClick={downloadReport}
-          disabled={downloading}
-          className="flex-1 flex items-center justify-center space-x-2"
-          variant="outline"
-        >
-          <Download className="w-4 h-4" />
-          <span>{downloading ? 'Descargando...' : 'Descargar Reporte TXT'}</span>
-        </Button>
-
-        <Button onClick={onStartOver} className="flex-1 flex items-center justify-center space-x-2">
-          <RotateCcw className="w-4 h-4" />
-          <span>Nueva Carga Masiva</span>
-        </Button>
-      </div>
-
-      {/* Nota informativa */}
-      <div className="text-sm text-muted-foreground text-center bg-gray-50 p-4 rounded-lg">
-        <p>
-          <strong>Nota:</strong> El reporte TXT contiene todos los detalles de la operación incluyendo empleados, fechas
-          y tipos de error específicos para revisión manual.
+    <div className="flex min-w-0 flex-col gap-5">
+      <div role="status" className="space-y-1">
+        <h3 className="text-lg font-semibold">Carga terminada</h3>
+        <p className="text-muted-foreground text-sm">
+          {summary.total_errors === 0
+            ? `Se procesaron ${summary.total_processed} ${summary.total_processed === 1 ? 'día' : 'días'} sin errores.`
+            : `Se procesaron ${summary.total_processed} ${summary.total_processed === 1 ? 'día' : 'días'}; ${summary.total_errors} con error.`}
         </p>
       </div>
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <MetricCard label="Creados" value={summary.total_created} hint="Novedades nuevas" tone="ok" />
+        <MetricCard label="Actualizados" value={summary.total_updated} hint="Reemplazaron otra novedad" tone="brand" />
+        <MetricCard
+          label="Con error"
+          value={summary.total_errors}
+          hint="No se cargaron"
+          tone={summary.total_errors > 0 ? 'danger' : 'default'}
+        />
+        <MetricCard label="Procesados" value={summary.total_processed} hint="Días evaluados" />
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <ResultGroup
+          title="Con error"
+          count={details.error_records.length}
+          defaultOpen={details.error_records.length > 0}
+        >
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Empleado</TableHead>
+                <TableHead>Fecha</TableHead>
+                <TableHead>Tipo de error</TableHead>
+                <TableHead>Descripción</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {details.error_records.map((record, index) => (
+                <TableRow key={index}>
+                  <TableCell className="font-medium">{record.employee_name}</TableCell>
+                  <TableCell className="font-mono tabular-nums">
+                    {record.date ? moment(record.date).format('DD/MM/YYYY') : '—'}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="destructive">{record.error_type}</Badge>
+                  </TableCell>
+                  <TableCell className="text-danger-subtle-foreground text-sm">{record.error_message}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </ResultGroup>
+
+        <ResultGroup title="Creados" count={details.created_records.length}>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Empleado</TableHead>
+                <TableHead>Fecha</TableHead>
+                <TableHead>Novedad</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {details.created_records.map((record, index) => (
+                <TableRow key={index}>
+                  <TableCell className="font-medium">{record.employee_name || record.employee_id}</TableCell>
+                  <TableCell className="font-mono tabular-nums">{moment(record.date).format('DD/MM/YYYY')}</TableCell>
+                  <TableCell>
+                    <NoveltyBadge name={record.novelty_name} color={record.novelty_color} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </ResultGroup>
+
+        <ResultGroup title="Actualizados" count={details.updated_records.length}>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Empleado</TableHead>
+                <TableHead>Fecha</TableHead>
+                <TableHead>Antes</TableHead>
+                <TableHead>Ahora</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {details.updated_records.map((record, index) => (
+                <TableRow key={index}>
+                  <TableCell className="font-medium">{record.employee_name || record.employee_id}</TableCell>
+                  <TableCell className="font-mono tabular-nums">{moment(record.date).format('DD/MM/YYYY')}</TableCell>
+                  <TableCell>
+                    <NoveltyBadge name={record.previous_novelty_name} color={record.previous_novelty_color} />
+                  </TableCell>
+                  <TableCell>
+                    <NoveltyBadge name={record.novelty_name} color={record.novelty_color} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </ResultGroup>
+      </div>
+
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button type="button" variant="outline" className="min-h-10" onClick={downloadReport} disabled={downloading}>
+          <Download aria-hidden="true" className="size-4" />
+          {downloading ? 'Descargando…' : 'Descargar reporte (.txt)'}
+        </Button>
+        <Button type="button" variant="brand" className="min-h-10" onClick={onStartOver}>
+          <RotateCcw aria-hidden="true" className="size-4" />
+          Nueva carga
+        </Button>
+      </div>
     </div>
+  );
+}
+
+/** Grupo plegable de resultados; sin filas no se puede abrir. */
+function ResultGroup({
+  title,
+  count,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  count: number;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  if (count === 0) {
+    return (
+      <div className="text-muted-foreground flex min-h-11 items-center justify-between rounded-lg border px-4 text-sm">
+        <span>{title}</span>
+        <span className="tabular-nums">0</span>
+      </div>
+    );
+  }
+
+  return (
+    <details open={defaultOpen} className="group rounded-lg border">
+      <summary className="focus-visible:ring-ring flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-4 text-sm font-medium outline-none focus-visible:ring-2 [&::-webkit-details-marker]:hidden">
+        <span>{title}</span>
+        <span className="flex items-center gap-2">
+          <span className="tabular-nums">{count}</span>
+          <ChevronDown aria-hidden="true" className="size-4 transition-transform group-open:rotate-180" />
+        </span>
+      </summary>
+      <div className="max-h-80 overflow-auto border-t">{children}</div>
+    </details>
+  );
+}
+
+function NoveltyBadge({ name, color }: { name?: string | null; color?: string | null }) {
+  if (!name) return <span className="text-muted-foreground text-sm">—</span>;
+  return (
+    <Badge
+      variant="outline"
+      className="border-0 text-white"
+      style={{ backgroundColor: color || 'var(--muted-foreground)' }}
+    >
+      {name}
+    </Badge>
   );
 }

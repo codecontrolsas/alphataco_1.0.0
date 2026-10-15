@@ -8,5 +8,5 @@ interface SolicitudesMantenimientoTabContentProps {
 export async function SolicitudesMantenimientoTabContent({
   searchParams = {},
 }: SolicitudesMantenimientoTabContentProps) {
-  return <MaintenanceRequestList searchParams={searchParams} canApproveReject />;
+  return <MaintenanceRequestList searchParams={searchParams} />;
 }

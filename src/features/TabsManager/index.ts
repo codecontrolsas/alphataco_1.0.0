@@ -9,11 +9,13 @@ export { SectionManagerServer } from './SectionManagerServer';
 export { TabsManagerClient } from './TabsManagerClient';
 export { TabsManagerClientSide } from './TabsManagerClientSide';
 export { TabsManagerServer } from './TabsManagerServer';
-export { TabsManagerServerWithPermissions } from './TabsManagerServerWithPermissions';
+export { ViewManagerServer } from './ViewManagerServer';
 export type {
   SectionManagerServerProps,
   TabDefinition,
   TabsManagerClientProps,
   TabsManagerServerProps,
   TabsManagerVariant,
+  ViewDefinition,
+  ViewManagerServerProps,
 } from './types';

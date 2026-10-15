@@ -77,11 +77,12 @@ function SortableSectorCard({ entry, index, totalCount, sectorCounts, onReorder 
       <div className="flex items-center gap-2 shrink-0">
         <button
           type="button"
-          className="cursor-grab active:cursor-grabbing touch-none p-0.5 rounded hover:bg-muted"
+          className="cursor-grab active:cursor-grabbing touch-none p-0.5 rounded hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={`Arrastrar ${entry.sectorName} para reordenar`}
           {...attributes}
           {...listeners}
         >
-          <GripVertical className="h-4 w-4 text-muted-foreground" />
+          <GripVertical className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         </button>
         <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm border border-primary/20">
           {entry.sequenceOrder}
@@ -102,24 +103,26 @@ function SortableSectorCard({ entry, index, totalCount, sectorCounts, onReorder 
       </Badge>
 
       {/* Reorder buttons (keyboard/accessibility alternative) */}
-      <div className="flex flex-col gap-0.5 shrink-0">
-        <Button
+      <div className="flex shrink-0 flex-col gap-0.5">
+        <Button type="button"
           variant="ghost"
           size="icon"
           className="h-6 w-6"
           disabled={index === 0}
+          aria-label={`Subir ${entry.sectorName}`}
           onClick={() => onReorder(entry.sectorId, 'up')}
         >
-          <ArrowUp className="h-3.5 w-3.5" />
+          <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
-        <Button
+        <Button type="button"
           variant="ghost"
           size="icon"
           className="h-6 w-6"
           disabled={index === totalCount - 1}
+          aria-label={`Bajar ${entry.sectorName}`}
           onClick={() => onReorder(entry.sectorId, 'down')}
         >
-          <ArrowDown className="h-3.5 w-3.5" />
+          <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
       </div>
     </div>

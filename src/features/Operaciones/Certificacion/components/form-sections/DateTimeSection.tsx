@@ -1,17 +1,15 @@
-import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
+import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { CalendarIcon } from 'lucide-react';
+import moment from 'moment';
+import 'moment/locale/es';
 import type { UseFormReturn } from 'react-hook-form';
+import type { DailyReportRowFormValues } from '../form-types';
 
 type DateTimeSectionProps = {
-  form: UseFormReturn<any>;
+  form: UseFormReturn<DailyReportRowFormValues>;
   isCreating: boolean;
   disabled?: boolean;
 };
@@ -41,33 +39,13 @@ export function DateTimeSection({ form, isCreating, disabled }: DateTimeSectionP
             render={({ field }) => (
               <FormItem className="flex flex-col">
                 <FormLabel>Fecha del Parte Diario *</FormLabel>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <FormControl>
-                      <Button
-                        variant="outline"
-                        className={cn('w-full pl-3 text-left font-normal', !field.value && 'text-muted-foreground')}
-                      >
-                        {field.value ? format(field.value, 'PPP', { locale: es }) : <span>Seleccione una fecha</span>}
-                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                      </Button>
-                    </FormControl>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={field.value}
-                      onSelect={field.onChange}
-                      disabled={(date) => {
-                        // Deshabilitar desde hoy en adelante
-                        const today = new Date();
-                        today.setHours(0, 0, 0, 0);
-                        return date >= today;
-                      }}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
+                <FormControl>
+                  <EnhancedDatePicker
+                    date={field.value}
+                    setDate={field.onChange}
+                    maxDate={moment().subtract(1, 'day').startOf('day').toDate()}
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}

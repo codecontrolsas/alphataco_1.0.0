@@ -10,8 +10,20 @@ import {
   parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
+import { fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { withCompany } from '@/shared/lib/prisma-tenant';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { nameActiveCreateSchema, nameActiveUpdateSchema } from '../../lib/catalog-input-schemas';
+import {
+  CATALOG_EXPORT_MAX_ROWS,
+  buildIsActiveWhere,
+  catalogExportFailure,
+  catalogTooLargeMessage,
+} from '../../lib/catalog-table.server';
+import { requireConfigTabPermission } from '../../lib/config-access.server';
 
 // ============================================================================
 // LOGGER
@@ -29,54 +41,38 @@ const VALID_SORT_FIELDS = new Set(['name', 'is_active', 'created_at']);
 // WHERE BUILDER — DRY helper compartido por paginated, export y facets
 // ============================================================================
 
-function buildWhereClause(state: ReturnType<typeof parseSearchParams>) {
-  const searchWhere = buildSearchWhere(state.search, ['name']);
+/** Claves de filtro que esta tabla realmente usa; el resto de la URL se descarta antes de armar el where. */
+const ALLOWED_FILTER_KEYS = new Set(['is_active', 'name', ...dateRangeKeys(['created_at'])]);
 
-  // is_active es booleano nullable — viene como string 'true'/'false'/NULL_FILTER_VALUE desde URL
-  // Se maneja manualmente: buildFiltersWhere es para enums/FK string, no para booleanos
-  const isActiveValues = state.filters['is_active'];
-  const isActiveFilter: Record<string, unknown> = {};
-  if (isActiveValues?.length === 1) {
-    // Un solo valor seleccionado
-    if (isActiveValues[0] === NULL_FILTER_VALUE) {
-      isActiveFilter.is_active = null;
-    } else {
-      isActiveFilter.is_active = isActiveValues[0] === 'true';
-    }
-  } else if (isActiveValues && isActiveValues.length > 1) {
-    // Múltiples valores: construir OR con Prisma
-    const conditions: Array<{ is_active: boolean | null }> = [];
-    for (const v of isActiveValues) {
-      if (v === NULL_FILTER_VALUE) conditions.push({ is_active: null });
-      else conditions.push({ is_active: v === 'true' });
-    }
-    isActiveFilter.OR = conditions;
-  }
-
-  // Filtros de texto libre por columna
-  const textFiltersWhere = buildTextFiltersWhere(state.filters, ['name']);
-
-  // Filtros de rango de fecha
-  const dateFiltersWhere = buildDateRangeFiltersWhere(state.filters, ['created_at']);
-
-  return {
-    ...searchWhere,
-    ...isActiveFilter,
-    ...textFiltersWhere,
-    ...dateFiltersWhere,
-  };
+function parseState(searchParams: DataTableSearchParams | undefined) {
+  return sanitizeFilters(parseSearchParams(searchParams ?? {}), ALLOWED_FILTER_KEYS);
 }
+
+function buildWhereClause(state: ReturnType<typeof parseState>, companyId: string) {
+  return withCompany(
+    {
+      // La búsqueda y el filtro de estado pueden traer un OR cada uno: van en AND para que no se pisen.
+      AND: [buildSearchWhere(state.search, ['name']), buildIsActiveWhere(state.filters['is_active'])],
+      ...buildTextFiltersWhere(state.filters, ['name']),
+      ...buildDateRangeFiltersWhere(state.filters, ['created_at']),
+    },
+    companyId
+  );
+}
+
+const LIST_SELECT = { id: true, name: true, is_active: true, created_at: true } as const;
 
 // ============================================================================
 // QUERY PAGINADA
 // ============================================================================
 
 export async function getCostCentersPaginated(searchParams: DataTableSearchParams) {
+  await requireConfigTabPermission('cost-center', 'view');
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseState(searchParams);
     const { skip, take } = stateToPrismaParams(state);
 
-    const where = buildWhereClause(state);
+    const where = buildWhereClause(state, await getActiveCompanyId());
 
     // Resolución de multi-sort
     const resolvedSorts: Array<Record<string, unknown>> = [];
@@ -94,12 +90,7 @@ export async function getCostCentersPaginated(searchParams: DataTableSearchParam
         take,
         orderBy: safeOrderBy,
         where,
-        select: {
-          id: true,
-          name: true,
-          is_active: true,
-          created_at: true,
-        },
+        select: LIST_SELECT,
       }),
       prisma.cost_center.count({ where }),
     ]);
@@ -115,10 +106,14 @@ export async function getCostCentersPaginated(searchParams: DataTableSearchParam
 // EXPORT COMPLETO — sin skip/take, mismos filtros
 // ============================================================================
 
-export async function getAllCostCentersForExport(searchParams: DataTableSearchParams) {
+export async function getAllCostCentersForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<CostCenterListItem[]>> {
+  await requireConfigTabPermission('cost-center', 'view');
   try {
-    const state = parseSearchParams(searchParams);
-    const where = buildWhereClause(state);
+    const state = parseState(searchParams);
+    const companyId = await getActiveCompanyId();
+    const where = buildWhereClause(state, companyId);
 
     const resolvedSorts: Array<Record<string, unknown>> = [];
     for (const s of state.sorting) {
@@ -126,21 +121,24 @@ export async function getAllCostCentersForExport(searchParams: DataTableSearchPa
         resolvedSorts.push({ [s.id]: s.desc ? 'desc' : 'asc' });
       }
     }
-    const safeOrderBy = [{ is_active: 'desc' as const }, ...resolvedSorts, { name: 'asc' as const }];
+    const safeOrderBy = [
+      { is_active: 'desc' as const },
+      ...resolvedSorts,
+      { name: 'asc' as const },
+      { id: 'asc' as const },
+    ];
 
-    return await prisma.cost_center.findMany({
-      where,
-      orderBy: safeOrderBy,
-      select: {
-        id: true,
-        name: true,
-        is_active: true,
-        created_at: true,
-      },
+    const rows = await fetchExportRowsInBatches({
+      maxRows: CATALOG_EXPORT_MAX_ROWS,
+      listIds: (take) => prisma.cost_center.findMany({ where, orderBy: safeOrderBy, select: { id: true }, take }),
+      fetchByIds: (ids) =>
+        prisma.cost_center.findMany({ where: { id: { in: ids }, company_id: companyId }, select: LIST_SELECT }),
+      tooLargeMessage: catalogTooLargeMessage('centros de costo'),
     });
+    return { ok: true, data: rows };
   } catch (error) {
     logger.error('Error al exportar centros de costo', { data: { error } });
-    throw new Error('No se pudo exportar la lista. Intente nuevamente.');
+    return catalogExportFailure(error, 'la lista de centros de costo');
   }
 }
 
@@ -156,8 +154,9 @@ export async function getCostCenterSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
 ): Promise<FacetResult | null> {
+  await requireConfigTabPermission('cost-center', 'view');
   try {
-    const state = searchParams ? parseSearchParams(searchParams) : parseSearchParams({});
+    const state = parseState(searchParams);
 
     // crossWhere: aplica todos los filtros EXCEPTO el de la columna propia
     const crossState = {
@@ -166,7 +165,7 @@ export async function getCostCenterSingleFacet(
     };
     delete crossState.filters[columnId];
 
-    const crossWhere = buildWhereClause(crossState);
+    const crossWhere = buildWhereClause(crossState, await getActiveCompanyId());
 
     switch (columnId) {
       case 'is_active': {
@@ -178,12 +177,8 @@ export async function getCostCenterSingleFacet(
 
         const counts = new Map<string, number>();
         for (const r of rows) {
-          counts.set(String(r.is_active), r._count);
-        }
-        // is_active es Boolean? (nullable), manejar null como NULL_FILTER_VALUE
-        const nullRow = rows.find((r) => r.is_active === null);
-        if (nullRow) {
-          counts.set(NULL_FILTER_VALUE, nullRow._count);
+          // is_active es Boolean? (nullable): el null se cuenta bajo NULL_FILTER_VALUE
+          counts.set(r.is_active === null ? NULL_FILTER_VALUE : String(r.is_active), r._count);
         }
 
         return {
@@ -210,6 +205,8 @@ export async function getCostCenterSingleFacet(
 // ============================================================================
 
 export async function createCostCenterPrisma(data: { name: string; is_active: boolean }) {
+  await requireConfigTabPermission('cost-center', 'create');
+  data = nameActiveCreateSchema.parse(data);
   try {
     const result = await prisma.cost_center.create({
       data: {
@@ -227,10 +224,15 @@ export async function createCostCenterPrisma(data: { name: string; is_active: bo
 }
 
 export async function updateCostCenterPrisma(data: { id: string; name: string; is_active: boolean }) {
+  await requireConfigTabPermission('cost-center', 'update');
+  data = nameActiveUpdateSchema.parse(data);
   try {
     // Perímetro sin RLS: sólo filas de la empresa activa.
     const companyId = await getActiveCompanyId();
-    const owned = await prisma.cost_center.findFirst({ where: { id: data.id, company_id: companyId }, select: { id: true } });
+    const owned = await prisma.cost_center.findFirst({
+      where: { id: data.id, company_id: companyId },
+      select: { id: true },
+    });
     if (!owned) throw new Error('No encontrado en la empresa activa');
     const result = await prisma.cost_center.update({
       where: { id: data.id },

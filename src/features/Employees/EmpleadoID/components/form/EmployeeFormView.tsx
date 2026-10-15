@@ -9,20 +9,36 @@ import { SectionCard } from '@/shared/components/common/SectionCard';
 import { SplitLayout } from '@/shared/components/common/SplitLayout';
 import { useRefreshAndWait } from '@/shared/hooks/useRefreshAndWait';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { ContactDataFields } from '../../../shared/forms/ContactDataFields';
 import { PersonalDataFields } from '../../../shared/forms/PersonalDataFields';
 import type { EmployeeDetailData } from '../../actions.server';
 import { createEmployee, updateEmployee } from '../../actions.server';
+import { diffIds } from '../../lib/employee-deltas';
 import { EMPLOYEE_FORM_SECTIONS, REQUIRED_EMPLOYEE_FIELDS, buildEmployeeDefaultValues } from '../../lib/employee-form';
 import { employeeFormSchema, type EmployeeFormData } from '../../schemas/employee-schema';
 import { EmployeeWorkDataForm } from '../forms/employee-work-data-form';
+import { PendingRemovalsNotice } from './PendingRemovalsNotice';
 
 const logger = new Logger('EmployeeFormView');
+
+/** Resumen del guardado con los números reales que devolvió el servidor (`{added, removed}`). */
+function describeSavedChanges(result: unknown): string {
+  if (typeof result === 'object' && result !== null && 'removed' in result && 'added' in result) {
+    const { added, removed } = result;
+    if (typeof added === 'number' && typeof removed === 'number' && (added > 0 || removed > 0)) {
+      return `Cambios guardados. Relaciones: ${added} ${added === 1 ? 'alta' : 'altas'}, ${removed} ${
+        removed === 1 ? 'baja' : 'bajas'
+      }.`;
+    }
+  }
+  return 'Cambios guardados';
+}
 
 interface EmployeeFormViewProps {
   /** `null` en un alta. */
@@ -38,6 +54,7 @@ interface EmployeeFormViewProps {
  */
 export function EmployeeFormView({ employee, mode, onClose }: EmployeeFormViewProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { canView } = usePermissions();
   // Mismo criterio que la lectura: sin permiso sobre contacto, esa sección no se ofrece.
   const showContact = canView('empleados', 'datos-contacto');
@@ -50,31 +67,63 @@ export function EmployeeFormView({ employee, mode, onClose }: EmployeeFormViewPr
     defaultValues: buildEmployeeDefaultValues(employee),
   });
 
+  // Baseline de las relaciones M:M: lo que cargó la ficha desde las pivotes al abrir el formulario.
+  // El delta se calcula contra esto (no contra el estado de la pantalla) y el servidor solo recibe
+  // altas y bajas explícitas.
+  const baseline = useMemo(() => {
+    const defaults = buildEmployeeDefaultValues(employee);
+    return {
+      allocated_to: defaults.allocated_to ?? [],
+      aptitudes: defaults.aptitudes ?? [],
+      workshop_sector_ids: defaults.workshop_sector_ids ?? [],
+    };
+  }, [employee]);
+
+  /** Las listas de empleados (activos y bajas) y sus filtros quedan viejos tras un alta o edición. */
+  const invalidateLists = () => {
+    queryClient.invalidateQueries({ queryKey: ['employees-paginated'] });
+    queryClient.invalidateQueries({ queryKey: ['datatable-facet'] });
+  };
+
+  const errorMessage = (fallback: string) => (error: unknown) =>
+    error instanceof Error && error.message ? error.message : fallback;
+
   const onSubmit = async (data: EmployeeFormData) => {
     if (mode === 'new') {
       const creating = createEmployee(data).then((created) => {
         setIsCreated(true);
+        invalidateLists();
         router.replace(`/dashboard/employee/action?action=view&employee_id=${created.id}`);
       });
       toast.promise(creating, {
         loading: 'Creando empleado...',
         success: 'Empleado creado',
-        error: 'Hubo un error al crear el empleado',
+        error: errorMessage('Hubo un error al crear el empleado'),
       });
       await creating.catch((error) => logger.error('Error al crear empleado', { data: { error } }));
       return;
     }
 
     if (employee) {
+      // En la edición las relaciones M:M viajan como deltas, no como el conjunto final.
+      const { allocated_to, aptitudes, workshop_sector_ids, ...rest } = data;
+      const payload = {
+        ...rest,
+        allocation_changes: diffIds(baseline.allocated_to, allocated_to),
+        aptitude_changes: diffIds(baseline.aptitudes, aptitudes),
+        workshop_sector_changes: diffIds(baseline.workshop_sector_ids, workshop_sector_ids),
+      };
       const saving = (async () => {
-        await updateEmployee(employee.id, data);
+        const result = await updateEmployee(employee.id, payload);
+        invalidateLists();
         await refreshAndWait();
         onClose();
+        return result;
       })();
       toast.promise(saving, {
         loading: 'Guardando cambios...',
-        success: 'Cambios guardados',
-        error: 'Hubo un error al guardar los cambios',
+        success: (result) => describeSavedChanges(result),
+        error: errorMessage('Hubo un error al guardar los cambios'),
       });
       await saving.catch((error) => logger.error('Error al actualizar empleado', { data: { error } }));
     }
@@ -104,7 +153,7 @@ export function EmployeeFormView({ employee, mode, onClose }: EmployeeFormViewPr
             main={
               <>
                 <SectionCard title="Datos personales" description="Tal como figuran en el DNI.">
-                  <PersonalDataFields />
+                  <PersonalDataFields currentPicture={employee?.picture} />
                 </SectionCard>
                 {/* Sin permiso sobre contacto la sección se oculta pero los campos siguen montados: así el
                     formulario conserva sus valores y valida (el schema los exige) en vez de fallar sin
@@ -122,6 +171,7 @@ export function EmployeeFormView({ employee, mode, onClose }: EmployeeFormViewPr
                 </SectionCard>
 
                 <div className="bg-background/90 sticky bottom-0 -mx-1 space-y-3 px-1 py-4 backdrop-blur-sm">
+                  {!isNew && <PendingRemovalsNotice baseline={baseline} />}
                   <SectionErrorsAlert sections={EMPLOYEE_FORM_SECTIONS} required={REQUIRED_EMPLOYEE_FIELDS} />
                   <div className="flex justify-end gap-2">
                     <Button type="button" variant="outline" onClick={onClose} disabled={isSaving}>

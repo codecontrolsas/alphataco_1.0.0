@@ -1,15 +1,21 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
-import { Eye, History, Pencil, Trash2, UserCog, type LucideIcon } from 'lucide-react';
-import moment from 'moment';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Clock, Eye, FileText, MoreHorizontal, Pencil, Trash2, UserCog } from 'lucide-react';
+import { canAssignRow, canDeleteRow, canEditRow, canManageRemitosRow } from '../lib/row-permissions';
 import type { DailyReportDetailRow } from '../types';
 import type { Permissions, RowActionHandlers } from './types';
 
 // ============================================================================
-// ROW ACTIONS CELL
+// ROW ACTIONS CELL — menú ⋯ con las mismas acciones y la misma elegibilidad que antes
+// (la elegibilidad vive en `lib/row-permissions.ts`)
 // ============================================================================
 
 export function RowActionsCell({
@@ -23,77 +29,66 @@ export function RowActionsCell({
   handlers: RowActionHandlers;
   reportDate: string;
 }) {
-  const isToday = moment(reportDate).isSame(moment(), 'day');
-  const isFutureDate = moment(reportDate).isAfter(moment(), 'day');
-  // Editar: no permitir si ejecutado (salvo hoy) ni en_certificacion
-  const canEdit = permissions.canUpdate && row.status !== 'en_certificacion' && (row.status !== 'ejecutado' || isToday);
-  // Asignar recursos: misma elegibilidad que editar, pero gobernada por su propio permiso
-  const canAssignResources =
-    permissions.canAssignResources && row.status !== 'en_certificacion' && (row.status !== 'ejecutado' || isToday);
-  // Eliminar: solo si fecha hoy, futura, o status sin_recursos_asignados
-  const canDelete = permissions.canDelete && (isToday || isFutureDate || row.status === 'sin_recursos_asignados');
+  const canEdit = canEditRow(row, permissions, reportDate);
+  const canAssignResources = canAssignRow(row, permissions, reportDate);
+  const canManageRemitos = canManageRemitosRow(row, permissions);
+  const canDelete = canDeleteRow(row, permissions, reportDate);
 
   return (
-    <TooltipProvider delayDuration={150}>
-      <div className="flex items-center justify-end gap-0.5">
-        <RowAction label="Ver detalle" icon={Eye} onClick={() => handlers.onViewDetail(row)} />
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Acciones de la línea">
+          <MoreHorizontal className="size-4" aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {/* Ver detalle — siempre visible */}
+        <DropdownMenuItem onSelect={() => handlers.onViewDetail(row)}>
+          <Eye aria-hidden="true" />
+          Ver detalle
+        </DropdownMenuItem>
 
         {/* Editar — solo si canUpdate Y (status no ejecutado O parte es hoy) */}
-        {canEdit && <RowAction label="Editar" icon={Pencil} onClick={() => handlers.onEdit(row)} />}
+        {canEdit && (
+          <DropdownMenuItem onSelect={() => handlers.onEdit(row)}>
+            <Pencil aria-hidden="true" />
+            Editar
+          </DropdownMenuItem>
+        )}
 
         {/* Asignar recursos — solo con el permiso assign_resources (Supervisor de Operaciones) */}
         {canAssignResources && (
-          <RowAction
-            label="Asignar recursos"
-            icon={UserCog}
-            onClick={() => handlers.onAssignResources(row)}
-            className="text-brand-ink hover:text-brand-ink"
-          />
+          <DropdownMenuItem onSelect={() => handlers.onAssignResources(row)}>
+            <UserCog aria-hidden="true" />
+            Asignar recursos
+          </DropdownMenuItem>
         )}
 
-        <RowAction label="Historial" icon={History} onClick={() => handlers.onHistory(row)} />
+        {/* Remitos — línea ejecutada o en certificación, con permiso de edición */}
+        {canManageRemitos && (
+          <DropdownMenuItem onSelect={() => handlers.onManageRemitos(row)}>
+            <FileText aria-hidden="true" />
+            Remitos
+          </DropdownMenuItem>
+        )}
+
+        {/* Historial — siempre visible */}
+        <DropdownMenuItem onSelect={() => handlers.onHistory(row)}>
+          <Clock aria-hidden="true" />
+          Historial
+        </DropdownMenuItem>
 
         {/* Eliminar — solo si canDelete (fecha hoy/futura o sin_recursos) */}
         {canDelete && (
-          <RowAction
-            label="Eliminar"
-            icon={Trash2}
-            onClick={() => handlers.onDelete(row)}
-            className="text-danger-subtle-foreground hover:text-danger-subtle-foreground"
-          />
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onSelect={() => handlers.onDelete(row)}>
+              <Trash2 aria-hidden="true" />
+              Eliminar
+            </DropdownMenuItem>
+          </>
         )}
-      </div>
-    </TooltipProvider>
-  );
-}
-
-/** Botón de acción de fila: ícono, tooltip y nombre accesible con el mismo texto. */
-function RowAction({
-  label,
-  icon: Icon,
-  onClick,
-  className,
-}: {
-  label: string;
-  icon: LucideIcon;
-  onClick: () => void;
-  className?: string;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label={label}
-          onClick={onClick}
-          className={cn('text-muted-foreground hover:text-foreground', className)}
-        >
-          <Icon className="size-4" />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

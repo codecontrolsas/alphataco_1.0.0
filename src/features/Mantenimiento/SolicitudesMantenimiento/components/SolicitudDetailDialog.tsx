@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Separator } from '@/components/ui/separator';
 import { ItemComments } from '@/features/Mantenimiento/components/ItemComments';
 import { isNonPropagatingChecklistItem } from '@/features/Mantenimiento/constants/non-propagating-checklist-items';
+import { MaintenanceStatusPill } from '@/features/Mantenimiento/shared/components/MaintenanceStatusPill';
 import { RepairGroupBadge } from '@/features/Mantenimiento/shared/components/RepairGroupBadge';
 import { PREVENTIVE_TYPES, type PreventiveType } from '@/features/Mantenimiento/shared/preventive-maintenance';
 import { formatDateTime } from '@/features/Mantenimiento/utils/dateFormat';
@@ -13,6 +14,7 @@ import { resolveDriverInfo } from '@/features/Mantenimiento/utils/driverInfo';
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react';
 import { RepairItemPhotos } from '../../shared/components/RepairItemPhotos';
 import { getRepairItemGroupName, getRepairItemImages, getRepairItemLabel } from '../../shared/repair-item-label';
+import { getResourceInternNumber, getResourceLabel } from '../../shared/maintenance-resource';
 import type { MaintenanceRequestData } from '../actions/queries.server';
 
 interface SolicitudDetailDialogProps {
@@ -31,12 +33,6 @@ const formatSectionCode = (code: string | null | undefined): string => {
 };
 
 export function SolicitudDetailDialog({ request, open, onClose }: SolicitudDetailDialogProps) {
-  const statusConfig: Record<string, { label: string; variant: 'warning' | 'success' | 'destructive' }> = {
-    pending_approval: { label: 'Pendiente de Aprobación', variant: 'warning' },
-    approved: { label: 'Aprobada', variant: 'success' },
-    rejected: { label: 'Rechazada', variant: 'destructive' },
-  };
-
   const itemStatusConfig: Record<string, { label: string; variant: 'secondary' | 'success' | 'destructive' }> = {
     pending: { label: 'Pendiente', variant: 'secondary' },
     approved: { label: 'Aprobado', variant: 'success' },
@@ -62,16 +58,15 @@ export function SolicitudDetailDialog({ request, open, onClose }: SolicitudDetai
                 <div>
                   <span className="text-sm text-muted-foreground">Equipo:</span>
                   <p className="font-medium">
-                    {request.vehicles?.domain || request.vehicles?.serie || 'Sin identificar'}
-                    {request.vehicles?.intern_number && ` (#${request.vehicles.intern_number})`}
+                    {getResourceLabel(request)}
+                    {getResourceInternNumber(request) && ` (#${getResourceInternNumber(request)})`}
+                    {request.other_equipment && <span className="text-muted-foreground text-sm font-normal"> · Equipamiento</span>}
                   </p>
                 </div>
                 <div>
                   <span className="text-sm text-muted-foreground">Estado:</span>
                   <div className="mt-1">
-                    <Badge variant={statusConfig[request.status]?.variant || 'secondary'}>
-                      {statusConfig[request.status]?.label || request.status}
-                    </Badge>
+                    <MaintenanceStatusPill entity="request" status={request.status} />
                   </div>
                 </div>
                 <div>
@@ -113,9 +108,9 @@ export function SolicitudDetailDialog({ request, open, onClose }: SolicitudDetai
               </div>
 
               {request.status === 'rejected' && request.rejection_reason && (
-                <div className="mt-4 p-3 bg-red-50 rounded-md">
-                  <span className="text-sm font-medium text-red-800">Motivo de rechazo:</span>
-                  <p className="text-sm text-red-700">{request.rejection_reason}</p>
+                <div className="mt-4 rounded-md bg-danger-subtle p-3 text-danger-subtle-foreground">
+                  <span className="text-sm font-medium">Motivo de rechazo:</span>
+                  <p className="text-sm">{request.rejection_reason}</p>
                 </div>
               )}
             </CardContent>
@@ -251,9 +246,9 @@ export function SolicitudDetailDialog({ request, open, onClose }: SolicitudDetai
                         />
 
                         {item.status === 'rejected' && item.rejection_reason && (
-                          <div className="text-sm p-2 bg-red-50 rounded">
-                            <span className="text-red-800 font-medium">Motivo: </span>
-                            <span className="text-red-700">{item.rejection_reason}</span>
+                          <div className="rounded bg-danger-subtle p-2 text-sm text-danger-subtle-foreground">
+                            <span className="font-medium">Motivo: </span>
+                            <span>{item.rejection_reason}</span>
                           </div>
                         )}
                       </div>

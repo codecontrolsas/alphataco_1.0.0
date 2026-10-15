@@ -2,7 +2,7 @@ import 'server-only';
 
 import type { Prisma } from '@/generated/prisma/client';
 import { StockError } from './stock-errors';
-import { tireMaterialCode, tireMaterialName } from './tire-material-code';
+import { tireMaterialBaseCode, tireMaterialCode, tireMaterialName } from './tire-material-code';
 
 /**
  * Materiales de stock de las cubiertas (Almacenes etapa 6): uno SERIAL por combinacion tipo +
@@ -76,9 +76,14 @@ export async function syncTireMaterials(tx: Tx, companyId: string): Promise<void
       }
 
       lookups ??= await ensureCategoryAndUnit(tx, companyId);
-      taken ??= new Set(
-        (await tx.materials.findMany({ where: { company_id: companyId }, select: { code: true } })).map((m) => m.code)
-      );
+      taken ??= new Set<string>();
+      // Solo los codigos que pueden chocar: el base de esta combinacion o ese base con sufijo -2, -3...
+      const base = tireMaterialBaseCode(combination);
+      const candidates = await tx.materials.findMany({
+        where: { company_id: companyId, code: { startsWith: base } },
+        select: { code: true },
+      });
+      for (const m of candidates) taken.add(m.code);
       const code = tireMaterialCode(combination, taken);
       taken.add(code);
       const created = await tx.materials.create({

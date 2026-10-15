@@ -1,8 +1,10 @@
 'use server';
 
+import { requireDashboardView } from '@/features/Dashboard/lib/permissions.server';
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { prisma } from '@/shared/lib/prisma';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 import moment from 'moment';
 
 const logger = new Logger('Dashboard/Estadisticas/SalaDeControl');
@@ -88,10 +90,12 @@ export type DeviationsChartData = {
  * estado actual de la base haria que el historico cambie solo con el tiempo.
  */
 export async function getDeviationsChartData(): Promise<DeviationsChartData> {
+  await requireDashboardView('desvios');
   const companyId = await getActiveCompanyId();
   // 24 meses: la vista mensual ya abarca 12, y navegar hacia atras desde ahi
   // dejaria el grafico vacio si el fetch cortara justo en ese limite.
-  const since = moment().subtract(24, 'months').startOf('month').toDate();
+  // "Hoy" en hora argentina; `snapshot_date` es @db.Date (medianoche UTC), por eso el corte también es UTC
+  const since = moment.utc(argentinaDate()).subtract(24, 'months').startOf('month').toDate();
 
   logger.debug('Fetching deviations chart data', { data: { companyId } });
 
@@ -119,7 +123,7 @@ export async function getDeviationsChartData(): Promise<DeviationsChartData> {
         if (entry.customer_id) customerMap.set(entry.customer_id, entry.customer_name);
       }
 
-      const date = moment(snapshot.snapshot_date).format('YYYY-MM-DD');
+      const date = moment.utc(snapshot.snapshot_date).format('YYYY-MM-DD');
       const capturedLive = metrics.meta?.captured_live === true;
 
       if (capturedLive && (firstLiveDate === null || date < firstLiveDate)) {

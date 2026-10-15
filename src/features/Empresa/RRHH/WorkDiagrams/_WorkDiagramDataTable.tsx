@@ -1,6 +1,12 @@
 'use client';
 
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import {
+  CatalogCreateButton,
+  CatalogFormSheet,
+  CatalogTableSurface,
+  useCatalogSheet,
+  type CatalogSheetMode,
+} from '@/shared/components/common/CatalogFormSheet';
 import {
   DataTable,
   type DataTableFacetedFilterConfig,
@@ -8,9 +14,11 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { Check, CircleOff, X } from 'lucide-react';
-import moment from 'moment';
-import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
+import { CircleOff } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
+import { activeStatusLabel, buildActiveFacetResult } from '../../lib/active-status';
 import WorkDiagramForm from './WorkDiagramForm';
 import {
   getAllWorkDiagramsForExport,
@@ -62,40 +70,29 @@ export default function _WorkDiagramDataTable({
     [permissionsMap]
   );
 
-  const canCreateOrUpdate =
-    permissions.hasPermission('configuracion', 'listado', 'create') ||
-    permissions.hasPermission('configuracion', 'listado', 'update');
+  const canCreate = permissions.hasPermission('configuracion', 'listado', 'create');
+  const canUpdate = permissions.hasPermission('configuracion', 'listado', 'update');
 
-  // ── Store de edición ─────────────────────────────────────────────────────
+  // ── Sheet de alta/edición (el form sigue leyendo el store de edición) ─────
   const setWorkDiagram = useWorkDiagramStore((state) => state.setWorkDiagram);
   const workDiagram = useWorkDiagramStore((state) => state.workDiagram);
+  const handleClearStore = useCallback(() => setWorkDiagram(null), [setWorkDiagram]);
+  const sheet = useCatalogSheet<WorkDiagramListItem>({
+    canCreate,
+    canUpdate,
+    onOpenEdit: setWorkDiagram,
+    onOpenCreate: handleClearStore,
+    onClosed: handleClearStore,
+  });
+  const handleEdit = sheet.openEdit;
+  const { close: closeSheet } = sheet;
 
-  const handleEdit = useCallback(
-    (item: WorkDiagramListItem) => {
-      setWorkDiagram(item);
+  // El form pide volver a 'create' al cancelar: equivale a cerrar el Sheet
+  const handleSetMode = useCallback(
+    (newMode: CatalogSheetMode) => {
+      if (newMode === 'create') closeSheet();
     },
-    [setWorkDiagram]
-  );
-
-  // ── mode para el formulario — derivado del store ──────────────────────────
-  const [mode, setMode] = useState<'create' | 'edit'>('create');
-
-  // Sincronizar mode con el store: si hay diagrama seleccionado → 'edit'
-  const effectiveMode = workDiagram ? 'edit' : mode;
-
-  const handleSetMode: Dispatch<SetStateAction<'create' | 'edit'>> = useCallback(
-    (valueOrUpdater: SetStateAction<'create' | 'edit'>) => {
-      const newMode = typeof valueOrUpdater === 'function' ? valueOrUpdater(effectiveMode) : valueOrUpdater;
-      setMode(newMode);
-      if (newMode === 'create') {
-        setWorkDiagram(null);
-      }
-    },
-    // effectiveMode is referenced but doesn't need to be in deps because
-    // the callback only uses it when valueOrUpdater is a function (rare),
-    // and the store update is always consistent.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [setWorkDiagram]
+    [closeSheet]
   );
 
   // ── Client-side navigation mode ──────────────────────────────────────────
@@ -142,28 +139,34 @@ export default function _WorkDiagramDataTable({
   const fetchIsActiveFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
     const result = await getWorkDiagramSingleFacet('is_active', params);
     if (!result) return { options: [], counts: new Map() };
-    const options = [
-      { value: 'true', label: 'Activo', icon: Check },
-      { value: 'false', label: 'Inactivo', icon: X },
-      ...(result.counts.has(NULL_FILTER_VALUE)
-        ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-        : []),
-    ];
-    return { options, counts: result.counts };
+    return buildActiveFacetResult(result.counts);
   }, []);
 
   // ── Lazy-load facet: inactive_novelty (FK → diagram_type) ─────────────────
   const fetchInactiveNoveltyFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
     const result = await getWorkDiagramSingleFacet('inactive_novelty', params);
     if (!result) return { options: [], counts: new Map() };
-    return result;
+    return {
+      options: result.options.map((option) =>
+        option.value === NULL_FILTER_VALUE ? { ...option, icon: CircleOff } : option
+      ),
+      counts: result.counts,
+    };
   }, []);
 
   // ── Lazy-load facet: active_novelties (M:M → diagram_type) ──────────────
   const fetchActiveNoveltiesFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
     const result = await getWorkDiagramSingleFacet('active_novelties', params);
     if (!result) return { options: [], counts: new Map() };
-    return result;
+    return {
+      options: [
+        ...result.options,
+        ...(result.counts.has(NULL_FILTER_VALUE)
+          ? [{ value: NULL_FILTER_VALUE, label: 'Sin novedades', icon: CircleOff }]
+          : []),
+      ],
+      counts: result.counts,
+    };
   }, []);
 
   // ── Faceted filters ───────────────────────────────────────────────────────
@@ -234,6 +237,7 @@ export default function _WorkDiagramDataTable({
       queryFn={tableQueryFn}
       queryKey={['work-diagrams']}
       onStateChange={handleStateChange}
+      toolbarActions={<CatalogCreateButton sheet={sheet} label="Nuevo diagrama" />}
       tableId={tableId}
       paramNamespace={tableId}
       facetedFilters={facetedFilters}
@@ -244,7 +248,7 @@ export default function _WorkDiagramDataTable({
       emptyMessage="No se encontraron diagramas de trabajo"
       data-testid="work-diagrams-table"
       exportConfig={{
-        fetchAllData: () => getAllWorkDiagramsForExport(currentParams),
+        fetchAllData: async () => unwrapExportResult(await getAllWorkDiagramsForExport(currentParams)),
         options: {
           filename: 'diagramas-de-trabajo',
           sheetName: 'Diagramas',
@@ -252,15 +256,12 @@ export default function _WorkDiagramDataTable({
         },
         formatters: {
           // Booleano nullable
-          is_active: (value) => {
-            if (value === null || value === undefined) return 'Sin asignar';
-            return value ? 'Activo' : 'Inactivo';
-          },
+          is_active: (value) => activeStatusLabel(value),
           // Decimales — Prisma Decimal llega como objeto, convertir a string
           active_working_days: (value) => (value !== null && value !== undefined ? String(value) : '—'),
           inactive_working_days: (value) => (value !== null && value !== undefined ? String(value) : '—'),
           // Fecha
-          created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '—'),
+          created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '—'),
           // M:M activas — el accessorFn ya retorna un string joinado
           active_novelties: (value) => (value ? String(value) : '—'),
         },
@@ -268,30 +269,19 @@ export default function _WorkDiagramDataTable({
     />
   );
 
-  // Si no tiene permisos de crear/editar, mostrar solo la tabla
-  if (!canCreateOrUpdate) {
-    return table;
-  }
-
-  // Con permisos: layout resizable con formulario a la izquierda y tabla a la derecha
   return (
-    <div className="w-full">
-      <ResizablePanelGroup className="min-h-[400px]" direction="horizontal">
-        <ResizablePanel defaultSize={30}>
-          <div className="overflow-auto h-full pr-2">
-            <WorkDiagramForm
-              diagram={workDiagram}
-              mode={effectiveMode}
-              diagramsTypes={diagramTypes}
-              setMode={handleSetMode}
-            />
-          </div>
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={70}>
-          <div className="overflow-auto h-full pl-2">{table}</div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    </div>
+    <>
+      <CatalogTableSurface>{table}</CatalogTableSurface>
+      <CatalogFormSheet
+        sheet={sheet}
+        getKey={(diagram) => diagram.id}
+        title={{ create: 'Nuevo diagrama', edit: 'Editar diagrama' }}
+        size="xl"
+      >
+        {({ mode }) => (
+          <WorkDiagramForm diagram={workDiagram} mode={mode} diagramsTypes={diagramTypes} setMode={handleSetMode} />
+        )}
+      </CatalogFormSheet>
+    </>
   );
 }

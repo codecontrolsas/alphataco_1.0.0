@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
-import { getRequestQuoteComparison } from '@/features/Purchases/actions/quotes.server';
-import { getPurchaseRequestDetail } from '@/features/Purchases/actions/requests.server';
+import { getRequestQuoteComparison } from '@/features/Purchases/actions/quote-queries.server';
+import { getPurchaseRequestDetail } from '@/features/Purchases/actions/request-queries.server';
 import { PurchaseRequestDetailView } from '@/features/Purchases/Requests/components/PurchaseRequestDetailView';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';

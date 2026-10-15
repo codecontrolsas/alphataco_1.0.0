@@ -23,6 +23,19 @@ export function isValidDomainForYear(domain: string, year: number): boolean {
   return DOMAIN_NEW_RE.test(value) || DOMAIN_OLD_RE.test(value) || DOMAIN_OLD_SHORT_RE.test(value);
 }
 
+/**
+ * Foto del equipo: se guarda como data URL en la columna `picture` (decisión de producto pendiente:
+ * migrar a storage). Mientras tanto, tope de tamaño y sólo imágenes.
+ */
+export const VEHICLE_PICTURE_MAX_BYTES = 1_500_000;
+const PICTURE_DATA_URL_RE = /^data:image\/[a-z0-9.+-]+;base64,/i;
+const pictureField = z
+  .string()
+  .max(VEHICLE_PICTURE_MAX_BYTES, 'La foto es demasiado pesada (máximo 1,5 MB). Quitala o subí una más liviana.')
+  .regex(PICTURE_DATA_URL_RE, 'La foto debe ser una imagen válida')
+  .optional()
+  .nullable();
+
 /** Campos del formulario (fechas como `Date`). Base sin refinamientos async. */
 export const vehicleFormSchema = z
   .object({
@@ -46,7 +59,7 @@ export const vehicleFormSchema = z
 
     // Technical Data
     engine: z.string().optional(),
-    type: z.string().optional(),
+    type: z.string().optional().nullable(),
     subType: z.string().optional().nullable(),
     chassis: z.string().optional(),
     serie: z.string().optional(),
@@ -54,7 +67,7 @@ export const vehicleFormSchema = z
     kilometer: z.string().optional(),
     engine_hours: z.string().optional(),
     intern_number: z.string().optional(),
-    picture: z.string().optional().nullable(),
+    picture: pictureField,
     contract_expiration_date: z.date().optional().nullable(),
     contract_start_date: z.date().optional().nullable(),
     contract_number: z.string().optional().nullable(),
@@ -93,7 +106,7 @@ export const vehicleFormSchema = z
       });
     }
   })
-  .refine((data) => (data.type_of_vehicle === '2' ? !!data.type : true), {
+  .refine((data) => !!data.type, {
     message: 'El tipo es requerido',
     path: ['type'],
   })
@@ -157,9 +170,24 @@ const emptyToNull = <T extends z.ZodTypeAny>(schema: T) =>
   z.preprocess((value) => (value === '' ? null : value), schema);
 
 /** Día sin hora: `Date` (del calendario) o `'YYYY-MM-DD'` (formateado en el navegador). */
-const dateOnly = z.union([z.date(), z.string().regex(ISO_DATE_RE, 'Fecha inválida')]).nullable().optional();
+const dateOnly = z
+  .union([z.date(), z.string().regex(ISO_DATE_RE, 'Fecha inválida')])
+  .nullable()
+  .optional();
 
 const uuid = z.string().uuid();
+
+const MAX_ALLOCATION_IDS = 500;
+
+export const allocationChangesSchema = z
+  .object({
+    add: z.array(uuid).max(MAX_ALLOCATION_IDS).default([]),
+    remove: z.array(uuid).max(MAX_ALLOCATION_IDS).default([]),
+  })
+  .refine((changes) => !changes.add.some((id) => changes.remove.includes(id)), {
+    message: 'Un cliente no puede agregarse y quitarse a la vez',
+  });
+export type AllocationChanges = z.output<typeof allocationChangesSchema>;
 
 export const vehicleInputSchema = z.object({
   type_of_vehicle: z.string().regex(/^\d+$/, 'El tipo de equipo es requerido'),
@@ -178,14 +206,17 @@ export const vehicleInputSchema = z.object({
   kilometer: z.string().optional(),
   engine_hours: z.string().optional(),
   intern_number: z.string().optional(),
-  picture: z.string().nullable().optional(),
+  picture: pictureField,
   contract_expiration_date: dateOnly,
   contract_start_date: dateOnly,
   contract_number: z.string().nullable().optional(),
   has_certification: z.boolean().default(false),
   certification_expiration_date: dateOnly,
   certification_number: z.string().nullable().optional(),
-  allocated_to: z.array(uuid).optional(),
+  /** Sólo para el alta (todo es alta). En la edición el servidor la ignora: usa `allocation_changes`. */
+  allocated_to: z.array(uuid).max(MAX_ALLOCATION_IDS).optional(),
+  /** Altas y bajas EXPLÍCITAS de afectaciones a clientes; la ausencia de un id nunca implica baja. */
+  allocation_changes: allocationChangesSchema.optional(),
   cost_center_id: emptyToNull(uuid.nullable().optional()),
   cost_type: z.enum(VEHICLE_COST_TYPES),
   sector: emptyToNull(uuid.nullable().optional()),

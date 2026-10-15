@@ -5,29 +5,27 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { StackedCell } from '@/shared/components/common/StackedCell';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Ban, CheckCircle2, Eye, FileText, Send, Smartphone, XCircle, type LucideIcon } from 'lucide-react';
-import moment from 'moment';
+import { Eye, FileText, Smartphone, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import {
-  OWN_CHECK_ALERT_LABEL,
   OWN_CHECK_KIND_LABELS,
   OWN_CHECK_STATUS_LABELS,
   ownCheckAlert,
   type OwnCheckStatus,
 } from '../../lib/own-check-transitions';
+import { OWN_CHECK_ALERT_UI, OWN_CHECK_STATUS_UI, TONE_TO_BADGE } from '../../lib/status-presentation';
 import { treasuryToday } from '../../lib/today';
 import type { OwnCheckListItem } from './actions.server';
+import { formatDay } from '../../lib/dates';
 
 export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['kind', 'issue_date', 'debited_on'];
 
-export const ownCheckStatusIcons: Record<OwnCheckStatus, LucideIcon> = {
-  ISSUED: Send,
-  DEBITED: CheckCircle2,
-  REJECTED: XCircle,
-  CANCELLED: Ban,
-};
+export const ownCheckStatusIcons = Object.fromEntries(
+  Object.entries(OWN_CHECK_STATUS_UI).map(([status, ui]) => [status, ui.icon])
+) as Record<OwnCheckStatus, LucideIcon>;
 
 export const ownCheckKindIcons: Record<OwnCheckListItem['kind'], LucideIcon> = {
   PHYSICAL: FileText,
@@ -35,8 +33,9 @@ export const ownCheckKindIcons: Record<OwnCheckListItem['kind'], LucideIcon> = {
 };
 
 /** Fecha valor (YYYY-MM-DD, sin hora): se formatea tal cual para no correr un dia. */
-export const formatValueDate = (value: string | null | undefined) =>
-  value ? moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY') : '';
+export const formatValueDate = formatDay;
+
+const OwnAlertIcon = OWN_CHECK_ALERT_UI.PENDING_CONFIRMATION.icon;
 
 const dash = <span className="text-muted-foreground">—</span>;
 
@@ -71,8 +70,8 @@ export function getColumns(): ColumnDef<OwnCheckListItem>[] {
       meta: { title: 'Número' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Número" />,
       cell: ({ row }) => (
-        <Link href={`/dashboard/treasury/own-checks/${row.original.id}`} className="font-mono text-sm font-medium hover:underline">
-          {row.original.number}
+        <Link href={`/dashboard/treasury/own-checks/${row.original.id}`} className="text-brand-ink block hover:underline">
+          <StackedCell primary={row.original.number} mono maxWidthClass="max-w-[200px]" />
         </Link>
       ),
     },
@@ -85,7 +84,7 @@ export function getColumns(): ColumnDef<OwnCheckListItem>[] {
         const Icon = ownCheckKindIcons[row.original.kind];
         return (
           <Badge variant="outline" className="gap-1 whitespace-nowrap">
-            <Icon className="h-3 w-3" />
+            <Icon className="h-3 w-3" aria-hidden="true" />
             {OWN_CHECK_KIND_LABELS[row.original.kind]}
           </Badge>
         );
@@ -97,7 +96,12 @@ export function getColumns(): ColumnDef<OwnCheckListItem>[] {
       accessorFn: (row) => row.account.name,
       meta: { title: 'Cuenta' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Cuenta" />,
-      cell: ({ row }) => <span>{row.original.account.name}</span>,
+      cell: ({ row }) => (
+        <StackedCell
+          primary={row.original.account.name}
+          secondary={row.original.checkbook ? `Chequera ${row.original.checkbook}` : undefined}
+        />
+      ),
       filterFn: (row, _id, value: string[]) => value.includes(row.original.account.id),
     },
     {
@@ -121,7 +125,7 @@ export function getColumns(): ColumnDef<OwnCheckListItem>[] {
         row.original.paymentOrder ? (
           <Link
             href={`/dashboard/purchases/payments/${row.original.paymentOrder.id}`}
-            className="font-mono text-sm font-medium text-blue-600 hover:underline"
+            className="text-brand-ink font-mono text-sm font-medium hover:underline"
           >
             {row.original.paymentOrder.number}
           </Link>
@@ -157,8 +161,9 @@ export function getColumns(): ColumnDef<OwnCheckListItem>[] {
           <div className="flex flex-wrap items-center gap-2">
             <span className="tabular-nums">{formatValueDate(paymentDate)}</span>
             {alert === 'PENDING_CONFIRMATION' && (
-              <Badge variant="outline" className="whitespace-nowrap border-amber-500 text-amber-700 dark:text-amber-400">
-                {OWN_CHECK_ALERT_LABEL}
+              <Badge variant={TONE_TO_BADGE[OWN_CHECK_ALERT_UI.PENDING_CONFIRMATION.tone]} className="gap-1 whitespace-nowrap">
+                <OwnAlertIcon className="h-3 w-3" aria-hidden="true" />
+                {OWN_CHECK_ALERT_UI.PENDING_CONFIRMATION.label}
               </Badge>
             )}
           </div>
@@ -171,11 +176,11 @@ export function getColumns(): ColumnDef<OwnCheckListItem>[] {
       meta: { title: 'Estado' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
       cell: ({ row }) => {
-        const Icon = ownCheckStatusIcons[row.original.status];
+        const ui = OWN_CHECK_STATUS_UI[row.original.status];
         return (
-          <Badge variant={row.original.status === 'CANCELLED' ? 'secondary' : 'outline'} className="gap-1 whitespace-nowrap">
-            <Icon className="h-3 w-3" />
-            {OWN_CHECK_STATUS_LABELS[row.original.status]}
+          <Badge variant={TONE_TO_BADGE[ui.tone]} className="gap-1 whitespace-nowrap">
+            <ui.icon className="h-3 w-3" aria-hidden="true" />
+            {ui.label}
           </Badge>
         );
       },

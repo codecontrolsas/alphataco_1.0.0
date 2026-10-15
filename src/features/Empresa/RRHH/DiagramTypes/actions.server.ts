@@ -10,9 +10,15 @@ import {
   parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
+import { fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { diagramTypeCreateSchema, diagramTypeUpdateSchema } from '../../lib/catalog-input-schemas';
+import { CATALOG_EXPORT_MAX_ROWS, catalogExportFailure, catalogTooLargeMessage } from '../../lib/catalog-table.server';
+import { requireConfigTabPermission } from '../../lib/config-access.server';
 
 // ============================================================================
 // LOGGER
@@ -23,6 +29,17 @@ const logger = new Logger('features/Empresa/RRHH/DiagramTypes');
 // ============================================================================
 // VALID SORT FIELDS — solo campos reales de BD
 // ============================================================================
+
+const LIST_SELECT = {
+  id: true,
+  name: true,
+  color: true,
+  short_description: true,
+  work_active: true,
+  is_active: true,
+  computes_absenteeism: true,
+  created_at: true,
+} as const;
 
 const VALID_SORT_FIELDS = new Set([
   'name',
@@ -37,53 +54,37 @@ const VALID_SORT_FIELDS = new Set([
 // WHERE BUILDER — DRY helper compartido por paginated, export y facets
 // ============================================================================
 
-function buildWhereClause(state: ReturnType<typeof parseSearchParams>) {
+/** Claves de filtro que esta tabla realmente usa; el resto de la URL se descarta antes de armar el where. */
+const ALLOWED_FILTER_KEYS = new Set([
+  'work_active',
+  'is_active',
+  'computes_absenteeism',
+  'name',
+  'short_description',
+  ...dateRangeKeys(['created_at']),
+]);
+
+function parseState(searchParams: DataTableSearchParams | undefined) {
+  return sanitizeFilters(parseSearchParams(searchParams ?? {}), ALLOWED_FILTER_KEYS);
+}
+
+/** Filtro facetado de un booleano: 'true' / 'false' / NULL_FILTER_VALUE (solo tiene efecto en columnas nullable). */
+function buildBooleanWhere(field: string, rawValues: string[] | undefined, nullable = false) {
+  // En columnas NOT NULL el valor "sin asignar" no existe: se descarta en vez de romper la consulta.
+  const values = nullable ? rawValues : rawValues?.filter((v) => v !== NULL_FILTER_VALUE);
+  if (!values || values.length === 0) return {};
+  const toCondition = (value: string) => ({ [field]: value === NULL_FILTER_VALUE ? null : value === 'true' });
+  return values.length === 1 ? toCondition(values[0]) : { OR: values.map(toCondition) };
+}
+
+function buildWhereClause(state: ReturnType<typeof parseState>) {
   // Búsqueda global en name y short_description
   const searchWhere = buildSearchWhere(state.search, ['name', 'short_description']);
 
-  // work_active es booleano nullable — manejo manual
-  const workActiveValues = state.filters['work_active'];
-  const workActiveFilter: Record<string, unknown> = {};
-  if (workActiveValues?.length === 1) {
-    if (workActiveValues[0] === NULL_FILTER_VALUE) {
-      workActiveFilter.work_active = null;
-    } else {
-      workActiveFilter.work_active = workActiveValues[0] === 'true';
-    }
-  } else if (workActiveValues && workActiveValues.length > 1) {
-    const conditions: Array<{ work_active: boolean | null }> = [];
-    for (const v of workActiveValues) {
-      if (v === NULL_FILTER_VALUE) conditions.push({ work_active: null });
-      else conditions.push({ work_active: v === 'true' });
-    }
-    workActiveFilter.OR = conditions;
-  }
-
-  // is_active es booleano NOT NULL — manejo manual
-  const isActiveValues = state.filters['is_active'];
-  const isActiveFilter: Record<string, unknown> = {};
-  if (isActiveValues?.length === 1) {
-    isActiveFilter.is_active = isActiveValues[0] === 'true';
-  } else if (isActiveValues && isActiveValues.length > 1) {
-    const conditions: Array<{ is_active: boolean }> = [];
-    for (const v of isActiveValues) {
-      conditions.push({ is_active: v === 'true' });
-    }
-    isActiveFilter.OR = conditions;
-  }
-
-  // computes_absenteeism es booleano NOT NULL — manejo manual
-  const computesValues = state.filters['computes_absenteeism'];
-  const computesFilter: Record<string, unknown> = {};
-  if (computesValues?.length === 1) {
-    computesFilter.computes_absenteeism = computesValues[0] === 'true';
-  } else if (computesValues && computesValues.length > 1) {
-    const conditions: Array<{ computes_absenteeism: boolean }> = [];
-    for (const v of computesValues) {
-      conditions.push({ computes_absenteeism: v === 'true' });
-    }
-    computesFilter.OR = conditions;
-  }
+  // Booleanos: work_active es nullable; is_active y computes_absenteeism son NOT NULL
+  const workActiveFilter = buildBooleanWhere('work_active', state.filters['work_active'], true);
+  const isActiveFilter = buildBooleanWhere('is_active', state.filters['is_active']);
+  const computesFilter = buildBooleanWhere('computes_absenteeism', state.filters['computes_absenteeism']);
 
   // Filtros de texto libre por columna
   const textFiltersWhere = buildTextFiltersWhere(state.filters, ['name', 'short_description']);
@@ -92,10 +93,8 @@ function buildWhereClause(state: ReturnType<typeof parseSearchParams>) {
   const dateFiltersWhere = buildDateRangeFiltersWhere(state.filters, ['created_at']);
 
   return {
-    ...searchWhere,
-    ...workActiveFilter,
-    ...isActiveFilter,
-    ...computesFilter,
+    // Cada filtro booleano puede traer un OR: van en AND para que no se pisen entre sí ni con la búsqueda.
+    AND: [searchWhere, workActiveFilter, isActiveFilter, computesFilter],
     ...textFiltersWhere,
     ...dateFiltersWhere,
   };
@@ -106,8 +105,9 @@ function buildWhereClause(state: ReturnType<typeof parseSearchParams>) {
 // ============================================================================
 
 export async function getDiagramTypesPaginated(searchParams: DataTableSearchParams) {
+  await requireConfigTabPermission('diagrams', 'view');
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseState(searchParams);
     const { skip, take } = stateToPrismaParams(state);
 
     const companyId = await getActiveCompanyId();
@@ -129,16 +129,7 @@ export async function getDiagramTypesPaginated(searchParams: DataTableSearchPara
         take,
         orderBy: safeOrderBy,
         where,
-        select: {
-          id: true,
-          name: true,
-          color: true,
-          short_description: true,
-          work_active: true,
-          is_active: true,
-          computes_absenteeism: true,
-          created_at: true,
-        },
+        select: LIST_SELECT,
       }),
       prisma.diagram_type.count({ where }),
     ]);
@@ -154,9 +145,12 @@ export async function getDiagramTypesPaginated(searchParams: DataTableSearchPara
 // EXPORT COMPLETO — sin skip/take, mismos filtros
 // ============================================================================
 
-export async function getAllDiagramTypesForExport(searchParams: DataTableSearchParams) {
+export async function getAllDiagramTypesForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<DiagramTypeListItem[]>> {
+  await requireConfigTabPermission('diagrams', 'view');
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseState(searchParams);
     const companyId = await getActiveCompanyId();
     const where = withCompany(buildWhereClause(state), companyId);
 
@@ -166,25 +160,24 @@ export async function getAllDiagramTypesForExport(searchParams: DataTableSearchP
         resolvedSorts.push({ [s.id]: s.desc ? 'desc' : 'asc' });
       }
     }
-    const safeOrderBy = [{ is_active: 'desc' as const }, ...resolvedSorts, { name: 'asc' as const }];
+    const safeOrderBy = [
+      { is_active: 'desc' as const },
+      ...resolvedSorts,
+      { name: 'asc' as const },
+      { id: 'asc' as const },
+    ];
 
-    return await prisma.diagram_type.findMany({
-      where,
-      orderBy: safeOrderBy,
-      select: {
-        id: true,
-        name: true,
-        color: true,
-        short_description: true,
-        work_active: true,
-        is_active: true,
-        computes_absenteeism: true,
-        created_at: true,
-      },
+    const rows = await fetchExportRowsInBatches({
+      maxRows: CATALOG_EXPORT_MAX_ROWS,
+      listIds: (take) => prisma.diagram_type.findMany({ where, orderBy: safeOrderBy, select: { id: true }, take }),
+      fetchByIds: (ids) =>
+        prisma.diagram_type.findMany({ where: { id: { in: ids }, company_id: companyId }, select: LIST_SELECT }),
+      tooLargeMessage: catalogTooLargeMessage('tipos de novedades'),
     });
+    return { ok: true, data: rows };
   } catch (error) {
     logger.error('Error al exportar tipos de novedades', { data: { error } });
-    throw new Error('No se pudo exportar la lista. Intente nuevamente.');
+    return catalogExportFailure(error, 'la lista de tipos de novedades');
   }
 }
 
@@ -200,8 +193,9 @@ export async function getDiagramTypeSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
 ): Promise<FacetResult | null> {
+  await requireConfigTabPermission('diagrams', 'view');
   try {
-    const state = searchParams ? parseSearchParams(searchParams) : parseSearchParams({});
+    const state = parseState(searchParams);
 
     // crossWhere: aplica todos los filtros EXCEPTO el de la columna propia
     const crossState = {
@@ -232,8 +226,8 @@ export async function getDiagramTypeSingleFacet(
 
         return {
           options: [
-            { value: 'true', label: 'Laboralmente activo' },
-            { value: 'false', label: 'No laboralmente activo' },
+            { value: 'true', label: 'Trabajando' },
+            { value: 'false', label: 'No trabajando' },
             ...(counts.has(NULL_FILTER_VALUE) ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar' }] : []),
           ],
           counts,
@@ -303,6 +297,8 @@ export async function createDiagramTypePrisma(data: {
   is_active: boolean;
   computes_absenteeism: boolean;
 }) {
+  await requireConfigTabPermission('diagrams', 'create');
+  data = diagramTypeCreateSchema.parse(data);
   try {
     const company_id = await getActiveCompanyId();
 
@@ -343,6 +339,8 @@ export async function updateDiagramTypePrisma(data: {
   is_active: boolean;
   computes_absenteeism: boolean;
 }) {
+  await requireConfigTabPermission('diagrams', 'update');
+  data = diagramTypeUpdateSchema.parse(data);
   try {
     // Perímetro sin RLS: sólo se edita un tipo de novedad de la empresa activa.
     const companyId = await getActiveCompanyId();

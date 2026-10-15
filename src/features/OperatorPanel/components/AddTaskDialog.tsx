@@ -236,7 +236,7 @@ export function AddTaskDialog({
             <Wrench className="h-3.5 w-3.5" />
             Mi Sector
             {sectorName && (
-              <span className="text-[10px] text-muted-foreground font-normal hidden sm:inline">({sectorName})</span>
+              <span className="text-xs text-muted-foreground font-normal hidden sm:inline">({sectorName})</span>
             )}
           </TabsTrigger>
           <TooltipProvider delayDuration={200}>
@@ -263,8 +263,8 @@ export function AddTaskDialog({
           {hasNoSectorRepairTypes ? (
             /* Empty state — no hay tipos configurados para este sector */
             <div className="flex flex-col items-center text-center py-6 px-4 space-y-3">
-              <div className="rounded-full bg-amber-100 dark:bg-amber-950/50 p-3">
-                <PackageOpen className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+              <div className="rounded-full bg-warn-subtle p-3">
+                <PackageOpen className="h-6 w-6 text-warn-subtle-foreground" />
               </div>
               <div className="space-y-1">
                 <p className="text-sm font-medium">Sin tipos de reparacion disponibles</p>
@@ -348,19 +348,19 @@ export function AddTaskDialog({
 
               {/* Info contextual segun tipo seleccionado */}
               {selectedOwnRepairType?.autorizable && (
-                <Alert variant="default" className="border-amber-300 bg-amber-50 dark:bg-amber-950/30">
-                  <ShieldAlert className="h-4 w-4 text-amber-600" />
-                  <AlertTitle className="text-amber-800 dark:text-amber-300 text-sm">Requiere aprobacion</AlertTitle>
-                  <AlertDescription className="text-amber-700 dark:text-amber-400 text-xs">
+                <Alert variant="default" className="border-warn/30 bg-warn-subtle">
+                  <ShieldAlert className="h-4 w-4 text-warn-subtle-foreground" />
+                  <AlertTitle className="text-warn-subtle-foreground text-sm">Requiere aprobacion</AlertTitle>
+                  <AlertDescription className="text-warn-subtle-foreground text-xs">
                     Esta tarea sera enviada como solicitud al jefe de taller para su aprobacion antes de ejecutarse.
                   </AlertDescription>
                 </Alert>
               )}
 
               {selectedOwnRepairType && !selectedOwnRepairType.autorizable && (
-                <div className="flex items-start gap-2 rounded-md border bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800 px-3 py-2">
-                  <Info className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
-                  <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                <div className="flex items-start gap-2 rounded-md border bg-ok-subtle border-ok/30 px-3 py-2">
+                  <Info className="h-3.5 w-3.5 text-ok-subtle-foreground mt-0.5 shrink-0" />
+                  <p className="text-xs text-ok-subtle-foreground">
                     La tarea se agregara directamente a esta orden de trabajo.
                   </p>
                 </div>
@@ -456,18 +456,18 @@ export function AddTaskDialog({
               </div>
 
               {/* Resumen de derivacion */}
-              <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 px-3 py-2.5 space-y-1.5">
+              <div className="rounded-lg border border-info/30 bg-info-subtle px-3 py-2.5 space-y-1.5">
                 <div className="flex items-center gap-1.5">
-                  <ArrowUpRight className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-                  <span className="text-xs font-medium text-blue-800 dark:text-blue-300">Derivacion a otro sector</span>
+                  <ArrowUpRight className="h-3.5 w-3.5 text-info-subtle-foreground" />
+                  <span className="text-xs font-medium text-info-subtle-foreground">Derivacion a otro sector</span>
                 </div>
-                <p className="text-xs text-blue-700 dark:text-blue-400">
+                <p className="text-xs text-info-subtle-foreground">
                   Esta tarea sera enviada al jefe de taller, quien decidira a que sector asignarla.
                 </p>
                 {selectedOtherRepairType && (
                   <div className="flex items-center gap-1.5 pt-1">
-                    <Settings2 className="h-3 w-3 text-blue-500" />
-                    <span className="text-xs text-blue-600 dark:text-blue-400">
+                    <Settings2 className="h-3 w-3 text-info-subtle-foreground" />
+                    <span className="text-xs text-info-subtle-foreground">
                       Tipo: <strong>{selectedOtherRepairType.name}</strong>
                     </span>
                   </div>

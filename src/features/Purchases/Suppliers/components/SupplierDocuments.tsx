@@ -2,13 +2,14 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
+import { SectionCard } from '@/shared/components/common/SectionCard';
+import { argentinaDate, formatArgentinaDay, formatDateAr } from '@/shared/lib/argentina-time';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import moment from 'moment';
@@ -42,22 +43,22 @@ type UploadFormValues = z.infer<typeof uploadFormSchema>;
 /** Dias que faltan para el vencimiento (negativo = vencido). `null` sin vencimiento. */
 function daysLeft(expiresAt: string | null): number | null {
   if (!expiresAt) return null;
-  return moment(expiresAt, 'YYYY-MM-DD').startOf('day').diff(moment().startOf('day'), 'days');
+  return moment(expiresAt, 'YYYY-MM-DD').diff(moment(argentinaDate(), 'YYYY-MM-DD'), 'days');
 }
 
 function ExpiryBadge({ expiresAt }: { expiresAt: string | null }) {
   const days = daysLeft(expiresAt);
   if (days === null) return <Badge variant="outline">Sin vencimiento</Badge>;
-  const date = moment(expiresAt, 'YYYY-MM-DD').format('DD/MM/YYYY');
+  const date = formatDateAr(expiresAt as string);
   if (days < 0) return <Badge variant="destructive">Vencido el {date}</Badge>;
   if (days <= 30) {
     return (
-      <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+      <Badge variant="warning">
         Vence en {days === 0 ? 'hoy' : `${days} ${days === 1 ? 'día' : 'días'}`} ({date})
       </Badge>
     );
   }
-  return <Badge variant="outline">Vence el {date}</Badge>;
+  return <Badge variant="success">Vigente · vence el {date}</Badge>;
 }
 
 interface Props {
@@ -114,19 +115,19 @@ export function SupplierDocuments({ supplierId, documents, nameSuggestions, canU
       <div className="min-w-0 flex-1">
         <p className={historical ? 'text-muted-foreground' : 'font-medium'}>{doc.name}</p>
         <p className="truncate text-xs text-muted-foreground">
-          {doc.file_name} · {doc.uploadedBy} · {moment(doc.uploadedAt).format('DD/MM/YYYY')}
+          {doc.file_name} · {doc.uploadedBy} · {formatArgentinaDay(doc.uploadedAt)}
         </p>
       </div>
       {historical ? <Badge variant="outline">Reemplazado</Badge> : <ExpiryBadge expiresAt={doc.expiresAt} />}
       <Button asChild type="button" size="sm" variant="ghost">
         <a href={doc.url} target="_blank" rel="noreferrer">
-          <ExternalLink className="mr-1 h-4 w-4" />
+          <ExternalLink className="mr-1 h-4 w-4" aria-hidden="true" />
           Ver
         </a>
       </Button>
       {!historical && canUpdate && (
         <Button type="button" size="sm" variant="ghost" onClick={() => open(doc)}>
-          <RefreshCw className="mr-1 h-4 w-4" />
+          <RefreshCw className="mr-1 h-4 w-4" aria-hidden="true" />
           Reemplazar
         </Button>
       )}
@@ -134,35 +135,32 @@ export function SupplierDocuments({ supplierId, documents, nameSuggestions, canU
   );
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
-        <div className="space-y-1">
-          <CardTitle className="text-base">Documentos</CardTitle>
-          <CardDescription>Constancias de ARCA, IIBB, seguros… con su vencimiento.</CardDescription>
-        </div>
-        {canUpdate && (
+    <SectionCard
+      title="Documentos"
+      description="Constancias de ARCA, IIBB, seguros… con su vencimiento."
+      action={
+        canUpdate ? (
           <Button type="button" size="sm" variant="outline" onClick={() => open('new')}>
-            <FileUp className="mr-1 h-4 w-4" />
+            <FileUp className="mr-1 h-4 w-4" aria-hidden="true" />
             Cargar documento
           </Button>
-        )}
-      </CardHeader>
-      <CardContent>
-        {current.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Sin documentos cargados.</p>
-        ) : (
-          <ul className="divide-y">{current.map((d) => row(d, false))}</ul>
-        )}
-        {replaced.length > 0 && (
-          <div className="mt-3">
-            <Button type="button" size="sm" variant="ghost" className="-ml-2" onClick={() => setShowHistory((v) => !v)}>
-              <History className="mr-1 h-4 w-4" />
-              {showHistory ? 'Ocultar reemplazados' : `Ver reemplazados (${replaced.length})`}
-            </Button>
-            {showHistory && <ul className="divide-y">{replaced.map((d) => row(d, true))}</ul>}
-          </div>
-        )}
-      </CardContent>
+        ) : undefined
+      }
+    >
+      {current.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Sin documentos cargados.</p>
+      ) : (
+        <ul className="divide-y">{current.map((d) => row(d, false))}</ul>
+      )}
+      {replaced.length > 0 && (
+        <div className="mt-3">
+          <Button type="button" size="sm" variant="ghost" className="-ml-2" onClick={() => setShowHistory((v) => !v)} aria-expanded={showHistory}>
+            <History className="mr-1 h-4 w-4" aria-hidden="true" />
+            {showHistory ? 'Ocultar reemplazados' : `Ver reemplazados (${replaced.length})`}
+          </Button>
+          {showHistory && <ul className="divide-y">{replaced.map((d) => row(d, true))}</ul>}
+        </div>
+      )}
 
       <Dialog open={target !== null} onOpenChange={(isOpen) => !isOpen && setTarget(null)}>
         <DialogContent className="sm:max-w-md">
@@ -235,6 +233,6 @@ export function SupplierDocuments({ supplierId, documents, nameSuggestions, canU
           </Form>
         </DialogContent>
       </Dialog>
-    </Card>
+    </SectionCard>
   );
 }

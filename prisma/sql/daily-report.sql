@@ -6,39 +6,25 @@
 -- FUNCTIONS (7)
 -- ============================================================================
 
--- function actualizar_estado_daily_reports (origen: supabase/migrations/20260304035040_sinc-2.sql)
+-- function actualizar_estado_daily_reports (T4: parte 1 usa reconcile_daily_report_rows_status; migracion 20261019100300)
 CREATE OR REPLACE FUNCTION public.actualizar_estado_daily_reports()
  RETURNS void
  LANGUAGE plpgsql
+ SET "TimeZone" TO 'America/Argentina/Buenos_Aires'
 AS $function$
 DECLARE
     report_record RECORD;
-    row_record RECORD;
     tiene_filas BOOLEAN;
     todas_completas BOOLEAN;
-    tiene_recursos BOOLEAN;
 BEGIN
-    -- Parte 1: Actualizar filas 'sin_recursos_asignados' que ya tienen recursos asignados
-    FOR row_record IN
+    -- Parte 1: reconciliar el estado de las lineas de los partes abiertos (sube y baja segun recursos y flags)
+    PERFORM public.reconcile_daily_report_rows_status(ARRAY(
         SELECT dr.id
         FROM dailyreportrows dr
-        WHERE dr.status = 'sin_recursos_asignados'
-    LOOP
-        SELECT EXISTS (
-            SELECT 1 FROM dailyreportemployeerelations
-            WHERE daily_report_row_id = row_record.id
-            UNION
-            SELECT 1 FROM dailyreportequipmentrelations
-            WHERE daily_report_row_id = row_record.id
-        ) INTO tiene_recursos;
-
-        IF tiene_recursos THEN
-            UPDATE dailyreportrows
-            SET status = 'pendiente',
-                updated_at = (NOW() AT TIME ZONE 'America/Argentina/Buenos_Aires')
-            WHERE id = row_record.id;
-        END IF;
-    END LOOP;
+        JOIN dailyreport d ON d.id = dr.daily_report_id
+        WHERE d.status = 'abierto'
+          AND dr.status IN ('pendiente', 'sin_recursos_asignados')
+    ));
 
     -- Parte 2: Cierre de reportes con fecha pasada
     FOR report_record IN
@@ -77,6 +63,139 @@ BEGIN
             END IF;
         END IF;
     END LOOP;
+END;
+$function$;
+
+-- function reconcile_daily_report_rows_status (T4, migracion 20261019100300)
+CREATE OR REPLACE FUNCTION public.reconcile_daily_report_rows_status(p_row_ids uuid[])
+ RETURNS integer
+ LANGUAGE sql
+ SET "TimeZone" TO 'America/Argentina/Buenos_Aires'
+AS $function$
+  WITH calc AS (
+    SELECT r.id,
+           CASE
+             WHEN (NOT COALESCE(si.needs_personnel, true) OR EXISTS (
+                     SELECT 1 FROM public.dailyreportemployeerelations e WHERE e.daily_report_row_id = r.id))
+              AND (NOT COALESCE(si.needs_equipment, true) OR EXISTS (
+                     SELECT 1 FROM public.dailyreportequipmentrelations q WHERE q.daily_report_row_id = r.id))
+             THEN 'pendiente'::daily_report_status
+             ELSE 'sin_recursos_asignados'::daily_report_status
+           END AS new_status
+    FROM public.dailyreportrows r
+    JOIN public.service_items si ON si.id = r.item_id
+    WHERE r.id = ANY (p_row_ids)
+      AND r.status IN ('pendiente', 'sin_recursos_asignados')
+  ),
+  upd AS (
+    UPDATE public.dailyreportrows dr
+    SET status = calc.new_status,
+        updated_at = now()
+    FROM calc
+    WHERE dr.id = calc.id
+      AND dr.status IS DISTINCT FROM calc.new_status
+    RETURNING 1
+  )
+  SELECT count(*)::integer FROM upd;
+$function$;
+
+-- function log_dailyreportrows_insert_history (T4, migracion 20261019100300)
+CREATE OR REPLACE FUNCTION public.log_dailyreportrows_insert_history()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_user uuid := public.app_current_user_id();
+BEGIN
+    -- Un trigger de sentencia se dispara aunque no afecte filas: no hacer nada en ese caso
+    IF NOT EXISTS (SELECT 1 FROM new_rows) THEN
+        RETURN NULL;
+    END IF;
+    INSERT INTO dailyreportrows_history (
+        daily_report_row_id, related_table, related_id, action_type,
+        changed_fields, changed_data, changed_by, reassignment_reason
+    )
+    SELECT n.id, TG_TABLE_NAME, n.id, 'CREATE',
+           '{}'::jsonb,
+           jsonb_build_object(
+               'customer_name', c.name,
+               'service_name', cs.service_name,
+               'item_name', si.item_name,
+               'working_day', n.working_day,
+               'status', n.status,
+               'type_service', n.type_service
+           ),
+           (SELECT p.credential_id FROM profile p WHERE p.credential_id = v_user),
+           NULL
+    FROM new_rows n
+    LEFT JOIN customers c ON c.id = n.customer_id
+    LEFT JOIN customer_services cs ON cs.id = n.service_id
+    LEFT JOIN service_items si ON si.id = n.item_id;
+    RETURN NULL;
+END;
+$function$;
+
+-- function log_dailyreportrows_update_history (T4, migracion 20261019100300)
+CREATE OR REPLACE FUNCTION public.log_dailyreportrows_update_history()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_user uuid := public.app_current_user_id();
+    v_reason text := NULLIF(current_setting('myapp.reassignment_reason', true), '');
+    v_logged integer;
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM new_rows) THEN
+        RETURN NULL;
+    END IF;
+    INSERT INTO dailyreportrows_history (
+        daily_report_row_id, related_table, related_id, action_type,
+        changed_fields, changed_data, changed_by, reassignment_reason
+    )
+    SELECT d.id, TG_TABLE_NAME, d.id, 'UPDATE', d.changed_fields,
+           jsonb_build_object(
+               'customer_name', c.name,
+               'service_name', cs.service_name,
+               'item_name', si.item_name,
+               'working_day', d.working_day,
+               'status', d.status,
+               'type_service', d.type_service
+           ),
+           (SELECT p.credential_id FROM profile p WHERE p.credential_id = v_user),
+           v_reason
+    FROM (
+        SELECT n.id, n.customer_id, n.service_id, n.item_id, n.working_day, n.status, n.type_service,
+               (CASE WHEN n.customer_id IS DISTINCT FROM o.customer_id THEN jsonb_build_object('customer_id', jsonb_build_object('old', o.customer_id, 'new', n.customer_id)) ELSE '{}'::jsonb END)
+            || (CASE WHEN n.service_id IS DISTINCT FROM o.service_id THEN jsonb_build_object('service_id', jsonb_build_object('old', o.service_id, 'new', n.service_id)) ELSE '{}'::jsonb END)
+            || (CASE WHEN n.completed_night IS DISTINCT FROM o.completed_night THEN jsonb_build_object('completed_night', jsonb_build_object('old', o.completed_night, 'new', n.completed_night)) ELSE '{}'::jsonb END)
+            || (CASE WHEN n.completed_day IS DISTINCT FROM o.completed_day THEN jsonb_build_object('completed_day', jsonb_build_object('old', o.completed_day, 'new', n.completed_day)) ELSE '{}'::jsonb END)
+            || (CASE WHEN n.item_id IS DISTINCT FROM o.item_id THEN jsonb_build_object('item_id', jsonb_build_object(
+                    'old', (SELECT item_name FROM service_items WHERE id = o.item_id),
+                    'new', (SELECT item_name FROM service_items WHERE id = n.item_id))) ELSE '{}'::jsonb END)
+            || (CASE WHEN n.working_day IS DISTINCT FROM o.working_day THEN jsonb_build_object('working_day', jsonb_build_object('old', o.working_day, 'new', n.working_day)) ELSE '{}'::jsonb END)
+            || (CASE WHEN n.start_time IS DISTINCT FROM o.start_time THEN jsonb_build_object('start_time', jsonb_build_object('old', o.start_time::text, 'new', n.start_time::text)) ELSE '{}'::jsonb END)
+            || (CASE WHEN n.end_time IS DISTINCT FROM o.end_time THEN jsonb_build_object('end_time', jsonb_build_object('old', o.end_time::text, 'new', n.end_time::text)) ELSE '{}'::jsonb END)
+            || (CASE WHEN n.description IS DISTINCT FROM o.description THEN jsonb_build_object('description', jsonb_build_object('old', o.description, 'new', n.description)) ELSE '{}'::jsonb END)
+            || (CASE WHEN n.status IS DISTINCT FROM o.status THEN jsonb_build_object('status', jsonb_build_object('old', o.status::text, 'new', n.status::text)) ELSE '{}'::jsonb END)
+            || (CASE WHEN n.sector_service_id IS DISTINCT FROM o.sector_service_id THEN jsonb_build_object('sector_service_id', jsonb_build_object('old', o.sector_service_id, 'new', n.sector_service_id)) ELSE '{}'::jsonb END)
+            || (CASE WHEN n.areas_service_id IS DISTINCT FROM o.areas_service_id THEN jsonb_build_object('areas_service_id', jsonb_build_object('old', o.areas_service_id, 'new', n.areas_service_id)) ELSE '{}'::jsonb END)
+            || (CASE WHEN n.cancel_reason IS DISTINCT FROM o.cancel_reason THEN jsonb_build_object('cancel_reason', jsonb_build_object('old', o.cancel_reason, 'new', n.cancel_reason)) ELSE '{}'::jsonb END)
+            || (CASE WHEN n.type_service IS DISTINCT FROM o.type_service THEN jsonb_build_object('type_service', jsonb_build_object('old', o.type_service::text, 'new', n.type_service::text)) ELSE '{}'::jsonb END)
+            AS changed_fields
+        FROM new_rows n
+        JOIN old_rows o ON o.id = n.id
+    ) d
+    LEFT JOIN customers c ON c.id = d.customer_id
+    LEFT JOIN customer_services cs ON cs.id = d.service_id
+    LEFT JOIN service_items si ON si.id = d.item_id
+    WHERE d.changed_fields <> '{}'::jsonb;
+
+    GET DIAGNOSTICS v_logged = ROW_COUNT;
+    -- El motivo de reasignacion se consume una sola vez (igual que antes)
+    IF v_logged > 0 AND v_reason IS NOT NULL THEN
+        PERFORM set_config('myapp.reassignment_reason', NULL, false);
+    END IF;
+    RETURN NULL;
 END;
 $function$;
 
@@ -131,27 +250,23 @@ BEGIN
 END;
 $function$;
 
--- function get_daily_report_deviations (origen: prisma/migrations/20260915190000_exclude_other_equipment_from_deviations/migration.sql)
-CREATE OR REPLACE FUNCTION public.get_daily_report_deviations(p_daily_report_id uuid, p_report_date date)
- RETURNS jsonb
- LANGUAGE plpgsql
- STABLE
+-- function get_daily_report_deviations (origen: prisma/migrations/20261020100000_deviations_single_pass/migration.sql)
+CREATE OR REPLACE FUNCTION public.get_daily_report_deviations(
+  p_daily_report_id uuid,
+  p_report_date date,
+  p_include_context boolean
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SET "TimeZone" TO 'America/Argentina/Buenos_Aires'
 AS $function$
 DECLARE
-  v_day INT;
-  v_month INT;
-  v_year INT;
-  v_rows_with_deviations JSONB;
-  v_summary JSONB;
-  v_total_employee_deviations INT := 0;
-  v_total_equipment_deviations INT := 0;
-  v_total_duplicated_employees INT := 0;
-  v_total_duplicated_equipment INT := 0;
+  v_day INT := EXTRACT(DAY FROM p_report_date)::INT;
+  v_month INT := EXTRACT(MONTH FROM p_report_date)::INT;
+  v_year INT := EXTRACT(YEAR FROM p_report_date)::INT;
+  v_result JSONB;
 BEGIN
-  v_day   := EXTRACT(DAY   FROM p_report_date)::INT;
-  v_month := EXTRACT(MONTH FROM p_report_date)::INT;
-  v_year  := EXTRACT(YEAR  FROM p_report_date)::INT;
-
   WITH employee_devs AS (
     SELECT
       der.daily_report_row_id AS row_id,
@@ -159,7 +274,6 @@ BEGIN
       COALESCE(e.firstname || ' ' || e.lastname, '—') AS employee_name,
       COALESCE(e.cuil, '—') AS employee_cuil,
       der.role::text AS role,
-      dr.customer_id,
       (COUNT(*) OVER (PARTITION BY der.employee_id)) > 1 AS is_duplicated,
       NOT EXISTS (
         SELECT 1 FROM contractor_employee ce
@@ -195,7 +309,6 @@ BEGIN
       -- Varios tipos vienen cargados con espacios al principio (" Contenedor")
       NULLIF(TRIM(t.name), '') AS equipment_type,
       COALESCE(v.condition::text, oe.condition::text) AS condition,
-      dr.customer_id,
       (COUNT(*) OVER (PARTITION BY COALESCE(deq.equipment_id, deq.other_equipment_id))) > 1 AS is_duplicated,
       -- Cada tipo de equipo tiene su propia pivote de afectacion a cliente.
       CASE
@@ -219,6 +332,14 @@ BEGIN
       -- Ticket 698: otros equipos excluidos temporalmente de los desvios.
       AND deq.other_equipment_id IS NULL
   ),
+  emp_flagged AS (
+    SELECT * FROM employee_devs
+    WHERE is_duplicated OR is_unassigned_to_client OR has_no_diagram OR is_non_work_day
+  ),
+  equip_flagged AS (
+    SELECT * FROM equipment_devs
+    WHERE is_duplicated OR is_unassigned_to_client OR (condition IS NOT NULL AND condition <> 'operativo')
+  ),
   emp_by_row AS (
     SELECT
       row_id,
@@ -235,8 +356,7 @@ BEGIN
           'diagram_type_name', diagram_type_name
         )
       ) AS employee_deviations
-    FROM employee_devs
-    WHERE is_duplicated OR is_unassigned_to_client OR has_no_diagram OR is_non_work_day
+    FROM emp_flagged
     GROUP BY row_id
   ),
   equip_by_row AS (
@@ -255,11 +375,10 @@ BEGIN
           'is_unassigned_to_client', is_unassigned_to_client
         )
       ) AS equipment_deviations
-    FROM equipment_devs
-    WHERE is_duplicated OR is_unassigned_to_client OR (condition IS NOT NULL AND condition <> 'operativo')
+    FROM equip_flagged
     GROUP BY row_id
   ),
-  -- Customer equipment per row
+  -- Equipos del cliente por fila: solo los usa el mail (p_include_context = true).
   cust_equip_by_row AS (
     SELECT
       dcer.daily_report_row_id AS row_id,
@@ -272,8 +391,15 @@ BEGIN
     FROM dailyreport_customer_equipment_relations dcer
     LEFT JOIN equipos_clientes ec ON ec.id = dcer.customer_equipment_id
     INNER JOIN dailyreportrows dr ON dr.id = dcer.daily_report_row_id
-    WHERE dr.daily_report_id = p_daily_report_id
+    WHERE p_include_context
+      AND dr.daily_report_id = p_daily_report_id
     GROUP BY dcer.daily_report_row_id
+  ),
+  -- Filas con algún desvío (de personal o de equipos).
+  flagged_rows AS (
+    SELECT row_id FROM emp_by_row
+    UNION
+    SELECT row_id FROM equip_by_row
   ),
   rows_data AS (
     SELECT
@@ -293,129 +419,82 @@ BEGIN
       COALESCE(ebr.employee_deviations, '[]'::jsonb) AS employee_deviations,
       COALESCE(eqr.equipment_deviations, '[]'::jsonb) AS equipment_deviations,
       COALESCE(cer.customer_equipment, '[]'::jsonb) AS customer_equipment
-    FROM dailyreportrows dr
-    LEFT JOIN customers c ON c.id = dr.customer_id
-    LEFT JOIN customer_services cs ON cs.id = dr.service_id
-    LEFT JOIN service_items si ON si.id = dr.item_id
-    LEFT JOIN service_sectors ss ON ss.id = dr.sector_service_id
+    FROM flagged_rows fr
+    INNER JOIN dailyreportrows dr ON dr.id = fr.row_id
+    -- Los joins de catálogos son solo de nombres: con p_include_context = false no se ejecutan.
+    LEFT JOIN customers c ON p_include_context AND c.id = dr.customer_id
+    LEFT JOIN customer_services cs ON p_include_context AND cs.id = dr.service_id
+    LEFT JOIN service_items si ON p_include_context AND si.id = dr.item_id
+    LEFT JOIN service_sectors ss ON p_include_context AND ss.id = dr.sector_service_id
     LEFT JOIN sectors sec ON sec.id = ss.sector_id
-    LEFT JOIN service_areas sa ON sa.id = dr.areas_service_id
+    LEFT JOIN service_areas sa ON p_include_context AND sa.id = dr.areas_service_id
     LEFT JOIN areas_cliente ac ON ac.id = sa.area_id
     LEFT JOIN emp_by_row ebr ON ebr.row_id = dr.id
     LEFT JOIN equip_by_row eqr ON eqr.row_id = dr.id
     LEFT JOIN cust_equip_by_row cer ON cer.row_id = dr.id
-    WHERE dr.daily_report_id = p_daily_report_id
-      AND (ebr.row_id IS NOT NULL OR eqr.row_id IS NOT NULL)
+  ),
+  counters AS (
+    SELECT
+      -- Mismas definiciones que los CTE de arriba; antes se repetían en 4 subconsultas.
+      (SELECT COUNT(*) FROM employee_devs
+        WHERE is_unassigned_to_client OR has_no_diagram OR is_non_work_day) AS total_employee_deviations,
+      (SELECT COUNT(*) FROM equipment_devs
+        WHERE is_unassigned_to_client OR (condition IS NOT NULL AND condition <> 'operativo')) AS total_equipment_deviations,
+      (SELECT COUNT(DISTINCT employee_id) FROM employee_devs WHERE is_duplicated) AS total_duplicated_employees,
+      (SELECT COUNT(DISTINCT equipment_id) FROM equipment_devs WHERE is_duplicated) AS total_duplicated_equipment
+  ),
+  rows_json AS (
+    SELECT COALESCE(jsonb_agg(
+      (jsonb_build_object(
+        'row_id', rd.row_id,
+        'employee_deviations', rd.employee_deviations,
+        'equipment_deviations', rd.equipment_deviations
+      ) || CASE WHEN p_include_context THEN jsonb_build_object(
+        'customer_id', rd.customer_id,
+        'customer_name', COALESCE(rd.customer_name, '—'),
+        'service_name', COALESCE(rd.service_name, '—'),
+        'item_name', COALESCE(rd.item_name, '—'),
+        'start_time', rd.start_time,
+        'end_time', rd.end_time,
+        'working_day', rd.working_day,
+        'type_service', rd.type_service,
+        'status', rd.status,
+        'description', rd.description,
+        'sector_name', rd.sector_name,
+        'area_name', rd.area_name,
+        'customer_equipment', rd.customer_equipment
+      ) ELSE '{}'::jsonb END)
+      -- El orden solo se usa en el mail; la UI indexa por row_id.
+      ORDER BY CASE WHEN p_include_context THEN rd.customer_name END,
+               CASE WHEN p_include_context THEN rd.service_name END
+    ), '[]'::jsonb) AS rows_with_deviations
+    FROM rows_data rd
   )
-  SELECT COALESCE(jsonb_agg(
-    jsonb_build_object(
-      'row_id', rd.row_id,
-      'customer_id', rd.customer_id,
-      'customer_name', COALESCE(rd.customer_name, '—'),
-      'service_name', COALESCE(rd.service_name, '—'),
-      'item_name', COALESCE(rd.item_name, '—'),
-      'start_time', rd.start_time,
-      'end_time', rd.end_time,
-      'working_day', rd.working_day,
-      'type_service', rd.type_service,
-      'status', rd.status,
-      'description', rd.description,
-      'sector_name', rd.sector_name,
-      'area_name', rd.area_name,
-      'customer_equipment', rd.customer_equipment,
-      'employee_deviations', rd.employee_deviations,
-      'equipment_deviations', rd.equipment_deviations
+  SELECT jsonb_build_object(
+    'rows_with_deviations', rj.rows_with_deviations,
+    'summary', jsonb_build_object(
+      'total_employee_deviations', ct.total_employee_deviations,
+      'total_equipment_deviations', ct.total_equipment_deviations,
+      'total_duplicated_employees', ct.total_duplicated_employees,
+      'total_duplicated_equipment', ct.total_duplicated_equipment,
+      'total_rows_with_deviations', jsonb_array_length(rj.rows_with_deviations)
     )
-    ORDER BY rd.customer_name, rd.service_name
-  ), '[]'::jsonb)
-  INTO v_rows_with_deviations
-  FROM rows_data rd;
+  )
+  INTO v_result
+  FROM rows_json rj, counters ct;
 
-  -- CONTADORES
-  SELECT COUNT(*) INTO v_total_employee_deviations
-  FROM (
-    SELECT der.employee_id
-    FROM dailyreportemployeerelations der
-    INNER JOIN dailyreportrows dr ON dr.id = der.daily_report_row_id
-    LEFT JOIN employees_diagram ed
-      ON ed.employee_id = der.employee_id
-      AND ed.day = v_day AND ed.month = v_month AND ed.year = v_year
-      AND (ed.is_active = true OR ed.is_active IS NULL)
-    LEFT JOIN diagram_type dt ON dt.id = ed.diagram_type
-    WHERE dr.daily_report_id = p_daily_report_id
-      AND (
-        NOT EXISTS (
-          SELECT 1 FROM contractor_employee ce
-          WHERE ce.employee_id = der.employee_id AND ce.contractor_id = dr.customer_id
-        )
-        OR ed.id IS NULL
-        OR (ed.id IS NOT NULL AND COALESCE(dt.work_active, true) = false)
-      )
-  ) sub;
-
-  SELECT COUNT(*) INTO v_total_equipment_deviations
-  FROM (
-    SELECT deq.id
-    FROM dailyreportequipmentrelations deq
-    INNER JOIN dailyreportrows dr ON dr.id = deq.daily_report_row_id
-    LEFT JOIN vehicles v ON v.id = deq.equipment_id
-    LEFT JOIN other_equipment oe ON oe.id = deq.other_equipment_id
-    WHERE dr.daily_report_id = p_daily_report_id
-      -- Ticket 698: otros equipos excluidos temporalmente de los desvios.
-      AND deq.other_equipment_id IS NULL
-      AND (
-        CASE
-          WHEN deq.other_equipment_id IS NOT NULL THEN NOT EXISTS (
-            SELECT 1 FROM contractor_other_equipment coe
-            WHERE coe.equipment_id = deq.other_equipment_id AND coe.contractor_id = dr.customer_id
-          )
-          ELSE NOT EXISTS (
-            SELECT 1 FROM contractor_equipment ce
-            WHERE ce.equipment_id = deq.equipment_id AND ce.contractor_id = dr.customer_id
-          )
-        END
-        OR (
-          COALESCE(v.condition::text, oe.condition::text) IS NOT NULL
-          AND COALESCE(v.condition::text, oe.condition::text) <> 'operativo'
-        )
-      )
-  ) sub;
-
-  SELECT COUNT(DISTINCT employee_id) INTO v_total_duplicated_employees
-  FROM (
-    SELECT der.employee_id
-    FROM dailyreportemployeerelations der
-    INNER JOIN dailyreportrows dr ON dr.id = der.daily_report_row_id
-    WHERE dr.daily_report_id = p_daily_report_id
-    GROUP BY der.employee_id
-    HAVING COUNT(*) > 1
-  ) sub;
-
-  SELECT COUNT(DISTINCT equipment_id) INTO v_total_duplicated_equipment
-  FROM (
-    SELECT COALESCE(deq.equipment_id, deq.other_equipment_id) AS equipment_id
-    FROM dailyreportequipmentrelations deq
-    INNER JOIN dailyreportrows dr ON dr.id = deq.daily_report_row_id
-    WHERE dr.daily_report_id = p_daily_report_id
-      -- Ticket 698: otros equipos excluidos temporalmente de los desvios.
-      AND deq.other_equipment_id IS NULL
-    GROUP BY COALESCE(deq.equipment_id, deq.other_equipment_id)
-    HAVING COUNT(*) > 1
-  ) sub;
-
-  v_summary := jsonb_build_object(
-    'total_employee_deviations', v_total_employee_deviations,
-    'total_equipment_deviations', v_total_equipment_deviations,
-    'total_duplicated_employees', v_total_duplicated_employees,
-    'total_duplicated_equipment', v_total_duplicated_equipment,
-    'total_rows_with_deviations', jsonb_array_length(v_rows_with_deviations)
-  );
-
-  RETURN jsonb_build_object(
-    'rows_with_deviations', v_rows_with_deviations,
-    'summary', v_summary
-  );
+  RETURN v_result;
 END;
+$function$;
+
+-- Firma histórica (mail nocturno, Dashboard): misma salida de siempre.
+CREATE OR REPLACE FUNCTION public.get_daily_report_deviations(p_daily_report_id uuid, p_report_date date)
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+SET "TimeZone" TO 'America/Argentina/Buenos_Aires'
+AS $function$
+  SELECT public.get_daily_report_deviations(p_daily_report_id, p_report_date, true);
 $function$;
 
 -- function get_daily_report_deviations_indicator (origen: prisma/migrations/20260915190000_exclude_other_equipment_from_deviations/migration.sql)
@@ -770,11 +849,6 @@ END IF;
                 jsonb_build_object('old', OLD.areas_service_id, 'new', NEW.areas_service_id));
         END IF;
         
-        IF NEW.remit_number IS DISTINCT FROM OLD.remit_number THEN
-            changed_fields := jsonb_set(changed_fields, '{remit_number}', 
-                jsonb_build_object('old', OLD.remit_number, 'new', NEW.remit_number));
-        END IF;
-        
         IF NEW.cancel_reason IS DISTINCT FROM OLD.cancel_reason THEN
             changed_fields := jsonb_set(changed_fields, '{cancel_reason}', 
                 jsonb_build_object('old', OLD.cancel_reason, 'new', NEW.cancel_reason));
@@ -958,7 +1032,7 @@ CREATE OR REPLACE VIEW public.equipments_with_pending_deviations AS
   ORDER BY (max(cd.created_at)) DESC;
 
 -- ============================================================================
--- TRIGGERS (8)
+-- TRIGGERS (6)
 -- ============================================================================
 
 -- trigger tr_dailyreport_customer_equipment_relations_history ON dailyreport_customer_equipment_relations (origen: supabase/migrations/20251103211302_initial_structure.sql)
@@ -973,22 +1047,140 @@ CREATE TRIGGER tr_dailyreport_employee_relations_history BEFORE INSERT OR DELETE
 DROP TRIGGER IF EXISTS tr_dailyreport_equipment_relations_history ON public.dailyreportequipmentrelations;
 CREATE TRIGGER tr_dailyreport_equipment_relations_history BEFORE INSERT OR DELETE ON public.dailyreportequipmentrelations FOR EACH ROW EXECUTE FUNCTION public.log_equipment_relations_changes();
 
--- trigger before_update_log_reason ON dailyreportrows (origen: supabase/migrations/20251103211302_initial_structure.sql)
-DROP TRIGGER IF EXISTS before_update_log_reason ON public.dailyreportrows;
-CREATE TRIGGER before_update_log_reason BEFORE UPDATE ON public.dailyreportrows FOR EACH ROW EXECUTE FUNCTION public.log_reassignment_reason_before_update();
+-- trigger tr_after_dailyreportrows_update_optimized: ELIMINADO en T4 (migracion 20261019100300); la funcion se conserva hasta T6
 
--- trigger tr_after_dailyreportrows_update_optimized ON dailyreportrows (origen: supabase/migrations/20251104195732_confirmed_by_and_dailyreport_perfomance.sql)
-DROP TRIGGER IF EXISTS tr_after_dailyreportrows_update_optimized ON public.dailyreportrows;
-CREATE TRIGGER tr_after_dailyreportrows_update_optimized AFTER INSERT OR DELETE OR UPDATE ON public.dailyreportrows FOR EACH ROW EXECUTE FUNCTION public.after_dailyreportrows_update_optimized();
-
--- trigger tr_dailyreportrows_history_after_insert ON dailyreportrows (origen: supabase/migrations/20251103211302_initial_structure.sql)
+-- trigger tr_dailyreportrows_history_after_insert ON dailyreportrows (T4: sentencia con tabla de transicion)
 DROP TRIGGER IF EXISTS tr_dailyreportrows_history_after_insert ON public.dailyreportrows;
-CREATE TRIGGER tr_dailyreportrows_history_after_insert AFTER INSERT ON public.dailyreportrows FOR EACH ROW EXECUTE FUNCTION public.log_dailyreport_changes();
+CREATE TRIGGER tr_dailyreportrows_history_after_insert
+  AFTER INSERT ON public.dailyreportrows
+  REFERENCING NEW TABLE AS new_rows
+  FOR EACH STATEMENT EXECUTE FUNCTION public.log_dailyreportrows_insert_history();
 
--- trigger tr_dailyreportrows_history_before_delete ON dailyreportrows (origen: supabase/migrations/20251103211302_initial_structure.sql)
-DROP TRIGGER IF EXISTS tr_dailyreportrows_history_before_delete ON public.dailyreportrows;
-CREATE TRIGGER tr_dailyreportrows_history_before_delete BEFORE DELETE ON public.dailyreportrows FOR EACH ROW EXECUTE FUNCTION public.log_dailyreport_changes();
-
--- trigger tr_dailyreportrows_history_before_update ON dailyreportrows (origen: supabase/migrations/20251103211302_initial_structure.sql)
+-- trigger tr_dailyreportrows_history_before_update ON dailyreportrows (T4: sentencia con tablas de transicion)
 DROP TRIGGER IF EXISTS tr_dailyreportrows_history_before_update ON public.dailyreportrows;
-CREATE TRIGGER tr_dailyreportrows_history_before_update BEFORE UPDATE ON public.dailyreportrows FOR EACH ROW EXECUTE FUNCTION public.log_dailyreport_changes();
+CREATE TRIGGER tr_dailyreportrows_history_before_update
+  AFTER UPDATE ON public.dailyreportrows
+  REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows
+  FOR EACH STATEMENT EXECUTE FUNCTION public.log_dailyreportrows_update_history();
+
+-- function log_remito_changes (remitos: fuente única del remito de una línea)
+-- Registra en el historial de la línea el alta (LINK), la baja (UNLINK) y el cambio de número
+-- (UPDATE) de cada remito. Mismo mecanismo que las relaciones de empleados y equipos.
+CREATE OR REPLACE FUNCTION public.log_remito_changes()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    user_id UUID;
+    parent_exists BOOLEAN;
+BEGIN
+    -- Actor de la transaccion (app.user_id via withActor); NULL si no hay usuario
+    user_id := public.app_current_user_id();
+
+    IF TG_OP = 'INSERT' THEN
+        BEGIN
+            INSERT INTO dailyreportrows_history (
+                daily_report_row_id, related_table, related_id, action_type,
+                changed_fields, changed_data, changed_by
+            ) VALUES (
+                NEW.daily_report_row_id, 'remitos', NEW.id, 'LINK',
+                '{}'::JSONB,
+                jsonb_build_object('remito_numero', NEW.remit_number, 'vinculado', NEW.is_linked),
+                user_id
+            );
+        EXCEPTION WHEN foreign_key_violation THEN
+            NULL;
+        END;
+
+    ELSIF TG_OP = 'UPDATE' THEN
+        IF NEW.remit_number IS DISTINCT FROM OLD.remit_number THEN
+            BEGIN
+                INSERT INTO dailyreportrows_history (
+                    daily_report_row_id, related_table, related_id, action_type,
+                    changed_fields, changed_data, changed_by
+                ) VALUES (
+                    NEW.daily_report_row_id, 'remitos', NEW.id, 'UPDATE',
+                    jsonb_build_object('remit_number', jsonb_build_object('old', OLD.remit_number, 'new', NEW.remit_number)),
+                    jsonb_build_object('remito_numero', NEW.remit_number, 'vinculado', NEW.is_linked),
+                    user_id
+                );
+            EXCEPTION WHEN foreign_key_violation THEN
+                NULL;
+            END;
+        END IF;
+
+    ELSIF TG_OP = 'DELETE' THEN
+        -- Si la línea se está borrando (cascada), no hay historial donde escribir
+        SELECT EXISTS (SELECT 1 FROM dailyreportrows WHERE id = OLD.daily_report_row_id) INTO parent_exists;
+        IF parent_exists THEN
+            BEGIN
+                INSERT INTO dailyreportrows_history (
+                    daily_report_row_id, related_table, related_id, action_type,
+                    changed_fields, changed_data, changed_by
+                ) VALUES (
+                    OLD.daily_report_row_id, 'remitos', OLD.id, 'UNLINK',
+                    '{}'::JSONB,
+                    jsonb_build_object('remito_numero', OLD.remit_number, 'vinculado', OLD.is_linked),
+                    user_id
+                );
+            EXCEPTION WHEN foreign_key_violation THEN
+                NULL;
+            END;
+        END IF;
+    END IF;
+
+    RETURN COALESCE(NEW, OLD);
+END;
+$function$;
+
+-- function log_remito_document_changes
+-- Registra en el historial de la línea el alta (LINK) y la baja (UNLINK) de cada documento de un remito.
+CREATE OR REPLACE FUNCTION public.log_remito_document_changes()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    user_id UUID;
+    v_row_id UUID;
+    v_remit_number TEXT;
+BEGIN
+    user_id := public.app_current_user_id();
+
+    -- Si el remito ya no existe (se borró y los documentos caen por cascada), su baja ya quedó registrada
+    SELECT r.daily_report_row_id, r.remit_number INTO v_row_id, v_remit_number
+    FROM remitos r
+    WHERE r.id = COALESCE(NEW.remit_id, OLD.remit_id);
+
+    IF v_row_id IS NULL THEN
+        RETURN COALESCE(NEW, OLD);
+    END IF;
+
+    BEGIN
+        INSERT INTO dailyreportrows_history (
+            daily_report_row_id, related_table, related_id, action_type,
+            changed_fields, changed_data, changed_by
+        ) VALUES (
+            v_row_id, 'remito_documents', COALESCE(NEW.id, OLD.id),
+            CASE WHEN TG_OP = 'INSERT' THEN 'LINK' ELSE 'UNLINK' END,
+            '{}'::JSONB,
+            jsonb_build_object(
+                'remito_numero', v_remit_number,
+                'documento_nombre', COALESCE(NEW.document_name, OLD.document_name)
+            ),
+            user_id
+        );
+    EXCEPTION WHEN foreign_key_violation THEN
+        NULL;
+    END;
+
+    RETURN COALESCE(NEW, OLD);
+END;
+$function$;
+
+-- trigger tr_remitos_history ON remitos
+DROP TRIGGER IF EXISTS tr_remitos_history ON public.remitos;
+CREATE TRIGGER tr_remitos_history AFTER INSERT OR DELETE OR UPDATE OF remit_number ON public.remitos FOR EACH ROW EXECUTE FUNCTION public.log_remito_changes();
+
+-- trigger tr_remito_documents_history ON remito_documents
+DROP TRIGGER IF EXISTS tr_remito_documents_history ON public.remito_documents;
+CREATE TRIGGER tr_remito_documents_history AFTER INSERT OR DELETE ON public.remito_documents FOR EACH ROW EXECUTE FUNCTION public.log_remito_document_changes();

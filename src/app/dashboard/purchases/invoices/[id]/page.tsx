@@ -1,4 +1,4 @@
-import { getSupplierInvoiceDetail } from '@/features/Purchases/actions/invoices.server';
+import { getSupplierInvoiceDetail } from '@/features/Purchases/actions/invoice-queries.server';
 import { SupplierInvoicePage } from '@/features/Purchases/Invoices/InvoicePages';
 import { notFound } from 'next/navigation';
 import { cache } from 'react';

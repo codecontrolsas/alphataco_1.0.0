@@ -19,6 +19,8 @@ interface DatePickerProps extends Pick<React.ComponentProps<'input'>, 'id' | 'na
   setDate?: (date: Date | undefined) => void;
   /** Fecha minima seleccionable/escribible (ej: hoy para vencimientos). Opcional. */
   minDate?: Date;
+  /** Fecha maxima seleccionable/escribible (ej: ayer para partes ya ocurridos). Opcional. */
+  maxDate?: Date;
   placeholder?: string;
   className?: string;
   /** Lo inyecta FormControl de shadcn para enlazar la descripcion y el error del campo. */
@@ -43,6 +45,7 @@ export function EnhancedDatePicker({
   date,
   setDate,
   minDate,
+  maxDate,
   placeholder = DATE_FORMAT,
   className,
   id,
@@ -88,6 +91,12 @@ export function EnhancedDatePicker({
       return;
     }
 
+    if (maxDate && parsed.isAfter(moment(maxDate), 'day')) {
+      setInputError(`La fecha debe ser igual o anterior a ${moment(maxDate).format(DATE_FORMAT)}`);
+      commitDate(undefined);
+      return;
+    }
+
     setInputError('');
     setCalendarMonth(parsed.toDate());
     commitDate(parsed.toDate());
@@ -129,6 +138,7 @@ export function EnhancedDatePicker({
               onMonthChange={setCalendarMonth}
               onSelect={handleCalendarSelect}
               fromDate={minDate}
+              toDate={maxDate}
               locale={es}
               initialFocus
             />

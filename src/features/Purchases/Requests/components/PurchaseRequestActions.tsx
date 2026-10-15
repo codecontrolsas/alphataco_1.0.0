@@ -14,8 +14,8 @@ import {
   copyPurchaseRequest,
   rejectPurchaseRequest,
   submitPurchaseRequest,
-  type PurchaseRequestDetail,
 } from '../../actions/requests.server';
+import type { PurchaseRequestDetail } from '../../lib/request-query-types';
 import { ConfirmAction } from '../../components/ConfirmAction';
 import { PURCHASES_QUERY_KEYS } from '../../lib/query-keys';
 import { RequestQuotesDialog } from './RequestQuotesDialog';

@@ -1,6 +1,7 @@
 import { getUserPermissionsMapServer } from '@/features/Permissions';
 import { SectionManagerServer } from '@/features/TabsManager';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { SectionErrorBoundary } from '@/shared/components/common/SectionErrorBoundary';
 import { ArrowLeftRight, ClipboardList, HandHelping, Layers, Package, Settings, Warehouse } from 'lucide-react';
 import { Suspense } from 'react';
 import DepotsTabContent from './Depots/DepotsTabContent';
@@ -42,9 +43,11 @@ export default async function WarehousesComponent({ searchParams }: { searchPara
           moduleSlug: 'almacenes',
           tabSlug: 'stock',
           content: (
-            <Suspense fallback={<WarehouseSectionSkeleton />}>
-              <StockTabContent searchParams={searchParams} permissions={permissions} />
-            </Suspense>
+            <SectionErrorBoundary title="No se pudo mostrar Stock">
+              <Suspense fallback={<WarehouseSectionSkeleton />}>
+                <StockTabContent searchParams={searchParams} permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
         {
@@ -53,9 +56,11 @@ export default async function WarehousesComponent({ searchParams }: { searchPara
           moduleSlug: 'almacenes',
           tabSlug: 'movimientos',
           content: (
-            <Suspense fallback={<WarehouseSectionSkeleton />}>
-              <MovementsTabContent searchParams={searchParams} permissions={permissions} />
-            </Suspense>
+            <SectionErrorBoundary title="No se pudo mostrar Movimientos">
+              <Suspense fallback={<WarehouseSectionSkeleton />}>
+                <MovementsTabContent searchParams={searchParams} permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
         {
@@ -64,9 +69,11 @@ export default async function WarehousesComponent({ searchParams }: { searchPara
           moduleSlug: 'almacenes',
           tabSlug: 'prestamos',
           content: (
-            <Suspense fallback={<WarehouseSectionSkeleton />}>
-              <LoansTabContent searchParams={searchParams} permissions={permissions} />
-            </Suspense>
+            <SectionErrorBoundary title="No se pudo mostrar Préstamos">
+              <Suspense fallback={<WarehouseSectionSkeleton />}>
+                <LoansTabContent searchParams={searchParams} permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
         {
@@ -75,9 +82,11 @@ export default async function WarehousesComponent({ searchParams }: { searchPara
           moduleSlug: 'almacenes',
           tabSlug: 'pedidos',
           content: (
-            <Suspense fallback={<WarehouseSectionSkeleton />}>
-              <RequestsTabContent searchParams={searchParams} permissions={permissions} />
-            </Suspense>
+            <SectionErrorBoundary title="No se pudo mostrar Pedidos">
+              <Suspense fallback={<WarehouseSectionSkeleton />}>
+                <RequestsTabContent searchParams={searchParams} permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
         {
@@ -86,9 +95,11 @@ export default async function WarehousesComponent({ searchParams }: { searchPara
           moduleSlug: 'almacenes',
           tabSlug: 'materiales',
           content: (
-            <Suspense fallback={<WarehouseSectionSkeleton />}>
-              <MaterialsTabContent searchParams={searchParams} permissions={permissions} />
-            </Suspense>
+            <SectionErrorBoundary title="No se pudo mostrar Materiales">
+              <Suspense fallback={<WarehouseSectionSkeleton />}>
+                <MaterialsTabContent searchParams={searchParams} permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
         {
@@ -97,9 +108,11 @@ export default async function WarehousesComponent({ searchParams }: { searchPara
           moduleSlug: 'almacenes',
           tabSlug: 'depositos',
           content: (
-            <Suspense fallback={<WarehouseSectionSkeleton />}>
-              <DepotsTabContent searchParams={searchParams} permissions={permissions} />
-            </Suspense>
+            <SectionErrorBoundary title="No se pudo mostrar Depósitos">
+              <Suspense fallback={<WarehouseSectionSkeleton />}>
+                <DepotsTabContent searchParams={searchParams} permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
         {
@@ -108,9 +121,11 @@ export default async function WarehousesComponent({ searchParams }: { searchPara
           moduleSlug: 'almacenes',
           tabSlug: 'config-almacen',
           content: (
-            <Suspense fallback={<SettingsSkeleton />}>
-              <SettingsTabContent permissions={permissions} />
-            </Suspense>
+            <SectionErrorBoundary title="No se pudo mostrar Configuración">
+              <Suspense fallback={<SettingsSkeleton />}>
+                <SettingsTabContent permissions={permissions} />
+              </Suspense>
+            </SectionErrorBoundary>
           ),
         },
       ]}

@@ -1,1 +1,1 @@
-export { WorkshopTrackingSkeleton } from './WorkshopTrackingSkeleton';
+export { TrackingMetricsSkeleton, WorkshopTrackingSkeleton } from './WorkshopTrackingSkeleton';

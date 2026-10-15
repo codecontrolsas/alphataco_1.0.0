@@ -1,5 +1,6 @@
 'use server';
 
+import { requireDashboardView } from '@/features/Dashboard/lib/permissions.server';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
@@ -19,6 +20,7 @@ const logger = new Logger('features/Dashboard/Principal/checklists');
  * "mes anterior" sin tocar la query (posible cambio futuro, según la reunión del ticket).
  */
 export async function getChecklistMissingIndicator() {
+  await requireDashboardView('principal');
   logger.debug('Obteniendo indicador de equipos sin checklist');
 
   try {
@@ -37,7 +39,8 @@ export async function getChecklistMissingIndicator() {
     return { historicalCount, monthCount };
   } catch (error) {
     logger.error('Error al obtener indicador de equipos sin checklist', { data: { error } });
-    return { historicalCount: 0, monthCount: 0 };
+    // Sin dato no hay 0: un cero se leería como "todos los equipos tienen checklist".
+    throw error;
   }
 }
 

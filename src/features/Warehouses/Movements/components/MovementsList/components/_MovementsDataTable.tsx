@@ -8,11 +8,14 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { CircleOff, User } from 'lucide-react';
-import moment from 'moment';
+import dynamic from 'next/dynamic';
 import { useCallback, useMemo, useState } from 'react';
 import { ALL_MOVEMENT_TYPES, DESTINATION_TYPE_LABELS, MOVEMENT_TYPE_LABELS, type MovementKind } from '../../../../lib/labels';
 import { WAREHOUSE_QUERY_KEYS } from '../../../../lib/query-keys';
+import { MOVEMENT_TYPE_UI, REVERSAL_STATUS_UI } from '../../../../lib/status-presentation';
 import {
   STOCK_DESTINATION_TYPES,
   type StockDestinationTypeValue,
@@ -28,10 +31,15 @@ import {
   HIDDEN_COLUMNS_BY_DEFAULT,
   REVERSAL_STATUS_LABELS,
   destinationTypeIcons,
+  formatOccurredOn,
   getColumns,
-  movementTypeIcons,
-  reversalStatusIcons,
 } from '../columns';
+
+// El detalle solo se necesita al abrirlo: no entra en el bundle de la lista.
+const MovementDetailSheet = dynamic(
+  () => import('../../MovementDetailSheet').then((m) => m.MovementDetailSheet),
+  { ssr: false }
+);
 
 interface Props {
   data: MovementListItem[];
@@ -63,7 +71,13 @@ export function _MovementsDataTable({
 
   // El servidor decide por su cuenta: esto solo agrega la columna de costo si va a haber datos.
   const canViewPrices = permissionsMap['almacenes:movimientos:view_prices'] === true;
-  const columns = useMemo(() => getColumns({ canViewPrices }), [canViewPrices]);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const openDetail = useCallback((id: string) => {
+    setDetailId(id);
+    setDetailOpen(true);
+  }, []);
+  const columns = useMemo(() => getColumns({ canViewPrices, onOpenDetail: openDetail }), [canViewPrices, openDetail]);
 
   const mergedColumnVisibility = useMemo(() => {
     const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((c) => [c, false]));
@@ -101,8 +115,8 @@ export function _MovementsDataTable({
           return {
             options: ALL_MOVEMENT_TYPES.map((value) => ({
               value,
-              label: MOVEMENT_TYPE_LABELS[value],
-              icon: movementTypeIcons[value],
+              label: MOVEMENT_TYPE_UI[value].label,
+              icon: MOVEMENT_TYPE_UI[value].icon,
             })),
             counts: result.counts,
           };
@@ -118,8 +132,8 @@ export function _MovementsDataTable({
           return {
             options: REVERSAL_STATUSES.map((value) => ({
               value,
-              label: REVERSAL_STATUS_LABELS[value],
-              icon: reversalStatusIcons[value],
+              label: REVERSAL_STATUS_UI[value].label,
+              icon: REVERSAL_STATUS_UI[value].icon,
             })),
             counts: result.counts,
           };
@@ -173,41 +187,44 @@ export function _MovementsDataTable({
 
   const exportConfig: DataTableExportConfig<MovementListItem> = useMemo(
     () => ({
-      fetchAllData: () => getAllMovementsForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllMovementsForExport(currentParams)),
       options: { filename: 'movimientos', title: 'Movimientos de stock', sheetName: 'Movimientos' },
       formatters: {
         type: (value) => MOVEMENT_TYPE_LABELS[value as MovementKind] ?? String(value),
-        occurred_on: (value) => (value ? moment.utc(value as string | Date).format('DD/MM/YYYY') : ''),
+        occurred_on: (value) => (value ? formatOccurredOn(value as string | Date) : ''),
         destination_type: (value) =>
           value ? (DESTINATION_TYPE_LABELS[value as StockDestinationTypeValue] ?? String(value)) : '',
         reference: (value) => (value ? String(value) : ''),
         notes: (value) => (value ? String(value) : ''),
         status: (value) => REVERSAL_STATUS_LABELS[value as MovementReversalStatus] ?? String(value),
-        created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY HH:mm') : ''),
+        created_at: (value) => (value ? formatArgentinaDateTime(value as string | Date) : ''),
       },
     }),
     [currentParams]
   );
 
   return (
-    <DataTable
-      columns={columns}
-      data={data}
-      totalRows={totalRows}
-      searchParams={searchParams}
-      tableId={tableId}
-      paramNamespace={tableId}
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={mergedColumnVisibility}
-      initialFilterVisibility={mergedFilterVisibility}
-      showFilterToggle
-      queryFn={tableQueryFn}
-      queryKey={[...WAREHOUSE_QUERY_KEYS.movements]}
-      onStateChange={handleStateChange}
-      searchPlaceholder="Buscar por número o referencia"
-      emptyMessage="No hay movimientos registrados"
-      exportConfig={exportConfig}
-      data-testid="warehouse-movements-table"
-    />
+    <>
+      <DataTable
+        columns={columns}
+        data={data}
+        totalRows={totalRows}
+        searchParams={searchParams}
+        tableId={tableId}
+        paramNamespace={tableId}
+        facetedFilters={facetedFilters}
+        initialColumnVisibility={mergedColumnVisibility}
+        initialFilterVisibility={mergedFilterVisibility}
+        showFilterToggle
+        queryFn={tableQueryFn}
+        queryKey={[...WAREHOUSE_QUERY_KEYS.movements]}
+        onStateChange={handleStateChange}
+        searchPlaceholder="Buscar por número o referencia"
+        emptyMessage="No hay movimientos registrados"
+        exportConfig={exportConfig}
+        data-testid="warehouse-movements-table"
+      />
+      {detailId ? <MovementDetailSheet movementId={detailId} open={detailOpen} onOpenChange={setDetailOpen} /> : null}
+    </>
   );
 }

@@ -5,7 +5,11 @@ import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { CACHE_TAGS } from '@/shared/constants/cache';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
-import { getResourceCompanyId } from '@/features/Mantenimiento/shared/resource-company';
+import {
+  NUEVO_PEDIDO_CREATE,
+  NUEVO_PEDIDO_VIEW,
+  requireResourceAccess,
+} from '@/features/Mantenimiento/shared/resource-access.server';
 import { cacheLife, cacheTag } from 'next/cache';
 
 const serverLogger = new Logger('Mantenimiento/NuevoPedido/queries');
@@ -56,7 +60,9 @@ async function getCachedExistingMaintenanceOrder(
  * corre desde el alta de pedido del flujo QR).
  */
 export async function checkExistingMaintenanceOrder(equipmentId: string, repairTypeId: string): Promise<boolean> {
-  const companyId = await getResourceCompanyId(prisma, 'vehicle', equipmentId);
+  const { companyId } = await requireResourceAccess('vehicle', equipmentId, {
+    dashboardPermissions: [NUEVO_PEDIDO_VIEW, NUEVO_PEDIDO_CREATE],
+  });
   return getCachedExistingMaintenanceOrder(equipmentId, repairTypeId, companyId);
 }
 
@@ -159,7 +165,9 @@ async function getCachedChecklistTemplatesForEquipment(equipmentId: string, comp
  * (nunca desde la sesión) y delega en la versión cacheada.
  */
 export async function getChecklistTemplatesForEquipment(equipmentId: string) {
-  const companyId = await getResourceCompanyId(prisma, 'vehicle', equipmentId);
+  const { companyId } = await requireResourceAccess('vehicle', equipmentId, {
+    dashboardPermissions: [NUEVO_PEDIDO_VIEW, NUEVO_PEDIDO_CREATE],
+  });
   return getCachedChecklistTemplatesForEquipment(equipmentId, companyId);
 }
 

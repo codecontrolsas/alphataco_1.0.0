@@ -17,7 +17,6 @@ import { PermissionGuard } from '@/features/Permissions/components/PermissionGua
 import { Logger } from '@/lib/logger';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -26,6 +25,7 @@ import {
   updateCustomerEquipment,
   type CustomerEquipmentRow,
 } from '../../actions/customer-equipment.server';
+import { customerKey } from '../../lib/query-keys';
 import {
   CUSTOMER_EQUIPMENT_TYPES,
   customerEquipmentFormSchema,
@@ -62,7 +62,6 @@ export function CustomerEquipmentFormDialog({
   triggerVariant = 'brand',
 }: CustomerEquipmentFormDialogProps) {
   const [open, setOpen] = useState(false);
-  const router = useRouter();
   const queryClient = useQueryClient();
   const isEditing = !!equipment;
 
@@ -85,10 +84,9 @@ export function CustomerEquipmentFormDialog({
       toast.success(isEditing ? 'Equipo actualizado correctamente' : 'Equipo creado correctamente');
       // La tabla de esta pestaña lee por React Query: `router.refresh()` solo refresca los
       // Server Components, así que sin invalidar el equipo se guarda y la tabla no lo muestra.
-      queryClient.invalidateQueries({ queryKey: ['customer-own-equipment', customerId] });
+      queryClient.invalidateQueries({ queryKey: customerKey(customerId) });
       setOpen(false);
       if (!isEditing) form.reset(toFormValues(customerId, null));
-      router.refresh();
     } catch (error) {
       // La action puede rechazar (no devolver `ok: false`): sin este catch el usuario no ve nada.
       logger.error('Error al guardar el equipo del cliente', { data: { error, equipmentId: equipment?.id } });

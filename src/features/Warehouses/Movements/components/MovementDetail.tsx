@@ -1,39 +1,53 @@
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import moment from 'moment';
+import { Field, FieldGrid } from '@/shared/components/common/FieldGrid';
+import { RecordHeader } from '@/shared/components/common/RecordHeader';
+import { SectionCard } from '@/shared/components/common/SectionCard';
+import { formatArgentinaDateTime, formatDateAr } from '@/shared/lib/argentina-time';
 import Link from 'next/link';
 import type { StockMovementDetail } from '../../actions/movements.server';
 import { formatMoney, formatQuantity, formatUnitCost } from '../../lib/format';
-import { DESTINATION_TYPE_LABELS, MOVEMENT_TYPE_LABELS } from '../../lib/labels';
+import { WarehouseStatusBadge } from '../../components/WarehouseStatusBadge';
+import { DESTINATION_TYPE_LABELS } from '../../lib/labels';
 import { ReverseMovementDialog } from './ReverseMovementDialog';
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+/** Tipo y vigencia del movimiento (la anulación o el haber sido anulado). */
+export function MovementBadges({ movement }: { movement: StockMovementDetail }) {
   return (
-    <div className="space-y-1">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="text-sm">{children}</dd>
+    <>
+      <WarehouseStatusBadge entity="movementType" status={movement.type} />
+      {movement.reverses && <WarehouseStatusBadge entity="reversal" status="REVERSAL" />}
+      {movement.reversedBy && <WarehouseStatusBadge entity="reversal" status="REVERSED" />}
+    </>
+  );
+}
+
+/** Detalle de un movimiento para su página: cabecera con la acción de anular y el cuerpo. */
+export function MovementDetail({ movement }: { movement: StockMovementDetail }) {
+  return (
+    <div className="space-y-4">
+      <RecordHeader
+        identity={
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="font-mono text-2xl font-semibold">{movement.number}</h1>
+            <MovementBadges movement={movement} />
+          </div>
+        }
+        actions={
+          movement.canReverse ? <ReverseMovementDialog movementId={movement.id} number={movement.number} /> : undefined
+        }
+      />
+      <MovementDetailBody movement={movement} />
     </div>
   );
 }
 
-/** Detalle de un movimiento: cabecera, destino, lineas y vinculo con su anulacion. */
-export function MovementDetail({ movement }: { movement: StockMovementDetail }) {
+/** Cuerpo del detalle (avisos, datos y líneas): lo comparten la página y el panel lateral. */
+export function MovementDetailBody({ movement }: { movement: StockMovementDetail }) {
   const showPrices = movement.totalCost !== null;
   const isTransfer = movement.type === 'TRANSFER';
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="font-mono text-2xl font-semibold">{movement.number}</h1>
-        <Badge variant="secondary">{MOVEMENT_TYPE_LABELS[movement.type]}</Badge>
-        {movement.reverses && <Badge variant="outline">Anulación</Badge>}
-        {movement.reversedBy && <Badge variant="destructive">Anulado</Badge>}
-        <div className="ml-auto">
-          {movement.canReverse && <ReverseMovementDialog movementId={movement.id} number={movement.number} />}
-        </div>
-      </div>
-
       {movement.clothingDelivery && (
         <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
           Entrega de ropa a {movement.destination ?? 'un empleado'}
@@ -95,39 +109,35 @@ export function MovementDetail({ movement }: { movement: StockMovementDetail }) 
         </p>
       )}
 
-      <Card>
-        <CardContent className="pt-6">
-          <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Fecha">{moment(movement.occurredOn).format('DD/MM/YYYY')}</Field>
-            <Field label={isTransfer ? 'Origen → destino' : 'Depósito'}>
-              {isTransfer ? `${movement.warehouse.name} → ${movement.targetWarehouse?.name ?? ''}` : movement.warehouse.name}
-            </Field>
-            {movement.destinationType && (
-              <Field label={`Imputado a (${DESTINATION_TYPE_LABELS[movement.destinationType]})`}>{movement.destination ?? '—'}</Field>
-            )}
-            <Field label="Referencia">{movement.reference ?? '—'}</Field>
-            <Field label="Registrado por">
-              {movement.createdBy} · {moment(movement.createdAt).format('DD/MM/YYYY HH:mm')}
-            </Field>
-            {showPrices && <Field label="Total">{formatMoney(movement.totalCost)}</Field>}
-            {movement.notes && (
-              <div className="sm:col-span-2 lg:col-span-4">
-                <Field label={movement.type === 'ADJUSTMENT' || movement.reverses ? 'Motivo' : 'Observaciones'}>
-                  <span className="whitespace-pre-wrap">{movement.notes}</span>
-                </Field>
-              </div>
-            )}
-          </dl>
-        </CardContent>
-      </Card>
+      <SectionCard>
+        <FieldGrid>
+          <Field label="Fecha" value={formatDateAr(movement.occurredOn)} />
+          <Field
+            label={isTransfer ? 'Origen → destino' : 'Depósito'}
+            value={isTransfer ? `${movement.warehouse.name} → ${movement.targetWarehouse?.name ?? ''}` : movement.warehouse.name}
+          />
+          {movement.destinationType && (
+            <Field label={`Imputado a (${DESTINATION_TYPE_LABELS[movement.destinationType]})`} value={movement.destination} />
+          )}
+          <Field label="Referencia" value={movement.reference} />
+          <Field label="Registrado por" value={`${movement.createdBy} · ${formatArgentinaDateTime(movement.createdAt)}`} />
+          {showPrices && <Field label="Total" value={formatMoney(movement.totalCost)} />}
+        </FieldGrid>
+        {movement.notes && (
+          <div className="mt-5 space-y-1">
+            <h3 className="text-muted-foreground text-sm">
+              {movement.type === 'ADJUSTMENT' || movement.reverses ? 'Motivo' : 'Observaciones'}
+            </h3>
+            <p className="font-medium break-words whitespace-pre-wrap">{movement.notes}</p>
+          </div>
+        )}
+      </SectionCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            {movement.lines.length === 1 ? '1 línea' : `${movement.lines.length} líneas`}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+      <SectionCard
+        flush
+        title={movement.lines.length === 1 ? '1 línea' : `${movement.lines.length} líneas`}
+      >
+        <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -150,7 +160,7 @@ export function MovementDetail({ movement }: { movement: StockMovementDetail }) 
                   <TableCell className="font-mono text-sm">
                     {line.serialNumber ??
                       (line.batch
-                        ? `${line.batch.number}${line.batch.expiresAt ? ` · vence ${moment(line.batch.expiresAt).format('DD/MM/YYYY')}` : ''}`
+                        ? `${line.batch.number}${line.batch.expiresAt ? ` · vence ${formatDateAr(line.batch.expiresAt)}` : ''}`
                         : '—')}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
@@ -164,8 +174,8 @@ export function MovementDetail({ movement }: { movement: StockMovementDetail }) 
               ))}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+        </div>
+      </SectionCard>
     </div>
   );
 }

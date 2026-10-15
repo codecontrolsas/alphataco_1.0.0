@@ -1,15 +1,19 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
+import { MaintenanceStatusPill } from '@/features/Mantenimiento/shared/components/MaintenanceStatusPill';
+import { ResourceCell, toResourceCellResource } from '@/features/Mantenimiento/shared/components/ResourceCell';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { argentinaDate, formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { type ColumnDef } from '@tanstack/react-table';
-import { ExternalLink, ListChecks, Wrench } from 'lucide-react';
+import { AlertTriangle, ExternalLink } from 'lucide-react';
 import moment from 'moment';
-import { getResourceInternNumber, getResourceKindLabel, getResourceLabel } from '../../shared/maintenance-resource';
+import { getResourceLabel } from '../../shared/maintenance-resource';
 import type { WorkshopSectorWorkOrderListItem } from './actions.server';
 import { WorkOrderTasksDialog } from './components/WorkOrderTasksDialog';
-import { MO_STATUS_CONFIG, WO_STATUS_CONFIG, getMoStatusConfig, getWoStatusConfig } from './work-order-status';
+import { MO_STATUS_CONFIG, WO_STATUS_CONFIG } from './work-order-status';
 
 // ============================================================================
 // CONSTANTS
@@ -17,7 +21,7 @@ import { MO_STATUS_CONFIG, WO_STATUS_CONFIG, getMoStatusConfig, getWoStatusConfi
 
 /**
  * Ticket 678 — una fila = una ORDEN DE TRABAJO (antes era una tarea).
- * Las tareas de cada OT se ven en el modal que abre el botón "Ver".
+ * Las tareas de cada OT se ven en el modal que abre el N° OT o el botón "Ver".
  */
 export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['started_at', 'created_at'];
 
@@ -42,39 +46,40 @@ export const IS_DIAGNOSTICO_LABELS: Record<string, string> = {
   false: 'Sin diagnóstico',
 };
 
+/** `planned_end_date` es `@db.Date`: llega como medianoche UTC, así que se compara como texto YYYY-MM-DD con el hoy argentino. */
+function isPlannedEndOverdue(plannedEnd: Date): boolean {
+  return plannedEnd.toISOString().slice(0, 10) < argentinaDate();
+}
+
 // ============================================================================
 // COLUMNS
 // ============================================================================
 
 export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWorkOrderListItem>[] {
   return [
-    // ── N° OT + Estado de la OT ─────────────────────────────────────────────
-    // El estado es de la ORDEN, no de la tarea: la OT está en proceso si alguien
-    // ya la inició, sin importar cuántas de sus tareas estén empezadas.
+    // ── N° OT: abre las tareas de la orden ──────────────────────────────────
     {
       id: 'work_order',
       accessorFn: (row) => row.order_number,
       meta: { title: 'N° OT' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="N° OT" />,
-      cell: ({ row }) => {
-        const cfg = getWoStatusConfig(row.original.status);
-        const StatusIcon = cfg.icon;
-        return (
-          <div className="flex flex-col gap-1">
-            <span className="inline-flex items-center gap-1 font-mono text-sm font-medium">
-              <Wrench className="h-3 w-3 opacity-60" />
-              {row.original.order_number}
-            </span>
-            <Badge
-              variant={cfg.variant}
-              className="w-fit gap-1 whitespace-nowrap px-1.5 py-0 text-[10px] uppercase tracking-wide"
+      cell: ({ row }) => (
+        <WorkOrderTasksDialog
+          workOrderId={row.original.id}
+          orderNumber={row.original.order_number}
+          status={row.original.status}
+          taskCount={row.original.taskCount}
+          trigger={
+            <button
+              type="button"
+              aria-label={`Ver las tareas de la orden de trabajo ${row.original.order_number}`}
+              className="focus-visible:ring-ring/50 -m-1 rounded-md p-1 text-left font-mono text-sm font-semibold outline-none hover:underline focus-visible:ring-[3px]"
             >
-              <StatusIcon className="h-2.5 w-2.5" />
-              {cfg.label}
-            </Badge>
-          </div>
-        );
-      },
+              {row.original.order_number}
+            </button>
+          }
+        />
+      ),
     },
 
     // ── Equipo (vehículo o equipamiento de la OT) ───────────────────────────
@@ -83,22 +88,76 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
       accessorFn: (row) => getResourceLabel(row),
       meta: { title: 'Equipo' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Equipo" />,
-      cell: ({ row }) => {
-        const internNumber = getResourceInternNumber(row.original);
-        return (
-          <div className="flex flex-col">
-            <span className="font-medium">{getResourceLabel(row.original)}</span>
-            <span className="text-xs text-muted-foreground">
-              {getResourceKindLabel(row.original)}
-              {internNumber ? ` · #${internNumber}` : ''}
-            </span>
-          </div>
-        );
-      },
+      cell: ({ row }) => <ResourceCell resource={toResourceCellResource(row.original, row.original.resourceSubtitle)} />,
       filterFn: (row, _id, value: string[]) => {
         const id = row.original.vehicles?.id ?? row.original.other_equipment?.id;
         if (id == null) return value.includes(NULL_FILTER_VALUE);
         return value.includes(id);
+      },
+    },
+
+    // ── Estado OT ───────────────────────────────────────────────────────────
+    // El estado es de la ORDEN, no de la tarea: la OT está en proceso si alguien
+    // ya la inició, sin importar cuántas de sus tareas estén empezadas.
+    {
+      id: 'wo_status',
+      accessorFn: (row) => row.status,
+      meta: { title: 'Estado OT' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado OT" />,
+      cell: ({ row }) => <MaintenanceStatusPill entity="workOrder" status={row.original.status} />,
+      filterFn: (row, _id, value: string[]) => value.includes(row.original.status),
+    },
+
+    // ── Tareas: completadas / total ─────────────────────────────────────────
+    // Se ordena server-side por la cantidad de tareas (ver FK_SORT_MAP). Sin filtro: es un agregado calculado
+    // sobre la relación, no una columna de la BD. El export lleva el mismo "2/4".
+    {
+      id: 'task_count',
+      accessorFn: (row) => `${row.completedTaskCount}/${row.taskCount}`,
+      meta: { title: 'Tareas' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Tareas" />,
+      cell: ({ row }) => (
+        <span className="font-mono tabular-nums">
+          {row.original.completedTaskCount}/{row.original.taskCount}
+          <span className="sr-only">
+            {' '}
+            tareas completadas de {row.original.taskCount}
+          </span>
+        </span>
+      ),
+    },
+
+    // ── Fecha inicio planificada ────────────────────────────────────────────
+    {
+      accessorKey: 'planned_start_date',
+      meta: { title: 'Inicio Plan.' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Inicio Plan." />,
+      cell: ({ row }) => (
+        <span>
+          {row.original.planned_start_date ? (
+            moment.utc(row.original.planned_start_date).format('DD/MM/YYYY')
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </span>
+      ),
+    },
+
+    // ── Fecha fin planificada: en rojo y con texto cuando ya pasó (la OT sigue abierta) ──
+    {
+      accessorKey: 'planned_end_date',
+      meta: { title: 'Fin Plan.' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Fin Plan." />,
+      cell: ({ row }) => {
+        const plannedEnd = row.original.planned_end_date;
+        if (!plannedEnd) return <span className="text-muted-foreground">—</span>;
+        const overdue = isPlannedEndOverdue(plannedEnd);
+        return (
+          <span className={cn(overdue && 'text-danger-subtle-foreground font-semibold')}>
+            {moment.utc(plannedEnd).format('DD/MM/YYYY')}
+            {overdue ? <span className="sr-only"> (fuera de plazo)</span> : null}
+          </span>
+        );
       },
     },
 
@@ -118,8 +177,6 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
           <div className="flex flex-col gap-1">
             {orders.map((order) => {
               const label = order.order_number ?? order.id.slice(0, 8);
-              const cfg = getMoStatusConfig(order.status);
-              const StatusIcon = cfg.icon;
               const href = order.order_number
                 ? `/dashboard/maintenance?tab=maint_taller&taller_step=in_workshop&maintenance-orders__order_number=${encodeURIComponent(
                     order.order_number
@@ -135,18 +192,13 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
                       className="inline-flex items-center gap-1 font-mono text-sm font-medium text-primary underline-offset-2 hover:underline"
                     >
                       {label}
-                      <ExternalLink className="h-3 w-3 flex-shrink-0 opacity-60" />
+                      <ExternalLink className="h-3 w-3 flex-shrink-0 opacity-60" aria-hidden="true" />
+                      <span className="sr-only"> (se abre en una pestaña nueva)</span>
                     </a>
                   ) : (
                     <span className="font-mono text-sm font-medium text-muted-foreground">{label}</span>
                   )}
-                  <Badge
-                    variant={cfg.variant}
-                    className="w-fit gap-1 whitespace-nowrap px-1.5 py-0 text-[10px] uppercase tracking-wide"
-                  >
-                    <StatusIcon className="h-2.5 w-2.5" />
-                    {cfg.label}
-                  </Badge>
+                  <MaintenanceStatusPill entity="order" status={order.status} size="sm" />
                 </div>
               );
             })}
@@ -155,52 +207,22 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
       },
     },
 
-    // ── Cantidad de tareas de la OT ─────────────────────────────────────────
-    // Sin filtro: es un agregado calculado sobre la relación, no una columna de
-    // la BD, así que no hay nada que filtrar server-side. Sí es ordenable.
+    // ── Crítica: la OT tiene alguna tarea crítica (filtro server-side `is_critical`) ──
     {
-      id: 'task_count',
-      accessorFn: (row) => row.taskCount,
-      meta: { title: 'Tareas' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tareas" />,
-      cell: ({ row }) => (
-        <Badge variant="secondary" className="gap-1 tabular-nums">
-          <ListChecks className="h-3 w-3" />
-          {row.original.taskCount}
-        </Badge>
-      ),
-    },
-
-    // ── Fecha inicio planificada ────────────────────────────────────────────
-    {
-      accessorKey: 'planned_start_date',
-      meta: { title: 'Inicio Plan.' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Inicio Plan." />,
-      cell: ({ row }) => (
-        <span>
-          {row.original.planned_start_date ? (
-            moment(row.original.planned_start_date).format('DD/MM/YYYY')
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          )}
-        </span>
-      ),
-    },
-
-    // ── Fecha fin planificada ───────────────────────────────────────────────
-    {
-      accessorKey: 'planned_end_date',
-      meta: { title: 'Fin Plan.' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fin Plan." />,
-      cell: ({ row }) => (
-        <span>
-          {row.original.planned_end_date ? (
-            moment(row.original.planned_end_date).format('DD/MM/YYYY')
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          )}
-        </span>
-      ),
+      id: 'is_critical',
+      accessorFn: (row) => (row.hasCriticalTask ? 'Sí' : 'No'),
+      meta: { title: 'Crítica' },
+      enableSorting: false,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Crítica" />,
+      cell: ({ row }) =>
+        row.original.hasCriticalTask ? (
+          <Badge variant="destructive">
+            <AlertTriangle aria-hidden="true" />
+            Sí
+          </Badge>
+        ) : (
+          <span className="text-muted-foreground">No</span>
+        ),
     },
 
     // ── Fecha de inicio real: cuándo entró la unidad al taller (oculta) ─────
@@ -213,7 +235,7 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
       cell: ({ row }) => (
         <span>
           {row.original.started_at ? (
-            moment(row.original.started_at).format('DD/MM/YYYY HH:mm')
+            formatArgentinaDateTime(row.original.started_at)
           ) : (
             <span className="text-muted-foreground">—</span>
           )}
@@ -229,7 +251,7 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
       cell: ({ row }) => (
         <span>
           {row.original.created_at ? (
-            moment(row.original.created_at).format('DD/MM/YYYY')
+            formatArgentinaDay(row.original.created_at)
           ) : (
             <span className="text-muted-foreground">—</span>
           )}
@@ -237,20 +259,8 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
       ),
     },
 
-    // ── Columna virtual: Estado OT (para el filtro facetado wo_status) ──────
-    // No visible: el badge de estado vive dentro de la columna `work_order`.
-    {
-      id: 'wo_status',
-      accessorFn: (row) => row.status,
-      meta: { title: 'Estado OT', excludeFromExport: true },
-      header: () => null,
-      cell: () => null,
-      enableHiding: false,
-      enableSorting: false,
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.status),
-    },
-
     // ── Columna virtual: Estado OM (para el filtro facetado mo_status) ──────
+    // No visible: el estado de la OM vive dentro de la columna `maintenance_order`.
     {
       id: 'mo_status',
       accessorFn: (row) => row.maintenanceOrders.map((order) => order.status).join(','),
@@ -276,15 +286,6 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
       enableSorting: false,
     },
     {
-      id: 'is_critical',
-      accessorFn: () => null,
-      meta: { title: 'Crítica', excludeFromExport: true },
-      header: () => null,
-      cell: () => null,
-      enableHiding: false,
-      enableSorting: false,
-    },
-    {
       id: 'is_rejected',
       accessorFn: () => null,
       meta: { title: 'Rechazada', excludeFromExport: true },
@@ -304,9 +305,11 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
     },
 
     // ── Acciones: "Ver" abre el modal con las tareas de la OT ───────────────
+    // Solo lectura: la Vista Taller es la tab `workshop_view` con la única acción `view`.
     {
       id: 'actions',
       meta: { title: '', excludeFromExport: true },
+      header: '',
       enableSorting: false,
       enableHiding: false,
       cell: ({ row }) => (
@@ -328,10 +331,10 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
 export function getWorkshopSectorWorkOrdersExportFormatters() {
   return {
     // Fechas
-    planned_start_date: (val: unknown) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
-    planned_end_date: (val: unknown) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
-    started_at: (val: unknown) => (val ? moment(val as string).format('DD/MM/YYYY HH:mm') : ''),
-    created_at: (val: unknown) => (val ? moment(val as string).format('DD/MM/YYYY HH:mm') : ''),
+    planned_start_date: (val: unknown) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
+    planned_end_date: (val: unknown) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
+    started_at: (val: unknown) => (val ? formatArgentinaDateTime(val as string) : ''),
+    created_at: (val: unknown) => (val ? formatArgentinaDateTime(val as string) : ''),
     // El N° OT se exporta crudo; el estado de la OT sale en su propia columna
     work_order: (val: unknown) => String(val ?? ''),
     // Estado OT (accessorFn retorna el enum crudo → traducir)

@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { RecordSectionNav } from '@/features/TabsManager/components/RecordSectionNav';
 import { RecordHeader } from '@/shared/components/common/RecordHeader';
 import { SectionCard } from '@/shared/components/common/SectionCard';
 import { ArrowLeft, ExternalLink, FileText, Pencil, User } from 'lucide-react';
@@ -27,6 +27,8 @@ interface PreEmployeeReadViewProps {
   onEdit: () => void;
   onReject: () => void;
   onApprove: () => void;
+  /** Sección activa de la ficha (`?section=`); cualquier otro valor cae en los datos. */
+  section?: string;
 }
 
 /** Ficha del candidato en modo lectura: cabecera con las acciones de la etapa, circuito y pestañas. */
@@ -39,8 +41,11 @@ export function PreEmployeeReadView({
   onEdit,
   onReject,
   onApprove,
+  section,
 }: PreEmployeeReadViewProps) {
   const router = useRouter();
+  const activeSection = section === 'documents' ? 'documents' : 'data';
+  const buildHref = (value: string) => `?action=view&pre_employee_id=${preEmployee.id}&section=${value}`;
 
   return (
     <div className="space-y-6">
@@ -80,30 +85,38 @@ export function PreEmployeeReadView({
       <PreEmployeeStatusBanner preEmployee={preEmployee} canApprove={canApprove} />
       <PreEmployeeStepper status={preEmployee.status} />
 
-      <Tabs defaultValue="data" className="gap-6">
-        <TabsList variant="line" className="h-11 w-full justify-start overflow-x-auto">
-          <TabsTrigger value="data" className="flex-none px-4">
-            <User />
-            Datos del candidato
-          </TabsTrigger>
-          <TabsTrigger value="documents" className="flex-none px-4">
-            <FileText />
-            Documentos
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="data">
-          <PreEmployeeDataView preEmployee={preEmployee} />
-        </TabsContent>
-        <TabsContent value="documents">
-          <SectionCard
-            title="Documentos del candidato"
-            description="Los que aplican a la función asignada se incorporan al legajo al aprobarlo."
-          >
-            <PreEmployeeDocumentChecklist preEmployeeId={preEmployee.id} readOnly={documentsReadOnly} />
-          </SectionCard>
-        </TabsContent>
-      </Tabs>
+      <div className="flex min-w-0 flex-col gap-4 lg:grid lg:grid-cols-[14rem_minmax(0,1fr)] lg:items-start lg:gap-6">
+        <RecordSectionNav
+          ariaLabel="Secciones del candidato"
+          activeValue={activeSection}
+          items={[
+            {
+              value: 'data',
+              label: 'Datos del candidato',
+              icon: <User />,
+              href: buildHref('data'),
+            },
+            {
+              value: 'documents',
+              label: 'Documentos',
+              icon: <FileText />,
+              href: buildHref('documents'),
+            },
+          ]}
+        />
+        <div className="min-w-0">
+          {activeSection === 'documents' ? (
+            <SectionCard
+              title="Documentos del candidato"
+              description="Los que aplican a la función asignada se incorporan al legajo al aprobarlo."
+            >
+              <PreEmployeeDocumentChecklist preEmployeeId={preEmployee.id} readOnly={documentsReadOnly} />
+            </SectionCard>
+          ) : (
+            <PreEmployeeDataView preEmployee={preEmployee} />
+          )}
+        </div>
+      </div>
     </div>
   );
 }

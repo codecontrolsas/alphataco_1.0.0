@@ -5,8 +5,11 @@ import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { NULL_FILTER_VALUE, parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { isoDay } from '../../lib/dates';
 import {
   buildTreasuryDateRangeWhere,
   facetWhere,
@@ -35,6 +38,9 @@ const SORT_MAP: Record<string, (dir: 'asc' | 'desc') => OwnCheckOrderBy[]> = {
   status: (dir) => [{ status: dir }],
   payment_order: (dir) => [{ payment_order_payment: { payment_order: { number: dir } } }],
 };
+
+/** Tope de filas por export. */
+const EXPORT_LIMIT = 10_000;
 
 const DATE_RANGE_COLUMNS = ['issue_date', 'payment_date', 'debited_on'];
 
@@ -105,12 +111,10 @@ const OWN_CHECK_SELECT = {
   debited_on: true,
   status: true,
   account: { select: { id: true, name: true } },
+  checkbook: { select: { first_number: true, last_number: true } },
   supplier: { select: { id: true, name: true } },
   payment_order_payment: { select: { payment_order: { select: { id: true, number: true } } } },
 } satisfies Prisma.own_checksSelect;
-
-/** Fecha @db.Date -> YYYY-MM-DD tal cual, sin correr zona horaria. */
-const day = (value: Date | null) => (value ? value.toISOString().slice(0, 10) : null);
 
 function shape(rows: Prisma.own_checksGetPayload<{ select: typeof OWN_CHECK_SELECT }>[]) {
   return rows.map((r) => ({
@@ -118,11 +122,12 @@ function shape(rows: Prisma.own_checksGetPayload<{ select: typeof OWN_CHECK_SELE
     number: r.number,
     kind: r.kind,
     amount: r.amount ? r.amount.toString() : null,
-    issueDate: r.issue_date.toISOString().slice(0, 10),
-    paymentDate: day(r.payment_date),
-    debitedOn: day(r.debited_on),
+    issueDate: isoDay(r.issue_date),
+    paymentDate: isoDay(r.payment_date),
+    debitedOn: isoDay(r.debited_on),
     status: r.status,
     account: { id: r.account.id, name: r.account.name },
+    checkbook: r.checkbook ? `${r.checkbook.first_number}–${r.checkbook.last_number}` : null,
     supplier: r.supplier ? { id: r.supplier.id, name: r.supplier.name } : null,
     paymentOrder: r.payment_order_payment?.payment_order
       ? { id: r.payment_order_payment.payment_order.id, number: r.payment_order_payment.payment_order.number }
@@ -167,22 +172,30 @@ export async function getOwnChecksPaginated(searchParams: DataTableSearchParams)
 // EXPORT (sin paginacion)
 // ============================================================================
 
-export async function getAllOwnChecksForExport(searchParams: DataTableSearchParams) {
+export async function getAllOwnChecksForExport(searchParams: DataTableSearchParams): Promise<ExportResult<OwnCheckListItem[]>> {
   const companyId = await resolveCompanyId();
-  if (!companyId) return [];
+  if (!companyId) return { ok: false, message: 'No tiene permiso para exportar los cheques propios.' };
 
   try {
     const state = parseSearchParams(searchParams);
     const where = buildWhereClause(companyId, state);
-    const rows = await prisma.own_checks.findMany({
-      where,
-      orderBy: [{ payment_date: 'asc' }, { number: 'asc' }, { id: 'asc' }],
-      select: OWN_CHECK_SELECT,
+    const orderBy: OwnCheckOrderBy[] = [{ payment_date: 'asc' }, { number: 'asc' }, { id: 'asc' }];
+
+    const rows = await fetchExportRowsInBatches({
+      maxRows: EXPORT_LIMIT,
+      listIds: (take) => prisma.own_checks.findMany({ where, orderBy, select: { id: true }, take }),
+      fetchByIds: (ids) => prisma.own_checks.findMany({ where: { id: { in: ids }, company_id: companyId }, select: OWN_CHECK_SELECT }),
+      tooLargeMessage: (maxRows) =>
+        `Hay más de ${maxRows.toLocaleString('es-AR')} cheques propios con los filtros actuales. Acote la exportación con filtros.`,
     });
-    return shape(rows);
+    return { ok: true, data: shape(rows) };
   } catch (error) {
     logger.error('Error al exportar cheques propios', { data: { error } });
-    throw new Error('No se pudo exportar la lista de cheques propios');
+    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en producción.
+    return {
+      ok: false,
+      message: error instanceof ExportTooLargeError ? error.message : 'No se pudo exportar la lista de cheques propios. Intente nuevamente.',
+    };
   }
 }
 

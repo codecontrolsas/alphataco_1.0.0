@@ -3,16 +3,14 @@
 import { FormItemDatePicker } from '@/components/ui/FormItemDatePicker';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormField, FormItem, FormMessage } from '@/components/ui/form';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
 import { Logger } from '@/lib/logger';
-import { cn } from '@/lib/utils';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarRange, Sparkles } from 'lucide-react';
 import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -30,14 +28,23 @@ import {
 import { searchEmployeeDiagrams, type DiagramEmployee } from './actions/diagram-search-actions';
 import { EMPTY_FILTERS, EmployeeFilterPanel, type FilterState } from './components/EmployeeFilterPanel';
 import { EmployeeSelectionGrid } from './components/EmployeeSelectionGrid';
+import { MassiveModeSelector } from './components/MassiveModeSelector';
+import { MassiveOperationSummary } from './components/MassiveOperationSummary';
+import { MASSIVE_MAX_DAYS_RANGE, MASSIVE_MAX_EMPLOYEES } from './lib/massive-limits';
 import type { ConflictData, MassiveFormData, ProcessingResult } from './types/massive-diagram';
 
 const logger = new Logger('Diagrams/DiagramMassiveForm');
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const MAX_EMPLOYEES = 100;
-const MAX_DAYS_RANGE = 90;
+const MAX_EMPLOYEES = MASSIVE_MAX_EMPLOYEES;
+const MAX_DAYS_RANGE = MASSIVE_MAX_DAYS_RANGE;
+
+/** Día calendario (YYYY-MM-DD) de una fecha elegida en el calendario del navegador. */
+const calendarDay = (date: Date) => moment(date).format('YYYY-MM-DD');
+
+/** Cantidad de días entre dos fechas del calendario, a nivel día (sin horas ni zona). */
+const daysBetween = (from: Date, to: Date) => moment(to).startOf('day').diff(moment(from).startOf('day'), 'days');
 
 // ── Zod Schema ───────────────────────────────────────────────────────────────
 
@@ -53,12 +60,11 @@ const formSchema = z
     diagramTypeId: z.string().optional(),
     dateRange: z
       .object({
-        from: z.date().min(new Date(), 'Solo fechas desde hoy en adelante'),
+        from: z.date().refine((date) => calendarDay(date) >= argentinaDate(), 'Solo fechas desde hoy en adelante'),
         to: z.date(),
       })
       .refine((data) => {
-        const diffDays = Math.ceil((data.to.getTime() - data.from.getTime()) / (1000 * 60 * 60 * 24));
-        return diffDays <= MAX_DAYS_RANGE;
+        return daysBetween(data.from, data.to) <= MAX_DAYS_RANGE;
       }, `Máximo ${MAX_DAYS_RANGE} días permitidos`),
   })
   .superRefine((data, ctx) => {
@@ -92,6 +98,9 @@ interface Props {
 // ── Component ────────────────────────────────────────────────────────────────
 
 export function DiagramMassiveForm({ onConflictsFound, loading, setLoading }: Props) {
+  // Procesar la carga masiva exige `massive_diagram:create`; con solo `view` se ve el formulario pero no se puede enviar.
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('empleados', 'massive_diagram', 'create');
   // ── Novelty state (only used in diagram mode) ──────────────────────────────
   const [noveltyData, setNoveltyData] = useState<NoveltyData | null>(null);
   const [showActiveNoveltySelect, setShowActiveNoveltySelect] = useState(false);
@@ -116,8 +125,9 @@ export function DiagramMassiveForm({ onConflictsFound, loading, setLoading }: Pr
       activeNoveltyId: '',
       diagramTypeId: '',
       dateRange: {
-        from: new Date(),
-        to: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        // Hoy en hora argentina, como fecha local a medianoche (lo que devuelve el calendario)
+        from: moment(argentinaDate(), 'YYYY-MM-DD').toDate(),
+        to: moment(argentinaDate(), 'YYYY-MM-DD').add(7, 'days').toDate(),
       },
     },
   });
@@ -179,10 +189,7 @@ export function DiagramMassiveForm({ onConflictsFound, loading, setLoading }: Pr
   const watchedValues = form.watch();
   const employeeCount = watchedValues.employeeIds?.length ?? 0;
   const dateRange = watchedValues.dateRange;
-  const days =
-    dateRange?.from && dateRange?.to
-      ? Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24)) + 1
-      : 0;
+  const days = dateRange?.from && dateRange?.to ? daysBetween(dateRange.from, dateRange.to) + 1 : 0;
   const totalRecords = employeeCount * days;
   const estimatedTime = `${Math.ceil(totalRecords / 1000) * 2} seg`;
 
@@ -350,60 +357,10 @@ export function DiagramMassiveForm({ onConflictsFound, loading, setLoading }: Pr
       {/* ── Top form: mode selector + main selects + date range ── */}
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handleVerifyAndSubmit)} className="space-y-6">
-          {/* ─── Mode selector ─── */}
           <FormField
             control={form.control}
             name="mode"
-            render={({ field }) => (
-              <FormItem>
-                <label className="text-sm font-medium leading-none">Tipo de carga</label>
-                <RadioGroup
-                  value={field.value}
-                  onValueChange={(val) => handleModeChange(val as 'diagram' | 'novelty')}
-                  className="grid grid-cols-1 gap-3 sm:grid-cols-2"
-                >
-                  <label
-                    htmlFor="mode-diagram"
-                    className={cn(
-                      'relative flex cursor-pointer items-start gap-4 rounded-lg border-2 p-4 transition-colors',
-                      'hover:bg-accent/40',
-                      field.value === 'diagram' ? 'border-primary bg-primary/5' : 'border-muted'
-                    )}
-                  >
-                    <RadioGroupItem value="diagram" id="mode-diagram" className="mt-1" />
-                    <div className="flex flex-1 flex-col gap-1">
-                      <div className="flex items-center gap-2">
-                        <CalendarRange className="h-4 w-4 text-primary" />
-                        <span className="font-medium">Diagrama</span>
-                      </div>
-                      <span className="text-xs text-muted-foreground">
-                        Aplica un patrón cíclico (activos/inactivos) a los empleados durante el rango.
-                      </span>
-                    </div>
-                  </label>
-                  <label
-                    htmlFor="mode-novelty"
-                    className={cn(
-                      'relative flex cursor-pointer items-start gap-4 rounded-lg border-2 p-4 transition-colors',
-                      'hover:bg-accent/40',
-                      field.value === 'novelty' ? 'border-primary bg-primary/5' : 'border-muted'
-                    )}
-                  >
-                    <RadioGroupItem value="novelty" id="mode-novelty" className="mt-1" />
-                    <div className="flex flex-1 flex-col gap-1">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="h-4 w-4 text-primary" />
-                        <span className="font-medium">Novedad</span>
-                      </div>
-                      <span className="text-xs text-muted-foreground">
-                        Asigna la misma novedad a todos los días del rango (ej: feriado, licencia).
-                      </span>
-                    </div>
-                  </label>
-                </RadioGroup>
-                <FormMessage />
-              </FormItem>
-            )}
+            render={({ field }) => <MassiveModeSelector value={field.value} onChange={handleModeChange} />}
           />
 
           {/* ─── Diagram mode: work diagram select ─── */}
@@ -549,7 +506,7 @@ export function DiagramMassiveForm({ onConflictsFound, loading, setLoading }: Pr
               control={form.control}
               label=""
               description="Selecciona el rango de fechas para la carga masiva"
-              disabled={(date) => date < new Date()}
+              disabled={(date) => calendarDay(date) < argentinaDate()}
             />
           </div>
         </form>
@@ -592,36 +549,21 @@ export function DiagramMassiveForm({ onConflictsFound, loading, setLoading }: Pr
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleVerifyAndSubmit)} className="space-y-6">
             {employeeCount > 0 && days > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Resumen de la operación</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 gap-4 text-center sm:grid-cols-4">
-                    <div>
-                      <div className="text-2xl font-bold text-blue-600">{employeeCount}</div>
-                      <div className="text-sm text-muted-foreground">Empleados</div>
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold text-green-600">{days}</div>
-                      <div className="text-sm text-muted-foreground">Días</div>
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold text-purple-600">{totalRecords}</div>
-                      <div className="text-sm text-muted-foreground">Registros</div>
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold text-orange-600">{estimatedTime}</div>
-                      <div className="text-sm text-muted-foreground">Tiempo Est.</div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <MassiveOperationSummary
+                employeeCount={employeeCount}
+                days={days}
+                totalRecords={totalRecords}
+                estimatedTime={estimatedTime}
+              />
             )}
 
-            <Button type="submit" className="w-full" disabled={loading || employeeCount === 0}>
-              {loading ? 'Verificando...' : submitLabel}
-            </Button>
+            {canCreate ? (
+              <Button type="submit" className="w-full" disabled={loading || employeeCount === 0}>
+                {loading ? 'Verificando...' : submitLabel}
+              </Button>
+            ) : (
+              <p className="text-muted-foreground text-sm">No tenés permiso para realizar cargas masivas.</p>
+            )}
           </form>
         </Form>
       )}

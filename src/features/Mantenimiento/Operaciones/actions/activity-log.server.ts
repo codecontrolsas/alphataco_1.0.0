@@ -1,18 +1,54 @@
 'use server';
 
+import { checkMultiplePermissionsServer } from '@/features/Permissions/actionsServer';
 import { Logger } from '@/lib/logger';
+import { requireServerAuthProfile } from '@/shared/actions/auth.actions';
 import { CACHE_TAGS, CACHE_TTL } from '@/shared/constants/cache';
 import { prisma } from '@/shared/lib/prisma';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { cacheLife, cacheTag } from 'next/cache';
 import { ACTIVITY_LOG_SELECT, getRequestItemComments, mapActivityLogEntry } from './operations-select';
 
 const serverLogger = new Logger('Operaciones/activity-log');
 
 /**
+ * Tabs desde las que se abre el historial (ActivityHistoryModal): leerlo exige `view` en alguna.
+ * Incluye la ficha del equipo (Equipos > Historial de mantenimiento).
+ */
+const ACTIVITY_LOG_VIEW_TABS = [
+  { moduleSlug: 'mantenimiento', tabSlug: 'maintenance_requests' },
+  { moduleSlug: 'mantenimiento', tabSlug: 'seguimiento_taller' },
+  { moduleSlug: 'mantenimiento', tabSlug: 'maintenance_orders' },
+  { moduleSlug: 'mantenimiento', tabSlug: 'pedidos_pendientes' },
+  { moduleSlug: 'mantenimiento', tabSlug: 'pedidos_confirmados' },
+  { moduleSlug: 'mantenimiento', tabSlug: 'bandeja_aprobaciones' },
+  { moduleSlug: 'mantenimiento', tabSlug: 'gestion_ordenes' },
+  { moduleSlug: 'equipos', tabSlug: 'historial-mantenimiento-equipo' },
+] as const;
+
+/**
+ * Sesión + empresa activa + `view` en alguna de las tabs que abren el historial.
+ * Las funciones `'use cache'` no leen sesión: la empresa que devuelve esto entra como argumento
+ * (y en la clave del cache), así un historial nunca se sirve a otra empresa.
+ */
+async function requireActivityLogAccess(): Promise<string> {
+  await requireServerAuthProfile();
+  const companyId = await getActiveCompanyId();
+
+  const granted = await checkMultiplePermissionsServer(
+    ACTIVITY_LOG_VIEW_TABS.map((tab) => ({ ...tab, actionSlug: 'view' }))
+  );
+  const allowed = [...granted.values()].some(Boolean);
+  if (!allowed) throw new Error('No tenés permiso para ver el historial de mantenimiento');
+
+  return companyId;
+}
+
+/**
  * Obtiene el historial de actividades de un pedido de mantenimiento.
  * Incluye información del usuario que realizó cada acción (como "performer").
  */
-export async function getMaintenanceOrderActivityLog(orderId: string) {
+async function getMaintenanceOrderActivityLogCached(companyId: string, orderId: string) {
   'use cache';
   cacheTag(CACHE_TAGS.MAINTENANCE_ORDERS);
   cacheLife({ revalidate: CACHE_TTL.PAGINATED_LIST });
@@ -21,7 +57,7 @@ export async function getMaintenanceOrderActivityLog(orderId: string) {
 
   try {
     const data = await prisma.maintenance_activity_log.findMany({
-      where: { maintenance_order_id: orderId },
+      where: { maintenance_order_id: orderId, company_id: companyId },
       select: ACTIVITY_LOG_SELECT,
       orderBy: { performed_at: 'asc' },
     });
@@ -33,13 +69,11 @@ export async function getMaintenanceOrderActivityLog(orderId: string) {
   }
 }
 
-export type MaintenanceActivityLogData = Awaited<ReturnType<typeof getMaintenanceOrderActivityLog>>;
-export type MaintenanceActivityLogEntry = MaintenanceActivityLogData[number];
 
 /**
  * Obtiene el historial de actividades de una solicitud de mantenimiento.
  */
-export async function getMaintenanceRequestActivityLog(requestId: string) {
+async function getMaintenanceRequestActivityLogCached(companyId: string, requestId: string) {
   'use cache';
   cacheTag(CACHE_TAGS.MAINTENANCE_REQUESTS);
   cacheLife({ revalidate: CACHE_TTL.PAGINATED_LIST });
@@ -48,7 +82,7 @@ export async function getMaintenanceRequestActivityLog(requestId: string) {
 
   try {
     const data = await prisma.maintenance_activity_log.findMany({
-      where: { maintenance_request_id: requestId },
+      where: { maintenance_request_id: requestId, company_id: companyId },
       select: ACTIVITY_LOG_SELECT,
       orderBy: { performed_at: 'asc' },
     });
@@ -99,7 +133,7 @@ export type MaintenanceRequestOrigin = {
  * - El origen (checklist o manual)
  * - El historial de actividades
  */
-export async function getMaintenanceRequestFullActivityLog(requestId: string) {
+async function getMaintenanceRequestFullActivityLogCached(companyId: string, requestId: string) {
   'use cache';
   cacheTag(CACHE_TAGS.MAINTENANCE_REQUESTS);
   cacheLife({ revalidate: CACHE_TTL.PAGINATED_LIST });
@@ -109,8 +143,8 @@ export async function getMaintenanceRequestFullActivityLog(requestId: string) {
   try {
     // 1. Obtener la solicitud, el activity log y los comentarios de los items en paralelo
     const [request, activityLogRaw, itemComments] = await Promise.all([
-      prisma.maintenance_requests.findUnique({
-        where: { id: requestId },
+      prisma.maintenance_requests.findFirst({
+        where: { id: requestId, company_id: companyId },
         select: {
           id: true,
           source: true,
@@ -140,7 +174,7 @@ export async function getMaintenanceRequestFullActivityLog(requestId: string) {
         },
       }),
       prisma.maintenance_activity_log.findMany({
-        where: { maintenance_request_id: requestId },
+        where: { maintenance_request_id: requestId, company_id: companyId },
         select: ACTIVITY_LOG_SELECT,
         orderBy: { performed_at: 'asc' },
       }),
@@ -202,7 +236,6 @@ export async function getMaintenanceRequestFullActivityLog(requestId: string) {
   }
 }
 
-export type MaintenanceRequestFullActivityLog = Awaited<ReturnType<typeof getMaintenanceRequestFullActivityLog>>;
 
 /**
  * Obtiene el historial COMPLETO de un pedido de mantenimiento (maintenance_order), incluyendo:
@@ -210,7 +243,7 @@ export type MaintenanceRequestFullActivityLog = Awaited<ReturnType<typeof getMai
  * - El historial de actividades de la solicitud
  * - El historial de actividades del pedido
  */
-export async function getMaintenanceOrderFullActivityLog(orderId: string, requestId?: string) {
+async function getMaintenanceOrderFullActivityLogCached(companyId: string, orderId: string, requestId?: string) {
   'use cache';
   cacheTag(CACHE_TAGS.MAINTENANCE_ORDERS);
   cacheLife({ revalidate: CACHE_TTL.PAGINATED_LIST });
@@ -221,8 +254,8 @@ export async function getMaintenanceOrderFullActivityLog(orderId: string, reques
     // Resolver el requestId si no viene
     let maintenanceRequestId = requestId;
     if (!maintenanceRequestId) {
-      const order = await prisma.maintenance_orders.findUnique({
-        where: { id: orderId },
+      const order = await prisma.maintenance_orders.findFirst({
+        where: { id: orderId, company_id: companyId },
         select: { maintenance_request_id: true },
       });
       maintenanceRequestId = order?.maintenance_request_id ?? undefined;
@@ -231,6 +264,7 @@ export async function getMaintenanceOrderFullActivityLog(orderId: string, reques
     // Resolver work_orders hijas de la OM con sus datos básicos
     const workOrdersData = await prisma.work_orders.findMany({
       where: {
+        company_id: companyId,
         maintenance_order_items: {
           some: { maintenance_order_id: orderId },
         },
@@ -254,8 +288,8 @@ export async function getMaintenanceOrderFullActivityLog(orderId: string, reques
     const [requestData, requestLogsRaw, orderLogsRaw, workOrderLogsRaw, itemComments] = await Promise.all([
       // 1. Origen desde la solicitud (si hay requestId)
       maintenanceRequestId
-        ? prisma.maintenance_requests.findUnique({
-            where: { id: maintenanceRequestId },
+        ? prisma.maintenance_requests.findFirst({
+            where: { id: maintenanceRequestId, company_id: companyId },
             select: {
               id: true,
               source: true,
@@ -288,21 +322,21 @@ export async function getMaintenanceOrderFullActivityLog(orderId: string, reques
       // 2. Logs de la solicitud (si hay requestId)
       maintenanceRequestId
         ? prisma.maintenance_activity_log.findMany({
-            where: { maintenance_request_id: maintenanceRequestId },
+            where: { maintenance_request_id: maintenanceRequestId, company_id: companyId },
             select: ACTIVITY_LOG_SELECT,
             orderBy: { performed_at: 'asc' },
           })
         : Promise.resolve([]),
       // 3. Logs del pedido (siempre)
       prisma.maintenance_activity_log.findMany({
-        where: { maintenance_order_id: orderId },
+        where: { maintenance_order_id: orderId, company_id: companyId },
         select: ACTIVITY_LOG_SELECT,
         orderBy: { performed_at: 'asc' },
       }),
       // 4. Logs de TODAS las work_orders hijas (si hay)
       workOrderIds.length > 0
         ? prisma.maintenance_activity_log.findMany({
-            where: { work_order_id: { in: workOrderIds } },
+            where: { work_order_id: { in: workOrderIds }, company_id: companyId },
             select: ACTIVITY_LOG_SELECT,
             orderBy: { performed_at: 'asc' },
           })
@@ -395,12 +429,11 @@ export async function getMaintenanceOrderFullActivityLog(orderId: string, reques
   }
 }
 
-export type MaintenanceOrderFullActivityLog = Awaited<ReturnType<typeof getMaintenanceOrderFullActivityLog>>;
 
 /**
  * Obtiene el historial de actividades de una orden de trabajo.
  */
-export async function getWorkOrderActivityLog(workOrderId: string) {
+async function getWorkOrderActivityLogCached(companyId: string, workOrderId: string) {
   'use cache';
   cacheTag(CACHE_TAGS.WORK_ORDER_REPAIRS);
   cacheLife({ revalidate: CACHE_TTL.PAGINATED_LIST });
@@ -409,7 +442,7 @@ export async function getWorkOrderActivityLog(workOrderId: string) {
 
   try {
     const data = await prisma.maintenance_activity_log.findMany({
-      where: { work_order_id: workOrderId },
+      where: { work_order_id: workOrderId, company_id: companyId },
       select: ACTIVITY_LOG_SELECT,
       orderBy: { performed_at: 'asc' },
     });
@@ -429,7 +462,7 @@ export async function getWorkOrderActivityLog(workOrderId: string) {
  * - El historial específico de la orden de trabajo
  * - Información de otras OTs derivadas de la misma solicitud
  */
-export async function getWorkOrderFullActivityLog(workOrderId: string) {
+async function getWorkOrderFullActivityLogCached(companyId: string, workOrderId: string) {
   'use cache';
   cacheTag(CACHE_TAGS.WORK_ORDER_REPAIRS);
   cacheLife({ revalidate: CACHE_TTL.PAGINATED_LIST });
@@ -439,8 +472,8 @@ export async function getWorkOrderFullActivityLog(workOrderId: string) {
   try {
     // 1. Obtener la work_order con sus relaciones y el activity log de la WO en paralelo
     const [workOrder, workOrderLogsRaw] = await Promise.all([
-      prisma.work_orders.findUnique({
-        where: { id: workOrderId },
+      prisma.work_orders.findFirst({
+        where: { id: workOrderId, company_id: companyId },
         select: {
           id: true,
           order_number: true,
@@ -469,7 +502,7 @@ export async function getWorkOrderFullActivityLog(workOrderId: string) {
         },
       }),
       prisma.maintenance_activity_log.findMany({
-        where: { work_order_id: workOrderId },
+        where: { work_order_id: workOrderId, company_id: companyId },
         select: ACTIVITY_LOG_SELECT,
         orderBy: { performed_at: 'asc' },
       }),
@@ -489,7 +522,7 @@ export async function getWorkOrderFullActivityLog(workOrderId: string) {
     const [orderLogsRaw, siblingWorkOrdersRaw, itemComments] = await Promise.all([
       maintenanceOrderId
         ? prisma.maintenance_activity_log.findMany({
-            where: { maintenance_order_id: maintenanceOrderId },
+            where: { maintenance_order_id: maintenanceOrderId, company_id: companyId },
             select: ACTIVITY_LOG_SELECT,
             orderBy: { performed_at: 'asc' },
           })
@@ -498,6 +531,7 @@ export async function getWorkOrderFullActivityLog(workOrderId: string) {
         ? prisma.work_orders.findMany({
             where: {
               id: { not: workOrderId },
+              company_id: companyId,
               work_order_items: {
                 some: {
                   maintenance_order_items: {
@@ -556,6 +590,43 @@ export async function getWorkOrderFullActivityLog(workOrderId: string) {
   }
 }
 
-export type WorkOrderFullActivityLog = Awaited<ReturnType<typeof getWorkOrderFullActivityLog>>;
+// ─── Entradas públicas (sesión + permiso + empresa; el cache solo recibe la empresa) ───
 
-// ─── WRITEs ───────────────────────────────────────────────────────────────────
+export async function getMaintenanceOrderActivityLog(orderId: string) {
+  const companyId = await requireActivityLogAccess();
+  return getMaintenanceOrderActivityLogCached(companyId, orderId);
+}
+
+export type MaintenanceActivityLogData = Awaited<ReturnType<typeof getMaintenanceOrderActivityLog>>;
+export type MaintenanceActivityLogEntry = MaintenanceActivityLogData[number];
+
+export async function getMaintenanceRequestActivityLog(requestId: string) {
+  const companyId = await requireActivityLogAccess();
+  return getMaintenanceRequestActivityLogCached(companyId, requestId);
+}
+
+export async function getMaintenanceRequestFullActivityLog(requestId: string) {
+  const companyId = await requireActivityLogAccess();
+  return getMaintenanceRequestFullActivityLogCached(companyId, requestId);
+}
+
+export type MaintenanceRequestFullActivityLog = Awaited<ReturnType<typeof getMaintenanceRequestFullActivityLog>>;
+
+export async function getMaintenanceOrderFullActivityLog(orderId: string, requestId?: string) {
+  const companyId = await requireActivityLogAccess();
+  return getMaintenanceOrderFullActivityLogCached(companyId, orderId, requestId);
+}
+
+export type MaintenanceOrderFullActivityLog = Awaited<ReturnType<typeof getMaintenanceOrderFullActivityLog>>;
+
+export async function getWorkOrderActivityLog(workOrderId: string) {
+  const companyId = await requireActivityLogAccess();
+  return getWorkOrderActivityLogCached(companyId, workOrderId);
+}
+
+export async function getWorkOrderFullActivityLog(workOrderId: string) {
+  const companyId = await requireActivityLogAccess();
+  return getWorkOrderFullActivityLogCached(companyId, workOrderId);
+}
+
+export type WorkOrderFullActivityLog = Awaited<ReturnType<typeof getWorkOrderFullActivityLog>>;

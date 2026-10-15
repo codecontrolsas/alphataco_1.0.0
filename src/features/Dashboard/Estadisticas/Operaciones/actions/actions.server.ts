@@ -1,8 +1,10 @@
 'use server';
 
+import { requireDashboardView } from '@/features/Dashboard/lib/permissions.server';
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { prisma } from '@/shared/lib/prisma';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 import moment from 'moment';
 
 const logger = new Logger('Dashboard/Estadisticas/Operaciones');
@@ -36,8 +38,10 @@ export type OperationsChartData = {
 // ---------------------------------------------------------------------------
 
 export async function getOperationsChartData(): Promise<OperationsChartData> {
+  await requireDashboardView('operaciones');
   const companyId = await getActiveCompanyId();
-  const since = moment().subtract(12, 'months').startOf('month').format('YYYY-MM-DD');
+  // "Hoy" en hora argentina: el servidor corre en UTC y entre las 21 y las 24 h ya estaría en el día siguiente
+  const since = moment.utc(argentinaDate()).subtract(12, 'months').startOf('month').format('YYYY-MM-DD');
 
   logger.debug('Fetching operations chart data', { data: { companyId, since } });
 
@@ -67,6 +71,13 @@ export async function getOperationsChartData(): Promise<OperationsChartData> {
         -- dentro de string_agg, que es la parte cara de la agregación
         SELECT der.daily_report_row_id AS row_id, v.cost_center_id
         FROM dailyreportequipmentrelations der
+        -- Acotado a la empresa y al rango pedido DENTRO del CTE: sin esto recorría todas las
+        -- relaciones parte-equipo históricas de todas las empresas (mismos filtros que la consulta final)
+        JOIN dailyreportrows pr ON pr.id = der.daily_report_row_id AND pr.customer_id IS NOT NULL
+        JOIN dailyreport pd ON pd.id = pr.daily_report_id
+          AND pd.company_id = ${companyId}::uuid
+          AND pd.date >= ${since}::date
+          AND pd.is_active = true
         JOIN vehicles v ON v.id = der.equipment_id AND v.cost_center_id IS NOT NULL
         GROUP BY 1, 2
       ),

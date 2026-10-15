@@ -8,11 +8,9 @@ import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
 import { errorMessage, fail, ok, type ActionResult } from '../lib/action-result';
 import { diffAssignments } from '../lib/assignment-diff';
-import {
-  buildContractDocumentPath,
-  classifyDocumentType,
-  CONTRACT_DOCUMENTS_BUCKET,
-} from '../lib/contract-documents';
+import { CONTRACT_DOCUMENTS_BUCKET, buildContractDocumentPath, classifyDocumentType } from '../lib/contract-documents';
+import { assertComercialView, requireComercialPermission } from '../lib/require-permission.server';
+import { cascadeServiceItemsActive } from '../lib/service-items-cascade';
 import { serviceFormSchema, type ServiceFormValues } from '../schemas/service';
 
 const logger = new Logger('features/Empresa/Clientes/services');
@@ -43,6 +41,7 @@ function ownedServiceWhere(companyId: string): Prisma.customer_servicesWhereInpu
 
 /** Contratos de la empresa activa con cliente, áreas y sectores; ordenados por nombre. */
 export async function getCustomerServices() {
+  await assertComercialView(['service']);
   const companyId = await getActiveCompanyId();
   try {
     return await prisma.customer_services.findMany({
@@ -62,6 +61,7 @@ export type CustomerServiceRow = Awaited<ReturnType<typeof getCustomerServices>>
  * Contratos activos de un cliente de la empresa activa (para vincular áreas recién creadas).
  */
 export async function getActiveContractsByCustomer(customerId: string) {
+  await assertComercialView(['areas-cliente', 'service']);
   const companyId = await getActiveCompanyId();
   try {
     return await prisma.customer_services.findMany({
@@ -81,7 +81,7 @@ export type ActiveContract = Awaited<ReturnType<typeof getActiveContractsByCusto
 async function findOwnedService(serviceId: string, companyId: string) {
   return prisma.customer_services.findFirst({
     where: { id: serviceId, ...ownedServiceWhere(companyId) },
-    select: { id: true, customer_id: true, service_name: true, customers: { select: { name: true } } },
+    select: { id: true, customer_id: true, service_name: true, is_active: true, customers: { select: { name: true } } },
   });
 }
 
@@ -93,9 +93,7 @@ async function assertAreasAndSectorsBelongToCustomer(
 ): Promise<void> {
   const [areas, sectors] = await Promise.all([
     areaIds.length ? prisma.areas_cliente.count({ where: { id: { in: areaIds }, customer_id: customerId } }) : 0,
-    sectorIds.length
-      ? prisma.sectors.count({ where: { id: { in: sectorIds }, customer_id: customerId } })
-      : 0,
+    sectorIds.length ? prisma.sectors.count({ where: { id: { in: sectorIds }, customer_id: customerId } }) : 0,
   ]);
   if (areas !== areaIds.length) throw new Error('Una o más áreas no pertenecen al cliente');
   if (sectors !== sectorIds.length) throw new Error('Uno o más sectores no pertenecen al cliente');
@@ -113,6 +111,8 @@ export async function createCustomerService(input: ServiceFormValues): Promise<A
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos');
   const values = parsed.data;
 
+  const permissionError = await requireComercialPermission('service', 'create');
+  if (permissionError) return fail(permissionError);
   const companyId = await getActiveCompanyId();
   try {
     const customer = await prisma.customers.findFirst({
@@ -170,6 +170,8 @@ export async function updateCustomerService(
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos');
   const values = parsed.data;
 
+  const permissionError = await requireComercialPermission('detalle-contrato', 'update');
+  if (permissionError) return fail(permissionError);
   const companyId = await getActiveCompanyId();
   try {
     const service = await findOwnedService(serviceId, companyId);
@@ -194,6 +196,7 @@ export async function updateCustomerService(
       values.sector_id
     );
 
+    let cascaded = 0;
     await prisma.$transaction(async (tx) => {
       await tx.customer_services.update({
         where: { id: serviceId },
@@ -206,6 +209,10 @@ export async function updateCustomerService(
           is_active: values.is_active,
         },
       });
+      // Reemplaza al trigger de customer_services: el estado del contrato se propaga a sus ítems.
+      if (service.is_active !== values.is_active) {
+        cascaded = await cascadeServiceItemsActive(tx, serviceId, companyId, values.is_active);
+      }
       if (areas.toRemove.length > 0) {
         await tx.service_areas.deleteMany({ where: { service_id: serviceId, area_id: { in: areas.toRemove } } });
       }
@@ -227,7 +234,11 @@ export async function updateCustomerService(
     });
 
     logger.info('Contrato actualizado', {
-      data: { serviceId, areas: { added: areas.toAdd.length, removed: areas.toRemove.length } },
+      data: {
+        serviceId,
+        itemsCascaded: cascaded,
+        areas: { added: areas.toAdd.length, removed: areas.toRemove.length },
+      },
     });
     revalidatePath(COMERCIAL_PATH);
     return ok({ id: serviceId });
@@ -250,6 +261,7 @@ export async function updateCustomerService(
  * `getContractDocumentDownloadUrl()`.
  */
 export async function getContractDocuments(serviceId: string) {
+  await assertComercialView(['documentos-contrato']);
   const companyId = await getActiveCompanyId();
   const service = await findOwnedService(serviceId, companyId);
   if (!service) throw new Error('Contrato no encontrado');
@@ -295,6 +307,8 @@ export async function uploadContractDocument(formData: FormData): Promise<Action
   if (!(file instanceof File) || file.size === 0) return fail('No se recibió ningún archivo');
   if (!serviceId) return fail('Contrato no indicado');
 
+  const permissionError = await requireComercialPermission('documentos-contrato', 'create');
+  if (permissionError) return fail(permissionError);
   const companyId = await getActiveCompanyId();
   const service = await findOwnedService(serviceId, companyId);
   if (!service || !service.customer_id) return fail('Contrato no encontrado');
@@ -341,6 +355,8 @@ async function findOwnedDocument(documentId: string, companyId: string) {
 
 /** Borra metadatos y archivo. Si el archivo no se puede borrar, el registro ya no existe (se loguea). */
 export async function deleteContractDocument(documentId: string): Promise<ActionResult> {
+  const permissionError = await requireComercialPermission('documentos-contrato', 'delete');
+  if (permissionError) return fail(permissionError);
   const companyId = await getActiveCompanyId();
   try {
     const doc = await findOwnedDocument(documentId, companyId);
@@ -363,6 +379,8 @@ export async function deleteContractDocument(documentId: string): Promise<Action
 
 /** URL de descarga de un documento del contrato. */
 export async function getContractDocumentDownloadUrl(documentId: string): Promise<ActionResult<{ url: string }>> {
+  const permissionError = await requireComercialPermission('documentos-contrato', 'view');
+  if (permissionError) return fail(permissionError);
   const companyId = await getActiveCompanyId();
   try {
     const doc = await findOwnedDocument(documentId, companyId);

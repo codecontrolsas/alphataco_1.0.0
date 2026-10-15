@@ -1,129 +1,141 @@
-'use client';
-
-import { Button } from '@/components/ui/button';
+import { EmployeeDeliveriesTableSkeleton } from '@/features/Clothing/EmployeeDeliveries/EmployeeDeliveriesList/fallback/EmployeeDeliveriesTableSkeleton';
+import { EmployeeDeliveriesTabContent } from '@/features/Clothing/EmployeeDeliveries/EmployeeDeliveriesTabContent';
+import { getUserPermissionsMapServer } from '@/features/Permissions';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
-import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
-import { TabsManagerClientSide } from '@/features/TabsManager/TabsManagerClientSide';
+import { createTabVisibilityChecker } from '@/features/Permissions/lib/tab-visibility';
+import { RecordSectionsServer } from '@/features/TabsManager/RecordSectionsServer';
 import { RecordHeader } from '@/shared/components/common/RecordHeader';
-import { ArrowLeft, BarChart3, Briefcase, FileText, Pencil, Shirt, User } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { CalendarDays, ChevronRight, FileText, IdCard, Shirt } from 'lucide-react';
+import Link from 'next/link';
+import { Suspense } from 'react';
 import type { EmployeeDetailData } from '../../actions.server';
-import { PersonalDataView, WorkDataView } from '../EmployeeViewDisplay';
+import { EmployeeDiagramsSection } from '../EmployeeDiagramsSection';
+import { EmployeeHeaderContent } from '../EmployeeHeaderContent';
+import { EmployeeRecordData } from '../EmployeeViewDisplay';
+import { EmployeeDocumentDetail } from '../employee-document-detail';
 import { EmployeeQuickActions } from '../employee-quick-actions';
+import { EmployeeDiagramsSkeleton } from '../skeletons/employee-diagrams-skeleton';
+import { EmployeeEditButton } from './EmployeeEditButton';
 
 interface EmployeeReadViewProps {
   employee: NonNullable<EmployeeDetailData>;
-  employeeId: string;
-  /** Identidad pre-renderizada en el servidor (`EmployeeHeaderContent`). */
-  header: React.ReactNode;
-  documentsSlot: React.ReactNode;
-  diagramsSlot: React.ReactNode;
-  clothingSlot: React.ReactNode;
-  onEdit: () => void;
+  searchParams: Record<string, string | string[] | undefined>;
 }
 
-const TabLabel = ({ icon, text }: { icon: React.ReactNode; text: string }) => (
-  <span className="flex items-center gap-2">
-    {icon}
-    <span className="sr-only sm:not-sr-only">{text}</span>
-  </span>
-);
-
-/** Legajo en modo lectura: cabecera con acciones y pestañas por tema. */
-export function EmployeeReadView({
-  employee,
-  employeeId,
-  header,
-  documentsSlot,
-  diagramsSlot,
-  clothingSlot,
-  onEdit,
-}: EmployeeReadViewProps) {
-  const router = useRouter();
-  const { canView } = usePermissions();
-
-  const showContact = canView('empleados', 'datos-contacto');
-  const hasDiagramAccess = canView('empleados', 'diagramas-empleado') || canView('empleados', 'new');
-  const hasClothingAccess = canView('empleados', 'indumentaria_empleado');
-
-  const tabs = [
-    {
-      value: 'personalData',
-      label: <TabLabel icon={<User className="size-4" />} text="Datos personales" />,
-      moduleSlug: 'empleados' as const,
-      tabSlug: 'datos-personales' as const,
-      content: <PersonalDataView employee={employee} showContact={showContact} />,
-    },
-    {
-      value: 'workData',
-      label: <TabLabel icon={<Briefcase className="size-4" />} text="Datos laborales" />,
-      moduleSlug: 'empleados' as const,
-      tabSlug: 'datos-laborales' as const,
-      content: <WorkDataView employee={employee} />,
-    },
-    {
-      value: 'documents',
-      label: <TabLabel icon={<FileText className="size-4" />} text="Documentación" />,
-      moduleSlug: 'documentacion' as const,
-      tabSlug: 'documentos-de-empleados' as const,
-      content: documentsSlot,
-    },
-    // Sin moduleSlug/tabSlug: la visibilidad de los diagramas la controlan sus subtabs internas.
-    ...(hasDiagramAccess
-      ? [
-          {
-            value: 'diagrams',
-            label: <TabLabel icon={<BarChart3 className="size-4" />} text="Diagramas" />,
-            content: diagramsSlot,
-          },
-        ]
-      : []),
-    ...(hasClothingAccess
-      ? [
-          {
-            value: 'clothing',
-            label: <TabLabel icon={<Shirt className="size-4" />} text="Indumentaria" />,
-            moduleSlug: 'empleados' as const,
-            tabSlug: 'indumentaria_empleado' as const,
-            content: clothingSlot,
-          },
-        ]
-      : []),
-  ];
+/**
+ * Ficha del empleado en lectura: ruta de vuelta al listado, cabecera con el legajo y las acciones,
+ * e índice de secciones (`?tab=`) a la izquierda. Solo se arma la sección activa.
+ *
+ * `aliases`: los valores de `?tab=` de la ficha anterior (`personalData`, `workData`) caen en "Legajo";
+ * `documents` y `clothing` se conservan y `diagrams` es alias de `novedades` (los mails de vencimientos enlazan a `tab=documents`).
+ */
+export async function EmployeeReadView({ employee, searchParams }: EmployeeReadViewProps) {
+  const permissions = await getUserPermissionsMapServer();
+  const isTabVisible = createTabVisibilityChecker(permissions);
+  const employeeId = employee.id;
+  const listHref = `/dashboard/employee?tab=employees&subtab=${employee.is_active ? 'empleados-activos' : 'empleados-inactivos'}`;
 
   return (
-    <div className="space-y-6">
-      <Button variant="ghost" size="sm" onClick={() => router.back()} className="-ml-2">
-        <ArrowLeft />
-        Volver
-      </Button>
+    <div className="flex min-w-0 flex-col gap-4">
+      <nav aria-label="Ruta" className="text-muted-foreground flex min-w-0 items-center gap-1 text-sm">
+        <Link
+          href={listHref}
+          className="hover:text-foreground focus-visible:ring-ring rounded-sm outline-none focus-visible:ring-2"
+        >
+          Personal · {employee.is_active ? 'Activos' : 'Bajas'}
+        </Link>
+        <ChevronRight aria-hidden="true" className="size-4 shrink-0" />
+        <span aria-current="page" className="text-foreground min-w-0 truncate font-mono tabular-nums">
+          Legajo {employee.file ?? '—'}
+        </span>
+      </nav>
 
       <RecordHeader
-        identity={header}
+        identity={<EmployeeHeaderContent employee={employee} />}
         actions={
           <>
+            <PermissionGuard module="empleados" tab="employees" action="update">
+              <EmployeeEditButton />
+            </PermissionGuard>
             <EmployeeQuickActions
               employeeId={employeeId}
               isActive={employee.is_active ?? true}
               email={employee.email ?? undefined}
             />
-            <PermissionGuard module="empleados" tab="employees" action="update">
-              <Button variant="outline" onClick={onEdit}>
-                <Pencil />
-                Editar
-              </Button>
-            </PermissionGuard>
           </>
         }
       />
 
-      <TabsManagerClientSide<'empleados' | 'documentacion'>
+      <RecordSectionsServer<'empleados' | 'documentacion'>
         paramName="tab"
-        defaultTab="personalData"
-        variant="line"
-        tabs={tabs}
-        listClassName="h-11 w-full justify-start overflow-x-auto"
-        triggerClassName="text-foreground/60 hover:text-foreground data-[state=active]:text-foreground flex-none px-4 font-medium transition-colors data-[state=active]:font-semibold data-[state=active]:shadow-none"
+        searchParams={searchParams}
+        permissions={permissions}
+        defaultSection="legajo"
+        preserveParams={['action', 'employee_id']}
+        ariaLabel="Secciones del legajo"
+        sections={[
+          {
+            value: 'legajo',
+            aliases: ['personalData', 'workData'],
+            label: 'Legajo',
+            description: 'Identidad, puesto y asignaciones',
+            icon: <IdCard aria-hidden="true" />,
+            visibleWhenAny: [
+              { moduleSlug: 'empleados', tabSlug: 'datos-personales' },
+              { moduleSlug: 'empleados', tabSlug: 'datos-laborales' },
+            ],
+            content: (
+              <EmployeeRecordData
+                employee={employee}
+                showPersonal={isTabVisible('empleados', 'datos-personales')}
+                showContact={isTabVisible('empleados', 'datos-contacto')}
+                showWork={isTabVisible('empleados', 'datos-laborales')}
+              />
+            ),
+          },
+          {
+            value: 'documents',
+            label: 'Documentación',
+            description: 'Permanentes y mensuales',
+            icon: <FileText aria-hidden="true" />,
+            moduleSlug: 'documentacion',
+            tabSlug: 'documentos-de-empleados',
+            content: (
+              <EmployeeDocumentDetail employeeId={employeeId} searchParams={searchParams} permissions={permissions} />
+            ),
+          },
+          {
+            // No `diagrams`: el sidebar marcaría su ítem "Diagramas" (mira `?tab=`). El valor viejo queda como alias.
+            value: 'novedades',
+            aliases: ['diagrams'],
+            label: 'Diagrama',
+            description: 'Novedades día por día',
+            icon: <CalendarDays aria-hidden="true" />,
+            // Como antes: visible con la consulta de novedades del empleado o con la carga de diagramas.
+            visibleWhenAny: [
+              { moduleSlug: 'empleados', tabSlug: 'diagramas-empleado' },
+              { moduleSlug: 'empleados', tabSlug: 'new' },
+            ],
+            content: (
+              <Suspense fallback={<EmployeeDiagramsSkeleton />}>
+                <EmployeeDiagramsSection employeeId={employeeId} />
+              </Suspense>
+            ),
+          },
+          {
+            value: 'clothing',
+            label: 'Indumentaria y EPP',
+            description: 'Entregas registradas',
+            icon: <Shirt aria-hidden="true" />,
+            moduleSlug: 'empleados',
+            tabSlug: 'indumentaria_empleado',
+            content: (
+              <Suspense fallback={<EmployeeDeliveriesTableSkeleton />}>
+                <EmployeeDeliveriesTabContent employeeId={employeeId} searchParams={searchParams} />
+              </Suspense>
+            ),
+          },
+        ]}
       />
     </div>
   );

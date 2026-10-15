@@ -1,31 +1,8 @@
 'use client';
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import {
   createRoleWithPermissions,
   deleteRoleServer,
@@ -35,57 +12,22 @@ import {
 } from '@/features/UserPermissionsManager/actions.server';
 import { Logger } from '@/lib/logger';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Download, Pencil, Plus, Search, Shield, Trash2, Users } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import type { ModulesWithTabsData, RoleWithCount } from '../actions.server';
-import { updateRoleHiddenEquipmentTypes } from '../actions/equipmentTypeVisibility.server';
 import {
   equipmentTypeVisibilityKeys,
   useRoleEquipmentTypesDraft,
   type RoleEquipmentTypeChanges,
 } from '../hooks/useEquipmentTypeVisibility';
 import { ManageRoleUsersDialog } from './ManageRoleUsersDialog';
-import { RoleEquipmentTypesSection } from './RoleEquipmentTypesSection';
-import { RolePermissionsEditor } from './RolePermissionsEditor';
-import { RoleTemplateSelector } from './RoleTemplateSelector';
+import { DeleteRoleDialog } from './role-manager/DeleteRoleDialog';
+import { RoleEditorSheet } from './role-manager/RoleEditorSheet';
+import { RoleGroups } from './role-manager/RoleGroups';
+import { describeEquipmentTypesOutcome, saveRoleEquipmentTypeChanges } from './role-manager/equipment-types-save';
 
 const logger = new Logger('RoleManager');
-
-// ─── Tipos de equipamiento (ticket 690) ───────────────────────────────────────
-
-type EquipmentTypesSaveOutcome =
-  | { status: 'unchanged' }
-  | { status: 'saved'; hidden: number; shown: number }
-  | { status: 'failed' };
-
-/**
- * Persiste el delta de tipos de equipamiento del rol después de guardar el rol.
- * No lanza: si falla, el rol ya quedó guardado y el diálogo informa el error del bloque.
- */
-async function saveRoleEquipmentTypeChanges(
-  roleId: number,
-  changes: RoleEquipmentTypeChanges
-): Promise<EquipmentTypesSaveOutcome> {
-  if (changes.hide.length === 0 && changes.show.length === 0) return { status: 'unchanged' };
-
-  try {
-    const result = await updateRoleHiddenEquipmentTypes(roleId, changes);
-    return { status: 'saved', ...result };
-  } catch (error) {
-    logger.error('Error al guardar tipos de equipamiento del rol', { data: { error, roleId } });
-    return { status: 'failed' };
-  }
-}
-
-function describeEquipmentTypesOutcome(outcome: EquipmentTypesSaveOutcome): string {
-  if (outcome.status !== 'saved') return '';
-  const parts = [
-    outcome.hidden > 0 ? `se ocultaron ${outcome.hidden}` : null,
-    outcome.shown > 0 ? `se volvieron a mostrar ${outcome.shown}` : null,
-  ].filter(Boolean);
-  return parts.length > 0 ? ` Tipos de equipamiento: ${parts.join(' y ')}.` : '';
-}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -93,101 +35,6 @@ interface RoleManagerProps {
   initialRoles: RoleWithCount[];
   initialRolePermissions: Record<number, Array<{ tabId: string; actionId: string }>>;
   initialModules: ModulesWithTabsData;
-}
-
-// ─── RoleCard ─────────────────────────────────────────────────────────────────
-
-function RoleCard({
-  role,
-  permissionsCount,
-  onEdit,
-  onManageUsers,
-  onDelete,
-  isDeleting,
-}: {
-  role: RoleWithCount;
-  permissionsCount: number;
-  onEdit: (role: RoleWithCount) => void;
-  onManageUsers: (role: RoleWithCount) => void;
-  onDelete: (roleId: number, roleName: string) => void;
-  isDeleting: boolean;
-}) {
-  const hasUsers = role.userCount > 0;
-  const canDelete = !role.is_system && !hasUsers;
-
-  return (
-    <Card className="p-4 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Shield className="h-5 w-5" style={{ color: role.color || 'currentColor' }} />
-          <h3 className="font-semibold">{role.name}</h3>
-        </div>
-        <div className="flex gap-1">
-          <Badge variant="outline" className="text-xs flex items-center gap-1">
-            <Users className="h-3 w-3" />
-            {role.userCount}
-          </Badge>
-          <Badge variant="outline" className="text-xs flex items-center gap-1">
-            <Shield className="h-3 w-3" />
-            {role.slug === 'owner' ? 'ALL' : permissionsCount}
-          </Badge>
-          {role.color && (
-            <Badge
-              variant="outline"
-              style={{
-                backgroundColor: `${role.color}20`,
-                borderColor: role.color,
-                color: role.color,
-              }}
-              className="text-xs"
-            >
-              {role.is_system ? 'Sistema' : 'Personalizado'}
-            </Badge>
-          )}
-        </div>
-      </div>
-
-      {role.description && <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{role.description}</p>}
-
-      <div className="flex gap-2">
-        {/* Roles de sistema: solo botón de asignar */}
-        {role.is_system ? (
-          <PermissionGuard module="configuracion" tab="gestion-roles" action="update">
-            <Button variant="outline" size="sm" className="flex-1" onClick={() => onManageUsers(role)}>
-              <Users className="h-4 w-4 mr-2" />
-              Asignar Usuarios
-            </Button>
-          </PermissionGuard>
-        ) : (
-          /* Roles personalizados: editar, asignar y eliminar */
-          <>
-            <PermissionGuard module="configuracion" tab="gestion-roles" action="update">
-              <Button variant="outline" size="sm" className="flex-1" onClick={() => onEdit(role)}>
-                <Pencil className="h-3 w-3 mr-2" />
-                Editar
-              </Button>
-            </PermissionGuard>
-            <PermissionGuard module="configuracion" tab="gestion-roles" action="update">
-              <Button variant="outline" size="sm" onClick={() => onManageUsers(role)} title="Asignar usuarios">
-                <Users className="h-3 w-3" />
-              </Button>
-            </PermissionGuard>
-            <PermissionGuard module="configuracion" tab="gestion-roles" action="delete">
-              <Button
-                variant={canDelete ? 'destructive' : 'outline'}
-                size="sm"
-                onClick={() => onDelete(role.id, role.name)}
-                disabled={!canDelete || isDeleting}
-                title={hasUsers ? `No se puede eliminar: ${role.userCount} usuario(s) asignado(s)` : 'Eliminar rol'}
-              >
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            </PermissionGuard>
-          </>
-        )}
-      </div>
-    </Card>
-  );
 }
 
 // ─── RoleManager ──────────────────────────────────────────────────────────────
@@ -202,6 +49,12 @@ export function RoleManager({ initialRoles, initialRolePermissions, initialModul
   const [roleDescription, setRoleDescription] = useState('');
   const [roleColor, setRoleColor] = useState('#3b82f6');
   const [rolePermissions, setRolePermissions] = useState<Array<{ tabId: string; actionId: string }>>([]);
+  // Permisos del rol tal como están en la BD al abrir el editor: base para calcular altas y bajas
+  const [permissionsBaseline, setPermissionsBaseline] = useState<Array<{ tabId: string; actionId: string }> | null>(
+    null
+  );
+  // Evita abrir dos veces el editor mientras se lee el baseline
+  const [isOpeningEditor, setIsOpeningEditor] = useState(false);
   const [templateRoleIds, setTemplateRoleIds] = useState<number[]>([]);
   // Bloquea el boton de importar mientras se cargan los permisos de los roles plantilla
   const [isImporting, setIsImporting] = useState(false);
@@ -298,7 +151,10 @@ export function RoleManager({ initialRoles, initialRolePermissions, initialModul
       queryClient.invalidateQueries({ queryKey: ['roles'] });
       // Actualizar cache local de permisos
       setLocalRolePermissions((prev) => ({ ...prev, [updatedRole.id]: rolePermissions }));
+      // El nuevo estado guardado es el baseline para un eventual reintento
+      setPermissionsBaseline(rolePermissions);
       invalidateEquipmentTypeVisibility(updatedRole.id);
+      const permissionsOutcome = `Permisos: ${updatedRole.added} agregados, ${updatedRole.removed} quitados.`;
 
       if (equipmentTypes.status === 'failed') {
         // Los permisos se guardaron; el borrador de tipos queda para reintentar
@@ -306,13 +162,13 @@ export function RoleManager({ initialRoles, initialRolePermissions, initialModul
           'Los permisos del rol se guardaron, pero no se pudo guardar qué tipos de equipamiento ve. Vuelve a guardar para reintentar.'
         );
         toast.error('Tipos de equipamiento sin guardar', {
-          description: `Los permisos de "${updatedRole.name}" se guardaron, pero no los tipos de equipamiento.`,
+          description: `Los permisos de "${updatedRole.name}" se guardaron (${updatedRole.added} agregados, ${updatedRole.removed} quitados), pero no los tipos de equipamiento.`,
         });
         return;
       }
 
       toast.success('Rol actualizado', {
-        description: `El rol "${updatedRole.name}" ha sido actualizado exitosamente.${describeEquipmentTypesOutcome(equipmentTypes)}`,
+        description: `El rol "${updatedRole.name}" ha sido actualizado exitosamente. ${permissionsOutcome}${describeEquipmentTypesOutcome(equipmentTypes)}`,
       });
       setIsDialogOpen(false);
     },
@@ -349,6 +205,7 @@ export function RoleManager({ initialRoles, initialRolePermissions, initialModul
     setRoleDescription('');
     setRoleColor('#3b82f6');
     setRolePermissions([]);
+    setPermissionsBaseline(null);
     setTemplateRoleIds([]);
     equipmentTypesDraft.reset();
     setEquipmentTypesSaveError(null);
@@ -356,30 +213,45 @@ export function RoleManager({ initialRoles, initialRolePermissions, initialModul
   };
 
   const handleEditRole = async (role: RoleWithCount) => {
-    setEditingRole(role);
-    setRoleName(role.name);
-    setRoleDescription(role.description || '');
-    setRoleColor(role.color || '#3b82f6');
-    setTemplateRoleIds([]);
-    equipmentTypesDraft.reset();
-    setEquipmentTypesSaveError(null);
+    if (isOpeningEditor) return;
+    setIsOpeningEditor(true);
 
-    // Usar permisos del cache local o cargar desde server
-    const cached = localRolePermissions[role.id];
-    if (cached !== undefined) {
-      setRolePermissions(cached);
-    } else {
-      try {
-        const permissions = await getRolePermissionsServer(role.id);
-        setRolePermissions(permissions);
-        setLocalRolePermissions((prev) => ({ ...prev, [role.id]: permissions }));
-      } catch (error) {
-        logger.error('Error al cargar permisos del rol', { data: { error } });
-        setRolePermissions([]);
-      }
+    try {
+      // El baseline se lee SIEMPRE del servidor: el cache local puede estar viejo y de él
+      // depende qué permisos se quitan al guardar. Si falla, el editor no se abre.
+      const permissions = await getRolePermissionsServer(role.id);
+
+      setEditingRole(role);
+      setRoleName(role.name);
+      setRoleDescription(role.description || '');
+      setRoleColor(role.color || '#3b82f6');
+      setTemplateRoleIds([]);
+      equipmentTypesDraft.reset();
+      setEquipmentTypesSaveError(null);
+      setRolePermissions(permissions);
+      setPermissionsBaseline(permissions);
+      setLocalRolePermissions((prev) => ({ ...prev, [role.id]: permissions }));
+      setIsDialogOpen(true);
+    } catch (error) {
+      logger.error('Error al cargar permisos del rol', { data: { error } });
+      toast.error('No se pudieron cargar los permisos del rol', {
+        description: 'Reintenta en unos segundos. El rol no se abrió para evitar perder permisos.',
+      });
+    } finally {
+      setIsOpeningEditor(false);
     }
+  };
 
-    setIsDialogOpen(true);
+  /** Delta de permisos contra el baseline leído al abrir: solo pares realmente agregados o quitados. */
+  const computePermissionsDelta = (baseline: Array<{ tabId: string; actionId: string }>) => {
+    const keyOf = (p: { tabId: string; actionId: string }) => `${p.tabId}:${p.actionId}`;
+    const baselineKeys = new Set(baseline.map(keyOf));
+    const currentKeys = new Set(rolePermissions.map(keyOf));
+    const toPair = (p: { tabId: string; actionId: string }) => ({ tab_id: p.tabId, action_id: p.actionId });
+    return {
+      add: rolePermissions.filter((p) => !baselineKeys.has(keyOf(p))).map(toPair),
+      remove: baseline.filter((p) => !currentKeys.has(keyOf(p))).map(toPair),
+    };
   };
 
   const handleSaveRole = () => {
@@ -395,13 +267,15 @@ export function RoleManager({ initialRoles, initialRolePermissions, initialModul
     const equipmentTypeChanges = equipmentTypesDraft.changes;
 
     if (editingRole) {
+      // Sin baseline no se puede calcular qué cambió: no se guarda
+      if (!permissionsBaseline) return;
       updateRoleMutation.mutate({
         role: {
           id: editingRole.id,
           name: roleName,
           description: roleDescription,
           color: roleColor,
-          permissions: rolePermissions,
+          permissions: computePermissionsDelta(permissionsBaseline),
         },
         equipmentTypeChanges,
       });
@@ -420,6 +294,7 @@ export function RoleManager({ initialRoles, initialRolePermissions, initialModul
 
   const isSavingRole = createRoleMutation.isPending || updateRoleMutation.isPending;
   const isWaitingEquipmentTypesBaseline = equipmentTypesDraft.hasChanges && !equipmentTypesDraft.isBaselineReady;
+  const isWaitingPermissionsBaseline = editingRole !== null && permissionsBaseline === null;
 
   const handleImportPermissions = async () => {
     if (templateRoleIds.length === 0) {
@@ -502,231 +377,78 @@ export function RoleManager({ initialRoles, initialRolePermissions, initialModul
 
   return (
     <div className="space-y-4">
-      <Card className="p-6">
+      <Card className="p-4 sm:p-6">
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <Label className="text-base font-semibold">Roles Disponibles</Label>
-              <p className="text-sm text-muted-foreground mt-1">Crea y gestiona roles con permisos predefinidos</p>
+              <p className="mt-1 text-sm text-muted-foreground">Crea y gestiona roles con permisos predefinidos</p>
             </div>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <PermissionGuard module="configuracion" tab="gestion-roles" action="create">
-                <DialogTrigger asChild>
-                  <Button onClick={handleCreateRole}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Crear Rol
-                  </Button>
-                </DialogTrigger>
-              </PermissionGuard>
-              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>{editingRole ? 'Editar Rol' : 'Crear Nuevo Rol'}</DialogTitle>
-                  <DialogDescription>Define el nombre, descripción, color y permisos para este rol</DialogDescription>
-                </DialogHeader>
-
-                <div className="space-y-4 py-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="role-name">Nombre del Rol</Label>
-                      <Input
-                        id="role-name"
-                        placeholder="Ej: Administrador, Editor, Visor"
-                        value={roleName}
-                        onChange={(e) => setRoleName(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="role-color">Color del Rol</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          id="role-color"
-                          type="color"
-                          value={roleColor}
-                          onChange={(e) => setRoleColor(e.target.value)}
-                          className="w-20 h-10 cursor-pointer"
-                        />
-                        <Input
-                          type="text"
-                          value={roleColor}
-                          onChange={(e) => setRoleColor(e.target.value)}
-                          placeholder="#3b82f6"
-                          className="flex-1"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="role-description">Descripción</Label>
-                    <Textarea
-                      id="role-description"
-                      placeholder="Describe las responsabilidades de este rol"
-                      value={roleDescription}
-                      onChange={(e) => setRoleDescription(e.target.value)}
-                      rows={2}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Importar Permisos desde Roles Existentes (Opcional)</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Selecciona uno o más roles para usar sus permisos como plantilla
-                    </p>
-
-                    <RoleTemplateSelector
-                      roles={roles.filter((r) => !editingRole || r.id !== editingRole.id)}
-                      selectedRoleIds={templateRoleIds}
-                      onSelectionChange={setTemplateRoleIds}
-                      rolePermissionsCache={localRolePermissions}
-                    />
-
-                    {templateRoleIds.length > 0 && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleImportPermissions}
-                        className="w-full"
-                        disabled={isImporting}
-                      >
-                        <Download className="h-4 w-4 mr-2" />
-                        {isImporting
-                          ? 'Importando...'
-                          : `Importar Permisos (${templateRoleIds.length} rol${templateRoleIds.length > 1 ? 'es' : ''})`}
-                      </Button>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <RolePermissionsEditor
-                      permissions={rolePermissions}
-                      onPermissionsChange={setRolePermissions}
-                      initialModules={initialModules}
-                      moduleAddons={{
-                        mantenimiento: (
-                          <RoleEquipmentTypesSection
-                            draft={equipmentTypesDraft}
-                            disabled={isSavingRole}
-                            saveError={equipmentTypesSaveError}
-                          />
-                        ),
-                      }}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Total de permisos seleccionados: {rolePermissions.length}
-                    </p>
-                  </div>
-                </div>
-
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                    Cancelar
-                  </Button>
-                  <Button
-                    onClick={handleSaveRole}
-                    disabled={isSavingRole || isWaitingEquipmentTypesBaseline}
-                    aria-busy={isSavingRole || isWaitingEquipmentTypesBaseline}
-                  >
-                    {isSavingRole
-                      ? 'Guardando...'
-                      : isWaitingEquipmentTypesBaseline
-                        ? 'Cargando tipos...'
-                        : editingRole
-                          ? 'Guardar Cambios'
-                          : 'Crear Rol'}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            <RoleEditorSheet
+              open={isDialogOpen}
+              onOpenChange={setIsDialogOpen}
+              onCreate={handleCreateRole}
+              editingRole={editingRole}
+              roles={roles}
+              initialModules={initialModules}
+              name={roleName}
+              onNameChange={setRoleName}
+              description={roleDescription}
+              onDescriptionChange={setRoleDescription}
+              color={roleColor}
+              onColorChange={setRoleColor}
+              permissions={rolePermissions}
+              permissionsBaseline={permissionsBaseline}
+              onPermissionsChange={setRolePermissions}
+              templateRoleIds={templateRoleIds}
+              onTemplateRoleIdsChange={setTemplateRoleIds}
+              rolePermissionsCache={localRolePermissions}
+              isImporting={isImporting}
+              onImportPermissions={handleImportPermissions}
+              equipmentTypesDraft={equipmentTypesDraft}
+              equipmentTypesSaveError={equipmentTypesSaveError}
+              isSaving={isSavingRole}
+              isWaitingEquipmentTypesBaseline={isWaitingEquipmentTypesBaseline}
+              isWaitingPermissionsBaseline={isWaitingPermissionsBaseline}
+              onSave={handleSaveRole}
+            />
           </div>
 
           {/* Buscador de roles */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <div className="relative mb-4 md:w-1/3">
+            <Search
+              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
             <Input
               placeholder="Buscar roles por nombre o descripción..."
+              aria-label="Buscar roles por nombre o descripción"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 mb-4 md:w-1/4"
+              className="pl-9"
             />
           </div>
         </div>
 
-        {/* Lista agrupada */}
-        {filteredCount === 0 ? (
-          <div className="text-center py-8 text-sm text-muted-foreground">
-            No se encontraron roles que coincidan con {searchQuery}
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {/* Roles Personalizados */}
-            {customRoles.length > 0 && (
-              <div>
-                <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Roles Personalizados ({customRoles.length})
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {customRoles.map((role) => (
-                    <RoleCard
-                      key={role.id}
-                      role={role}
-                      permissionsCount={getPermissionsCountForRole(role.id)}
-                      onEdit={handleEditRole}
-                      onManageUsers={handleManageUsers}
-                      onDelete={handleDeleteRole}
-                      isDeleting={deleteRoleMutation.isPending}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Roles de Sistema */}
-            {systemRoles.length > 0 && (
-              <div>
-                <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
-                  <Shield className="h-4 w-4" />
-                  Roles de Sistema ({systemRoles.length})
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {systemRoles.map((role) => (
-                    <RoleCard
-                      key={role.id}
-                      role={role}
-                      permissionsCount={getPermissionsCountForRole(role.id)}
-                      onEdit={handleEditRole}
-                      onManageUsers={handleManageUsers}
-                      onDelete={handleDeleteRole}
-                      isDeleting={deleteRoleMutation.isPending}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+        <RoleGroups
+          customRoles={customRoles}
+          systemRoles={systemRoles}
+          searchQuery={searchQuery}
+          getPermissionsCount={getPermissionsCountForRole}
+          onEdit={handleEditRole}
+          onManageUsers={handleManageUsers}
+          onDelete={handleDeleteRole}
+          isDeleting={deleteRoleMutation.isPending}
+        />
       </Card>
 
-      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar rol?</AlertDialogTitle>
-            <AlertDialogDescription>
-              ¿Estás seguro de que deseas eliminar el rol {roleToDelete?.name}? Esta acción no se puede deshacer.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setRoleToDelete(null)}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmDeleteRole}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteRoleDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        roleName={roleToDelete?.name}
+        onCancel={() => setRoleToDelete(null)}
+        onConfirm={confirmDeleteRole}
+      />
 
       <ManageRoleUsersDialog
         role={manageUsersRole}

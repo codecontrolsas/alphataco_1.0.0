@@ -1,7 +1,5 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
@@ -22,7 +20,8 @@ import {
   getAllWorkDiagramOptions,
   getAllWorkshopSectorOptions,
 } from '../../actions.server';
-import type { EmployeeWorkDataValues } from './employee-form';
+import type { EmployeeWorkDataValues } from '../../schemas/employee-schema';
+import { AptitudesCard, ContractorsCard } from './employee-work-data-cards';
 
 /**
  * Datos laborales del legajo. Toma el form del contexto para poder reutilizarse tal cual
@@ -541,83 +540,20 @@ export function EmployeeWorkDataForm() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Asignado a contratistas */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Asignado a contratistas</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loadingContractors ? (
-              <div className="space-y-2">
-                <Skeleton className="h-5 w-full" />
-                <Skeleton className="h-5 w-full" />
-                <Skeleton className="h-5 w-3/4" />
-              </div>
-            ) : contractorCompanies.length > 0 ? (
-              <div className="grid grid-cols-1 gap-3">
-                {contractorCompanies.map((contractor) => (
-                  <div key={contractor.id} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={contractor.id}
-                      checked={allocatedTo.includes(contractor.id)}
-                      onCheckedChange={(checked) => handleContractorChange(contractor.id, checked as boolean)}
-                    />
-                    <label
-                      htmlFor={contractor.id}
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                    >
-                      {contractor.name}
-                    </label>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">No hay contratistas asignados</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Aptitudes Técnicas</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loadingAptitudes ? (
-              <div className="space-y-2">
-                <Skeleton className="h-5 w-full" />
-                <Skeleton className="h-5 w-full" />
-                <Skeleton className="h-5 w-3/4" />
-              </div>
-            ) : !selectedCompanyPosition ? (
-              <p className="text-sm text-muted-foreground">
-                Primero seleccione un puesto para ver las aptitudes disponibles
-              </p>
-            ) : filteredAptitudes.filter((a) => a.is_active).length > 0 ? (
-              <div className="grid grid-cols-1 gap-3">
-                {filteredAptitudes
-                  .filter((aptitude) => aptitude.is_active)
-                  .map((aptitude) => (
-                    <div key={aptitude.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={aptitude.id}
-                        checked={selectedAptitudes.includes(aptitude.id)}
-                        onCheckedChange={(checked) => handleAptitudeChange(aptitude.id, checked as boolean)}
-                      />
-                      <label
-                        htmlFor={aptitude.id}
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                      >
-                        {aptitude.nombre}
-                      </label>
-                    </div>
-                  ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">No hay aptitudes disponibles para el puesto seleccionado</p>
-            )}
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <ContractorsCard
+          contractors={contractorCompanies}
+          isLoading={loadingContractors}
+          selectedIds={allocatedTo}
+          onToggle={handleContractorChange}
+        />
+        <AptitudesCard
+          aptitudes={filteredAptitudes.filter((aptitude) => aptitude.is_active)}
+          isLoading={loadingAptitudes}
+          hasPosition={!!selectedCompanyPosition}
+          selectedIds={selectedAptitudes}
+          onToggle={handleAptitudeChange}
+        />
       </div>
     </div>
   );

@@ -1,12 +1,12 @@
 import { getUserPermissionsMapServer } from '@/features/Permissions';
+import { getInvoiceReceivable } from '@/features/Treasury/actions/customer-statement.server';
 import { Lock } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import { cache } from 'react';
-import { getInvoiceReceivable } from '@/features/Treasury/actions/customer-statement.server';
 import { getInvoiceForEditor } from './actions/invoices.server';
 import { InvoiceDetail } from './components/detail/InvoiceDetail';
-import { InvoiceEditor } from './components/editor/InvoiceEditor';
 import type { InvoicePermissions } from './components/editor/InvoiceDraftForm';
+import { InvoiceEditor } from './components/editor/InvoiceEditor';
 import { isEditable } from './lib/invoice-state-machine';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -48,6 +48,7 @@ export async function InvoicePage({ id, result }: { id: string; result: string |
 
   const permissions: InvoicePermissions = {
     canCreate: can('create'),
+    canUpdate: can('update'),
     canDelete: can('delete'),
     canApprove: can('approve'),
     canViewPrices: can('view_prices'),
@@ -58,13 +59,17 @@ export async function InvoicePage({ id, result }: { id: string; result: string |
   }
   // Pendiente de cobro: solo con permiso de Cobranzas en Tesorería (spec Tesorería etapa 2 §4.6).
   const receivable =
-    permissionsMap['tesoreria:cobranzas:view'] === true && data.invoice.status === 'autorizada' ? await getInvoiceReceivable(id) : null;
+    permissionsMap['tesoreria:cobranzas:view'] === true && data.invoice.status === 'autorizada'
+      ? await getInvoiceReceivable(id)
+      : null;
   return (
     <InvoiceDetail
       data={data}
       permissions={permissions}
       result={result}
-      receivable={receivable ? { ...receivable, canCollect: permissionsMap['tesoreria:cobranzas:create'] === true } : null}
+      receivable={
+        receivable ? { ...receivable, canCollect: permissionsMap['tesoreria:cobranzas:create'] === true } : null
+      }
     />
   );
 }

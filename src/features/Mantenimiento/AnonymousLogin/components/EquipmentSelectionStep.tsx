@@ -2,12 +2,11 @@
 
 import { Button } from '@/components/ui/button';
 import { CardDescription } from '@/components/ui/card';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Check, ChevronsUpDown } from 'lucide-react';
+import { Check, Loader2, Search } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useEquipmentSearch } from '../hooks/useEquipmentSearch';
@@ -21,10 +20,12 @@ interface EquipmentSelectionStepProps {
 
 /**
  * Paso 1: identificar el equipo por dominio o serie cuando no llega por el QR.
+ *
+ * Búsqueda y resultados van en la misma pantalla (sin desplegable): en un celular el
+ * teclado tapa el popover y el operario no ve qué está eligiendo.
  */
 export function EquipmentSelectionStep({ selectedEquipmentId, onSelect, onSubmit }: EquipmentSelectionStepProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [isOpen, setIsOpen] = useState(false);
   const { options, isSearching, isTermTooShort } = useEquipmentSearch(searchTerm);
 
   const form = useForm<EquipmentSelectionValues>({
@@ -32,83 +33,94 @@ export function EquipmentSelectionStep({ selectedEquipmentId, onSelect, onSubmit
     defaultValues: { equipment_id: selectedEquipmentId || '' },
   });
 
-  const selectedEquipment = options.find((equipment) => equipment.id === selectedEquipmentId);
+  // El elegido puede no estar en la búsqueda actual (se retipeó): se conserva su etiqueta
+  const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
+  const currentValue = form.watch('equipment_id');
+
+  // Un solo mensaje, siempre en el DOM: el lector de pantalla anuncia el resultado de cada búsqueda
+  const statusMessage = isTermTooShort
+    ? 'Ingrese al menos 2 caracteres para buscar'
+    : isSearching
+      ? 'Buscando…'
+      : options.length === 0
+        ? 'No se encontraron equipos. Probá con el número interno o la serie.'
+        : `${options.length} ${options.length === 1 ? 'equipo encontrado' : 'equipos encontrados'}`;
 
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit((values) => onSubmit(values.equipment_id))} className="space-y-4">
-        <CardDescription className="text-center text-gray-700 mb-4">
-          Ingrese el dominio o serie del equipo para continuar
+        <CardDescription className="mb-4 text-center text-base text-foreground">
+          Si el QR no se leyó, buscá el equipo por dominio o serie
         </CardDescription>
         <FormField
           control={form.control}
           name="equipment_id"
-          render={({ field }) => (
-            <FormItem className="flex flex-col">
+          render={() => (
+            <FormItem>
               <FormLabel>Equipo</FormLabel>
-              <Popover open={isOpen} onOpenChange={setIsOpen}>
-                <PopoverTrigger asChild>
-                  <FormControl>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      className={cn('justify-between', !field.value && 'text-muted-foreground')}
-                    >
-                      {selectedEquipment ? selectedEquipment.label : 'Buscar por dominio o serie...'}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </FormControl>
-                </PopoverTrigger>
-                <PopoverContent className="w-full p-0" align="start">
-                  <Command>
-                    <CommandInput
-                      placeholder="Buscar equipo (mínimo 2 caracteres)..."
-                      value={searchTerm}
-                      onValueChange={setSearchTerm}
-                    />
-                    <CommandList>
-                      {isSearching && (
-                        <div className="py-6 text-center text-sm text-muted-foreground">Buscando...</div>
-                      )}
-                      {!isSearching && options.length === 0 && !isTermTooShort && (
-                        <CommandEmpty>No se encontraron equipos</CommandEmpty>
-                      )}
-                      {!isSearching && isTermTooShort && (
-                        <CommandEmpty>Ingrese al menos 2 caracteres para buscar</CommandEmpty>
-                      )}
-                      {!isSearching && options.length > 0 && (
-                        <CommandGroup>
-                          {options.map((equipment) => (
-                            <CommandItem
-                              value={equipment.label}
-                              key={equipment.id}
-                              onSelect={() => {
-                                form.setValue('equipment_id', equipment.id);
-                                onSelect(equipment.id);
-                                setIsOpen(false);
-                              }}
-                            >
-                              <Check
-                                className={cn(
-                                  'mr-2 h-4 w-4',
-                                  equipment.id === field.value ? 'opacity-100' : 'opacity-0'
-                                )}
-                              />
-                              {equipment.label}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      )}
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+              <div className="relative">
+                <Search
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                />
+                <FormControl>
+                  <Input
+                    type="search"
+                    inputMode="search"
+                    autoCapitalize="characters"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    placeholder="Dominio o serie"
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                    className="h-12 pl-9 text-base"
+                  />
+                </FormControl>
+              </div>
+              <p role="status" aria-live="polite" className="flex items-center gap-2 text-sm text-muted-foreground">
+                {isSearching && <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />}
+                {statusMessage}
+              </p>
+
+              {!isSearching && options.length > 0 && (
+                <div
+                  role="radiogroup"
+                  aria-label="Equipos encontrados"
+                  className="divide-y overflow-hidden rounded-lg border bg-card"
+                >
+                  {options.map((equipment) => {
+                    const isSelected = equipment.id === currentValue;
+                    return (
+                      <button
+                        key={equipment.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={isSelected}
+                        onClick={() => {
+                          form.setValue('equipment_id', equipment.id, { shouldValidate: true });
+                          setSelectedLabel(equipment.label);
+                          onSelect(equipment.id);
+                        }}
+                        className={cn(
+                          'flex min-h-12 w-full items-center justify-between gap-3 px-4 py-2 text-left text-base outline-none transition-colors',
+                          'focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/50',
+                          isSelected ? 'bg-brand-subtle text-brand-subtle-foreground' : 'hover:bg-accent'
+                        )}
+                      >
+                        <span className="min-w-0 truncate font-mono font-semibold">{equipment.label}</span>
+                        <Check aria-hidden="true" className={cn('h-4 w-4 shrink-0', !isSelected && 'invisible')} />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               <FormMessage />
             </FormItem>
           )}
         />
-        <Button type="submit" className="w-full text-white" disabled={form.formState.isSubmitting}>
-          Continuar
+        <Button type="submit" className="h-12 w-full text-base" disabled={form.formState.isSubmitting || !currentValue}>
+          {selectedLabel && currentValue ? `Continuar con ${selectedLabel}` : 'Continuar'}
         </Button>
       </form>
     </Form>

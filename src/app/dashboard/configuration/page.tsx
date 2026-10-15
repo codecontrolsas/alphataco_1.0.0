@@ -7,15 +7,15 @@ export async function generateMetadata() {
   const companyName = cookiesStore.get('actualCompName')?.value;
   if (companyName) {
     return {
-      title: `Empresa | ${companyName}`,
-      description: `Página de empresa de ${companyName} con información general, comercial, HR y equipos`,
+      title: `Configuración | ${companyName}`,
+      description: `Configuración de ${companyName}: organización, personal, flota, taller y tipos de documento`,
     };
   } else {
     const actualCompany = await getCompanyName();
     if (actualCompany) {
       return {
-        title: `Empresa | ${actualCompany.company_name}`,
-        description: `Página de empresa de ${actualCompany.company_name} con información general, comercial, HR y equipos`,
+        title: `Configuración | ${actualCompany.company_name}`,
+        description: `Configuración de ${actualCompany.company_name}: organización, personal, flota, taller y tipos de documento`,
       };
     }
   }

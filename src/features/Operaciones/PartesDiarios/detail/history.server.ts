@@ -40,6 +40,7 @@ export async function getDailyReportRowHistory(rowId: string) {
           select: {
             credential_id: true,
             email: true,
+            fullname: true,
           },
         },
       },

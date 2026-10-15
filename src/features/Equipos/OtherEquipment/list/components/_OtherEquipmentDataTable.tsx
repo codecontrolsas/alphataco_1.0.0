@@ -8,7 +8,6 @@ import {
   cost_type_enum,
   currency_enum,
   status_type,
-  termination_reason_enum,
 } from '@/generated/prisma/enums';
 import {
   DataTable,
@@ -18,13 +17,14 @@ import {
   type SortItem,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import {
   conditionLabels,
   contractTypeVehiclesLabels,
   costTypeLabels,
   currencyLabels,
   otherEquipmentStatusLabels,
-  terminationReasonEquipmentLabels,
 } from '@/shared/utils/mappers';
 import type { LucideIcon } from 'lucide-react';
 import { Check, CircleOff, Plus, X } from 'lucide-react';
@@ -171,7 +171,6 @@ export function _OtherEquipmentDataTable({
       'cost_type',
       'currency',
       'type_of_contract',
-      'reason_for_termination',
       'serial_number',
       'intern_number',
       'manufacturer_plate',
@@ -182,7 +181,6 @@ export function _OtherEquipmentDataTable({
       'initial_value',
       'purchase_date',
       'created_at',
-      'termination_date',
       'has_certification',
       'certification_expiration_date',
       'certification_number',
@@ -258,16 +256,6 @@ export function _OtherEquipmentDataTable({
         columnId: 'currency',
         title: 'Moneda',
         fetchFacet: makeEnumFetchFacet('currency', Object.values(currency_enum), currencyLabels, {}),
-      },
-      {
-        columnId: 'reason_for_termination',
-        title: 'Motivo de baja',
-        fetchFacet: makeEnumFetchFacet(
-          'reason_for_termination',
-          Object.values(termination_reason_enum),
-          terminationReasonEquipmentLabels,
-          {}
-        ),
       },
       {
         columnId: 'type_of_contract',
@@ -355,7 +343,6 @@ export function _OtherEquipmentDataTable({
       // ── Filtros de rango de fechas ───────────────────────────────────────────
       { columnId: 'purchase_date', title: 'Fecha de compra', type: 'dateRange' as const },
       { columnId: 'created_at', title: 'Creado', type: 'dateRange' as const },
-      { columnId: 'termination_date', title: 'Fecha de baja', type: 'dateRange' as const },
       { columnId: 'certification_expiration_date', title: 'Vencimiento de certificación', type: 'dateRange' as const },
     ],
     [makeEnumFetchFacet, makeFkFetchFacet, makeBooleanFetchFacet]
@@ -402,7 +389,7 @@ export function _OtherEquipmentDataTable({
       emptyMessage="No hay equipos registrados"
       data-testid="other-equipment-table"
       exportConfig={{
-        fetchAllData: () => getAllOtherEquipmentForExport(currentParams),
+        fetchAllData: async () => unwrapExportResult(await getAllOtherEquipmentForExport(currentParams)),
         options: {
           filename: 'otros-equipos',
           title: 'Listado de Otros Equipos',
@@ -414,10 +401,8 @@ export function _OtherEquipmentDataTable({
           cost_type: (val) => costTypeLabels[val as string] ?? String(val ?? ''),
           currency: (val) => currencyLabels[val as string] ?? String(val ?? ''),
           type_of_contract: (val) => contractTypeVehiclesLabels[val as string] ?? String(val ?? ''),
-          reason_for_termination: (val) => terminationReasonEquipmentLabels[val as string] ?? String(val ?? ''),
           purchase_date: (val) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
-          termination_date: (val) => (val ? moment.utc(val as string).format('DD/MM/YYYY') : ''),
-          created_at: (val) => (val ? moment(val as string).format('DD/MM/YYYY') : ''),
+          created_at: (val) => (val ? formatArgentinaDay(val as string | Date) : ''),
           initial_value: (val) => (val != null ? String(val) : ''),
           horometer: (val) => (val != null ? `${String(val)} h` : ''),
           has_certification: (val) => (val ? 'Sí' : 'No'),

@@ -4,6 +4,7 @@ import { preparte_status } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { preparteCompanyScope } from '../lib/preparte-scope';
 import moment from 'moment';
 
 const logger = new Logger('features/Operaciones/Preparte/report');
@@ -65,7 +66,7 @@ export async function getPreparteReportData(filters: PreparteReportFilters): Pro
     const companyId = await getActiveCompanyId();
 
     const where: Record<string, unknown> = {
-      AND: [{ OR: [{ company_id: companyId }, { company_id: null }] }],
+      AND: [preparteCompanyScope(companyId)],
       OR: [
         { executionDate: { gte: fromDate, lte: toDate } },
         {

@@ -2,10 +2,13 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { Timeline, type TimelineItem, type TimelineTone } from '@/features/Operaciones/shared/components/Timeline';
+import { StateBlock } from '@/shared/components/common/StateBlock';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
+import { dailyReportRowStatusLabels, dailyReportTypeServiceLabels } from '@/shared/utils/mappers';
 import { useQuery } from '@tanstack/react-query';
 import {
   CheckCircle2,
@@ -14,6 +17,7 @@ import {
   Clock,
   Computer,
   ExternalLink,
+  FileText,
   History,
   Info,
   LinkIcon,
@@ -25,10 +29,11 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
-import moment from 'moment';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import { DETAIL_QUERY_PREFIX } from '../constants';
 import { getDailyReportRowHistory } from '../history.server';
 import type { DailyReportHistoryEntry } from '../types';
+import { useRestoreFocus } from './hooks/useRestoreFocus';
 
 // ============================================================================
 // PROPS
@@ -49,32 +54,28 @@ type ActionType = string;
 function getActionIcon(actionType: ActionType) {
   switch (actionType) {
     case 'UPDATE':
-      return <RotateCcw className="h-5 w-5" />;
+      return <RotateCcw className="h-4 w-4" aria-hidden="true" />;
     case 'LINK':
-      return <LinkIcon className="h-5 w-5" />;
+      return <LinkIcon className="h-4 w-4" aria-hidden="true" />;
     case 'UNLINK':
-      return <X className="h-5 w-5" />;
+      return <X className="h-4 w-4" aria-hidden="true" />;
     case 'CREATE':
-      return <PlusCircle className="h-5 w-5" />;
+      return <PlusCircle className="h-4 w-4" aria-hidden="true" />;
     default:
-      return <Info className="h-5 w-5" />;
+      return <Info className="h-4 w-4" aria-hidden="true" />;
   }
 }
 
-function getActionColor(actionType: ActionType) {
+function getActionTone(actionType: ActionType): TimelineTone {
   switch (actionType) {
-    case 'UPDATE':
-      return 'bg-blue-600 text-white';
-    case 'LINK':
-      return 'bg-purple-600 text-white';
-    case 'UNLINK':
-      return 'bg-orange-600 text-white';
     case 'CREATE':
-      return 'bg-emerald-600 text-white';
+      return 'ok';
+    case 'UNLINK':
+      return 'warn';
     case 'DELETE':
-      return 'bg-red-600 text-white';
+      return 'danger';
     default:
-      return 'bg-slate-600 text-white';
+      return 'brand';
   }
 }
 
@@ -110,10 +111,13 @@ const fieldTranslations: Record<string, string> = {
   service_type: 'Tipo de Servicio',
   working_day: 'Jornada Laboral',
   customer: 'Cliente',
+  customer_id: 'Cliente',
   customer_name: 'Cliente',
   service: 'Servicio',
+  service_id: 'Servicio',
   service_name: 'Servicio',
   item: 'Ítem',
+  item_id: 'Ítem',
   item_name: 'Ítem',
   remit_number: 'Nro Remito',
   cancel_reason: 'Motivo de Cancelación',
@@ -121,24 +125,9 @@ const fieldTranslations: Record<string, string> = {
   area_name: 'Área',
 };
 
-const statusTranslations: Record<string, string> = {
-  pendiente: 'Pendiente',
-  sin_recursos_asignados: 'Sin Recursos Asignados',
-  ejecutado: 'Ejecutado',
-  reprogramado: 'Reprogramado',
-  cancelado: 'Cancelado',
-  en_certificacion: 'En Certificación',
-};
-
 function getFieldDisplayName(field: string) {
   return fieldTranslations[field] ?? field.replace(/_/g, ' ');
 }
-
-const typeServiceTranslations: Record<string, string> = {
-  mensual: 'Mensual',
-  adicional: 'Adicional',
-  adicional_permanente: 'Adicional Permanente',
-};
 
 function getValueDisplay(value: unknown, field: string): string {
   if (value === null || value === undefined) return 'Sin valor';
@@ -146,10 +135,10 @@ function getValueDisplay(value: unknown, field: string): string {
     return value === true || value === 'true' ? 'Completado' : 'No completado';
   }
   if (field === 'status') {
-    return statusTranslations[String(value)] ?? String(value).replace(/_/g, ' ');
+    return dailyReportRowStatusLabels[String(value)] ?? String(value).replace(/_/g, ' ');
   }
   if (field === 'type_service') {
-    return typeServiceTranslations[String(value)] ?? String(value).replace(/_/g, ' ');
+    return dailyReportTypeServiceLabels[String(value)] ?? String(value).replace(/_/g, ' ');
   }
   return String(value);
 }
@@ -158,7 +147,14 @@ function getValueDisplay(value: unknown, field: string): string {
 // HELPERS — Determine relation type from raw DB data
 // ============================================================================
 
-type RelationType = 'employee' | 'vehicle' | 'other_equipment' | 'customer_equipment' | 'unknown';
+type RelationType =
+  | 'employee'
+  | 'vehicle'
+  | 'other_equipment'
+  | 'customer_equipment'
+  | 'remito'
+  | 'remito_document'
+  | 'unknown';
 
 function getRelationType(entry: DailyReportHistoryEntry): RelationType {
   const table = entry.related_table;
@@ -170,6 +166,8 @@ function getRelationType(entry: DailyReportHistoryEntry): RelationType {
     return 'vehicle';
   }
   if (table === 'dailyreport_customer_equipment_relations') return 'customer_equipment';
+  if (table === 'remitos') return 'remito';
+  if (table === 'remito_documents') return 'remito_document';
   return 'unknown';
 }
 
@@ -183,6 +181,10 @@ function getRelationBadgeLabel(relType: RelationType): string {
       return 'Otro Equipo';
     case 'customer_equipment':
       return 'Equipo Cliente';
+    case 'remito':
+      return 'Remito';
+    case 'remito_document':
+      return 'Documento de remito';
     default:
       return 'Recurso';
   }
@@ -191,11 +193,14 @@ function getRelationBadgeLabel(relType: RelationType): string {
 function getRelationIcon(relType: RelationType) {
   switch (relType) {
     case 'employee':
-      return <Users className="h-3 w-3 mr-1" />;
+      return <Users className="h-3 w-3 mr-1" aria-hidden="true" />;
     case 'vehicle':
-      return <Truck className="h-3 w-3 mr-1" />;
+      return <Truck className="h-3 w-3 mr-1" aria-hidden="true" />;
     case 'other_equipment':
-      return <Wrench className="h-3 w-3 mr-1" />;
+      return <Wrench className="h-3 w-3 mr-1" aria-hidden="true" />;
+    case 'remito':
+    case 'remito_document':
+      return <FileText className="h-3 w-3 mr-1" aria-hidden="true" />;
     default:
       return null;
   }
@@ -207,20 +212,14 @@ function getRelationIcon(relType: RelationType) {
 
 function HistoryDialogSkeleton() {
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" role="status" aria-label="Cargando historial">
       {Array.from({ length: 4 }, (_, i) => (
-        <div key={i} className="rounded-lg border p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Skeleton className="h-11 w-11 rounded-full" />
-              <div className="space-y-1">
-                <Skeleton className="h-4 w-32" />
-                <Skeleton className="h-3 w-24" />
-              </div>
-            </div>
-            <Skeleton className="h-6 w-20" />
+        <div key={i} className="flex gap-3">
+          <Skeleton className="size-6 shrink-0 rounded-full" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-3 w-56" />
           </div>
-          <Skeleton className="h-8 w-full" />
         </div>
       ))}
     </div>
@@ -230,295 +229,317 @@ function HistoryDialogSkeleton() {
 // ============================================================================
 // ENTRY ITEM
 // ============================================================================
+//
+// `Timeline` renderiza el título y el meta dentro de un <p>, así que ahí solo van elementos en línea
+// (span). El detalle expandible (botón + paneles) va como `children` del ítem, fuera del <p>.
 
-function HistoryEntryItem({ entry, isLast }: { entry: DailyReportHistoryEntry; isLast: boolean }) {
+/** Tarjeta de detalle (bloque gris con título) */
+function DetailPanel({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <span className="bg-muted/40 text-foreground block space-y-3 rounded-lg border p-3 text-sm">
+      <span className="text-foreground block text-sm font-medium">{title}</span>
+      {children}
+    </span>
+  );
+}
+
+/** Celda con etiqueta y valor */
+function DetailCell({ label, children }: { label: ReactNode; children: ReactNode }) {
+  return (
+    <span className="bg-card relative block overflow-hidden rounded-md border p-3">
+      <span className="text-muted-foreground mb-1 flex items-center gap-1 text-xs">{label}</span>
+      <span className="text-foreground block text-sm font-medium">{children}</span>
+    </span>
+  );
+}
+
+function SnapshotGrid({ data, translate }: { data: Record<string, unknown>; translate: boolean }) {
+  return (
+    <span className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {Object.entries(data).map(([key, value]) => (
+        <DetailCell key={key} label={translate ? getFieldDisplayName(key) : key.replace(/_/g, ' ')}>
+          {translate ? getValueDisplay(value, key) : String(value ?? '—')}
+        </DetailCell>
+      ))}
+    </span>
+  );
+}
+
+function HistoryEntryTitle({ entry }: { entry: DailyReportHistoryEntry }) {
+  const actionType = entry.action_type ?? 'UNKNOWN';
+  const changedFields = (entry.changed_fields ?? {}) as Record<string, { old?: unknown; new?: unknown }>;
+  const relationType = getRelationType(entry);
+  const updateFieldCount = Object.keys(changedFields).length;
+
+  return (
+    <span className="flex flex-wrap items-center gap-2">
+      <span className="flex items-center gap-1.5">
+        {getActionIcon(actionType)}
+        {getActionName(actionType)}
+      </span>
+      <Badge variant="outline" className="text-xs font-normal">
+        {actionType === 'CREATE' && 'Nuevo registro'}
+        {actionType === 'UPDATE' && `${updateFieldCount} cambio${updateFieldCount !== 1 ? 's' : ''}`}
+        {(actionType === 'LINK' || actionType === 'UNLINK') && (
+          <>
+            {getRelationIcon(relationType)}
+            {getRelationBadgeLabel(relationType)}
+          </>
+        )}
+        {actionType === 'DELETE' && 'Eliminación'}
+      </Badge>
+    </span>
+  );
+}
+
+/** Cuándo y quién (solo elementos en línea: se renderiza dentro de un <p>). */
+function HistoryEntryMeta({ entry }: { entry: DailyReportHistoryEntry }) {
+  return (
+    <span className="block">
+      <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="flex items-center gap-1 tabular-nums">
+          <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+          {formatArgentinaDateTime(entry.created_at)}
+        </span>
+
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span tabIndex={0} className="bg-muted flex items-center gap-1 rounded-full px-2 py-0.5">
+                {entry.profile ? (
+                  <>
+                    <UserCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span>{entry.profile.fullname ?? entry.profile.email ?? 'Usuario'}</span>
+                    {entry.profile.credential_id && (
+                      <a
+                        href="/dashboard/configuration?tab=general&subtab=users"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-1 inline-flex"
+                        aria-label="Ver usuarios (se abre en una pestaña nueva)"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <ExternalLink className="hover:text-brand-ink h-3 w-3" aria-hidden="true" />
+                      </a>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <Computer className="text-warn-subtle-foreground h-3.5 w-3.5" aria-hidden="true" />
+                    <span>El Sistema</span>
+                  </>
+                )}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              {entry.profile ? <p>{entry.profile.email}</p> : <p>Cambio realizado automáticamente</p>}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </span>
+    </span>
+  );
+}
+
+/** Motivo de reasignación y detalle expandible (fuera del <p> del Timeline). */
+function HistoryEntryDetails({ entry }: { entry: DailyReportHistoryEntry }) {
   const [expanded, setExpanded] = useState(false);
 
   const actionType = entry.action_type ?? 'UNKNOWN';
   const changedData = (entry.changed_data ?? {}) as Record<string, unknown>;
   const changedFields = (entry.changed_fields ?? {}) as Record<string, { old?: unknown; new?: unknown }>;
   const relationType = getRelationType(entry);
-
-  // Count meaningful changes for UPDATE badge
   const updateFieldCount = Object.keys(changedFields).length;
+  // Las filas históricas de "otro equipo" traen los datos con prefijo `otro_equipo_` (función SQL vieja).
+  const otherEquipmentType = changedData.equipo_tipo ?? changedData.otro_equipo_tipo;
+  const otherEquipmentNumber = (changedData.equipo_numero_interno ??
+    changedData.otro_equipo_numero_interno ??
+    changedData.equipo_serie ??
+    changedData.otro_equipo_numero_serie) as string | null | undefined;
 
   return (
-    <div className="relative">
-      {!isLast && (
-        <div className="absolute left-[22px] top-12 bottom-0 w-1 bg-slate-200 dark:bg-slate-700 rounded-full" />
+    <div className="text-muted-foreground mt-2 space-y-2 text-xs">
+      {/* Motivo de reasignación — visible siempre, para cualquier tipo de acción */}
+      {entry.reassignment_reason && (
+        <span className="bg-warn-subtle text-warn-subtle-foreground border-warn/40 flex items-start gap-1 rounded-md border p-2 text-sm">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>
+            <strong>Motivo:</strong> {entry.reassignment_reason}
+          </span>
+        </span>
       )}
 
-      <div className="flex gap-4">
-        {/* Timeline node */}
-        <div
-          className={cn(
-            'w-11 h-11 rounded-full flex items-center justify-center shrink-0 z-10',
-            getActionColor(actionType)
-          )}
-        >
-          {getActionIcon(actionType)}
-        </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="bg-muted hover:bg-muted/70 w-full justify-between"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((p) => !p)}
+      >
+        <span className="text-sm font-medium">{expanded ? 'Ocultar detalles' : 'Ver detalles'}</span>
+        {expanded ? (
+          <ChevronUp className="h-4 w-4" aria-hidden="true" />
+        ) : (
+          <ChevronDown className="h-4 w-4" aria-hidden="true" />
+        )}
+      </Button>
 
-        <div className="flex-1 pb-4">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-            <div className="flex items-center gap-2">
-              <h3 className="font-medium text-slate-900 dark:text-slate-100">{getActionName(actionType)}</h3>
-              <Badge variant="outline" className="font-normal text-xs">
-                {actionType === 'CREATE' && 'Nuevo registro'}
-                {actionType === 'UPDATE' && `${updateFieldCount} cambio${updateFieldCount !== 1 ? 's' : ''}`}
-                {(actionType === 'LINK' || actionType === 'UNLINK') && (
-                  <span className="flex items-center">
-                    {getRelationIcon(relationType)}
-                    {getRelationBadgeLabel(relationType)}
+      {expanded && (
+        <span className="block space-y-3">
+          {/* ── CREATE: snapshot de changed_data ─────────────────────── */}
+          {actionType === 'CREATE' && (
+            <DetailPanel title="Detalles del registro creado:">
+              <SnapshotGrid data={changedData} translate />
+            </DetailPanel>
+          )}
+
+          {/* ── UPDATE: changed_fields (anterior → nuevo) ────────────── */}
+          {actionType === 'UPDATE' && updateFieldCount > 0 && (
+            <span className="block space-y-3">
+              {Object.entries(changedFields).map(([field, change]) => (
+                <DetailPanel key={field} title={getFieldDisplayName(field)}>
+                  <span className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <DetailCell
+                      label={
+                        <>
+                          <X className="text-danger h-3 w-3" aria-hidden="true" />
+                          Valor anterior
+                        </>
+                      }
+                    >
+                      <span className="bg-danger absolute top-0 left-0 h-full w-1" aria-hidden="true" />
+                      <span className="capitalize">{getValueDisplay(change.old, field)}</span>
+                    </DetailCell>
+                    <DetailCell
+                      label={
+                        <>
+                          <CheckCircle2 className="text-ok h-3 w-3" aria-hidden="true" />
+                          Valor nuevo
+                        </>
+                      }
+                    >
+                      <span className="bg-ok absolute top-0 left-0 h-full w-1" aria-hidden="true" />
+                      <span className="capitalize">{getValueDisplay(change.new, field)}</span>
+                    </DetailCell>
+                  </span>
+                </DetailPanel>
+              ))}
+            </span>
+          )}
+
+          {/* ── UPDATE fallback: si changed_fields está vacío, snapshot de changed_data ── */}
+          {actionType === 'UPDATE' && updateFieldCount === 0 && Object.keys(changedData).length > 0 && (
+            <DetailPanel title="Estado del registro al momento de la actualización:">
+              <SnapshotGrid data={changedData} translate />
+            </DetailPanel>
+          )}
+
+          {/* ── LINK/UNLINK: empleado ───────────────────────────────── */}
+          {(actionType === 'LINK' || actionType === 'UNLINK') && relationType === 'employee' && (
+            <DetailPanel title={actionType === 'LINK' ? 'Empleado vinculado:' : 'Empleado desvinculado:'}>
+              <span className="bg-card flex items-center gap-2 rounded-md border p-3">
+                <Users className="text-brand-ink h-4 w-4" aria-hidden="true" />
+                <Badge variant="default">{(changedData.empleado_nombre as string) ?? '—'}</Badge>
+              </span>
+            </DetailPanel>
+          )}
+
+          {/* ── LINK/UNLINK: vehículo ───────────────────────────────── */}
+          {(actionType === 'LINK' || actionType === 'UNLINK') && relationType === 'vehicle' && (
+            <DetailPanel title={actionType === 'LINK' ? 'Vehículo vinculado:' : 'Vehículo desvinculado:'}>
+              <span className="bg-card flex flex-col gap-2 rounded-md border p-3">
+                <span className="flex items-center gap-2">
+                  <span className="text-muted-foreground text-xs">Dominio:</span>
+                  <Badge variant="info">
+                    <Truck className="mr-1 h-3 w-3" aria-hidden="true" />
+                    {(changedData.vehiculo_dominio as string) ?? '—'}
+                  </Badge>
+                </span>
+                {typeof changedData.vehiculo_numero_interno === 'string' && (
+                  <span className="flex items-center gap-2">
+                    <span className="text-muted-foreground text-xs">Número interno:</span>
+                    <span className="text-sm font-medium">{changedData.vehiculo_numero_interno}</span>
                   </span>
                 )}
-                {actionType === 'DELETE' && 'Eliminación'}
-              </Badge>
-            </div>
-
-            <div className="flex items-center gap-3 text-sm">
-              <span className="flex items-center gap-1 text-muted-foreground">
-                <Clock className="h-3.5 w-3.5" />
-                {moment(entry.created_at).format('DD MMM YYYY, HH:mm')}
               </span>
-
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-xs">
-                      {entry.profile ? (
-                        <>
-                          <UserCircle className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />
-                          <span className="text-slate-700 dark:text-slate-300">{entry.profile.email ?? 'Usuario'}</span>
-                          {entry.profile.credential_id && (
-                            <a
-                              href="/dashboard/configuration?tab=general&subtab=users"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex ml-1"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <ExternalLink className="h-3 w-3 text-slate-500 hover:text-blue-500" />
-                            </a>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <Computer className="h-3.5 w-3.5 text-orange-600" />
-                          <span className="text-slate-700 dark:text-slate-300">El Sistema</span>
-                        </>
-                      )}
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {entry.profile ? <p>{entry.profile.email}</p> : <p>Cambio realizado automáticamente</p>}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-          </div>
-
-          {/* Toggle button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-between mb-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700"
-            onClick={() => setExpanded((p) => !p)}
-          >
-            <span className="font-medium text-sm">{expanded ? 'Ocultar detalles' : 'Ver detalles'}</span>
-            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </Button>
-
-          {/* Expandable content */}
-          {expanded && (
-            <div className="space-y-3">
-              {/* Reassignment reason — shown for any action type */}
-              {entry.reassignment_reason && (
-                <div className="bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800 p-2 rounded-md">
-                  <p className="text-sm text-amber-800 dark:text-amber-300 flex items-start gap-1">
-                    <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <span>
-                      <strong>Motivo:</strong> {entry.reassignment_reason}
-                    </span>
-                  </p>
-                </div>
-              )}
-
-              {/* ── CREATE: show changed_data snapshot ──────────────────── */}
-              {actionType === 'CREATE' && (
-                <div className="p-4 rounded-lg border bg-slate-50 dark:bg-slate-800">
-                  <h4 className="font-medium text-sm mb-3 text-slate-700 dark:text-slate-300">
-                    Detalles del registro creado:
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {Object.entries(changedData).map(([key, value]) => (
-                      <div key={key} className="bg-white dark:bg-slate-900 p-3 rounded-md border">
-                        <span className="text-xs text-muted-foreground block mb-1">{getFieldDisplayName(key)}</span>
-                        <span className="font-medium text-slate-900 dark:text-slate-200 text-sm">
-                          {getValueDisplay(value, key)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* ── UPDATE: show changed_fields (old → new) ────────────── */}
-              {actionType === 'UPDATE' && updateFieldCount > 0 && (
-                <div className="space-y-3">
-                  {Object.entries(changedFields).map(([field, change]) => (
-                    <div key={field} className="p-4 rounded-lg border bg-slate-50 dark:bg-slate-800">
-                      <h4 className="font-medium text-sm mb-3 text-slate-700 dark:text-slate-300">
-                        {getFieldDisplayName(field)}
-                      </h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="bg-white dark:bg-slate-900 p-3 rounded-md border relative overflow-hidden">
-                          <div className="absolute top-0 left-0 w-1 h-full bg-red-400" />
-                          <span className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-                            <X className="h-3 w-3 text-red-500" />
-                            Valor anterior
-                          </span>
-                          <span className="font-medium text-sm capitalize block mt-1">
-                            {getValueDisplay(change.old, field)}
-                          </span>
-                        </div>
-                        <div className="bg-white dark:bg-slate-900 p-3 rounded-md border relative overflow-hidden">
-                          <div className="absolute top-0 left-0 w-1 h-full bg-green-400" />
-                          <span className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-                            <CheckCircle2 className="h-3 w-3 text-green-500" />
-                            Valor nuevo
-                          </span>
-                          <span className="font-medium text-sm capitalize block mt-1">
-                            {getValueDisplay(change.new, field)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* ── UPDATE fallback: if changed_fields is empty, show changed_data snapshot ── */}
-              {actionType === 'UPDATE' && updateFieldCount === 0 && Object.keys(changedData).length > 0 && (
-                <div className="p-4 rounded-lg border bg-slate-50 dark:bg-slate-800">
-                  <h4 className="font-medium text-sm mb-3 text-slate-700 dark:text-slate-300">
-                    Estado del registro al momento de la actualización:
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {Object.entries(changedData).map(([key, value]) => (
-                      <div key={key} className="bg-white dark:bg-slate-900 p-3 rounded-md border">
-                        <span className="text-xs text-muted-foreground block mb-1">{getFieldDisplayName(key)}</span>
-                        <span className="font-medium text-slate-900 dark:text-slate-200 text-sm">
-                          {getValueDisplay(value, key)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* ── LINK/UNLINK: employee ───────────────────────────────── */}
-              {(actionType === 'LINK' || actionType === 'UNLINK') && relationType === 'employee' && (
-                <div className="p-4 rounded-lg border bg-slate-50 dark:bg-slate-800">
-                  <h4 className="font-medium text-sm mb-3 text-slate-700 dark:text-slate-300">
-                    {actionType === 'LINK' ? 'Empleado vinculado:' : 'Empleado desvinculado:'}
-                  </h4>
-                  <div className="bg-white dark:bg-slate-900 p-3 rounded-md border">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-blue-500" />
-                      <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100 dark:bg-blue-900 dark:text-blue-200">
-                        {(changedData.empleado_nombre as string) ?? '—'}
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ── LINK/UNLINK: vehicle ────────────────────────────────── */}
-              {(actionType === 'LINK' || actionType === 'UNLINK') && relationType === 'vehicle' && (
-                <div className="p-4 rounded-lg border bg-slate-50 dark:bg-slate-800">
-                  <h4 className="font-medium text-sm mb-3 text-slate-700 dark:text-slate-300">
-                    {actionType === 'LINK' ? 'Vehículo vinculado:' : 'Vehículo desvinculado:'}
-                  </h4>
-                  <div className="bg-white dark:bg-slate-900 p-3 rounded-md border flex flex-col gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">Dominio:</span>
-                      <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100 dark:bg-purple-900 dark:text-purple-200">
-                        <Truck className="h-3 w-3 mr-1" />
-                        {(changedData.vehiculo_dominio as string) ?? '—'}
-                      </Badge>
-                    </div>
-                    {typeof changedData.vehiculo_numero_interno === 'string' && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">Número interno:</span>
-                        <span className="font-medium text-sm">{changedData.vehiculo_numero_interno}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* ── LINK/UNLINK: other equipment ───────────────────────── */}
-              {(actionType === 'LINK' || actionType === 'UNLINK') && relationType === 'other_equipment' && (
-                <div className="p-4 rounded-lg border bg-slate-50 dark:bg-slate-800">
-                  <h4 className="font-medium text-sm mb-3 text-slate-700 dark:text-slate-300">
-                    {actionType === 'LINK' ? 'Otro equipo vinculado:' : 'Otro equipo desvinculado:'}
-                  </h4>
-                  <div className="bg-white dark:bg-slate-900 p-3 rounded-md border flex flex-col gap-2">
-                    {typeof changedData.equipo_tipo === 'string' && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">Tipo:</span>
-                        <Badge className="bg-teal-100 text-teal-800 hover:bg-teal-100 dark:bg-teal-900 dark:text-teal-200">
-                          <Wrench className="h-3 w-3 mr-1" />
-                          {changedData.equipo_tipo}
-                        </Badge>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">Número interno:</span>
-                      <span className="font-medium text-sm">
-                        {(changedData.equipo_numero_interno as string) ?? (changedData.equipo_serie as string) ?? '—'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ── LINK/UNLINK: customer equipment ────────────────────── */}
-              {(actionType === 'LINK' || actionType === 'UNLINK') && relationType === 'customer_equipment' && (
-                <div className="p-4 rounded-lg border bg-slate-50 dark:bg-slate-800">
-                  <h4 className="font-medium text-sm mb-3 text-slate-700 dark:text-slate-300">
-                    {actionType === 'LINK' ? 'Equipo cliente vinculado:' : 'Equipo cliente desvinculado:'}
-                  </h4>
-                  <div className="bg-white dark:bg-slate-900 p-3 rounded-md border">
-                    <span className="font-medium text-sm">{(changedData.equipo_cliente_nombre as string) ?? '—'}</span>
-                  </div>
-                </div>
-              )}
-
-              {/* ── LINK/UNLINK: unknown relation type — show raw data ── */}
-              {(actionType === 'LINK' || actionType === 'UNLINK') && relationType === 'unknown' && (
-                <div className="p-4 rounded-lg border bg-slate-50 dark:bg-slate-800">
-                  <h4 className="font-medium text-sm mb-3 text-slate-700 dark:text-slate-300">
-                    {actionType === 'LINK' ? 'Recurso vinculado:' : 'Recurso desvinculado:'}
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {Object.entries(changedData).map(([key, value]) => (
-                      <div key={key} className="bg-white dark:bg-slate-900 p-3 rounded-md border">
-                        <span className="text-xs text-muted-foreground block mb-1">{key.replace(/_/g, ' ')}</span>
-                        <span className="font-medium text-slate-900 dark:text-slate-200 text-sm">
-                          {String(value ?? '—')}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            </DetailPanel>
           )}
-        </div>
-      </div>
+
+          {/* ── LINK/UNLINK: otro equipo ────────────────────────────── */}
+          {(actionType === 'LINK' || actionType === 'UNLINK') && relationType === 'other_equipment' && (
+            <DetailPanel title={actionType === 'LINK' ? 'Otro equipo vinculado:' : 'Otro equipo desvinculado:'}>
+              <span className="bg-card flex flex-col gap-2 rounded-md border p-3">
+                {typeof otherEquipmentType === 'string' && (
+                  <span className="flex items-center gap-2">
+                    <span className="text-muted-foreground text-xs">Tipo:</span>
+                    <Badge variant="pending">
+                      <Wrench className="mr-1 h-3 w-3" aria-hidden="true" />
+                      {otherEquipmentType}
+                    </Badge>
+                  </span>
+                )}
+                <span className="flex items-center gap-2">
+                  <span className="text-muted-foreground text-xs">Número interno:</span>
+                  <span className="text-sm font-medium">
+                    {otherEquipmentNumber ?? '—'}
+                  </span>
+                </span>
+              </span>
+            </DetailPanel>
+          )}
+
+          {/* ── LINK/UNLINK: equipo del cliente ─────────────────────── */}
+          {(actionType === 'LINK' || actionType === 'UNLINK') && relationType === 'customer_equipment' && (
+            <DetailPanel title={actionType === 'LINK' ? 'Equipo cliente vinculado:' : 'Equipo cliente desvinculado:'}>
+              <span className="bg-card block rounded-md border p-3">
+                <span className="text-sm font-medium">{(changedData.equipo_cliente_nombre as string) ?? (changedData.equipo_nombre as string) ?? '—'}</span>
+              </span>
+            </DetailPanel>
+          )}
+
+          {/* ── LINK/UNLINK: remito (alta o baja) ───────────────────── */}
+          {(actionType === 'LINK' || actionType === 'UNLINK') && relationType === 'remito' && (
+            <DetailPanel
+              title={
+                actionType === 'LINK'
+                  ? changedData.vinculado
+                    ? 'Remito vinculado desde otra línea:'
+                    : 'Remito cargado:'
+                  : changedData.vinculado
+                    ? 'Remito desvinculado:'
+                    : 'Remito eliminado:'
+              }
+            >
+              <span className="bg-card block rounded-md border p-3">
+                <span className="font-mono text-sm font-medium tabular-nums">
+                  {(changedData.remito_numero as string) ?? '—'}
+                </span>
+              </span>
+            </DetailPanel>
+          )}
+
+          {/* ── LINK/UNLINK: documento de un remito ─────────────────── */}
+          {(actionType === 'LINK' || actionType === 'UNLINK') && relationType === 'remito_document' && (
+            <DetailPanel title={actionType === 'LINK' ? 'Documento agregado al remito:' : 'Documento quitado del remito:'}>
+              <span className="bg-card flex flex-col gap-1 rounded-md border p-3">
+                <span className="text-sm font-medium">{(changedData.documento_nombre as string) ?? '—'}</span>
+                <span className="text-muted-foreground text-xs">
+                  Remito{' '}
+                  <span className="font-mono tabular-nums">{(changedData.remito_numero as string) ?? '—'}</span>
+                </span>
+              </span>
+            </DetailPanel>
+          )}
+
+          {/* ── LINK/UNLINK: relación desconocida — datos crudos ────── */}
+          {(actionType === 'LINK' || actionType === 'UNLINK') && relationType === 'unknown' && (
+            <DetailPanel title={actionType === 'LINK' ? 'Recurso vinculado:' : 'Recurso desvinculado:'}>
+              <SnapshotGrid data={changedData} translate={false} />
+            </DetailPanel>
+          )}
+        </span>
+      )}
     </div>
   );
 }
@@ -528,8 +549,15 @@ function HistoryEntryItem({ entry, isLast }: { entry: DailyReportHistoryEntry; i
 // ============================================================================
 
 export function HistoryDialog({ open, onOpenChange, rowId }: Props) {
-  const { data: historyData, isLoading } = useQuery({
-    queryKey: ['daily-report-row-history', rowId],
+  const { onOpenAutoFocus, onCloseAutoFocus } = useRestoreFocus();
+  const {
+    data: historyData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
+    // Cuelga del prefijo del detalle: `invalidateDetail()` refresca el historial tras editar la línea.
+    queryKey: [DETAIL_QUERY_PREFIX, 'row-history', rowId],
     queryFn: () => getDailyReportRowHistory(rowId!),
     enabled: open && rowId != null,
     staleTime: 5 * 60 * 1000,
@@ -539,33 +567,52 @@ export function HistoryDialog({ open, onOpenChange, rowId }: Props) {
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[850px] max-h-[90vh] flex flex-col p-0 overflow-hidden">
-        <DialogHeader className="px-6 py-4 border-b">
-          <DialogTitle className="flex items-center gap-2">
-            <History className="h-5 w-5" />
-            Historial de Cambios
-          </DialogTitle>
-        </DialogHeader>
+  const timelineItems: TimelineItem[] = sorted.map((entry) => ({
+    tone: getActionTone(entry.action_type ?? 'UNKNOWN'),
+    title: <HistoryEntryTitle entry={entry} />,
+    meta: <HistoryEntryMeta entry={entry} />,
+    children: <HistoryEntryDetails entry={entry} />,
+  }));
 
-        <div className="px-6 py-4 overflow-y-auto max-h-[70vh]">
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        className="flex w-full flex-col gap-0 p-0 sm:max-w-lg"
+        onOpenAutoFocus={onOpenAutoFocus}
+        onCloseAutoFocus={onCloseAutoFocus}
+      >
+        <SheetHeader className="border-b px-6 py-4 text-left">
+          <SheetTitle className="flex items-center gap-2">
+            <History className="h-5 w-5" aria-hidden="true" />
+            Historial de cambios
+          </SheetTitle>
+          <SheetDescription className="sr-only">
+            Cambios registrados sobre esta línea del parte, del más reciente al más antiguo.
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4">
           {isLoading ? (
             <HistoryDialogSkeleton />
+          ) : isError ? (
+            <StateBlock
+              variant="error"
+              title="No se pudo cargar el historial"
+              description="Intentá de nuevo en unos segundos."
+              action={
+                <Button type="button" variant="outline" size="sm" onClick={() => refetch()}>
+                  Reintentar
+                </Button>
+              }
+            />
           ) : sorted.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-              <Info className="h-12 w-12 mb-2 opacity-50" />
-              <p>No hay registros de cambios para este ítem.</p>
-            </div>
+            <StateBlock variant="empty" icon={Info} title="No hay registros de cambios para este ítem." />
           ) : (
-            <div className="space-y-4">
-              {sorted.map((entry, index) => (
-                <HistoryEntryItem key={entry.id} entry={entry} isLast={index === sorted.length - 1} />
-              ))}
-            </div>
+            <Timeline items={timelineItems} />
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }

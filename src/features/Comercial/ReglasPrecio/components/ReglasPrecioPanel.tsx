@@ -12,22 +12,21 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
-import moment from 'moment';
-import { useState, useTransition } from 'react';
-import { toast } from 'sonner';
 import {
   runPriceUpdateRule,
   setPriceUpdateRuleActive,
   type ContractOption,
   type PriceUpdateRuleRow,
 } from '@/features/Empresa/Clientes/actions/price-rules.server';
-import { PriceRuleFormDialog } from './PriceRuleFormDialog';
 import { PRICE_METHOD_LABELS } from '@/features/Empresa/Clientes/lib/price-method-labels';
-import { polynomialConfigSchema, indexConfigSchema } from '@/features/Empresa/Clientes/schemas/price-rule';
+import { indexConfigSchema, polynomialConfigSchema } from '@/features/Empresa/Clientes/schemas/price-rule';
+import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
+import { argentinaDate } from '@/shared/lib/argentina-time';
+import { useState, useTransition } from 'react';
+import { toast } from 'sonner';
+import { PriceRuleFormDialog } from './PriceRuleFormDialog';
 
 interface ReglasPrecioPanelProps {
   rules: PriceUpdateRuleRow[];
@@ -44,7 +43,7 @@ interface ReglasPrecioPanelProps {
  */
 export function ReglasPrecioPanel({ rules, contracts }: ReglasPrecioPanelProps) {
   const [running, setRunning] = useState<PriceUpdateRuleRow | null>(null);
-  const [validFrom, setValidFrom] = useState(moment().format('YYYY-MM-DD'));
+  const [validFrom, setValidFrom] = useState(argentinaDate());
   const [coefficient, setCoefficient] = useState('');
   const [coefficients, setCoefficients] = useState<Record<string, string>>({});
   const [note, setNote] = useState('');
@@ -125,12 +124,7 @@ export function ReglasPrecioPanel({ rules, contracts }: ReglasPrecioPanelProps) 
               </TableCell>
               <TableCell className="space-x-2 text-right">
                 {canUpdate && (
-                  <PriceRuleFormDialog
-                    rule={rule}
-                    contracts={contracts}
-                    triggerLabel="Editar"
-                    triggerVariant="ghost"
-                  />
+                  <PriceRuleFormDialog rule={rule} contracts={contracts} triggerLabel="Editar" triggerVariant="ghost" />
                 )}
                 {rule.is_active && rule.method !== 'manual' && canUpdatePrices && (
                   <Button type="button" size="sm" disabled={pending} onClick={() => openRun(rule)}>
@@ -167,20 +161,15 @@ export function ReglasPrecioPanel({ rules, contracts }: ReglasPrecioPanelProps) 
               <DialogHeader>
                 <DialogTitle>Ejecutar: {running.name}</DialogTitle>
                 <DialogDescription>
-                  Se crea una revisión por ítem alcanzado, con el precio anterior guardado. Las
-                  certificaciones ya emitidas no cambian: su precio quedó congelado al emitirlas.
+                  Se crea una revisión por ítem alcanzado, con el precio anterior guardado. Las certificaciones ya
+                  emitidas no cambian: su precio quedó congelado al emitirlas.
                 </DialogDescription>
               </DialogHeader>
 
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="valid-from">Vigente desde</Label>
-                  <Input
-                    id="valid-from"
-                    type="date"
-                    value={validFrom}
-                    onChange={(e) => setValidFrom(e.target.value)}
-                  />
+                  <Input id="valid-from" type="date" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} />
                 </div>
 
                 {running.method === 'index' && (
@@ -208,9 +197,7 @@ export function ReglasPrecioPanel({ rules, contracts }: ReglasPrecioPanelProps) 
                         inputMode="decimal"
                         placeholder="1.12"
                         value={coefficients[component.name] ?? ''}
-                        onChange={(e) =>
-                          setCoefficients((prev) => ({ ...prev, [component.name]: e.target.value }))
-                        }
+                        onChange={(e) => setCoefficients((prev) => ({ ...prev, [component.name]: e.target.value }))}
                       />
                     </div>
                   ))}

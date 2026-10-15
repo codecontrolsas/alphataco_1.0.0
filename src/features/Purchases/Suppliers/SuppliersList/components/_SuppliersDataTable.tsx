@@ -8,9 +8,11 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Check, CircleOff, Tag, X } from 'lucide-react';
-import moment from 'moment';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { PURCHASES_QUERY_KEYS } from '../../../lib/query-keys';
 import {
   getAllSuppliersForExport,
   getSupplierSingleFacet,
@@ -25,6 +27,8 @@ interface Props {
   totalRows: number;
   searchParams: DataTableSearchParams;
   tableId: string;
+  /** Banda de atención sobre la tabla (la arma el Server Component con su propio Suspense). */
+  topSlot?: ReactNode;
   initialColumnVisibility?: Record<string, boolean>;
   initialFilterVisibility?: Record<string, boolean>;
 }
@@ -38,6 +42,7 @@ export function _SuppliersDataTable({
   totalRows,
   searchParams,
   tableId,
+  topSlot,
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
@@ -134,17 +139,19 @@ export function _SuppliersDataTable({
 
   const exportConfig: DataTableExportConfig<SupplierListItem> = useMemo(
     () => ({
-      fetchAllData: () => getAllSuppliersForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllSuppliersForExport(currentParams)),
       options: { filename: 'proveedores', title: 'Proveedores', sheetName: 'Proveedores' },
       formatters: {
-        created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : ''),
+        created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : ''),
       },
     }),
     [currentParams]
   );
 
   return (
-    <DataTable
+    <div className="space-y-4">
+      {topSlot}
+      <DataTable
       columns={columns}
       data={data}
       totalRows={totalRows}
@@ -156,12 +163,13 @@ export function _SuppliersDataTable({
       initialFilterVisibility={mergedFilterVisibility}
       showFilterToggle
       queryFn={tableQueryFn}
-      queryKey={['suppliers']}
+      queryKey={[...PURCHASES_QUERY_KEYS.suppliers]}
       onStateChange={handleStateChange}
       searchPlaceholder="Buscar por razón social, fantasía o CUIT"
       emptyMessage="No hay proveedores"
       exportConfig={exportConfig}
       data-testid="suppliers-table"
-    />
+      />
+    </div>
   );
 }

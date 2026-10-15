@@ -31,7 +31,7 @@ const SLOW_NOTICE_MS = 8000;
 
 /** Clases completas por ambiente (Tailwind v4). Mismo criterio que el badge de ambiente de Datos fiscales. */
 const ENVIRONMENT_STYLES = {
-  homologacion: 'border-amber-500/50 text-amber-700 dark:text-amber-400',
+  homologacion: 'border-warn/50 text-warn-subtle-foreground',
   produccion: 'bg-foreground text-background',
 } as const;
 
@@ -105,7 +105,8 @@ export function IssueInvoiceDialog({
       logger.error('Falló la llamada de emisión', { data: { error, invoiceId } });
       onOutcome({
         status: 'failed',
-        message: 'Se cortó la comunicación con el servidor. Puede que la emisión haya llegado a ARCA: actualizá la página antes de volver a emitir.',
+        message:
+          'Se cortó la comunicación con el servidor. Puede que la emisión haya llegado a ARCA: actualizá la página antes de volver a emitir.',
       });
     } finally {
       if (slowTimer.current) clearTimeout(slowTimer.current);
@@ -136,12 +137,14 @@ export function IssueInvoiceDialog({
                 <div role="status" className="flex flex-col gap-3">
                   <span className="flex items-center gap-2">
                     <Loader2 className="size-4 animate-spin" aria-hidden />
-                    {data ? `${data.label} por ${data.currency} ${formatAmountText(data.total)}` : 'Emitiendo el comprobante'}
+                    {data
+                      ? `${data.label} por ${data.currency} ${formatAmountText(data.total)}`
+                      : 'Emitiendo el comprobante'}
                   </span>
                   {slow && (
                     <span className="text-pretty">
-                      ARCA está tardando más de lo habitual. No cierres esta pestaña; si no responde, el comprobante queda
-                      pendiente y lo podés consultar después.
+                      ARCA está tardando más de lo habitual. No cierres esta pestaña; si no responde, el comprobante
+                      queda pendiente y lo podés consultar después.
                     </span>
                   )}
                 </div>
@@ -202,8 +205,9 @@ export function IssueInvoiceDialog({
                         )}
                       </dl>
                       <span className="text-pretty">
-                        Una vez autorizado no se puede modificar ni borrar. Para corregirlo vas a tener que emitir una nota de
-                        crédito. El número es el que informa ARCA ahora: si alguien emite antes, se toma el siguiente.
+                        Una vez autorizado no se puede modificar ni borrar. Para corregirlo vas a tener que emitir una
+                        nota de crédito. El número es el que informa ARCA ahora: si alguien emite antes, se toma el
+                        siguiente.
                       </span>
                     </>
                   ) : null}

@@ -1,13 +1,11 @@
 import { Button } from '@/components/ui/button';
-import { checkPermissionServer } from '@/features/Permissions';
+import { getMaterialUnitForPage } from '@/features/Warehouses/actions/materials-detail.server';
 import { MaterialHeader } from '@/features/Warehouses/Materials/components/MaterialHeader';
 import { MaterialKardex } from '@/features/Warehouses/Materials/components/MaterialKardex';
 import {
   MaterialHeaderSkeleton,
   MaterialKardexSkeleton,
 } from '@/features/Warehouses/Materials/fallback/MaterialDetailSkeletons';
-import { prisma } from '@/shared/lib/prisma';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -19,14 +17,9 @@ export const metadata = { title: 'Material | Almacenes' };
 export default async function MaterialPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) notFound();
-  if (!(await checkPermissionServer('almacenes', 'stock', 'view'))) notFound();
-
   // Solo la unidad, para el kardex: el resto lo carga cada bloque en su propio Suspense.
-  const material = await prisma.materials.findFirst({
-    where: { id, company_id: await getActiveCompanyId() },
-    select: { unit: { select: { abbreviation: true } } },
-  });
-  if (!material) notFound();
+  const unit = await getMaterialUnitForPage(id);
+  if (unit === null) notFound();
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
@@ -40,7 +33,7 @@ export default async function MaterialPage({ params }: { params: Promise<{ id: s
         <MaterialHeader materialId={id} />
       </Suspense>
       <Suspense fallback={<MaterialKardexSkeleton />}>
-        <MaterialKardex materialId={id} unit={material.unit.abbreviation} />
+        <MaterialKardex materialId={id} unit={unit} />
       </Suspense>
     </div>
   );

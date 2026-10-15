@@ -1,7 +1,9 @@
+import { StateBlock } from '@/shared/components/common/StateBlock';
 import { Suspense } from 'react';
 import { PipelineLayout, type PipelineStepEntry } from '../components/PipelineLayout';
 import type { PipelineStep } from '../types';
-import { getOperacionesPipelineCounts } from './actions/pipeline-counts.server';
+import { getOperacionesPipelineSummary } from './actions/pipeline-summary.server';
+import { getOperacionesSummaryCached } from '../../lib/section-counts';
 
 // TabContent components existentes
 import { SolicitudesMantenimientoTabContent } from '@/features/Mantenimiento/SolicitudesMantenimiento';
@@ -26,6 +28,7 @@ const OPERACIONES_STEPS: PipelineStep[] = [
     label: 'Validar Solicitud',
     description: 'Solicitudes nuevas pendientes de tu aprobación',
     iconName: 'ClipboardCheck',
+    permissionTab: 'maintenance_requests',
   },
   {
     id: 'in_workshop',
@@ -33,23 +36,43 @@ const OPERACIONES_STEPS: PipelineStep[] = [
     label: 'Seguimiento',
     description: 'Equipos pendientes de ingreso y actualmente en taller',
     iconName: 'Eye',
+    permissionTab: 'seguimiento_taller',
   },
 ];
 
 interface OperacionesPipelineContentProps {
   searchParams: Record<string, string | string[] | undefined>;
+  /** Mapa `modulo:tab:accion -> boolean` del usuario; cada paso exige el `view` de SU tab. */
+  permissions: Record<string, boolean>;
 }
 
-export async function OperacionesPipelineContent({ searchParams }: OperacionesPipelineContentProps) {
-  const counts = await getOperacionesPipelineCounts();
+export async function OperacionesPipelineContent({ searchParams, permissions }: OperacionesPipelineContentProps) {
+  const visibleSteps = OPERACIONES_STEPS.filter(
+    (step) => step.permissionTab && permissions[`mantenimiento:${step.permissionTab}:view`] === true
+  );
+
+  if (visibleSteps.length === 0) {
+    return (
+      <StateBlock
+        variant="noperm"
+        title="Sin acceso"
+        description="No tenés permisos para ver ningún paso de Operaciones."
+      />
+    );
+  }
+
+  // Contadores y atención de la cabecera (mismo `where` que cada tabla). Hidratan el cliente, que los refresca solo.
+  const summary = await getOperacionesSummaryCached();
 
   // Determinar paso inicial desde la URL o usar el default
   const rawStep = searchParams[PARAM_NAME];
   const initialStep =
-    typeof rawStep === 'string' && OPERACIONES_STEPS.some((s) => s.id === rawStep) ? rawStep : DEFAULT_STEP;
+    typeof rawStep === 'string' && visibleSteps.some((s) => s.id === rawStep)
+      ? rawStep
+      : (visibleSteps.find((s) => s.id === DEFAULT_STEP) ?? visibleSteps[0]).id;
 
   // Todos los pasos se renderizan simultáneamente (show/hide con CSS)
-  const stepContents: PipelineStepEntry[] = [
+  const allStepContents: PipelineStepEntry[] = [
     {
       id: 'validate',
       content: (
@@ -68,10 +91,17 @@ export async function OperacionesPipelineContent({ searchParams }: OperacionesPi
     },
   ];
 
+  const visibleIds = new Set(visibleSteps.map((step) => step.id));
+  const stepContents = allStepContents.filter((entry) => visibleIds.has(entry.id));
+
   return (
     <PipelineLayout
-      steps={OPERACIONES_STEPS}
-      counts={counts}
+      steps={visibleSteps}
+      summaryQuery={{
+        queryKey: ['maintenance', 'pipeline', 'operaciones'],
+        queryFn: getOperacionesPipelineSummary,
+        initialData: summary,
+      }}
       initialStep={initialStep}
       paramName={PARAM_NAME}
       stepContents={stepContents}

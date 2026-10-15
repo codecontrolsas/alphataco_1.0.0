@@ -41,8 +41,6 @@ jobs:
               - '**'
               - '!docs/**'
               - '!**/*.md'
-              - '!cypress/**'
-              - '!cypress.config.ts'
               - '!.claude/**'
               - '!.agents/**'
               - '!.planes/**'
@@ -69,7 +67,6 @@ jobs:
       - run: npm ci
         env:
           DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
-          CYPRESS_INSTALL_BINARY: '0'
       - run: npm run check-types
         env:
           # tsc del proyecto completo pasa los ~2 GB del heap por defecto de Node (OOM, exit 134).

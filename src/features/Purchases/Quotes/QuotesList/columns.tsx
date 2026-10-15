@@ -1,23 +1,26 @@
 'use client';
 
-import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { StackedCell } from '@/shared/components/common/StackedCell';
+import { argentinaDate, formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import moment from 'moment';
 import Link from 'next/link';
+import { PriceText } from '../../components/PriceText';
 import { PurchaseQuoteStatusBadge } from '../components/PurchaseQuoteStatusBadge';
 import type { PurchaseQuoteListItem } from './actions.server';
 
 export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['sent_at', 'creator'];
 
-const formatDateTime = (value: Date | string | null) => (value ? moment(value).format('DD/MM/YYYY') : '-');
+/** Timestamps: dia en hora argentina, igual en el servidor y en cualquier navegador. */
+const formatDateTime = (value: Date | string | null) => (value ? formatArgentinaDay(value) : '-');
 /** Columnas DATE (sin hora): se leen en UTC para no correr un dia. */
 const formatDateOnly = (value: Date | string | null) => (value ? moment.utc(value).format('DD/MM/YYYY') : '-');
 
 const isExpired = (value: Date | string | null) =>
-  value != null && moment.utc(value).format('YYYY-MM-DD') < moment().format('YYYY-MM-DD');
+  value != null && moment.utc(value).format('YYYY-MM-DD') < argentinaDate();
 
-export function getColumns(): ColumnDef<PurchaseQuoteListItem>[] {
+export function getColumns({ canViewPrices }: { canViewPrices: boolean }): ColumnDef<PurchaseQuoteListItem>[] {
   return [
     {
       id: 'number',
@@ -27,7 +30,7 @@ export function getColumns(): ColumnDef<PurchaseQuoteListItem>[] {
       cell: ({ row }) => (
         <Link
           href={`/dashboard/purchases/quotes/${row.original.id}`}
-          className="font-mono text-sm font-medium text-blue-600 hover:underline"
+          className="text-brand-ink font-mono text-sm font-medium hover:underline"
         >
           {row.original.number}
         </Link>
@@ -39,12 +42,16 @@ export function getColumns(): ColumnDef<PurchaseQuoteListItem>[] {
       meta: { title: 'Proveedor' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Proveedor" />,
       cell: ({ row }) => (
-        <Link
-          href={`/dashboard/purchases/suppliers/${row.original.supplier.id}`}
-          className="text-blue-600 hover:underline"
-        >
-          {row.original.supplier.name}
-        </Link>
+        <StackedCell
+          primary={
+            <Link
+              href={`/dashboard/purchases/suppliers/${row.original.supplier.id}`}
+              className="text-brand-ink hover:underline"
+            >
+              {row.original.supplier.name}
+            </Link>
+          }
+        />
       ),
       filterFn: (row, _id, value: string[]) => value.includes(row.original.supplier.id),
     },
@@ -86,7 +93,7 @@ export function getColumns(): ColumnDef<PurchaseQuoteListItem>[] {
         const value = row.original.valid_until;
         if (!value) return <span>-</span>;
         return isExpired(value) ? (
-          <span className="text-destructive">{formatDateOnly(value)} (vencida)</span>
+          <span className="text-danger-subtle-foreground">{formatDateOnly(value)} (vencida)</span>
         ) : (
           <span>{formatDateOnly(value)}</span>
         );
@@ -99,7 +106,7 @@ export function getColumns(): ColumnDef<PurchaseQuoteListItem>[] {
       // Derivado de las lineas (no es columna de BD): ni se ordena ni se filtra en el servidor.
       enableSorting: false,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Total cotizado" />,
-      cell: ({ row }) => <span className="tabular-nums">{formatMoney(row.original.total_quoted)}</span>,
+      cell: ({ row }) => <PriceText value={row.original.total_quoted} canViewPrices={canViewPrices} />,
     },
     {
       id: 'requests',
@@ -114,7 +121,7 @@ export function getColumns(): ColumnDef<PurchaseQuoteListItem>[] {
             <Link
               key={r.id}
               href={`/dashboard/purchases/requests/${r.id}`}
-              className="font-mono text-sm text-blue-600 hover:underline"
+              className="font-mono text-sm text-brand-ink hover:underline"
             >
               {r.number}
             </Link>

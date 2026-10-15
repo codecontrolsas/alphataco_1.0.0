@@ -4,7 +4,7 @@ import { isNonPropagatingChecklistItem } from '@/features/Mantenimiento/constant
 import { ACTIVITY_LOG } from '@/features/Mantenimiento/shared/activity-log/action-types';
 import { logActivity } from '@/features/Mantenimiento/shared/activity-log/log-activity';
 import { resourceIdFields, type MaintenanceResourceKind } from '@/features/Mantenimiento/shared/maintenance-resource';
-import { getResourceCompanyId } from '@/features/Mantenimiento/shared/resource-company';
+import { NUEVO_PEDIDO_CREATE, requireResourceAccess } from '@/features/Mantenimiento/shared/resource-access.server';
 import type { PreventiveType } from '@/features/Mantenimiento/shared/preventive-maintenance';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile, requireServerAuthProfile } from '@/shared/actions/auth.actions';
@@ -50,8 +50,12 @@ export async function createMaintenanceOrderDirect(input: CreateMaintenanceOrder
   // Sin sesión (alta directa desde el QR) el trigger deja `performed_by` NULL, igual que antes.
   const actorProfile = await getServerAuthProfile();
 
+  // Perímetro de dos caminos (QR de la empresa del equipo o dashboard con `nuevo_pedido:create`).
+  const { companyId } = await requireResourceAccess('vehicle', input.equipment_id, {
+    dashboardPermissions: [NUEVO_PEDIDO_CREATE],
+  });
+
   const { order, items } = await withMaintenanceActor(actorProfile?.id ?? null, async (tx) => {
-    const companyId = await getResourceCompanyId(tx, 'vehicle', input.equipment_id);
     // 1. Crear el maintenance_order
     const order = await tx.maintenance_orders.create({
       data: {
@@ -205,7 +209,11 @@ export async function createMaintenanceOrderFromDeviations(input: {
   }
 
   const profile = await requireServerAuthProfile();
-  const companyId = await getResourceCompanyId(prisma, input.resourceKind, input.equipmentId);
+  // Perímetro de dos caminos: operario del QR de esa empresa o usuario del dashboard con
+  // `nuevo_pedido:create` en la empresa activa. La empresa sigue saliendo del recurso.
+  const { companyId } = await requireResourceAccess(input.resourceKind, input.equipmentId, {
+    dashboardPermissions: [NUEVO_PEDIDO_CREATE],
+  });
   // El supervisor llega del cliente: tiene que ser de la empresa del recurso.
   await assertSupervisorInCompany(input.supervisorId, companyId);
 

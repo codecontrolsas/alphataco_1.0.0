@@ -8,8 +8,8 @@ import { rejectedCheckLabel } from '../lib/rejected-checks';
 import { TreasuryError } from '../lib/treasury-errors';
 import { ReceiptPdfDocument } from './ReceiptPdfDocument';
 import { buildReceiptPdfData } from './receipt-pdf-data';
+import { isoDay } from '../lib/dates';
 
-const isoDay = (value: Date) => value.toISOString().slice(0, 10);
 
 /** PDF del recibo de cobranza, generado a demanda (spec Tesorería etapa 2 §3.5). */
 export async function renderCustomerReceiptPdf(receiptId: string, companyId: string): Promise<RenderedPdf> {

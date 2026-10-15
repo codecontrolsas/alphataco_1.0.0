@@ -8,6 +8,7 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { formatMoney } from '@/features/Warehouses/lib/format';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Users } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { TREASURY_QUERY_KEYS } from '../../../lib/query-keys';
@@ -128,7 +129,7 @@ export function _WithholdingsDataTable({
 
   const exportConfig: DataTableExportConfig<WithholdingListItem> = useMemo(
     () => ({
-      fetchAllData: () => getAllWithholdingsForExport(currentParams),
+      fetchAllData: async () => unwrapExportResult(await getAllWithholdingsForExport(currentParams)),
       options: { filename: 'retenciones-sufridas', title: 'Retenciones sufridas', sheetName: 'Retenciones' },
       formatters: {
         certificate_date: (value) => formatValueDate(value as string),

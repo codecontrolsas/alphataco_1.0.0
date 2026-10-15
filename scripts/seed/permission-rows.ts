@@ -38,9 +38,19 @@ export type TabRow = {
   slug: string;
   name: string;
   orderIndex: number;
+  /** Qué habilita la pestaña (de `permission-catalog.ts`); ausente si el catálogo no la describe. */
+  description?: string;
 };
 
-export type ActionRow = { slug: string; name: string };
+export type ActionRow = { slug: string; name: string; description?: string };
+
+/** Textos opcionales que acompañan al mapa (ver `src/features/Permissions/permission-catalog.ts`). */
+export type PermissionDescriptions = {
+  /** Descripción por `tabId`. */
+  tabs?: Record<string, string>;
+  /** Descripción genérica por slug de acción. */
+  actions?: Record<string, string>;
+};
 
 export type RolePermissionRow = {
   roleSlug: (typeof SYSTEM_ROLE_SLUGS)[number];
@@ -61,10 +71,13 @@ export type PermissionRows = {
  * @param map mapa de modulos/tabs/subtabs (PERMISSIONS de permissions-map.ts, o uno minimo para tests)
  * @param actionNames nombres legibles por slug de accion (ej. ACTIONS de permissions-map.ts
  *   mapeado a { view: 'Ver', ... }); si una accion no tiene nombre, se usa el slug tal cual
+ * @param descriptions descripciones de tabs (por tabId) y de acciones (por slug); lo que no
+ *   figure queda sin `description` en la fila
  */
 export function buildPermissionRows(
   map: PermissionsMap,
-  actionNames: Record<string, string> = {}
+  actionNames: Record<string, string> = {},
+  descriptions: PermissionDescriptions = {}
 ): PermissionRows {
   const modules: ModuleRow[] = [];
   const tabs: TabRow[] = [];
@@ -81,6 +94,7 @@ export function buildPermissionRows(
         slug: tabDef.slug,
         name: tabDef.name,
         orderIndex,
+        ...(descriptions.tabs?.[tabDef.tabId] ? { description: descriptions.tabs[tabDef.tabId] } : {}),
       });
       orderIndex += 1;
 
@@ -89,6 +103,7 @@ export function buildPermissionRows(
           actionsBySlug.set(actionSlug, {
             slug: actionSlug,
             name: actionNames[actionSlug] ?? actionSlug,
+            ...(descriptions.actions?.[actionSlug] ? { description: descriptions.actions[actionSlug] } : {}),
           });
         }
         for (const roleSlug of SYSTEM_ROLE_SLUGS) {

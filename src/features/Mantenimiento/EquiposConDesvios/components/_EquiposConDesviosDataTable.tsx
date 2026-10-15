@@ -1,7 +1,6 @@
 'use client';
 
 import { getPendingDeviations } from '@/features/Mantenimiento/actions/maintenance-actions';
-import { CriticalDeviationsRepairModal } from '@/features/Mantenimiento/shared/components/critical-deviations-repair-modal';
 import { Logger } from '@/lib/logger';
 import {
   DataTable,
@@ -11,10 +10,13 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useQueryClient } from '@tanstack/react-query';
 import { CircleOff } from 'lucide-react';
-import moment from 'moment';
+import dynamic from 'next/dynamic';
 import { useCallback, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import {
   getAllEquipmentsWithDeviationsForExport,
   getEquipmentsWithDeviationsPaginated,
@@ -22,10 +24,18 @@ import {
   type EquipmentWithDeviationsListItem,
 } from '../actions.server';
 import { HIDDEN_COLUMNS_BY_DEFAULT, getColumns } from '../columns';
+import { DEVIATIONS_LIST_QUERY_KEY, DEVIATIONS_METRICS_QUERY_KEY, DEVIATIONS_PARAM_NAMESPACE } from '../constants';
+
+// Modal pesado: se carga recién cuando se abre (no forma parte del bundle inicial de la tabla)
+const CriticalDeviationsRepairModal = dynamic(() =>
+  import('@/features/Mantenimiento/shared/components/critical-deviations-repair-modal').then(
+    (m) => m.CriticalDeviationsRepairModal
+  )
+);
 
 const logger = new Logger('_EquiposConDesviosDataTable');
 
-const QUERY_KEY = ['equipments-with-deviations-list'];
+const QUERY_KEY = [...DEVIATIONS_LIST_QUERY_KEY];
 
 type Deviation = {
   id: string;
@@ -101,28 +111,39 @@ export function _EquiposConDesviosDataTable({
   );
 
   // ─── Modal de resolución de desvíos críticos ─────────────────────────────
-  const handleResolveDeviations = useCallback(async (equipmentId: string) => {
-    try {
-      // Mismo criterio que la agregación de la tabla: solo desvíos que todavía
-      // no pertenecen a ninguna solicitud.
-      const pendingDeviations = await getPendingDeviations(equipmentId, { onlyWithoutRequest: true });
-      setDeviations(
-        pendingDeviations.map((d) => ({
-          id: d.id,
-          item_code: d.item_code,
-          item_label: d.item_label,
-          section_code: d.section_code,
-          is_critical: d.is_critical ?? false,
-          checklistAnswerId: d.checklist_answer_id,
-          created_at: d.created_at?.toISOString() ?? new Date().toISOString(),
-        }))
-      );
-      setSelectedEquipmentId(equipmentId);
-      setShowModal(true);
-    } catch (error) {
-      logger.error('Error loading deviations', { data: { error } });
-    }
-  }, []);
+  const handleResolveDeviations = useCallback(
+    async (equipmentId: string) => {
+      try {
+        // Mismo criterio que la agregación de la tabla: solo desvíos que todavía
+        // no pertenecen a ninguna solicitud.
+        const pendingDeviations = await getPendingDeviations(equipmentId, { onlyWithoutRequest: true });
+        if (pendingDeviations.length === 0) {
+          // Otro usuario ya armó el pedido (o no hay acceso al equipo): se refresca y se avisa, no se abre un modal vacío.
+          toast.info('Este equipo ya no tiene desvíos pendientes de pedido.');
+          queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+          queryClient.invalidateQueries({ queryKey: DEVIATIONS_METRICS_QUERY_KEY });
+          return;
+        }
+        setDeviations(
+          pendingDeviations.map((d) => ({
+            id: d.id,
+            item_code: d.item_code,
+            item_label: d.item_label,
+            section_code: d.section_code,
+            is_critical: d.is_critical ?? false,
+            checklistAnswerId: d.checklist_answer_id,
+            created_at: d.created_at?.toISOString() ?? new Date().toISOString(),
+          }))
+        );
+        setSelectedEquipmentId(equipmentId);
+        setShowModal(true);
+      } catch (error) {
+        logger.error('Error loading deviations', { data: { error } });
+        toast.error('No se pudieron cargar los desvíos del equipo. Intentá nuevamente.');
+      }
+    },
+    [queryClient]
+  );
 
   const handleCloseModal = useCallback(() => {
     setShowModal(false);
@@ -130,6 +151,7 @@ export function _EquiposConDesviosDataTable({
     setDeviations([]);
     // Refrescar la tabla: los desvíos resueltos ya no deben aparecer
     queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+    queryClient.invalidateQueries({ queryKey: DEVIATIONS_METRICS_QUERY_KEY });
   }, [queryClient]);
 
   const columns = useMemo(() => getColumns(handleResolveDeviations), [handleResolveDeviations]);
@@ -210,19 +232,21 @@ export function _EquiposConDesviosDataTable({
         initialColumnVisibility={mergedColumnVisibility}
         initialFilterVisibility={mergedFilterVisibility}
         tableId={tableId}
-        paramNamespace={tableId}
+        paramNamespace={DEVIATIONS_PARAM_NAMESPACE}
         showFilterToggle={true}
-        emptyMessage="No hay equipos con desvíos pendientes."
+        emptyMessage="No hay equipos con desvíos pendientes de pedido. Si esperabas ver alguno, revisá los filtros activos."
+        mobileCards
         data-testid="equipments-with-deviations-table"
         exportConfig={{
-          fetchAllData: () => getAllEquipmentsWithDeviationsForExport(currentParams),
+          fetchAllData: async () => unwrapExportResult(await getAllEquipmentsWithDeviationsForExport(currentParams)),
           options: {
             filename: 'equipos-con-desvios',
             title: 'Equipos con Desvíos Pendientes',
             sheetName: 'Equipos con Desvíos',
           },
           formatters: {
-            last_deviation_date: (val) => (val ? moment(val as string).format('DD/MM/YYYY HH:mm') : ''),
+            last_deviation_date: (val) => (val ? formatArgentinaDateTime(val as string) : ''),
+            first_deviation_date: (val) => (val ? formatArgentinaDateTime(val as string) : ''),
           },
         }}
       />

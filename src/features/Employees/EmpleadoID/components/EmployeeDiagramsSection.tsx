@@ -1,22 +1,15 @@
 // Server Component async — se envuelve en <Suspense> desde el padre
 import { DiagramDetailEmployeeView } from '@/features/Employees/Diagrams/DiagramDetailEmployeeView';
 import type { DiagramHistoryRow } from '@/features/Employees/Diagrams/table/DiagramDetailTable';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import moment from 'moment';
-import type { EmployeeDetailData } from '../actions.server';
 import { getDiagramTypes, getEmployeeDiagramHistory, getEmployeeDiagrams } from '../actions.server';
 
-interface Props {
-  employeeId: string;
-  companyId: string;
-  employee: NonNullable<EmployeeDetailData>;
-  searchParams: Record<string, string | undefined>;
-}
-
-export async function EmployeeDiagramsSection({ employeeId, companyId, employee, searchParams }: Props) {
+export async function EmployeeDiagramsSection({ employeeId }: { employeeId: string }) {
   const [rawHistory, rawDiagrams, diagramTypes] = await Promise.all([
     getEmployeeDiagramHistory(employeeId),
     getEmployeeDiagrams(employeeId),
-    getDiagramTypes(companyId),
+    getDiagramTypes(),
   ]);
 
   // Formatear historyData (movido de page.tsx lineas 88-98)
@@ -29,7 +22,7 @@ export async function EmployeeDiagramsSection({ employeeId, companyId, employee,
       ?.split(' ')
       .map((name: string) => name.charAt(0).toUpperCase() + name.slice(1))
       .join(' '),
-    modifiedAt: moment(item.created_at).local().format('DD/MM/YYYY HH:mm'),
+    modifiedAt: formatArgentinaDateTime(item.created_at),
     type: item.prev_state ? ('modified' as const) : ('created' as const),
   }));
 
@@ -62,8 +55,7 @@ export async function EmployeeDiagramsSection({ employeeId, companyId, employee,
       historyData={historyData}
       diagrams={diagrams}
       diagrams_types={diagramTypes}
-      activeEmploees={[employee]}
-      searchParams={searchParams}
+      employeeId={employeeId}
     />
   );
 }

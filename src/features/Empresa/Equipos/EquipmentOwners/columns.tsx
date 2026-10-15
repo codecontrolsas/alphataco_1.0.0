@@ -4,9 +4,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
-import moment from 'moment';
-import type { EquipmentOwnerListItem } from './actions.server';
+import { ActiveStatusBadge } from '../../components/ActiveStatusBadge';
+import type { EquipmentOwnerListItem } from './lib/owners-types';
 
 // ============================================================================
 // HIDDEN COLUMNS BY DEFAULT
@@ -77,13 +78,7 @@ export function getEquipmentOwnerColumns(
       accessorKey: 'is_active',
       meta: { title: 'Estado' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
-      cell: ({ row }) => {
-        const val = row.original.is_active;
-        if (val === null || val === undefined) {
-          return <Badge variant="default">Sin asignar</Badge>;
-        }
-        return <Badge variant={val ? 'success' : 'secondary'}>{val ? 'Activo' : 'Inactivo'}</Badge>;
-      },
+      cell: ({ row }) => <ActiveStatusBadge value={row.original.is_active} />,
       filterFn: (row, id, value: string[]) => {
         const val = row.getValue(id);
         if (val === null || val === undefined) return value.includes(NULL_FILTER_VALUE);
@@ -98,7 +93,7 @@ export function getEquipmentOwnerColumns(
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de creación" />,
       cell: ({ row }) => {
         const val = row.original.created_at;
-        return <span>{val ? moment(val).format('DD/MM/YYYY') : '-'}</span>;
+        return <span>{val ? formatArgentinaDay(val) : '-'}</span>;
       },
     },
 
@@ -114,7 +109,9 @@ export function getEquipmentOwnerColumns(
             <Button
               size="sm"
               variant="link"
-              className="hover:text-blue-400 p-0 h-auto"
+              type="button"
+              className="h-auto p-0"
+              aria-label={`Editar ${row.original.name ?? 'titular'}`}
               onClick={() => onEdit(row.original)}
             >
               Editar
@@ -123,7 +120,9 @@ export function getEquipmentOwnerColumns(
           <Button
             size="sm"
             variant="link"
-            className="hover:text-green-600 p-0 h-auto"
+            type="button"
+            className="h-auto p-0"
+            aria-label={`Ver equipos de ${row.original.name ?? 'titular'}`}
             onClick={() => onViewEquipment(row.original)}
           >
             Ver Equipos

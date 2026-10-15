@@ -1,7 +1,8 @@
 'use server';
 
+import { requireDashboardView } from '@/features/Dashboard/lib/permissions.server';
 import type { Prisma } from '@/generated/prisma/client';
-import type { condition_enum } from '@/generated/prisma/enums';
+import { condition_enum } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
 import {
   buildFiltersWhere,
@@ -12,25 +13,52 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { cache } from 'react';
-import { getOperationToday } from '../lib/dashboard-dates';
-import { aggregateEquipmentIndicators } from '../lib/indicators';
-import { mapVehicleToResult, toFacetMap } from '../lib/row-mapping';
-import type { EquipmentIndicatorResult, VehicleNotInReportResult } from './types';
+import { CANCELLED_ROW_STATUS, getOperationToday } from '../lib/dashboard-dates';
+import { aggregateEquipmentIndicators, isNotOperative, NOT_OPERATIVE_CONDITIONS } from '../lib/indicators';
+import { toFacetMap } from '../lib/row-mapping';
+import type { EquipmentIndicatorResult } from './types';
 
 const logger = new Logger('features/Dashboard/Principal/fleet');
 
-/** Condiciones que dejan a un equipo disponible para el parte. */
-const AVAILABLE_CONDITIONS: condition_enum[] = ['operativo', 'operativo_condicionado'];
-/** Condiciones que dejan a un equipo fuera de servicio (diálogo "en reparación"). */
-const REPAIR_CONDITIONS: condition_enum[] = ['no_operativo', 'en_reparacion', 'en_preparacion'];
+/**
+ * Condiciones "en servicio" (diálogo "Disponible / Sin asignar"): todas menos las de
+ * `NOT_OPERATIVE_CONDITIONS`. Un equipo sin condición también cuenta como en servicio, igual que
+ * en el indicador (`aggregateEquipmentIndicators`): una sola definición para los dos.
+ */
+const AVAILABLE_CONDITIONS: condition_enum[] = Object.values(condition_enum).filter((value) => !isNotOperative(value));
+/** Condiciones que dejan a un equipo fuera de servicio (diálogo "Fuera de servicio"). */
+const REPAIR_CONDITIONS: condition_enum[] = [...NOT_OPERATIVE_CONDITIONS];
 
 /**
- * Flota del dashboard principal: indicadores de uso de equipos, equipos fuera del parte,
- * equipos en reparación y las tablas paginadas de los diálogos.
+ * Relaciones equipo ↔ parte de HOY de la empresa: los equipos "en operaciones" (sin los servicios
+ * cancelados). La usan el indicador y el diálogo de disponibles, así los dos excluyen el mismo
+ * conjunto. `includeCancelled` trae todas las filas, para informar aparte las canceladas.
+ */
+function buildTodayReportVehicleRelationsWhere(
+  companyId: string,
+  typeIds: readonly string[] | undefined,
+  includeCancelled = false
+) {
+  const typeFilter = typeIds?.length ? { type: { in: [...typeIds] } } : {};
+  return {
+    equipment_id: { not: null },
+    dailyreportrows: {
+      status: includeCancelled ? undefined : { not: CANCELLED_ROW_STATUS },
+      dailyreport: { date: new Date(getOperationToday()), is_active: true, company_id: companyId },
+    },
+    vehicles: { is_active: true, company_id: companyId, ...typeFilter },
+  } satisfies Prisma.dailyreportequipmentrelationsWhereInput;
+}
+
+/**
+ * Flota del dashboard principal: indicadores de uso de equipos y las tablas paginadas de los
+ * diálogos (disponibles y fuera de servicio).
  *
  * Perímetro: todo sale de `getActiveCompanyId()`; los `typeIds` que manda el cliente sólo
  * acotan más el listado, nunca lo amplían fuera de la empresa activa.
@@ -41,130 +69,58 @@ const REPAIR_CONDITIONS: condition_enum[] = ['no_operativo', 'en_reparacion', 'e
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Indicador de uso de equipos por tipo.
- * Memoizado por request con `cache()`: las tarjetas de KPIs y la sección de flota lo piden
- * en el mismo render.
+ * Memoizado por request con clave PRIMITIVA: un array de `typeIds` nuevo en cada llamada no
+ * reutiliza `cache()` (compara por identidad), un string sí. La clave son los ids ordenados.
  */
-export const getEquipmentIndicators = cache(async (typeIds?: string[]): Promise<EquipmentIndicatorResult[]> => {
-  logger.debug('Obteniendo indicadores de equipos', { data: { typeIds } });
+const loadEquipmentIndicators = cache(async (typeIdsKey: string): Promise<EquipmentIndicatorResult[]> => {
+  logger.debug('Obteniendo indicadores de equipos', { data: { typeIdsKey } });
 
   try {
     const companyId = await getActiveCompanyId();
-    const todayDate = getOperationToday();
-    const typeFilter = typeIds?.length ? { type: { in: typeIds } } : {};
+    const typeIds = typeIdsKey ? typeIdsKey.split(',') : [];
+    const typeFilter = typeIds.length ? { type: { in: typeIds } } : {};
 
-    const [allVehicles, usedInReport] = await Promise.all([
+    const [allVehicles, reportRelations] = await Promise.all([
       prisma.vehicles.findMany({
         where: withCompany({ is_active: true, ...typeFilter }, companyId),
         select: { id: true, condition: true, type_vehicles_typeTotype: { select: { name: true } } },
       }),
       prisma.dailyreportequipmentrelations.findMany({
-        where: {
-          equipment_id: { not: null },
-          dailyreportrows: {
-            dailyreport: { date: new Date(todayDate), is_active: true, company_id: companyId },
-          },
-          vehicles: { is_active: true, company_id: companyId, ...typeFilter },
-        },
-        select: { equipment_id: true },
-        distinct: ['equipment_id'],
+        where: buildTodayReportVehicleRelationsWhere(companyId, typeIds, true),
+        select: { equipment_id: true, dailyreportrows: { select: { status: true } } },
       }),
     ]);
 
-    const usedIds = new Set(usedInReport.map((row) => row.equipment_id).filter((id): id is string => id != null));
+    const usedIds = new Set<string>();
+    const inCancelledIds = new Set<string>();
+    for (const relation of reportRelations) {
+      if (!relation.equipment_id) continue;
+      if (relation.dailyreportrows?.status === CANCELLED_ROW_STATUS) inCancelledIds.add(relation.equipment_id);
+      else usedIds.add(relation.equipment_id);
+    }
 
-    return aggregateEquipmentIndicators(allVehicles, usedIds);
+    return aggregateEquipmentIndicators(allVehicles, usedIds, inCancelledIds);
   } catch (error) {
     logger.error('Error al obtener indicadores de equipos', { data: { error } });
-    return [];
+    // Sin dato no hay []: una flota vacía se leería como "no hay equipos".
+    throw error;
   }
 });
 
+/** Indicador de uso de equipos por tipo. Lanza si no se puede calcular. */
+export async function getEquipmentIndicators(typeIds?: string[]): Promise<EquipmentIndicatorResult[]> {
+  await requireDashboardView('principal');
+  const key = [...new Set(typeIds ?? [])].filter(Boolean).sort().join(',');
+  return loadEquipmentIndicators(key);
+}
+
 export type EquipmentIndicatorsData = Awaited<ReturnType<typeof getEquipmentIndicators>>;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Listados simples (secciones del tablero)
-// ─────────────────────────────────────────────────────────────────────────────
-
-const VEHICLE_SELECT = {
-  id: true,
-  domain: true,
-  type_vehicles_typeTotype: { select: { name: true } },
-  sub_type: { select: { name: true } },
-  contractor_equipment: { select: { customers: { select: { name: true } } } },
-} as const;
-
-/** Equipos operativos que no están en el parte diario de hoy. */
-export async function getVehiclesNotInDailyReport(typeIds?: string[]): Promise<VehicleNotInReportResult[]> {
-  logger.debug('Obteniendo vehículos fuera del parte diario', { data: { typeIds } });
-
-  try {
-    const companyId = await getActiveCompanyId();
-    const todayDate = getOperationToday();
-    const typeFilter = typeIds?.length ? { type: { in: typeIds } } : {};
-
-    const vehiclesInReport = await prisma.dailyreportequipmentrelations.findMany({
-      where: {
-        equipment_id: { not: null },
-        dailyreportrows: { dailyreport: { date: new Date(todayDate), is_active: true } },
-        vehicles: { is_active: true, company_id: companyId, ...typeFilter },
-      },
-      select: { equipment_id: true },
-      distinct: ['equipment_id'],
-    });
-
-    const inReportIds = vehiclesInReport.map((row) => row.equipment_id).filter((id): id is string => id != null);
-
-    const vehicles = await prisma.vehicles.findMany({
-      where: withCompany(
-        {
-          is_active: true,
-          condition: { in: AVAILABLE_CONDITIONS },
-          ...typeFilter,
-          ...(inReportIds.length > 0 ? { id: { notIn: inReportIds } } : {}),
-        },
-        companyId
-      ),
-      select: VEHICLE_SELECT,
-      orderBy: [{ domain: 'asc' }],
-    });
-
-    return vehicles.map(mapVehicleToResult);
-  } catch (error) {
-    logger.error('Error al obtener vehículos fuera del parte', { data: { error } });
-    return [];
-  }
-}
-
-export type VehiclesNotInDailyReportData = Awaited<ReturnType<typeof getVehiclesNotInDailyReport>>;
-
-/** Equipos no operativos (en reparación). */
-export async function getVehiclesOnRepair(): Promise<VehicleNotInReportResult[]> {
-  logger.debug('Obteniendo vehículos en reparación');
-
-  try {
-    const companyId = await getActiveCompanyId();
-
-    const vehicles = await prisma.vehicles.findMany({
-      where: withCompany({ is_active: true, condition: 'no_operativo' as condition_enum }, companyId),
-      select: VEHICLE_SELECT,
-      orderBy: [{ domain: 'asc' }],
-    });
-
-    return vehicles.map(mapVehicleToResult);
-  } catch (error) {
-    logger.error('Error al obtener vehículos en reparación', { data: { error } });
-    return [];
-  }
-}
-
-export type VehiclesOnRepairData = Awaited<ReturnType<typeof getVehiclesOnRepair>>;
 
 /**
  * Tipos de vehículo disponibles para el filtro: los de la empresa activa más los globales
  * (`company_id IS NULL`).
  */
-export async function getAllVehicleTypes() {
+const loadAllVehicleTypes = cache(async () => {
   logger.debug('Obteniendo todos los tipos de vehículos');
 
   try {
@@ -183,6 +139,12 @@ export async function getAllVehicleTypes() {
     logger.error('Error al obtener tipos de vehículos', { data: { error } });
     throw error;
   }
+});
+
+/** Memoizado por request: las dos secciones de flota lo piden en el mismo render. */
+export async function getAllVehicleTypes() {
+  await requireDashboardView('principal');
+  return loadAllVehicleTypes();
 }
 
 export type AllVehicleTypesData = Awaited<ReturnType<typeof getAllVehicleTypes>>;
@@ -193,7 +155,7 @@ export type VehicleTypeItem = AllVehicleTypesData[number];
 // ─────────────────────────────────────────────────────────────────────────────
 
 const VEHICLE_TEXT_COLUMNS = ['domain', 'serie', 'intern_number'];
-const VALID_VEHICLE_SORT_FIELDS = new Set(['domain', 'serie', 'intern_number']);
+const VALID_VEHICLE_SORT_FIELDS = new Set(['domain', 'serie', 'intern_number', 'condition']);
 const VEHICLE_FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Record<string, unknown>> = {
   vehicleType: (dir) => ({ type_vehicles_typeTotype: { name: dir } }),
   subType: (dir) => ({ sub_type: { name: dir } }),
@@ -212,15 +174,35 @@ const VEHICLE_DIALOG_SELECT = {
   contractor_equipment: { select: { customers: { select: { id: true, name: true } } } },
 } as const;
 
-function buildVehicleFiltersWhere(state: ReturnType<typeof parseSearchParams>) {
+/**
+ * Filtros del DataTable de los diálogos. La condición del filtro se INTERSECA con `allowedConditions`
+ * (las del diálogo): elegir «No operativo» en el diálogo de disponibles no amplía el listado.
+ */
+function buildVehicleFiltersWhere(
+  state: ReturnType<typeof parseSearchParams>,
+  allowedConditions: condition_enum[],
+  /** El diálogo admite equipos sin condición (los de disponibles, como el indicador). */
+  includeNullCondition = false
+) {
   const filtersWhere = buildFiltersWhere(
     state.filters,
     { vehicleType: 'type', subType: 'subType' },
-    { exclude: [...VEHICLE_TEXT_COLUMNS, 'contractor_equipment'] }
+    { exclude: [...VEHICLE_TEXT_COLUMNS, 'contractor_equipment', 'condition'] }
   );
 
+  const selectedConditions = (state.filters['condition'] ?? []).filter((value): value is condition_enum =>
+    (allowedConditions as string[]).includes(value)
+  );
+
+  const wantsNullCondition = includeNullCondition && (state.filters['condition'] ?? []).includes(NULL_FILTER_VALUE);
+  const anyConditionSelected = selectedConditions.length > 0 || wantsNullCondition;
+  const conditionValues = anyConditionSelected ? selectedConditions : allowedConditions;
+  const withNullCondition = includeNullCondition && (!anyConditionSelected || wantsNullCondition);
+
   const contractorValues = state.filters['contractor_equipment'];
-  const extraAndConditions: Record<string, unknown>[] = [];
+  const extraAndConditions: Record<string, unknown>[] = withNullCondition
+    ? [{ OR: [{ condition: null }, { condition: { in: conditionValues } }] }]
+    : [];
   const directM2mFilters: Record<string, unknown> = {};
 
   if (contractorValues?.length) {
@@ -246,6 +228,7 @@ function buildVehicleFiltersWhere(state: ReturnType<typeof parseSearchParams>) {
 
   return {
     ...buildSearchWhere(state.search, VEHICLE_TEXT_COLUMNS),
+    ...(withNullCondition ? {} : { condition: { in: conditionValues } }),
     ...filtersWhereWithoutAnd,
     ...buildTextFiltersWhere(state.filters, VEHICLE_TEXT_COLUMNS),
     ...directM2mFilters,
@@ -258,36 +241,37 @@ async function buildAvailableVehiclesWhereClause(
   typeIds: string[] | undefined,
   state: ReturnType<typeof parseSearchParams>
 ) {
-  const todayDate = getOperationToday();
-
   const vehiclesInReport = await prisma.dailyreportequipmentrelations.findMany({
-    where: {
-      equipment_id: { not: null },
-      dailyreportrows: { dailyreport: { date: new Date(todayDate), is_active: true } },
-      vehicles: { is_active: true, company_id: companyId, ...(typeIds?.length ? { type: { in: typeIds } } : {}) },
-    },
+    where: buildTodayReportVehicleRelationsWhere(companyId, typeIds),
     select: { equipment_id: true },
     distinct: ['equipment_id'],
   });
 
   const inReportIds = vehiclesInReport.map((row) => row.equipment_id).filter((id): id is string => id != null);
 
+  // Con `typeIds` (unidades motoras) el filtro por tipo del usuario se intersecta con ellos; sin tipos
+  // válidos elegidos queda el conjunto completo del diálogo.
+  const selectedTypes = (state.filters['vehicleType'] ?? []).filter(
+    (value) => value !== NULL_FILTER_VALUE && typeIds?.includes(value)
+  );
+  const scopedTypes = typeIds?.length ? (selectedTypes.length > 0 ? selectedTypes : typeIds) : null;
+
+  // Los filtros del usuario van primero: lo que define el diálogo (empresa, activos, no están en el parte)
+  // se aplica DESPUÉS y no se puede pisar desde la URL.
   return {
+    ...buildVehicleFiltersWhere(state, AVAILABLE_CONDITIONS, true),
     is_active: true,
     company_id: companyId,
-    condition: { in: AVAILABLE_CONDITIONS },
-    ...(typeIds?.length ? { type: { in: typeIds } } : {}),
+    ...(scopedTypes ? { type: { in: scopedTypes } } : {}),
     ...(inReportIds.length > 0 ? { id: { notIn: inReportIds } } : {}),
-    ...buildVehicleFiltersWhere(state),
   };
 }
 
 function buildRepairVehiclesWhereClause(companyId: string, state: ReturnType<typeof parseSearchParams>) {
   return {
+    ...buildVehicleFiltersWhere(state, REPAIR_CONDITIONS),
     is_active: true,
     company_id: companyId,
-    condition: { in: REPAIR_CONDITIONS },
-    ...buildVehicleFiltersWhere(state),
   };
 }
 
@@ -319,7 +303,11 @@ async function getVehicleFacet(
     const ids = rows.map((row) => row.type).filter((id): id is string => id != null);
     const resolvedOptions =
       ids.length > 0
-        ? await prisma.type.findMany({ where: { id: { in: ids } }, select: { id: true, name: true }, orderBy: { name: 'asc' } })
+        ? await prisma.type.findMany({
+            where: { id: { in: ids } },
+            select: { id: true, name: true },
+            orderBy: { name: 'asc' },
+          })
         : [];
     return { counts: toFacetMap(rows.map((row) => ({ key: row.type, count: row._count }))), resolvedOptions };
   }
@@ -337,6 +325,12 @@ async function getVehicleFacet(
           })
         : [];
     return { counts: toFacetMap(rows.map((row) => ({ key: row.subType, count: row._count }))), resolvedOptions };
+  }
+
+  if (columnId === 'condition') {
+    const where = await buildWhere('condition');
+    const rows = await prisma.vehicles.groupBy({ by: ['condition'], where, _count: true });
+    return { counts: toFacetMap(rows.map((row) => ({ key: row.condition, count: row._count }))) };
   }
 
   if (columnId === 'contractor_equipment') {
@@ -371,6 +365,7 @@ async function getVehicleFacet(
 }
 
 export async function getAvailableVehiclesPaginated(searchParams: DataTableSearchParams, typeIds?: string[]) {
+  await requireDashboardView('principal');
   // Fuera del try a propósito: una sesión sin empresa activa es un error de sesión, no
   // "no hay datos" — el catch de abajo es para fallas de la query.
   const companyId = await getActiveCompanyId();
@@ -401,7 +396,33 @@ export async function getAvailableVehiclesPaginated(searchParams: DataTableSearc
 
 export type AvailableVehicleItem = Awaited<ReturnType<typeof getAvailableVehiclesPaginated>>['data'][number];
 
-export async function getAvailableVehiclesForExport(searchParams: DataTableSearchParams, typeIds?: string[]) {
+/** Tope de filas de las exportaciones de los diálogos. */
+const EXPORT_LIMIT = 10_000;
+
+function vehiclesTooLargeMessage(maxRows: number) {
+  return `Hay más de ${maxRows.toLocaleString('es-AR')} equipos con los filtros actuales. Acote la exportación con filtros.`;
+}
+
+async function exportVehicles(companyId: string, where: VehicleWhere) {
+  const orderBy = [{ domain: 'asc' as const }, { id: 'asc' as const }];
+
+  return fetchExportRowsInBatches({
+    maxRows: EXPORT_LIMIT,
+    listIds: (take) => prisma.vehicles.findMany({ where, orderBy, select: { id: true }, take }),
+    fetchByIds: (ids) =>
+      prisma.vehicles.findMany({
+        where: { id: { in: ids }, company_id: companyId },
+        select: VEHICLE_DIALOG_SELECT,
+      }),
+    tooLargeMessage: vehiclesTooLargeMessage,
+  });
+}
+
+export async function getAvailableVehiclesForExport(
+  searchParams: DataTableSearchParams,
+  typeIds?: string[]
+): Promise<ExportResult<AvailableVehicleItem[]>> {
+  await requireDashboardView('principal');
   const companyId = await getActiveCompanyId();
   logger.debug('Exportando vehículos disponibles', { data: { typeIds } });
 
@@ -409,10 +430,17 @@ export async function getAvailableVehiclesForExport(searchParams: DataTableSearc
     const state = parseSearchParams(searchParams);
     const where = (await buildAvailableVehiclesWhereClause(companyId, typeIds, state)) as VehicleWhere;
 
-    return await prisma.vehicles.findMany({ orderBy: [{ domain: 'asc' }], where, select: VEHICLE_DIALOG_SELECT });
+    return { ok: true, data: await exportVehicles(companyId, where) };
   } catch (error) {
     logger.error('Error al exportar vehículos disponibles', { data: { error } });
-    throw error;
+    // Next enmascara el mensaje de un error lanzado desde una server action: se devuelve como resultado.
+    return {
+      ok: false,
+      message:
+        error instanceof ExportTooLargeError
+          ? error.message
+          : 'No se pudo exportar la lista de equipos. Intente nuevamente.',
+    };
   }
 }
 
@@ -421,6 +449,7 @@ export async function getAvailableVehicleSingleFacet(
   typeIds: string[] | undefined,
   searchParams?: DataTableSearchParams
 ): Promise<{ counts: Map<string, number>; resolvedOptions?: Array<{ id: string; name: string | null }> } | null> {
+  await requireDashboardView('principal');
   // Fuera del try: sin empresa activa el filtro NO debe verse como "no hay opciones".
   const companyId = await getActiveCompanyId();
   logger.debug('Obteniendo facet de vehículos disponibles', { data: { columnId } });
@@ -443,6 +472,7 @@ export async function getAvailableVehicleSingleFacet(
 }
 
 export async function getRepairVehiclesPaginated(searchParams: DataTableSearchParams) {
+  await requireDashboardView('principal');
   const companyId = await getActiveCompanyId();
   logger.debug('Obteniendo vehículos en reparación paginados');
 
@@ -471,7 +501,10 @@ export async function getRepairVehiclesPaginated(searchParams: DataTableSearchPa
 
 export type RepairVehicleItem = Awaited<ReturnType<typeof getRepairVehiclesPaginated>>['data'][number];
 
-export async function getRepairVehiclesForExport(searchParams: DataTableSearchParams) {
+export async function getRepairVehiclesForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<RepairVehicleItem[]>> {
+  await requireDashboardView('principal');
   const companyId = await getActiveCompanyId();
   logger.debug('Exportando vehículos en reparación');
 
@@ -479,10 +512,16 @@ export async function getRepairVehiclesForExport(searchParams: DataTableSearchPa
     const state = parseSearchParams(searchParams);
     const where = buildRepairVehiclesWhereClause(companyId, state) as VehicleWhere;
 
-    return await prisma.vehicles.findMany({ orderBy: [{ domain: 'asc' }], where, select: VEHICLE_DIALOG_SELECT });
+    return { ok: true, data: await exportVehicles(companyId, where) };
   } catch (error) {
     logger.error('Error al exportar vehículos en reparación', { data: { error } });
-    throw error;
+    return {
+      ok: false,
+      message:
+        error instanceof ExportTooLargeError
+          ? error.message
+          : 'No se pudo exportar la lista de equipos. Intente nuevamente.',
+    };
   }
 }
 
@@ -490,6 +529,7 @@ export async function getRepairVehicleSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
 ): Promise<{ counts: Map<string, number>; resolvedOptions?: Array<{ id: string; name: string | null }> } | null> {
+  await requireDashboardView('principal');
   // Fuera del try: sin empresa activa el filtro NO debe verse como "no hay opciones".
   const companyId = await getActiveCompanyId();
   logger.debug('Obteniendo facet de vehículos en reparación', { data: { columnId } });

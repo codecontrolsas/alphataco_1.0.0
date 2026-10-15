@@ -1,11 +1,14 @@
 'use server';
 
+import { hasDocTypePermission } from '@/features/Documentacion/TiposDocumentos/lib/document-type-permissions';
 import {
   getDocumentCompanyById,
   getDocumentEmployeesById,
   getDocumentEquipmentById,
 } from '@/features/Documentacion/shared/actions/document-actions';
 import { DOCUMENT_FILES_BUCKET, storagePublicUrl } from '@/shared/lib/storage';
+import type { ComplianceKind } from '../../shared/compliance/types';
+import { getDocumentDerivedView, type DocumentDerivedView } from '../lib/document-derived-view.server';
 import { resolveResourceKind } from '../lib/document-detail';
 
 /**
@@ -40,7 +43,18 @@ export type DocumentTypeInfo = NonNullable<CompanyDocument['document_types']>;
 export type DocumentDetailResult = DocumentDetail & {
   /** URL pública del archivo en el bucket de documentos (cadena vacía si todavía no hay archivo). */
   fileUrl: string;
+  /** Estado derivado por el motor ("vencido" por fecha) y "Ya no aplica" según la aplicabilidad actual. */
+  derived: DocumentDerivedView;
 };
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Recurso del motor y su id: el empleado, el equipo o, para la empresa, la empresa activa. */
+function derivedTarget(detail: DocumentDetail): { kind: ComplianceKind; resourceId: string | null } {
+  if (detail.resource === 'employee') return { kind: 'Persona', resourceId: detail.document.applies?.id ?? null };
+  if (detail.resource === 'vehicle') return { kind: 'Equipos', resourceId: detail.document.applies?.id ?? null };
+  return { kind: 'Empresa', resourceId: detail.document.applies };
+}
 
 /**
  * Detalle del documento `id`. `resourceParam` es el `?resource=` de la URL; si falta o no se
@@ -48,6 +62,8 @@ export type DocumentDetailResult = DocumentDetail & {
  * tenía la página: empleado → equipo → empresa).
  */
 export async function getDocumentDetail(id: string, resourceParam?: string): Promise<DocumentDetailResult | null> {
+  // Un id de fila faltante (`missing:...`) o cualquier id que no sea un UUID no es un documento real.
+  if (!UUID_PATTERN.test(id)) return null;
   const kind = resolveResourceKind(resourceParam);
 
   let detail: DocumentDetail | null = null;
@@ -74,7 +90,19 @@ export async function getDocumentDetail(id: string, resourceParam?: string): Pro
 
   if (!detail) return null;
 
+  // Una fila vacía legacy (sin archivo) no es un documento: para el motor el recurso tiene un faltante.
   const documentPath = detail.document.document_path ?? '';
-  const fileUrl = documentPath ? await storagePublicUrl(DOCUMENT_FILES_BUCKET, documentPath) : '';
-  return { ...detail, fileUrl };
+  if (!documentPath.trim()) return null;
+
+  // Tipo privado: solo lo ve quien tiene `view_private` en la tab de tipos de su alcance (se responde como "no existe").
+  const docType = detail.document.document_types;
+  if (docType?.private && !(await hasDocTypePermission(docType.applies, 'view_private'))) return null;
+
+  const { kind: derivedKind, resourceId } = derivedTarget(detail);
+  const [fileUrl, derived] = await Promise.all([
+    storagePublicUrl(DOCUMENT_FILES_BUCKET, documentPath),
+    resourceId ? getDocumentDerivedView(derivedKind, resourceId, id) : Promise.resolve(null),
+  ]);
+  if (!derived) return null;
+  return { ...detail, fileUrl, derived };
 }

@@ -7,16 +7,21 @@ import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from '@/components/ui/use-toast';
 import { Logger } from '@/lib/logger';
+import { useCatalogSheetBusy } from '@/shared/components/common/CatalogFormSheet';
 import DependencyValidationModal, { type DependencyConfig } from '@/shared/components/modal/DependencyValidationModal';
 import { fetchDependenciesForValue, fetchReplacementOptions } from '@/shared/components/modal/dependency-utils';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import type { EquipmentOwnerListItem } from './actions.server';
-import { createEquipmentOwnerPrisma, reassignVehiclesToOwner, updateEquipmentOwnerPrisma } from './actions.server';
+import { computeIdDelta } from '../EquipmentTypes/lib/id-delta';
+import type { EquipmentOwnerListItem } from './lib/owners-types';
+import {
+  createEquipmentOwnerPrisma,
+  reassignAndDeactivateEquipmentOwner,
+  updateEquipmentOwnerPrisma,
+} from './owners.server';
 
 // ============================================================================
 // LOGGER
@@ -39,6 +44,7 @@ const formSchema = z.object({
 });
 
 type FormData = z.infer<typeof formSchema>;
+type ContractType = FormData['contract_types'][number];
 
 // ============================================================================
 // PROPS
@@ -57,7 +63,7 @@ interface EquipmentOwnerFormProps {
 export function EquipmentOwnerForm({ initialData = null, onReset, isEditing = false }: EquipmentOwnerFormProps) {
   const [showDependencyModal, setShowDependencyModal] = useState(false);
   const queryClient = useQueryClient();
-  const router = useRouter();
+  const setBusy = useCatalogSheetBusy();
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -78,6 +84,18 @@ export function EquipmentOwnerForm({ initialData = null, onReset, isEditing = fa
     handleSubmit,
     formState: { isSubmitting },
   } = form;
+
+  // Base leída al abrir el formulario: contra ella se calcula el delta {add, remove} que se envía.
+  const initialContractTypes = useMemo(
+    () => (initialData?.equipment_owner_contract_types ?? []).map((ct) => ct.contract_type as ContractType),
+    [initialData]
+  );
+
+  /** Delta de tipos de contrato contra la base cargada al abrir. */
+  const contractTypesDelta = (selected: ContractType[]) => {
+    const delta = computeIdDelta(initialContractTypes, selected);
+    return { add: delta.add as ContractType[], remove: delta.remove as ContractType[] };
+  };
 
   // ── Dependency modal config ────────────────────────────────────────────────
   const dependencyConfigs = useMemo<DependencyConfig[]>(
@@ -108,6 +126,7 @@ export function EquipmentOwnerForm({ initialData = null, onReset, isEditing = fa
 
   // ── Submit handler ─────────────────────────────────────────────────────────
   const onSubmit = async (data: FormData) => {
+    setBusy(true);
     try {
       if (isEditing && data.id) {
         const prevActive = !!initialData?.is_active;
@@ -117,6 +136,7 @@ export function EquipmentOwnerForm({ initialData = null, onReset, isEditing = fa
         if (prevActive && !nextActive) {
           const deps = await fetchDependencies(dependencyConfigs[0], initialData!.id);
           if (deps.data.length > 0) {
+            setBusy(false);
             setShowDependencyModal(true);
             return;
           }
@@ -127,7 +147,7 @@ export function EquipmentOwnerForm({ initialData = null, onReset, isEditing = fa
           name: data.name,
           is_active: data.is_active,
           cuit: data.cuit,
-          contract_types: data.contract_types,
+          contract_types: contractTypesDelta(data.contract_types),
         });
       } else {
         await createEquipmentOwnerPrisma({
@@ -149,6 +169,7 @@ export function EquipmentOwnerForm({ initialData = null, onReset, isEditing = fa
       onReset();
     } catch (error: unknown) {
       logger.error('Error al guardar el titular', { data: { error } });
+      setBusy(false);
       toast({
         title: 'Error',
         description: 'No se pudo guardar el titular. Por favor, inténtalo de nuevo.',
@@ -171,23 +192,22 @@ export function EquipmentOwnerForm({ initialData = null, onReset, isEditing = fa
     }
 
     if (action === 'replace') {
+      setBusy(true);
       try {
-        // Reasignar vehículos al nuevo titular (o null) — PRISMA, no Supabase
+        // Reasignación + update en UNA transacción del servidor: si algo falla, los equipos no se mueven.
         const toOwnerId = replacementValue !== '__NULL__' && replacementValue ? replacementValue : null;
-        await reassignVehiclesToOwner(initialData.id, toOwnerId);
-
         const values = form.getValues();
-        await updateEquipmentOwnerPrisma({
-          id: values.id!,
+        const result = await reassignAndDeactivateEquipmentOwner(initialData.id, toOwnerId, {
+          id: initialData.id,
           name: values.name,
           is_active: values.is_active,
           cuit: values.cuit,
-          contract_types: values.contract_types,
+          contract_types: contractTypesDelta(values.contract_types),
         });
 
         toast({
           title: 'Titular actualizado correctamente',
-          description: 'El titular y sus equipos han sido actualizados exitosamente.',
+          description: `Se reasignaron ${result.reassigned} ${result.reassigned === 1 ? 'equipo' : 'equipos'} y se actualizó el titular.`,
           variant: 'default',
         });
 
@@ -195,9 +215,10 @@ export function EquipmentOwnerForm({ initialData = null, onReset, isEditing = fa
         onReset();
       } catch (err: unknown) {
         logger.error('Error al reasignar equipos y actualizar titular', { data: { err } });
+        setBusy(false);
         toast({
           title: 'Error',
-          description: 'No se pudieron reasignar los equipos.',
+          description: err instanceof Error ? err.message : 'No se pudieron reasignar los equipos.',
           variant: 'destructive',
         });
       }
@@ -206,11 +227,9 @@ export function EquipmentOwnerForm({ initialData = null, onReset, isEditing = fa
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="flex space-y-8 max-w-[400px]">
+    <div className="w-full">
       <Form {...form}>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          <h2 className="text-xl font-bold mb-4">{isEditing ? 'Editar' : 'Crear'} Titular</h2>
-
           {/* Nombre */}
           <FormField
             control={form.control}
@@ -219,7 +238,7 @@ export function EquipmentOwnerForm({ initialData = null, onReset, isEditing = fa
               <FormItem>
                 <FormLabel>Nombre</FormLabel>
                 <FormControl>
-                  <Input placeholder="Ingrese el nombre del titular" {...field} className="w-[400px]" />
+                  <Input placeholder="Ingrese el nombre del titular" {...field} className="w-full" />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -234,7 +253,7 @@ export function EquipmentOwnerForm({ initialData = null, onReset, isEditing = fa
               <FormItem>
                 <FormLabel>CUIT</FormLabel>
                 <FormControl>
-                  <Input placeholder="Ingrese el CUIT" {...field} className="w-[400px]" />
+                  <Input placeholder="Ingrese el CUIT" {...field} className="w-full" />
                 </FormControl>
                 <FormMessage />
               </FormItem>

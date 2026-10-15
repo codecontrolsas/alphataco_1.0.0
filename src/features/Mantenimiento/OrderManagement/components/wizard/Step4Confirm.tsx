@@ -8,7 +8,6 @@ import { RepairGroupBadge } from '@/features/Mantenimiento/shared/components/Rep
 import { RepairItemPhotos } from '@/features/Mantenimiento/shared/components/RepairItemPhotos';
 import { getRepairItemGroupName, getRepairItemImages } from '@/features/Mantenimiento/shared/repair-item-label';
 import { ClipboardList, Info } from 'lucide-react';
-import moment from 'moment';
 import { useMemo } from 'react';
 import type { WorkshopSector } from '../../actions/queries.server';
 import type { LocalItem } from '../ManageOrderWizard';
@@ -84,7 +83,8 @@ export function Step4Confirm({
   }, [regularItems, sectorAssignments, sectorOrder, repairTypes]);
 
   const totalOTs = sectorPreviews.length;
-  const dateError = moment(plannedEndDate).isBefore(moment(plannedStartDate));
+  // Fechas `YYYY-MM-DD`: la comparación de texto es la cronológica y no depende de la zona horaria.
+  const dateError = plannedEndDate < plannedStartDate;
 
   return (
     <div className="space-y-5">

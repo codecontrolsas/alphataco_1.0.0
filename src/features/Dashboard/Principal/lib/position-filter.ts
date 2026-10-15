@@ -1,7 +1,7 @@
 /**
  * Saneo del filtro de puestos del tablero.
  *
- * Los `positionIds` llegan del cliente (cookie `position-filter`, partida por comas) y
+ * Los `positionIds` llegan del cliente (`?puestos=` de la URL, partida por comas) y
  * terminan bindeados dentro de una consulta SQL cruda, así que se validan antes de usarse.
  * Lógica pura, con test: el comportamiento que importa acá es que el filtro falle CERRADO.
  */

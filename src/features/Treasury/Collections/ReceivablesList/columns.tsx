@@ -3,32 +3,30 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
+import { StackedCell } from '@/shared/components/common/StackedCell';
 import type { ColumnDef } from '@tanstack/react-table';
-import { AlertCircle, Clock, Eye, FilePen, HandCoins, type LucideIcon } from 'lucide-react';
-import moment from 'moment';
+import { Eye, HandCoins, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
+import { formatDay } from '../../lib/dates';
 import { formatInCurrency } from '../../lib/currency-format';
-import { RECEIVABLE_STATE_LABELS, type ReceivableState } from '../../lib/receipt-rules';
+import type { ReceivableState } from '../../lib/receipt-rules';
+import { RECEIVABLE_STATE_UI, TONE_TO_BADGE } from '../../lib/status-presentation';
 import type { ReceivableListItem } from './actions.server';
 import { NO_DUE_DATE_LABEL } from './constants';
 
 export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = [];
 
-export const receivableStateIcons: Record<ReceivableState, LucideIcon> = {
-  OVERDUE: AlertCircle,
-  DUE: Clock,
-  IN_DRAFT: FilePen,
-};
+export const receivableStateIcons = Object.fromEntries(
+  Object.entries(RECEIVABLE_STATE_UI).map(([state, ui]) => [state, ui.icon])
+) as Record<ReceivableState, LucideIcon>;
 
-const stateBadgeClass: Record<ReceivableState, string> = {
-  OVERDUE: 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300',
-  DUE: '',
-  IN_DRAFT: 'bg-secondary text-secondary-foreground',
-};
+/** Destino de "Ver": el cheque rechazado o la factura de Comercial. */
+function detailHref(item: ReceivableListItem): string {
+  return item.kind === 'CHECK' ? `/dashboard/treasury/checks/${item.id}` : `/dashboard/comercial/facturacion/${item.id}`;
+}
 
 /** Fecha valor (YYYY-MM-DD, sin hora): se formatea tal cual para no correr un dia. */
-export const formatValueDate = (value: string | null | undefined) =>
-  value ? moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY') : '';
+export const formatValueDate = formatDay;
 
 interface ColumnsOptions {
   canCollect: boolean;
@@ -41,7 +39,7 @@ export function getColumns({ canCollect }: ColumnsOptions): ColumnDef<Receivable
       accessorFn: (row) => row.customer.name,
       meta: { title: 'Cliente' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Cliente" />,
-      cell: ({ row }) => <span className="font-medium">{row.original.customer.name}</span>,
+      cell: ({ row }) => <StackedCell primary={row.original.customer.name} secondary={row.original.customer.cuit} />,
       filterFn: (row, _id, value: string[]) => value.includes(row.original.customer.id),
     },
     {
@@ -49,7 +47,11 @@ export function getColumns({ canCollect }: ColumnsOptions): ColumnDef<Receivable
       accessorFn: (row) => row.voucherLabel,
       meta: { title: 'Comprobante' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Comprobante" />,
-      cell: ({ row }) => <span className="whitespace-nowrap font-mono text-sm">{row.original.voucherLabel}</span>,
+      cell: ({ row }) => (
+        <Link href={detailHref(row.original)} className="text-brand-ink whitespace-nowrap font-mono text-sm hover:underline">
+          {row.original.voucherLabel}
+        </Link>
+      ),
     },
     {
       id: 'issue_date',
@@ -101,22 +103,23 @@ export function getColumns({ canCollect }: ColumnsOptions): ColumnDef<Receivable
       header: ({ column }) => <DataTableColumnHeader column={column} title="Días de atraso" />,
       cell: ({ row }) =>
         row.original.overdueDays > 0 ? (
-          <span className="tabular-nums text-red-600">{row.original.overdueDays}</span>
+          <span className="tabular-nums text-destructive">{row.original.overdueDays}</span>
         ) : (
           <span className="text-muted-foreground">0</span>
         ),
     },
     {
       id: 'state',
-      accessorFn: (row) => RECEIVABLE_STATE_LABELS[row.state],
+      accessorFn: (row) => RECEIVABLE_STATE_UI[row.state].label,
       meta: { title: 'Estado' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
       cell: ({ row }) => {
-        const Icon = receivableStateIcons[row.original.state];
+        const ui = RECEIVABLE_STATE_UI[row.original.state];
+        const Icon = ui.icon;
         return (
-          <Badge variant="outline" className={`gap-1 whitespace-nowrap ${stateBadgeClass[row.original.state]}`}>
-            <Icon className="h-3 w-3" />
-            {RECEIVABLE_STATE_LABELS[row.original.state]}
+          <Badge variant={TONE_TO_BADGE[ui.tone]} className="gap-1 whitespace-nowrap">
+            <Icon className="h-3 w-3" aria-hidden="true" />
+            {ui.label}
           </Badge>
         );
       },
@@ -138,20 +141,14 @@ export function getColumns({ canCollect }: ColumnsOptions): ColumnDef<Receivable
                   row.original.kind === 'CHECK' ? 'checkId' : 'invoiceId'
                 }=${row.original.id}`}
               >
-                <HandCoins className="h-3.5 w-3.5" />
+                <HandCoins className="h-3.5 w-3.5" aria-hidden="true" />
                 Cobrar
               </Link>
             </Button>
           )}
           <Button asChild type="button" variant="ghost" size="sm" className="h-8 gap-1">
-            <Link
-              href={
-                row.original.kind === 'CHECK'
-                  ? `/dashboard/treasury/checks/${row.original.id}`
-                  : `/dashboard/comercial/facturacion/${row.original.id}`
-              }
-            >
-              <Eye className="h-3.5 w-3.5" />
+            <Link href={detailHref(row.original)} aria-label={`Ver ${row.original.voucherLabel}`}>
+              <Eye className="h-3.5 w-3.5" aria-hidden="true" />
               Ver
             </Link>
           </Button>

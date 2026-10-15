@@ -6,9 +6,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getCostCenterOptions } from '@/features/Empresa/General/actions/cost-centers.server';
-import { fetchAllContractorForVehicles } from '@/features/Equipos/EquipoID/actions/vehicle-actions';
+import { fetchAllContractorForVehicles } from '@/features/Equipos/EquipoID/actions/customer-catalog-actions';
 import { use } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
+import { diffContractors } from '../schemas/other-equipment-form';
 import type { OtherEquipmentFormData } from './OtherEquipmentForm';
 
 interface OtherEquipmentAssignmentFormProps {
@@ -17,6 +18,8 @@ interface OtherEquipmentAssignmentFormProps {
   costCentersPromise: ReturnType<typeof getCostCenterOptions>;
   contractorsPromise: ReturnType<typeof fetchAllContractorForVehicles>;
   hierarchicalPositionsPromise: Promise<Array<{ id: string; name: string }>>;
+  /** Clientes afectados tal como los devolvió el servidor al cargar la ficha (vacío en el alta). */
+  baselineContractorIds: string[];
 }
 
 export function OtherEquipmentAssignmentForm({
@@ -25,11 +28,21 @@ export function OtherEquipmentAssignmentForm({
   contractorsPromise,
   costCentersPromise,
   hierarchicalPositionsPromise,
+  baselineContractorIds,
 }: OtherEquipmentAssignmentFormProps) {
   const costCenters = use(costCentersPromise);
   const contractorCompanies = use(contractorsPromise);
   const hierarchicalPositions = use(hierarchicalPositionsPromise);
   const contractors = form.watch('contractors') || [];
+
+  // Delta que se enviará al guardar: se muestra ANTES de confirmar, con las bajas en rojo
+  const changes = diffContractors(
+    baselineContractorIds,
+    contractors,
+    contractorCompanies.map((contractor) => contractor.id)
+  );
+  const nameOf = (contractorId: string) =>
+    contractorCompanies.find((contractor) => contractor.id === contractorId)?.name ?? contractorId;
 
   const handleContractorChange = (contractorId: string, checked: boolean) => {
     const current = form.getValues('contractors') || [];
@@ -178,6 +191,26 @@ export function OtherEquipmentAssignmentForm({
                     </div>
                   )}
                 </div>
+                {!readOnly && (
+                  <div role="status" className="space-y-1 text-sm">
+                    <p className="text-muted-foreground">
+                      <span className="tabular-nums">{baselineContractorIds.length}</span> afectado(s) actualmente.
+                      {changes.add.length === 0 && changes.remove.length === 0 && ' Sin cambios.'}
+                    </p>
+                    {changes.add.length > 0 && (
+                      <p>
+                        Se agregan <span className="tabular-nums">{changes.add.length}</span>:{' '}
+                        {changes.add.map(nameOf).join(', ')}
+                      </p>
+                    )}
+                    {changes.remove.length > 0 && (
+                      <p className="text-destructive">
+                        Se quitan <span className="tabular-nums">{changes.remove.length}</span>:{' '}
+                        {changes.remove.map(nameOf).join(', ')}
+                      </p>
+                    )}
+                  </div>
+                )}
                 <FormDescription>Selecciona los contratistas a los que se asignará este equipo</FormDescription>
                 <FormMessage />
               </FormItem>

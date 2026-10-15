@@ -14,14 +14,15 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import { saveFiscalProfile, type FiscalDataOverview } from '../actions/fiscal-data.server';
+import { saveFiscalProfile } from '../actions/fiscal-data.server';
+import type { FiscalDataOverview } from '../lib/fiscal-data-overview.server';
 import {
-  fiscalProfileSchema,
-  GROSS_INCOME_REGIME_LABELS,
   GROSS_INCOME_REGIMES,
+  GROSS_INCOME_REGIME_LABELS,
+  TAX_CONDITIONS,
   TAX_CONDITION_LABELS,
   TAX_CONDITION_LETTERS,
-  TAX_CONDITIONS,
+  fiscalProfileSchema,
   type FiscalProfileValues,
 } from '../schemas/fiscal-data';
 import { FiscalSection } from './FiscalSection';
@@ -78,7 +79,10 @@ export function IssuerFiscalForm({ company, profile, provinces, canUpdate }: Pro
     >
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6">
-          <fieldset disabled={!canUpdate || form.formState.isSubmitting} className="grid min-w-0 grid-cols-1 gap-6 md:grid-cols-2">
+          <fieldset
+            disabled={!canUpdate || form.formState.isSubmitting}
+            className="grid min-w-0 grid-cols-1 gap-6 md:grid-cols-2"
+          >
             {/* Razón social y CUIT: se editan en Empresa, acá solo se muestran. */}
             <div className="flex min-w-0 flex-col gap-1">
               <span className="text-sm font-medium">Razón social</span>
@@ -126,7 +130,9 @@ export function IssuerFiscalForm({ company, profile, provinces, canUpdate }: Pro
                     </RadioGroup>
                   </FormControl>
                   <FormDescription>
-                    {taxCondition ? TAX_CONDITION_LETTERS[taxCondition] : 'Define qué tipo de factura emitís (A, B o C).'}
+                    {taxCondition
+                      ? TAX_CONDITION_LETTERS[taxCondition]
+                      : 'Define qué tipo de factura emitís (A, B o C).'}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

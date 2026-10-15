@@ -26,7 +26,6 @@ export async function TicketsTabContent({ searchParams }: Props) {
     <HelpCenter
       initialTickets={initialTickets}
       initialTicket={initialTicket}
-      initialTicketId={ticketId}
       currentUserEmail={reporter?.email ?? ''}
       currentUserName={reporter?.name ?? reporter?.email ?? 'Usuario'}
     />

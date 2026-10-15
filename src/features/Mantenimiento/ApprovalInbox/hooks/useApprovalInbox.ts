@@ -4,8 +4,10 @@ import { useQuery } from '@tanstack/react-query';
 import {
   getOrdersPendingValidation,
   getPendingApprovalTasks,
+  getReturnedOrders,
   getReturnedTasks,
   type PendingTasksData,
+  type ReturnedOrdersData,
   type ReturnedTasksData,
   type ValidationOrdersData,
 } from '../actions/actionsServer';
@@ -32,6 +34,15 @@ export function useReturnedTasks(initialData?: ReturnedTasksData) {
   return useQuery({
     queryKey: [...APPROVAL_INBOX_QUERY_KEY, 'returned'],
     queryFn: () => getReturnedTasks(),
+    initialData,
+  });
+}
+
+/** Órdenes devueltas al taller (D-1). Solo lectura: no suma al contador del paso. */
+export function useReturnedOrders(initialData?: ReturnedOrdersData) {
+  return useQuery({
+    queryKey: [...APPROVAL_INBOX_QUERY_KEY, 'returned-orders'],
+    queryFn: () => getReturnedOrders(),
     initialData,
   });
 }

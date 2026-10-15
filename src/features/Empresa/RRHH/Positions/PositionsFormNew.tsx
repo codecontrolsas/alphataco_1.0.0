@@ -3,10 +3,17 @@
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Logger } from '@/lib/logger';
+import { useCatalogSheetBusy } from '@/shared/components/common/CatalogFormSheet';
 import DependencyValidationModal, { type DependencyConfig } from '@/shared/components/modal/DependencyValidationModal';
-import { fetchDependenciesForValue, fetchReplacementOptions } from '@/shared/components/modal/dependency-utils';
+import {
+  fetchDependenciesForValue,
+  fetchReplacementOptions,
+  reassignDependencies,
+} from '@/shared/components/modal/dependency-utils';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
@@ -17,9 +24,12 @@ import {
   createPositionPrisma,
   getAllAptitudesForForm,
   getAllHierarchiesForForm,
+  getPositionAptitudeIds,
   updatePositionPrisma,
   type PositionListItem,
 } from './actions.server';
+
+const logger = new Logger('PositionsFormNew');
 
 // ============================================================================
 // SCHEMA
@@ -29,7 +39,6 @@ const PositionSchema = z.object({
   name: z.string().min(1, { message: 'El nombre es requerido' }),
   is_active: z.boolean(),
   hierarchical_position_id: z.array(z.string()).optional(),
-  aptitudes_tecnicas_id: z.array(z.string()).optional(),
 });
 
 type PositionFormValues = z.infer<typeof PositionSchema>;
@@ -49,6 +58,7 @@ interface PositionsFormNewProps {
 
 export default function PositionsFormNew({ selectedPosition, onDone }: PositionsFormNewProps) {
   const queryClient = useQueryClient();
+  const setBusy = useCatalogSheetBusy();
   const isEditing = selectedPosition !== null;
   const [showDependencyModal, setShowDependencyModal] = useState(false);
 
@@ -65,6 +75,28 @@ export default function PositionsFormNew({ selectedPosition, onDone }: Positions
     staleTime: 5 * 60 * 1000,
   });
 
+  // ── Aptitudes (M:M): baseline leído del servidor al abrir el form ───────────
+  // La selección es `null` hasta que el usuario toca el combo; mientras tanto se muestra el baseline.
+  const [aptitudeSelection, setAptitudeSelection] = useState<string[] | null>(null);
+  const baselineQuery = useQuery({
+    queryKey: ['position-aptitude-ids', selectedPosition?.id],
+    queryFn: () => getPositionAptitudeIds(selectedPosition!.id),
+    enabled: isEditing,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+  });
+  const baseline = useMemo(() => (isEditing ? baselineQuery.data ?? null : []), [isEditing, baselineQuery.data]);
+  const baselineReady = baseline !== null;
+  const selectedAptitudes = aptitudeSelection ?? baseline ?? [];
+  const aptitudeDelta = useMemo(() => {
+    const base = baseline ?? [];
+    return {
+      add: selectedAptitudes.filter((id) => !base.includes(id)),
+      remove: base.filter((id) => !selectedAptitudes.includes(id)),
+    };
+  }, [baseline, selectedAptitudes]);
+
   // ── Formulario ────────────────────────────────────────────────────────────
   const form = useForm<PositionFormValues>({
     resolver: zodResolver(PositionSchema),
@@ -72,7 +104,6 @@ export default function PositionsFormNew({ selectedPosition, onDone }: Positions
       name: '',
       is_active: true,
       hierarchical_position_id: [],
-      aptitudes_tecnicas_id: [],
     },
   });
 
@@ -83,16 +114,15 @@ export default function PositionsFormNew({ selectedPosition, onDone }: Positions
         name: selectedPosition.name ?? '',
         is_active: selectedPosition.is_active ?? true,
         hierarchical_position_id: selectedPosition.hierarchical_position_id ?? [],
-        aptitudes_tecnicas_id: selectedPosition.aptitudes_tecnicas_puestos.map((rel) => rel.aptitudes_tecnicas.id),
       });
     } else {
       form.reset({
         name: '',
         is_active: true,
         hierarchical_position_id: [],
-        aptitudes_tecnicas_id: [],
       });
     }
+    setAptitudeSelection(null);
   }, [selectedPosition]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Dependency modal config ───────────────────────────────────────────────
@@ -123,14 +153,31 @@ export default function PositionsFormNew({ selectedPosition, onDone }: Positions
   };
 
   // ── Submit ────────────────────────────────────────────────────────────────
+  const persistUpdate = async (values: PositionFormValues) => {
+    if (!selectedPosition) return;
+    const result = await updatePositionPrisma({
+      id: selectedPosition.id,
+      name: values.name,
+      is_active: values.is_active,
+      hierarchical_position_id: values.hierarchical_position_id ?? [],
+      aptitudes: aptitudeDelta,
+    });
+    toast.success(`Posición actualizada. Aptitudes: ${result.added} agregadas, ${result.removed} quitadas.`);
+    await queryClient.invalidateQueries({ queryKey: ['positions'] });
+    form.reset();
+    onDone();
+  };
+
   const handleSubmit = async (values: PositionFormValues) => {
+    if (isEditing && !baselineReady) return;
+    setBusy(true);
     try {
       if (!isEditing) {
         await createPositionPrisma({
           name: values.name,
           is_active: values.is_active,
           hierarchical_position_id: values.hierarchical_position_id ?? [],
-          aptitudes_tecnicas_id: values.aptitudes_tecnicas_id ?? [],
+          aptitudes_tecnicas_id: selectedAptitudes,
         });
         toast.success('Posición creada con éxito');
       } else {
@@ -141,19 +188,14 @@ export default function PositionsFormNew({ selectedPosition, onDone }: Positions
         if (prevActive && !nextActive) {
           const data = await fetchDependencies(dependencyConfigs[0], selectedPosition.id);
           if (data.data.length > 0) {
+            setBusy(false);
             setShowDependencyModal(true);
             return; // El modal decidirá
           }
         }
 
-        await updatePositionPrisma({
-          id: selectedPosition.id,
-          name: values.name,
-          is_active: values.is_active,
-          hierarchical_position_id: values.hierarchical_position_id ?? [],
-          aptitudes_tecnicas_id: values.aptitudes_tecnicas_id ?? [],
-        });
-        toast.success('Posición actualizada con éxito');
+        await persistUpdate(values);
+        return;
       }
 
       // Invalidar queries para refrescar la tabla
@@ -162,20 +204,40 @@ export default function PositionsFormNew({ selectedPosition, onDone }: Positions
       form.reset();
       onDone();
     } catch (error) {
+      logger.error('Error al guardar la posición', { data: { error } });
+      setBusy(false);
       toast.error('Error al guardar la posición');
     }
   };
 
   // ── Dependency modal handler ──────────────────────────────────────────────
-  const handleDependencyConfirm = async (action: 'force' | 'replace') => {
-    setShowDependencyModal(false);
+  const handleDependencyConfirm = (action: 'force' | 'replace', replacementValue?: string): void => {
+    void handleDependencyConfirmAsync(action, replacementValue);
+  };
 
+  const handleDependencyConfirmAsync = async (action: 'force' | 'replace', replacementValue?: string) => {
+    setShowDependencyModal(false);
     if (!selectedPosition?.id) return;
 
-    // En ambos casos (force o replace) el modal ya procesó el reemplazo,
-    // ahora ejecutamos el update de la posición
-    const values = form.getValues();
-    await handleSubmit(values);
+    setBusy(true);
+    try {
+      // 'replace': reasigna los empleados al puesto elegido (o los deja sin puesto) y recién después desactiva.
+      // 'force': desactiva sin reasignar.
+      if (action === 'replace') {
+        await reassignDependencies({
+          targetTable: 'employees',
+          targetColumn: dependencyConfigs[0].targetColumn,
+          sourceTable: 'company_positions',
+          fromValue: selectedPosition.id,
+          toValue: replacementValue && replacementValue !== '__NULL__' ? replacementValue : null,
+        });
+      }
+      await persistUpdate(form.getValues());
+    } catch (error) {
+      logger.error('Error al desactivar la posición', { data: { error, action } });
+      setBusy(false);
+      toast.error(action === 'replace' ? 'No se pudieron reemplazar las referencias' : 'Error al guardar la posición');
+    }
   };
 
   const handleCancel = () => {
@@ -191,9 +253,7 @@ export default function PositionsFormNew({ selectedPosition, onDone }: Positions
   return (
     <>
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6 w-[300px]">
-          <h2 className="text-xl font-bold mb-4">{isEditing ? 'Editar Posición' : 'Crear Posición'}</h2>
-
+        <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
           <FormField
             control={form.control}
             name="name"
@@ -228,25 +288,31 @@ export default function PositionsFormNew({ selectedPosition, onDone }: Positions
             )}
           />
 
-          <FormField
-            control={form.control}
-            name="aptitudes_tecnicas_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Aptitudes Técnicas</FormLabel>
-                <FormControl>
-                  <MultiSelectCombobox
-                    options={aptitudeOptions}
-                    emptyMessage="No hay aptitudes disponibles"
-                    selectedValues={field.value ?? []}
-                    onChange={field.onChange}
-                    placeholder="Seleccione Aptitudes"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+          <div className="space-y-2">
+            <Label>Aptitudes Técnicas</Label>
+            <MultiSelectCombobox
+              options={aptitudeOptions}
+              emptyMessage="No hay aptitudes disponibles"
+              selectedValues={selectedAptitudes}
+              onChange={setAptitudeSelection}
+              placeholder={baselineReady ? 'Seleccione Aptitudes' : 'Cargando aptitudes del puesto...'}
+              disabled={!baselineReady}
+            />
+            {baselineQuery.isError && (
+              <p role="alert" className="text-sm text-danger">
+                No se pudieron cargar las aptitudes actuales del puesto; no se puede guardar.
+              </p>
             )}
-          />
+            {isEditing && baselineReady && (
+              <p role="status" className="text-sm text-muted-foreground tabular-nums">
+                {baseline?.length ?? 0} {(baseline?.length ?? 0) === 1 ? 'aptitud actual' : 'aptitudes actuales'}. Se
+                agregan {aptitudeDelta.add.length}.{' '}
+                <span className={aptitudeDelta.remove.length > 0 ? 'text-danger' : undefined}>
+                  Se quitan {aptitudeDelta.remove.length}.
+                </span>
+              </p>
+            )}
+          </div>
 
           <FormField
             control={form.control}
@@ -280,11 +346,15 @@ export default function PositionsFormNew({ selectedPosition, onDone }: Positions
           />
 
           <div className="flex gap-2 mt-6">
-            <Button variant="brand" type="submit" disabled={form.formState.isSubmitting}>
+            <Button
+              variant="brand"
+              type="submit"
+              disabled={form.formState.isSubmitting || (isEditing && !baselineReady)}
+            >
               {form.formState.isSubmitting ? 'Guardando...' : isEditing ? 'Actualizar' : 'Crear'}
             </Button>
             <Button type="button" onClick={handleCancel} variant="outline">
-              {isEditing ? 'Cancelar' : 'Limpiar'}
+              Cancelar
             </Button>
           </div>
         </form>

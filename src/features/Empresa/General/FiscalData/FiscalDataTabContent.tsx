@@ -2,12 +2,12 @@ import { Separator } from '@/components/ui/separator';
 import { checkPermissionServer } from '@/features/Permissions';
 import { getProvinces } from '@/shared/actions/countries.server';
 import { Info, MonitorPlay } from 'lucide-react';
-import { getFiscalDataOverview } from './actions/fiscal-data.server';
 import { ArcaCertificateSection } from './components/ArcaCertificateSection';
 import { FiscalEnvironmentSection } from './components/FiscalEnvironmentSection';
 import { FiscalReadinessSummary } from './components/FiscalReadinessSummary';
 import { IssuerFiscalForm } from './components/IssuerFiscalForm';
 import { SalesPointsSection } from './components/SalesPointsSection';
+import { getFiscalDataOverview } from './lib/fiscal-data-overview.server';
 import { ARCA_ENVIRONMENTS } from './schemas/fiscal-data';
 
 type ArcaEnvironment = (typeof ARCA_ENVIRONMENTS)[number];

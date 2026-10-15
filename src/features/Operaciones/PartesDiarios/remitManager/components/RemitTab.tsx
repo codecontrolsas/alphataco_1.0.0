@@ -40,29 +40,30 @@ export function RemitTab({ remito, dailyReportRowId, customerName }: RemitTabPro
 
   return (
     <div className="space-y-5">
-      <Card className="border shadow-sm">
-        <CardHeader className="pb-4 bg-muted/30 border-b">
+      <Card>
+        <CardHeader className="border-b pb-4">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <Package className="h-5 w-5 text-primary" />
+              <div className="bg-muted text-muted-foreground rounded-lg p-2">
+                <Package className="size-5" aria-hidden="true" />
               </div>
               <div>
-                <CardTitle className="text-lg flex items-center gap-2">Remito: {remito.remit_number}</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  Remito <span className="font-mono tabular-nums">{remito.remit_number}</span>
+                </CardTitle>
                 <div className="flex items-center gap-2 mt-1">
-                  <Badge variant={hasDocuments ? 'default' : 'outline'} className="text-xs">
-                    <FileText className="h-3 w-3 mr-1" />
+                  <Badge variant={hasDocuments ? 'default' : 'outline'}>
+                    <FileText aria-hidden="true" />
                     {remito.remito_documents.length} {remito.remito_documents.length === 1 ? 'documento' : 'documentos'}
                   </Badge>
                   {!hasDocuments && (
-                    <Badge variant="destructive" className="text-xs">
-                      Sin documentos
-                    </Badge>
+                    <Badge variant="warning">Sin documentos</Badge>
                   )}
                 </div>
               </div>
             </div>
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               onClick={() => setShowDeleteDialog(true)}
@@ -76,37 +77,30 @@ export function RemitTab({ remito, dailyReportRowId, customerName }: RemitTabPro
         </CardHeader>
         <CardContent className="space-y-4 pt-5">
           {!showUpload && !hasDocuments && (
-            <Alert
-              variant="default"
-              className="bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900 flex items-center"
-            >
-              <div className="flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-amber-600 p-0" />
-                <AlertDescription className="text-sm text-amber-800 dark:text-amber-200">
-                  <span className="font-medium">Atención:</span> Este remito no tiene documentos asociados
-                </AlertDescription>
-              </div>
+            <Alert variant="warning">
+              <AlertCircle />
+              <AlertDescription>Este remito todavía no tiene documentos. Subí el remito escaneado o una foto.</AlertDescription>
             </Alert>
           )}
 
           {!showUpload ? (
             <Button
+              type="button"
               onClick={() => setShowUpload(true)}
               variant="outline"
-              size="default"
-              className="w-full border-2 border-dashed hover:border-primary hover:bg-primary/5 transition-colors"
+              className="hover:border-brand w-full border-2 border-dashed transition-colors"
             >
-              <Upload className="h-4 w-4 mr-2" />
-              Subir Nuevo Documento
+              <Upload className="mr-2 size-4" />
+              Subir documento
             </Button>
           ) : (
             <div className="space-y-3">
               <div className="flex items-center justify-between pb-2 border-b">
                 <div className="flex items-center gap-2">
-                  <Upload className="h-4 w-4 text-primary" />
+                  <Upload className="text-muted-foreground size-4" aria-hidden="true" />
                   <span className="text-sm font-semibold">Subir nuevo documento</span>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => setShowUpload(false)}>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setShowUpload(false)}>
                   Cancelar
                 </Button>
               </div>
@@ -150,8 +144,9 @@ export function RemitTab({ remito, dailyReportRowId, customerName }: RemitTabPro
                 </>
               ) : (
                 <>
-                  ¿Está seguro que desea eliminar el remito <strong>{remito.remit_number}</strong> y todos sus
-                  documentos asociados? Esta acción no se puede deshacer.
+                  Se elimina el remito <strong>{remito.remit_number}</strong> con todos sus documentos. Esta acción no
+                  se puede deshacer. Si el remito está vinculado a otras líneas, esas copias y sus archivos se
+                  conservan.
                 </>
               )}
             </AlertDialogDescription>
@@ -161,7 +156,7 @@ export function RemitTab({ remito, dailyReportRowId, customerName }: RemitTabPro
             <AlertDialogAction
               onClick={handleDelete}
               disabled={mutation.isPending}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive hover:bg-destructive/90 text-white"
             >
               {mutation.isPending
                 ? isLinked

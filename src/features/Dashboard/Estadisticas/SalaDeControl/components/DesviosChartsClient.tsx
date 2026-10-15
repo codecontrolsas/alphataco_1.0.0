@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { ChartSummary } from '@/features/Dashboard/shared/charts/ChartSummary';
+import { argentinaDate, formatDateAr } from '@/shared/lib/argentina-time';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import moment from 'moment';
 import 'moment/locale/es';
@@ -74,7 +76,9 @@ export function DesviosChartsClient({ data }: Props) {
    * Ordena lexicograficamente igual que cronologicamente, asi que sirve tambien
    * para comparar contra los limites.
    */
-  const [selectedMonthKey, setSelectedMonthKey] = React.useState(() => moment().format(MONTH_KEY_FORMAT));
+  const [selectedMonthKey, setSelectedMonthKey] = React.useState(() =>
+    moment(argentinaDate()).format(MONTH_KEY_FORMAT)
+  );
   const [granularity, setGranularity] = React.useState<DeviationGranularity>('daily');
   const [selectedCustomerIds, setSelectedCustomerIds] = React.useState<string[]>([]);
   const [visibleSeries, setVisibleSeries] = React.useState<DeviationSeriesKey[]>(DEFAULT_VISIBLE_SERIES);
@@ -85,7 +89,7 @@ export function DesviosChartsClient({ data }: Props) {
     [data.customers]
   );
 
-  const currentMonthKey = moment().format(MONTH_KEY_FORMAT);
+  const currentMonthKey = moment(argentinaDate()).format(MONTH_KEY_FORMAT);
   const earliestMonthKey = data.days.length > 0 ? data.days[0].date.slice(0, 7) : currentMonthKey;
   const canGoBack = selectedMonthKey > earliestMonthKey;
   const canGoForward = selectedMonthKey < currentMonthKey;
@@ -191,8 +195,8 @@ export function DesviosChartsClient({ data }: Props) {
     <section data-deviation-series className="grid grid-cols-1 gap-3 mb-4">
       <SeriesColorVars />
 
-      <Card className="gap-0 py-0">
-        <div className="flex flex-col gap-1 px-6 pt-4 pb-3 sm:py-4">
+      <Card className="@container gap-0 py-0">
+        <div className="flex flex-col gap-1 px-6 pt-4 pb-3 @xl:py-4">
           <h3 className="text-base font-semibold leading-none">Desvíos del parte diario</h3>
           <p className="text-sm text-muted-foreground">{periodLabel} — la meta es 0 desvíos</p>
 
@@ -232,6 +236,7 @@ export function DesviosChartsClient({ data }: Props) {
               }}
               variant="outline"
               size="sm"
+              className="max-w-full overflow-x-auto"
               aria-label="Agrupar por"
             >
               {GRANULARITY_OPTIONS.map((option) => (
@@ -241,7 +246,7 @@ export function DesviosChartsClient({ data }: Props) {
               ))}
             </ToggleGroup>
 
-            <div className="w-full sm:w-56">
+            <div className="w-full @xl:w-56">
               <MultiSelectCombobox
                 options={customerOptions}
                 placeholder="Todos los clientes"
@@ -263,7 +268,7 @@ export function DesviosChartsClient({ data }: Props) {
         <div
           role="group"
           aria-label="Indicadores: mostrar u ocultar series del gráfico"
-          className="grid grid-cols-2 gap-px border-y bg-border md:grid-cols-3 xl:grid-cols-5"
+          className="grid grid-cols-2 gap-px border-y bg-border @2xl:grid-cols-3 @5xl:grid-cols-5"
         >
           {DEVIATION_SERIES.map((serie) => {
             const isActive = visibleSeries.includes(serie.key);
@@ -280,7 +285,7 @@ export function DesviosChartsClient({ data }: Props) {
                 onClick={() => toggleSeries(serie.key)}
                 className="group flex cursor-pointer flex-col justify-center gap-1 bg-card px-4 py-3 text-left
                            transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2
-                           focus-visible:ring-ring focus-visible:ring-inset sm:px-5 sm:py-4"
+                           focus-visible:ring-ring focus-visible:ring-inset @xl:px-5 @xl:py-4"
               >
                 <span className="flex items-center gap-1.5 text-xs leading-tight text-muted-foreground group-data-[active=false]:opacity-55">
                   <span
@@ -290,7 +295,7 @@ export function DesviosChartsClient({ data }: Props) {
                   />
                   <span className="truncate">{serie.label}</span>
                 </span>
-                <span className="text-lg font-bold leading-none tabular-nums tracking-tight sm:text-2xl group-data-[active=false]:opacity-55">
+                <span className="text-lg font-bold leading-none tabular-nums tracking-tight @xl:text-2xl group-data-[active=false]:opacity-55">
                   {periodTotals[serie.key] ?? <span className="text-muted-foreground">—</span>}
                 </span>
               </button>
@@ -298,21 +303,38 @@ export function DesviosChartsClient({ data }: Props) {
           })}
         </div>
 
-        <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
+        <CardContent className="px-2 pt-4 @xl:px-6 @xl:pt-6">
           {!hasDays ? (
             <div className="flex h-[300px] flex-col items-center justify-center gap-1 text-center">
               <p className="text-sm font-medium">Sin datos para este período</p>
-              <p className="max-w-md text-xs text-muted-foreground">
-                No hay partes diarios cerrados en {periodLabel.toLowerCase()}. El registro de desvíos comienza el{' '}
-                {moment(data.days[0]?.date ?? undefined).format('DD/MM/YYYY')}.
+              <p role="status" className="max-w-md text-xs text-muted-foreground">
+                {data.days.length === 0
+                  ? 'Todavía no hay registros de desvíos del parte diario.'
+                  : `No hay partes diarios cerrados en ${periodLabel.toLowerCase()}. El registro de desvíos comienza el ${formatDateAr(data.days[0].date)}.`}
               </p>
             </div>
           ) : (
             <>
               <DesviosTimeSeriesChart chartData={chartData} visibleSeries={visibleSeries} />
 
+              <ChartSummary
+                className="mt-3"
+                title="Desvíos del parte diario"
+                summary={`${periodLabel}: ${DEVIATION_SERIES.filter((serie) => visibleSeries.includes(serie.key))
+                  .map((serie) => `${serie.label} ${periodTotals[serie.key] ?? 'sin medición'}`)
+                  .join(', ')}. La meta es 0 desvíos.`}
+                columns={[
+                  { key: 'label', header: 'Período' },
+                  ...DEVIATION_SERIES.map((serie) => ({ key: serie.key, header: serie.label, numeric: true })),
+                ]}
+                rows={chartData.map((point) => ({
+                  label: point.label,
+                  ...Object.fromEntries(DEVIATION_SERIES.map((serie) => [serie.key, point[serie.key] ?? '—'])),
+                }))}
+              />
+
               {hasNoDeviations && (
-                <p className="px-4 pt-3 text-xs text-muted-foreground sm:px-0">
+                <p className="px-4 pt-3 text-xs text-muted-foreground @xl:px-0">
                   Sin desvíos {isFilteredByCustomer ? 'para los clientes seleccionados ' : ''}en el período. Se
                   registraron {chartData.length} {chartData.length === 1 ? 'período' : 'períodos'} con parte diario
                   cerrado.
@@ -320,7 +342,7 @@ export function DesviosChartsClient({ data }: Props) {
               )}
 
               {(hasUnmeasuredSeries || missingDaysInWindow > 0) && (
-                <p className="px-4 pt-3 text-xs leading-relaxed text-muted-foreground sm:px-0">
+                <p className="px-4 pt-3 text-xs leading-relaxed text-muted-foreground @xl:px-0">
                   {hasUnmeasuredSeries
                     ? 'El reporte de desvíos del parte diario existe desde febrero de 2026: antes de esa fecha no se medían. Los duplicados, en cambio, se pueden reconstruir y están desde el inicio.'
                     : `Sin registro de desvíos en ${missingDaysInWindow} ${missingDaysInWindow === 1 ? 'día' : 'días'} del período; esos días no suman a los totales.`}

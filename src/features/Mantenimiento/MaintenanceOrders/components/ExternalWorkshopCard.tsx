@@ -72,14 +72,24 @@ export function ExternalWorkshopCard({
   ).length;
 
   return (
-    <Card className="border-blue-200">
+    <Card className="border-info/40">
       <Collapsible open={isOpen} onOpenChange={setIsOpen}>
         <CollapsibleTrigger asChild>
-          <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3">
+          <CardHeader
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setIsOpen((open) => !open);
+              }
+            }}
+            className="hover:bg-muted/50 focus-visible:ring-ring cursor-pointer py-3 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
+          >
             <CardTitle className="text-sm flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Building2 className="h-4 w-4 text-blue-600" />
-                <Badge variant="outline" className="text-xs border-blue-300 text-blue-700">
+                <Building2 aria-hidden="true" className="text-info h-4 w-4" />
+                <Badge variant="outline" className="border-info/50 text-info-subtle-foreground text-xs">
                   Taller Externo
                 </Badge>
                 <span>{workshopName}</span>
@@ -115,6 +125,7 @@ export function ExternalWorkshopCard({
                       <Button
                         size="sm"
                         variant="outline"
+                        type="button"
                         className="text-xs h-7"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -131,7 +142,7 @@ export function ExternalWorkshopCard({
                       </Button>
                     </PermissionGuard>
                   )}
-                  {isWOCompleted && <CheckCircle2 className="h-4 w-4 text-green-600" />}
+                  {isWOCompleted && <CheckCircle2 aria-hidden="true" className="text-ok h-4 w-4" />}
                 </div>
               );
             })}

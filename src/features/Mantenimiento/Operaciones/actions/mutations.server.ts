@@ -1,5 +1,7 @@
 'use server';
 
+import { refreshDocumentStatus } from '@/features/Documentacion/shared/compliance/server/document-status.server';
+import { checkMultiplePermissionsServer } from '@/features/Permissions/actionsServer';
 import { Logger } from '@/lib/logger';
 import { requireServerAuthProfile } from '@/shared/actions/auth.actions';
 import { INVALIDATION_MAP } from '@/shared/constants/cache-invalidation-map';
@@ -12,10 +14,19 @@ import { assertOrderTransition } from '@/features/Mantenimiento/shared/order-tra
 
 const serverLogger = new Logger('Operaciones/mutations');
 
+/** Exige `update` en alguna de las tabs desde las que se opera el pedido (Seguimiento es la principal). */
+async function requireOperationUpdate(tabSlugs: readonly string[]) {
+  const granted = await checkMultiplePermissionsServer(
+    tabSlugs.map((tabSlug) => ({ moduleSlug: 'mantenimiento', tabSlug, actionSlug: 'update' }))
+  );
+  if (![...granted.values()].some(Boolean)) throw new Error('No tenés permiso para operar pedidos de mantenimiento');
+}
+
 /**
  * Rechaza una operación y la devuelve al estado de pedido pendiente
  */
 export async function rejectMaintenanceOperation(input: RejectOperationInput) {
+  await requireOperationUpdate(['seguimiento_taller', 'maintenance_orders', 'pedidos_pendientes']);
   // Perímetro: el pedido tiene que ser de la empresa activa.
   await assertOperationOrderInActiveCompany(input.orderId);
 
@@ -57,6 +68,12 @@ export async function rejectMaintenanceOperation(input: RejectOperationInput) {
  * Usa transacción atómica para garantizar consistencia entre order y vehicle.
  */
 export async function approveWorkshopEntry(input: ApproveWorkshopEntryInput) {
+  await requireOperationUpdate([
+    'seguimiento_taller',
+    'maintenance_requests',
+    'maintenance_orders',
+    'pedidos_confirmados',
+  ]);
   // Perímetro: el pedido tiene que ser de la empresa activa.
   await assertOperationOrderInActiveCompany(input.orderId);
 
@@ -100,6 +117,8 @@ export async function approveWorkshopEntry(input: ApproveWorkshopEntryInput) {
             kilometer: input.kilometer,
           },
         });
+        // `condition` es condición registrada de los tipos de documento de equipos: refresca el cache de status.
+        await refreshDocumentStatus(tx, 'Equipos', { ids: [order.equipment_id] });
       } else if (order.other_equipment_id) {
         await tx.other_equipment.update({
           where: { id: order.other_equipment_id },

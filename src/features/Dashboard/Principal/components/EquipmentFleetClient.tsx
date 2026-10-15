@@ -2,16 +2,19 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
+import { statusColorVar } from '@/features/Dashboard/shared/charts/ChartColorVars';
+import { ChartSummary } from '@/features/Dashboard/shared/charts/ChartSummary';
 import dynamic from 'next/dynamic';
 import * as React from 'react';
 import { Cell, Label, Pie, PieChart } from 'recharts';
+import { cancelledNote } from '../lib/cancelled-note';
+import { IndicatorStats } from '../shared/IndicatorStats';
 import { RadialGauge } from '../shared/RadialGauge';
 
+// bundle-dynamic-imports — dialogs load only when opened
 const VehiclesOnRepairDialog = dynamic(() => import('./VehiclesOnRepairDialog'), {
   ssr: false,
 });
-
-// bundle-dynamic-imports — dialog loads only when opened
 const AvailableVehiclesDialog = dynamic(() => import('./AvailableVehiclesDialog'), {
   ssr: false,
 });
@@ -20,58 +23,110 @@ interface Props {
   totalActive: number;
   totalNotAvailable: number;
   totalInUse: number;
+  /** Operativos que hoy están solo en servicios cancelados. */
+  totalCancelled: number;
   totalFleet: number;
-  availabilityPercent: number;
-  usagePercent: number;
+  operativityPercent: number | null;
+  usagePercent: number | null;
   // Motor unit metrics (Chasis & Tractor)
   motorActive: number;
   motorInUse: number;
+  motorCancelled: number;
   motorNotAvailable: number;
   motorFleet: number;
-  motorAvailabilityPercent: number;
-  motorUsagePercent: number;
+  motorOperativityPercent: number | null;
+  motorUsagePercent: number | null;
   // Tipos "motora" (Chasis & Tractor) — para filtrar el modal de disponibles
   motorTypeIds: string[];
 }
 
-function DonutWithCenter({
-  data,
-  config,
+interface Slice {
+  name: string;
+  value: number;
+  fill: string;
+}
+
+const OPERATIVE_DESCRIPTION =
+  'Equipos activos que no están fuera de servicio (no operativo, en reparación o en preparación).';
+const OUT_OF_SERVICE_DESCRIPTION =
+  'Equipos activos no operativos, en reparación o en preparación. La cifra abre el listado.';
+const IN_USE_DESCRIPTION =
+  'Equipos operativos cargados en el parte diario de hoy. Los servicios cancelados no cuentan: se indican aparte.';
+const AVAILABLE_DESCRIPTION =
+  'Operativos − en operaciones. El listado muestra los equipos con condición operativa u operativa condicionada que no están en el parte de hoy (o solo en servicios cancelados).';
+
+/** Dona con total al centro, leyenda con valores y alternativa textual. */
+function DonutBlock({
+  title,
+  slices,
   centerValue,
   centerLabel,
 }: {
-  data: { name: string; value: number; fill: string }[];
-  config: ChartConfig;
+  title: string;
+  slices: Slice[];
   centerValue: number;
   centerLabel: string;
 }) {
+  const config = React.useMemo<ChartConfig>(
+    () => Object.fromEntries(slices.map((s, i) => [`slice${i}`, { label: s.name, color: s.fill }])),
+    [slices]
+  );
+  const total = slices.reduce((sum, s) => sum + s.value, 0);
+  const summary = `${title}: ${slices.map((s) => `${s.name} ${s.value}`).join(', ')} (${centerLabel.toLowerCase()} ${centerValue}).`;
+
   return (
-    <ChartContainer config={config} className="mx-auto aspect-square w-full max-h-[160px]">
-      <PieChart>
-        <ChartTooltip content={<ChartTooltipContent />} />
-        <Pie data={data} dataKey="value" nameKey="name" innerRadius={38} outerRadius={62} strokeWidth={2}>
-          {data.map((entry) => (
-            <Cell key={entry.name} fill={entry.fill} />
-          ))}
-          <Label
-            content={({ viewBox }) => {
-              if (viewBox && 'cx' in viewBox && 'cy' in viewBox) {
-                return (
-                  <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
-                    <tspan x={viewBox.cx} y={viewBox.cy} className="fill-foreground text-xl font-bold">
-                      {centerValue}
-                    </tspan>
-                    <tspan x={viewBox.cx} y={(viewBox.cy ?? 0) + 16} className="fill-muted-foreground text-[10px]">
-                      {centerLabel}
-                    </tspan>
-                  </text>
-                );
-              }
-            }}
-          />
-        </Pie>
-      </PieChart>
-    </ChartContainer>
+    <div className="w-full space-y-2">
+      <div role="img" aria-label={summary}>
+        <ChartContainer config={config} className="mx-auto aspect-square w-full max-h-[160px]">
+          <PieChart>
+            <ChartTooltip content={<ChartTooltipContent />} />
+            <Pie data={slices} dataKey="value" nameKey="name" innerRadius={38} outerRadius={62} strokeWidth={2}>
+              {slices.map((entry) => (
+                <Cell key={entry.name} fill={entry.fill} />
+              ))}
+              <Label
+                content={({ viewBox }) => {
+                  if (viewBox && 'cx' in viewBox && 'cy' in viewBox) {
+                    return (
+                      <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
+                        <tspan x={viewBox.cx} y={viewBox.cy} className="fill-foreground text-xl font-bold">
+                          {centerValue}
+                        </tspan>
+                        <tspan x={viewBox.cx} y={(viewBox.cy ?? 0) + 16} className="fill-muted-foreground text-[10px]">
+                          {centerLabel}
+                        </tspan>
+                      </text>
+                    );
+                  }
+                }}
+              />
+            </Pie>
+          </PieChart>
+        </ChartContainer>
+      </div>
+      <div className="flex gap-3 justify-center flex-wrap">
+        {slices.map((d) => (
+          <div key={d.name} className="flex items-center gap-1.5 text-xs">
+            <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: d.fill }} aria-hidden="true" />
+            {d.name}: {d.value}
+          </div>
+        ))}
+      </div>
+      <ChartSummary
+        title={title}
+        summary={summary}
+        columns={[
+          { key: 'name', header: 'Categoría' },
+          { key: 'value', header: 'Equipos', numeric: true },
+          { key: 'share', header: '%', numeric: true },
+        ]}
+        rows={slices.map((s) => ({
+          name: s.name,
+          value: s.value,
+          share: total > 0 ? `${Math.round((s.value / total) * 100)} %` : '—',
+        }))}
+      />
+    </div>
   );
 }
 
@@ -79,14 +134,16 @@ export const EquipmentFleetClient = React.memo(function EquipmentFleetClient({
   totalActive,
   totalNotAvailable,
   totalInUse,
+  totalCancelled,
   totalFleet,
-  availabilityPercent,
+  operativityPercent,
   usagePercent,
   motorActive,
   motorInUse,
+  motorCancelled,
   motorNotAvailable,
   motorFleet,
-  motorAvailabilityPercent,
+  motorOperativityPercent,
   motorUsagePercent,
   motorTypeIds,
 }: Props) {
@@ -94,69 +151,101 @@ export const EquipmentFleetClient = React.memo(function EquipmentFleetClient({
   // Qué variante del modal de disponibles está abierta: 'all' (toda la flota) o 'motor' (Chasis & Tractor)
   const [availableDialog, setAvailableDialog] = React.useState<'all' | 'motor' | null>(null);
 
-  const availabilityConfig = React.useMemo<ChartConfig>(
-    () => ({
-      disponibles: { label: 'Operativos', color: 'var(--chart-2)' },
-      noDisponibles: { label: 'No disponibles', color: 'var(--chart-1)' },
-    }),
-    []
-  );
-
-  const availabilityData = React.useMemo(
+  const operativityData = React.useMemo<Slice[]>(
     () => [
-      { name: 'Operativos', value: totalActive, fill: 'var(--chart-2)' },
-      { name: 'No disponibles', value: totalNotAvailable, fill: 'var(--chart-1)' },
+      { name: 'Operativos', value: totalActive, fill: statusColorVar('operational') },
+      { name: 'Fuera de servicio', value: totalNotAvailable, fill: statusColorVar('unavailable') },
     ],
     [totalActive, totalNotAvailable]
   );
 
-  const usageConfig = React.useMemo<ChartConfig>(
-    () => ({
-      enUso: { label: 'En Operaciones', color: 'var(--chart-5)' },
-      sinUsar: { label: 'Disponible / Sin asignar', color: 'var(--chart-4)' },
-    }),
-    []
-  );
-
-  const usageData = React.useMemo(
+  const usageData = React.useMemo<Slice[]>(
     () => [
-      { name: 'En Operaciones', value: totalInUse, fill: 'var(--chart-5)' },
-      { name: 'Disponible / Sin asignar', value: totalActive - totalInUse, fill: 'var(--chart-4)' },
+      { name: 'En operaciones', value: totalInUse, fill: statusColorVar('inUse') },
+      { name: 'Disponible / Sin asignar', value: totalActive - totalInUse, fill: statusColorVar('available') },
     ],
     [totalInUse, totalActive]
   );
 
-  // Motor units donut data
-  const motorAvailabilityConfig = React.useMemo<ChartConfig>(
-    () => ({
-      disponibles: { label: 'Operativos', color: '#34C759' },
-      noDisponibles: { label: 'No disponibles', color: '#e74c3c' },
-    }),
-    []
-  );
-
-  const motorAvailabilityData = React.useMemo(
+  const motorOperativityData = React.useMemo<Slice[]>(
     () => [
-      { name: 'Operativos', value: motorActive, fill: '#34C759' },
-      { name: 'No disponibles', value: motorNotAvailable, fill: '#e74c3c' },
+      { name: 'Operativos', value: motorActive, fill: statusColorVar('operational') },
+      { name: 'Fuera de servicio', value: motorNotAvailable, fill: statusColorVar('unavailable') },
     ],
     [motorActive, motorNotAvailable]
   );
 
-  const motorUsageConfig = React.useMemo<ChartConfig>(
-    () => ({
-      enUso: { label: 'En Operaciones', color: '#3a86ff' },
-      disponibles: { label: 'Disponible / Sin asignar', color: '#06d6a0' },
-    }),
-    []
+  const motorUsageData = React.useMemo<Slice[]>(
+    () => [
+      { name: 'En operaciones', value: motorInUse, fill: statusColorVar('inUse') },
+      { name: 'Disponible / Sin asignar', value: motorActive - motorInUse, fill: statusColorVar('available') },
+    ],
+    [motorInUse, motorCancelled, motorActive]
   );
 
-  const motorUsageData = React.useMemo(
+  const motorOperativityStats = React.useMemo(
     () => [
-      { name: 'En Operaciones', value: motorInUse, fill: '#3a86ff' },
-      { name: 'Disponible / Sin asignar', value: motorActive - motorInUse, fill: '#06d6a0' },
+      { label: 'Operativos', value: motorActive, description: OPERATIVE_DESCRIPTION },
+      {
+        label: 'Fuera de servicio',
+        value: motorNotAvailable,
+        description: OUT_OF_SERVICE_DESCRIPTION,
+      },
+      { label: 'Total flota', value: motorFleet, description: 'Operativos + fuera de servicio (equipos activos).' },
+    ],
+    [motorActive, motorNotAvailable, motorFleet]
+  );
+
+  const motorUsageStats = React.useMemo(
+    () => [
+      {
+        label: 'En operaciones',
+        value: motorInUse,
+        note: cancelledNote(motorCancelled),
+        description: IN_USE_DESCRIPTION,
+      },
+      {
+        label: 'Disponible / Sin asignar',
+        value: motorActive - motorInUse,
+        onClick: motorActive - motorInUse > 0 ? () => setAvailableDialog('motor') : undefined,
+        description: AVAILABLE_DESCRIPTION,
+      },
+      { label: 'Operativos', value: motorActive, description: OPERATIVE_DESCRIPTION },
     ],
     [motorInUse, motorActive]
+  );
+
+  const operativityStats = React.useMemo(
+    () => [
+      { label: 'Operativos', value: totalActive, description: OPERATIVE_DESCRIPTION },
+      {
+        label: 'Fuera de servicio',
+        value: totalNotAvailable,
+        onClick: totalNotAvailable > 0 ? () => setRepairDialogOpen(true) : undefined,
+        description: OUT_OF_SERVICE_DESCRIPTION,
+      },
+      { label: 'Total flota', value: totalFleet, description: 'Operativos + fuera de servicio (equipos activos).' },
+    ],
+    [totalActive, totalNotAvailable, totalFleet]
+  );
+
+  const usageStats = React.useMemo(
+    () => [
+      {
+        label: 'En operaciones',
+        value: totalInUse,
+        note: cancelledNote(totalCancelled),
+        description: IN_USE_DESCRIPTION,
+      },
+      {
+        label: 'Disponible / Sin asignar',
+        value: totalActive - totalInUse,
+        onClick: totalActive - totalInUse > 0 ? () => setAvailableDialog('all') : undefined,
+        description: AVAILABLE_DESCRIPTION,
+      },
+      { label: 'Operativos', value: totalActive, description: OPERATIVE_DESCRIPTION },
+    ],
+    [totalInUse, totalCancelled, totalActive]
   );
 
   return (
@@ -165,7 +254,7 @@ export const EquipmentFleetClient = React.memo(function EquipmentFleetClient({
         <CardHeader className="border-b px-6 py-4">
           <div>
             <CardTitle className="text-base">Equipos — Estado de Flota</CardTitle>
-            <CardDescription>Disponibilidad y uso de la flota de vehiculos</CardDescription>
+            <CardDescription>Operatividad y uso de la flota de vehículos activos</CardDescription>
           </div>
         </CardHeader>
         <CardContent className="p-6">
@@ -175,168 +264,76 @@ export const EquipmentFleetClient = React.memo(function EquipmentFleetClient({
               <h4 className="text-sm font-medium mb-3">
                 Solo Unidades Motoras <span className="text-muted-foreground font-normal">(Chasis & Tractor)</span>
               </h4>
-              <div className="grid grid-cols-2 gap-6">
-                {/* Motor: Disponibilidad */}
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                {/* Motor: Operatividad */}
                 <div className="flex flex-col items-center gap-2">
-                  <DonutWithCenter
-                    data={motorAvailabilityData}
-                    config={motorAvailabilityConfig}
+                  <DonutBlock
+                    title="Operatividad de unidades motoras"
+                    slices={motorOperativityData}
                     centerValue={motorFleet}
                     centerLabel="Total"
                   />
-                  <div className="flex gap-3 justify-center flex-wrap">
-                    {motorAvailabilityData.map((d) => (
-                      <div key={d.name} className="flex items-center gap-1.5 text-xs">
-                        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: d.fill }} />
-                        {d.name}: {d.value}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 w-full text-center mt-1">
-                    <div className="rounded-lg border p-2">
-                      <p className="text-lg font-bold tabular-nums">{motorActive.toLocaleString('es-AR')}</p>
-                      <p className="text-[10px] text-muted-foreground">Operativos</p>
-                    </div>
-                    <div className="rounded-lg border p-2">
-                      <p className="text-lg font-bold tabular-nums">{motorNotAvailable.toLocaleString('es-AR')}</p>
-                      <p className="text-[10px] text-muted-foreground">En reparacion</p>
-                    </div>
-                    <div className="rounded-lg border p-2">
-                      <p className="text-lg font-bold tabular-nums">{motorFleet.toLocaleString('es-AR')}</p>
-                      <p className="text-[10px] text-muted-foreground">Total</p>
-                    </div>
-                  </div>
-                  <RadialGauge value={motorAvailabilityPercent} label="Indicador de flota" accentColor="#34C759" />
+                  <IndicatorStats items={motorOperativityStats} className="w-full mt-1" />
+                  <RadialGauge
+                    value={motorOperativityPercent}
+                    label="Operatividad"
+                    accentColor={statusColorVar('operational')}
+                  />
                 </div>
 
                 {/* Motor: Uso */}
                 <div className="flex flex-col items-center gap-2">
-                  <DonutWithCenter
-                    data={motorUsageData}
-                    config={motorUsageConfig}
+                  <DonutBlock
+                    title="Uso de unidades motoras operativas"
+                    slices={motorUsageData}
                     centerValue={motorActive}
                     centerLabel="Operativos"
                   />
-                  <div className="flex gap-3 justify-center flex-wrap">
-                    {motorUsageData.map((d) => (
-                      <div key={d.name} className="flex items-center gap-1.5 text-xs">
-                        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: d.fill }} />
-                        {d.name}: {d.value}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 w-full text-center mt-1">
-                    <div className="rounded-lg border p-2">
-                      <p className="text-lg font-bold tabular-nums">{motorInUse.toLocaleString('es-AR')}</p>
-                      <p className="text-[10px] text-muted-foreground">En Operaciones</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={motorActive - motorInUse > 0 ? () => setAvailableDialog('motor') : undefined}
-                      className="rounded-lg border p-2 hover:bg-muted/50 transition-colors cursor-pointer"
-                    >
-                      <p className="text-lg font-bold tabular-nums">
-                        {(motorActive - motorInUse).toLocaleString('es-AR')}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">Disponible / Sin asignar</p>
-                    </button>
-                    <div className="rounded-lg border p-2">
-                      <p className="text-lg font-bold tabular-nums">{motorActive.toLocaleString('es-AR')}</p>
-                      <p className="text-[10px] text-muted-foreground">Total operativos</p>
-                    </div>
-                  </div>
-                  <RadialGauge value={motorUsagePercent} label="Eficiencia de uso" accentColor="#3a86ff" />
+                  <IndicatorStats items={motorUsageStats} className="w-full mt-1" />
+                  <RadialGauge value={motorUsagePercent} label="Uso" accentColor={statusColorVar('inUse')} />
                 </div>
               </div>
             </div>
           )}
 
-          {/* Disponibilidad y Uso — segunda fila */}
-          <div className="grid grid-cols-2 gap-6">
-            {/* Disponibilidad */}
+          {/* Operatividad y Uso — segunda fila */}
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            {/* Operatividad */}
             <div className="flex flex-col items-center gap-2">
-              <h4 className="text-sm font-medium self-start">Disponibilidad — Todos los Equipos</h4>
-              <DonutWithCenter
-                data={availabilityData}
-                config={availabilityConfig}
+              <h4 className="text-sm font-medium self-start">Operatividad — Todos los Equipos</h4>
+              <DonutBlock
+                title="Operatividad de todos los equipos"
+                slices={operativityData}
                 centerValue={totalFleet}
                 centerLabel="Flota"
               />
-              <div className="flex gap-3 justify-center flex-wrap">
-                {availabilityData.map((d) => (
-                  <div key={d.name} className="flex items-center gap-1.5 text-xs">
-                    <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: d.fill }} />
-                    {d.name}: {d.value}
-                  </div>
-                ))}
-              </div>
-              {/* Key stats inline */}
-              <div className="grid grid-cols-3 gap-2 w-full text-center mt-1">
-                <div className="rounded-lg border p-2">
-                  <p className="text-lg font-bold tabular-nums">{totalActive.toLocaleString('es-AR')}</p>
-                  <p className="text-[10px] text-muted-foreground">Operativos</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={totalNotAvailable > 0 ? () => setRepairDialogOpen(true) : undefined}
-                  className="rounded-lg border p-2 hover:bg-muted/50 transition-colors cursor-pointer"
-                >
-                  <p className="text-lg font-bold tabular-nums">{totalNotAvailable.toLocaleString('es-AR')}</p>
-                  <p className="text-[10px] text-muted-foreground">En reparacion</p>
-                </button>
-                <div className="rounded-lg border p-2">
-                  <p className="text-lg font-bold tabular-nums">{totalFleet.toLocaleString('es-AR')}</p>
-                  <p className="text-[10px] text-muted-foreground">Total flota</p>
-                </div>
-              </div>
-              <RadialGauge value={availabilityPercent} label="Disponibilidad" accentColor="var(--chart-2)" />
+              <IndicatorStats items={operativityStats} className="w-full mt-1" />
+              <RadialGauge
+                value={operativityPercent}
+                label="Operatividad"
+                accentColor={statusColorVar('operational')}
+              />
             </div>
 
             {/* Uso */}
             <div className="flex flex-col items-center gap-2">
               <h4 className="text-sm font-medium self-start">Uso — Todos los Equipos</h4>
-              <DonutWithCenter
-                data={usageData}
-                config={usageConfig}
+              <DonutBlock
+                title="Uso de todos los equipos operativos"
+                slices={usageData}
                 centerValue={totalActive}
                 centerLabel="Operativos"
               />
-              <div className="flex gap-3 justify-center flex-wrap">
-                {usageData.map((d) => (
-                  <div key={d.name} className="flex items-center gap-1.5 text-xs">
-                    <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: d.fill }} />
-                    {d.name}: {d.value}
-                  </div>
-                ))}
-              </div>
-              {/* Key stats inline */}
-              <div className="grid grid-cols-3 gap-2 w-full text-center mt-1">
-                <div className="rounded-lg border p-2">
-                  <p className="text-lg font-bold tabular-nums">{totalInUse.toLocaleString('es-AR')}</p>
-                  <p className="text-[10px] text-muted-foreground">En Operaciones</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={totalActive - totalInUse > 0 ? () => setAvailableDialog('all') : undefined}
-                  className="rounded-lg border p-2 hover:bg-muted/50 transition-colors cursor-pointer"
-                >
-                  <p className="text-lg font-bold tabular-nums">{(totalActive - totalInUse).toLocaleString('es-AR')}</p>
-                  <p className="text-[10px] text-muted-foreground">Disponible / Sin asignar</p>
-                </button>
-                <div className="rounded-lg border p-2">
-                  <p className="text-lg font-bold tabular-nums">{totalActive.toLocaleString('es-AR')}</p>
-                  <p className="text-[10px] text-muted-foreground">Operativos</p>
-                </div>
-              </div>
-              <RadialGauge value={usagePercent} label="Uso" accentColor="var(--chart-5)" />
+              <IndicatorStats items={usageStats} className="w-full mt-1" />
+              <RadialGauge value={usagePercent} label="Uso" accentColor={statusColorVar('inUse')} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-6 mt-4 pt-3 border-t">
+          <div className="grid grid-cols-1 gap-2 mt-4 pt-3 border-t md:grid-cols-2 md:gap-6">
             <p className="text-[11px] text-muted-foreground text-center">
-              <span className="font-semibold">Disponibilidad</span> = Total de flota − Equipos en reparacion
+              <span className="font-semibold">Operatividad</span> = Equipos operativos / Total de flota × 100
             </p>
             <p className="text-[11px] text-muted-foreground text-center">
-              <span className="font-semibold">Uso</span> = Equipos operativos − Equipos en operaciones
+              <span className="font-semibold">Uso</span> = Equipos en operaciones / Equipos operativos × 100
             </p>
           </div>
         </CardContent>

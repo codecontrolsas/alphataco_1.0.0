@@ -1,0 +1,75 @@
+---
+title: Tableros del Dashboard
+summary: Cómo elegir un tablero, armar uno propio con los widgets que necesitás y por qué cada persona ve widgets distintos.
+keywords: dashboard, tablero, tableros, personalizar, widget, widgets, agregar widget, inicio, resumen, vencimientos, análisis, permisos
+updated: 2026-10-15
+---
+
+El Dashboard es la pantalla de inicio. Se arma con **tableros**: cada tablero es una página con **widgets** (tarjetas, gráficos y tablas). Cada persona tiene sus propios tableros, en cada empresa a la que entra: lo que cambies vos no lo ve nadie más.
+
+<OpenScreen />
+
+## Tableros por defecto
+
+Mientras no cambies nada, ves estos tableros (solo los que tengan al menos un widget que puedas ver):
+
+| Tablero                | Qué muestra                                                                                                                          | Acceso del menú lateral      |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------- |
+| **Resumen**            | Personal, flota y servicios de hoy (<GuideLink to="dashboard-principal">Dashboard principal</GuideLink>).                            | **Dashboard → Resumen**      |
+| **Vencimientos**       | Documentos vencidos o que vencen en los próximos 30 días (<GuideLink to="dashboard-vencimientos">Próximos vencimientos</GuideLink>). | **Dashboard → Vencimientos** |
+| **Operación**          | Histórico de servicios, ranking de clientes y centros de costo.                                                                      | **Dashboard → Análisis**     |
+| **Flota y taller**     | Equipos en mantenimiento, origen y tipo de solicitudes.                                                                              | **Dashboard → Análisis**     |
+| **Personal**           | Ausentismo, dotación y distribución del personal.                                                                                    | **Dashboard → Análisis**     |
+| **Control de desvíos** | Desvíos de partes diarios y gestión de pedidos.                                                                                      | **Dashboard → Análisis**     |
+| **Indicadores**        | Evolución de los KPIs contra su umbral (<GuideLink to="kpis">KPIs</GuideLink>).                                                      | **Dashboard → Análisis**     |
+
+Para cambiar de tablero usá el selector **Tablero** arriba a la izquierda. El menú lateral y la línea de ubicación del encabezado marcan el tablero que estás viendo; un tablero propio aparece en el encabezado con su nombre.
+
+El enlace de la barra del navegador incluye el tablero: si lo guardás o lo compartís, abre ese mismo tablero (a quien lo abra le muestra su propia versión).
+
+## Personalizar un tablero
+
+1. Abrí el tablero y tocá **Personalizar**.
+2. Cada widget muestra una barra con sus controles:
+   - El asa de la izquierda **mueve** el widget: arrastralo con el mouse o el dedo hasta el lugar que quieras. Con teclado, ponete sobre el asa, presioná espacio o Enter, movelo con las flechas y volvé a presionar espacio o Enter para soltarlo (Escape cancela).
+   - **−** y **+** cambian el ancho: de **1/6 del ancho** a **Ancho completo**. Cada widget tiene un mínimo y un máximo para que se siga leyendo bien.
+   - La **X** lo quita del tablero. Los datos no se borran: lo podés volver a agregar.
+3. **Agregar widget** abre la lista de widgets que podés usar, agrupados por sección y con buscador. Los que ya están en el tablero dicen **En el tablero**.
+4. **Guardar tablero** guarda todos los cambios juntos. **Cancelar** los descarta.
+
+Mientras personalizás, los widgets se ven como vista previa y no se pueden usar; vuelven a funcionar al guardar.
+
+En el celular y en pantallas angostas los widgets se acomodan solos uno debajo del otro, sin importar el ancho elegido.
+
+## Tableros propios
+
+El botón **⋯** (más acciones) al lado de **Personalizar** tiene:
+
+- **Nuevo tablero**: crea uno vacío con el nombre que elijas y lo abre para que le agregues widgets.
+- **Renombrar tablero**.
+- **Mover antes en la lista** / **Mover después en la lista**: cambian el orden del selector. El primero de la lista es el que se abre al entrar al Dashboard.
+- **Eliminar tablero**: pide confirmación. Se borra el tablero, no los datos.
+- **Restablecer tableros por defecto**: aparece cuando ya cambiaste algo. Borra todos tus tableros y vuelven los de la tabla de arriba.
+
+La primera vez que guardás un cambio, el sistema guarda una copia de todos tus tableros por defecto: a partir de ahí son tuyos y los podés cambiar.
+
+## Qué widgets ve cada uno
+
+Cada widget se muestra solo si tenés permiso para ver la sección del Dashboard de la que sale **y** los datos de origen. Por eso dos personas pueden ver el mismo tablero con widgets distintos.
+
+| Sección del widget     | Permisos que hacen falta (Ver)                                                                                                                             |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Resumen**            | **Dashboard → Resumen**, y además el módulo de cada dato: **Empleados**, **Equipos**, **Partes de operaciones**, **Diagramas** o **Checklist** de equipos. |
+| **Vencimientos**       | **Dashboard → Vencimientos de personal** o **Vencimientos de equipos**, y **Documentos de empleados** o **Documentos de equipos**.                         |
+| **Operación**          | **Dashboard → Operación** y **Partes de operaciones**.                                                                                                     |
+| **Flota y taller**     | **Dashboard → Flota y taller** y **Mantenimiento → Taller**.                                                                                               |
+| **Personal**           | **Dashboard → Personal**, **Empleados** y **Diagramas**.                                                                                                   |
+| **Control de desvíos** | **Dashboard → Control de desvíos**, y **Equipos con desvíos** o **Planificador** según el widget.                                                          |
+| **Indicadores**        | **Configuración → Gráficos** o **Configuración → Indicadores**.                                                                                            |
+
+Si te quitan un permiso, los widgets que dependen de él desaparecen de tus tableros sin dejar huecos; si te lo vuelven a dar, reaparecen. Si no tenés ningún widget habilitado, el Dashboard muestra **No tenés indicadores habilitados**. Los permisos los asigna un administrador (<GuideLink to="usuarios-y-roles">Usuarios y roles</GuideLink>).
+
+<Callout type="info" title="Los filtros de una sección quedan en el enlace">
+  Los filtros de **Recursos Humanos** (por posición) y de **Estado de Equipos** (por tipo) se guardan en el enlace de la
+  página: siguen activos al recargar y se comparten con el enlace. Para sacarlos, vaciá el filtro y tocá **Filtrar**.
+</Callout>

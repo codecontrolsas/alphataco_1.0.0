@@ -4,11 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { ChartSummary } from '@/features/Dashboard/shared/charts/ChartSummary';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import moment from 'moment';
 import 'moment/locale/es';
 import * as React from 'react';
 import type { PreparteKpiData } from '../actions/preparte-kpi.server';
+import { ORDER_CHART_CONFIG, ORDER_SERIES, type OrderActiveView } from '../utils/order-series';
 import { OrderManagementBarChart } from './OrderManagementBarChart';
 import { OrderManagementChart, type OrderChartDataPoint } from './OrderManagementChart';
 
@@ -17,7 +20,7 @@ import { OrderManagementChart, type OrderChartDataPoint } from './OrderManagemen
 // ---------------------------------------------------------------------------
 
 type Granularity = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
-type ActiveView = 'total' | 'confirmado' | 'pendiente' | 'rechazado' | 'cancelado';
+type ActiveView = OrderActiveView;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -105,19 +108,19 @@ interface Props {
 }
 
 export function OrderManagementClient({ data }: Props) {
-  const [selectedMonth, setSelectedMonth] = React.useState(() => moment().startOf('month'));
+  const [selectedMonth, setSelectedMonth] = React.useState(() => moment(argentinaDate()).startOf('month'));
   const [granularity, setGranularity] = React.useState<Granularity>('monthly');
   const [selectedCustomerIds, setSelectedCustomerIds] = React.useState<string[]>([]);
   const [activeView, setActiveView] = React.useState<ActiveView>('total');
 
   // Earliest month with data
   const earliestMonth = React.useMemo(() => {
-    if (data.rows.length === 0) return moment();
+    if (data.rows.length === 0) return moment(argentinaDate());
     return moment(data.rows[0].date).startOf('month');
   }, [data.rows]);
 
   const canGoBack = selectedMonth.isAfter(earliestMonth, 'month');
-  const canGoForward = selectedMonth.isBefore(moment(), 'month');
+  const canGoForward = selectedMonth.isBefore(moment(argentinaDate()), 'month');
 
   // Process data
   const { chartData, stats, periodLabel } = React.useMemo(() => {
@@ -274,10 +277,10 @@ export function OrderManagementClient({ data }: Props) {
 
   return (
     <>
-      <Card className="py-0">
-        <CardHeader className="flex flex-col items-stretch border-b p-0! sm:flex-row">
+      <Card className="@container py-0">
+        <CardHeader className="flex flex-col items-stretch border-b p-0! @3xl:flex-row">
           {/* Left: title + controls */}
-          <div className="flex flex-1 flex-col justify-center gap-1 px-6 pt-4 pb-3 sm:py-4">
+          <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 px-6 pt-4 pb-3 @3xl:py-4">
             <CardTitle className="text-base">Gestion de Pedidos — Sala de Control</CardTitle>
             <CardDescription>
               {periodLabel}
@@ -299,6 +302,8 @@ export function OrderManagementClient({ data }: Props) {
               {/* Month navigator */}
               <div className="flex items-center gap-1">
                 <Button
+                  type="button"
+                  aria-label="Mes anterior"
                   variant="outline"
                   size="icon"
                   className="h-8 w-8"
@@ -309,6 +314,8 @@ export function OrderManagementClient({ data }: Props) {
                 </Button>
                 <span className="text-sm font-medium min-w-[130px] text-center">{capitalizedMonth}</span>
                 <Button
+                  type="button"
+                  aria-label="Mes siguiente"
                   variant="outline"
                   size="icon"
                   className="h-8 w-8"
@@ -328,6 +335,7 @@ export function OrderManagementClient({ data }: Props) {
                 }}
                 variant="outline"
                 size="sm"
+                className="max-w-full overflow-x-auto"
               >
                 <ToggleGroupItem value="daily">Diario</ToggleGroupItem>
                 <ToggleGroupItem value="weekly">Semanal</ToggleGroupItem>
@@ -337,7 +345,7 @@ export function OrderManagementClient({ data }: Props) {
               </ToggleGroup>
 
               {/* Client filter */}
-              <div className="w-[220px]">
+              <div className="w-full max-w-[220px]">
                 <MultiSelectCombobox
                   options={data.customers.map((c) => ({ label: c.name, value: c.id }))}
                   placeholder="Todos los clientes"
@@ -351,26 +359,45 @@ export function OrderManagementClient({ data }: Props) {
           </div>
 
           {/* Right: stat buttons (identical pattern to Historico de servicios) */}
-          <div className="flex">
-            {statButtons.map(({ key, label, value }) => (
-              <button
-                key={key}
-                data-active={activeView === key}
-                className="relative z-30 flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l data-[active=true]:bg-muted/50 sm:border-t-0 sm:border-l sm:px-8 sm:py-6 cursor-pointer transition-colors hover:bg-muted/30"
-                onClick={() => setActiveView(key)}
-              >
-                <span className="text-xs text-muted-foreground">{label}</span>
-                <span className="text-lg leading-none font-bold sm:text-3xl">{value.toLocaleString('es-AR')}</span>
-              </button>
-            ))}
+          <div className="overflow-hidden @3xl:shrink-0">
+            <div className="-ml-px grid grid-cols-2 @lg:grid-cols-3 @3xl:ml-0 @3xl:flex">
+              {statButtons.map(({ key, label, value }) => (
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={activeView === key}
+                  data-active={activeView === key}
+                  className="relative z-30 flex flex-1 flex-col justify-center gap-1 border-t border-l px-3 py-4 text-left data-[active=true]:bg-muted/50 @3xl:border-t-0 @3xl:px-8 @3xl:py-6 cursor-pointer transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  onClick={() => setActiveView(key)}
+                >
+                  <span className="text-xs text-muted-foreground">{label}</span>
+                  <span className="text-lg leading-none font-bold @3xl:text-3xl">{value.toLocaleString('es-AR')}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </CardHeader>
 
-        <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
+        <CardContent className="px-2 pt-4 @xl:px-6 @xl:pt-6">
           {chartData.length > 0 ? (
-            <OrderManagementChart chartData={chartData} activeView={activeView} />
+            <>
+              <OrderManagementChart chartData={chartData} activeView={activeView} />
+              <ChartSummary
+                className="mt-3"
+                title="Gestión de pedidos"
+                summary={`${periodLabel}: ${stats.total.toLocaleString('es-AR')} pedidos en el mes seleccionado (${stats.confirmado} confirmados, ${stats.pendiente} pendientes, ${stats.rechazado} rechazados, ${stats.cancelado} cancelados).`}
+                columns={[
+                  { key: 'label', header: 'Período' },
+                  ...ORDER_SERIES.map((key) => ({ key, header: ORDER_CHART_CONFIG[key].label, numeric: true })),
+                ]}
+                rows={chartData.map((point) => ({
+                  label: point.label,
+                  ...Object.fromEntries(ORDER_SERIES.map((key) => [key, point[key].toLocaleString('es-AR')])),
+                }))}
+              />
+            </>
           ) : (
-            <div className="flex items-center justify-center h-[280px] text-muted-foreground text-sm">
+            <div role="status" className="flex items-center justify-center h-[280px] text-muted-foreground text-sm">
               No hay datos de pedidos para este periodo
             </div>
           )}

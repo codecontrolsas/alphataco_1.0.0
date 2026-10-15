@@ -12,16 +12,20 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { pickFilters } from '@/features/Warehouses/lib/filters';
 import { computeOrderTotals } from '../../lib/order-totals';
+import { canViewPurchasePrices } from '../../lib/price-visibility.server';
+import { PURCHASE_QUOTE_STATUSES } from '../../lib/quote-state-machine';
 
 const logger = new Logger('features/Purchases/Quotes/QuotesList');
 
 type QuoteWhere = Prisma.purchase_quotesWhereInput;
 type QuoteOrderBy = Prisma.purchase_quotesOrderByWithRelationInput;
-type FilterState = ReturnType<typeof parseSearchParams>;
+type FilterState = ReturnType<typeof parseListState>;
 
 // ============================================================================
 // CONSTANTS
@@ -47,6 +51,30 @@ const COLUMN_MAP: Record<string, string> = {
   creator: 'created_by',
 };
 
+/** Filtro de solicitudes de origen (M:M via lineas): se resuelve a mano. */
+const REQUESTS_FILTER = 'requests';
+
+/** Unicas claves de filtro que se aceptan: cualquier otra de la URL se descarta antes de armar el `where`. */
+const ALLOWED_FILTER_KEYS: ReadonlySet<string> = new Set([
+  ...FACETED_COLUMNS,
+  ...TEXT_FILTER_COLUMNS,
+  REQUESTS_FILTER,
+  ...dateRangeKeys(DATE_RANGE_COLUMNS),
+]);
+
+/** Tope de filas del export. */
+const EXPORT_MAX_ROWS = 10_000;
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Valores validos por columna con lista cerrada (un valor ajeno haria fallar a Prisma). */
+const VALID_VALUES: Record<string, (value: string) => boolean> = {
+  status: (v) => (PURCHASE_QUOTE_STATUSES as readonly string[]).includes(v),
+  supplier: (v) => UUID_RE.test(v),
+  creator: (v) => UUID_RE.test(v),
+  [REQUESTS_FILTER]: (v) => v === NULL_FILTER_VALUE || UUID_RE.test(v),
+};
+
 const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
 
 // ============================================================================
@@ -58,6 +86,19 @@ async function resolveCompanyId(): Promise<string | null> {
   const canView = await checkPermissionServer('compras', 'cotizaciones', 'view');
   if (!canView) return null;
   return getActiveCompanyId();
+}
+
+/** Estado de la tabla ya parseado, con solo los filtros permitidos y sus valores validos. */
+function parseListState(searchParams: DataTableSearchParams) {
+  const state = sanitizeFilters(parseSearchParams(searchParams), ALLOWED_FILTER_KEYS);
+  for (const [column, isValid] of Object.entries(VALID_VALUES)) {
+    const values = state.filters[column];
+    if (!values) continue;
+    const valid = values.filter(isValid);
+    if (valid.length > 0) state.filters[column] = valid;
+    else delete state.filters[column];
+  }
+  return state;
 }
 
 /** WHERE compartido entre paginated, export y facets. */
@@ -75,12 +116,12 @@ function buildWhereClause(companyId: string, state: FilterState): QuoteWhere {
     });
   }
 
-  and.push(buildFiltersWhere(pickFilters(f, FACETED_COLUMNS), COLUMN_MAP) as QuoteWhere);
+  and.push(buildFiltersWhere(f, COLUMN_MAP, { exclude: [...TEXT_FILTER_COLUMNS, REQUESTS_FILTER] }) as QuoteWhere);
   and.push(buildTextFiltersWhere(f, TEXT_FILTER_COLUMNS) as QuoteWhere);
   and.push(buildDateRangeFiltersWhere(f, DATE_RANGE_COLUMNS) as QuoteWhere);
 
   // Solicitudes de origen (M:M via lineas): alcanza con que una linea venga de alguna de las elegidas
-  const requestIds = f.requests?.filter((v) => v !== NULL_FILTER_VALUE) ?? [];
+  const requestIds = f[REQUESTS_FILTER]?.filter((v) => v !== NULL_FILTER_VALUE) ?? [];
   if (requestIds.length > 0) {
     and.push({ lines: { some: { request_line: { request_id: { in: requestIds } } } } });
   }
@@ -111,12 +152,13 @@ const QUOTE_SELECT = {
 
 const profileName = (p: { fullname: string | null; email: string | null }) => p.fullname ?? p.email ?? '-';
 
-function shape(rows: Prisma.purchase_quotesGetPayload<{ select: typeof QUOTE_SELECT }>[]) {
+function shape(rows: Prisma.purchase_quotesGetPayload<{ select: typeof QUOTE_SELECT }>[], canViewPrices: boolean) {
   return rows.map((r) => {
     // Total cotizado: solo lineas con precio y alicuota (las "no cotizadas" quedan afuera)
     const priced = r.lines.filter((l) => !l.not_quoted && l.unit_price != null && l.vat_rate_id != null);
+    // Sin `view_prices` no se calcula ni viaja (la UI muestra "Sin permiso").
     const total_quoted =
-      priced.length > 0
+      canViewPrices && priced.length > 0
         ? computeOrderTotals(
             priced.map((l) => ({
               quantity: l.quantity.toFixed(),
@@ -151,10 +193,10 @@ function shape(rows: Prisma.purchase_quotesGetPayload<{ select: typeof QUOTE_SEL
 
 export async function getPurchaseQuotesPaginated(searchParams: DataTableSearchParams) {
   const companyId = await resolveCompanyId();
-  if (!companyId) return { data: [], total: 0 };
+  if (!companyId) return { data: [], total: 0, canViewPrices: false };
 
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseListState(searchParams);
     const { skip, take } = stateToPrismaParams(state);
     const where = buildWhereClause(companyId, state);
 
@@ -171,7 +213,8 @@ export async function getPurchaseQuotesPaginated(searchParams: DataTableSearchPa
       prisma.purchase_quotes.findMany({ where, orderBy, skip, take, select: QUOTE_SELECT }),
       prisma.purchase_quotes.count({ where }),
     ]);
-    return { data: shape(rows), total };
+    const canViewPrices = await canViewPurchasePrices('cotizaciones');
+    return { data: shape(rows, canViewPrices), total, canViewPrices };
   } catch (error) {
     logger.error('Error al obtener pedidos de cotizacion', { data: { error } });
     throw new Error('No se pudo obtener la lista de pedidos de cotización');
@@ -182,22 +225,36 @@ export async function getPurchaseQuotesPaginated(searchParams: DataTableSearchPa
 // EXPORT (sin paginacion)
 // ============================================================================
 
-export async function getAllPurchaseQuotesForExport(searchParams: DataTableSearchParams) {
+export async function getAllPurchaseQuotesForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<PurchaseQuoteListItem[]>> {
   const companyId = await resolveCompanyId();
-  if (!companyId) return [];
+  if (!companyId) return { ok: true, data: [] };
 
   try {
-    const state = parseSearchParams(searchParams);
+    const state = parseListState(searchParams);
     const where = buildWhereClause(companyId, state);
-    const rows = await prisma.purchase_quotes.findMany({
-      where,
-      orderBy: [{ created_at: 'desc' }, { number: 'desc' }],
-      select: QUOTE_SELECT,
+    const orderBy: QuoteOrderBy[] = [{ created_at: 'desc' }, { number: 'desc' }, { id: 'asc' }];
+
+    const rows = await fetchExportRowsInBatches({
+      maxRows: EXPORT_MAX_ROWS,
+      listIds: (take) => prisma.purchase_quotes.findMany({ where, orderBy, select: { id: true }, take }),
+      fetchByIds: (ids) =>
+        prisma.purchase_quotes.findMany({ where: { id: { in: ids }, company_id: companyId }, select: QUOTE_SELECT }),
+      tooLargeMessage: (maxRows) =>
+        `Hay más de ${maxRows.toLocaleString('es-AR')} pedidos de cotización con los filtros actuales. Acote la exportación con filtros.`,
     });
-    return shape(rows);
+    return { ok: true, data: shape(rows, await canViewPurchasePrices('cotizaciones')) };
   } catch (error) {
     logger.error('Error al exportar pedidos de cotizacion', { data: { error } });
-    throw new Error('No se pudo exportar la lista de pedidos de cotización');
+    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
+    return {
+      ok: false,
+      message:
+        error instanceof ExportTooLargeError
+          ? error.message
+          : 'No se pudo exportar la lista de pedidos de cotización. Intente nuevamente.',
+    };
   }
 }
 
@@ -212,11 +269,11 @@ export async function getPurchaseQuoteSingleFacet(
   const companyId = await resolveCompanyId();
   if (!companyId) return null;
 
-  const parsed = searchParams && Object.keys(searchParams).length > 0 ? parseSearchParams(searchParams) : null;
+  const parsed = searchParams && Object.keys(searchParams).length > 0 ? parseListState(searchParams) : null;
 
   /** WHERE con todos los filtros activos MENOS el de la columna que se esta abriendo. */
   function crossWhere(excludeColumn: string): QuoteWhere {
-    const base: FilterState = parsed ?? parseSearchParams({});
+    const base: FilterState = parsed ?? parseListState({});
     const filters = { ...base.filters };
     delete filters[excludeColumn];
     return buildWhereClause(companyId as string, { ...base, filters });
@@ -275,7 +332,9 @@ export async function getPurchaseQuoteSingleFacet(
       // M:M: cuantos pedidos de cotizacion (distintos) tiene cada solicitud de origen
       const quotes = await prisma.purchase_quotes.findMany({
         where,
-        select: { lines: { select: { request_line: { select: { request: { select: { id: true, number: true } } } } } } },
+        select: {
+          lines: { select: { request_line: { select: { request: { select: { id: true, number: true } } } } } },
+        },
       });
       const counts = new Map<string, number>();
       const names = new Map<string, string>();
@@ -300,6 +359,29 @@ export async function getPurchaseQuoteSingleFacet(
     return null;
   } catch (error) {
     logger.error('Error al obtener facet de pedidos de cotizacion', { data: { error, columnId } });
+    return null;
+  }
+}
+
+// ============================================================================
+// BANDA DE ATENCION
+// ============================================================================
+
+/**
+ * Pedidos de cotizacion enviados que todavia no tienen respuesta (estado `SENT`: de ahi salen solo
+ * `receive` o `decline`). La maquina de estados no define un plazo, asi que no hay umbral de dias: se
+ * cuentan todas las enviadas. El numero usa el WHERE de la lista con `status=SENT`, asi coincide con el
+ * total de la tabla filtrada. Nunca rechaza: `null` si no se pudo contar (la banda no se muestra).
+ */
+export async function getPurchaseQuotesAttention(): Promise<{ awaitingResponse: number } | null> {
+  try {
+    const companyId = await resolveCompanyId();
+    if (!companyId) return null;
+    const state = parseListState({ status: 'SENT' });
+    const awaitingResponse = await prisma.purchase_quotes.count({ where: buildWhereClause(companyId, state) });
+    return { awaitingResponse };
+  } catch (error) {
+    logger.error('Error al contar cotizaciones sin respuesta', { data: { error } });
     return null;
   }
 }

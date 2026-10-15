@@ -1,6 +1,11 @@
 'use client';
 
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import {
+  CatalogCreateButton,
+  CatalogFormSheet,
+  CatalogTableSurface,
+  useCatalogSheet,
+} from '@/shared/components/common/CatalogFormSheet';
 import {
   DataTable,
   type DataTableFacetedFilterConfig,
@@ -8,9 +13,11 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { Check, CircleOff, X } from 'lucide-react';
-import moment from 'moment';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
+import { CircleOff } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
+import { activeStatusLabel, buildActiveFacetResult } from '../../lib/active-status';
 import EquipmentModelForm from './EquipmentModelForm';
 import {
   getAllEquipmentModelsForExport,
@@ -57,20 +64,24 @@ export default function _EquipmentModelDataTable({
     [permissionsMap]
   );
 
-  const canCreateOrUpdate =
-    permissions.hasPermission('configuracion', 'modelos', 'create') ||
-    permissions.hasPermission('configuracion', 'modelos', 'update');
+  const canCreate = permissions.hasPermission('configuracion', 'modelos', 'create');
+  const canUpdate = permissions.hasPermission('configuracion', 'modelos', 'update');
 
-  // ── Estado de edición ─────────────────────────────────────────────────────
+  // ── Sheet de alta/edición (el form sigue leyendo el estado de edición local) ─
   const [editingItem, setEditingItem] = useState<EquipmentModelListItem | null>(null);
-
-  const handleEdit = useCallback((item: EquipmentModelListItem) => {
-    setEditingItem(item);
-  }, []);
 
   const handleReset = useCallback(() => {
     setEditingItem(null);
   }, []);
+
+  const sheet = useCatalogSheet<EquipmentModelListItem>({
+    canCreate,
+    canUpdate,
+    onOpenEdit: setEditingItem,
+    onOpenCreate: handleReset,
+    onClosed: handleReset,
+  });
+  const handleEdit = sheet.openEdit;
 
   // ── Client-side navigation mode ──────────────────────────────────────────
   const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
@@ -107,14 +118,7 @@ export default function _EquipmentModelDataTable({
   const fetchIsActiveFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
     const result = await getEquipmentModelSingleFacet('is_active', params);
     if (!result) return { options: [], counts: new Map() };
-    const options = [
-      { value: 'true', label: 'Activo', icon: Check },
-      { value: 'false', label: 'Inactivo', icon: X },
-      ...(result.counts.has(NULL_FILTER_VALUE)
-        ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-        : []),
-    ];
-    return { options, counts: result.counts };
+    return buildActiveFacetResult(result.counts);
   }, []);
 
   // ── Lazy-load facet: brand ─────────────────────────────────────────────────
@@ -174,6 +178,7 @@ export default function _EquipmentModelDataTable({
       queryFn={tableQueryFn}
       queryKey={['equipment-models']}
       onStateChange={handleStateChange}
+      toolbarActions={<CatalogCreateButton sheet={sheet} label="Nuevo modelo" />}
       tableId={tableId}
       paramNamespace={tableId}
       facetedFilters={facetedFilters}
@@ -183,7 +188,7 @@ export default function _EquipmentModelDataTable({
       searchPlaceholder="Buscar modelos de equipos..."
       emptyMessage="No se encontraron modelos de equipos"
       exportConfig={{
-        fetchAllData: () => getAllEquipmentModelsForExport(currentParams),
+        fetchAllData: async () => unwrapExportResult(await getAllEquipmentModelsForExport(currentParams)),
         options: {
           filename: 'modelos-de-equipos',
           sheetName: 'Modelos',
@@ -192,35 +197,24 @@ export default function _EquipmentModelDataTable({
         formatters: {
           // FK brand: accessorFn ya retorna el nombre, no necesita formatter
           // brand_vehicles: no es columna exportable directa
-          is_active: (value) => {
-            if (value === null || value === undefined) return 'Sin asignar';
-            return value ? 'Activo' : 'Inactivo';
-          },
-          created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
+          is_active: (value) => activeStatusLabel(value),
+          created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
         },
       }}
     />
   );
 
-  // Si no tiene permisos de crear/editar, mostrar solo la tabla
-  if (!canCreateOrUpdate) {
-    return table;
-  }
-
-  // Con permisos: layout resizable con formulario a la izquierda y tabla a la derecha
   return (
-    <div className="w-full">
-      <ResizablePanelGroup className="min-h-[400px]" direction="horizontal">
-        <ResizablePanel defaultSize={30}>
-          <div className="overflow-auto h-full pr-2">
-            <EquipmentModelForm editingItem={editingItem} onReset={handleReset} />
-          </div>
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={70}>
-          <div className="overflow-auto h-full pl-2">{table}</div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    </div>
+    <>
+      <CatalogTableSurface>{table}</CatalogTableSurface>
+      <CatalogFormSheet
+        sheet={sheet}
+        getKey={(model) => model.id}
+        title={{ create: 'Nuevo modelo de unidad', edit: 'Editar modelo de unidad' }}
+        size="lg"
+      >
+        {({ close }) => <EquipmentModelForm editingItem={editingItem} onReset={close} />}
+      </CatalogFormSheet>
+    </>
   );
 }

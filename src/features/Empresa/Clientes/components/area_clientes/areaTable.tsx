@@ -2,12 +2,14 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { createFilterOptions } from '@/features/Employees/Empleados/components/utils/utils';
-import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
-import { BaseDataTable } from '@/shared/components/data-table/base/data-table';
-import { DataTableColumnHeader } from '@/shared/components/data-table/base/data-table-column-header';
-import type { ColumnDef, VisibilityState } from '@tanstack/react-table';
-import Cookies from 'js-cookie';
+import {
+  DataTable,
+  DataTableColumnHeader,
+  inMemoryTextFilterFn,
+  type DataTableFacetedFilterConfig,
+} from '@/shared/components/common/DataTable';
+import type { ColumnDef } from '@tanstack/react-table';
+import { MapPin } from 'lucide-react';
 import { useMemo } from 'react';
 import type { AreaRow } from '../../actions/areas.server';
 import { AreaFormDialog, type ProvinceOption } from './AreaFormDialog';
@@ -17,12 +19,12 @@ interface AreaTableProps {
   /** Cliente de la ficha: se le pasa al diálogo de edición para no volver a preguntarlo. */
   customerId: string;
   provinces: ProvinceOption[];
-  savedFilters: string[];
+  canEdit: boolean;
+  initialColumnVisibility: Record<string, boolean>;
+  initialFilterVisibility: Record<string, boolean>;
 }
 
-function includesValue(value: unknown, filter: unknown): boolean {
-  return Array.isArray(filter) && filter.includes(value);
-}
+const TABLE_ID = 'customer-areas';
 
 function provinceNames(area: AreaRow): string[] {
   return area.area_province.map((ap) => ap.provinces.name);
@@ -36,37 +38,47 @@ export function getAreaColumns(
   const columns: ColumnDef<AreaRow>[] = [
     {
       accessorKey: 'nombre',
-      id: 'Nombre',
+      meta: { title: 'Nombre' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
-      filterFn: (row, id, value) => includesValue(row.getValue(id), value),
+      cell: ({ row }) => <span className="font-medium">{row.original.nombre}</span>,
+      filterFn: inMemoryTextFilterFn,
     },
     {
-      id: 'Descripción',
+      id: 'descripcion_corta',
       accessorFn: (row) => row.descripcion_corta ?? '',
+      meta: { title: 'Descripción' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción" />,
-      filterFn: (row, id, value) => includesValue(row.getValue(id), value),
+      cell: ({ row }) => row.original.descripcion_corta || <span className="text-muted-foreground">-</span>,
+      filterFn: inMemoryTextFilterFn,
     },
     {
-      id: 'Provincias',
+      id: 'provinces',
       accessorFn: (row) => provinceNames(row),
+      meta: { title: 'Provincias' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Provincias" />,
+      enableSorting: false,
       cell: ({ row }) => {
-        const provinces = provinceNames(row.original);
-        if (provinces.length === 0) return null;
-        const [first, ...rest] = provinces;
+        const names = provinceNames(row.original);
+        if (names.length === 0) return <span className="text-muted-foreground">-</span>;
+        const [first, ...rest] = names;
         if (rest.length === 0) return <Badge variant="default">{first}</Badge>;
         return (
           <TooltipProvider delayDuration={100}>
             <Tooltip>
-              <TooltipTrigger>
-                <Badge variant="default" className="cursor-pointer select-none">
-                  {first} +{rest.length}
-                </Badge>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="focus-visible:ring-ring/50 rounded-full outline-none focus-visible:ring-[3px]"
+                >
+                  <Badge variant="default">
+                    {first} +{rest.length}
+                  </Badge>
+                </button>
               </TooltipTrigger>
               <TooltipContent>
                 <div className="flex flex-col gap-1">
-                  {rest.map((prov) => (
-                    <p key={prov}>{prov}</p>
+                  {rest.map((name) => (
+                    <p key={name}>{name}</p>
                   ))}
                 </div>
               </TooltipContent>
@@ -74,7 +86,7 @@ export function getAreaColumns(
           </TooltipProvider>
         );
       },
-      filterFn: (row, id, value) => {
+      filterFn: (row, id, value: string[]) => {
         const rowValues = row.getValue<string[]>(id);
         return Array.isArray(value) && value.some((val) => rowValues.includes(val));
       },
@@ -83,8 +95,11 @@ export function getAreaColumns(
 
   if (canEdit) {
     columns.push({
-      id: 'Acciones',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Acciones" />,
+      id: 'actions',
+      meta: { title: 'Acciones', excludeFromExport: true },
+      enableSorting: false,
+      enableHiding: false,
+      header: () => <span className="sr-only">Acciones</span>,
       cell: ({ row }) => (
         <AreaFormDialog
           customerId={customerId}
@@ -100,55 +115,59 @@ export function getAreaColumns(
   return columns;
 }
 
-function readCookieJson<T>(name: string, fallback: T): T {
-  const raw = Cookies.get(name);
-  if (!raw) return fallback;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
+/**
+ * Áreas del cliente: un catálogo chico (decenas por cliente) que llega completo desde el servidor, así que
+ * ordena, filtra y pagina en memoria (`inMemory`).
+ */
+function AreaTable({
+  areas,
+  customerId,
+  provinces,
+  canEdit,
+  initialColumnVisibility,
+  initialFilterVisibility,
+}: AreaTableProps) {
+  const columns = useMemo(() => getAreaColumns(customerId, provinces, canEdit), [customerId, provinces, canEdit]);
 
-function AreaTable({ areas, customerId, provinces, savedFilters }: AreaTableProps) {
-  const { hasPermission } = usePermissions();
-  const canEdit = hasPermission('comercial', 'areas-cliente', 'update');
-
-  const savedVisibility = readCookieJson<VisibilityState>('areaTable', {});
-  const savedFiltersFromCookie = readCookieJson<string[]>('areaTable-filters', savedFilters);
-
-  const filterOptions = useMemo(
-    () => ({
-      names: createFilterOptions(areas, (area) => area.nombre),
-      provinces: createFilterOptions(
-        areas.flatMap((area) => provinceNames(area)),
-        (name) => name
-      ),
-    }),
-    [areas]
-  );
-
-  const columns = useMemo(
-    () => getAreaColumns(customerId, provinces, canEdit),
-    [customerId, provinces, canEdit]
-  );
+  const facetedFilters = useMemo<DataTableFacetedFilterConfig[]>(() => {
+    const names = Array.from(new Set(areas.flatMap((area) => provinceNames(area)))).sort((a, b) => a.localeCompare(b));
+    return [
+      { columnId: 'nombre', title: 'Nombre', type: 'text', placeholder: 'Buscar por nombre...' },
+      { columnId: 'descripcion_corta', title: 'Descripción', type: 'text', placeholder: 'Buscar por descripción...' },
+      {
+        columnId: 'provinces',
+        title: 'Provincias',
+        options: names.map((name) => ({ value: name, label: name, icon: MapPin })),
+      },
+    ];
+  }, [areas]);
 
   return (
-    <div className="flex flex-col gap-4 p-4 pt-0">
-      <BaseDataTable
-        columns={columns}
-        data={areas}
-        savedVisibility={savedVisibility}
-        tableId="areaTable"
-        toolbarOptions={{
-          initialVisibleFilters: savedFiltersFromCookie,
-          filterableColumns: [
-            { columnId: 'Nombre', title: 'Nombre', options: filterOptions.names },
-            { columnId: 'Provincias', title: 'Provincias', options: filterOptions.provinces },
-          ],
-        }}
-      />
-    </div>
+    <DataTable
+      columns={columns}
+      data={areas}
+      totalRows={areas.length}
+      searchParams={{}}
+      inMemory
+      mobileCards
+      tableId={TABLE_ID}
+      paramNamespace={TABLE_ID}
+      facetedFilters={facetedFilters}
+      initialColumnVisibility={initialColumnVisibility}
+      initialFilterVisibility={initialFilterVisibility}
+      searchPlaceholder="Buscar por nombre o descripción"
+      showSearch
+      showFilterToggle
+      emptyMessage="Este cliente no tiene áreas cargadas"
+      data-testid="customer-areas-table"
+      exportConfig={{
+        fetchAllData: async () => areas,
+        options: { filename: 'areas-cliente', title: 'Áreas del cliente', sheetName: 'Áreas' },
+        formatters: {
+          provinces: (value) => (Array.isArray(value) ? value.join(', ') : String(value ?? '')),
+        },
+      }}
+    />
   );
 }
 

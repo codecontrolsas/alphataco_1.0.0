@@ -28,12 +28,17 @@ import type { RequestDeliveryInput } from '../schemas/requests';
  * ORDEN DE LOCKS, unico en todo el dominio (si dos caminos lo invierten, deadlock):
  *   1. el movimiento original (solo anulaciones)
  *   2. el pedido de materiales (entregas y anulaciones de entregas, etapa 3)
- *   3. `materials` (por id)
- *   4. `stock_balances` (por id)
- *   5. `material_units` (por id)
- *   6. advisory lock de numeracion (`nextStockMovementNumber`)
+ *   3. `warehouses` (FOR SHARE, por id — `lockWarehouses`)
+ *   4. `materials` (por id)
+ *   5. `stock_balances` (por id)
+ *   6. `material_units` (por id)
+ *   7. advisory lock de numeracion (`nextStockMovementNumber`)
  * Lockear el material serializa todo lo que toca su stock, incluido el calculo del total de
  * la empresa para el costo promedio (que suma saldos de depositos que no se lockean uno a uno).
+ * El FOR SHARE de los depositos no frena a otros movimientos (dos FOR SHARE conviven), pero si
+ * a la baja del deposito (`removeWarehouse` toma FOR UPDATE y recien despues mira saldos y
+ * movimientos): un movimiento en curso no puede dejar stock en un deposito recien desactivado
+ * o borrado. Registro, entrega, devolucion y anulacion lo toman en este mismo punto.
  *
  * Errores de negocio: `StockError` con el mensaje para el usuario. Las validaciones van ANTES
  * de escribir; los CHECK de la base son la red, no el mensaje.
@@ -185,13 +190,33 @@ function directionFor(type: StockMovementTypeValue, adjustmentDirection: 'IN' | 
   return -1; // EXIT y TRANSFER restan del deposito origen
 }
 
+interface WarehouseRow {
+  id: string;
+  name: string;
+  is_active: boolean;
+}
+
+/**
+ * Lee los depositos con FOR SHARE (paso 3 del orden de locks), en orden de id. El estado que se
+ * valida es el que devuelve esta misma sentencia, despues de esperar una baja en curso. No falla
+ * si falta alguno: cada caller decide el mensaje.
+ */
+async function lockWarehouses(tx: Tx, companyId: string, ids: string[]): Promise<Map<string, WarehouseRow>> {
+  const unique = [...new Set(ids)].sort();
+  if (unique.length === 0) return new Map();
+  const rows = await tx.$queryRaw<WarehouseRow[]>`
+    SELECT id, name, is_active
+    FROM warehouses
+    WHERE id = ANY(${unique}::uuid[]) AND company_id = ${companyId}::uuid
+    ORDER BY id
+    FOR SHARE
+  `;
+  return new Map(rows.map((r) => [r.id, r]));
+}
+
 async function loadWarehouses(tx: Tx, companyId: string, input: StockMovementInput) {
   const ids = [input.warehouseId, ...(input.targetWarehouseId ? [input.targetWarehouseId] : [])];
-  const rows = await tx.warehouses.findMany({
-    where: { id: { in: ids }, company_id: companyId },
-    select: { id: true, name: true, is_active: true },
-  });
-  const byId = new Map(rows.map((r) => [r.id, r]));
+  const byId = await lockWarehouses(tx, companyId, ids);
 
   const origin = byId.get(input.warehouseId);
   if (!origin) throw new StockError('NOT_FOUND', 'El depósito no existe en la empresa');
@@ -695,6 +720,10 @@ export async function reverseStockMovement(
   // Entrega de un pedido: el pedido se lockea despues del original y antes de los materiales.
   const request = original.material_request_id ? await lockRequest(tx, companyId, original.material_request_id) : null;
 
+  // Depositos (FOR SHARE): solo el lock, para que una baja no corra en paralelo. La anulacion
+  // sigue admitiendo depositos inactivos, como antes.
+  await lockWarehouses(tx, companyId, [origin.id, ...(target ? [target.id] : [])]);
+
   // Locks de stock en el orden del dominio.
   const materials = await lockMaterials(
     tx,
@@ -916,10 +945,8 @@ export async function registerReturn(
     throw new StockError('NOT_ON_LOAN', `${exit.number} no es una salida: no hay préstamo que devolver`);
   }
 
-  const warehouse = await tx.warehouses.findFirst({
-    where: { id: input.warehouseId, company_id: companyId },
-    select: { id: true, name: true, is_active: true },
-  });
+  // Deposito (FOR SHARE, paso 3 del orden de locks).
+  const warehouse = (await lockWarehouses(tx, companyId, [input.warehouseId])).get(input.warehouseId);
   if (!warehouse) throw new StockError('NOT_FOUND', 'El depósito no existe en la empresa');
   if (!warehouse.is_active) throw new StockError('INACTIVE_WAREHOUSE', `El depósito ${warehouse.name} está inactivo`);
 
@@ -931,7 +958,7 @@ export async function registerReturn(
     }
   }
 
-  // 2-4. Locks en el orden del dominio.
+  // 4-6. Locks en el orden del dominio.
   const materials = await lockMaterials(
     tx,
     companyId,

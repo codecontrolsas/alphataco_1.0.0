@@ -2,17 +2,20 @@
 title: Estadísticas
 summary: La evolución en el tiempo de servicios, ausentismo, mantenimiento de la flota y desvíos de los partes, para analizar tendencias.
 keywords: estadísticas, gráficos, ausentismo, dotación, servicios, histórico, mantenimiento, sala de control, desvíos, pedidos
-updated: 2026-10-07
+updated: 2026-10-15
 ---
 
 Mientras el <GuideLink to="dashboard-principal">Dashboard principal</GuideLink> muestra el día de hoy, **Estadísticas** muestra cómo vienen las cosas en el tiempo: servicios por período, ausentismo, uso y mantenimiento de la flota, y los desvíos de los partes diarios. Es la pantalla para jefaturas y gerencia.
 
 <OpenScreen />
 
-Se entra desde el menú lateral, en **Dashboard → Estadísticas**. Tiene cuatro solapas: **Operaciones**, **RRHH**, **Mantenimiento** y **Sala de Control**. Cada una se muestra solo si tenés permiso para verla.
+Se entra desde el menú lateral, en **Dashboard → Análisis**. Cada parte de esta guía es un tablero propio, que se elige con el selector **Tablero**: **Operación**, **Personal**, **Flota y taller** y **Control de desvíos** (los **Indicadores** están en <GuideLink to="kpis">KPIs</GuideLink>). Cada tablero muestra solo los widgets que tenés permiso para ver (ver <GuideLink to="dashboard-tableros">Tableros del Dashboard</GuideLink>).
 
 <Callout type="info" title="Si un gráfico aparece vacío">
-Los gráficos se arman solo con lo que ya está cargado en el sistema. Si la empresa todavía no carga partes diarios, diagramas o pedidos de mantenimiento, el gráfico correspondiente aparece vacío con un mensaje como **Sin datos para este período**. La **Sala de Control**, además, se arma con un registro nocturno que empieza a acumularse desde que la empresa cierra partes: los días anteriores a ese registro no tienen datos.
+  Los gráficos se arman solo con lo que ya está cargado en el sistema. Si la empresa todavía no carga partes diarios,
+  diagramas o pedidos de mantenimiento, el gráfico correspondiente aparece vacío con un mensaje como **Sin datos para
+  este período**. La **Sala de Control**, además, se arma con un registro nocturno que empieza a acumularse desde que la
+  empresa cierra partes: los días anteriores a ese registro no tienen datos.
 </Callout>
 
 ## Operaciones
@@ -33,14 +36,14 @@ Mide la dotación y el ausentismo. Arriba dice **Medición del día de hoy** con
 
 ### Tarjetas del día
 
-| Tarjeta | Qué cuenta |
-|---|---|
+| Tarjeta                   | Qué cuenta                                                                   |
+| ------------------------- | ---------------------------------------------------------------------------- |
 | **Dotación Día Anterior** | Empleados que ya habían ingresado al día de ayer y no estaban dados de baja. |
-| **Altas** | Ingresos de hoy (por fecha de ingreso). |
-| **Bajas** | Bajas de hoy (por fecha de baja). |
-| **Total Ausentes** | Empleados ausentes hoy. |
-| **Dotación Actual** | Dotación de hoy. |
-| **% Ausentismo Diario** | **Total Ausentes** sobre **Dotación Actual**. |
+| **Altas**                 | Ingresos de hoy (por fecha de ingreso).                                      |
+| **Bajas**                 | Bajas de hoy (por fecha de baja).                                            |
+| **Total Ausentes**        | Empleados ausentes hoy.                                                      |
+| **Dotación Actual**       | Dotación de hoy.                                                             |
+| **% Ausentismo Diario**   | **Total Ausentes** sobre **Dotación Actual**.                                |
 
 ### Cómo se calcula el ausentismo
 
@@ -93,10 +96,18 @@ Son pantallas complementarias pero independientes: las metas que se ven en Estad
 ## Cómo se conecta con el resto del sistema
 
 <Flow title="De la carga diaria a la estadística">
-  <FlowStep title="Partes diarios" module="Operaciones" to="partes-diarios">Servicios, recursos y desvíos.</FlowStep>
-  <FlowStep title="Diagramas" module="Empleados" to="diagramas">Ausencias y días laborales.</FlowStep>
-  <FlowStep title="Mantenimiento" module="Mantenimiento" to="taller">Solicitudes, órdenes y condición de los equipos.</FlowStep>
-  <FlowStep title="Estadísticas" module="Dashboard" tone="success">Tendencias por período.</FlowStep>
+  <FlowStep title="Partes diarios" module="Operaciones" to="partes-diarios">
+    Servicios, recursos y desvíos.
+  </FlowStep>
+  <FlowStep title="Diagramas" module="Empleados" to="diagramas">
+    Ausencias y días laborales.
+  </FlowStep>
+  <FlowStep title="Mantenimiento" module="Mantenimiento" to="taller">
+    Solicitudes, órdenes y condición de los equipos.
+  </FlowStep>
+  <FlowStep title="Estadísticas" module="Dashboard" tone="success">
+    Tendencias por período.
+  </FlowStep>
 </Flow>
 
 Cualquier carga atrasada o incompleta en esos módulos se ve acá como un hueco o una caída en los gráficos.

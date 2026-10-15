@@ -1,30 +1,24 @@
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatMoney, formatQuantity, formatUnitCost } from '@/features/Warehouses/lib/format';
 import { RECEIVER_VAT_CONDITIONS, isReceiverVatConditionId } from '@/shared/lib/arca/catalogs';
-import { BadgeCheck, CircleX, Paperclip, ShieldAlert, ShieldCheck, ShieldX, TriangleAlert } from 'lucide-react';
+import { Paperclip, ShieldAlert, ShieldCheck, ShieldX } from 'lucide-react';
 import moment from 'moment';
 import 'moment/locale/es';
 import Link from 'next/link';
-import type { SupplierInvoiceDetail } from '../../actions/invoices.server';
+import type { SupplierInvoiceDetail } from '../../lib/invoice-query-types';
 import { HistoryCard } from '../../components/HistoryCard';
 import { ARCA_CHECK_LABELS } from '../../lib/invoice-status';
 import { SUPPLIER_INVOICE_TAX_LABELS } from '../../schemas/invoices';
 import { SupplierInvoiceActions } from './SupplierInvoiceActions';
 import { SupplierInvoiceStatusBadge } from './SupplierInvoiceStatusBadge';
 import { PaymentOrderStatusBadge } from '../../Payments/components/PaymentOrderStatusBadge';
+import { AttentionBanner } from '@/features/Mantenimiento/shared/components/AttentionBanner';
+import { Field, FieldGrid } from '@/shared/components/common/FieldGrid';
+import { RecordHeader } from '@/shared/components/common/RecordHeader';
+import { SectionCard } from '@/shared/components/common/SectionCard';
+import { formatArgentinaDateTime, formatDateAr } from '@/shared/lib/argentina-time';
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="text-sm">{children}</dd>
-    </div>
-  );
-}
-
-const day = (value: string | null) => (value ? moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY') : '—');
+const day = (value: string | null) => (value ? formatDateAr(value) : '—');
 const period = (value: string) => {
   const text = moment(value, 'YYYY-MM').locale('es').format('MMMM YYYY');
   return text.charAt(0).toUpperCase() + text.slice(1);
@@ -32,9 +26,9 @@ const period = (value: string) => {
 
 const ARCA_ICONS = { APPROVED: ShieldCheck, REJECTED: ShieldX, UNAVAILABLE: ShieldAlert } as const;
 const ARCA_CLASSES = {
-  APPROVED: 'text-green-700 dark:text-green-400',
-  REJECTED: 'text-red-700 dark:text-red-400',
-  UNAVAILABLE: 'text-amber-700 dark:text-amber-400',
+  APPROVED: 'text-ok-subtle-foreground',
+  REJECTED: 'text-danger-subtle-foreground',
+  UNAVAILABLE: 'text-warn-subtle-foreground',
 } as const;
 
 /** Detalle del comprobante: datos, lineas con las diferencias resaltadas, IVA, tributos y estado. */
@@ -47,56 +41,55 @@ export function SupplierInvoiceDetailView({ invoice }: { invoice: SupplierInvoic
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">{invoice.label}</h1>
-        <SupplierInvoiceStatusBadge status={invoice.status} />
-        <div className="w-full sm:ml-auto sm:w-auto">
-          <SupplierInvoiceActions invoice={invoice} />
-        </div>
-      </div>
+      <RecordHeader
+        identity={
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-semibold">{invoice.label}</h1>
+            <SupplierInvoiceStatusBadge status={invoice.status} />
+          </div>
+        }
+        actions={<SupplierInvoiceActions invoice={invoice} />}
+      />
 
       {invoice.status === 'OBSERVED' && invoice.observations.length > 0 && (
-        <Alert className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-          <TriangleAlert className="h-4 w-4" />
-          <AlertTitle>
-            Observada: {invoice.observations.length} {invoice.observations.length === 1 ? 'diferencia' : 'diferencias'}
-          </AlertTitle>
-          <AlertDescription>
-            <ul className="list-disc space-y-1 pl-4">
+        <AttentionBanner
+          tone="warn"
+          title={`Observada: ${invoice.observations.length} ${invoice.observations.length === 1 ? 'diferencia' : 'diferencias'}`}
+          description={
+            <>
               {invoice.observations.map((o, i) => (
-                <li key={`${o.code}-${i}`}>{o.message}</li>
+                <span key={`${o.code}-${i}`} className="block">
+                  • {o.message}
+                </span>
               ))}
-            </ul>
-            <p className="mt-2">Quien tenga permiso de aprobar la acepta (queda a pagar) o la rechaza.</p>
-          </AlertDescription>
-        </Alert>
+              <span className="mt-2 block">Quien tenga permiso de aprobar la acepta (queda a pagar) o la rechaza.</span>
+            </>
+          }
+        />
       )}
       {invoice.resolution && (invoice.status === 'APPROVED' || invoice.status === 'REJECTED') && (
-        <Alert variant={invoice.status === 'REJECTED' ? 'destructive' : 'default'}>
-          {invoice.status === 'APPROVED' ? <BadgeCheck className="h-4 w-4" /> : <CircleX className="h-4 w-4" />}
-          <AlertTitle>{invoice.status === 'APPROVED' ? 'Aprobada con diferencias' : 'Rechazada'}</AlertTitle>
-          <AlertDescription className="whitespace-pre-wrap">
-            {invoice.resolution.comment}
-            {invoice.observations.length > 0 && (
-              <ul className="mt-2 list-disc pl-4 text-xs">
-                {invoice.observations.map((o, i) => (
-                  <li key={`${o.code}-${i}`}>{o.message}</li>
-                ))}
-              </ul>
-            )}
-          </AlertDescription>
-        </Alert>
+        <AttentionBanner
+          tone={invoice.status === 'REJECTED' ? 'danger' : 'ok'}
+          title={invoice.status === 'APPROVED' ? 'Aprobada con diferencias' : 'Rechazada'}
+          description={
+            <>
+              <span className="block whitespace-pre-wrap">{invoice.resolution.comment}</span>
+              {invoice.observations.map((o, i) => (
+                <span key={`${o.code}-${i}`} className="block text-xs">
+                  • {o.message}
+                </span>
+              ))}
+            </>
+          }
+        />
       )}
       {invoice.status === 'CANCELLED' && invoice.cancelReason && (
-        <Alert variant="destructive">
-          <AlertTitle>Anulada</AlertTitle>
-          <AlertDescription className="whitespace-pre-wrap">{invoice.cancelReason}</AlertDescription>
-        </Alert>
+        <AttentionBanner tone="danger" title="Anulada" description={<span className="whitespace-pre-wrap">{invoice.cancelReason}</span>} />
       )}
 
-      <Card>
-        <CardContent className="pt-6">
-          <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <SectionCard title="Datos del comprobante">
+        <div>
+          <FieldGrid>
             <Field label="Proveedor">
               <Link href={`/dashboard/purchases/suppliers/${invoice.supplier.id}`} className="hover:underline">
                 {invoice.supplier.name}
@@ -117,7 +110,7 @@ export function SupplierInvoiceDetailView({ invoice }: { invoice: SupplierInvoic
                 <span className={`inline-flex items-center gap-1 ${ARCA_CLASSES[invoice.arcaCheck.result]}`}>
                   <ArcaIcon className="h-4 w-4" />
                   {ARCA_CHECK_LABELS[invoice.arcaCheck.result]}
-                  {invoice.arcaCheck.at && <span className="text-muted-foreground"> · {moment(invoice.arcaCheck.at).format('DD/MM/YYYY HH:mm')}</span>}
+                  {invoice.arcaCheck.at && <span className="text-muted-foreground"> · {formatArgentinaDateTime(invoice.arcaCheck.at)}</span>}
                 </span>
               ) : (
                 <span className="text-muted-foreground">{invoice.cae ? 'Sin constatar' : 'Sin CAE: no se puede constatar'}</span>
@@ -152,16 +145,12 @@ export function SupplierInvoiceDetailView({ invoice }: { invoice: SupplierInvoic
                 'Sin adjunto'
               )}
             </Field>
-          </dl>
+          </FieldGrid>
           {invoice.notes && <p className="mt-4 whitespace-pre-wrap text-sm text-muted-foreground">{invoice.notes}</p>}
-        </CardContent>
-      </Card>
+        </div>
+      </SectionCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Líneas</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <SectionCard title="Líneas">
           <div className="overflow-x-auto">
             <Table className="min-w-[640px]">
               <TableHeader>
@@ -180,7 +169,7 @@ export function SupplierInvoiceDetailView({ invoice }: { invoice: SupplierInvoic
                   const quantityFlag = line.observationCodes.includes('QUANTITY');
                   const rateFlag = line.observationCodes.includes('VAT_RATE');
                   return (
-                    <TableRow key={line.id} className={flagged ? 'bg-amber-50 dark:bg-amber-950/30' : undefined}>
+                    <TableRow key={line.id} className={flagged ? 'bg-warn-subtle' : undefined}>
                       <TableCell>
                         <span className="block">{line.itemLabel}</span>
                         <span className="block text-xs text-muted-foreground">
@@ -193,16 +182,16 @@ export function SupplierInvoiceDetailView({ invoice }: { invoice: SupplierInvoic
                           )}
                         </span>
                       </TableCell>
-                      <TableCell className={`text-right tabular-nums ${quantityFlag ? 'font-medium text-amber-800 dark:text-amber-300' : ''}`}>
+                      <TableCell className={`text-right tabular-nums ${quantityFlag ? 'font-medium text-warn-subtle-foreground' : ''}`}>
                         {line.quantity ? `${formatQuantity(line.quantity)} ${line.unitAbbr ?? ''}` : '—'}
                       </TableCell>
-                      <TableCell className={`text-right tabular-nums ${priceFlag ? 'font-medium text-amber-800 dark:text-amber-300' : ''}`}>
+                      <TableCell className={`text-right tabular-nums ${priceFlag ? 'font-medium text-warn-subtle-foreground' : ''}`}>
                         {line.unitPrice ? formatUnitCost(line.unitPrice) : '—'}
                         {priceFlag && line.orderUnitPrice && (
                           <span className="block text-xs font-normal">OC {formatUnitCost(line.orderUnitPrice)}</span>
                         )}
                       </TableCell>
-                      <TableCell className={rateFlag ? 'font-medium text-amber-800 dark:text-amber-300' : ''}>{line.vatRateLabel ?? '—'}</TableCell>
+                      <TableCell className={rateFlag ? 'font-medium text-warn-subtle-foreground' : ''}>{line.vatRateLabel ?? '—'}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatMoney(line.netTotal)}</TableCell>
                     </TableRow>
                   );
@@ -210,14 +199,9 @@ export function SupplierInvoiceDetailView({ invoice }: { invoice: SupplierInvoic
               </TableBody>
             </Table>
           </div>
-        </CardContent>
-      </Card>
+      </SectionCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Importes</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <SectionCard title="Importes">
           <dl className="ml-auto grid max-w-md grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-sm tabular-nums">
             <dt className="text-muted-foreground">{invoice.letter === 'C' ? 'Importe de las líneas' : 'Neto gravado'}</dt>
             <dd className="text-right">{formatMoney(invoice.amounts.netTaxed)}</dd>
@@ -254,15 +238,11 @@ export function SupplierInvoiceDetailView({ invoice }: { invoice: SupplierInvoic
             <dt className="text-base font-semibold">Total</dt>
             <dd className="text-right text-base font-semibold">{formatMoney(invoice.amounts.total)}</dd>
           </dl>
-        </CardContent>
-      </Card>
+      </SectionCard>
 
       {invoice.status !== 'CANCELLED' && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Pagos</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
+        <SectionCard title="Pagos">
+          <div className="space-y-3">
             <dl className="grid grid-cols-2 gap-4 sm:max-w-md">
               <div>
                 <dt className="text-xs text-muted-foreground">Pagado</dt>
@@ -281,7 +261,7 @@ export function SupplierInvoiceDetailView({ invoice }: { invoice: SupplierInvoic
                       {o.number}
                     </Link>
                     <PaymentOrderStatusBadge status={o.status} />
-                    {o.paidOn && <span className="text-muted-foreground">pagada {moment(o.paidOn, 'YYYY-MM-DD').format('DD/MM/YYYY')}</span>}
+                    {o.paidOn && <span className="text-muted-foreground">pagada {formatDateAr(o.paidOn)}</span>}
                     <span className="ml-auto tabular-nums">{formatMoney(o.amount)}</span>
                   </li>
                 ))}
@@ -289,8 +269,8 @@ export function SupplierInvoiceDetailView({ invoice }: { invoice: SupplierInvoic
             ) : (
               <p className="text-sm text-muted-foreground">Todavía no está en ninguna orden de pago.</p>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </SectionCard>
       )}
 
       <HistoryCard history={invoice.history} />

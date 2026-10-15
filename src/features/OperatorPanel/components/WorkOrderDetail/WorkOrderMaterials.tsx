@@ -50,7 +50,7 @@ export function WorkOrderMaterials({
           <Package className="h-4 w-4" />
           Materiales
           {waiting && (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+            <span className="rounded-full bg-warn-subtle px-2 py-0.5 text-xs font-medium text-warn-subtle-foreground">
               Esperando materiales
             </span>
           )}

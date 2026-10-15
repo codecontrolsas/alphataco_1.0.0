@@ -3,7 +3,6 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { PermanentDocumentsDownloadButton } from '@/features/Employees/Empleados/DocumentosEmpleados/PermanentDocumentsDownloadButton';
 import { useDebounce } from '@/shared/hooks/useDebounce';
 import type { ColumnFiltersState, SortingState, Table } from '@tanstack/react-table';
 import { X } from 'lucide-react';
@@ -124,7 +123,6 @@ interface DataTableToolbarProps<
   initialVisibleFilters?: string[];
   extraActions?: React.ReactNode | ((table: Table<TData>) => React.ReactNode);
   showExport?: boolean;
-  showDocumentDownload?: boolean;
   tableId?: string;
   bulkAction?: BulkActionProps<TData>;
   isLoading?: boolean;
@@ -146,7 +144,6 @@ export function DataTableToolbar<
   initialVisibleFilters,
   extraActions,
   showExport = true,
-  showDocumentDownload = false,
   tableId,
   bulkAction,
   isLoading = false,
@@ -342,7 +339,6 @@ export function DataTableToolbar<
       </div>
       <div className="flex items-center space-x-2 flex-wrap">
         {typeof extraActions === 'function' ? extraActions(table) : extraActions}
-        {showDocumentDownload && <PermanentDocumentsDownloadButton table={table} />}
         {showExport &&
           (serverSide && fetchAllData ? (
             <DataTableExportExcelServer table={table} fetchAllData={fetchAllData} />

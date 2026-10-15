@@ -1,4 +1,4 @@
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
@@ -12,8 +12,12 @@ import { getWorkshopSectorWorkOrdersPaginated } from './actions.server';
 interface WorkshopSectorTasksListProps {
   /** ID del sector de taller — filtro base obligatorio. */
   sectorId: string;
-  /** Todos los searchParams de la URL. Se aplica stripPrefix con el tableId. */
+  /** Todos los searchParams de la URL. Se aplica stripPrefix con el namespace de la tabla. */
   searchParams: DataTableSearchParams;
+  /** Título de la tarjeta (el sector elegido). */
+  title: string;
+  /** Línea de apoyo: cupos ocupados y tareas sin OT del sector. */
+  description?: string;
 }
 
 // ============================================================================
@@ -23,19 +27,24 @@ interface WorkshopSectorTasksListProps {
 /**
  * WorkshopSectorTasksList — Server Component.
  *
- * Se instancia una vez por sector de taller en el acordeón de la Vista Taller y
- * lista las ÓRDENES DE TRABAJO abiertas del sector (ticket 678).
+ * Se instancia UNA vez: para el sector que eligió el usuario en la grilla de tarjetas de la Vista Taller.
+ * Lista las ÓRDENES DE TRABAJO abiertas del sector (ticket 678).
  *
- * tableId único por sector para que los URL params de cada tabla en la página no
- * interfieran entre sí. El prefijo cambió respecto de la versión que listaba
- * tareas: las columnas ya no son las mismas, así que reutilizar las preferencias
- * guardadas dejaría visibilidades apuntando a columnas que ya no existen.
+ * El namespace de los parámetros de URL es único por sector, así las tablas de sectores distintos no se pisan
+ * entre sí al cambiar de tarjeta. El tableId (preferencias de columnas y filtros) lleva el sufijo `-v2` porque
+ * las columnas cambiaron con el rediseño; el namespace NO cambia, así los links y bookmarks siguen funcionando.
  */
-export async function WorkshopSectorTasksList({ sectorId, searchParams }: WorkshopSectorTasksListProps) {
-  const tableId = `workshop-sector-work-orders-${sectorId}`;
+export async function WorkshopSectorTasksList({
+  sectorId,
+  searchParams,
+  title,
+  description,
+}: WorkshopSectorTasksListProps) {
+  const paramNamespace = `workshop-sector-work-orders-${sectorId}`;
+  const tableId = `${paramNamespace}-v2`;
 
   // Strip del namespace antes de parsear los searchParams de esta tabla
-  const tableParams = stripPrefixFromSearchParams(searchParams as DataTableSearchParams, tableId);
+  const tableParams = stripPrefixFromSearchParams(searchParams, paramNamespace);
 
   const [{ data, total }, preferences] = await Promise.all([
     getWorkshopSectorWorkOrdersPaginated(sectorId, tableParams),
@@ -44,13 +53,18 @@ export async function WorkshopSectorTasksList({ sectorId, searchParams }: Worksh
 
   return (
     <Card>
-      <CardContent className="pt-6">
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        {description ? <CardDescription>{description}</CardDescription> : null}
+      </CardHeader>
+      <CardContent>
         <_WorkshopSectorTasksDataTable
           sectorId={sectorId}
           data={data}
           totalRows={total}
           searchParams={tableParams}
           tableId={tableId}
+          paramNamespace={paramNamespace}
           initialColumnVisibility={preferences.columnVisibility ?? {}}
           initialFilterVisibility={preferences.filterVisibility ?? {}}
         />

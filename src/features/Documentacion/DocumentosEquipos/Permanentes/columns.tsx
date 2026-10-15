@@ -2,19 +2,21 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { formatExportDbDate } from '@/features/Documentacion/lists-shared/document-list-export';
 import {
   DocumentEquipmentCell,
   DocumentExpiryCell,
   DocumentNameCell,
   DocumentRowActions,
   DocumentStatePill,
+  documentListStateLabels,
   documentStateIcons,
 } from '@/features/Documentacion/shared/components/DocumentCells';
-import SimpleDocument from '@/features/Documentacion/shared/components/SimpleDocument';
-import { formatArgentinaDay } from '@/features/Treasury/lib/today';
+import { RequirementUpload } from '@/features/Documentacion/shared/components/RequirementUpload';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { contractTypeVehiclesLabels, documentStateLabels } from '@/shared/utils/mappers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { contractTypeVehiclesLabels } from '@/shared/utils/mappers';
 import type { ColumnDef } from '@tanstack/react-table';
 import Link from 'next/link';
 import type { EquipmentPermanentDocumentListItem } from './queries.server';
@@ -46,7 +48,7 @@ export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = [
 
 /** Íconos y labels de estado: los mismos que usa la pill de la tabla (los consume el filtro de Estado). */
 export const stateIcons = documentStateIcons;
-export const stateLabels = documentStateLabels;
+export const stateLabels = documentListStateLabels;
 
 // ============================================================================
 // HELPERS
@@ -75,7 +77,7 @@ function ActionsCell({ row }: { row: EquipmentPermanentDocumentListItem }) {
       documentId={row.id}
       documentName={row.document_types?.name}
       state={row.state}
-      archived={row.archived_at != null}
+      archived={row.notApplicable}
       resource="Equipos"
       viewTab="docs-equipos-permanentes"
       upload={{
@@ -83,11 +85,12 @@ function ActionsCell({ row }: { row: EquipmentPermanentDocumentListItem }) {
         tab: isPrivateDocType ? 'documentos-de-equipos' : 'docs-equipos-permanentes',
         action: isPrivateDocType ? 'upload_private' : 'update',
         render: (close) => (
-          <SimpleDocument
-            resource="equipo"
-            handleOpen={close}
-            defaultDocumentId={row.id_document_types ?? undefined}
-            numberDocument={row.vehicles?.id ?? undefined}
+          <RequirementUpload
+            kind="vehicle"
+            resourceId={row.applies}
+            documentTypeId={row.id_document_types}
+            period={row.period}
+            close={close}
           />
         ),
       }}
@@ -174,7 +177,7 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
     header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
     cell: ({ row }) => (
       // Documento archivado: historial / no vigente (solo visible en el detalle del equipo)
-      <DocumentStatePill state={row.original.state} archived={row.original.archived_at != null} />
+      <DocumentStatePill state={row.original.state} archived={row.original.notApplicable} />
     ),
     filterFn: (row, id, value: string[]) => {
       const val = row.getValue(id) as string | null;
@@ -194,7 +197,8 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
       <DocumentExpiryCell
         validity={row.original.document_types?.explired ? row.original.validity : null}
         state={row.original.state}
-        archived={row.original.archived_at != null}
+        archived={row.original.notApplicable}
+        missing={row.original.isMissing}
       />
     ),
     enableSorting: true,
@@ -207,12 +211,10 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
     meta: { title: 'Subido el' },
     header: ({ column }) => <DataTableColumnHeader column={column} title="Subido el" />,
     cell: ({ row }) => {
-      if (row.original.state === 'pendiente') {
-        return <span className="text-muted-foreground">No disponible</span>;
-      }
       // Usar la fecha del log más reciente si existe, sino created_at
       const latestLog = row.original.documents_equipment_logs?.[0];
       const date = latestLog?.updated_at ?? row.original.created_at;
+      if (row.original.isMissing || !date) return <span className="text-muted-foreground">No disponible</span>;
       return <span className="font-mono tabular-nums">{formatArgentinaDay(date)}</span>;
     },
     enableSorting: true,
@@ -503,7 +505,8 @@ export const columns: ColumnDef<EquipmentPermanentDocumentListItem>[] = [
     cell: ({ row }) => {
       const date = row.original.vehicles?.contract_expiration_date;
       if (!date) return <span className="text-muted-foreground">-</span>;
-      return <span className="text-sm">{formatArgentinaDay(date)}</span>;
+      // `contract_expiration_date` es @db.Date (medianoche UTC): en hora argentina caería un día antes.
+      return <span className="text-sm">{formatExportDbDate(date)}</span>;
     },
     enableSorting: true,
   },

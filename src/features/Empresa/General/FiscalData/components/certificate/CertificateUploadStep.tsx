@@ -6,9 +6,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { LoadingSwap } from '@/components/ui/loading-swap';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ChevronDown, Loader2, Upload } from 'lucide-react';
-import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useRef, useState, useTransition, type DragEvent } from 'react';
 import { useForm } from 'react-hook-form';
@@ -63,7 +63,7 @@ export function CertificateUploadStep({
         setError(result.error);
         return;
       }
-      toast.success(`Certificado cargado. Vence el ${moment(result.data.notAfter).format('DD/MM/YYYY')}.`);
+      toast.success(`Certificado cargado. Vence el ${formatArgentinaDay(result.data.notAfter)}.`);
       pasteForm.reset();
       router.refresh();
       onUploaded();

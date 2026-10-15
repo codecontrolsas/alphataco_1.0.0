@@ -2,13 +2,10 @@ import type { DataTableSearchParams } from '@/shared/components/common/DataTable
 import { PendingOrderList } from './PendingOrderList';
 
 /**
- * Subtab de Pedidos Pendientes
+ * Paso "Por Programar": pedidos aprobados que esperan fecha de ingreso al taller.
  *
- * Muestra los pedidos de mantenimiento:
- * - pending_scheduling: Pendientes de planificar fecha
- * - scheduled: Pendientes de aprobación de fecha (ya planificados)
- *
- * Ordenamiento: pending_scheduling primero, luego scheduled, de más viejo a más reciente
+ * Por defecto lista los `pending_scheduling`; el filtro de Estado también ofrece `scheduled` (ya planificados).
+ * Arriba van la banda de atención y las tarjetas de métricas, que filtran la tabla vía `attention`.
  */
 
 interface PendientesTabContentProps {

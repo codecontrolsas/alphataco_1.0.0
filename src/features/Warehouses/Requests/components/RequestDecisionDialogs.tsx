@@ -59,6 +59,8 @@ function DecisionDialog({ icon: Icon, destructive, motive, run, ...text }: Decis
     onSuccess: () => {
       toast.success(text.successMessage);
       queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.requests });
+      queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.requestsAttention });
+      queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.requestDetail });
       setOpen(false);
       router.refresh();
     },

@@ -1,11 +1,10 @@
 'use client';
 
-import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { ClipboardX } from 'lucide-react';
+import { MetricCard } from '@/shared/components/common/MetricCard';
 import { useState } from 'react';
+import { InfoTip } from '../shared/InfoTip';
 
 interface Props {
   /** Equipos que nunca tuvieron un checklist cargado. */
@@ -21,47 +20,32 @@ interface Props {
 export function ChecklistMissingCard({ historicalCount, monthCount }: Props) {
   const [showHistorical, setShowHistorical] = useState(false);
   const value = showHistorical ? historicalCount : monthCount;
+  const scope = showHistorical ? 'histórico' : 'este mes';
 
   return (
-    <Card>
-      <CardContent className="flex items-center gap-4 p-4">
-        <div className="rounded-lg p-2.5 text-[var(--chart-4)] bg-[var(--chart-4)]/10">
-          <ClipboardX className="h-5 w-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-2xl font-bold tabular-nums">{value.toLocaleString('es-AR')}</p>
-          <div className="flex items-center justify-between gap-2">
-            <p className="truncate text-xs text-muted-foreground">
-              equipos sin checklist ({showHistorical ? 'histórico' : 'este mes'})
-            </p>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <Label
-                    htmlFor="checklist-missing-switch"
-                    className="cursor-pointer text-[10px] text-muted-foreground"
-                  >
-                    {showHistorical ? 'Histórico' : 'Mes'}
-                  </Label>
-                  <Switch
-                    id="checklist-missing-switch"
-                    checked={showHistorical}
-                    onCheckedChange={setShowHistorical}
-                    className="scale-75"
-                  />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="text-xs">
-                  {showHistorical
-                    ? 'Equipos a los que nunca se les cargó un checklist'
-                    : 'Equipos sin ningún checklist dentro del mes en curso'}
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <MetricCard
+      label={
+        <span className="inline-flex items-center gap-1">
+          Sin checklist
+          <InfoTip label="Cómo se calcula «Sin checklist»">
+            {showHistorical
+              ? 'Equipos activos de la tabla de Equipos a los que nunca se les cargó un checklist.'
+              : 'Equipos activos de la tabla de Equipos sin ningún checklist dentro del mes en curso (hora argentina).'}
+          </InfoTip>
+        </span>
+      }
+      value={value.toLocaleString('es-AR')}
+      hint={
+        <span className="flex items-center justify-between gap-2">
+          <span className="truncate">equipos ({scope})</span>
+          <span className="flex shrink-0 items-center gap-1.5">
+            <Label htmlFor="checklist-missing-switch" className="cursor-pointer text-xs font-normal">
+              Ver histórico
+            </Label>
+            <Switch id="checklist-missing-switch" checked={showHistorical} onCheckedChange={setShowHistorical} />
+          </span>
+        </span>
+      }
+    />
   );
 }

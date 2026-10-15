@@ -6,6 +6,8 @@ import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { storagePublicUrl } from '@/shared/lib/storage';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
@@ -17,6 +19,7 @@ import {
   safePaging,
   textValue,
 } from '../../lib/filter-values';
+import { isoDay } from '../../lib/dates';
 import { CUSTOMER_FILES_BUCKET } from '../../lib/storage-files';
 import { CUSTOMER_WITHHOLDING_TAX_LABELS } from '../../schemas/receipts';
 
@@ -44,6 +47,9 @@ const SORT_MAP: Record<string, (dir: 'asc' | 'desc') => WithholdingOrderBy[]> = 
 };
 
 const DATE_RANGE_COLUMNS = ['certificate_date'];
+
+/** Tope de filas por export de esta tabla. */
+const EXPORT_LIMIT = 10_000;
 
 const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
 
@@ -152,7 +158,7 @@ async function shape(rows: Prisma.customer_receipt_withholdingsGetPayload<{ sele
       jurisdiction: r.jurisdiction,
       certificateNumber: r.certificate_number,
       // Fecha valor (@db.Date): se toma el dia tal cual, sin correr zona horaria
-      certificateDate: r.certificate_date.toISOString().slice(0, 10),
+      certificateDate: isoDay(r.certificate_date),
       amount: r.amount.toString(),
       certificateUrl: r.file_path ? await storagePublicUrl(CUSTOMER_FILES_BUCKET, r.file_path) : null,
       certificateName: r.file_name,
@@ -200,22 +206,39 @@ export async function getWithholdingsPaginated(searchParams: DataTableSearchPara
 // EXPORT (sin paginacion)
 // ============================================================================
 
-export async function getAllWithholdingsForExport(searchParams: DataTableSearchParams) {
+export async function getAllWithholdingsForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<WithholdingListItem[]>> {
   const companyId = await resolveCompanyId();
-  if (!companyId) return [];
+  if (!companyId) return { ok: false, message: 'No tiene permiso para exportar las retenciones.' };
 
   try {
     const state = parseSearchParams(searchParams);
     const where = await buildWhereClause(companyId, state);
-    const rows = await prisma.customer_receipt_withholdings.findMany({
-      where,
-      orderBy: [{ certificate_date: 'desc' }, { certificate_number: 'asc' }],
-      select: WITHHOLDING_SELECT,
+    const orderBy: WithholdingOrderBy[] = [{ certificate_date: 'desc' }, { certificate_number: 'asc' }, { id: 'asc' }];
+
+    const rows = await fetchExportRowsInBatches({
+      maxRows: EXPORT_LIMIT,
+      listIds: (take) => prisma.customer_receipt_withholdings.findMany({ where, orderBy, select: { id: true }, take }),
+      fetchByIds: (ids) =>
+        prisma.customer_receipt_withholdings.findMany({
+          where: { id: { in: ids }, company_id: companyId },
+          select: WITHHOLDING_SELECT,
+        }),
+      tooLargeMessage: (maxRows) =>
+        `Hay más de ${maxRows.toLocaleString('es-AR')} retenciones con los filtros actuales. Acote la exportación con filtros.`,
     });
-    return await shape(rows);
+    return { ok: true, data: await shape(rows) };
   } catch (error) {
     logger.error('Error al exportar retenciones sufridas', { data: { error } });
-    throw new Error('No se pudo exportar la lista de retenciones');
+    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
+    return {
+      ok: false,
+      message:
+        error instanceof ExportTooLargeError
+          ? error.message
+          : 'No se pudo exportar la lista de retenciones. Intente nuevamente.',
+    };
   }
 }
 

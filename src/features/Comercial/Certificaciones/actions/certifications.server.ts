@@ -7,6 +7,7 @@ import { UUID_RE } from '@/features/Purchases/lib/action-errors';
 import { Prisma } from '@/generated/prisma/client';
 import type { certification_status } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
+import { fromDateOnly } from '@/shared/lib/date-only';
 import { toPdfDownload } from '@/shared/lib/pdf/react-pdf.server';
 import type { PdfDownload } from '@/shared/lib/pdf/types';
 import { prisma } from '@/shared/lib/prisma';
@@ -17,6 +18,7 @@ import { certificationTotal, lineAmount } from '../lib/certification-amounts';
 import { serializeCertification, serializeCertificationLine } from '../lib/serializers';
 import { canTransition, isDeletable, isEditable, transitionError } from '../lib/state-machine';
 import { renderCertificationPdf } from '../pdf/render-certification-pdf.server';
+import { certificationFormSchema, type CertificationFormValues } from '../schemas/certification';
 
 const logger = new Logger('features/Comercial/Certificaciones');
 
@@ -42,39 +44,18 @@ const COMERCIAL_PATH = '/dashboard/comercial';
  */
 const ESTADOS_CERTIFICABLES = ['ejecutado', 'en_certificacion'] as const;
 
-export async function getCertifications() {
-  const companyId = await getActiveCompanyId();
-
-  try {
-    const rows = await prisma.certifications.findMany({
-      where: { company_id: companyId },
-      select: {
-        id: true,
-        number: true,
-        status: true,
-        period_from: true,
-        period_to: true,
-        currency: true,
-        total: true,
-        issued_at: true,
-        confirmed_at: true,
-        customers: { select: { id: true, name: true } },
-        customer_services: { select: { id: true, service_name: true } },
-        _count: { select: { lines: true } },
-      },
-      orderBy: [{ period_to: 'desc' }, { number: 'desc' }],
-    });
-
-    return rows.map(serializeCertification);
-  } catch (error) {
-    logger.error('Error al obtener las certificaciones', { data: { error, companyId } });
-    throw error;
-  }
+/** Lecturas de certificaciones: exigen `view`; los importes salen `null` sin `view_prices`. */
+async function readCertificationAccess(): Promise<{ canViewPrices: boolean }> {
+  const [canView, canViewPrices] = await Promise.all([
+    checkPermissionServer('comercial', 'certificaciones', 'view'),
+    checkPermissionServer('comercial', 'certificaciones', 'view_prices'),
+  ]);
+  if (!canView) throw new Error('No tenés permiso para ver las certificaciones.');
+  return { canViewPrices };
 }
 
-export type CertificationRow = Awaited<ReturnType<typeof getCertifications>>[number];
-
 export async function getCertificationById(id: string) {
+  const { canViewPrices } = await readCertificationAccess();
   const companyId = await getActiveCompanyId();
 
   try {
@@ -126,9 +107,18 @@ export async function getCertificationById(id: string) {
     });
 
     if (!row) return null;
+    const serialized = serializeCertification(row);
     return {
-      ...serializeCertification(row),
-      lines: row.lines.map(serializeCertificationLine),
+      ...serialized,
+      total: canViewPrices ? serialized.total : null,
+      lines: row.lines.map((line) => {
+        const serializedLine = serializeCertificationLine(line);
+        return {
+          ...serializedLine,
+          unit_price: canViewPrices ? serializedLine.unit_price : null,
+          amount: canViewPrices ? serializedLine.amount : null,
+        };
+      }),
       invoices: row.invoice_certifications.map((link) => ({
         id: link.invoice.id,
         label: formatVoucherLabel(link.invoice.cbte_type, link.invoice.sales_point.number, link.invoice.number),
@@ -161,46 +151,51 @@ async function nextNumber(tx: Prisma.TransactionClient, companyId: string, year:
   return `${prefix}${String(seq).padStart(4, '0')}`;
 }
 
-interface CreateCertificationInput {
-  customerId: string;
-  customerServiceId: string;
-  periodFrom: string;
-  periodTo: string;
-  notes?: string | null;
-}
-
-export async function createCertification(input: CreateCertificationInput): Promise<ActionResult<{ id: string }>> {
+export async function createCertification(input: CertificationFormValues): Promise<ActionResult<{ id: string }>> {
   const canCreate = await checkPermissionServer('comercial', 'certificaciones', 'create');
   if (!canCreate) return fail('No tenés permiso para crear certificaciones');
 
+  const parsed = certificationFormSchema.safeParse(input);
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos');
+  const values = parsed.data;
+
   const companyId = await getActiveCompanyId();
 
-  const from = new Date(input.periodFrom);
-  const to = new Date(input.periodTo);
-  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return fail('El período no es válido');
+  // `period_from/to` son @db.Date: 'YYYY-MM-DD' estricto, a medianoche UTC.
+  let from: Date | null;
+  let to: Date | null;
+  try {
+    from = fromDateOnly(values.periodFrom);
+    to = fromDateOnly(values.periodTo);
+  } catch {
+    return fail('El período no es válido');
+  }
+  if (!from || !to) return fail('El período no es válido');
   if (to < from) return fail('El período no puede terminar antes de empezar');
 
   try {
-    // Perímetro y moneda en la misma lectura: la moneda se copia del contrato para que la
-    // certificación no cambie de moneda si el contrato se edita después.
+    // Perímetro, cliente y moneda en la misma lectura: el cliente sale del contrato (no se confía en
+    // el que mande el cliente) y la moneda se copia para que la certificación no cambie de moneda si
+    // el contrato se edita después.
     const service = await prisma.customer_services.findFirst({
-      where: { id: input.customerServiceId, customer_id: input.customerId, customers: { company_id: companyId } },
-      select: { id: true, currency: true },
+      where: { id: values.customerServiceId, customers: { company_id: companyId } },
+      select: { id: true, currency: true, customer_id: true },
     });
-    if (!service) return fail('Contrato no encontrado para ese cliente');
+    if (!service || !service.customer_id) return fail('Contrato no encontrado');
+    const customerId = service.customer_id;
 
     const created = await prisma.$transaction(async (tx) => {
       const number = await nextNumber(tx, companyId, from.getUTCFullYear());
       return tx.certifications.create({
         data: {
           company_id: companyId,
-          customer_id: input.customerId,
-          customer_service_id: input.customerServiceId,
+          customer_id: customerId,
+          customer_service_id: values.customerServiceId,
           number,
           period_from: from,
           period_to: to,
           currency: service.currency,
-          notes: input.notes?.trim() || null,
+          notes: values.notes?.trim() || null,
         },
         select: { id: true },
       });
@@ -357,7 +352,7 @@ async function transition(
  * partir de este momento el documento no vuelve a mirar el catálogo, así que actualizar precios
  * después no cambia lo ya emitido.
  */
-export async function issueCertification(id: string): Promise<ActionResult<{ total: string }>> {
+export async function issueCertification(id: string): Promise<ActionResult<{ total: string | null }>> {
   const canUpdate = await checkPermissionServer('comercial', 'certificaciones', 'update');
   if (!canUpdate) return fail('No tenés permiso para emitir certificaciones');
 
@@ -379,6 +374,12 @@ export async function issueCertification(id: string): Promise<ActionResult<{ tot
     const issuedBy = await getSessionUserId();
 
     const total = await prisma.$transaction(async (tx) => {
+      // Solo se emite si sigue en el estado leído: si otra acción lo cambió, no se pisa.
+      const { count } = await tx.certifications.updateMany({
+        where: { id, company_id: companyId, status: 'borrador' },
+        data: { status: 'emitida', issued_at: new Date(), issued_by: issuedBy },
+      });
+      if (count !== 1) return null;
       const amounts: Prisma.Decimal[] = [];
       for (const line of cert.lines) {
         const unitPrice = line.service_items.item_price;
@@ -391,16 +392,17 @@ export async function issueCertification(id: string): Promise<ActionResult<{ tot
       }
 
       const sum = certificationTotal(amounts);
-      await tx.certifications.update({
-        where: { id },
-        data: { status: 'emitida', total: sum, issued_at: new Date(), issued_by: issuedBy },
-      });
+      await tx.certifications.update({ where: { id }, data: { total: sum } });
       return sum;
     });
 
+    if (total === null) return fail('La certificación cambió de estado mientras tanto. Actualizá la pantalla.');
+
     logger.info('Certificación emitida', { data: { id, total: total.toString() } });
     revalidatePath(COMERCIAL_PATH);
-    return ok({ total: total.toFixed(2) });
+    // Sin `view_prices` el total emitido no sale del servidor.
+    const canViewPrices = await checkPermissionServer('comercial', 'certificaciones', 'view_prices');
+    return ok({ total: canViewPrices ? total.toFixed(2) : null });
   } catch (error) {
     logger.error('Error al emitir la certificación', { data: { error, id } });
     return fail(errorMessage(error, 'Error al emitir la certificación'));

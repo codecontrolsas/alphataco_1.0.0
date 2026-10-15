@@ -44,12 +44,20 @@ export function parseSortString(sort: string): SortItem[] {
     .filter((s) => s.id);
 }
 
+/** Tope de filas por página aceptado desde la URL. */
+export const MAX_PAGE_SIZE = 200;
+
 export function parseSearchParams(searchParams: DataTableSearchParams): DataTableState {
   // Parsear página (1-indexed en URL, 0-indexed internamente)
-  const page = searchParams.page ? Math.max(0, Number(searchParams.page) - 1) : DEFAULT_PAGE;
+  const rawPage = searchParams.page ? Number(searchParams.page) - 1 : DEFAULT_PAGE;
+  const page = Number.isFinite(rawPage) ? Math.max(0, Math.trunc(rawPage)) : DEFAULT_PAGE;
 
-  // Parsear pageSize
-  const pageSize = searchParams.pageSize ? Number(searchParams.pageSize) : DEFAULT_PAGE_SIZE;
+  // Parsear pageSize: valor no numérico → default; se acota a [1, MAX_PAGE_SIZE] para que una URL
+  // manipulada (`?pageSize=1000000`) no pueda pedir la tabla entera.
+  const rawPageSize = searchParams.pageSize ? Number(searchParams.pageSize) : DEFAULT_PAGE_SIZE;
+  const pageSize = Number.isFinite(rawPageSize)
+    ? Math.min(MAX_PAGE_SIZE, Math.max(1, Math.trunc(rawPageSize)))
+    : DEFAULT_PAGE_SIZE;
 
   // Parsear sorting: nuevo formato "sort=name.asc,status.desc"
   let sorting: SortItem[] = [];
@@ -329,6 +337,12 @@ export function buildSearchWhere(search: string, fields: string[]) {
  * });
  * ```
  */
+/**
+ * Claves de la URL que NUNCA se aceptan como filtro de columna salvo que el `columnMap` de la tabla las
+ * declare explícitamente: pisarían el perímetro de empresa (`company_id`) o la estructura del `where`.
+ */
+const FORBIDDEN_FILTER_KEYS = new Set(['company_id', 'AND', 'OR', 'NOT']);
+
 export function buildFiltersWhere(
   filters: Record<string, string[]>,
   columnMap: Record<string, string> = {},
@@ -343,6 +357,7 @@ export function buildFiltersWhere(
     if (columnId.endsWith('_from') || columnId.endsWith('_to')) return;
     // Ignorar columnas excluidas (ej. columnas de texto que se procesan con buildTextFiltersWhere)
     if (excluded.has(columnId)) return;
+    if (FORBIDDEN_FILTER_KEYS.has(columnId) && !(columnId in columnMap)) return;
 
     if (values.length > 0) {
       const field = columnMap[columnId] || columnId;

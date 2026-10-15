@@ -77,7 +77,8 @@ describe('resolveVisibleTabs', () => {
   it('no declara entradas para los módulos sin sub-items', () => {
     const visible = resolveVisibleTabs({ 'comercial:comerce:view': true, 'formularios:formularios:view': true });
 
-    expect(visible.comercial).toBeUndefined();
+    // Comercial declara sub-items, pero cada uno exige su propio `view`: sin ellos no se ve ninguno.
+    expect(visible.comercial).toEqual([]);
     expect(visible.formularios).toBeUndefined();
   });
 });

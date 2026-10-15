@@ -68,6 +68,9 @@ export function DeliverRequestForm({
       queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.movements });
       queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.stock });
       queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.availability });
+      queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.loans });
+      queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.requestsAttention });
+      queryClient.invalidateQueries({ queryKey: WAREHOUSE_QUERY_KEYS.requestDetail });
       router.push(`/dashboard/warehouse/requests/${request.id}`);
       router.refresh();
     },

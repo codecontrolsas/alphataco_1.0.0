@@ -1,62 +1,43 @@
 'use client';
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
-import { Toaster } from '@/components/ui/toaster';
 import { usePermissions } from '@/features/Permissions';
-import { VisibilityState } from '@tanstack/react-table';
-import { useState } from 'react';
+import { CatalogCreateButton, CatalogFormSheet, useCatalogSheet } from '@/shared/components/common/CatalogFormSheet';
 import MaintenanceGroupForm from './MaintenanceGroupForm';
 import MaintenanceGroupsTable from './MaintenanceGroupsTable';
 import { fetchMaintenanceGroupsActionType, fetchTypesOfRepairActionType } from './actions/maintenanceGroupActions';
 
+type Group = fetchMaintenanceGroupsActionType['groups'][number];
+
 interface MaintenanceGroupsClientProps {
   groups: fetchMaintenanceGroupsActionType['groups'];
-  savedVisibility: VisibilityState;
-  savedFilter: string[];
   types: fetchTypesOfRepairActionType['types'];
 }
 
-export default function MaintenanceGroupsClient({
-  groups,
-  savedVisibility,
-  savedFilter,
-  types,
-}: MaintenanceGroupsClientProps) {
-  const [selectedGroup, setSelectedGroup] = useState<fetchMaintenanceGroupsActionType['groups'][number] | null>(null);
-  const [mode, setMode] = useState<'create' | 'edit'>('create');
+/** Grupos de mantenimiento: tabla a ancho completo; alta y edición en un Sheet. */
+export default function MaintenanceGroupsClient({ groups, types }: MaintenanceGroupsClientProps) {
   const { hasPermission } = usePermissions();
 
-  // Verificar permisos
   const canCreate = hasPermission('configuracion', 'maintenance_groups', 'create');
   const canUpdate = hasPermission('configuracion', 'maintenance_groups', 'update');
-  const canCreateOrUpdate = canCreate || canUpdate;
+
+  const sheet = useCatalogSheet<Group>({ canCreate, canUpdate });
 
   return (
-    <div>
-      <ResizablePanelGroup className="min-h-[400px]" direction="horizontal">
-        {canCreateOrUpdate && (
-          <>
-            <ResizablePanel defaultSize={30}>
-              <MaintenanceGroupForm group={selectedGroup} mode={mode} setMode={setMode} types={types} />
-            </ResizablePanel>
-            <ResizableHandle withHandle />
-          </>
-        )}
-        <ResizablePanel defaultSize={canCreateOrUpdate ? 70 : 100}>
-          <MaintenanceGroupsTable
-            savedFilter={savedFilter}
-            savedVisibility={savedVisibility}
-            groups={groups}
-            selectedGroup={selectedGroup}
-            setSelectedGroup={setSelectedGroup}
-            setMode={setMode}
-            types={types}
-            mode={mode}
-            canEdit={canUpdate}
-          />
-        </ResizablePanel>
-      </ResizablePanelGroup>
-      <Toaster />
-      {/* {error && <div className="text-red-500 mt-2">Error: {error}</div>} */}
-    </div>
+    <>
+      <MaintenanceGroupsTable
+        groups={groups}
+        types={types}
+        onEdit={sheet.openEdit}
+        canEdit={canUpdate}
+        toolbarActions={<CatalogCreateButton sheet={sheet} label="Nuevo grupo" />}
+      />
+      <CatalogFormSheet
+        sheet={sheet}
+        getKey={(group) => group.id}
+        title={{ create: 'Nuevo grupo de reparación', edit: 'Editar grupo de reparación' }}
+        size="lg"
+      >
+        {({ item, close }) => <MaintenanceGroupForm group={item} types={types} onDone={close} />}
+      </CatalogFormSheet>
+    </>
   );
 }

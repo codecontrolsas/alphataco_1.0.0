@@ -1,16 +1,21 @@
 'use client';
 
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import {
+  CatalogCreateButton,
+  CatalogFormSheet,
+  CatalogTableSurface,
+  useCatalogSheet,
+} from '@/shared/components/common/CatalogFormSheet';
 import {
   DataTable,
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,
   type FacetResult,
 } from '@/shared/components/common/DataTable';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { Check, CircleOff, X } from 'lucide-react';
-import moment from 'moment';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useCallback, useMemo, useState } from 'react';
+import { activeStatusLabel, buildActiveFacetResult } from '../../lib/active-status';
 import {
   getAllContractTypesForExport,
   getContractTypeSingleFacet,
@@ -58,18 +63,20 @@ export default function _ContractTypeDataTable({
     [permissionsMap]
   );
 
-  const canCreateOrUpdate =
-    permissions.hasPermission('configuracion', 'contract-types', 'create') ||
-    permissions.hasPermission('configuracion', 'contract-types', 'update');
+  const canCreate = permissions.hasPermission('configuracion', 'contract-types', 'create');
+  const canUpdate = permissions.hasPermission('configuracion', 'contract-types', 'update');
 
-  // ── Store de edición ─────────────────────────────────────────────────────
+  // ── Sheet de alta/edición (el form sigue leyendo el store de edición) ─────
   const setContractType = useContractTypeStore((state) => state.setContractType);
-  const handleEdit = useCallback(
-    (item: ContractTypeListItem) => {
-      setContractType(item);
-    },
-    [setContractType]
-  );
+  const handleClearStore = useCallback(() => setContractType(null), [setContractType]);
+  const sheet = useCatalogSheet<ContractTypeListItem>({
+    canCreate,
+    canUpdate,
+    onOpenEdit: setContractType,
+    onOpenCreate: handleClearStore,
+    onClosed: handleClearStore,
+  });
+  const handleEdit = sheet.openEdit;
 
   // ── Client-side navigation mode ──────────────────────────────────────────
   const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
@@ -106,15 +113,7 @@ export default function _ContractTypeDataTable({
   const fetchIsActiveFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
     const result = await getContractTypeSingleFacet('is_active', params);
     if (!result) return { options: [], counts: new Map() };
-    // Enriquecer las opciones con iconos semánticos
-    const options = [
-      { value: 'true', label: 'Activo', icon: Check },
-      { value: 'false', label: 'Inactivo', icon: X },
-      ...(result.counts.has(NULL_FILTER_VALUE)
-        ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }]
-        : []),
-    ];
-    return { options, counts: result.counts };
+    return buildActiveFacetResult(result.counts);
   }, []);
 
   // ── Faceted filters ───────────────────────────────────────────────────────
@@ -163,6 +162,7 @@ export default function _ContractTypeDataTable({
       queryFn={tableQueryFn}
       queryKey={['contract-types']}
       onStateChange={handleStateChange}
+      toolbarActions={<CatalogCreateButton sheet={sheet} label="Nuevo tipo de contrato" />}
       tableId={tableId}
       paramNamespace={tableId}
       facetedFilters={facetedFilters}
@@ -172,42 +172,31 @@ export default function _ContractTypeDataTable({
       searchPlaceholder="Buscar tipos de contrato..."
       emptyMessage="No se encontraron tipos de contrato"
       exportConfig={{
-        fetchAllData: () => getAllContractTypesForExport(currentParams),
+        fetchAllData: async () => unwrapExportResult(await getAllContractTypesForExport(currentParams)),
         options: {
           filename: 'tipos-de-contrato',
           sheetName: 'Tipos de Contrato',
           title: 'Tipos de Contrato',
         },
         formatters: {
-          is_active: (value) => {
-            if (value === null || value === undefined) return 'Sin asignar';
-            return value ? 'Activo' : 'Inactivo';
-          },
-          created_at: (value) => (value ? moment(value as string | Date).format('DD/MM/YYYY') : '-'),
+          is_active: (value) => activeStatusLabel(value),
+          created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
         },
       }}
     />
   );
 
-  // Si no tiene permisos de crear/editar, mostrar solo la tabla
-  if (!canCreateOrUpdate) {
-    return table;
-  }
-
-  // Con permisos: layout resizable con formulario a la izquierda y tabla a la derecha
   return (
-    <div className="w-full">
-      <ResizablePanelGroup className="min-h-[400px]" direction="horizontal">
-        <ResizablePanel defaultSize={30}>
-          <div className="overflow-auto h-full pr-2">
-            <ContractTypeForm />
-          </div>
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={70}>
-          <div className="overflow-auto h-full pl-2">{table}</div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    </div>
+    <>
+      <CatalogTableSurface>{table}</CatalogTableSurface>
+      <CatalogFormSheet
+        sheet={sheet}
+        getKey={(contractType) => contractType.id}
+        title={{ create: 'Nuevo tipo de contrato', edit: 'Editar tipo de contrato' }}
+        size="md"
+      >
+        {() => <ContractTypeForm />}
+      </CatalogFormSheet>
+    </>
   );
 }
