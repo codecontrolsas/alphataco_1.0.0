@@ -33,7 +33,6 @@ export async function getDailyReportRowForForm(rowId: string) {
         document_path: true,
         sector_service_id: true,
         areas_service_id: true,
-        remit_number: true,
         cancel_reason: true,
         type_service: true,
         completed_day: true,

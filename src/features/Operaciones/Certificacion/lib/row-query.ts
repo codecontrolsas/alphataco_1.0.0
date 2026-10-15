@@ -144,7 +144,6 @@ export function buildWhereClause(rawState: TableState, companyId: string): RowWh
     and.push({
       OR: [
         { description: contains(term) },
-        { remit_number: contains(term) },
         { remitos: { some: { remit_number: contains(term) } } },
         { customers: { name: contains(term) } },
         { customer_services: { service_name: contains(term) } },
@@ -201,7 +200,7 @@ export function buildWhereClause(rawState: TableState, companyId: string): RowWh
 
   const remit = filters['remit_number']?.[0]?.trim();
   if (remit) {
-    and.push({ OR: [{ remitos: { some: { remit_number: contains(remit) } } }, { remit_number: contains(remit) }] });
+    and.push({ remitos: { some: { remit_number: contains(remit) } } });
   }
 
   // FK y M:M (con "Sin asignar")
@@ -283,7 +282,6 @@ export const CERTIFICATION_ROW_SELECT = {
   description: true,
   status: true,
   working_day: true,
-  remit_number: true,
   type_service: true,
   completed_day: true,
   completed_night: true,

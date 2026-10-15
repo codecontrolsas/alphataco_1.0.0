@@ -54,7 +54,6 @@ export function buildRowScalarData(data: DailyReportRowInput) {
     description: data.description ?? null,
     sector_service_id: data.sector_service_id ?? null,
     areas_service_id: data.areas_service_id ?? null,
-    remit_number: data.remit_number ?? null,
     cancel_reason: data.cancel_reason ?? null,
     completed_day: data.completed_day ?? null,
     completed_night: data.completed_night ?? null,

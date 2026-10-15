@@ -13,6 +13,7 @@ import { AlertTriangle, Building2, ExternalLink, FileText, Mail, Phone, User, Wr
 import Link from 'next/link';
 import { DetailField as Field, EmptyValue } from '@/features/Operaciones/shared/components/DetailField';
 import { DetailSkeleton } from '@/features/Operaciones/shared/components/DetailSkeleton';
+import { remitNumbersOf } from '../../remitManager/lib/remit-numbers';
 import { formatRowTime } from '../columns/helpers';
 import { DETAIL_QUERY_PREFIX } from '../constants';
 import { getDailyReportRowDetail } from '../form-data/row-detail.server';
@@ -61,6 +62,7 @@ export function ServiceDetailDialog({ open, onOpenChange, rowId }: Props) {
 
   if (!rowId) return null;
 
+  const remitNumbers = row ? remitNumbersOf(row) : [];
   const statusLabel = row?.status ? dailyReportRowStatusLabels[row.status] ?? row.status : null;
   const statusVariant = row?.status ? dailyReportRowStatusTones[row.status] ?? 'default' : 'default';
   const typeServiceLabel = row?.type_service
@@ -149,7 +151,13 @@ export function ServiceDetailDialog({ open, onOpenChange, rowId }: Props) {
               <Field label="Tipo servicio">
                 {typeServiceLabel ? <Badge variant="outline">{typeServiceLabel}</Badge> : <EmptyValue />}
               </Field>
-              <Field label="Nro Remito">{row.remit_number ?? <EmptyValue />}</Field>
+              <Field label="Remitos">
+                {remitNumbers.length > 0 ? (
+                  <span className="font-mono tabular-nums">{remitNumbers.join(', ')}</span>
+                ) : (
+                  <EmptyValue />
+                )}
+              </Field>
             </div>
 
             {/* Descripción */}

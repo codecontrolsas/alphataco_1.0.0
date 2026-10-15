@@ -52,7 +52,6 @@ export interface DailyReportRowInput {
   description?: string | null;
   sector_service_id?: string | null;
   areas_service_id?: string | null;
-  remit_number?: string | null;
   cancel_reason?: string | null;
   completed_day?: boolean | null;
   completed_night?: boolean | null;

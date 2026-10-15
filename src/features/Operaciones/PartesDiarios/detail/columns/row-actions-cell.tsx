@@ -8,8 +8,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Clock, Eye, MoreHorizontal, Pencil, Trash2, UserCog } from 'lucide-react';
-import { canAssignRow, canDeleteRow, canEditRow } from '../lib/row-permissions';
+import { Clock, Eye, FileText, MoreHorizontal, Pencil, Trash2, UserCog } from 'lucide-react';
+import { canAssignRow, canDeleteRow, canEditRow, canManageRemitosRow } from '../lib/row-permissions';
 import type { DailyReportDetailRow } from '../types';
 import type { Permissions, RowActionHandlers } from './types';
 
@@ -31,6 +31,7 @@ export function RowActionsCell({
 }) {
   const canEdit = canEditRow(row, permissions, reportDate);
   const canAssignResources = canAssignRow(row, permissions, reportDate);
+  const canManageRemitos = canManageRemitosRow(row, permissions);
   const canDelete = canDeleteRow(row, permissions, reportDate);
 
   return (
@@ -60,6 +61,14 @@ export function RowActionsCell({
           <DropdownMenuItem onSelect={() => handlers.onAssignResources(row)}>
             <UserCog aria-hidden="true" />
             Asignar recursos
+          </DropdownMenuItem>
+        )}
+
+        {/* Remitos — línea ejecutada o en certificación, con permiso de edición */}
+        {canManageRemitos && (
+          <DropdownMenuItem onSelect={() => handlers.onManageRemitos(row)}>
+            <FileText aria-hidden="true" />
+            Remitos
           </DropdownMenuItem>
         )}
 

@@ -88,7 +88,7 @@ export function useDetailFacets(dailyReportId: string) {
       { columnId: 'type_service', title: 'Tipo Servicio', fetchFacet: makeFetchFacet('type_service', { labels: dailyReportTypeServiceLabels }) },
       { columnId: 'working_day', title: 'Jornada', fetchFacet: makeFetchFacet('working_day', { nullLabel: 'Sin jornada' }) },
       { columnId: 'description', title: 'Descripción', type: 'text' as const, placeholder: 'Buscar en descripción...' },
-      { columnId: 'remit_number', title: 'Nro Remito', type: 'text' as const, placeholder: 'Buscar remito...' },
+      { columnId: 'remit_number', title: 'Remitos', type: 'text' as const, placeholder: 'Buscar remito...' },
       { columnId: 'completed_day', title: 'Completado Día', fetchFacet: makeFetchFacet('completed_day', { bool: true }) },
       { columnId: 'completed_night', title: 'Completado Noche', fetchFacet: makeFetchFacet('completed_night', { bool: true }) },
       { columnId: 'employees', title: 'Empleados', fetchFacet: makeFetchFacet('employees', { nullLabel: 'Sin empleados' }) },

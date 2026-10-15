@@ -38,7 +38,7 @@ export function mapCertificationRow(row: CertificationDbRow) {
       : []
   );
 
-  // Todos los remitos de la línea; el campo `remit_number` de la fila quedó deprecado (fallback).
+  // Todos los remitos de la línea (fuente única: tabla `remitos`).
   const remit_numbers = row.remitos.map((remito) => remito.remit_number).filter(Boolean);
 
   return {
@@ -72,7 +72,7 @@ export function mapCertificationRow(row: CertificationDbRow) {
     service_id: row.service_id,
     item_id: row.item_id,
     preparte: row.preparte,
-    remit_number: remit_numbers.length > 0 ? remit_numbers.join(', ') : (row.remit_number ?? ''),
+    remit_number: remit_numbers.join(', '),
     remit_numbers,
     employees_references,
     equipment_references,

@@ -44,6 +44,14 @@ export function canAssignRow(row: RowStatusLike, permissions: Permissions, repor
   );
 }
 
+/**
+ * Remitos: con la línea ya prestada (ejecutada) o mientras Comercial la certifica. No depende de la
+ * fecha: el remito suele llegar días después del servicio.
+ */
+export function canManageRemitosRow(row: RowStatusLike, permissions: Permissions): boolean {
+  return permissions.canUpdate && (row.status === 'ejecutado' || row.status === 'en_certificacion');
+}
+
 /** Eliminar: solo si la fecha es hoy, futura, o el estado es sin_recursos_asignados. */
 export function canDeleteRow(row: RowStatusLike, permissions: Permissions, reportDate: string): boolean {
   return (

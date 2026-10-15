@@ -17,6 +17,7 @@ import {
   Clock,
   Computer,
   ExternalLink,
+  FileText,
   History,
   Info,
   LinkIcon,
@@ -146,7 +147,14 @@ function getValueDisplay(value: unknown, field: string): string {
 // HELPERS — Determine relation type from raw DB data
 // ============================================================================
 
-type RelationType = 'employee' | 'vehicle' | 'other_equipment' | 'customer_equipment' | 'unknown';
+type RelationType =
+  | 'employee'
+  | 'vehicle'
+  | 'other_equipment'
+  | 'customer_equipment'
+  | 'remito'
+  | 'remito_document'
+  | 'unknown';
 
 function getRelationType(entry: DailyReportHistoryEntry): RelationType {
   const table = entry.related_table;
@@ -158,6 +166,8 @@ function getRelationType(entry: DailyReportHistoryEntry): RelationType {
     return 'vehicle';
   }
   if (table === 'dailyreport_customer_equipment_relations') return 'customer_equipment';
+  if (table === 'remitos') return 'remito';
+  if (table === 'remito_documents') return 'remito_document';
   return 'unknown';
 }
 
@@ -171,6 +181,10 @@ function getRelationBadgeLabel(relType: RelationType): string {
       return 'Otro Equipo';
     case 'customer_equipment':
       return 'Equipo Cliente';
+    case 'remito':
+      return 'Remito';
+    case 'remito_document':
+      return 'Documento de remito';
     default:
       return 'Recurso';
   }
@@ -184,6 +198,9 @@ function getRelationIcon(relType: RelationType) {
       return <Truck className="h-3 w-3 mr-1" aria-hidden="true" />;
     case 'other_equipment':
       return <Wrench className="h-3 w-3 mr-1" aria-hidden="true" />;
+    case 'remito':
+    case 'remito_document':
+      return <FileText className="h-3 w-3 mr-1" aria-hidden="true" />;
     default:
       return null;
   }
@@ -477,6 +494,40 @@ function HistoryEntryDetails({ entry }: { entry: DailyReportHistoryEntry }) {
             <DetailPanel title={actionType === 'LINK' ? 'Equipo cliente vinculado:' : 'Equipo cliente desvinculado:'}>
               <span className="bg-card block rounded-md border p-3">
                 <span className="text-sm font-medium">{(changedData.equipo_cliente_nombre as string) ?? (changedData.equipo_nombre as string) ?? '—'}</span>
+              </span>
+            </DetailPanel>
+          )}
+
+          {/* ── LINK/UNLINK: remito (alta o baja) ───────────────────── */}
+          {(actionType === 'LINK' || actionType === 'UNLINK') && relationType === 'remito' && (
+            <DetailPanel
+              title={
+                actionType === 'LINK'
+                  ? changedData.vinculado
+                    ? 'Remito vinculado desde otra línea:'
+                    : 'Remito cargado:'
+                  : changedData.vinculado
+                    ? 'Remito desvinculado:'
+                    : 'Remito eliminado:'
+              }
+            >
+              <span className="bg-card block rounded-md border p-3">
+                <span className="font-mono text-sm font-medium tabular-nums">
+                  {(changedData.remito_numero as string) ?? '—'}
+                </span>
+              </span>
+            </DetailPanel>
+          )}
+
+          {/* ── LINK/UNLINK: documento de un remito ─────────────────── */}
+          {(actionType === 'LINK' || actionType === 'UNLINK') && relationType === 'remito_document' && (
+            <DetailPanel title={actionType === 'LINK' ? 'Documento agregado al remito:' : 'Documento quitado del remito:'}>
+              <span className="bg-card flex flex-col gap-1 rounded-md border p-3">
+                <span className="text-sm font-medium">{(changedData.documento_nombre as string) ?? '—'}</span>
+                <span className="text-muted-foreground text-xs">
+                  Remito{' '}
+                  <span className="font-mono tabular-nums">{(changedData.remito_numero as string) ?? '—'}</span>
+                </span>
               </span>
             </DetailPanel>
           )}

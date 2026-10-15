@@ -37,6 +37,12 @@ const HistoryDialog = dynamic(() => import('./HistoryDialog').then((m) => ({ def
   ssr: false,
 });
 
+// El gestor de remitos es el mismo que usa Comercial; se carga recién cuando se abre
+const RemitosManagerModal = dynamic(
+  () => import('../../remitManager').then((m) => ({ default: m.RemitosManagerModal })),
+  { ssr: false }
+);
+
 const CloneRowsDialog = dynamic(() => import('./CloneRowsDialog').then((m) => ({ default: m.CloneRowsDialog })), {
   ssr: false,
 });
@@ -115,6 +121,7 @@ export function _DailyReportDetailDataTable({
   const [deleteRow, setDeleteRow] = useState<DailyReportDetailRow | null>(null);
   const [detailRowId, setDetailRowId] = useState<string | null>(null);
   const [historyRowId, setHistoryRowId] = useState<string | null>(null);
+  const [remitRow, setRemitRow] = useState<{ id: string; customerName?: string } | null>(null);
   const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [showClone, setShowClone] = useState(false);
 
@@ -138,6 +145,7 @@ export function _DailyReportDetailDataTable({
       onAssignResources: (row) => openForm(row.id, 'resources'),
       onHistory: (row) => setHistoryRowId(row.id),
       onDelete: (row) => setDeleteRow(row),
+      onManageRemitos: (row) => setRemitRow({ id: row.id, customerName: row.customers?.name ?? undefined }),
     }),
     [openForm]
   );
@@ -264,6 +272,15 @@ export function _DailyReportDetailDataTable({
         dailyReportId={dailyReportId}
         onSuccess={invalidateDetail}
       />
+
+      {remitRow && (
+        <RemitosManagerModal
+          dailyReportRowId={remitRow.id}
+          customerName={remitRow.customerName}
+          isOpen
+          onClose={() => setRemitRow(null)}
+        />
+      )}
 
       <ServiceDetailDialog
         open={detailRowId !== null}

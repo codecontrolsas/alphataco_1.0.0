@@ -8,6 +8,7 @@ import {
   parseSearchParams,
 } from '@/shared/components/common/DataTable/helpers';
 import { prisma } from '@/shared/lib/prisma';
+import { REMIT_NUMBERS_SELECT, remitNumberContainsWhere } from '../../remitManager/lib/remit-numbers';
 import { sanitizeFilters } from '@/shared/lib/table-filters';
 
 /** Tipo del cliente transaccional de Prisma (evita TS2589 con Omit<typeof prisma, ...>) */
@@ -25,7 +26,6 @@ export const VALID_SORT_FIELDS = new Set([
   'start_time',
   'end_time',
   'description',
-  'remit_number',
   'completed_day',
   'completed_night',
   'created_at',
@@ -45,7 +45,10 @@ export const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Record<string,
 export const DATE_RANGE_COLUMNS: string[] = [];
 
 /** Columnas de texto libre */
-export const TEXT_COLUMNS = ['description', 'remit_number', 'cancel_reason', 'working_day'];
+export const TEXT_COLUMNS = ['description', 'cancel_reason', 'working_day'];
+
+/** Campos de texto propios de la fila que entran en la búsqueda global (los remitos se suman aparte). */
+const SEARCH_FIELDS = ['description', 'cancel_reason', 'working_day'];
 
 /** Columnas manejadas manualmente (no pasar a buildFiltersWhere) */
 export const MANUALLY_HANDLED = [
@@ -59,6 +62,8 @@ export const MANUALLY_HANDLED = [
   'employees',
   'equipment',
   'customer_equipment',
+  // Remitos: viven en la tabla `remitos` (1:N), se filtran con `some`
+  'remit_number',
   ...TEXT_COLUMNS,
 ];
 
@@ -90,7 +95,11 @@ export function buildWhereClause(
   companyId: string
 ) {
   const state = sanitizeFilters(rawState, ALLOWED_FILTER_KEYS);
-  const searchWhere = buildSearchWhere(state.search, ['description', 'remit_number', 'cancel_reason', 'working_day']);
+  // La búsqueda global también encuentra la línea por cualquiera de sus remitos
+  const fieldsSearch = buildSearchWhere(state.search, SEARCH_FIELDS);
+  const searchWhere = state.search
+    ? { OR: [...(fieldsSearch.OR ?? []), remitNumberContainsWhere(state.search)] }
+    : {};
 
   const filtersWhere = buildFiltersWhere(state.filters, COLUMN_MAP, {
     exclude: [...MANUALLY_HANDLED, ...DATE_RANGE_COLUMNS.flatMap((c) => [`${c}_from`, `${c}_to`])],
@@ -266,6 +275,10 @@ export function buildWhereClause(
     }
   }
 
+  // remit_number (texto libre sobre los remitos de la línea)
+  const remitNumberValue = state.filters['remit_number']?.[0];
+  if (remitNumberValue) manualFilters.push(remitNumberContainsWhere(remitNumberValue));
+
   // `AND` de `buildFiltersWhere` (casos mixtos con null): se fusiona con los filtros manuales.
   const { AND: filtersAnd, ...filtersRest } = filtersWhere as { AND?: Record<string, unknown>[] };
 
@@ -309,7 +322,7 @@ export function buildRowSelect() {
     document_path: true,
     sector_service_id: true,
     areas_service_id: true,
-    remit_number: true,
+    remitos: REMIT_NUMBERS_SELECT,
     cancel_reason: true,
     type_service: true,
     completed_day: true,

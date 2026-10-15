@@ -27,8 +27,8 @@ del Dashboard lo muestra hoy.
 
 | Pantalla | Acción | Cuándo aparece |
 |---|---|---|
-| Operaciones → detalle del parte | **Remitos** (`detail/columns/row-actions-cell.tsx`) | Línea **Ejecutada** o **En certificación**, con `operaciones:detalle-parte-diario:update` |
-| Comercial → Partes Diarios | **Gestionar Remitos** (`Certificacion/components/EnhancedComercialReportTable.tsx`) | Línea **En certificación**, con `comercial:daily_reports:update` |
+| Operaciones → detalle del parte | **Remitos** (`detail/columns/row-actions-cell.tsx`, regla en `detail/lib/row-permissions.ts`) | Línea **Ejecutada** o **En certificación**, con `operaciones:detalle-parte-diario:update` |
+| Comercial → Partes Diarios | **Gestionar Remitos** (`Certificacion/list/columns.tsx`) | Línea **En certificación**, con `comercial:daily_reports:update` |
 
 La regla de estado vive en la UI de cada pantalla. El servidor exige el permiso **Editar** de cualquiera
 de las dos (`assertCanWriteRemitos`), y no exige estado: Comercial también crea el primer remito al dar

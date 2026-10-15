@@ -7,6 +7,7 @@ import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers'
 import { dailyReportRowStatusLabels, dailyReportRowStatusTones } from '@/shared/utils/mappers';
 import type { ColumnDef } from '@tanstack/react-table';
 import { CheckCircle2, Info } from 'lucide-react';
+import { remitNumbersOf } from '../../remitManager/lib/remit-numbers';
 import type { DailyReportDetailRow } from '../types';
 import { RowActionsCell } from './row-actions-cell';
 import type { Permissions, RowActionHandlers } from './types';
@@ -133,12 +134,28 @@ export function getStatusColumns(): ColumnDef<DailyReportDetailRow>[] {
       },
     },
 
-    // ── Nro Remito (texto nullable) ───────────────────────────────────────────
+    // ── Remitos (1:N, tabla `remitos`) ────────────────────────────────────────
+    // Mantiene el id `remit_number` para no perder el filtro ni las preferencias guardadas.
+    // Sin orden: una línea puede tener varios remitos (misma regla que las columnas M:M).
     {
-      accessorKey: 'remit_number',
-      meta: { title: 'Nro Remito' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nro Remito" />,
-      cell: ({ row }) => <span>{row.original.remit_number ?? '—'}</span>,
+      id: 'remit_number',
+      accessorFn: (row) => remitNumbersOf(row).join(', '),
+      meta: { title: 'Remitos' },
+      enableSorting: false,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Remitos" />,
+      cell: ({ row }) => {
+        const numbers = remitNumbersOf(row.original);
+        if (numbers.length === 0) return <span className="text-muted-foreground">—</span>;
+        return (
+          <div className="flex flex-wrap gap-1">
+            {numbers.map((number) => (
+              <Badge key={number} variant="outline" className="font-mono tabular-nums">
+                {number}
+              </Badge>
+            ))}
+          </div>
+        );
+      },
     },
 
     // ── Completado Día (booleano nullable) ────────────────────────────────────

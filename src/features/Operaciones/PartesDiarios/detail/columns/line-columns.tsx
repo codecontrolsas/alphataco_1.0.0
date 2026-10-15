@@ -7,6 +7,7 @@ import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import type { ColumnDef } from '@tanstack/react-table';
 import { AlertTriangle, Truck } from 'lucide-react';
 import { employeeDeviations, equipmentDeviations } from '../../lib/resource-deviations';
+import { remitNumbersOf } from '../../remitManager/lib/remit-numbers';
 import { canEditRow } from '../lib/row-permissions';
 import type { DailyReportDetailRow } from '../types';
 import { formatRowTime } from './helpers';
@@ -284,12 +285,13 @@ export function getLineColumns(
       header: ({ column }) => <DataTableColumnHeader column={column} title="Remito" />,
       cell: ({ row }) => {
         const line = row.original;
+        const remitNumbers = remitNumbersOf(line);
         const is24Hours = line.working_day?.toLowerCase() === 'jornada 24 horas';
         const showShifts = is24Hours || line.completed_day != null || line.completed_night != null;
 
         return (
           <div className="flex flex-col gap-1">
-            <span className="text-foreground font-mono text-sm tabular-nums">{line.remit_number ?? '—'}</span>
+            <span className="text-foreground font-mono text-sm tabular-nums">{remitNumbers.length > 0 ? remitNumbers.join(', ') : '—'}</span>
             {showShifts ? (
               <span className="flex items-center gap-1">
                 <ShiftMark letter="D" label="Turno día" done={Boolean(line.completed_day)} />
