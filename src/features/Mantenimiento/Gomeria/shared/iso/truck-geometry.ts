@@ -295,13 +295,13 @@ export function buildTruckSvg({
   const frontEnd =
     firstX +
     (body === 'pickup'
-      ? 96
+      ? 52
       : body === 'machinery'
         ? 64
         : hitch?.position === 'front' && !hasCab
           ? 200
           : hasCab
-            ? 72
+            ? 38
             : 50);
   const rearEnd =
     lastX - (body === 'pickup' ? 52 : body === 'machinery' ? 60 : Math.max(62, 36 + SPARE_PITCH * rearSpares));
