@@ -30,7 +30,7 @@ function countPositions(axles: DiagramAxle[]) {
  * - Todos los ejes simples y dos ejes: camioneta (cabina y caja).
  * - Sin ejes motrices marcados y todos dobles: semirremolque (perno rey adelante, sin cabina, ejes en tándem o trídem).
  * - Eje delantero simple (dirección) y el resto doble: camión con cabina. Con ejes motrices y tren trasero doble,
- *   es tractor con quinta rueda sobre el tándem.
+ *   y son tres ejes, es tractor con quinta rueda sobre el tándem; con 2 ejes o doble dirección es camión rígido.
  * - Dos ejes simples seguidos adelante: doble dirección (8×4), un poco más juntos que el resto.
  * Los auxilios no cambian el tipo: van acostados sobre el chasis, detrás del último eje.
  */
@@ -62,7 +62,8 @@ export function inferTemplateLayout(axles: DiagramAxle[]): TemplateLayout | null
       counts,
     };
   }
-  if (driveCount > 0 && dual(regular[regular.length - 1])) {
+  // Tractor: tres ejes con tracción y tren trasero doble (6×4 / 6×2). Con 2 ejes o doble dirección (8×4) se asume camión rígido.
+  if (driveCount > 0 && regular.length === 3 && dual(regular[regular.length - 1])) {
     return {
       kind: 'tractor',
       title: 'Tractor con quinta rueda',
