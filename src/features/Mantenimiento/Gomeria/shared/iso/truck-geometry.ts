@@ -170,7 +170,7 @@ export interface TruckZones {
 
 const GAP_TANDEM = 75;
 const GAP_TWIN_STEER = 100;
-const GAP_WHEELBASE = 140;
+const GAP_WHEELBASE = 160;
 
 /**
  * Separación entre ejes consecutivos (de adelante hacia atrás) según cómo son los dos vecinos: dos dobles
@@ -243,7 +243,16 @@ export function buildTruckSvg({
   const hasCab = Boolean(cabinLabel);
 
   // ── Distribución en X: el eje 1 en x = 0, los demás hacia atrás. Dos ejes dobles seguidos = tándem (más juntos).
-  const gaps = axleGaps ?? defaultAxleGaps(regular);
+  const gaps = [...(axleGaps ?? defaultAxleGaps(regular))];
+  // El auxilio es un eje más de la configuración y su lugar en la secuencia dice dónde va: antes del primer eje
+  // (bajo la trompa del semirremolque), entre dos ejes (acoplados) o después del último (camiones y tractores).
+  const spareAnchor = (axle: DiagramAxle) => regular.filter((r) => r.axle_number < axle.axle_number).length;
+  const spareAxles = sorted.filter((a) => a.is_spare);
+  for (const axle of spareAxles) {
+    const anchor = spareAnchor(axle);
+    // Entre dos ejes hace falta lugar para la cubierta acostada: se abre el hueco si estaban pegados (tándem).
+    if (anchor > 0 && anchor < regular.length) gaps[anchor - 1] = Math.max(gaps[anchor - 1] ?? 0, 150);
+  }
   const slots: AxleSlot[] = [];
   let cursor = 0;
   regular.forEach((axle, index) => {
@@ -257,6 +266,32 @@ export function buildTruckSvg({
   const firstX = slots.length ? slots[0].x : 0;
   const lastX = slots.length ? slots[slots.length - 1].x : 0;
 
+  // ── Dónde va cada auxilio (acostado sobre el chasis). Varios en el mismo lugar se reparten a lo largo.
+  const trailerBody = body === 'truck' && !hasCab;
+  type SpareSpot = 'between' | 'front' | 'behind-cab' | 'rear';
+  const spotOf = (axle: DiagramAxle): SpareSpot => {
+    const anchor = spareAnchor(axle);
+    if (anchor > 0 && anchor < slots.length) return 'between';
+    if (body === 'truck' && hasCab && slots.length >= 2) return 'behind-cab'; // tractor / rígido: detrás de la cabina
+    if (anchor === 0 && trailerBody) return 'front'; // semirremolque: bajo la trompa, entre el perno rey y el primer eje
+    return 'rear';
+  };
+  const spotCount = new Map<SpareSpot, number>();
+  const spareXs = new Map<number, number>();
+  for (const axle of spareAxles) {
+    const spot = spotOf(axle);
+    const index = spotCount.get(spot) ?? 0;
+    spotCount.set(spot, index + 1);
+    const group = spareAxles.filter((a) => spotOf(a) === spot).length;
+    const spread = (index - (group - 1) / 2) * SPARE_PITCH;
+    const anchor = spareAnchor(axle);
+    if (spot === 'between') spareXs.set(axle.axle_number, (slots[anchor - 1].x + slots[anchor].x) / 2 + spread);
+    else if (spot === 'behind-cab') spareXs.set(axle.axle_number, (slots[0].x + slots[1].x) / 2 + spread);
+    else if (spot === 'front') spareXs.set(axle.axle_number, firstX + 110 + spread);
+    else spareXs.set(axle.axle_number, lastX - 56 - SPARE_PITCH * index);
+  }
+  const rearSpares = spareAxles.filter((a) => spotOf(a) === 'rear').length;
+
   const frontEnd =
     firstX +
     (body === 'pickup'
@@ -269,7 +304,7 @@ export function buildTruckSvg({
             ? 72
             : 50);
   const rearEnd =
-    lastX - (body === 'pickup' ? 52 : body === 'machinery' ? 60 : Math.max(62, 36 + SPARE_PITCH * spareCount));
+    lastX - (body === 'pickup' ? 52 : body === 'machinery' ? 60 : Math.max(62, 36 + SPARE_PITCH * rearSpares));
   const frameLen = frontEnd - rearEnd;
   const outerHalf = Math.max(LANE_SINGLE[1], ...slots.map((s) => (s.dual ? LANE_OUTER[1] : LANE_SINGLE[1])));
   const halfWidth = outerHalf + 6;
@@ -281,7 +316,7 @@ export function buildTruckSvg({
     ...(hasCab && body === 'truck' ? ([[frontEnd - 34, 0, 108]] as k.Point3[]) : []),
     ...(body === 'pickup' ? ([[frontEnd - 76, 0, 90]] as k.Point3[]) : []),
     ...(body === 'machinery' ? ([[firstX, 0, 100]] as k.Point3[]) : []),
-    ...(spareCount ? ([[lastX - 56, 0, FRAME_TOP + TIRE_W + 2]] as k.Point3[]) : []),
+    ...[...spareXs.values()].map((x) => [x, 0, FRAME_TOP + TIRE_W + 2] as k.Point3),
   ];
   const P = k.fitProjection(rise, TRUCK_VIEW_WIDTH, TRUCK_VIEW_HEIGHT, { pad: 28, azimuth: AZIMUTH });
   // `lathe.mjs` no tiene tipos: sus puntos llegan como number[].
@@ -352,7 +387,9 @@ export function buildTruckSvg({
   function badgeOf(cp: ComputedPosition, F: unknown): string {
     const hub = G.pointOf(F, cp.side === 'SPARE' ? TIRE_W + 1.4 : TIRE_W / 2, 0, 0);
     const [bx, by] = at(cp.side === 'SPARE' ? hub : [hub[0], hub[1], hub[2] + TIRE_R + 0.5]);
-    return `<g aria-hidden="true" pointer-events="none"><circle cx="${bx}" cy="${by}" r="8.2" style="fill:var(--anatomy-paper);stroke:var(--anatomy-hi);stroke-width:.9"/><text x="${bx}" y="${by}" text-anchor="middle" dominant-baseline="central" style="fill:var(--anatomy-hi);font:600 9.5px var(--anatomy-mono);font-variant-numeric:tabular-nums">${cp.position_number}</text></g>`;
+    // Zona de toque más grande que el círculo visible: en un dual las cuatro ruedas quedan pegadas y en el celular
+    // el número se ve chico. El `data-iso-id` hace que tocar el número seleccione la rueda aunque el chasis la tape.
+    return `<g data-iso-id="${wheelIdPrefix}${cp.position_number}" aria-hidden="true"><circle cx="${bx}" cy="${by}" r="12" style="fill:transparent;stroke:none"/><circle cx="${bx}" cy="${by}" r="8.2" style="fill:var(--anatomy-paper);stroke:var(--anatomy-hi);stroke-width:.9"/><text x="${bx}" y="${by}" text-anchor="middle" dominant-baseline="central" style="fill:var(--anatomy-hi);font:600 9.5px var(--anatomy-mono);font-variant-numeric:tabular-nums;pointer-events:none">${cp.position_number}</text></g>`;
   }
 
   /** `inlineBadge: false` deja el número para la capa superior (las ruedas del lado lejano quedan detrás del chasis). */
@@ -402,8 +439,8 @@ export function buildTruckSvg({
       F: G.frameAlong([slot.x, yMin, TIRE_R], [0, 1, 0]),
     });
   }
-  spareOrder.forEach((cp, index) => {
-    const x = lastX - 56 - SPARE_PITCH * index;
+  spareOrder.forEach((cp) => {
+    const x = spareXs.get(cp.axle_number) ?? lastX - 56;
     spares.push({ cp, depth: k.depthOf([x, 0, FRAME_TOP], P), F: G.frameAlong([x, 0, FRAME_TOP], [0, 0, 1]) });
   });
 
@@ -707,7 +744,7 @@ export function buildTruckSvg({
       farWheels.map((w) => wheelGroup(w.cp, w.F, false)).join(''),
       // La estructura queda semitransparente: deja ver las ruedas del lado lejano que tapa. Con zonas del
       // gemelo (contornos de estado) se baja menos, para que los colores se sigan leyendo.
-      `<g style="opacity:${zones ? 0.8 : 0.58}">${chassis()}</g>`,
+      `<g style="opacity:${zones ? 0.8 : 0.58};pointer-events:none">${chassis()}</g>`,
       spareCradles.join(''),
       nearWheels.map((w) => wheelGroup(w.cp, w.F)).join(''),
       // Números de las ruedas lejanas, por encima de todo.

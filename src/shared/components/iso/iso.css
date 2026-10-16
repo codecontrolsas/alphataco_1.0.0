@@ -50,6 +50,7 @@
   --anatomy-dot: #e6ebf1;
 }
 .iso-svg [data-iso-id] {
+  pointer-events: auto;
   cursor: pointer;
   outline: none;
 }
