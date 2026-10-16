@@ -16,7 +16,11 @@ import 'moment/locale/es';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { exportWithholdingsTxt, getWithholdingsReport, type WithholdingsReport } from '../../actions/withholdings-report.server';
+import {
+  exportWithholdingsTxt,
+  getWithholdingsReport,
+  type WithholdingsReport,
+} from '../../actions/withholdings-report.server';
 import { cents, money } from '../../lib/payment-totals';
 import { WITHHOLDING_TAXES, WITHHOLDING_TAX_LABELS, type WithholdingTax } from '../../schemas/payment-settings';
 
@@ -102,7 +106,11 @@ export function WithholdingsView({ initialReport, periods }: { initialReport: Wi
           state: r.cancelled ? 'Anulada' : 'Vigente',
         })),
         columns,
-        { filename: `Retenciones ${period}`, sheetName: 'Retenciones', title: `Retenciones practicadas · ${periodLabel(period)}` }
+        {
+          filename: `Retenciones ${period}`,
+          sheetName: 'Retenciones',
+          title: `Retenciones practicadas · ${periodLabel(period)}`,
+        }
       );
     },
     onError: () => toast.error('No se pudo exportar el Excel'),
@@ -145,11 +153,23 @@ export function WithholdingsView({ initialReport, periods }: { initialReport: Wi
               ))}
             </SelectContent>
           </Select>
-          <Button type="button" size="sm" variant="outline" disabled={rows.length === 0 || excel.isPending} onClick={() => excel.mutate()}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={rows.length === 0 || excel.isPending}
+            onClick={() => excel.mutate()}
+          >
             <FileSpreadsheet className="mr-1 h-4 w-4" />
             Excel
           </Button>
-          <Button type="button" size="sm" variant="outline" disabled={(report?.rows ?? []).length === 0 || txt.isPending} onClick={() => txt.mutate()}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={(report?.rows ?? []).length === 0 || txt.isPending}
+            onClick={() => txt.mutate()}
+          >
             <FileDown className="mr-1 h-4 w-4" />
             {txt.isPending ? 'Generando…' : 'Archivos para declarar'}
           </Button>
@@ -159,8 +179,8 @@ export function WithholdingsView({ initialReport, periods }: { initialReport: Wi
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription>
-            El ZIP trae SICORE (Ganancias), SIRE F.2003 (IVA), SIRE F.2004 (SUSS) y Rentas Neuquén (IIBB). Los de SIRE y Rentas Neuquén todavía no se
-            probaron con el aplicativo: revisalos la primera vez que los importes.
+            El ZIP trae SICORE (Ganancias), SIRE F.2003 (IVA), SIRE F.2004 (SUSS) y Rentas Neuquén (IIBB). Los de SIRE y
+            Rentas Neuquén todavía no se probaron con el aplicativo: revisalos la primera vez que los importes.
           </AlertDescription>
         </Alert>
         {totals.length > 0 && (
@@ -183,7 +203,7 @@ export function WithholdingsView({ initialReport, periods }: { initialReport: Wi
             No hay retenciones en {periodLabel(period)}. Se registran al pagar una orden de pago con retenciones.
           </p>
         ) : (
-          <div className={`overflow-x-auto rounded-md border ${isFetching ? 'opacity-60' : ''}`}>
+          <div className={`overflow-x-auto rounded-xl border ${isFetching ? 'opacity-60' : ''}`}>
             <Table className="min-w-[900px] text-xs">
               <TableHeader>
                 <TableRow>

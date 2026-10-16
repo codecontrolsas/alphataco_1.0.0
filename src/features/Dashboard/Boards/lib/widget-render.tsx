@@ -6,6 +6,14 @@ import {
   VehicleExpiringCounter,
 } from '@/features/Dashboard/Documentacion/ExpiringDocsCounters';
 import { VehicleExpiringDocsList } from '@/features/Dashboard/Documentacion/Vehiculos/VehicleExpiringDocsList';
+import { DocumentComplianceWidget } from '@/features/Dashboard/Documentacion/components/DocumentComplianceWidget';
+import { ExpiringTimelineWidget } from '@/features/Dashboard/Documentacion/components/ExpiringTimelineWidget';
+import { ExpiringWeeksWidget } from '@/features/Dashboard/Documentacion/components/ExpiringWeeksWidget';
+import {
+  ComplianceWidgetSkeleton,
+  TimelineWidgetSkeleton,
+  WeeksWidgetSkeleton,
+} from '@/features/Dashboard/Documentacion/fallback/DocumentWidgetsSkeleton';
 import { ExpiringDocsSkeleton } from '@/features/Dashboard/Documentacion/fallback/ExpiringDocsSkeleton';
 import GraficosTabContent from '@/features/Dashboard/Estadisticas/KPIs/Graficos/GraficosTabContent';
 import { GraficosGridSkeleton } from '@/features/Dashboard/Estadisticas/KPIs/Graficos/fallback/KpiChartSkeleton';
@@ -96,6 +104,13 @@ const RENDERERS: Record<WidgetId, WidgetRenderer> = {
     render: ({ searchParams }) => <EquipmentOperationSection searchParams={searchParams} />,
   },
   'equipment-fleet': { skeleton: <SectionSkeleton />, render: () => <EquipmentFleetSection /> },
+  'document-compliance': {
+    skeleton: <ComplianceWidgetSkeleton />,
+    render: () => <DocumentComplianceWidget />,
+    frame: {},
+  },
+  'expiring-weeks': { skeleton: <WeeksWidgetSkeleton />, render: () => <ExpiringWeeksWidget />, frame: {} },
+  'expiring-timeline': { skeleton: <TimelineWidgetSkeleton />, render: () => <ExpiringTimelineWidget />, frame: {} },
   'expiring-employee-docs': {
     skeleton: <ExpiringDocsSkeleton />,
     render: ({ searchParams }) => <EmployeeExpiringDocsList searchParams={searchParams} />,

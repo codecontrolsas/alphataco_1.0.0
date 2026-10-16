@@ -3,12 +3,12 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PreventiveItemsBadge } from '@/features/Mantenimiento/components/PreventiveItemsBadge';
+import { ATTENTION_THRESHOLDS } from '@/features/Mantenimiento/lib/attention-thresholds';
 import {
   LEGACY_HISTORY_LABELS,
   ORDER_STATUS_UI,
   TONE_TO_BADGE,
 } from '@/features/Mantenimiento/lib/status-presentation';
-import { ATTENTION_THRESHOLDS } from '@/features/Mantenimiento/lib/attention-thresholds';
 import { MaintenanceStatusPill } from '@/features/Mantenimiento/shared/components/MaintenanceStatusPill';
 import { RelativeAge } from '@/features/Mantenimiento/shared/components/RelativeAge';
 import { ResourceCell, toResourceCellResource } from '@/features/Mantenimiento/shared/components/ResourceCell';
@@ -131,8 +131,8 @@ export function getPendingOrderColumns(
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
       cell: ({ row }) => {
         const { status, date_rejected_at, date_rejection_reason } = row.original;
-        // "Fecha Rechazada" acompaña al estado (no lo reemplaza: el filtro de Estado sigue diciendo
-        // "Pend. Programación"). Solo aplica mientras el pedido espera una fecha nueva.
+        // "Fecha rechazada" acompaña al estado (no lo reemplaza: el filtro de Estado sigue diciendo
+        // "Pend. de programación"). Solo aplica mientras el pedido espera una fecha nueva.
         const dateRejected = status === 'pending_scheduling' && date_rejected_at != null;
         return (
           <div className="flex flex-col items-start gap-1">

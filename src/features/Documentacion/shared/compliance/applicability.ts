@@ -68,7 +68,8 @@ export function resolveTypeScope(type: Pick<ComplianceType, 'scope'>): TypeScope
   return { kind: 'conditions', conditions };
 }
 
-function matchesOne(resource: ComplianceResource, condition: DocumentCondition): boolean {
+/** ¿El recurso cumple UNA condición? (OR entre sus `ids`; falla cerrada si falta el dato). */
+export function matchesOne(resource: ComplianceResource, condition: DocumentCondition): boolean {
   if (condition.kind === 'direct') {
     const value = resource.direct[condition.filterColumn];
     if (value === null || value === undefined) return false;

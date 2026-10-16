@@ -51,7 +51,12 @@ export async function EmployeeReadView({ employee, searchParams }: EmployeeReadV
       </nav>
 
       <RecordHeader
-        identity={<EmployeeHeaderContent employee={employee} />}
+        identity={
+          <EmployeeHeaderContent
+            employee={employee}
+            canViewDocuments={isTabVisible('documentacion', 'documentos-de-empleados')}
+          />
+        }
         actions={
           <>
             <PermissionGuard module="empleados" tab="employees" action="update">

@@ -88,6 +88,8 @@ function toEquipmentDocumentRow(entry: DocumentEntry, vehicle: VehicleDisplay) {
     expiringSoon: entry.expiringSoon,
     /** El tipo ya no aplica al equipo (sólo en la ficha del equipo). */
     notApplicable: entry.notApplicable,
+    /** Criterio por el que se pide el documento (sólo en la ficha del recurso). */
+    requestedBy: entry.requestedBy,
   };
 }
 

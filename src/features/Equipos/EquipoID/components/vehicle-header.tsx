@@ -11,10 +11,11 @@ import { reasonForTerminationLabels } from '@/shared/utils/mappers';
 import { Pencil, Truck } from 'lucide-react';
 import moment from 'moment';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import type { ReactNode } from 'react';
 
 type Vehicle = NonNullable<VehicleById>;
 
-function VehicleIdentity({ vehicle }: { vehicle: Vehicle }) {
+function VehicleIdentity({ vehicle, documentStatus }: { vehicle: Vehicle; documentStatus?: ReactNode }) {
   const name = [vehicle.brand_vehicles?.name, vehicle.model_vehicles?.name].filter(Boolean).join(' ');
   const details = [vehicle.type?.name, vehicle.year].filter(Boolean).join(' · ');
 
@@ -53,6 +54,7 @@ function VehicleIdentity({ vehicle }: { vehicle: Vehicle }) {
           <Badge variant={vehicle.is_active ? 'success' : 'destructive'}>
             {vehicle.is_active ? 'Activo' : 'Dado de baja'}
           </Badge>
+          {documentStatus}
           {!vehicle.is_active && vehicle.termination_date && (
             <span className="text-danger-subtle-foreground text-sm">
               Baja el <span className="font-mono">{moment.utc(vehicle.termination_date).format('DD/MM/YYYY')}</span>
@@ -99,7 +101,16 @@ function VehicleFacts({ vehicle, sectorName }: { vehicle: Vehicle; sectorName?: 
 }
 
 /** Cabecera de la ficha del vehículo (modo lectura): identidad, acciones y datos de uso. */
-export function VehicleHeader({ vehicle, sectorName }: { vehicle: VehicleById; sectorName?: string }) {
+export function VehicleHeader({
+  vehicle,
+  sectorName,
+  documentStatus,
+}: {
+  vehicle: VehicleById;
+  sectorName?: string;
+  /** Estado documental (chip + conteo + legajo ZIP), resuelto en el servidor para no demorar la cabecera. */
+  documentStatus?: ReactNode;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -114,7 +125,7 @@ export function VehicleHeader({ vehicle, sectorName }: { vehicle: VehicleById; s
   return (
     <div className="space-y-4">
       <RecordHeader
-        identity={<VehicleIdentity vehicle={vehicle} />}
+        identity={<VehicleIdentity vehicle={vehicle} documentStatus={documentStatus} />}
         actions={
           <>
             <PermissionGuard module="equipos" tab="detalle-equipo" action="update">

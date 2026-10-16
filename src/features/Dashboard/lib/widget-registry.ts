@@ -10,9 +10,11 @@ import type { ActionSlug, ModuleSlug } from '@/features/Permissions/permissions-
  *
  * Regla de permisos: un widget se ve si el usuario tiene TODAS las claves de `requires`: el
  * `view` de la sección del Dashboard de la que sale (`dashboard:<sección>:view`) y el `view` del
- * módulo de origen de los datos. Las acciones de datos conservan sus guards propios
- * (`requireDashboardView`, `assertCanViewKpiCharts`), así que esto es la puerta de visibilidad,
- * no la única defensa.
+ * módulo de origen de los datos. Si además declara `requiresAny` (widgets que combinan fuentes
+ * independientes, como personal y equipos), alcanza con que se cumpla UN grupo completo de claves;
+ * el widget muestra solo la fuente que el usuario puede ver. Las acciones de datos conservan sus
+ * guards propios (`requireDashboardView`, `assertCanViewKpiCharts`), así que esto es la puerta de
+ * visibilidad, no la única defensa.
  */
 
 /** Clave `modulo:tab:accion` tal como la devuelve el mapa de permisos del usuario. */
@@ -49,6 +51,8 @@ export interface WidgetDefinition {
   description: string;
   section: WidgetSection;
   requires: readonly PermissionKey[];
+  /** Grupos alternativos de claves: se ve si se cumple algún grupo completo (además de `requires`). */
+  requiresAny?: readonly (readonly PermissionKey[])[];
   defaultSize: WidgetSize;
   minSize: WidgetSize;
   maxSize: WidgetSize;
@@ -60,6 +64,10 @@ const DIAGRAMS: PermissionKey = 'empleados:diagrams:view';
 const VEHICLES: PermissionKey = 'equipos:equipos:view';
 const DAILY_REPORTS: PermissionKey = 'operaciones:dailyreportstable:view';
 const WORKSHOP: PermissionKey = 'mantenimiento:maint_taller:view';
+
+/** Fuentes de los widgets que combinan personal y equipos: las mismas claves que los `expiring-*-docs`. */
+const EMPLOYEE_DOCS_SOURCE = ['dashboard:empleados:view', 'documentacion:documentos-de-empleados:view'] as const;
+const VEHICLE_DOCS_SOURCE = ['dashboard:vehiculos:view', 'documentacion:documentos-de-equipos:view'] as const;
 
 export const WIDGETS = [
   // ── Resumen (dashboard:principal) ───────────────────────────────────────
@@ -180,6 +188,39 @@ export const WIDGETS = [
     description: 'Documentos de vehículos y equipamiento vencidos o que vencen en 30 días',
     section: 'vencimientos',
     requires: ['dashboard:vehiculos:view', 'documentacion:documentos-de-equipos:view'],
+    defaultSize: 'full',
+    minSize: 'lg',
+    maxSize: 'full',
+  },
+  {
+    id: 'document-compliance',
+    title: 'Estado documental',
+    description: 'Empleados y equipos en regla, con documentos vencidos o con faltantes',
+    section: 'vencimientos',
+    requires: [],
+    requiresAny: [EMPLOYEE_DOCS_SOURCE, VEHICLE_DOCS_SOURCE],
+    defaultSize: 'lg',
+    minSize: 'md',
+    maxSize: 'full',
+  },
+  {
+    id: 'expiring-weeks',
+    title: 'Vencimientos por semana',
+    description: 'Documentos que vencen en cada una de las próximas 4 semanas',
+    section: 'vencimientos',
+    requires: [],
+    requiresAny: [EMPLOYEE_DOCS_SOURCE, VEHICLE_DOCS_SOURCE],
+    defaultSize: 'lg',
+    minSize: 'md',
+    maxSize: 'full',
+  },
+  {
+    id: 'expiring-timeline',
+    title: 'Línea de vencimientos',
+    description: 'Documentos que vencen día por día en los próximos 30 días',
+    section: 'vencimientos',
+    requires: [],
+    requiresAny: [EMPLOYEE_DOCS_SOURCE, VEHICLE_DOCS_SOURCE],
     defaultSize: 'full',
     minSize: 'lg',
     maxSize: 'full',
@@ -341,8 +382,20 @@ export function getWidgetDefinition(id: string): WidgetDefinition | undefined {
 
 /** Todas las claves que hay que consultar para resolver la visibilidad del catálogo completo. */
 export const ALL_WIDGET_PERMISSION_KEYS: readonly PermissionKey[] = [
-  ...new Set(WIDGETS.flatMap((widget) => widget.requires)),
+  ...new Set(
+    WIDGETS.flatMap((widget): PermissionKey[] => [
+      ...widget.requires,
+      ...(('requiresAny' in widget ? widget.requiresAny : undefined) ?? []).flat(),
+    ])
+  ),
 ];
+
+/** `true` si las claves concedidas alcanzan para ver el widget (`requires` completo y algún grupo de `requiresAny`). */
+export function isWidgetGranted(widget: WidgetDefinition, granted: ReadonlySet<PermissionKey>): boolean {
+  if (!widget.requires.every((key) => granted.has(key))) return false;
+  if (!widget.requiresAny || widget.requiresAny.length === 0) return true;
+  return widget.requiresAny.some((group) => group.every((key) => granted.has(key)));
+}
 
 /** Índice del tamaño en `WIDGET_SIZES` (para comparar y para achicar/agrandar). */
 export function sizeIndex(size: WidgetSize): number {
@@ -383,7 +436,13 @@ export const BOARD_TEMPLATES = [
     key: 'vencimientos',
     name: 'Vencimientos',
     description: 'Documentos vencidos o que vencen en los próximos 30 días',
-    widgets: ['expiring-employee-docs', 'expiring-vehicle-docs'],
+    widgets: [
+      'document-compliance',
+      'expiring-weeks',
+      'expiring-timeline',
+      'expiring-employee-docs',
+      'expiring-vehicle-docs',
+    ],
   },
   {
     key: 'operacion',

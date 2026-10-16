@@ -1,5 +1,8 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { EmployeeDocumentStatus } from '@/features/Documentacion/DocumentosEmpleados/components/EmployeeDocumentStatus';
+import { DocumentStatusChip } from '@/features/Documentacion/shared/components/DocumentStatusChip';
+import { isDocumentStatusKey } from '@/features/Documentacion/shared/lib/document-status-ui';
 import {
   employeeStatusBadges,
   employeeStatusLabels,
@@ -7,17 +10,20 @@ import {
   reasonForTerminationLabels,
 } from '@/shared/utils/mappers';
 import moment from 'moment';
+import { Suspense } from 'react';
 import type { EmployeeDetailData } from '../actions.server';
 
 interface EmployeeHeaderContentProps {
   employee: NonNullable<EmployeeDetailData>;
+  /** El usuario puede ver la documentación del legajo (`documentacion:documentos-de-empleados:view`). */
+  canViewDocuments: boolean;
 }
 
 /**
  * Identidad del empleado en la cabecera de la ficha: el legajo arriba (es como lo identifican),
- * nombre, puesto, documento y estados. La tarjeta y las acciones las pone `RecordHeader`.
+ * nombre, puesto, documento y estados (activo, estado documental con "N de M vigentes" y descarga del legajo). La tarjeta y las acciones las pone `RecordHeader`.
  */
-export function EmployeeHeaderContent({ employee }: EmployeeHeaderContentProps) {
+export function EmployeeHeaderContent({ employee, canViewDocuments }: EmployeeHeaderContentProps) {
   const fullName = `${employee.lastname} ${employee.firstname}`;
   const initials = `${employee.lastname?.[0] ?? ''}${employee.firstname?.[0] ?? ''}`;
   const role = [employee.company_positions?.name, employee.hierarchy?.name].filter(Boolean).join(' · ');
@@ -43,10 +49,18 @@ export function EmployeeHeaderContent({ employee }: EmployeeHeaderContentProps) 
         </p>
         <div className="flex flex-wrap items-center gap-2 pt-1">
           <Badge variant={employee.is_active ? 'success' : 'secondary'}>{employee.is_active ? 'Activo' : 'Baja'}</Badge>
-          {employee.status && (
+          {/* Avalado / No avalado: otra dimensión del mismo campo. Los estados documentales los muestra el chip. */}
+          {employee.status && !isDocumentStatusKey(employee.status) && (
             <Badge variant={employeeStatusBadges[employee.status] ?? 'default'}>
               {getEnumLabel(employee.status, employeeStatusLabels)}
             </Badge>
+          )}
+          {canViewDocuments ? (
+            <Suspense fallback={<DocumentStatusChip status={employee.status} />}>
+              <EmployeeDocumentStatus employeeId={employee.id} status={employee.status} />
+            </Suspense>
+          ) : (
+            <DocumentStatusChip status={employee.status} />
           )}
           {!employee.is_active && employee.termination_date && (
             <span className="text-danger-subtle-foreground text-sm">

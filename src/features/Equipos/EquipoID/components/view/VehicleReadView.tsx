@@ -1,4 +1,6 @@
 import type { VehicleById } from '@/app/dashboard/equipment/action/page';
+import { EquipmentDocumentStatus } from '@/features/Documentacion/DocumentosEquipos/components/EquipmentDocumentStatus';
+import { DocumentStatusChip } from '@/features/Documentacion/shared/components/DocumentStatusChip';
 import { getCostCenterOptions } from '@/features/Empresa/General/actions/cost-centers.server';
 import { EquipmentBreadcrumb } from '@/features/Equipos/components/EquipmentBreadcrumb';
 import { createTabVisibilityChecker } from '@/features/Permissions/lib/tab-visibility';
@@ -72,7 +74,19 @@ export function VehicleReadView({
         identifier={vehicle.domain || vehicle.serie}
       />
 
-      <VehicleHeader vehicle={vehicle} sectorName={sectorName} />
+      <VehicleHeader
+        vehicle={vehicle}
+        sectorName={sectorName}
+        documentStatus={
+          isTabVisible('documentacion', 'documentos-de-equipos') ? (
+            <Suspense fallback={<DocumentStatusChip status={vehicle.status} />}>
+              <EquipmentDocumentStatus equipmentId={vehicle.id} status={vehicle.status} />
+            </Suspense>
+          ) : (
+            <DocumentStatusChip status={vehicle.status} />
+          )
+        }
+      />
 
       <RecordSectionsServer<'equipos' | 'documentacion' | 'mantenimiento'>
         paramName="tab"

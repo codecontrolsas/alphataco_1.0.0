@@ -1,12 +1,12 @@
 'use client';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
 import { StackedCell } from '@/features/Operaciones/shared/components/StackedCell';
+import { cn } from '@/lib/utils';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import type { ColumnDef } from '@tanstack/react-table';
 import { AlertTriangle, Truck } from 'lucide-react';
-import { employeeDeviations, equipmentDeviations } from '../../lib/resource-deviations';
+import { deviationText, employeeDeviations, equipmentDeviations } from '../../lib/resource-deviations';
 import { canEditRow } from '../lib/row-permissions';
 import type { DailyReportDetailRow } from '../types';
 import { formatRowTime } from './helpers';
@@ -85,8 +85,8 @@ function buildEmployeeChips(row: DailyReportDetailRow, deviations: DeviationGett
     const emp = rel.employees;
     if (!emp) continue;
     const dev = rel.employee_id ? deviations.getEmployeeDeviation(rel.employee_id, row.id) : null;
-    const messages = dev ? employeeDeviations(dev).map((entry) => entry.label) : [];
-    const roleLabel = rel.role ? (EMPLOYEE_ROLE_LABELS[rel.role] ?? rel.role) : null;
+    const messages = dev ? employeeDeviations(dev).map(deviationText) : [];
+    const roleLabel = rel.role ? EMPLOYEE_ROLE_LABELS[rel.role] ?? rel.role : null;
     const fullName = [emp.lastname, emp.firstname].filter(Boolean).join(' ');
     chips.push({
       key: rel.id,
@@ -107,11 +107,11 @@ function buildEquipmentChips(row: DailyReportDetailRow, deviations: DeviationGet
     const other = rel.other_equipment;
     if (!vehicle && !other) continue;
     const label = vehicle
-      ? (vehicle.domain ?? vehicle.intern_number ?? 'Equipo')
-      : (other?.intern_number ?? other?.serial_number ?? 'Equipo');
+      ? vehicle.domain ?? vehicle.intern_number ?? 'Equipo'
+      : other?.intern_number ?? other?.serial_number ?? 'Equipo';
     const equipmentId = vehicle ? rel.equipment_id : rel.other_equipment_id;
     const dev = equipmentId ? deviations.getEquipmentDeviation(equipmentId, row.id) : null;
-    const messages = dev ? equipmentDeviations(dev).map((entry) => entry.label) : [];
+    const messages = dev ? equipmentDeviations(dev).map(deviationText) : [];
     chips.push({
       key: rel.id,
       label,
@@ -235,7 +235,9 @@ export function getLineColumns(
               <>
                 <AlertTriangle className="text-warn-subtle-foreground size-4 shrink-0" aria-hidden="true" />
                 <span className="sr-only">
-                  {deviationCount === 1 ? '1 desvío en el personal o los equipos' : `${deviationCount} desvíos en el personal o los equipos`}
+                  {deviationCount === 1
+                    ? '1 desvío en el personal o los equipos'
+                    : `${deviationCount} desvíos en el personal o los equipos`}
                 </span>
               </>
             ) : null}
@@ -257,13 +259,11 @@ export function getLineColumns(
           .join(' · ');
         const start = formatRowTime(line.start_time);
         const end = formatRowTime(line.end_time);
-        const schedule = [line.working_day, start && end ? `${start}–${end}` : (start ?? end)]
+        const schedule = [line.working_day, start && end ? `${start}–${end}` : start ?? end]
           .filter((part): part is string => Boolean(part))
           .join(' · ');
 
-        return (
-          <StackedCell primary={place || '—'} secondary={schedule || undefined} maxWidthClass="max-w-[190px]" />
-        );
+        return <StackedCell primary={place || '—'} secondary={schedule || undefined} maxWidthClass="max-w-[190px]" />;
       },
     },
 

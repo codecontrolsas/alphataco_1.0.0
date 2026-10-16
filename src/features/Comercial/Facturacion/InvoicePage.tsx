@@ -67,6 +67,11 @@ export async function InvoicePage({ id, result }: { id: string; result: string |
       data={data}
       permissions={permissions}
       result={result}
+      originAccess={{
+        orders: permissionsMap['operaciones:preparte:view'] === true,
+        reports: permissionsMap['operaciones:detalle-parte-diario:view'] === true,
+        certifications: permissionsMap['comercial:certificaciones:view'] === true,
+      }}
       receivable={
         receivable ? { ...receivable, canCollect: permissionsMap['tesoreria:cobranzas:create'] === true } : null
       }

@@ -26,11 +26,12 @@ const FORMULARIOS_CREATE: ResourcePermission = { module: 'formularios', tab: 'fo
 /**
  * Crea una nueva respuesta de checklist normalizado
  *
- * NUEVO FLUJO:
- * - Ya NO actualiza vehicles.condition a 'no operativo' directamente
- * - Ya NO actualiza vehicles.kilometer directamente
- * - En su lugar, crea una maintenance_request que debe ser aprobada
- * - El kilometraje y condición se actualizan cuando se aprueba la entrada a taller
+ * Qué hace con los desvíos y con el vehículo:
+ * - NO crea ninguna `maintenance_request`: los ítems fallidos se guardan como desvíos pendientes
+ *   (`checklist_deviations`) sin solicitud. El usuario los registra después en el modal que aparece al
+ *   finalizar el checklist (o desde "Equipos con Desvíos") y ahí pasan a una solicitud que valida el supervisor.
+ * - NO cambia `vehicles.condition` a 'no operativo': la condición se actualiza cuando se aprueba la entrada a taller.
+ * - SÍ actualiza `vehicles.kilometer` cuando el kilometraje informado es mayor al actual.
  */
 type FailedChecklistItem = {
   item_code: string;

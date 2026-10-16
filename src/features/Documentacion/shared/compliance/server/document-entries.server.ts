@@ -5,6 +5,7 @@ import { cache } from 'react';
 import { typeAppliesTo } from '../applicability';
 import { arCurrentPeriod, arToday, normalizePeriod } from '../dates';
 import { deriveState, evaluateResource } from '../evaluation';
+import { describeRequirementReason } from '../requirement-reason';
 import type { ComplianceDoc, ComplianceKind, ComplianceResource, ComplianceType } from '../types';
 import { loadComplianceDataset, type ComplianceDataset, type ComplianceDocExtra } from './dataset.server';
 
@@ -41,6 +42,8 @@ export interface DocumentEntry {
   notApplicable: boolean;
   doc: ComplianceDoc | null;
   extra: ComplianceDocExtra | null;
+  /** Criterio por el que se pide ("Puesto = Operador"). Sólo en listas embebidas en la ficha; resuelto sin consultas. */
+  requestedBy: string | null;
   /** Período del documento; en una fila faltante mensual, el período corriente (`YYYY-MM`). */
   period: string | null;
 }
@@ -152,6 +155,7 @@ async function loadEntries(params: LoadParams): Promise<LoadedDocumentEntries> {
       notApplicable: flags.notApplicable ?? false,
       doc,
       extra: doc ? dataset.docExtras.get(doc.id) ?? null : null,
+      requestedBy: embedded ? describeRequirementReason(type, resource) : null,
       period,
     });
   };

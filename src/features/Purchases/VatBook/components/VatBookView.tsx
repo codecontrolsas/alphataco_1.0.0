@@ -162,7 +162,13 @@ export function VatBookView({ initialBook, periods }: { initialBook: PurchasesVa
             <FileSpreadsheet className="mr-1 h-4 w-4" />
             {excel.isPending ? 'Exportando…' : 'Exportar Excel'}
           </Button>
-          <Button type="button" size="sm" variant="outline" disabled={count === 0 || txt.isPending} onClick={() => txt.mutate()}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={count === 0 || txt.isPending}
+            onClick={() => txt.mutate()}
+          >
             <FileDown className="mr-1 h-4 w-4" />
             {txt.isPending ? 'Generando…' : 'Descargar TXT'}
           </Button>
@@ -171,10 +177,11 @@ export function VatBookView({ initialBook, periods }: { initialBook: PurchasesVa
       <CardContent>
         {!book ? null : count === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">
-            No hay comprobantes imputados a {periodLabel(period)}. Un comprobante se imputa al período IVA que se elige al cargarlo.
+            No hay comprobantes imputados a {periodLabel(period)}. Un comprobante se imputa al período IVA que se elige
+            al cargarlo.
           </p>
         ) : (
-          <div className={`overflow-x-auto rounded-md border ${isFetching ? 'opacity-60' : ''}`}>
+          <div className={`overflow-x-auto rounded-xl border ${isFetching ? 'opacity-60' : ''}`}>
             <Table className="min-w-[960px] text-xs">
               <TableHeader>
                 <TableRow>

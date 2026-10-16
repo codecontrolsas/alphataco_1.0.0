@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { loadEquipmentPermanentRows } from '@/features/Documentacion/DocumentosEquipos/lib/permanent-list.server';
+import { countDocumentRows } from '@/features/Documentacion/shared/compliance/summary';
 import { toDiagramPosition } from '@/features/Mantenimiento/Gomeria/shared/iso/diagram-position';
 import { getStatusLabel } from '@/features/Mantenimiento/lib/status-presentation';
 import { createTabVisibilityChecker } from '@/features/Permissions/lib/tab-visibility';
@@ -51,18 +52,8 @@ async function safely<T>(name: string, task: Promise<T>): Promise<T | null> {
 }
 
 async function loadDocuments(equipmentId: string): Promise<TwinDocuments> {
-  const rows = await loadEquipmentPermanentRows(equipmentId);
-  const out: TwinDocuments = { overdue: 0, expiringSoon: 0, missing: 0, rejected: 0, inReview: 0, ok: 0 };
-  for (const row of rows) {
-    if (row.notApplicable) continue;
-    if (row.isMissing) out.missing += 1;
-    else if (row.state === 'vencido') out.overdue += 1;
-    else if (row.state === 'rechazado') out.rejected += 1;
-    else if (row.state === 'presentado') out.inReview += 1;
-    else if (row.expiringSoon) out.expiringSoon += 1;
-    else out.ok += 1;
-  }
-  return out;
+  // Misma regla de conteo que la cabecera de la ficha (`countDocumentRows`).
+  return countDocumentRows(await loadEquipmentPermanentRows(equipmentId));
 }
 
 async function loadDeviations(equipmentId: string, now: Date): Promise<TwinDeviations> {

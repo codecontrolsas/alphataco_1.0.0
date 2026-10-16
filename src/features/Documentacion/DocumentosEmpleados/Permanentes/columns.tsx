@@ -132,6 +132,8 @@ export const columns: ColumnDef<EmployeePermanentDocumentListItem>[] = [
         mandatory={row.original.document_types?.mandatory}
         denyReason={row.original.deny_reason}
         state={row.original.state}
+        requestedBy={row.original.requestedBy}
+        archived={row.original.notApplicable}
       />
     ),
     filterFn: (row, _id, value: string[]) => {

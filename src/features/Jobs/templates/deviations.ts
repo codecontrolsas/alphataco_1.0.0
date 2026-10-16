@@ -1,17 +1,25 @@
 import {
   EQUIPMENT_CONDITION_LABELS,
   normalizeEquipmentCondition,
-  type EquipmentConditionKey,
 } from '@/features/Operaciones/PartesDiarios/lib/equipment-condition';
 import {
+  CONDITION_DEVIATION_KIND,
+  DEVIATION_LABELS,
+  type DeviationKind,
+} from '@/features/Operaciones/PartesDiarios/lib/resource-deviations';
+import {
+  MAIL_COLORS as C,
+  MAIL_RADIUS as R,
   appUrl,
   badge,
   ctaBlock,
   escapeHtml,
   groupCardClose,
   groupCardOpen,
+  headerPill,
   renderEmailShell,
   tableHeaderRow,
+  type MailTone,
 } from '@/shared/lib/mail/shell';
 import { formatLongDateAr } from '../lib/dates';
 import type {
@@ -39,13 +47,19 @@ const ROLE_LABELS: Record<string, string> = {
   sin_rol: 'Sin rol',
 };
 
-const CONDITION_COLORS: Record<EquipmentConditionKey, { bg: string; text: string }> = {
-  operativo: { bg: '#f0fdf4', text: '#15803d' },
-  'no operativo': { bg: '#fef2f2', text: '#b91c1c' },
-  'en reparacion': { bg: '#fefce8', text: '#a16207' },
-  'operativo condicionado': { bg: '#fff7ed', text: '#c2410c' },
-  'en preparacion': { bg: '#eff6ff', text: '#1d4ed8' },
-  desconocido: { bg: '#f1f5f9', text: '#475569' },
+/**
+ * Tono de cada desvío: el mismo que usa la pantalla del parte (duplicado = naranja, no afectado = celeste,
+ * sin diagrama / no operativo = rojo, día no laboral / en reparación = amarillo).
+ */
+const DEVIATION_TONES: Record<DeviationKind, MailTone> = {
+  duplicated: 'expired',
+  unassigned_to_client: 'info',
+  no_diagram: 'danger',
+  non_work_day: 'warn',
+  not_operative: 'danger',
+  under_repair: 'warn',
+  conditioned: 'info',
+  in_preparation: 'pending',
 };
 
 const TYPE_SERVICE_LABELS: Record<string, string> = {
@@ -54,24 +68,28 @@ const TYPE_SERVICE_LABELS: Record<string, string> = {
   adicional_permanente: 'Adicional Permanente',
 };
 
-const STATUS_LABELS: Record<string, { label: string; bg: string; text: string }> = {
-  pendiente: { label: 'Pendiente', bg: '#fefce8', text: '#a16207' },
-  sin_recursos_asignados: { label: 'Sin recursos', bg: '#fef2f2', text: '#b91c1c' },
-  ejecutado: { label: 'Ejecutado', bg: '#f0fdf4', text: '#15803d' },
-  reprogramado: { label: 'Reprogramado', bg: '#eff6ff', text: '#1d4ed8' },
-  cancelado: { label: 'Cancelado', bg: '#fef2f2', text: '#b91c1c' },
-  en_certificacion: { label: 'En certificación', bg: '#f5f3ff', text: '#7c3aed' },
+const STATUS_LABELS: Record<string, { label: string; tone: MailTone }> = {
+  pendiente: { label: 'Pendiente', tone: 'warn' },
+  sin_recursos_asignados: { label: 'Sin recursos', tone: 'danger' },
+  ejecutado: { label: 'Ejecutado', tone: 'ok' },
+  reprogramado: { label: 'Reprogramado', tone: 'info' },
+  cancelado: { label: 'Cancelado', tone: 'danger' },
+  en_certificacion: { label: 'En certificación', tone: 'cert' },
 };
+
+function deviationBadge(kind: DeviationKind, suffix = ''): string {
+  return badge(`${DEVIATION_LABELS[kind]}${suffix}`, DEVIATION_TONES[kind]);
+}
 
 function employeeDeviationBadges(deviation: EmployeeDeviation): string {
   const badges: string[] = [];
-  if (deviation.is_unassigned_to_client) badges.push(badge('No afectado', '#fff7ed', '#c2410c'));
-  if (deviation.has_no_diagram) badges.push(badge('Sin diagrama', '#fef2f2', '#b91c1c'));
+  if (deviation.is_unassigned_to_client) badges.push(deviationBadge('unassigned_to_client'));
+  if (deviation.has_no_diagram) badges.push(deviationBadge('no_diagram'));
   if (deviation.is_non_work_day) {
     const suffix = deviation.diagram_type_name ? ` (${deviation.diagram_type_name})` : '';
-    badges.push(badge(`Día no laboral${suffix}`, '#fefce8', '#a16207'));
+    badges.push(deviationBadge('non_work_day', suffix));
   }
-  if (deviation.is_duplicated) badges.push(badge('Duplicado', '#f5f3ff', '#7c3aed'));
+  if (deviation.is_duplicated) badges.push(deviationBadge('duplicated'));
   return badges.join(' ');
 }
 
@@ -82,7 +100,7 @@ function employeeDeviationBadges(deviation: EmployeeDeviation): string {
 function equipmentLabelCell(deviation: EquipmentDeviation): string {
   const label = deviation.equipment_label || deviation.equipment_domain || '—';
   if (!deviation.is_other_equipment || !deviation.equipment_type) return escapeHtml(label);
-  return `${escapeHtml(label)} ${badge(deviation.equipment_type, '#f1f5f9', '#475569')}`;
+  return `${escapeHtml(label)} ${badge(deviation.equipment_type, 'pending')}`;
 }
 
 /**
@@ -98,15 +116,15 @@ function equipmentInternCell(deviation: EquipmentDeviation): string {
 
 function equipmentDeviationBadges(deviation: EquipmentDeviation): string {
   const badges: string[] = [];
-  if (deviation.is_unassigned_to_client) badges.push(badge('No afectado', '#fff7ed', '#c2410c'));
+  if (deviation.is_unassigned_to_client) badges.push(deviationBadge('unassigned_to_client'));
   if (deviation.condition) {
     const key = normalizeEquipmentCondition(deviation.condition);
     if (key !== 'operativo') {
-      const colors = CONDITION_COLORS[key];
-      badges.push(badge(EQUIPMENT_CONDITION_LABELS[key], colors.bg, colors.text));
+      const kind = key === 'desconocido' ? null : CONDITION_DEVIATION_KIND[key];
+      badges.push(kind ? deviationBadge(kind) : badge(EQUIPMENT_CONDITION_LABELS[key], 'pending'));
     }
   }
-  if (deviation.is_duplicated) badges.push(badge('Duplicado', '#f5f3ff', '#7c3aed'));
+  if (deviation.is_duplicated) badges.push(deviationBadge('duplicated'));
   return badges.join(' ');
 }
 
@@ -117,22 +135,22 @@ function formatTime(time: string | null): string {
 }
 
 function metadataItem(label: string, value: string): string {
-  return `<span style="font-size:12px;color:#64748b;">${escapeHtml(label)}: </span><span style="font-size:12px;color:#1e293b;font-weight:500;">${escapeHtml(value)}</span>`;
+  return `<span style="font-size:12px;color:${C.textMuted};">${escapeHtml(label)}: </span><span style="font-size:12px;color:${C.text};font-weight:500;">${escapeHtml(value)}</span>`;
 }
 
 function statusBadge(status: string | null): string {
-  if (!status) return badge('—', '#f1f5f9', '#475569');
-  const mapped = STATUS_LABELS[status] ?? { label: status, bg: '#f1f5f9', text: '#475569' };
-  return badge(mapped.label, mapped.bg, mapped.text);
+  if (!status) return badge('—', 'pending');
+  const mapped = STATUS_LABELS[status] ?? { label: status, tone: 'pending' as const };
+  return badge(mapped.label, mapped.tone);
 }
 
 function summaryCards(summary: DeviationsResult['summary']): string {
   const cards = [
-    { label: 'Rows con desvíos', value: summary.total_rows_with_deviations, color: '#ea580c' },
-    { label: 'Desvíos Empleados', value: summary.total_employee_deviations, color: '#c2410c' },
-    { label: 'Desvíos Equipos', value: summary.total_equipment_deviations, color: '#b91c1c' },
-    { label: 'Empleados Duplicados', value: summary.total_duplicated_employees, color: '#7c3aed' },
-    { label: 'Equipos Duplicados', value: summary.total_duplicated_equipment, color: '#6d28d9' },
+    { label: 'Rows con desvíos', value: summary.total_rows_with_deviations, color: C.expiredInk },
+    { label: 'Desvíos Empleados', value: summary.total_employee_deviations, color: C.warnInk },
+    { label: 'Desvíos Equipos', value: summary.total_equipment_deviations, color: C.dangerInk },
+    { label: 'Empleados Duplicados', value: summary.total_duplicated_employees, color: C.certInk },
+    { label: 'Equipos Duplicados', value: summary.total_duplicated_equipment, color: C.certInk },
   ];
 
   return `
@@ -142,11 +160,11 @@ function summaryCards(summary: DeviationsResult['summary']): string {
           .map(
             (card) => `
         <td align="center" style="padding:0 3px;">
-          <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:${C.surfaceMuted};border:1px solid ${C.border};border-radius:${R.surface};">
             <tr>
               <td style="padding:12px 6px;text-align:center;">
                 <p style="margin:0;font-size:24px;font-weight:800;color:${card.color};line-height:1;">${card.value}</p>
-                <p style="margin:5px 0 0;font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;">${escapeHtml(card.label)}</p>
+                <p style="margin:5px 0 0;font-size:10px;color:${C.textMuted};font-weight:600;text-transform:uppercase;letter-spacing:0.3px;">${escapeHtml(card.label)}</p>
               </td>
             </tr>
           </table>
@@ -162,11 +180,11 @@ function employeesTable(deviations: readonly EmployeeDeviation[]): string {
   const rows = deviations
     .map(
       (employee, index) => `
-      <tr style="background:${index % 2 === 0 ? '#ffffff' : '#fafafa'};">
-        <td style="padding:7px 10px;font-size:12px;color:#1e293b;font-weight:500;border-bottom:1px solid #f1f5f9;">${escapeHtml(employee.employee_name)}</td>
-        <td style="padding:7px 10px;font-size:12px;color:#64748b;font-family:monospace;border-bottom:1px solid #f1f5f9;">${escapeHtml(employee.employee_cuil)}</td>
-        <td style="padding:7px 10px;font-size:12px;color:#475569;border-bottom:1px solid #f1f5f9;">${escapeHtml(ROLE_LABELS[employee.role] ?? employee.role)}</td>
-        <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;">${employeeDeviationBadges(employee)}</td>
+      <tr style="background:${index % 2 === 0 ? C.card : C.surfaceAlt};">
+        <td style="padding:7px 10px;font-size:12px;color:${C.text};font-weight:500;border-bottom:1px solid ${C.border};">${escapeHtml(employee.employee_name)}</td>
+        <td style="padding:7px 10px;font-size:12px;color:${C.textMuted};font-family:monospace;border-bottom:1px solid ${C.border};">${escapeHtml(employee.employee_cuil)}</td>
+        <td style="padding:7px 10px;font-size:12px;color:${C.textMuted};border-bottom:1px solid ${C.border};">${escapeHtml(ROLE_LABELS[employee.role] ?? employee.role)}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid ${C.border};">${employeeDeviationBadges(employee)}</td>
       </tr>`
     )
     .join('');
@@ -174,8 +192,8 @@ function employeesTable(deviations: readonly EmployeeDeviation[]): string {
   return `
     <tr>
       <td style="padding:10px 18px 4px;">
-        <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Empleados</p>
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;">
+        <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:${C.textMuted};text-transform:uppercase;letter-spacing:0.5px;">Empleados</p>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${C.border};border-radius:${R.surface};overflow:hidden;">
           <thead>${tableHeaderRow(['Nombre', 'CUIL', 'Rol', 'Desvíos'])}</thead>
           <tbody>${rows}</tbody>
         </table>
@@ -188,10 +206,10 @@ function equipmentTable(deviations: readonly EquipmentDeviation[]): string {
   const rows = deviations
     .map(
       (equipment, index) => `
-      <tr style="background:${index % 2 === 0 ? '#ffffff' : '#fafafa'};">
-        <td style="padding:7px 10px;font-size:12px;color:#1e293b;font-weight:500;font-family:monospace;border-bottom:1px solid #f1f5f9;">${equipmentLabelCell(equipment)}</td>
-        <td style="padding:7px 10px;font-size:12px;color:#475569;border-bottom:1px solid #f1f5f9;">${equipmentInternCell(equipment)}</td>
-        <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;">${equipmentDeviationBadges(equipment)}</td>
+      <tr style="background:${index % 2 === 0 ? C.card : C.surfaceAlt};">
+        <td style="padding:7px 10px;font-size:12px;color:${C.text};font-weight:500;font-family:monospace;border-bottom:1px solid ${C.border};">${equipmentLabelCell(equipment)}</td>
+        <td style="padding:7px 10px;font-size:12px;color:${C.textMuted};border-bottom:1px solid ${C.border};">${equipmentInternCell(equipment)}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid ${C.border};">${equipmentDeviationBadges(equipment)}</td>
       </tr>`
     )
     .join('');
@@ -199,8 +217,8 @@ function equipmentTable(deviations: readonly EquipmentDeviation[]): string {
   return `
     <tr>
       <td style="padding:10px 18px 4px;">
-        <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Equipos</p>
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;">
+        <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:${C.textMuted};text-transform:uppercase;letter-spacing:0.5px;">Equipos</p>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${C.border};border-radius:${R.surface};overflow:hidden;">
           <thead>${tableHeaderRow(['Equipo', 'N° Interno', 'Desvíos'])}</thead>
           <tbody>${rows}</tbody>
         </table>
@@ -209,8 +227,8 @@ function equipmentTable(deviations: readonly EquipmentDeviation[]): string {
 }
 
 function reportRow(row: RowWithDeviations, index: number): string {
-  const background = index % 2 === 0 ? '#ffffff' : '#f8fafc';
-  const borderTop = index > 0 ? 'border-top:1px solid #e2e8f0;' : '';
+  const background = index % 2 === 0 ? C.card : C.surfaceMuted;
+  const borderTop = index > 0 ? `border-top:1px solid ${C.border};` : '';
   const typeServiceLabel = TYPE_SERVICE_LABELS[row.type_service ?? ''] ?? row.type_service ?? '—';
   const customerEquipment = row.customer_equipment.filter((item: CustomerEquipment) => item.name !== '—');
   const customerEquipmentText =
@@ -223,14 +241,14 @@ function reportRow(row: RowWithDeviations, index: number): string {
       <td style="background:${background};padding:0;${borderTop}">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
           <tr>
-            <td style="padding:10px 18px;background:#f1f5f9;border-bottom:1px solid #e2e8f0;">
+            <td style="padding:10px 18px;background:${C.surfaceMuted};border-bottom:1px solid ${C.border};">
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td>
-                    <p style="margin:0;font-size:13px;font-weight:600;color:#334155;">${escapeHtml(row.service_name)}${row.item_name !== '—' ? ` &rsaquo; ${escapeHtml(row.item_name)}` : ''}</p>
+                    <p style="margin:0;font-size:13px;font-weight:600;color:${C.text};">${escapeHtml(row.service_name)}${row.item_name !== '—' ? ` &rsaquo; ${escapeHtml(row.item_name)}` : ''}</p>
                   </td>
                   <td align="right">
-                    <span style="font-size:12px;color:#64748b;">${formatTime(row.start_time)} &mdash; ${formatTime(row.end_time)}</span>
+                    <span style="font-size:12px;color:${C.textMuted};">${formatTime(row.start_time)} &mdash; ${formatTime(row.end_time)}</span>
                   </td>
                 </tr>
               </table>
@@ -249,8 +267,8 @@ function reportRow(row: RowWithDeviations, index: number): string {
                   <td style="padding:2px 0;" colspan="2">${metadataItem('Área', row.area_name ?? '—')}</td>
                 </tr>
               </table>
-              ${customerEquipmentText ? `<p style="margin:4px 0 0;font-size:12px;color:#64748b;">Equipo cliente: <span style="color:#1e293b;font-weight:500;">${escapeHtml(customerEquipmentText)}</span></p>` : ''}
-              ${row.description ? `<p style="margin:4px 0 0;font-size:12px;color:#64748b;">Descripción: <span style="color:#475569;font-style:italic;">${escapeHtml(row.description)}</span></p>` : ''}
+              ${customerEquipmentText ? `<p style="margin:4px 0 0;font-size:12px;color:${C.textMuted};">Equipo cliente: <span style="color:${C.text};font-weight:500;">${escapeHtml(customerEquipmentText)}</span></p>` : ''}
+              ${row.description ? `<p style="margin:4px 0 0;font-size:12px;color:${C.textMuted};">Descripción: <span style="color:${C.textMuted};font-style:italic;">${escapeHtml(row.description)}</span></p>` : ''}
             </td>
           </tr>
           ${employeesTable(row.employee_deviations)}
@@ -313,7 +331,7 @@ export function renderDeviationsEmail(params: DeviationsEmailParams): RenderedEm
       companyName,
       title: 'Reporte de Desvíos — Parte Diario',
       subtitle: formatLongDateAr(reportDate),
-      badgeHtml: `<span style="background:rgba(255,255,255,0.2);color:#fff;padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;">${totalIssues} desvío${totalIssues !== 1 ? 's' : ''}</span>`,
+      badgeHtml: headerPill(`${totalIssues} desvío${totalIssues !== 1 ? 's' : ''}`),
       body,
     }),
     text: [

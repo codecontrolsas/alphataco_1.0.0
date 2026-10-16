@@ -61,7 +61,7 @@ export function PendingOrderMetrics({ initialMetrics, serverAttention = null }: 
               ? `1 pedido espera fecha hace más de ${days} días.`
               : `${overdue} pedidos esperan fecha hace más de ${days} días.`
           }
-          description="Desde la aprobación de Operaciones. El supervisor los ve como “Pend. Programación” en Seguimiento."
+          description="Desde la aprobación de Operaciones. El supervisor los ve como “Pend. de programación” en Seguimiento."
           actions={
             <Button type="button" variant="outline" onClick={() => toggle('overdue')}>
               {attention === 'overdue' ? 'Ver todos los pendientes' : 'Ver solo esos'}
@@ -70,7 +70,11 @@ export function PendingOrderMetrics({ initialMetrics, serverAttention = null }: 
         />
       ) : null}
 
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4" role="group" aria-label="Métricas de pedidos por programar">
+      <div
+        className="grid grid-cols-2 gap-4 xl:grid-cols-4"
+        role="group"
+        aria-label="Métricas de pedidos por programar"
+      >
         <MetricCard
           label="Por programar"
           value={show(metrics?.total)}
