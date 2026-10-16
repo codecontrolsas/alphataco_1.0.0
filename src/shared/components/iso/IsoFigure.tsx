@@ -1,4 +1,7 @@
+'use client';
+
 import { cn } from '@/lib/utils';
+import { memo, useMemo } from 'react';
 import './iso.css';
 
 interface IsoFigureProps {
@@ -8,10 +11,16 @@ interface IsoFigureProps {
 }
 
 /**
- * Contenedor de una figura isométrica. Es un componente de servidor: el SVG se arma al renderizar
- * con funciones puras del kit y no manda JS al cliente. La interacción, si hay, la agrega
- * `useIsoSelect` en un componente cliente que envuelve a este.
+ * Contenedor de una figura isométrica: el SVG se arma con funciones puras del kit y la interacción la agrega
+ * `useIsoSelect` en el componente que lo envuelve.
+ *
+ * React 19 vuelve a escribir el `innerHTML` en cada render si el objeto de `dangerouslySetInnerHTML` es nuevo,
+ * aunque el texto sea igual: reemplazaba el SVG al pasar el mouse y se perdían el foco y los clics. El objeto va
+ * memorizado por `svg`, así el DOM solo se reemplaza cuando la figura cambia de verdad.
  */
-export function IsoFigure({ svg, className }: IsoFigureProps) {
-  return <div className={cn('iso w-full', className)} dangerouslySetInnerHTML={{ __html: svg }} />;
+function IsoFigureBase({ svg, className }: IsoFigureProps) {
+  const html = useMemo(() => ({ __html: svg }), [svg]);
+  return <div className={cn('iso w-full', className)} dangerouslySetInnerHTML={html} />;
 }
+
+export const IsoFigure = memo(IsoFigureBase);

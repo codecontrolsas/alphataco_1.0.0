@@ -33,6 +33,8 @@ export interface ComputedPosition {
   side: 'LEFT' | 'RIGHT' | 'SPARE';
   /** For dual axles: 'INNER' | 'OUTER', for single/spare: undefined */
   dual_role?: 'INNER' | 'OUTER';
+  /** Lugar del eje entre los ejes reales (1..N, sin contar auxilios); `axle_number` puede incluir las filas de auxilio. */
+  axle_ordinal?: number;
 }
 
 // ─── Position Calculation ──────────────────────────────────────────────────
@@ -55,15 +57,40 @@ export function calculatePositions(axles: DiagramAxle[]): ComputedPosition[] {
   const positions: ComputedPosition[] = [];
   let counter = 1;
 
-  for (const axle of regularAxles) {
+  for (const [axleIndex, axle] of regularAxles.entries()) {
+    const axle_ordinal = axleIndex + 1;
     if (axle.tires_per_side === 1) {
-      positions.push({ position_number: counter++, axle_number: axle.axle_number, side: 'LEFT' });
-      positions.push({ position_number: counter++, axle_number: axle.axle_number, side: 'RIGHT' });
+      positions.push({ position_number: counter++, axle_number: axle.axle_number, axle_ordinal, side: 'LEFT' });
+      positions.push({ position_number: counter++, axle_number: axle.axle_number, axle_ordinal, side: 'RIGHT' });
     } else {
-      positions.push({ position_number: counter++, axle_number: axle.axle_number, side: 'LEFT', dual_role: 'OUTER' });
-      positions.push({ position_number: counter++, axle_number: axle.axle_number, side: 'LEFT', dual_role: 'INNER' });
-      positions.push({ position_number: counter++, axle_number: axle.axle_number, side: 'RIGHT', dual_role: 'INNER' });
-      positions.push({ position_number: counter++, axle_number: axle.axle_number, side: 'RIGHT', dual_role: 'OUTER' });
+      positions.push({
+        position_number: counter++,
+        axle_number: axle.axle_number,
+        axle_ordinal,
+        side: 'LEFT',
+        dual_role: 'OUTER',
+      });
+      positions.push({
+        position_number: counter++,
+        axle_number: axle.axle_number,
+        axle_ordinal,
+        side: 'LEFT',
+        dual_role: 'INNER',
+      });
+      positions.push({
+        position_number: counter++,
+        axle_number: axle.axle_number,
+        axle_ordinal,
+        side: 'RIGHT',
+        dual_role: 'INNER',
+      });
+      positions.push({
+        position_number: counter++,
+        axle_number: axle.axle_number,
+        axle_ordinal,
+        side: 'RIGHT',
+        dual_role: 'OUTER',
+      });
     }
   }
 
@@ -81,7 +108,7 @@ export function describePosition(position: ComputedPosition): string {
   if (position.side === 'SPARE') return `Posición ${position.position_number} · Auxilio`;
   const side = position.side === 'LEFT' ? 'izquierda' : 'derecha';
   const role = position.dual_role === 'INNER' ? ' interior' : position.dual_role === 'OUTER' ? ' exterior' : '';
-  return `Posición ${position.position_number} · Eje ${position.axle_number} · ${side}${role}`;
+  return `Posición ${position.position_number} · Eje ${position.axle_ordinal ?? position.axle_number} · ${side}${role}`;
 }
 
 /** Descripción de una posición por número, a partir de los ejes del vehículo. */
