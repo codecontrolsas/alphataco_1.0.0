@@ -182,7 +182,8 @@ export function defaultAxleGaps(regular: DiagramAxle[]): number[] {
   return regular.slice(1).map((axle, index) => {
     const previous = regular[index];
     if (dual(previous) && dual(axle)) return GAP_TANDEM;
-    if (!dual(previous) && !dual(axle)) return GAP_TWIN_STEER;
+    // Dos simples seguidos son doble dirección solo en vehículos de 3 ejes o más; con 2 ejes es la distancia entre ejes de una camioneta.
+    if (!dual(previous) && !dual(axle)) return regular.length >= 3 ? GAP_TWIN_STEER : GAP_WHEELBASE;
     return GAP_WHEELBASE;
   });
 }
