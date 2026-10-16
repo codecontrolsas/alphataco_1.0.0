@@ -103,10 +103,22 @@ interface DocumentNameCellProps {
   /** Se muestra en rojo solo si el documento está rechazado. */
   denyReason?: string | null;
   state?: string | null;
+  /** Criterio por el que se pide ("Puesto = Operador"). Sólo en la ficha del recurso. */
+  requestedBy?: string | null;
+  /** "Ya no aplica": el criterio se muestra como el que lo exigía. */
+  archived?: boolean;
 }
 
-/** Nombre del documento en negrita y debajo: obligatoriedad, período y motivo de rechazo. */
-export function DocumentNameCell({ name, mandatory, period, denyReason, state }: DocumentNameCellProps) {
+/** Nombre del documento en negrita y debajo: obligatoriedad, período, motivo de rechazo y por qué se pide. */
+export function DocumentNameCell({
+  name,
+  mandatory,
+  period,
+  denyReason,
+  state,
+  requestedBy,
+  archived = false,
+}: DocumentNameCellProps) {
   const formattedPeriod = formatDocumentPeriod(period);
   const reason = state === 'rechazado' ? denyReason : null;
   const meta = [
@@ -126,6 +138,11 @@ export function DocumentNameCell({ name, mandatory, period, denyReason, state }:
               <span className="text-destructive">{reason}</span>
             </>
           )}
+        </div>
+      )}
+      {requestedBy && (
+        <div className="text-sm text-muted-foreground">
+          <span className="font-medium">{archived ? 'Se pedía por:' : 'Se pide por:'}</span> {requestedBy}
         </div>
       )}
     </div>

@@ -6,8 +6,9 @@ import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { AlertTriangle, ArrowLeft, CheckCircle2, Clock, SearchCheck } from 'lucide-react';
 import moment from 'moment';
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
 import type { InvoiceEditorData } from '../../actions/invoices.server';
+import { InvoiceOriginSkeleton } from '../../fallback/InvoiceOriginSkeleton';
 import { INVOICE_STATUS_LABELS } from '../../lib/invoice-state-machine';
 import { formatAddress } from '../../lib/snapshots';
 import { TAX_CONDITION_PRINT } from '../../pdf/invoice-pdf-data';
@@ -20,6 +21,7 @@ import { InvoiceStatusBadge } from '../InvoiceStatusBadge';
 import type { InvoicePermissions } from '../editor/InvoiceDraftForm';
 import { AdjustmentActions } from './AdjustmentActions';
 import { FocusOnMountHeading } from './FocusOnMountHeading';
+import { InvoiceOriginChain, type InvoiceOriginAccess } from './InvoiceOriginChain';
 import { InvoicePdfActions } from './InvoicePdfActions';
 import { ReconcileInvoicePanel } from './ReconcileInvoicePanel';
 
@@ -46,10 +48,13 @@ export function InvoiceDetail({
   permissions,
   result,
   receivable = null,
+  originAccess,
 }: {
   data: InvoiceEditorData;
   permissions: InvoicePermissions;
   result: string | null;
+  /** Qué eslabones de la cadena de origen puede abrir el usuario (permisos por módulo). */
+  originAccess: InvoiceOriginAccess;
   /** Pendiente de cobro (Tesorería): solo llega con `tesoreria:cobranzas:view` y si es cobrable. */
   receivable?: {
     pending: string;
@@ -421,6 +426,11 @@ export function InvoiceDetail({
           </section>
         )}
       </article>
+
+      {/* ── Origen: pedido → partes → certificación → factura (su propio Suspense: no frena el detalle) ── */}
+      <Suspense fallback={<InvoiceOriginSkeleton />}>
+        <InvoiceOriginChain voucherLabel={voucherLabel} certifications={invoice.certifications} access={originAccess} />
+      </Suspense>
 
       {/* ── Comprobantes vinculados ── */}
       {invoice.associatedInvoice && (

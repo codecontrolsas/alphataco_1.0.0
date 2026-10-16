@@ -1,6 +1,6 @@
 import { TriangleAlert } from 'lucide-react';
 import type { EmployeeDeviation } from '../../../../actions/validation.server';
-import { employeeDeviations } from '../../../../lib/resource-deviations';
+import { deviationText, employeeDeviations } from '../../../../lib/resource-deviations';
 
 /** Contexto de avisos de desvío compartido por los selectores de la sección */
 export interface DeviationContext {
@@ -16,7 +16,7 @@ export function getSavedDeviationLabels(employeeId: string, ctx: DeviationContex
   if (!deviation) return [];
   return employeeDeviations(deviation)
     .filter((entry) => entry.kind !== 'unassigned_to_client')
-    .map((entry) => entry.label);
+    .map(deviationText);
 }
 
 export function DeviationNotice({ labels }: { labels: string[] }) {

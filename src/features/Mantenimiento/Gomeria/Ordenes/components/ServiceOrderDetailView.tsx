@@ -157,7 +157,7 @@ export function ServiceOrderDetailView({ orderId, open, onOpenChange }: ServiceO
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   Intervenciones ({order.items.length})
                 </p>
-                <div className="rounded-md border overflow-x-auto">
+                <div className="rounded-xl border overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>

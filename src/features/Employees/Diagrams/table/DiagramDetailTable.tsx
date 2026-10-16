@@ -157,7 +157,7 @@ export function DiagramDetailTable<TData extends DiagramRowBase, TValue>({
     <div className="grid grid-cols-1 lg:grid-cols-10 gap-4">
       <div className="space-y-4 col-span-5">
         <DataTableToolbarDiagramDetail table={table} />
-        <div className="rounded-md border">
+        <div className="rounded-xl border">
           <Table>
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (

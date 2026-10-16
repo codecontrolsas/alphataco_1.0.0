@@ -103,12 +103,7 @@ interface ToolbarOptions<TData, TableName extends string> {
   showExport?: boolean;
 }
 
-interface DataTableProps<
-  TData,
-  TValue,
-  TableName extends string,
-  Query extends string = '*',
-> {
+interface DataTableProps<TData, TValue, TableName extends string, Query extends string = '*'> {
   columns: ColumnDef<TData, TValue>[];
   enableRowSelection?: boolean | ((row: Row<TData>) => boolean) | undefined;
   data?: TData[]; // Hacer opcional para server-side
@@ -146,12 +141,7 @@ interface DataTableProps<
   queryKey?: string;
   initialSorting?: SortingState; // Nueva prop para ordenamiento inicial
 }
-export function BaseDataTable<
-  TData,
-  TValue,
-  TableName extends string = never,
-  Query extends string = '*',
->({
+export function BaseDataTable<TData, TValue, TableName extends string = never, Query extends string = '*'>({
   columns,
   data: clientData,
   onRowClick,
@@ -382,7 +372,7 @@ export function BaseDataTable<
               {...toolbarProps}
             />
           )}
-          <div className="rounded-md border overflow-auto max-h-[60vh] relative">
+          <div className="rounded-xl border overflow-auto max-h-[60vh] relative">
             <Table containerClassName="overflow-x-visible overflow-y-visible min-w-fit">
               <TableHeader>
                 {table.getHeaderGroups().map((headerGroup) => (

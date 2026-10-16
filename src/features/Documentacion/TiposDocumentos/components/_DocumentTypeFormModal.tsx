@@ -39,6 +39,7 @@ import {
   selectionsToConditionsJson,
 } from '../utils/conditionsMapper';
 import { _ConditionsSection } from './_ConditionsSection';
+import { _RulePreviewPanel } from './_RulePreviewPanel';
 import { _ToggleDocTypeDialog } from './_ToggleDocTypeDialog';
 import { _VerifyDocumentsDialog } from './_VerifyDocumentsDialog';
 
@@ -175,6 +176,15 @@ export function _DocumentTypeFormModal({
     enabled: isSpecial && hasActive && applies !== 'Empresa',
     staleTime: 10_000,
   });
+
+  // Condiciones del borrador SIN debounce: "Probar regla" evalúa lo que hay en pantalla al hacer click.
+  const liveConditionsJson = useMemo(
+    () =>
+      isSpecial && hasActiveConditions(conditions)
+        ? selectionsToConditionsJson(conditions, applies, namesMapRef.current)
+        : [],
+    [isSpecial, conditions, applies]
+  );
 
   // --- Mutaciones ---
   const createMutation = useMutation({
@@ -546,6 +556,15 @@ export function _DocumentTypeFormModal({
                           </span>
                         )}
                       </div>
+                    )}
+
+                    {/* Probar regla: panel de solo lectura dentro del formulario (sin modal) */}
+                    {isSpecial && hasActive && (applies === 'Persona' || applies === 'Equipos') && (
+                      <_RulePreviewPanel
+                        applies={applies}
+                        conditionsJson={liveConditionsJson as Parameters<typeof countMatchingResources>[1]}
+                        documentTypeId={documentType?.id}
+                      />
                     )}
                   </div>
                 )}

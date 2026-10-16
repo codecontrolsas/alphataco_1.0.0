@@ -13,7 +13,7 @@
  * diagrama cargado), no uno solo elegido por prioridad.
  */
 
-import { normalizeEquipmentCondition } from './equipment-condition';
+import { normalizeEquipmentCondition, type EquipmentConditionKey } from './equipment-condition';
 
 export interface EmployeeDeviationFlags {
   is_duplicated: boolean;
@@ -31,7 +31,10 @@ export interface EquipmentDeviationFlags {
   condition: string | null;
 }
 
-export type EmployeeDeviationKind = 'duplicated' | 'unassigned_to_client' | 'no_diagram' | 'non_work_day';
+export type EmployeeDeviationKind = Extract<
+  DeviationKind,
+  'duplicated' | 'unassigned_to_client' | 'no_diagram' | 'non_work_day'
+>;
 
 export type EquipmentDeviationKind =
   | 'duplicated'
@@ -41,10 +44,43 @@ export type EquipmentDeviationKind =
   | 'conditioned'
   | 'in_preparation';
 
-export interface DeviationEntry<K extends string> {
+/**
+ * Vocabulario ÚNICO de los desvíos: rótulos cortos que comparten la pantalla del parte (badges y
+ * tooltips) y el correo de desvíos (`Jobs/templates/deviations.ts`). Módulo puro: el correo lo
+ * importa sin arrastrar nada de `server-only`.
+ */
+export const DEVIATION_LABELS = {
+  duplicated: 'Duplicado',
+  unassigned_to_client: 'No afectado',
+  no_diagram: 'Sin diagrama',
+  non_work_day: 'Día no laboral',
+  not_operative: 'No operativo',
+  under_repair: 'En reparación',
+  conditioned: 'Condicionado',
+  in_preparation: 'En preparación',
+} as const;
+
+export type DeviationKind = keyof typeof DEVIATION_LABELS;
+
+/** Condición de equipo que dispara cada desvío de condición (el resto no es desvío). */
+export const CONDITION_DEVIATION_KIND = {
+  'no operativo': 'not_operative',
+  'en reparacion': 'under_repair',
+  'operativo condicionado': 'conditioned',
+  'en preparacion': 'in_preparation',
+} as const satisfies Partial<Record<EquipmentConditionKey, DeviationKind>>;
+
+export interface DeviationEntry<K extends DeviationKind> {
   kind: K;
-  /** Texto exacto que hoy muestra el tooltip de la celda (fuente única del label). */
+  /** Rótulo corto del vocabulario común (`DEVIATION_LABELS`). */
   label: string;
+  /** Explicación larga: solo para el tooltip o el aviso de la pantalla, nunca para el correo. */
+  detail: string;
+}
+
+/** Texto de tooltip / aviso: rótulo corto y, tras la raya, el detalle largo. */
+export function deviationText(entry: DeviationEntry<DeviationKind>): string {
+  return `${entry.label} — ${entry.detail}`;
 }
 
 /**
@@ -67,16 +103,32 @@ export function classifyEmployeeDiagram(
 export function employeeDeviations(flags: EmployeeDeviationFlags): DeviationEntry<EmployeeDeviationKind>[] {
   const entries: DeviationEntry<EmployeeDeviationKind>[] = [];
   if (flags.is_duplicated) {
-    entries.push({ kind: 'duplicated', label: 'Empleado asignado en múltiples filas' });
+    entries.push({
+      kind: 'duplicated',
+      label: DEVIATION_LABELS.duplicated,
+      detail: 'Empleado asignado en múltiples filas',
+    });
   }
   if (flags.is_unassigned_to_client) {
-    entries.push({ kind: 'unassigned_to_client', label: 'No asignado al cliente de esta fila' });
+    entries.push({
+      kind: 'unassigned_to_client',
+      label: DEVIATION_LABELS.unassigned_to_client,
+      detail: 'No asignado al cliente de esta fila',
+    });
   }
   if (flags.has_no_diagram) {
-    entries.push({ kind: 'no_diagram', label: 'Sin diagrama cargado para este día' });
+    entries.push({
+      kind: 'no_diagram',
+      label: DEVIATION_LABELS.no_diagram,
+      detail: 'Sin diagrama cargado para este día',
+    });
   }
   if (flags.is_non_work_day) {
-    entries.push({ kind: 'non_work_day', label: `Día no laboral: ${flags.diagram_type_name ?? 'No laboral'}` });
+    entries.push({
+      kind: 'non_work_day',
+      label: DEVIATION_LABELS.non_work_day,
+      detail: `Diagrama del día: ${flags.diagram_type_name ?? 'No laboral'}`,
+    });
   }
   return entries;
 }
@@ -90,22 +142,30 @@ export function equipmentDeviations(flags: EquipmentDeviationFlags): DeviationEn
   const entries: DeviationEntry<EquipmentDeviationKind>[] = [];
 
   if (flags.is_duplicated) {
-    entries.push({ kind: 'duplicated', label: 'Asignado en múltiples filas del parte diario' });
+    entries.push({
+      kind: 'duplicated',
+      label: DEVIATION_LABELS.duplicated,
+      detail: 'Asignado en múltiples filas del parte diario',
+    });
   }
   if (condition === 'no operativo') {
-    entries.push({ kind: 'not_operative', label: 'Condición: No operativo' });
+    entries.push({ kind: 'not_operative', label: DEVIATION_LABELS.not_operative, detail: 'Condición del equipo' });
   }
   if (condition === 'en reparacion') {
-    entries.push({ kind: 'under_repair', label: 'Condición: En reparación' });
+    entries.push({ kind: 'under_repair', label: DEVIATION_LABELS.under_repair, detail: 'Condición del equipo' });
   }
   if (flags.is_unassigned_to_client) {
-    entries.push({ kind: 'unassigned_to_client', label: 'No asignado al cliente de esta fila' });
+    entries.push({
+      kind: 'unassigned_to_client',
+      label: DEVIATION_LABELS.unassigned_to_client,
+      detail: 'No asignado al cliente de esta fila',
+    });
   }
   if (condition === 'operativo condicionado') {
-    entries.push({ kind: 'conditioned', label: 'Condición: Condicionado' });
+    entries.push({ kind: 'conditioned', label: DEVIATION_LABELS.conditioned, detail: 'Condición del equipo' });
   }
   if (condition === 'en preparacion') {
-    entries.push({ kind: 'in_preparation', label: 'Condición: En preparación' });
+    entries.push({ kind: 'in_preparation', label: DEVIATION_LABELS.in_preparation, detail: 'Condición del equipo' });
   }
   return entries;
 }

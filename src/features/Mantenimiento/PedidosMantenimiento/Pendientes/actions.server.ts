@@ -2,7 +2,6 @@
 
 import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   buildDateRangeFiltersWhere,
   buildFiltersWhere,
@@ -12,9 +11,10 @@ import {
 } from '@/shared/components/common/DataTable';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
-import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
+import { clampedPageParams } from '@/shared/lib/table-pagination';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { isPendingAttentionKey } from '../constants';
 import {
   ORDER_LIST_EXPORT_MAX_ROWS,
@@ -75,7 +75,7 @@ const PENDING_ORDER_SELECT = {
   status: true,
   created_at: true,
   scheduled_date: true,
-  // Marca "Fecha Rechazada" de la columna Estado: la fecha propuesta no se aprobó y el pedido volvió a programarse
+  // Marca "Fecha rechazada" de la columna Estado: la fecha propuesta no se aprobó y el pedido volvió a programarse
   date_rejected_at: true,
   date_rejection_reason: true,
   source: true,

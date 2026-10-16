@@ -50,21 +50,21 @@ export const TONE_TO_BADGE: Record<StatusTone, BadgeVariant> = {
 
 /** Órdenes de mantenimiento (`maintenance_orders.status`). */
 export const ORDER_STATUS_UI: Record<MaintenanceOrderStatus, StatusUi> = {
-  pending_scheduling: { label: 'Pend. Programación', tone: 'warn', icon: Clock },
-  date_confirmed: { label: 'Fecha Confirmada', tone: 'pending', icon: CalendarCheck },
+  pending_scheduling: { label: 'Pend. de programación', tone: 'warn', icon: Clock },
+  date_confirmed: { label: 'Fecha confirmada', tone: 'pending', icon: CalendarCheck },
   scheduled: { label: 'Programada', tone: 'info', icon: CalendarClock },
-  in_workshop: { label: 'En Taller', tone: 'brand', icon: Wrench },
-  pending_workshop_validation: { label: 'Pend. Validación Taller', tone: 'warn', icon: ClipboardCheck },
-  pending_operations_validation: { label: 'Pend. Validación Operaciones', tone: 'warn', icon: ClipboardCheck },
-  operations_rejected: { label: 'Rechazada por Ops', tone: 'danger', icon: XCircle },
-  workshop_rejected: { label: 'Rechazada por Taller', tone: 'danger', icon: Ban },
+  in_workshop: { label: 'En taller', tone: 'brand', icon: Wrench },
+  pending_workshop_validation: { label: 'Pend. validación de taller', tone: 'warn', icon: ClipboardCheck },
+  pending_operations_validation: { label: 'Pend. validación de operaciones', tone: 'warn', icon: ClipboardCheck },
+  operations_rejected: { label: 'Rechazada por operaciones', tone: 'danger', icon: XCircle },
+  workshop_rejected: { label: 'Rechazada por taller', tone: 'danger', icon: Ban },
   rejected: { label: 'Rechazada', tone: 'danger', icon: Ban },
   completed: { label: 'Completada', tone: 'ok', icon: CheckCircle2 },
 };
 
 /** Solicitudes de mantenimiento (`maintenance_requests.status`). */
 export const REQUEST_STATUS_UI: Record<'pending_approval' | 'approved' | 'rejected', StatusUi> = {
-  pending_approval: { label: 'Pendiente de Aprobación', tone: 'warn', icon: Clock },
+  pending_approval: { label: 'Pendiente de aprobación', tone: 'warn', icon: Clock },
   approved: { label: 'Aprobada', tone: 'ok', icon: CheckCircle2 },
   rejected: { label: 'Rechazada', tone: 'danger', icon: XCircle },
 };
@@ -75,10 +75,10 @@ export const REQUEST_STATUS_UI: Record<'pending_approval' | 'approved' | 'reject
  */
 export const WORK_ORDER_STATUS_UI: Record<work_order_status | 'blocked', StatusUi> = {
   pending: { label: 'Pendiente', tone: 'pending', icon: Clock },
-  in_progress: { label: 'En Progreso', tone: 'brand', icon: PlayCircle },
+  in_progress: { label: 'En progreso', tone: 'brand', icon: PlayCircle },
   paused: { label: 'Pausada', tone: 'warn', icon: Pause },
   completed: { label: 'Completada', tone: 'ok', icon: CheckCircle2 },
-  completed_partial: { label: 'Completada Parcial', tone: 'warn', icon: CheckCircle2 },
+  completed_partial: { label: 'Completada parcial', tone: 'warn', icon: CheckCircle2 },
   cancelled: { label: 'Cancelada', tone: 'danger', icon: Ban },
   blocked: { label: 'Bloqueada', tone: 'pending', icon: Lock },
 };
@@ -86,10 +86,10 @@ export const WORK_ORDER_STATUS_UI: Record<work_order_status | 'blocked', StatusU
 /** Tareas / reparaciones de una OT (`work_order_item_repairs.status`, enum `work_order_item_status`). */
 export const REPAIR_STATUS_UI: Record<work_order_item_status, StatusUi> = {
   pending: { label: 'Pendiente', tone: 'pending', icon: Clock },
-  in_progress: { label: 'En Progreso', tone: 'brand', icon: PlayCircle },
+  in_progress: { label: 'En progreso', tone: 'brand', icon: PlayCircle },
   completed: { label: 'Completado', tone: 'ok', icon: CheckCircle2 },
   cancelled: { label: 'Cancelado', tone: 'neutral', icon: Ban },
-  pending_approval: { label: 'Pend. Aprobación', tone: 'warn', icon: ClipboardCheck },
+  pending_approval: { label: 'Pend. de aprobación', tone: 'warn', icon: ClipboardCheck },
   reassignment_requested: { label: 'Devuelto', tone: 'danger', icon: Undo2 },
   rejected: { label: 'Rechazado', tone: 'danger', icon: XCircle },
 };
@@ -135,6 +135,6 @@ export const getStatusBadgeVariant = (entity: StatusEntity, status: string | nul
 
 /** Estados que aparecen en logs históricos y ya no existen como valor vigente de ninguna entidad. */
 export const LEGACY_HISTORY_LABELS: Record<string, string> = {
-  date_rejected: 'Fecha Rechazada',
+  date_rejected: 'Fecha rechazada',
   scheduled: 'Programada',
 };

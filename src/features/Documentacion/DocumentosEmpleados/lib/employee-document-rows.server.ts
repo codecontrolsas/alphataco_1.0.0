@@ -71,6 +71,8 @@ function toEmployeeDocumentRow(entry: DocumentEntry, employee: EmployeeDisplay) 
     expiringSoon: entry.expiringSoon,
     /** El tipo ya no aplica al empleado (sólo en la ficha del empleado). */
     notApplicable: entry.notApplicable,
+    /** Criterio por el que se pide el documento (sólo en la ficha del recurso). */
+    requestedBy: entry.requestedBy,
   };
 }
 

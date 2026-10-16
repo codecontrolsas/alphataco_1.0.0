@@ -5,6 +5,7 @@ import {
   BOARD_TEMPLATES,
   WIDGETS,
   getWidgetDefinition,
+  isWidgetGranted,
   type BoardTemplateKey,
   type WidgetId,
 } from '@/features/Dashboard/lib/widget-registry';
@@ -20,7 +21,7 @@ const logger = new Logger('features/Dashboard/Boards');
 
 /**
  * Widgets que el usuario de sesión puede ver: los que tienen concedidas TODAS sus claves
- * (`requires`). Una sola consulta (`check_multiple_permissions`) por request para todo el catálogo.
+ * (`requires`) y, si declaran `requiresAny`, algún grupo completo (`isWidgetGranted`). Una sola consulta (`check_multiple_permissions`) por request para todo el catálogo.
  */
 export const getVisibleWidgetIds = cache(async (): Promise<ReadonlySet<WidgetId>> => {
   const keys = ALL_WIDGET_PERMISSION_KEYS;
@@ -31,9 +32,7 @@ export const getVisibleWidgetIds = cache(async (): Promise<ReadonlySet<WidgetId>
     })
   );
   const granted = new Set(keys.filter((key) => result.get(key) === true));
-  return new Set(
-    WIDGETS.filter((widget) => widget.requires.every((key) => granted.has(key))).map((widget) => widget.id)
-  );
+  return new Set(WIDGETS.filter((widget) => isWidgetGranted(widget, granted)).map((widget) => widget.id));
 });
 
 export interface DashboardBoard {

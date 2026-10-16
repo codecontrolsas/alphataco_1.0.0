@@ -327,11 +327,7 @@ export function DataTable<TData extends Record<string, unknown>, TValue = unknow
   const hasStaleDataOnError = hasLoadError && queryResult !== undefined;
   const emptyData = React.useMemo<TData[]>(() => [], []);
   const tableData = isRemoteQuery ? (hasNoResultOnError ? emptyData : queryResult?.data ?? propData) : propData;
-  const tableTotalRows = isRemoteQuery
-    ? hasNoResultOnError
-      ? 0
-      : queryResult?.total ?? propTotalRows
-    : propTotalRows;
+  const tableTotalRows = isRemoteQuery ? (hasNoResultOnError ? 0 : queryResult?.total ?? propTotalRows) : propTotalRows;
   // isPlaceholderData = true SOLO cuando se muestra data stale de un query key anterior
   // (mientras se fetch data nueva). false cuando se muestra data real del cache → sin efecto disabled.
   // En in-memory nunca hay fetch ni navegación: el estado se resuelve de forma síncrona.
@@ -553,59 +549,59 @@ export function DataTable<TData extends Record<string, unknown>, TValue = unknow
 
         {/* Table */}
         {!hasNoResultOnError && (
-        <div className={cn('overflow-auto rounded-md border max-h-[60vh]', mobileCards && MOBILE_CARDS_WRAPPER)}>
-          <Table containerClassName="overflow-x-visible overflow-y-visible min-w-fit max-md:min-w-0">
-            <TableHeader>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => (
-                    <TableHead
-                      key={header.id}
-                      colSpan={header.colSpan}
-                      className="sticky top-0 z-10 dark:bg-slate-900 bg-white"
-                    >
-                      {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody
-              className={cn(
-                'transition-opacity duration-150',
-                isPending && 'opacity-50 pointer-events-none',
-                hasStaleDataOnError && !isPending && 'opacity-60'
-              )}
-              data-stale={hasStaleDataOnError ? 'true' : undefined}
-            >
-              {table.getRowModel().rows?.length ? (
-                table.getRowModel().rows.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    data-state={row.getIsSelected() && 'selected'}
-                    data-testid={`table-row-${row.id}`}
-                    className={rowClassName ? rowClassName(row.original) : undefined}
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell
-                        key={cell.id}
-                        data-label={(cell.column.columnDef.meta as { title?: string } | undefined)?.title}
+          <div className={cn('overflow-auto rounded-xl border max-h-[60vh]', mobileCards && MOBILE_CARDS_WRAPPER)}>
+            <Table containerClassName="overflow-x-visible overflow-y-visible min-w-fit max-md:min-w-0">
+              <TableHeader>
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <TableHead
+                        key={header.id}
+                        colSpan={header.colSpan}
+                        className="sticky top-0 z-10 dark:bg-slate-900 bg-white"
                       >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
+                        {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                      </TableHead>
                     ))}
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={columns.length} className="h-24 text-center">
-                    {emptyMessage}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                ))}
+              </TableHeader>
+              <TableBody
+                className={cn(
+                  'transition-opacity duration-150',
+                  isPending && 'opacity-50 pointer-events-none',
+                  hasStaleDataOnError && !isPending && 'opacity-60'
+                )}
+                data-stale={hasStaleDataOnError ? 'true' : undefined}
+              >
+                {table.getRowModel().rows?.length ? (
+                  table.getRowModel().rows.map((row) => (
+                    <TableRow
+                      key={row.id}
+                      data-state={row.getIsSelected() && 'selected'}
+                      data-testid={`table-row-${row.id}`}
+                      className={rowClassName ? rowClassName(row.original) : undefined}
+                    >
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell
+                          key={cell.id}
+                          data-label={(cell.column.columnDef.meta as { title?: string } | undefined)?.title}
+                        >
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={columns.length} className="h-24 text-center">
+                      {emptyMessage}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         )}
 
         {/* Pagination */}

@@ -157,7 +157,7 @@ export const navigationLinks: NavigationLink[] = [
     items: [
       { name: 'Vehículos', tabSlug: 'vehicles' },
       { name: 'Equipamiento', tabSlug: 'others' },
-      { name: 'Dados de Baja', tabSlug: 'inactive' },
+      { name: 'Dados de baja', tabSlug: 'inactive' },
     ],
   },
   {
@@ -169,11 +169,11 @@ export const navigationLinks: NavigationLink[] = [
     items: [
       { name: 'Clientes', tabSlug: 'comerce', subTabSlug: 'customers' },
       { name: 'Contratos', tabSlug: 'comerce', subTabSlug: 'service' },
-      { name: 'Unidades de Medida', tabSlug: 'comerce', subTabSlug: 'mensure_units' },
-      { name: 'Reglas de Precio', tabSlug: 'comerce', subTabSlug: 'reglas-precio' },
+      { name: 'Unidades de medida', tabSlug: 'comerce', subTabSlug: 'mensure_units' },
+      { name: 'Reglas de precio', tabSlug: 'comerce', subTabSlug: 'reglas-precio' },
       { name: 'Certificaciones', tabSlug: 'comerce', subTabSlug: 'certificaciones' },
       { name: 'Facturación', tabSlug: 'comerce', subTabSlug: 'facturacion' },
-      { name: 'Partes Diarios', tabSlug: 'comerce', subTabSlug: 'daily_reports' },
+      { name: 'Partes diarios', tabSlug: 'comerce', subTabSlug: 'daily_reports' },
     ],
   },
   {
@@ -196,7 +196,7 @@ export const navigationLinks: NavigationLink[] = [
     position: 7,
     items: [
       { name: 'Planificador', tabSlug: 'preparte' },
-      { name: 'Partes Operaciones', tabSlug: 'dailyreportstable' },
+      { name: 'Partes de operaciones', tabSlug: 'dailyreportstable' },
     ],
   },
   {
@@ -207,10 +207,10 @@ export const navigationLinks: NavigationLink[] = [
     position: 8,
     items: [
       { name: 'Supervisión', tabSlug: 'maint_operaciones' },
-      { name: 'Vista Taller', tabSlug: 'workshop_view' },
+      { name: 'Vista taller', tabSlug: 'workshop_view' },
       { name: 'Taller', tabSlug: 'maint_taller' },
-      { name: 'Nuevo Pedido', tabSlug: 'nuevo_pedido' },
-      { name: 'Equipos con Desvíos', tabSlug: 'equipments_with_deviations' },
+      { name: 'Nuevo pedido', tabSlug: 'nuevo_pedido' },
+      { name: 'Equipos con desvíos', tabSlug: 'equipments_with_deviations' },
       { name: 'Gomería', tabSlug: 'gomeria' },
     ],
   },

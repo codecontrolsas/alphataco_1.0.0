@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { AlertTriangle } from 'lucide-react';
-import { employeeDeviations, equipmentDeviations } from '../../lib/resource-deviations';
+import { deviationText, employeeDeviations, equipmentDeviations } from '../../lib/resource-deviations';
 import { ResourceCell } from '../components/ResourceCell';
 import type { DailyReportDetailRow } from '../types';
 import { buildEmployeeLabel, buildRowDescription } from './helpers';
@@ -56,7 +56,7 @@ export function renderEmployeeBadge(
   // Desvíos (aditivos: un empleado puede tener varios a la vez) — fuente única de la regla
   // en `lib/resource-deviations.ts` (misma semántica que el SQL `get_daily_report_deviations`).
   const devEntries = employeeDeviations(dev);
-  const messages = devEntries.map((entry) => entry.label);
+  const messages = devEntries.map(deviationText);
   const kinds = new Set(devEntries.map((entry) => entry.kind));
 
   // Determinar color según prioridad
@@ -166,7 +166,7 @@ export function renderEquipmentBadge(
   // Desvíos (aditivos: un equipo puede tener varios a la vez) — fuente única de la regla en
   // `lib/resource-deviations.ts` (misma semántica que el SQL `get_daily_report_deviations`).
   const devEntries = equipmentDeviations(dev);
-  const tooltipMessages = devEntries.map((entry) => entry.label);
+  const tooltipMessages = devEntries.map(deviationText);
   const kinds = new Set(devEntries.map((entry) => entry.kind));
 
   // Determinar color según prioridad y condición

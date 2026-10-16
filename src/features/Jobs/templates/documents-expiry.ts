@@ -1,12 +1,17 @@
 import {
+  MAIL_COLORS as C,
+  MAIL_TONES,
+  MAIL_RADIUS as R,
   appUrl,
   ctaBlock,
   escapeHtml,
   groupCardClose,
   groupCardOpen,
+  headerPill,
   renderEmailShell,
   sectionHeader,
   tableHeaderRow,
+  type MailTone,
 } from '@/shared/lib/mail/shell';
 import { formatDateAr, formatLongDateAr } from '../lib/dates';
 import type {
@@ -96,33 +101,28 @@ function urlDashboardRoot(): string {
 }
 
 function expiryChip(daysRemaining: number): string {
-  let bg: string;
-  let fg: string;
+  let tone: MailTone;
   let label: string;
 
   if (daysRemaining < 0) {
-    bg = '#fef2f2';
-    fg = '#b91c1c';
+    tone = 'danger';
     label = `vencido hace ${Math.abs(daysRemaining)}d`;
   } else if (daysRemaining === 0) {
-    bg = '#fee2e2';
-    fg = '#991b1b';
+    tone = 'danger';
     label = 'hoy';
   } else if (daysRemaining === 1) {
-    bg = '#fee2e2';
-    fg = '#991b1b';
+    tone = 'danger';
     label = 'mañana';
   } else if (daysRemaining <= 3) {
-    bg = '#ffedd5';
-    fg = '#c2410c';
+    tone = 'expired';
     label = `en ${daysRemaining} días`;
   } else {
-    bg = '#fef3c7';
-    fg = '#a16207';
+    tone = 'warn';
     label = `en ${daysRemaining} días`;
   }
 
-  return `<span style="display:inline-block;background:${bg};color:${fg};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap;line-height:1.4;margin-left:6px;">${escapeHtml(label)}</span>`;
+  const { bg, fg } = MAIL_TONES[tone];
+  return `<span style="display:inline-block;background:${bg};color:${fg};padding:2px 8px;border-radius:${R.pill};font-size:11px;font-weight:600;white-space:nowrap;line-height:1.4;margin-left:6px;">${escapeHtml(label)}</span>`;
 }
 
 interface SummaryCTA {
@@ -151,11 +151,11 @@ function summaryCardDistributed(options: {
 
   return `
     <td align="center" valign="top" style="padding:0 4px;width:33.33%;">
-      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:${C.surfaceMuted};border:1px solid ${C.border};border-radius:${R.surface};">
         <tr>
           <td style="padding:14px 10px;text-align:center;">
             <p style="margin:0;font-size:28px;font-weight:800;color:${options.color};line-height:1;">${options.value.toLocaleString('es-AR')}</p>
-            <p style="margin:6px 0 0;font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;">${escapeHtml(options.label)}</p>
+            <p style="margin:6px 0 0;font-size:10px;color:${C.textMuted};font-weight:600;text-transform:uppercase;letter-spacing:0.3px;">${escapeHtml(options.label)}</p>
             ${ctaBlockHtml}
           </td>
         </tr>
@@ -168,11 +168,11 @@ function employeesGroup(group: { total: number; detail: readonly ExpiringEmploye
   const rows = group.detail
     .map(
       (item, index) => `
-      <tr style="background:${index % 2 === 0 ? '#ffffff' : '#fafafa'};">
-        <td style="padding:7px 10px;font-size:12px;color:#475569;font-family:monospace;border-bottom:1px solid #f1f5f9;">[${escapeHtml(item.file_number)}]</td>
-        <td style="padding:7px 10px;font-size:12px;border-bottom:1px solid #f1f5f9;"><a href="${escapeHtml(urlEmployeeDetailDocs(item.employee_id, item.document_type_id))}" style="color:#1e293b;font-weight:500;text-decoration:underline;">${escapeHtml(item.employee_name)}</a></td>
-        <td style="padding:7px 10px;font-size:12px;color:#475569;border-bottom:1px solid #f1f5f9;">${escapeHtml(item.document_type_name)}</td>
-        <td style="padding:7px 10px;font-size:12px;color:#1e293b;border-bottom:1px solid #f1f5f9;white-space:nowrap;">${escapeHtml(formatDateAr(item.validity))}${expiryChip(item.days_remaining)}</td>
+      <tr style="background:${index % 2 === 0 ? C.card : C.surfaceAlt};">
+        <td style="padding:7px 10px;font-size:12px;color:${C.textMuted};font-family:monospace;border-bottom:1px solid ${C.border};">[${escapeHtml(item.file_number)}]</td>
+        <td style="padding:7px 10px;font-size:12px;border-bottom:1px solid ${C.border};"><a href="${escapeHtml(urlEmployeeDetailDocs(item.employee_id, item.document_type_id))}" style="color:${C.text};font-weight:500;text-decoration:underline;">${escapeHtml(item.employee_name)}</a></td>
+        <td style="padding:7px 10px;font-size:12px;color:${C.textMuted};border-bottom:1px solid ${C.border};">${escapeHtml(item.document_type_name)}</td>
+        <td style="padding:7px 10px;font-size:12px;color:${C.text};border-bottom:1px solid ${C.border};white-space:nowrap;">${escapeHtml(formatDateAr(item.validity))}${expiryChip(item.days_remaining)}</td>
       </tr>`
     )
     .join('');
@@ -183,7 +183,7 @@ function employeesGroup(group: { total: number; detail: readonly ExpiringEmploye
       'por vencer en los próximos 7 días'
     ) +
     `<tr><td style="padding:14px 16px;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${C.border};border-radius:${R.surface};overflow:hidden;">
         <thead>${tableHeaderRow(['Legajo', 'Empleado', 'Documento', 'Vence'])}</thead>
         <tbody>${rows}</tbody>
       </table>
@@ -197,11 +197,11 @@ function equipmentGroup(group: { total: number; detail: readonly ExpiringEquipme
   const rows = group.detail
     .map(
       (item, index) => `
-      <tr style="background:${index % 2 === 0 ? '#ffffff' : '#fafafa'};">
-        <td style="padding:7px 10px;font-size:12px;font-weight:500;font-family:monospace;border-bottom:1px solid #f1f5f9;"><a href="${escapeHtml(urlEquipmentDetailDocs(item.vehicle_id, item.document_type_id))}" style="color:#1e293b;text-decoration:underline;">${escapeHtml(item.domain)}</a></td>
-        <td style="padding:7px 10px;font-size:12px;color:#475569;border-bottom:1px solid #f1f5f9;">#${escapeHtml(item.intern_number)}</td>
-        <td style="padding:7px 10px;font-size:12px;color:#475569;border-bottom:1px solid #f1f5f9;">${escapeHtml(item.document_type_name)}</td>
-        <td style="padding:7px 10px;font-size:12px;color:#1e293b;border-bottom:1px solid #f1f5f9;white-space:nowrap;">${escapeHtml(formatDateAr(item.validity))}${expiryChip(item.days_remaining)}</td>
+      <tr style="background:${index % 2 === 0 ? C.card : C.surfaceAlt};">
+        <td style="padding:7px 10px;font-size:12px;font-weight:500;font-family:monospace;border-bottom:1px solid ${C.border};"><a href="${escapeHtml(urlEquipmentDetailDocs(item.vehicle_id, item.document_type_id))}" style="color:${C.text};text-decoration:underline;">${escapeHtml(item.domain)}</a></td>
+        <td style="padding:7px 10px;font-size:12px;color:${C.textMuted};border-bottom:1px solid ${C.border};">#${escapeHtml(item.intern_number)}</td>
+        <td style="padding:7px 10px;font-size:12px;color:${C.textMuted};border-bottom:1px solid ${C.border};">${escapeHtml(item.document_type_name)}</td>
+        <td style="padding:7px 10px;font-size:12px;color:${C.text};border-bottom:1px solid ${C.border};white-space:nowrap;">${escapeHtml(formatDateAr(item.validity))}${expiryChip(item.days_remaining)}</td>
       </tr>`
     )
     .join('');
@@ -212,7 +212,7 @@ function equipmentGroup(group: { total: number; detail: readonly ExpiringEquipme
       'por vencer en los próximos 7 días'
     ) +
     `<tr><td style="padding:14px 16px;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${C.border};border-radius:${R.surface};overflow:hidden;">
         <thead>${tableHeaderRow(['Dominio', 'Nº Int.', 'Documento', 'Vence'])}</thead>
         <tbody>${rows}</tbody>
       </table>
@@ -226,9 +226,9 @@ function companyGroup(group: { total: number; detail: readonly ExpiringCompanyIt
   const rows = group.detail
     .map(
       (item, index) => `
-      <tr style="background:${index % 2 === 0 ? '#ffffff' : '#fafafa'};">
-        <td style="padding:7px 10px;font-size:12px;font-weight:500;border-bottom:1px solid #f1f5f9;"><a href="${escapeHtml(urlCompanyDocFiltered([item.document_type_id]))}" style="color:#1e293b;text-decoration:underline;">${escapeHtml(item.document_type_name)}</a></td>
-        <td style="padding:7px 10px;font-size:12px;color:#1e293b;border-bottom:1px solid #f1f5f9;white-space:nowrap;">${escapeHtml(formatDateAr(item.validity))}${expiryChip(item.days_remaining)}</td>
+      <tr style="background:${index % 2 === 0 ? C.card : C.surfaceAlt};">
+        <td style="padding:7px 10px;font-size:12px;font-weight:500;border-bottom:1px solid ${C.border};"><a href="${escapeHtml(urlCompanyDocFiltered([item.document_type_id]))}" style="color:${C.text};text-decoration:underline;">${escapeHtml(item.document_type_name)}</a></td>
+        <td style="padding:7px 10px;font-size:12px;color:${C.text};border-bottom:1px solid ${C.border};white-space:nowrap;">${escapeHtml(formatDateAr(item.validity))}${expiryChip(item.days_remaining)}</td>
       </tr>`
     )
     .join('');
@@ -239,7 +239,7 @@ function companyGroup(group: { total: number; detail: readonly ExpiringCompanyIt
       'por vencer en los próximos 7 días'
     ) +
     `<tr><td style="padding:14px 16px;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${C.border};border-radius:${R.surface};overflow:hidden;">
         <thead>${tableHeaderRow(['Documento', 'Vence'])}</thead>
         <tbody>${rows}</tbody>
       </table>
@@ -253,12 +253,12 @@ function heroAllClear(): string {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
       <tr>
         <td align="center" style="padding:32px 0 8px;">
-          <table role="presentation" cellpadding="0" cellspacing="0" style="max-width:420px;width:100%;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" style="max-width:420px;width:100%;background:${C.okSubtle};border:1px solid ${C.ok};border-radius:${R.surface};">
             <tr>
               <td style="padding:32px 28px;text-align:center;">
-                <div style="font-size:56px;line-height:1;color:#15803d;margin-bottom:8px;">&#10003;</div>
-                <p style="margin:0;font-size:18px;font-weight:700;color:#15803d;">Todo al d&iacute;a</p>
-                <p style="margin:8px 0 0;font-size:13px;color:#166534;line-height:1.5;">
+                <div style="font-size:56px;line-height:1;color:${C.ok};margin-bottom:8px;">&#10003;</div>
+                <p style="margin:0;font-size:18px;font-weight:700;color:${C.okInk};">Todo al d&iacute;a</p>
+                <p style="margin:8px 0 0;font-size:13px;color:${C.okInk};line-height:1.5;">
                   No hay documentos vencidos, por vencer ni faltantes esta semana.<br>
                   Buen trabajo del equipo de control documental.
                 </p>
@@ -342,9 +342,9 @@ export function renderDocumentsExpiryEmail(params: DocumentsExpiryEmailParams): 
     bodyInner += `
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;">
         <tr>
-          ${summaryCardDistributed({ value: totalExpiringSoon, label: `Por vencer en ${data.days_ahead} días`, color: '#ea580c', ctas: expiringCtas, fallbackText: 'Sin documentos' })}
-          ${summaryCardDistributed({ value: totalExpired, label: 'Vencidos', color: '#b91c1c', ctas: expiredCtas, fallbackText: 'Sin documentos' })}
-          ${summaryCardDistributed({ value: totalPending, label: 'Faltantes (sin cargar)', color: '#a16207', ctas: pendingCtas, fallbackText: 'Sin documentos' })}
+          ${summaryCardDistributed({ value: totalExpiringSoon, label: `Por vencer en ${data.days_ahead} días`, color: C.expiredInk, ctas: expiringCtas, fallbackText: 'Sin documentos' })}
+          ${summaryCardDistributed({ value: totalExpired, label: 'Vencidos', color: C.dangerInk, ctas: expiredCtas, fallbackText: 'Sin documentos' })}
+          ${summaryCardDistributed({ value: totalPending, label: 'Faltantes (sin cargar)', color: C.warnInk, ctas: pendingCtas, fallbackText: 'Sin documentos' })}
         </tr>
       </table>`;
 
@@ -359,9 +359,7 @@ export function renderDocumentsExpiryEmail(params: DocumentsExpiryEmailParams): 
     }
   }
 
-  const badgeHtml = isAllClear
-    ? '<span style="background:#10b981;color:#ffffff;padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;">Todo al d&iacute;a</span>'
-    : `<span style="background:rgba(255,255,255,0.2);color:#ffffff;padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;">${totalExpiringSoon} por vencer</span>`;
+  const badgeHtml = isAllClear ? headerPill('Todo al d&iacute;a', 'ok') : headerPill(`${totalExpiringSoon} por vencer`);
 
   return {
     subject: `Resumen semanal de documentos — ${companyName} — ${formatLongDateAr(data.today)}`,

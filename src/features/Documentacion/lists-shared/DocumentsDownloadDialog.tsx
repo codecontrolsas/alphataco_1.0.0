@@ -39,6 +39,8 @@ interface DocumentsDownloadDialogProps<Row extends DownloadableDocumentRow> {
   /** Recurso para el nombre del archivo dentro del ZIP, ej. `Perez_Juan`. */
   getFileResourceName: (row: Row) => string;
   zipFileName: string;
+  /** Texto del botón; por defecto "Descargar Documentos". */
+  triggerLabel?: string;
 }
 
 /** Botón + diálogo que descarga en un ZIP los documentos cargados de la lista (con sus filtros activos). */
@@ -48,6 +50,7 @@ export function DocumentsDownloadDialog<Row extends DownloadableDocumentRow>({
   getResourceLabel,
   getFileResourceName,
   zipFileName,
+  triggerLabel = 'Descargar Documentos',
 }: DocumentsDownloadDialogProps<Row>) {
   const [open, setOpen] = useState(false);
   const { data: tableRows = [], isFetching, error } = useQuery({ queryKey, queryFn: fetchRows, enabled: open });
@@ -92,7 +95,7 @@ export function DocumentsDownloadDialog<Row extends DownloadableDocumentRow>({
       <AlertDialogTrigger asChild>
         <Button size="sm" variant="outline">
           <Download className="h-4 w-4 mr-2" />
-          Descargar Documentos
+          {triggerLabel}
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>

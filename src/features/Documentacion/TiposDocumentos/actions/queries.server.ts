@@ -16,7 +16,7 @@ import { prisma } from '@/shared/lib/prisma';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import type { ComplianceType } from '../../shared/compliance';
-import { parseDocumentConditions } from '../../shared/compliance/applicability';
+import { parseDocumentConditions, typeAppliesTo } from '../../shared/compliance/applicability';
 import { loadComplianceDataset } from '../../shared/compliance/server/dataset.server';
 import {
   assertDocTypeIdPermission,
@@ -313,44 +313,60 @@ export async function countMatchingResources(
 
   try {
     if (applies !== 'Persona' && applies !== 'Equipos') return empty;
-    await assertDocTypePermission(applies, 'view');
-    if (documentTypeId) await assertDocTypeIdPermission(documentTypeId, companyId, 'view');
-
-    const stored = documentTypeId
-      ? await findScopedDocumentType(prisma, documentTypeId, companyId, { id: true })
-      : null;
-
-    // Sin documentos: sólo hace falta a quién aplica; los pivotes del borrador se cargan igual.
-    const draftBase: ComplianceType = {
-      id: 'draft',
-      companyId,
+    const { draft, current, resources } = await loadDraftApplicability(
       applies,
-      mandatory: true,
-      isActive: true,
-      monthly: false,
-      hasExpiry: false,
-      downDocument: false,
-      isPrivate: false,
-      multiresource: false,
-      scope: { special: true, conditions: conditionsJson },
-    };
-    const dataset = await loadComplianceDataset(prisma, {
+      conditionsJson,
       companyId,
-      kind: applies,
-      includeDocs: false,
-      extraTypes: [draftBase],
-    });
-    const current = stored ? dataset.types.find((t) => t.id === stored.id) ?? null : null;
-    // El borrador hereda del tipo guardado todo menos las condiciones, para que el delta mida sólo ese cambio.
-    const draft: ComplianceType = current
-      ? { ...current, scope: { special: true, conditions: conditionsJson } }
-      : draftBase;
-
-    return computeApplicabilityDelta(draft, current, dataset.resources);
+      documentTypeId
+    );
+    return computeApplicabilityDelta(draft, current, resources);
   } catch (error) {
     logger.error('Error al contar recursos para condiciones', { data: { error, applies } });
     return empty;
   }
+}
+
+/**
+ * Carga (sólo lectura, sin documentos) los recursos de la empresa y arma el tipo "borrador" con las
+ * condiciones del formulario. En edición el borrador hereda del tipo guardado todo menos las
+ * condiciones, para que el delta mida sólo ese cambio. Valida permiso `view` del alcance.
+ */
+async function loadDraftApplicability(
+  applies: 'Persona' | 'Equipos',
+  conditionsJson: Prisma.JsonValue[],
+  companyId: string,
+  documentTypeId?: string
+) {
+  await assertDocTypePermission(applies, 'view');
+  if (documentTypeId) await assertDocTypeIdPermission(documentTypeId, companyId, 'view');
+
+  const stored = documentTypeId ? await findScopedDocumentType(prisma, documentTypeId, companyId, { id: true }) : null;
+
+  // Sin documentos: sólo hace falta a quién aplica; los pivotes del borrador se cargan igual.
+  const draftBase: ComplianceType = {
+    id: 'draft',
+    companyId,
+    applies,
+    mandatory: true,
+    isActive: true,
+    monthly: false,
+    hasExpiry: false,
+    downDocument: false,
+    isPrivate: false,
+    multiresource: false,
+    scope: { special: true, conditions: conditionsJson },
+  };
+  const dataset = await loadComplianceDataset(prisma, {
+    companyId,
+    kind: applies,
+    includeDocs: false,
+    extraTypes: [draftBase],
+  });
+  const current = stored ? dataset.types.find((t) => t.id === stored.id) ?? null : null;
+  const draft: ComplianceType = current
+    ? { ...current, scope: { special: true, conditions: conditionsJson } }
+    : draftBase;
+  return { draft, current, resources: dataset.resources };
 }
 
 export interface MatchingResourcesResult {
@@ -360,6 +376,111 @@ export interface MatchingResourcesResult {
   startsRequiring: number;
   /** Recursos a los que el tipo guardado les aplica y el borrador no (0 en un alta). */
   stopsRequiring: number;
+}
+
+// ============================================================================
+// PROBAR REGLA — conteo + muestra de a quién aplicaría el borrador (sólo lectura)
+// ============================================================================
+
+/** Cantidad de recursos que se listan como muestra en "Probar regla". */
+const RULE_PREVIEW_SAMPLE_SIZE = 10;
+
+export type RulePreviewSampleItem =
+  | { kind: 'Persona'; id: string; fileNumber: string | null; lastname: string; firstname: string }
+  | {
+      kind: 'Equipos';
+      id: string;
+      domain: string | null;
+      internNumber: string | null;
+      brand: string | null;
+      model: string | null;
+    };
+
+export interface RulePreviewResult extends MatchingResourcesResult {
+  /** Recursos de la empresa evaluados (activos y de baja). */
+  totalResources: number;
+  /** Primeros recursos que cumplen la regla, ordenados por apellido (empleados) o dominio (equipos). */
+  sample: RulePreviewSampleItem[];
+}
+
+/**
+ * "Probar regla": evalúa las condiciones del borrador (sin guardar nada) contra los recursos de la empresa
+ * activa con el MISMO motor que calcula el status (`typeAppliesTo`) y devuelve cuántos cumplen más una
+ * muestra de los primeros. Sólo lectura: 4 consultas fijas sin importar cuántos recursos haya
+ * (recursos + pivotes M:M ya cargados por el motor, y UNA consulta para los nombres de la muestra).
+ * Exige `view` sobre los tipos del alcance (el mismo permiso que el contador del formulario).
+ */
+export async function previewTypeRule(
+  applies: string,
+  conditionsJson: Prisma.JsonValue[],
+  documentTypeId?: string
+): Promise<RulePreviewResult> {
+  const companyId = await getActiveCompanyId();
+
+  logger.debug('Probando regla de tipo de documento', { data: { applies, documentTypeId } });
+
+  try {
+    if (applies !== 'Persona' && applies !== 'Equipos') {
+      throw new Error('Los tipos de documento de empresa no tienen condiciones que probar');
+    }
+    const { draft, current, resources } = await loadDraftApplicability(
+      applies,
+      conditionsJson,
+      companyId,
+      documentTypeId
+    );
+    const delta = computeApplicabilityDelta(draft, current, resources);
+    const matchingIds = resources.filter((resource) => typeAppliesTo(draft, resource)).map((resource) => resource.id);
+    const base = { ...delta, totalResources: resources.length };
+
+    if (matchingIds.length === 0) return { ...base, sample: [] };
+
+    if (applies === 'Persona') {
+      const rows = await prisma.employees.findMany({
+        where: { id: { in: matchingIds }, company_id: companyId },
+        select: { id: true, file: true, lastname: true, firstname: true },
+        orderBy: [{ lastname: 'asc' }, { firstname: 'asc' }],
+        take: RULE_PREVIEW_SAMPLE_SIZE,
+      });
+      return {
+        ...base,
+        sample: rows.map((row) => ({
+          kind: 'Persona' as const,
+          id: row.id,
+          fileNumber: row.file ?? null,
+          lastname: row.lastname ?? '',
+          firstname: row.firstname ?? '',
+        })),
+      };
+    }
+
+    const rows = await prisma.vehicles.findMany({
+      where: { id: { in: matchingIds }, company_id: companyId },
+      select: {
+        id: true,
+        domain: true,
+        intern_number: true,
+        brand_vehicles: { select: { name: true } },
+        model_vehicles: { select: { name: true } },
+      },
+      orderBy: { domain: 'asc' },
+      take: RULE_PREVIEW_SAMPLE_SIZE,
+    });
+    return {
+      ...base,
+      sample: rows.map((row) => ({
+        kind: 'Equipos' as const,
+        id: row.id,
+        domain: row.domain ?? null,
+        internNumber: row.intern_number ?? null,
+        brand: row.brand_vehicles?.name ?? null,
+        model: row.model_vehicles?.name ?? null,
+      })),
+    };
+  } catch (error) {
+    logger.error('Error al probar la regla de un tipo de documento', { data: { error, applies } });
+    throw error instanceof Error ? error : new Error('No se pudo probar la regla');
+  }
 }
 
 // ============================================================================

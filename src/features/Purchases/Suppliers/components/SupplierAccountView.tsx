@@ -18,7 +18,12 @@ import { getSupplierAccount, type SupplierAccount } from '../../actions/supplier
 
 const day = (value: string | null) => (value ? formatDateAr(value) : '—');
 
-const KIND_LABELS = { INVOICE: 'Comprobante', CREDIT_NOTE: 'Nota de crédito', PAYMENT: 'Orden de pago', REJECTED_CHECK: 'Cheque rechazado' } as const;
+const KIND_LABELS = {
+  INVOICE: 'Comprobante',
+  CREDIT_NOTE: 'Nota de crédito',
+  PAYMENT: 'Orden de pago',
+  REJECTED_CHECK: 'Cheque rechazado',
+} as const;
 
 /** Importe `Decimal` serializado ("1234.50", "-10.00") mayor a cero, sin pasar por `Number`. */
 function isPositiveAmount(value: string): boolean {
@@ -29,11 +34,23 @@ function isPositiveAmount(value: string): boolean {
  * Cuenta corriente del proveedor (spec Compras etapa 5 §4): movimientos con saldo acumulado,
  * resumen (saldo, vencido, a vencer, anticipos) y rango de fechas con saldo anterior.
  */
-export function SupplierAccountView({ initial, canCreatePayment }: { initial: SupplierAccount; canCreatePayment: boolean }) {
+export function SupplierAccountView({
+  initial,
+  canCreatePayment,
+}: {
+  initial: SupplierAccount;
+  canCreatePayment: boolean;
+}) {
   const [range, setRange] = useState<{ from: string; to: string }>({ from: '', to: '' });
-  const { data: account, isFetching, isError, refetch } = useQuery({
+  const {
+    data: account,
+    isFetching,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ['supplier-account', initial.supplier.id, range.from, range.to],
-    queryFn: () => getSupplierAccount(initial.supplier.id, { from: range.from || undefined, to: range.to || undefined }),
+    queryFn: () =>
+      getSupplierAccount(initial.supplier.id, { from: range.from || undefined, to: range.to || undefined }),
     initialData: !range.from && !range.to ? initial : undefined,
     staleTime: 30 * 1000,
   });
@@ -52,7 +69,17 @@ export function SupplierAccountView({ initial, canCreatePayment }: { initial: Su
       ];
       const rows: Record<string, unknown>[] = [
         ...(current.previousBalance !== null
-          ? [{ date: day(current.range.from), kind: '', label: 'Saldo anterior', due: '', debit: '', credit: '', balance: current.previousBalance }]
+          ? [
+              {
+                date: day(current.range.from),
+                kind: '',
+                label: 'Saldo anterior',
+                due: '',
+                debit: '',
+                credit: '',
+                balance: current.previousBalance,
+              },
+            ]
           : []),
         ...current.movements.map((m) => ({
           date: day(m.date),
@@ -75,14 +102,20 @@ export function SupplierAccountView({ initial, canCreatePayment }: { initial: Su
 
   const a = account ?? initial;
   const s = a.summary;
-  const balanceText = s.balance.startsWith('-') ? `A favor ${formatMoney(s.balance.replace('-', ''))}` : formatMoney(s.balance);
+  const balanceText = s.balance.startsWith('-')
+    ? `A favor ${formatMoney(s.balance.replace('-', ''))}`
+    : formatMoney(s.balance);
 
   return (
     <div className="space-y-4">
       <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { label: 'Saldo', value: balanceText, tone: '' },
-          { label: 'Vencido sin orden de pago', value: formatMoney(s.overdue), tone: isPositiveAmount(s.overdue) ? 'text-danger' : '' },
+          {
+            label: 'Vencido sin orden de pago',
+            value: formatMoney(s.overdue),
+            tone: isPositiveAmount(s.overdue) ? 'text-danger' : '',
+          },
           { label: 'A vencer sin orden de pago', value: formatMoney(s.upcoming), tone: '' },
           { label: 'Anticipos disponibles', value: formatMoney(s.advancesAvailable), tone: '' },
         ].map((k) => (
@@ -94,7 +127,10 @@ export function SupplierAccountView({ initial, canCreatePayment }: { initial: Su
       </dl>
 
       {isError && (
-        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-danger/30 bg-danger-subtle px-4 py-3 text-sm text-danger-subtle-foreground">
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-3 rounded-lg border border-danger/30 bg-danger-subtle px-4 py-3 text-sm text-danger-subtle-foreground"
+        >
           <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span>No se pudo actualizar la cuenta corriente con ese rango de fechas.</span>
           <Button type="button" size="sm" variant="outline" className="ml-auto" onClick={() => void refetch()}>
@@ -124,7 +160,13 @@ export function SupplierAccountView({ initial, canCreatePayment }: { initial: Su
                 placeholder="DD/MM/AAAA"
               />
             </div>
-            <Button type="button" size="sm" variant="outline" disabled={!account || excel.isPending} onClick={() => account && excel.mutate(account)}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!account || excel.isPending}
+              onClick={() => account && excel.mutate(account)}
+            >
               <FileSpreadsheet className="mr-1 h-4 w-4" aria-hidden="true" />
               {excel.isPending ? 'Exportando…' : 'Excel'}
             </Button>
@@ -142,9 +184,11 @@ export function SupplierAccountView({ initial, canCreatePayment }: { initial: Su
       >
         <div aria-busy={isFetching}>
           {a.movements.length === 0 && a.previousBalance === null ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">Sin movimientos: el proveedor no tiene comprobantes a pagar ni pagos registrados.</p>
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Sin movimientos: el proveedor no tiene comprobantes a pagar ni pagos registrados.
+            </p>
           ) : (
-            <div className={`overflow-x-auto rounded-md border ${isFetching ? 'opacity-60' : ''}`}>
+            <div className={`overflow-x-auto rounded-xl border ${isFetching ? 'opacity-60' : ''}`}>
               <Table className="min-w-[720px] text-sm">
                 <TableHeader>
                   <TableRow>
@@ -187,8 +231,12 @@ export function SupplierAccountView({ initial, canCreatePayment }: { initial: Su
                         {m.detail && <span className="block text-xs text-muted-foreground">{m.detail}</span>}
                       </TableCell>
                       <TableCell className="whitespace-nowrap">{m.dueDate ? day(m.dueDate) : '—'}</TableCell>
-                      <TableCell className="text-right tabular-nums">{m.debit === '0.00' ? '' : formatMoney(m.debit)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{m.credit === '0.00' ? '' : formatMoney(m.credit)}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {m.debit === '0.00' ? '' : formatMoney(m.debit)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {m.credit === '0.00' ? '' : formatMoney(m.credit)}
+                      </TableCell>
                       <TableCell className="text-right tabular-nums">{formatMoney(m.balance)}</TableCell>
                     </TableRow>
                   ))}
