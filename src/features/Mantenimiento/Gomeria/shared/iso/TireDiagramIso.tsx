@@ -335,8 +335,10 @@ export function TireDiagramIso({
       )}
 
       {/* Los handlers van en el contenedor (delegación): cada rueda lleva `data-iso-id`. */}
+      {/* En pantallas angostas la figura conserva un ancho mínimo (números y zonas de toque usables) y se desliza dentro de su caja. */}
       <div
         ref={containerRef}
+        className="overflow-x-auto"
         onClick={onClick}
         onKeyDown={onKeyDown}
         onPointerOver={onPointerOver}
@@ -344,7 +346,7 @@ export function TireDiagramIso({
         onFocus={onFocus}
         onBlur={onBlur}
       >
-        <IsoFigure svg={svg} />
+        <IsoFigure svg={svg} className="min-w-[540px]" />
       </div>
 
       {showPositions && (
@@ -397,10 +399,12 @@ export function TireDiagramIso({
         </div>
       )}
 
-      <p className="text-muted-foreground text-[11px]">
-        {computed.length - spareCount} posiciones
-        {showPositions && ` · ${withTire} con cubierta`} · {spareCount} auxilio
-      </p>
+      {showPositions && (
+        <p className="text-muted-foreground text-[11px]">
+          {computed.length} {computed.length === 1 ? 'posición' : 'posiciones'} · {withTire} con cubierta
+          {spareCount > 0 && ` · ${spareCount} ${spareCount === 1 ? 'auxilio' : 'auxilios'} incluidos`}
+        </p>
+      )}
     </div>
   );
 }

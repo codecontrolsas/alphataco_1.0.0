@@ -6,7 +6,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
-  TireDiagramRenderer,
   type DiagramAxle,
   type DiagramPosition,
   type TireDiagramHitch,
@@ -20,8 +19,15 @@ import {
 } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
 import { useQuery } from '@tanstack/react-query';
 import moment from 'moment';
+import dynamic from 'next/dynamic';
 import { getServiceOrderById } from '../actions/actions.server';
 import { getVehicleTirePositions } from '../actions/service-order-queries.server';
+
+// Figura isométrica: se carga bajo demanda y solo en el cliente.
+const TireDiagramIso = dynamic(
+  () => import('@/features/Mantenimiento/Gomeria/shared/iso/TireDiagramIso').then((m) => m.TireDiagramIso),
+  { ssr: false, loading: () => <Skeleton className="h-44 w-full rounded-xl" /> }
+);
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -307,7 +313,7 @@ function VehicleDiagramReadonly({
   }));
 
   return (
-    <TireDiagramRenderer
+    <TireDiagramIso
       axles={axles}
       positions={diagramPositions}
       interactive={false}
@@ -375,7 +381,7 @@ function SnapshotDiagram({
   return (
     <div className="space-y-2">
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</p>
-      <TireDiagramRenderer axles={axles} positions={positions} interactive={false} />
+      <TireDiagramIso axles={axles} positions={positions} interactive={false} />
     </div>
   );
 }
