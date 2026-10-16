@@ -11,8 +11,10 @@ import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import moment from 'moment';
 
 import { assertDiagramAccess } from '../lib/diagram-access';
+import { buildDiagramDayRangeWhere, diagramDayKey, toDiagramDay, type DiagramDay } from '../lib/diagram-dates';
 import { uuidLike } from '../lib/diagram-ids';
 
 const logger = new Logger('Employees/Diagrams/Reports/actions.server');
@@ -22,6 +24,13 @@ const EXPORT_MAX_ROWS = 10_000;
 
 /** Tamaño máximo de página. */
 const MAX_PAGE_SIZE = 200;
+
+/** Máximo de movimientos del historial de una casilla que se devuelven. */
+const HISTORY_MAX_ROWS = 30;
+
+/** Límites del rango de fechas cuando el filtro llega abierto por un lado (el formulario acepta 2000-2100). */
+const MIN_DIAGRAM_DAY: DiagramDay = { year: 2000, month: 1, day: 1 };
+const MAX_DIAGRAM_DAY: DiagramDay = { year: 2100, month: 12, day: 31 };
 
 /** Columnas con filtro de texto sobre campos del empleado o de la novedad. */
 const TEXT_FILTER_KEYS = ['lastname', 'firstname', 'cuil', 'fileNumber', 'comments'] as const;
@@ -35,72 +44,57 @@ const ALLOWED_FILTER_KEYS = new Set<string>([
   'companyPosition',
   ...TEXT_FILTER_KEYS,
   ...NUMBER_FILTER_KEYS,
-  ...dateRangeKeys(['created_at']),
+  // `date`: fecha de la novedad (período). `created_at`: cuándo se registró.
+  ...dateRangeKeys(['date', 'created_at']),
 ]);
 
-// ============================================================================
-// CONSTANTS
-// ============================================================================
+type ReportOrderBy = Prisma.employees_diagramOrderByWithRelationInput;
 
-/** Campos directos de employees_diagram que se pueden ordenar server-side */
-const VALID_SORT_FIELDS = new Set([
-  'day',
-  'month',
-  'year',
-  'created_at',
-  'comments',
-  // FK columns (sorted via FK_SORT_MAP)
-  'employee',
-  'diagramType',
-  'companyPosition',
-  'fileNumber',
-  'cuil',
-]);
-
-/**
- * Mapeo de columnId → orderBy de Prisma para columnas FK.
- */
-const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Record<string, unknown>> = {
-  employee: (dir) => ({ employees: { lastname: dir } }),
-  diagramType: (dir) => ({ diagram_type_employees_diagram_diagram_typeTodiagram_type: { name: dir } }),
-  companyPosition: (dir) => ({ employees: { company_positions: { name: dir } } }),
-  fileNumber: (dir) => ({ employees: { file: dir } }),
-  cuil: (dir) => ({ employees: { cuil: dir } }),
+/** Orden por columna: cada clave de la tabla se traduce a su `orderBy` de Prisma (incluye las relaciones). */
+const SORT_MAP: Record<string, (dir: 'asc' | 'desc') => ReportOrderBy[]> = {
+  date: (dir) => [{ year: dir }, { month: dir }, { day: dir }],
+  day: (dir) => [{ day: dir }],
+  month: (dir) => [{ month: dir }],
+  year: (dir) => [{ year: dir }],
+  created_at: (dir) => [{ created_at: dir }],
+  comments: (dir) => [{ comments: dir }],
+  employee: (dir) => [{ employees: { lastname: dir } }, { employees: { firstname: dir } }],
+  fileNumber: (dir) => [{ employees: { file: dir } }],
+  cuil: (dir) => [{ employees: { cuil: dir } }],
+  companyPosition: (dir) => [{ employees: { company_positions: { name: dir } } }],
+  diagramType: (dir) => [{ diagram_type_employees_diagram_diagram_typeTodiagram_type: { name: dir } }],
 };
 
-/** Select común con todas las relaciones resueltas */
+/** Desempate: lo más reciente primero; `id` para que la paginación sea estable. */
+const DEFAULT_ORDER: ReportOrderBy[] = [{ year: 'desc' }, { month: 'desc' }, { day: 'desc' }, { id: 'asc' }];
+
+/**
+ * Select de la tabla: solo lo que se muestra. El empleado y el tipo de novedad ya viajan por sus ids
+ * (`employee_id`, `diagram_type.id`), así que no se repiten las claves foráneas sueltas.
+ */
 const DIAGRAM_REPORT_SELECT = {
   id: true,
   created_at: true,
   day: true,
   month: true,
   year: true,
-  is_active: true,
-  employee_id: true,
-  diagram_type: true,
   comments: true,
+  employee_id: true,
   employees: {
     select: {
-      id: true,
       lastname: true,
       firstname: true,
       cuil: true,
       file: true,
-      company_position: true,
-      company_positions: {
-        select: { id: true, name: true },
-      },
+      company_positions: { select: { id: true, name: true } },
     },
   },
   diagram_type_employees_diagram_diagram_typeTodiagram_type: {
-    select: {
-      id: true,
-      name: true,
-      color: true,
-      short_description: true,
-    },
+    select: { id: true, name: true, color: true, short_description: true },
   },
-} as const;
+} satisfies Prisma.employees_diagramSelect;
+
+type DiagramReportRecord = Prisma.employees_diagramGetPayload<{ select: typeof DIAGRAM_REPORT_SELECT }>;
 
 // ============================================================================
 // HELPERS INTERNOS
@@ -121,13 +115,23 @@ function argentinaDayBound(value: string, bound: 'start' | 'end'): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+/** `YYYY-MM-DD` estricto → día/mes/año; `null` si el texto no es una fecha real. */
+function parseDay(value: string | undefined): DiagramDay | null {
+  if (!value) return null;
+  try {
+    return toDiagramDay(value);
+  } catch {
+    return null;
+  }
+}
+
 /** Ids válidos de un filtro faceteado (descarta el centinela de nulo y texto que no es UUID). */
 function validIds(values: string[]): string[] {
   return values.filter((value) => value !== NULL_FILTER_VALUE && uuidLike.safeParse(value).success);
 }
 
 /**
- * Construye el WHERE compartido entre paginated, export y facets. El perímetro (empleados activos de la
+ * Construye el WHERE compartido entre paginated, export, totales y facets. El perímetro (empleados activos de la
  * empresa) y todos los filtros van en un único `AND`. Los campos están en relaciones anidadas, por eso
  * los filtros se arman a mano en vez de pasar por `buildFiltersWhere`.
  */
@@ -219,6 +223,20 @@ function buildWhereClause(companyId: string, rawState: ReportState): Prisma.empl
     and.push(key === 'day' ? { day: { equals } } : key === 'month' ? { month: { equals } } : { year: { equals } });
   }
 
+  // ── Período: fecha de la novedad (day/month/year), abierto por un lado o por ambos ──
+  const dateFrom = state.filters['date_from']?.[0];
+  const dateTo = state.filters['date_to']?.[0];
+  if (dateFrom || dateTo) {
+    const from = dateFrom ? parseDay(dateFrom) : MIN_DIAGRAM_DAY;
+    const to = dateTo ? parseDay(dateTo) : MAX_DIAGRAM_DAY;
+    // Fecha mal formada o rango invertido: no puede coincidir nada, así que no se ignora el filtro.
+    if (from && to && diagramDayKey(from) <= diagramDayKey(to)) {
+      and.push(buildDiagramDayRangeWhere(from, to));
+    } else {
+      and.push({ id: { in: [] } });
+    }
+  }
+
   // ── Fecha de registro (dateRange: created_at), en hora argentina ─────────
   const createdAtFrom = state.filters['created_at_from']?.[0];
   const createdAtTo = state.filters['created_at_to']?.[0];
@@ -232,55 +250,125 @@ function buildWhereClause(companyId: string, rawState: ReportState): Prisma.empl
   return { AND: and };
 }
 
+/** `orderBy` seguro: solo columnas de la lista, en el orden pedido, con el desempate por fecha al final. */
+function buildOrderBy(state: ReportState): ReportOrderBy[] {
+  const sorts = state.sorting.flatMap((sort) => SORT_MAP[sort.id]?.(sort.desc ? 'desc' : 'asc') ?? []);
+  return [...sorts, ...DEFAULT_ORDER];
+}
+
+/** Fila lista para la tabla: sin `Decimal` (el cliente no los puede recibir) y con la fecha ya armada. */
+function toReportRow(record: DiagramReportRecord) {
+  const day = Number(record.day);
+  const month = Number(record.month);
+  const year = Number(record.year);
+  const diagramType = record.diagram_type_employees_diagram_diagram_typeTodiagram_type;
+
+  return {
+    id: record.id,
+    createdAt: record.created_at,
+    /** `YYYY-MM-DD` de la novedad. */
+    date: diagramDayKey({ year, month, day }),
+    day,
+    month,
+    year,
+    comments: record.comments,
+    employee: {
+      id: record.employee_id,
+      fileNumber: record.employees.file,
+      lastname: record.employees.lastname,
+      firstname: record.employees.firstname,
+      cuil: record.employees.cuil,
+    },
+    position: record.employees.company_positions,
+    diagramType: {
+      id: diagramType.id,
+      name: diagramType.name,
+      color: diagramType.color,
+      shortDescription: diagramType.short_description,
+    },
+  };
+}
+
 // ============================================================================
 // PAGINATED QUERY
 // ============================================================================
 
 export async function getDiagramReportsPaginated(searchParams: DataTableSearchParams) {
-  await assertDiagramAccess('reports');
-  const companyId = await getActiveCompanyId();
+  const [, companyId] = await Promise.all([assertDiagramAccess('reports'), getActiveCompanyId()]);
 
   try {
     const state = parseSearchParams(searchParams);
     const { skip, take } = clampedPageParams(state, { max: MAX_PAGE_SIZE });
     const where = buildWhereClause(companyId, state);
 
-    // Safe orderBy: multi-sort, only valid fields, with FK_SORT_MAP
-    const resolvedSorts: Record<string, unknown>[] = [];
-    for (const s of state.sorting) {
-      if (VALID_SORT_FIELDS.has(s.id)) {
-        const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-        const fkMapper = FK_SORT_MAP[s.id];
-        resolvedSorts.push(fkMapper ? fkMapper(dir) : { [s.id]: dir });
-      }
-    }
-    // Default sort: employee lastname ASC, then year/month/day DESC; `id` desempata para paginar estable
-    const safeOrderBy = [
-      ...resolvedSorts,
-      { employees: { lastname: 'asc' as const } },
-      { year: 'desc' as const },
-      { month: 'desc' as const },
-      { day: 'desc' as const },
-      { id: 'asc' as const },
-    ];
-
-    const [data, total] = await Promise.all([
+    const [records, total] = await Promise.all([
       prisma.employees_diagram.findMany({
         skip,
         take,
-        orderBy: safeOrderBy,
+        orderBy: buildOrderBy(state),
         where,
         select: DIAGRAM_REPORT_SELECT,
       }),
       prisma.employees_diagram.count({ where }),
     ]);
 
-    return { data, total };
+    return { data: records.map(toReportRow), total };
   } catch (error) {
     logger.error('Error al obtener reportes de diagramas paginados', { data: { error } });
     throw new Error(`Error al obtener los reportes: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
+
+export type DiagramReportListItem = Awaited<ReturnType<typeof getDiagramReportsPaginated>>['data'][number];
+
+// ============================================================================
+// TOTALES POR NOVEDAD
+// ============================================================================
+
+/**
+ * Cantidad de novedades por tipo con TODOS los filtros activos (también el propio tipo: son los totales de lo
+ * que muestra la tabla). Un `groupBy` y una consulta de nombres; no depende de la página ni del orden.
+ */
+export async function getDiagramReportTotals(searchParams: DataTableSearchParams) {
+  const [, companyId] = await Promise.all([assertDiagramAccess('reports'), getActiveCompanyId()]);
+
+  try {
+    const where = buildWhereClause(companyId, parseSearchParams(searchParams));
+    const groups = await prisma.employees_diagram.groupBy({ by: ['diagram_type'], where, _count: true });
+
+    const types = groups.length
+      ? await prisma.diagram_type.findMany({
+          where: { id: { in: groups.map((g) => g.diagram_type) }, company_id: companyId },
+          select: { id: true, name: true, color: true, short_description: true },
+        })
+      : [];
+    const typeById = new Map(types.map((type) => [type.id, type]));
+
+    const items = groups
+      .flatMap((group) => {
+        const type = typeById.get(group.diagram_type);
+        return type
+          ? [
+              {
+                id: type.id,
+                name: type.name ?? type.short_description,
+                shortDescription: type.short_description,
+                color: type.color,
+                count: group._count,
+              },
+            ]
+          : [];
+      })
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+
+    return { total: items.reduce((sum, item) => sum + item.count, 0), items };
+  } catch (error) {
+    logger.error('Error al obtener los totales por novedad', { data: { error } });
+    throw new Error('Error al obtener los totales por novedad');
+  }
+}
+
+export type DiagramReportTotals = Awaited<ReturnType<typeof getDiagramReportTotals>>;
 
 // ============================================================================
 // EXPORT QUERY (all data, no pagination)
@@ -304,27 +392,21 @@ export async function getDiagramReportsForExport(
     const state = parseSearchParams(searchParams);
     const where = buildWhereClause(companyId, state);
 
-    const data = await prisma.employees_diagram.findMany({
-      orderBy: [
-        { employees: { lastname: 'asc' } },
-        { year: 'desc' },
-        { month: 'desc' },
-        { day: 'desc' },
-        { id: 'asc' },
-      ],
+    const records = await prisma.employees_diagram.findMany({
+      orderBy: [{ employees: { lastname: 'asc' } }, { employees: { firstname: 'asc' } }, ...DEFAULT_ORDER],
       where,
       select: DIAGRAM_REPORT_SELECT,
       take: EXPORT_MAX_ROWS + 1,
     });
 
-    if (data.length > EXPORT_MAX_ROWS) {
+    if (records.length > EXPORT_MAX_ROWS) {
       return {
         ok: false,
         message: `La exportación supera el máximo de ${EXPORT_MAX_ROWS.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`,
       };
     }
 
-    return { ok: true, data };
+    return { ok: true, data: records.map(toReportRow) };
   } catch (error) {
     logger.error('Error al exportar reportes de diagramas', { data: { error } });
     return { ok: false, message: 'Error al exportar los reportes de diagramas' };
@@ -347,8 +429,7 @@ export async function getDiagramReportSingleFacet(
   counts: Map<string, number>;
   resolvedOptions?: Array<{ id: string; name: string | null }>;
 } | null> {
-  await assertDiagramAccess('reports');
-  const companyId = await getActiveCompanyId();
+  const [, companyId] = await Promise.all([assertDiagramAccess('reports'), getActiveCompanyId()]);
 
   try {
     const state = parseSearchParams(searchParams ?? {});
@@ -443,7 +524,76 @@ export async function getDiagramReportSingleFacet(
 }
 
 // ============================================================================
-// EXPORTED TYPES
+// DETALLE DE UNA NOVEDAD: HISTORIAL Y TIPOS EDITABLES
 // ============================================================================
 
-export type DiagramReportListItem = Awaited<ReturnType<typeof getDiagramReportsPaginated>>['data'][number];
+/**
+ * Movimientos de una casilla (empleado + día), del más nuevo al más viejo. Salen de `diagrams_logs`, que arma un
+ * trigger al crear o cambiar una novedad. El log no apunta a la fila de `employees_diagram`: se ubica por
+ * empleado y por el día que guarda en `prev_date` (medianoche del día de la novedad).
+ */
+export async function getDiagramCellHistory(employeeId: string, date: string) {
+  const [, companyId] = await Promise.all([assertDiagramAccess('reports'), getActiveCompanyId()]);
+  if (!uuidLike.safeParse(employeeId).success) throw new Error('Empleado inválido');
+  const day = parseDay(date);
+  if (!day) throw new Error('Fecha inválida');
+
+  try {
+    const dayStart = moment.utc(diagramDayKey(day), 'YYYY-MM-DD');
+    const logs = await prisma.diagrams_logs.findMany({
+      where: {
+        employee_id: employeeId,
+        employees: { company_id: companyId },
+        prev_date: { gte: dayStart.toDate(), lt: dayStart.clone().add(1, 'day').toDate() },
+      },
+      select: {
+        id: true,
+        created_at: true,
+        description: true,
+        state: true,
+        prev_state: true,
+        profile: { select: { fullname: true } },
+      },
+      orderBy: { created_at: 'desc' },
+      take: HISTORY_MAX_ROWS,
+    });
+
+    return logs.map((log) => ({
+      id: log.id,
+      changedAt: log.created_at,
+      shortDescription: log.description,
+      state: log.state,
+      previousState: log.prev_state,
+      changedBy: log.profile?.fullname ?? null,
+    }));
+  } catch (error) {
+    logger.error('Error al obtener el historial de la novedad', { data: { error, employeeId, date } });
+    throw new Error('Error al obtener el historial de la novedad');
+  }
+}
+
+export type DiagramCellHistoryItem = Awaited<ReturnType<typeof getDiagramCellHistory>>[number];
+
+/** Tipos de novedad activos de la empresa para el selector de la edición rápida. */
+export async function getReportDiagramTypes() {
+  const [, companyId] = await Promise.all([assertDiagramAccess('reports'), getActiveCompanyId()]);
+
+  try {
+    const types = await prisma.diagram_type.findMany({
+      where: { company_id: companyId, is_active: true },
+      select: { id: true, name: true, color: true, short_description: true },
+      orderBy: { name: 'asc' },
+    });
+    return types.map((type) => ({
+      id: type.id,
+      name: type.name ?? type.short_description,
+      color: type.color,
+      shortDescription: type.short_description,
+    }));
+  } catch (error) {
+    logger.error('Error al obtener los tipos de novedad activos', { data: { error } });
+    throw new Error('Error al obtener los tipos de novedad');
+  }
+}
+
+export type ReportDiagramType = Awaited<ReturnType<typeof getReportDiagramTypes>>[number];

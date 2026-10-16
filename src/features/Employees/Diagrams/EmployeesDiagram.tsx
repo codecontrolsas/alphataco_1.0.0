@@ -3,9 +3,19 @@ import { ViewManagerServer } from '@/features/TabsManager';
 import { Suspense } from 'react';
 import DiagramFormUpdatedWrapper from './DiagramFormUpdatedWrapper';
 import DiagramMassive from './DiagramMassive';
-import EmployeesDiagramWrapper from './EmployeesDiagramWrapper';
 import { DiagramReportsList } from './Reports/DiagramReportsList';
 import { DiagramReportsSkeleton } from './Reports/fallback/DiagramReportsSkeleton';
+import DiagramCalendar from './calendar/DiagramCalendar';
+import { DiagramCalendarSkeleton } from './fallback/DiagramCalendarSkeleton';
+
+/** Filtros `diagOld_*` de la URL como texto estable, para remontar el calendario cuando un enlace los cambia. */
+function calendarKey(searchParams: { [key: string]: string | string[] | undefined }) {
+  return Object.keys(searchParams)
+    .filter((name) => name.startsWith('diagOld_'))
+    .sort()
+    .map((name) => `${name}=${String(searchParams[name])}`)
+    .join('&');
+}
 
 /**
  * Sección Diagramas: una vista por tarea (consultar, cargar uno, cargar en lote, informar).
@@ -34,8 +44,10 @@ export default async function EmployeesDiagram({
           moduleSlug: 'empleados',
           tabSlug: 'old',
           content: (
-            <Suspense fallback={<Skeleton className="h-[300px] w-full rounded-xl" />}>
-              <EmployeesDiagramWrapper searchParams={searchParams} />
+            <Suspense fallback={<DiagramCalendarSkeleton />}>
+              {/* La key cambia solo con una navegación real a otros `diagOld_*` (p. ej. un enlace del Dashboard):
+                  los cambios de filtros dentro del calendario actualizan la URL sin pasar por el servidor. */}
+              <DiagramCalendar key={calendarKey(searchParams)} />
             </Suspense>
           ),
         },

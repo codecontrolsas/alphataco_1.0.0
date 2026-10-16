@@ -1,3 +1,4 @@
+import { checkPermissionServer } from '@/features/Permissions/actionsServer';
 import { getTablePreferences } from '@/shared/actions/table-preferences';
 import { CatalogTableSurface } from '@/shared/components/common/CatalogFormSheet';
 import { stripPrefixFromSearchParams } from '@/shared/components/common/DataTable/helpers';
@@ -27,10 +28,14 @@ export async function DiagramReportsList({ searchParams }: DiagramReportsListPro
   // Extract only params for this table (strip namespace prefix)
   const tableParams = stripPrefixFromSearchParams(searchParams as DataTableSearchParams, TABLE_ID);
 
-  // Facets load lazy (on-demand on popover open) — NOT in SSR
-  const [{ data, total }, preferences] = await Promise.all([
+  // Facets load lazy (on-demand on popover open) — NOT in SSR.
+  // Editar una novedad exige `update` en `new` o en `employees` (lo mismo que valida `UpdateDiagramsById`);
+  // la pestaña `reports` solo admite `view`.
+  const [{ data, total }, preferences, canUpdateInNew, canUpdateInEmployees] = await Promise.all([
     getDiagramReportsPaginated(tableParams),
     getTablePreferences(TABLE_ID),
+    checkPermissionServer('empleados', 'new', 'update'),
+    checkPermissionServer('empleados', 'employees', 'update'),
   ]);
 
   return (
@@ -40,6 +45,7 @@ export async function DiagramReportsList({ searchParams }: DiagramReportsListPro
         totalRows={total}
         searchParams={tableParams}
         tableId={TABLE_ID}
+        canUpdate={canUpdateInNew || canUpdateInEmployees}
         initialColumnVisibility={preferences.columnVisibility ?? {}}
         initialFilterVisibility={preferences.filterVisibility ?? {}}
       />

@@ -1,572 +1,372 @@
 'use client';
 
-import { FormItemDatePicker } from '@/components/ui/FormItemDatePicker';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Form, FormField, FormItem, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
 import { Logger } from '@/lib/logger';
+import { StateBlock } from '@/shared/components/common/StateBlock';
 import { argentinaDate } from '@/shared/lib/argentina-time';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+import { CalendarRange, Sparkles } from 'lucide-react';
 import moment from 'moment';
-import { useCallback, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import { z } from 'zod';
-
+import { checkMassiveConflicts } from './actions/diagram-massive-actions';
+import { MASSIVE_MAX_EMPLOYEES, MASSIVE_MAX_RANGES, MASSIVE_MAX_TOTAL_DAYS } from './lib/massive-limits';
+import { dateToIsoDay, inclusiveDays, isoDayToDate } from './lib/massive-ranges';
+import { ConflictReviewSheet } from './load/components/ConflictReviewSheet';
+import { DateRangeList } from './load/components/DateRangeList';
+import { EmployeeChips } from './load/components/EmployeeChips';
+import { LoadModeSelector, type LoadModeOption } from './load/components/LoadModeSelector';
+import { LoadPreview } from './load/components/LoadPreview';
+import { LoadSection } from './load/components/LoadSection';
+import { NoveltyBadge, NoveltyDot } from './load/components/NoveltyBadge';
+import { NoveltySelect } from './load/components/NoveltySelect';
+import { useMassiveLoadCatalogs } from './load/hooks';
 import {
-  checkDiagramConflicts,
-  checkNoveltyConflicts,
-  getActiveDiagramTypes,
-  getActiveWorkDiagrams,
-  getWorkDiagramNovelties,
-  type NoveltyData,
-} from './actions/diagram-massive-actions';
-import { searchEmployeeDiagrams, type DiagramEmployee } from './actions/diagram-search-actions';
-import { EMPTY_FILTERS, EmployeeFilterPanel, type FilterState } from './components/EmployeeFilterPanel';
-import { EmployeeSelectionGrid } from './components/EmployeeSelectionGrid';
-import { MassiveModeSelector } from './components/MassiveModeSelector';
-import { MassiveOperationSummary } from './components/MassiveOperationSummary';
-import { MASSIVE_MAX_DAYS_RANGE, MASSIVE_MAX_EMPLOYEES } from './lib/massive-limits';
-import type { ConflictData, MassiveFormData, ProcessingResult } from './types/massive-diagram';
+  massiveLoadFormSchema,
+  type EmployeeOption,
+  type MassiveLoadFormValues,
+  type MassiveLoadParams,
+} from './load/schemas';
+import type { ConflictCheckResult, MassiveMode, ProcessingResult } from './types/massive-diagram';
 
 const logger = new Logger('Diagrams/DiagramMassiveForm');
 
-// ── Constants ────────────────────────────────────────────────────────────────
+const MODE_OPTIONS: readonly LoadModeOption<MassiveMode>[] = [
+  {
+    value: 'diagram',
+    title: 'Diagrama de trabajo',
+    description: `Aplica un patrón cíclico (días activos e inactivos) a hasta ${MASSIVE_MAX_EMPLOYEES} empleados durante un rango.`,
+    icon: CalendarRange,
+  },
+  {
+    value: 'novelty',
+    title: 'Una novedad',
+    description: `Asigna la misma novedad (feriado, licencia…) a hasta ${MASSIVE_MAX_EMPLOYEES} empleados en todos los días elegidos.`,
+    icon: Sparkles,
+  },
+];
 
-const MAX_EMPLOYEES = MASSIVE_MAX_EMPLOYEES;
-const MAX_DAYS_RANGE = MASSIVE_MAX_DAYS_RANGE;
-
-/** Día calendario (YYYY-MM-DD) de una fecha elegida en el calendario del navegador. */
-const calendarDay = (date: Date) => moment(date).format('YYYY-MM-DD');
-
-/** Cantidad de días entre dos fechas del calendario, a nivel día (sin horas ni zona). */
-const daysBetween = (from: Date, to: Date) => moment(to).startOf('day').diff(moment(from).startOf('day'), 'days');
-
-// ── Zod Schema ───────────────────────────────────────────────────────────────
-
-const formSchema = z
-  .object({
-    mode: z.enum(['diagram', 'novelty']),
-    employeeIds: z
-      .array(z.string())
-      .min(1, 'Selecciona al menos un empleado')
-      .max(MAX_EMPLOYEES, `Máximo ${MAX_EMPLOYEES} empleados`),
-    workDiagramId: z.string().optional(),
-    activeNoveltyId: z.string().optional(),
-    diagramTypeId: z.string().optional(),
-    dateRange: z
-      .object({
-        from: z.date().refine((date) => calendarDay(date) >= argentinaDate(), 'Solo fechas desde hoy en adelante'),
-        to: z.date(),
-      })
-      .refine((data) => {
-        return daysBetween(data.from, data.to) <= MAX_DAYS_RANGE;
-      }, `Máximo ${MAX_DAYS_RANGE} días permitidos`),
-  })
-  .superRefine((data, ctx) => {
-    if (data.mode === 'diagram' && !data.workDiagramId) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Selecciona un diagrama de trabajo',
-        path: ['workDiagramId'],
-      });
-    }
-    if (data.mode === 'novelty' && !data.diagramTypeId) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Selecciona una novedad',
-        path: ['diagramTypeId'],
-      });
-    }
-  });
-
-type FormData = z.infer<typeof formSchema>;
-
-// ── Props ────────────────────────────────────────────────────────────────────
-
-interface Props {
-  onConflictsFound: (conflicts: ConflictData, formData: MassiveFormData) => void;
-  onProcessingComplete: (result: ProcessingResult) => void;
-  loading: boolean;
-  setLoading: (loading: boolean) => void;
+interface PendingReview {
+  params: MassiveLoadParams;
+  check: ConflictCheckResult;
+  labels: Record<string, string>;
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
+interface DiagramMassiveFormProps {
+  /** Se llama al terminar el procesamiento, con los nombres con legajo de los empleados de la carga. */
+  onCompleted: (result: ProcessingResult, labels: Record<string, string>) => void;
+}
 
-export function DiagramMassiveForm({ onConflictsFound, loading, setLoading }: Props) {
+function buildParams(data: MassiveLoadFormValues): MassiveLoadParams {
+  const base = {
+    employeeIds: data.employees.map((employee) => employee.id),
+    ranges: data.dateRanges.map((range) => ({ from: dateToIsoDay(range.from), to: dateToIsoDay(range.to) })),
+  };
+  return data.mode === 'diagram'
+    ? {
+        ...base,
+        mode: 'diagram',
+        workDiagramId: data.workDiagramId,
+        activeNoveltyId: data.activeNoveltyId || undefined,
+      }
+    : { ...base, mode: 'novelty', diagramTypeId: data.diagramTypeId };
+}
+
+/** Formulario único de la carga masiva: qué cargar, con qué novedad o diagrama, en qué fechas y para quiénes. */
+export function DiagramMassiveForm({ onCompleted }: DiagramMassiveFormProps) {
   // Procesar la carga masiva exige `massive_diagram:create`; con solo `view` se ve el formulario pero no se puede enviar.
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('empleados', 'massive_diagram', 'create');
-  // ── Novelty state (only used in diagram mode) ──────────────────────────────
-  const [noveltyData, setNoveltyData] = useState<NoveltyData | null>(null);
-  const [showActiveNoveltySelect, setShowActiveNoveltySelect] = useState(false);
+  const [review, setReview] = useState<PendingReview | null>(null);
 
-  // ── Filter state ──────────────────────────────────────────────────────────
-  const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
-  const [activeFilters, setActiveFilters] = useState<(keyof FilterState)[]>([]);
-  const [showFilters, setShowFilters] = useState(false);
+  const catalogsQuery = useMassiveLoadCatalogs();
+  const catalogs = catalogsQuery.data;
 
-  // ── Search / pagination state ─────────────────────────────────────────────
-  const [searchTrigger, setSearchTrigger] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [accumulatedEmployees, setAccumulatedEmployees] = useState<DiagramEmployee[]>([]);
+  // Hoy en hora argentina, como fecha local a medianoche (lo que devuelve el calendario).
+  const today = isoDayToDate(argentinaDate());
 
-  // ── Form ──────────────────────────────────────────────────────────────────
-  const form = useForm<FormData>({
-    resolver: zodResolver(formSchema),
+  const form = useForm<MassiveLoadFormValues>({
+    resolver: zodResolver(massiveLoadFormSchema),
     defaultValues: {
       mode: 'diagram',
-      employeeIds: [],
+      employees: [],
       workDiagramId: '',
       activeNoveltyId: '',
       diagramTypeId: '',
-      dateRange: {
-        // Hoy en hora argentina, como fecha local a medianoche (lo que devuelve el calendario)
-        from: moment(argentinaDate(), 'YYYY-MM-DD').toDate(),
-        to: moment(argentinaDate(), 'YYYY-MM-DD').add(7, 'days').toDate(),
-      },
+      dateRanges: [{ from: today, to: moment(today).add(7, 'days').toDate() }],
     },
   });
 
   const mode = form.watch('mode');
+  const workDiagramId = form.watch('workDiagramId');
+  const employees = form.watch('employees');
+  const dateRanges = form.watch('dateRanges');
 
-  // ── Work diagrams query (diagram mode) ────────────────────────────────────
-  const { data: workDiagrams = [], isLoading: isLoadingDiagrams } = useQuery({
-    queryKey: ['massive-work-diagrams'],
-    queryFn: getActiveWorkDiagrams,
-    staleTime: 5 * 60 * 1000,
+  const workDiagrams = catalogs?.workDiagrams ?? [];
+  const selectedWorkDiagram = workDiagrams.find((workDiagram) => workDiagram.id === workDiagramId);
+  const dayCount = dateRanges.reduce(
+    (sum, range) => sum + inclusiveDays({ from: dateToIsoDay(range.from), to: dateToIsoDay(range.to) }),
+    0
+  );
+
+  const checkMutation = useMutation({
+    mutationFn: (params: MassiveLoadParams) => checkMassiveConflicts(params),
+    onError: (error: Error) => {
+      logger.error('Error al verificar los conflictos', { data: { error } });
+      toast.error(error.message || 'No se pudieron verificar los conflictos. Volvé a intentar.');
+    },
   });
 
-  // ── Diagram types query (novelty mode) ────────────────────────────────────
-  const { data: diagramTypes = [], isLoading: isLoadingDiagramTypes } = useQuery({
-    queryKey: ['massive-diagram-types'],
-    queryFn: getActiveDiagramTypes,
-    staleTime: 5 * 60 * 1000,
-  });
+  const handleSubmit = (data: MassiveLoadFormValues) => {
+    const params = buildParams(data);
+    const labels = Object.fromEntries(data.employees.map((employee) => [employee.id, employee.label]));
+    checkMutation.mutate(params, { onSuccess: (check) => setReview({ params, check, labels }) });
+  };
 
-  // ── Employee search query ─────────────────────────────────────────────────
-  const searchParams = useMemo(
-    () => ({
-      firstname: filters.firstname || undefined,
-      lastname: filters.lastname || undefined,
-      positions: filters.position.length > 0 ? filters.position : undefined,
-      workflows: filters.workflow.length > 0 ? filters.workflow : undefined,
-      costCenters: filters.costCenter.length > 0 ? filters.costCenter : undefined,
-      covenants: filters.covenant.length > 0 ? filters.covenant : undefined,
-      guilds: filters.guild.length > 0 ? filters.guild : undefined,
-      categories: filters.category.length > 0 ? filters.category : undefined,
-      contractors: filters.contractors.length > 0 ? filters.contractors : undefined,
-      page: currentPage,
-      pageSize: 100,
-    }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [searchTrigger, currentPage]
-  );
+  const handleModeChange = (nextMode: MassiveMode) => {
+    form.setValue('mode', nextMode);
+    // Los campos del otro modo no deben arrastrar valores ni errores.
+    form.setValue('workDiagramId', '');
+    form.setValue('activeNoveltyId', '');
+    form.setValue('diagramTypeId', '');
+    form.clearErrors(['workDiagramId', 'activeNoveltyId', 'diagramTypeId']);
+    // El diagrama de trabajo admite un solo rango: el ciclo se cuenta desde su primer día.
+    if (nextMode === 'diagram' && form.getValues('dateRanges').length > 1) {
+      form.setValue('dateRanges', [form.getValues('dateRanges')[0]]);
+    }
+  };
 
-  const { data: employeeResult, isFetching: isSearching } = useQuery({
-    queryKey: ['massive-employees', searchParams],
-    queryFn: () => searchEmployeeDiagrams(searchParams),
-    enabled: searchTrigger > 0,
-    staleTime: 0,
-  });
+  const handleWorkDiagramChange = (id: string) => {
+    form.setValue('workDiagramId', id, { shouldValidate: form.formState.isSubmitted });
+    // Igual que el servidor: si no se elige otra, se usa la primera novedad activa configurada.
+    const firstActive = workDiagrams.find((workDiagram) => workDiagram.id === id)?.activeNovelties[0];
+    form.setValue('activeNoveltyId', firstActive?.id ?? '', { shouldValidate: form.formState.isSubmitted });
+  };
 
-  // ── Derived state ─────────────────────────────────────────────────────────
-  const employees = useMemo<DiagramEmployee[]>(() => {
-    if (!employeeResult) return accumulatedEmployees;
-    if (currentPage === 1) return employeeResult.data;
-    const existingIds = new Set(accumulatedEmployees.map((e) => e.value));
-    const newEmployees = employeeResult.data.filter((e) => !existingIds.has(e.value));
-    return [...accumulatedEmployees, ...newEmployees];
-  }, [employeeResult, currentPage, accumulatedEmployees]);
+  const handleEmployeesChange = (selected: EmployeeOption[]) => {
+    form.setValue('employees', selected, { shouldValidate: form.formState.isSubmitted });
+  };
 
-  const hasMoreData = employeeResult?.hasMore ?? false;
-  const hasSearched = searchTrigger > 0;
-
-  const watchedValues = form.watch();
-  const employeeCount = watchedValues.employeeIds?.length ?? 0;
-  const dateRange = watchedValues.dateRange;
-  const days = dateRange?.from && dateRange?.to ? daysBetween(dateRange.from, dateRange.to) + 1 : 0;
-  const totalRecords = employeeCount * days;
-  const estimatedTime = `${Math.ceil(totalRecords / 1000) * 2} seg`;
-
-  // ── Handlers ──────────────────────────────────────────────────────────────
-
-  const handleModeChange = useCallback(
-    (newMode: 'diagram' | 'novelty') => {
-      form.setValue('mode', newMode);
-      // Reset mode-specific fields so validation no arrastra estado del otro modo
-      form.setValue('workDiagramId', '');
-      form.setValue('activeNoveltyId', '');
-      form.setValue('diagramTypeId', '');
-      form.clearErrors(['workDiagramId', 'activeNoveltyId', 'diagramTypeId']);
-      setNoveltyData(null);
-      setShowActiveNoveltySelect(false);
-      // Quitar el filtro de workflow que se auto-aplica en modo diagrama
-      if (filters.workflow.length > 0) {
-        const cleared = { ...filters, workflow: [] };
-        setFilters(cleared);
-        setActiveFilters(activeFilters.filter((f) => f !== 'workflow'));
-      }
-    },
-    [form, filters, activeFilters]
-  );
-
-  const handleWorkDiagramChange = useCallback(
-    async (diagramId: string) => {
-      form.setValue('workDiagramId', diagramId);
-      form.setValue('activeNoveltyId', '');
-      setNoveltyData(null);
-      setShowActiveNoveltySelect(false);
-
-      if (!diagramId) return;
-
-      try {
-        const data = await getWorkDiagramNovelties(diagramId);
-        setNoveltyData(data);
-        setShowActiveNoveltySelect(data.activeNovelties.length > 1);
-
-        // Auto-set activeNoveltyId when there's exactly 1 option
-        if (data.activeNovelties.length === 1) {
-          form.setValue('activeNoveltyId', data.activeNovelties[0].diagram_type_id);
+  if (catalogsQuery.isError) {
+    return (
+      <StateBlock
+        variant="error"
+        title="No se pudieron cargar los diagramas y las novedades"
+        description="Revisá la conexión e intentá de nuevo."
+        action={
+          <Button type="button" variant="outline" onClick={() => catalogsQuery.refetch()}>
+            Reintentar
+          </Button>
         }
-
-        // Auto-set workflow filter to narrow down employees
-        const newFilters = { ...filters, workflow: [diagramId] };
-        setFilters(newFilters);
-        if (!activeFilters.includes('workflow')) {
-          setActiveFilters([...activeFilters, 'workflow']);
-        }
-      } catch (error) {
-        logger.error('Error loading diagram novelties', { data: { error } });
-        toast.error('Error al cargar las novedades del diagrama');
-      }
-    },
-    [filters, activeFilters, form]
-  );
-
-  const handleFilterSubmit = useCallback(() => {
-    setCurrentPage(1);
-    setAccumulatedEmployees([]);
-    setSearchTrigger((prev) => prev + 1);
-  }, []);
-
-  const loadMoreData = useCallback(() => {
-    setAccumulatedEmployees(employees);
-    setCurrentPage((prev) => prev + 1);
-    setSearchTrigger((prev) => prev + 1);
-  }, [employees]);
-
-  const clearAllFilters = useCallback(() => {
-    const resetFilters = { ...EMPTY_FILTERS, workflow: filters.workflow };
-    setFilters(resetFilters);
-    setActiveFilters(activeFilters.filter((f) => f === 'workflow'));
-    setCurrentPage(1);
-    setAccumulatedEmployees([]);
-    setSearchTrigger(0);
-    form.setValue('employeeIds', []);
-  }, [filters.workflow, activeFilters, form]);
-
-  const handleEmployeeToggle = useCallback(
-    (employeeId: string) => {
-      const current = form.getValues('employeeIds');
-      if (current.includes(employeeId)) {
-        form.setValue(
-          'employeeIds',
-          current.filter((id) => id !== employeeId)
-        );
-      } else {
-        if (current.length >= MAX_EMPLOYEES) {
-          toast.warning(`Máximo ${MAX_EMPLOYEES} empleados permitidos`);
-          return;
-        }
-        form.setValue('employeeIds', [...current, employeeId]);
-      }
-    },
-    [form]
-  );
-
-  const handleVerifyAndSubmit = useCallback(
-    async (data: FormData) => {
-      setLoading(true);
-      try {
-        // Fecha LOCAL elegida en el calendario: toISOString() la corría un día de noche (UTC-3)
-        const dateFrom = moment(data.dateRange.from).format('YYYY-MM-DD');
-        const dateTo = moment(data.dateRange.to).format('YYYY-MM-DD');
-
-        if (data.mode === 'diagram') {
-          const result = await checkDiagramConflicts({
-            employeeIds: data.employeeIds,
-            workDiagramId: data.workDiagramId!,
-            dateFrom,
-            dateTo,
-            activeNoveltyId: data.activeNoveltyId || undefined,
-          });
-
-          const conflictData: ConflictData = {
-            operationConflicts: result.conflicts.filter((c) => c.conflict_type === 'IN_USE'),
-            simpleConflicts: result.conflicts.filter((c) => c.conflict_type === 'CAN_UPDATE'),
-          };
-
-          onConflictsFound(conflictData, {
-            mode: 'diagram',
-            employeeIds: data.employeeIds,
-            workDiagramId: data.workDiagramId!,
-            activeNoveltyId: data.activeNoveltyId,
-            dateRange: { from: data.dateRange.from, to: data.dateRange.to },
-          });
-        } else {
-          const result = await checkNoveltyConflicts({
-            employeeIds: data.employeeIds,
-            diagramTypeId: data.diagramTypeId!,
-            dateFrom,
-            dateTo,
-          });
-
-          const conflictData: ConflictData = {
-            operationConflicts: result.conflicts.filter((c) => c.conflict_type === 'IN_USE'),
-            simpleConflicts: result.conflicts.filter((c) => c.conflict_type === 'CAN_UPDATE'),
-          };
-
-          onConflictsFound(conflictData, {
-            mode: 'novelty',
-            employeeIds: data.employeeIds,
-            diagramTypeId: data.diagramTypeId!,
-            dateRange: { from: data.dateRange.from, to: data.dateRange.to },
-          });
-        }
-      } catch (error) {
-        logger.error('Error verifying conflicts', { data: { error } });
-        toast.error('Error al verificar conflictos. Intente nuevamente.');
-      } finally {
-        setLoading(false);
-      }
-    },
-    [setLoading, onConflictsFound]
-  );
-
-  // ── Render ────────────────────────────────────────────────────────────────
-
-  const submitLabel = mode === 'novelty' ? 'Verificar y Cargar Novedad' : 'Verificar y Crear Diagramas';
+      />
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      {/* ── Top form: mode selector + main selects + date range ── */}
+    <>
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(handleVerifyAndSubmit)} className="space-y-6">
-          <FormField
-            control={form.control}
-            name="mode"
-            render={({ field }) => <MassiveModeSelector value={field.value} onChange={handleModeChange} />}
-          />
+        <form onSubmit={form.handleSubmit(handleSubmit)} className="flex max-w-3xl flex-col gap-8" noValidate>
+          <LoadSection step={1} title="Qué se carga">
+            <LoadModeSelector
+              value={mode}
+              onChange={handleModeChange}
+              options={MODE_OPTIONS}
+              ariaLabel="Tipo de carga masiva"
+            />
+          </LoadSection>
 
-          {/* ─── Diagram mode: work diagram select ─── */}
-          {mode === 'diagram' && (
-            <FormField
-              control={form.control}
-              name="workDiagramId"
-              render={({ field }) => (
-                <FormItem>
-                  <label className="text-sm font-medium leading-none">Diagrama de trabajo</label>
-                  {isLoadingDiagrams ? (
-                    <Skeleton className="h-10 w-full" />
-                  ) : (
-                    <Select value={field.value ?? ''} onValueChange={(val) => handleWorkDiagramChange(val)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar diagrama..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {workDiagrams.map((wd) => (
-                          <SelectItem key={wd.id} value={wd.id}>
-                            {wd.name}
-                            {wd.active_working_days != null && wd.inactive_working_days != null && (
-                              <span className="ml-2 text-muted-foreground text-xs">
-                                ({wd.active_working_days}x{wd.inactive_working_days})
-                              </span>
-                            )}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+          <LoadSection
+            step={2}
+            title={mode === 'diagram' ? 'Diagrama de trabajo' : 'Novedad a aplicar'}
+            description={
+              mode === 'diagram'
+                ? 'Los días activos e inactivos se alternan desde el primer día del rango.'
+                : 'Se carga la misma novedad en cada día de los rangos.'
+            }
+          >
+            {mode === 'diagram' ? (
+              <div className="flex flex-col gap-4">
+                <FormField
+                  control={form.control}
+                  name="workDiagramId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Diagrama de trabajo</FormLabel>
+                      {catalogsQuery.isPending ? (
+                        <Skeleton className="h-10 w-full" />
+                      ) : (
+                        <Select value={field.value} onValueChange={handleWorkDiagramChange}>
+                          <FormControl>
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Elegí un diagrama de trabajo" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {workDiagrams.map((workDiagram) => (
+                              <SelectItem key={workDiagram.id} value={workDiagram.id}>
+                                {workDiagram.name}
+                                {workDiagram.activeDays != null && workDiagram.inactiveDays != null ? (
+                                  <span className="text-muted-foreground ml-2 text-xs">
+                                    ({workDiagram.activeDays}x{workDiagram.inactiveDays})
+                                  </span>
+                                ) : null}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      <FormMessage />
+                    </FormItem>
                   )}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
+                />
 
-          {/* ─── Diagram mode: active novelty select (only when > 1 option) ─── */}
-          {mode === 'diagram' && showActiveNoveltySelect && noveltyData && (
+                {selectedWorkDiagram && selectedWorkDiagram.activeNovelties.length > 1 ? (
+                  <FormField
+                    control={form.control}
+                    name="activeNoveltyId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Novedad de los días activos</FormLabel>
+                        <NoveltySelect
+                          options={selectedWorkDiagram.activeNovelties}
+                          value={field.value}
+                          onChange={field.onChange}
+                          placeholder="Elegí la novedad de los días activos"
+                          ariaLabel="Novedad de los días activos"
+                        />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ) : null}
+
+                {selectedWorkDiagram ? (
+                  <dl className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+                    {selectedWorkDiagram.activeNovelties.length === 1 ? (
+                      <div className="flex items-center gap-2">
+                        <dt className="text-muted-foreground">Días activos:</dt>
+                        <dd>
+                          <NoveltyBadge
+                            name={selectedWorkDiagram.activeNovelties[0].name}
+                            color={selectedWorkDiagram.activeNovelties[0].color}
+                          />
+                        </dd>
+                      </div>
+                    ) : null}
+                    {selectedWorkDiagram.inactiveNovelty ? (
+                      <div className="flex items-center gap-2">
+                        <dt className="text-muted-foreground">Días inactivos:</dt>
+                        <dd className="flex items-center gap-1.5">
+                          <NoveltyDot color={selectedWorkDiagram.inactiveNovelty.color} />
+                          {selectedWorkDiagram.inactiveNovelty.name}
+                        </dd>
+                      </div>
+                    ) : null}
+                    {selectedWorkDiagram.activeNovelties.length === 0 ? (
+                      <p role="alert" className="text-destructive">
+                        Este diagrama no tiene una novedad activa configurada.
+                      </p>
+                    ) : null}
+                  </dl>
+                ) : null}
+              </div>
+            ) : (
+              <FormField
+                control={form.control}
+                name="diagramTypeId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Novedad</FormLabel>
+                    <NoveltySelect
+                      options={catalogs?.diagramTypes ?? []}
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Elegí una novedad"
+                      isLoading={catalogsQuery.isPending}
+                      ariaLabel="Novedad"
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+          </LoadSection>
+
+          <LoadSection
+            step={3}
+            title={mode === 'diagram' ? 'Rango de fechas' : 'Rangos de fechas'}
+            description="Desde hoy en adelante."
+          >
+            <DateRangeList
+              maxRanges={mode === 'diagram' ? 1 : MASSIVE_MAX_RANGES}
+              maxTotalDays={MASSIVE_MAX_TOTAL_DAYS}
+              minDate={today}
+            />
+          </LoadSection>
+
+          <LoadSection step={4} title="Empleados" description={`Hasta ${MASSIVE_MAX_EMPLOYEES} por carga.`}>
             <FormField
               control={form.control}
-              name="activeNoveltyId"
-              render={({ field }) => (
+              name="employees"
+              render={({ fieldState }) => (
                 <FormItem>
-                  <label className="text-sm font-medium leading-none">Novedad activa</label>
-                  <Select value={field.value ?? ''} onValueChange={field.onChange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar novedad activa..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {noveltyData.activeNovelties.map((novelty) => (
-                        <SelectItem key={novelty.diagram_type_id} value={novelty.diagram_type_id}>
-                          <span className="flex items-center gap-2">
-                            <span
-                              className="inline-block h-3 w-3 rounded-full"
-                              style={{ backgroundColor: novelty.color ?? undefined }}
-                            />
-                            {novelty.name}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <EmployeeChips
+                    value={employees}
+                    onChange={handleEmployeesChange}
+                    max={MASSIVE_MAX_EMPLOYEES}
+                    invalid={Boolean(fieldState.error)}
+                    withFilters
+                    workflowOptions={workDiagrams.map((workDiagram) => ({
+                      value: workDiagram.id,
+                      label: workDiagram.name,
+                    }))}
+                    defaultWorkflowId={mode === 'diagram' && workDiagramId ? workDiagramId : undefined}
+                    ariaLabel="Empleados de la carga"
+                  />
                   <FormMessage />
                 </FormItem>
               )}
             />
-          )}
+          </LoadSection>
 
-          {/* ─── Diagram mode: novelty info badges ─── */}
-          {mode === 'diagram' && noveltyData && (
-            <div className="flex flex-wrap gap-2">
-              {noveltyData.activeNovelties.length === 1 && (
-                <Badge
-                  style={{ backgroundColor: noveltyData.activeNovelties[0].color ?? undefined }}
-                  className="text-white"
-                >
-                  Activo: {noveltyData.activeNovelties[0].name}
-                </Badge>
-              )}
-              {noveltyData.inactiveNovelty && (
-                <Badge
-                  style={{ backgroundColor: noveltyData.inactiveNovelty.color ?? undefined }}
-                  className="text-white"
-                >
-                  Inactivo: {noveltyData.inactiveNovelty.name}
-                </Badge>
-              )}
-            </div>
-          )}
+          <LoadPreview employeeCount={employees.length} dayCount={dayCount} />
 
-          {/* ─── Novelty mode: single diagram_type select ─── */}
-          {mode === 'novelty' && (
-            <FormField
-              control={form.control}
-              name="diagramTypeId"
-              render={({ field }) => (
-                <FormItem>
-                  <label className="text-sm font-medium leading-none">Novedad</label>
-                  {isLoadingDiagramTypes ? (
-                    <Skeleton className="h-10 w-full" />
-                  ) : (
-                    <Select value={field.value ?? ''} onValueChange={field.onChange}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar novedad..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {diagramTypes.map((dt) => (
-                          <SelectItem key={dt.id} value={dt.id}>
-                            <span className="flex items-center gap-2">
-                              <span
-                                className="inline-block h-3 w-3 rounded-full"
-                                style={{ backgroundColor: dt.color }}
-                              />
-                              {dt.name}
-                              {dt.short_description && (
-                                <span className="ml-2 text-muted-foreground text-xs">· {dt.short_description}</span>
-                              )}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          {canCreate ? (
+            <Button
+              type="submit"
+              size="lg"
+              className="w-full sm:w-auto sm:self-start"
+              disabled={checkMutation.isPending}
+            >
+              {checkMutation.isPending ? 'Verificando…' : 'Revisar y confirmar'}
+            </Button>
+          ) : (
+            <p className="text-muted-foreground text-sm">No tenés permiso para realizar cargas masivas.</p>
           )}
-
-          {/* ─── Date range picker + day counter ─── */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium leading-none">Rango de fechas</span>
-              {days > 0 && (
-                <Badge variant="secondary" className="font-mono">
-                  {days} {days === 1 ? 'día' : 'días'}
-                </Badge>
-              )}
-            </div>
-            <FormItemDatePicker
-              name="dateRange"
-              control={form.control}
-              label=""
-              description="Selecciona el rango de fechas para la carga masiva"
-              disabled={(date) => calendarDay(date) < argentinaDate()}
-            />
-          </div>
         </form>
       </Form>
 
-      {/* ── Employee filters ── */}
-      <EmployeeFilterPanel
-        filters={filters}
-        activeFilters={activeFilters}
-        showFilters={showFilters}
-        isSearching={isSearching}
-        onFiltersChange={setFilters}
-        onActiveFiltersChange={setActiveFilters}
-        onToggleFilters={() => setShowFilters((prev) => !prev)}
-        onSubmit={handleFilterSubmit}
-        onClearAll={clearAllFilters}
-      />
-
-      {/* ── Employee grid ── */}
-      <EmployeeSelectionGrid
-        employees={employees}
-        selectedIds={form.watch('employeeIds')}
-        maxEmployees={MAX_EMPLOYEES}
-        isSearching={isSearching}
-        hasSearched={hasSearched}
-        hasMoreData={hasMoreData}
-        onToggle={handleEmployeeToggle}
-        onSelectAll={(ids) => form.setValue('employeeIds', ids)}
-        onClearSelection={() => form.setValue('employeeIds', [])}
-        onLoadMore={loadMoreData}
-      />
-
-      {/* ── Employee selection error ── */}
-      {form.formState.errors.employeeIds && (
-        <p className="text-sm text-destructive">{form.formState.errors.employeeIds.message}</p>
-      )}
-
-      {/* ── Bottom form: summary + submit (only when employees loaded) ── */}
-      {employees.length > 0 && (
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleVerifyAndSubmit)} className="space-y-6">
-            {employeeCount > 0 && days > 0 && (
-              <MassiveOperationSummary
-                employeeCount={employeeCount}
-                days={days}
-                totalRecords={totalRecords}
-                estimatedTime={estimatedTime}
-              />
-            )}
-
-            {canCreate ? (
-              <Button type="submit" className="w-full" disabled={loading || employeeCount === 0}>
-                {loading ? 'Verificando...' : submitLabel}
-              </Button>
-            ) : (
-              <p className="text-muted-foreground text-sm">No tenés permiso para realizar cargas masivas.</p>
-            )}
-          </form>
-        </Form>
-      )}
-    </div>
+      {review ? (
+        <ConflictReviewSheet
+          open
+          onOpenChange={(open) => {
+            if (!open) setReview(null);
+          }}
+          params={review.params}
+          check={review.check}
+          employeeLabels={review.labels}
+          onProcessed={(result) => {
+            setReview(null);
+            onCompleted(result, review.labels);
+          }}
+        />
+      ) : null}
+    </>
   );
 }

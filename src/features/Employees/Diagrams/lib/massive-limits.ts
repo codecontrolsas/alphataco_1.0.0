@@ -12,3 +12,15 @@ export const MASSIVE_MAX_DAYS_RANGE = 90;
 
 /** Máximo de filas (empleado × día) que acepta una sola llamada de alta/modificación de novedades. */
 export const DIAGRAM_MUTATION_MAX_ROWS = 10_000;
+
+/** Máximo de rangos de fechas por carga (masiva por novedad e individual). */
+export const MASSIVE_MAX_RANGES = 10;
+
+/**
+ * Máximo de días (inclusivos) entre todos los rangos de una carga masiva. Es el mismo tope de siempre
+ * (`MASSIVE_MAX_DAYS_RANGE` es una diferencia, por eso suma 1): varios rangos no permiten saltearlo.
+ */
+export const MASSIVE_MAX_TOTAL_DAYS = MASSIVE_MAX_DAYS_RANGE + 1;
+
+/** Máximo de días (inclusivos) entre todos los rangos de una carga individual (tope de consulta del servidor). */
+export const INDIVIDUAL_MAX_TOTAL_DAYS = 366;

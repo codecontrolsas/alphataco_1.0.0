@@ -1,238 +1,196 @@
-import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Calendar, FileText, MessageSquare, User } from 'lucide-react';
+import { Eye } from 'lucide-react';
 import moment from 'moment';
+import { DiagramCell } from '../components/DiagramCell';
 import type { DiagramReportListItem } from './actions.server';
 
 // ============================================================================
 // COLUMNS HIDDEN BY DEFAULT
 // ============================================================================
 
-export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['created_at', 'cuil', 'comments'];
+export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['created_at', 'cuil', 'comments', 'day', 'month', 'year'];
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+/** `DD/MM/YYYY` de la fecha de la novedad (`YYYY-MM-DD`, sin zona horaria). */
+export function formatReportDate(date: string): string {
+  return moment.utc(date, 'YYYY-MM-DD').format('DD/MM/YYYY');
+}
+
+/** `Apellido Nombre` del empleado de una fila. */
+export function reportEmployeeName(item: DiagramReportListItem): string {
+  return `${item.employee.lastname} ${item.employee.firstname}`.trim();
+}
 
 // ============================================================================
 // COLUMN DEFINITIONS
 // ============================================================================
 
-export function getColumns(): ColumnDef<DiagramReportListItem>[] {
-  return [
-    // ── Select ──────────────────────────────────────────────────────────────
-    {
-      id: 'select',
-      header: ({ table }) => (
-        <Checkbox
-          checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && 'indeterminate')}
-          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label="Seleccionar todo"
-        />
-      ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Seleccionar fila"
-        />
-      ),
-      enableSorting: false,
-      enableHiding: false,
-      meta: { title: '', excludeFromExport: true },
-    },
+interface ColumnsHandlers {
+  /** Abre el detalle (novedad, edición rápida si hay permiso e historial) de una fila. */
+  onOpenDetail: (item: DiagramReportListItem) => void;
+}
 
-    // ── Legajo (file number) — columna separada OBLIGATORIA ─────────────────
+export function getColumns({ onOpenDetail }: ColumnsHandlers): ColumnDef<DiagramReportListItem>[] {
+  return [
+    // ── Legajo (file number) — columna separada OBLIGATORIA, antes del nombre ──
     {
       id: 'fileNumber',
-      accessorFn: (row) => row.employees?.file ?? '',
+      accessorFn: (row) => row.employee.fileNumber,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Legajo" />,
       meta: { title: 'Legajo' },
-      cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <span className="font-medium tabular-nums">{row.original.employees?.file ?? '-'}</span>
-        </div>
-      ),
+      cell: ({ row }) => <span className="font-medium tabular-nums">{row.original.employee.fileNumber}</span>,
     },
 
-    // ── Empleado (lastname + firstname) ───────────────────────────────────────
+    // ── Empleado (apellido + nombre) ──────────────────────────────────────────
     {
       id: 'employee',
-      accessorFn: (row) => `${row.employees?.lastname ?? ''} ${row.employees?.firstname ?? ''}`.trim(),
+      accessorFn: (row) => reportEmployeeName(row),
       header: ({ column }) => <DataTableColumnHeader column={column} title="Empleado" />,
       meta: { title: 'Empleado' },
-      cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <User className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <span className="font-medium">
-            {row.original.employees?.lastname} {row.original.employees?.firstname}
-          </span>
-        </div>
-      ),
-      filterFn: (row, _id, value: string[]) => {
-        const employeeId = row.original.employee_id;
-        if (employeeId == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(employeeId);
-      },
+      cell: ({ row }) => <span className="font-medium">{reportEmployeeName(row.original)}</span>,
+      filterFn: (row, _id, value: string[]) => value.includes(row.original.employee.id),
     },
 
     // ── CUIL ─────────────────────────────────────────────────────────────────
     {
       id: 'cuil',
-      accessorFn: (row) => row.employees?.cuil ?? '',
+      accessorFn: (row) => row.employee.cuil,
       header: ({ column }) => <DataTableColumnHeader column={column} title="CUIL" />,
       meta: { title: 'CUIL' },
-      cell: ({ row }) => <span className="tabular-nums">{row.original.employees?.cuil ?? '-'}</span>,
+      cell: ({ row }) => <span className="tabular-nums">{row.original.employee.cuil}</span>,
     },
 
-    // ── Puesto (company position — FK) ────────────────────────────────────────
+    // ── Puesto (company position — FK nullable) ───────────────────────────────
     {
       id: 'companyPosition',
-      accessorFn: (row) => row.employees?.company_positions?.name ?? '',
+      accessorFn: (row) => row.position?.name ?? '',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Puesto" />,
       meta: { title: 'Puesto' },
-      cell: ({ row }) => <span className="text-sm">{row.original.employees?.company_positions?.name ?? '-'}</span>,
+      cell: ({ row }) => <span className="text-sm">{row.original.position?.name ?? '-'}</span>,
       filterFn: (row, _id, value: string[]) => {
-        const positionId = row.original.employees?.company_positions?.id;
+        const positionId = row.original.position?.id;
         if (positionId == null) return value.includes(NULL_FILTER_VALUE);
         return value.includes(positionId);
       },
     },
 
-    // ── Tipo de novedad — nombre completo (FK) ─────────────────────────────
+    // ── Novedad: casilla de color + nombre (el color y la sigla son los del calendario) ──
     {
       id: 'diagramType',
-      accessorFn: (row) => row.diagram_type_employees_diagram_diagram_typeTodiagram_type?.name ?? '',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo de novedad" />,
-      meta: { title: 'Tipo de novedad' },
+      accessorFn: (row) => row.diagramType.name ?? row.diagramType.shortDescription,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Novedad" />,
+      meta: { title: 'Novedad' },
       cell: ({ row }) => {
-        const dt = row.original.diagram_type_employees_diagram_diagram_typeTodiagram_type;
+        const { diagramType, date } = row.original;
         return (
           <div className="flex items-center gap-2">
-            <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="text-sm">{dt?.name ?? '-'}</span>
+            <DiagramCell
+              size="sm"
+              date={date}
+              diagramType={{
+                name: diagramType.name,
+                short_description: diagramType.shortDescription,
+                color: diagramType.color,
+              }}
+              onClick={() => onOpenDetail(row.original)}
+            />
+            <span className="text-sm">{diagramType.name ?? diagramType.shortDescription}</span>
           </div>
         );
       },
-      filterFn: (row, _id, value: string[]) => {
-        const dtId = row.original.diagram_type;
-        if (dtId == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(dtId);
-      },
-    },
-
-    // ── Novedad abreviada (badge con color) ───────────────────────────────────
-    {
-      id: 'shortDescription',
-      accessorFn: (row) => row.diagram_type_employees_diagram_diagram_typeTodiagram_type?.short_description ?? '',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Novedad" />,
-      meta: { title: 'Novedad (abrev.)' },
-      enableSorting: false,
-      cell: ({ row }) => {
-        const dt = row.original.diagram_type_employees_diagram_diagram_typeTodiagram_type;
-        if (!dt) return <span className="text-muted-foreground">-</span>;
-
-        return (
-          <Badge
-            variant="outline"
-            style={{
-              color: dt.color,
-              borderColor: dt.color,
-              backgroundColor: `${dt.color}18`,
-            }}
-          >
-            {dt.short_description}
-          </Badge>
-        );
-      },
+      filterFn: (row, _id, value: string[]) => value.includes(row.original.diagramType.id),
     },
 
     // ── Comentario (texto libre, cargado desde Cargar Diagrama) ───────────────
     {
       id: 'comments',
-      accessorKey: 'comments',
+      accessorFn: (row) => row.comments ?? '',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Comentario" />,
       meta: { title: 'Comentario' },
       cell: ({ row }) => {
         const comment = row.original.comments;
         if (!comment) return <span className="text-muted-foreground">-</span>;
         return (
-          <div className="flex max-w-[240px] items-center gap-2" title={comment}>
-            <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="truncate text-sm">{comment}</span>
-          </div>
+          <span className="block max-w-[240px] truncate text-sm" title={comment}>
+            {comment}
+          </span>
         );
       },
     },
 
-    // ── Fecha (computed from day/month/year Decimal) ──────────────────────────
+    // ── Fecha de la novedad (se arma en el servidor desde day/month/year) ─────
     {
       id: 'date',
-      accessorFn: (row) => {
-        const d = Number(row.day);
-        const m = Number(row.month);
-        const y = Number(row.year);
-        const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-        return dateStr;
-      },
+      accessorFn: (row) => row.date,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha" />,
       meta: { title: 'Fecha' },
-      enableSorting: false,
-      cell: ({ row }) => {
-        const d = Number(row.original.day);
-        const m = Number(row.original.month);
-        const y = Number(row.original.year);
-        const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-        return (
-          <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="tabular-nums">{moment(dateStr, 'YYYY-MM-DD').format('DD/MM/YYYY')}</span>
-          </div>
-        );
-      },
+      cell: ({ row }) => <span className="tabular-nums">{formatReportDate(row.original.date)}</span>,
     },
 
     // ── Día ──────────────────────────────────────────────────────────────────
     {
       id: 'day',
-      accessorFn: (row) => Number(row.day),
+      accessorFn: (row) => row.day,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Día" />,
       meta: { title: 'Día' },
-      cell: ({ row }) => <span className="tabular-nums">{Number(row.original.day)}</span>,
+      cell: ({ row }) => <span className="tabular-nums">{row.original.day}</span>,
     },
 
     // ── Mes ──────────────────────────────────────────────────────────────────
     {
       id: 'month',
-      accessorFn: (row) => Number(row.month),
+      accessorFn: (row) => row.month,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Mes" />,
       meta: { title: 'Mes' },
-      cell: ({ row }) => <span className="tabular-nums">{Number(row.original.month)}</span>,
+      cell: ({ row }) => <span className="tabular-nums">{row.original.month}</span>,
     },
 
     // ── Año ──────────────────────────────────────────────────────────────────
     {
       id: 'year',
-      accessorFn: (row) => Number(row.year),
+      accessorFn: (row) => row.year,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Año" />,
       meta: { title: 'Año' },
-      cell: ({ row }) => <span className="tabular-nums">{Number(row.original.year)}</span>,
+      cell: ({ row }) => <span className="tabular-nums">{row.original.year}</span>,
     },
 
-    // ── Creado ───────────────────────────────────────────────────────────────
+    // ── Registrado ───────────────────────────────────────────────────────────
     {
       id: 'created_at',
-      accessorKey: 'created_at',
+      accessorFn: (row) => row.createdAt,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Registrado" />,
       meta: { title: 'Registrado' },
-      cell: ({ row }) =>
-        row.original.created_at ? (
-          <span className="text-sm text-muted-foreground tabular-nums">
-            {formatArgentinaDay(row.original.created_at)}
-          </span>
-        ) : (
-          <span className="text-muted-foreground">-</span>
-        ),
+      cell: ({ row }) => (
+        <span className="text-muted-foreground text-sm tabular-nums">{formatArgentinaDay(row.original.createdAt)}</span>
+      ),
+    },
+
+    // ── Acciones: el detalle lo ve cualquiera con acceso al reporte; la edición se gatea dentro del Sheet ──
+    {
+      id: 'actions',
+      header: () => <span className="sr-only">Acciones</span>,
+      meta: { title: 'Acciones', excludeFromExport: true },
+      enableSorting: false,
+      enableHiding: false,
+      cell: ({ row }) => (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          onClick={() => onOpenDetail(row.original)}
+          aria-label={`Ver detalle de la novedad de ${reportEmployeeName(row.original)} del ${formatReportDate(row.original.date)}`}
+        >
+          <Eye aria-hidden="true" className="size-4" />
+        </Button>
+      ),
     },
   ];
 }
