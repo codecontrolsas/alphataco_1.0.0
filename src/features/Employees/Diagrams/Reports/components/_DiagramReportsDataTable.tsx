@@ -1,5 +1,6 @@
 'use client';
 
+import { TooltipProvider } from '@/components/ui/tooltip';
 import {
   DataTable,
   type DataTableFacetedFilterConfig,
@@ -11,7 +12,7 @@ import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import type { LucideIcon } from 'lucide-react';
 import { CircleOff } from 'lucide-react';
-import moment from 'moment';
+import dynamic from 'next/dynamic';
 import { useCallback, useMemo, useState } from 'react';
 import {
   getDiagramReportSingleFacet,
@@ -19,7 +20,41 @@ import {
   getDiagramReportsPaginated,
   type DiagramReportListItem,
 } from '../actions.server';
-import { HIDDEN_COLUMNS_BY_DEFAULT, getColumns } from '../columns';
+import { HIDDEN_COLUMNS_BY_DEFAULT, formatReportDate, getColumns } from '../columns';
+import { PeriodFilter } from './_PeriodFilter';
+import { ReportTotals } from './_ReportTotals';
+
+// El Sheet (formulario, historial) solo hace falta al abrir una novedad: no entra al bundle de la tabla.
+const DiagramReportDetailSheet = dynamic(
+  () => import('./_DiagramReportDetailSheet').then((module) => module.DiagramReportDetailSheet),
+  { ssr: false }
+);
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+/** Filtros visibles de entrada (el resto se activa desde "Filtros"). */
+const DEFAULT_VISIBLE_FILTERS = ['diagramType', 'employee', 'fileNumber'];
+
+/** Todos los filtros de la tabla: uno por columna de datos. */
+const ALL_FILTER_IDS = [
+  'employee',
+  'diagramType',
+  'companyPosition',
+  'fileNumber',
+  'lastname',
+  'firstname',
+  'cuil',
+  'day',
+  'month',
+  'year',
+  'created_at',
+  'comments',
+];
+
+/** Clave base de React Query de la tabla: la usa el Sheet para refrescarla al editar una novedad. */
+const TABLE_QUERY_KEY = ['diagram-reports-paginated'] as const;
 
 // ============================================================================
 // TYPES
@@ -30,6 +65,8 @@ interface DiagramReportsDataTableProps {
   totalRows: number;
   searchParams: DataTableSearchParams;
   tableId: string;
+  /** Puede cambiar el tipo y el comentario de una novedad (se calcula en el servidor). */
+  canUpdate: boolean;
   initialColumnVisibility?: Record<string, boolean>;
   initialFilterVisibility?: Record<string, boolean>;
 }
@@ -55,6 +92,12 @@ function buildFkFacetResult(
   };
 }
 
+/** Un solo parámetro de texto de la URL (los filtros del DataTable llegan como string). */
+function singleParam(params: DataTableSearchParams, key: string): string | undefined {
+  const value = params[key];
+  return typeof value === 'string' && value !== '' ? value : undefined;
+}
+
 // ============================================================================
 // COMPONENT
 // ============================================================================
@@ -64,10 +107,11 @@ export default function _DiagramReportsDataTable({
   totalRows,
   searchParams,
   tableId,
+  canUpdate,
   initialColumnVisibility,
   initialFilterVisibility,
 }: DiagramReportsDataTableProps) {
-  // ─── Client-side navigation: reactive state for dependent queries ───────────
+  // ─── Client-side navigation: estado reactivo para totales, período y export ───
   const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
 
   const handleStateChange = useCallback((params: DataTableSearchParams) => {
@@ -77,8 +121,19 @@ export default function _DiagramReportsDataTable({
   // queryFn for client-side data fetching
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getDiagramReportsPaginated(params), []);
 
-  // Columns (static — no permissions needed for this table)
-  const columns = useMemo(() => getColumns(), []);
+  // ─── Detalle de una novedad (Sheet) ──────────────────────────────────────────
+  // La fila se conserva al cerrar para que el Sheet no se vacíe durante la animación.
+  const [detail, setDetail] = useState<{ item: DiagramReportListItem; open: boolean } | null>(null);
+
+  const handleOpenDetail = useCallback((item: DiagramReportListItem) => {
+    setDetail({ item, open: true });
+  }, []);
+
+  const handleDetailOpenChange = useCallback((open: boolean) => {
+    setDetail((current) => (current ? { ...current, open } : current));
+  }, []);
+
+  const columns = useMemo(() => getColumns({ onOpenDetail: handleOpenDetail }), [handleOpenDetail]);
 
   // Initial column visibility: merge defaults with saved preferences
   const mergedColumnVisibility = useMemo(() => {
@@ -89,28 +144,11 @@ export default function _DiagramReportsDataTable({
     return { ...defaults, ...(initialColumnVisibility ?? {}) };
   }, [initialColumnVisibility]);
 
-  // Default visible filters: top 3 most useful
-  const DEFAULT_VISIBLE_FILTERS = ['diagramType', 'employee', 'companyPosition'];
-
   const mergedFilterVisibility = useMemo(() => {
     if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
       return initialFilterVisibility;
     }
-    const allFilterIds = [
-      'employee',
-      'diagramType',
-      'companyPosition',
-      'fileNumber',
-      'lastname',
-      'firstname',
-      'cuil',
-      'day',
-      'month',
-      'year',
-      'created_at',
-      'comments',
-    ];
-    return Object.fromEntries(allFilterIds.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
+    return Object.fromEntries(ALL_FILTER_IDS.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
   }, [initialFilterVisibility]);
 
   // ─── fetchFacet factory for FK filters ─────────────────────────────────────
@@ -132,10 +170,10 @@ export default function _DiagramReportsDataTable({
         fetchFacet: makeFkFetchFacet('employee'),
       },
 
-      // ── FK: Tipo de novedad ────────────────────────────────────────────────
+      // ── FK: Novedad ────────────────────────────────────────────────────────
       {
         columnId: 'diagramType',
-        title: 'Tipo de novedad',
+        title: 'Novedad',
         fetchFacet: makeFkFetchFacet('diagramType'),
       },
 
@@ -192,7 +230,7 @@ export default function _DiagramReportsDataTable({
         placeholder: 'Ej: 2024',
       },
 
-      // ── Date range filter ───────────────────────────────────────────────────
+      // ── Date range filter (cuándo se registró; el período de la novedad está en la barra) ──
       {
         columnId: 'created_at',
         title: 'Fecha de registro',
@@ -212,50 +250,58 @@ export default function _DiagramReportsDataTable({
 
   // ─── Render ─────────────────────────────────────────────────────────────────
   return (
-    <DataTable
-      columns={columns}
-      data={data}
-      totalRows={totalRows}
-      searchParams={searchParams}
-      tableId={tableId}
-      paramNamespace={tableId}
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={mergedColumnVisibility}
-      initialFilterVisibility={mergedFilterVisibility}
-      showFilterToggle
-      // Client-side navigation: instant fetch via React Query, no router.push
-      queryFn={tableQueryFn}
-      queryKey={['diagram-reports-paginated']}
-      onStateChange={handleStateChange}
-      enableRowSelection
-      showRowSelection
-      searchPlaceholder="Buscar por nombre, apellido, legajo o CUIL..."
-      emptyMessage="No se encontraron registros de novedades"
-      exportConfig={{
-        fetchAllData: async () => unwrapExportResult(await getDiagramReportsForExport(currentParams)),
-        options: {
-          filename: 'reporte-novedades-diagramas',
-          sheetName: 'Novedades',
-          title: 'Reporte de Novedades de Diagramas',
-        },
-        formatters: {
-          // FK columns with accessorFn return strings directly — no formatter needed
-          // Decimal fields
-          day: (value) => (value != null ? String(Number(value)) : '-'),
-          month: (value) => (value != null ? String(Number(value)) : '-'),
-          year: (value) => (value != null ? String(Number(value)) : '-'),
-          // Date computed
-          date: (_value, row) => {
-            const d = Number(row.day);
-            const m = Number(row.month);
-            const y = Number(row.year);
-            const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-            return moment(dateStr, 'YYYY-MM-DD').format('DD/MM/YYYY');
-          },
-          // Timestamps
-          created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
-        },
-      }}
-    />
+    <TooltipProvider delayDuration={150}>
+      <div className="space-y-4">
+        <ReportTotals params={currentParams} />
+        <DataTable
+          columns={columns}
+          data={data}
+          totalRows={totalRows}
+          searchParams={searchParams}
+          tableId={tableId}
+          paramNamespace={tableId}
+          facetedFilters={facetedFilters}
+          initialColumnVisibility={mergedColumnVisibility}
+          initialFilterVisibility={mergedFilterVisibility}
+          showFilterToggle
+          mobileCards
+          // Client-side navigation: instant fetch via React Query, no router.push
+          queryFn={tableQueryFn}
+          queryKey={TABLE_QUERY_KEY}
+          onStateChange={handleStateChange}
+          searchPlaceholder="Buscar por legajo, nombre, apellido o CUIL..."
+          showSearch
+          emptyMessage="No se encontraron novedades con estos filtros"
+          toolbarActions={
+            <PeriodFilter
+              paramNamespace={tableId}
+              dateFrom={singleParam(currentParams, 'date_from')}
+              dateTo={singleParam(currentParams, 'date_to')}
+            />
+          }
+          exportConfig={{
+            fetchAllData: async () => unwrapExportResult(await getDiagramReportsForExport(currentParams)),
+            options: {
+              filename: 'reporte-novedades-diagramas',
+              sheetName: 'Novedades',
+              title: 'Reporte de Novedades de Diagramas',
+            },
+            formatters: {
+              // Columnas con accessorFn devuelven texto o número: solo se formatean fechas
+              date: (value) => (typeof value === 'string' ? formatReportDate(value) : '-'),
+              created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
+            },
+          }}
+        />
+      </div>
+      {detail && (
+        <DiagramReportDetailSheet
+          item={detail.item}
+          open={detail.open}
+          onOpenChange={handleDetailOpenChange}
+          canUpdate={canUpdate}
+        />
+      )}
+    </TooltipProvider>
   );
 }

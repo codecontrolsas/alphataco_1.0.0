@@ -4,214 +4,135 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Logger } from '@/lib/logger';
-import { MetricCard } from '@/shared/components/common/MetricCard';
-import { argentinaDate, formatArgentinaDateTime } from '@/shared/lib/argentina-time';
-import { ChevronDown, Download, RotateCcw } from 'lucide-react';
-import moment from 'moment';
-import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { argentinaDate, formatArgentinaDateTime, formatDateAr } from '@/shared/lib/argentina-time';
+import { ChevronDown, Download } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import type {
-  ErrorRecord,
-  ProcessingResult,
-  ProcessingResultRecord,
-  UpdatedResultRecord,
-} from './types/massive-diagram';
-
-// Re-export for backward compatibility (DiagramMassive.tsx imports it from here)
-export type { ProcessingResult };
+import { LoadResultPanel } from './load/components/LoadResultPanel';
+import { NoveltyBadge } from './load/components/NoveltyBadge';
+import { useCalendarHref } from './load/hooks';
+import type { ErrorRecord, ProcessingResult } from './types/massive-diagram';
 
 const logger = new Logger('Diagrams/DiagramMassiveResults');
 
-interface Props {
+/** Filas que se dibujan por grupo: una carga grande puede tener miles; el reporte descargable las trae todas. */
+const MAX_VISIBLE_ROWS = 200;
+
+/** `DD/MM/AAAA` de una fecha `YYYY-MM-DD` (se descarta cualquier hora que venga pegada). */
+const dayLabel = (date: string) => formatDateAr(date.slice(0, 10));
+
+interface DiagramMassiveResultsProps {
   results: ProcessingResult;
-  onStartOver: () => void;
+  /** `[legajo] Apellido, Nombre` por id de empleado: el servidor devuelve los nombres sin legajo. */
+  employeeLabels: Record<string, string>;
+  onReset: () => void;
 }
 
-export function DiagramMassiveResults({ results, onStartOver }: Props) {
+/** Resultado de la carga masiva: totales, detalle por grupo plegable y reporte descargable. */
+export function DiagramMassiveResults({ results, employeeLabels, onReset }: DiagramMassiveResultsProps) {
+  const calendarHref = useCalendarHref();
   const [downloading, setDownloading] = useState(false);
 
-  //   {
-  //     "summary": {
-  //         "records_created": 0,
-  //         "records_updated": 0,
-  //         "records_skipped": 8,
-  //         "records_error": 0,
-  //         "total_processed": 8
-  //     },
-  //     "work_diagram_id": "5ab76fab-6f7f-4446-aa15-07e5a7e63b23",
-  //     "active_novelty_id": "6e074fdd-6e7f-4386-9893-b3e43fb1c7fd",
-  //     "inactive_novelty_id": "33e7a3cd-8c14-452b-8072-d3b727b3e404",
-  //     "report": []
-  // }
+  const { summary } = results;
+  const created = results.data.created;
+  const updated = results.data.updated;
+  const errors = results.errors;
 
-  // Función auxiliar para obtener el resumen
-  const getSummary = () => {
-    if (!results) return { total_created: 0, total_updated: 0, total_errors: 0, total_processed: 0 };
-
-    return {
-      total_created: results.summary.created_records,
-      total_updated: results.summary.updated_records,
-      total_errors: results.summary.errors_count || 0,
-      total_processed: results.summary.processed_days,
-    };
-  };
-
-  const getDetails = (): {
-    created_records: ProcessingResultRecord[];
-    updated_records: UpdatedResultRecord[];
-    error_records: ErrorRecord[];
-  } => {
-    if (!results) return { created_records: [], updated_records: [], error_records: [] };
-    return {
-      created_records: results.data.created || [],
-      updated_records: results.data.updated || [],
-      error_records: results.errors || [],
-    };
-  };
-
-  const details = getDetails();
+  const nameOf = (employeeId: string, fallback?: string | null) =>
+    employeeLabels[employeeId] ?? (fallback || employeeId || 'N/A');
 
   const generateTxtReport = () => {
-    const timestamp = formatArgentinaDateTime(new Date());
+    const lines: string[] = [
+      'REPORTE DE CARGA MASIVA',
+      `Fecha y Hora: ${formatArgentinaDateTime(new Date())}`,
+      '=====================================',
+      '',
+      'RESUMEN:',
+      `- Días procesados: ${summary.processed_days}`,
+      `- Creados: ${summary.created_records}`,
+      `- Reemplazados: ${summary.updated_records}`,
+      `- Omitidos: ${summary.skipped_records}`,
+      `- Con error: ${summary.errors_count ?? 0}`,
+      `- Tiempo de procesamiento: ${summary.processing_time_seconds?.toFixed(2) ?? 'N/A'} segundos`,
+      '',
+    ];
 
-    let report = `REPORTE DE CARGA MASIVA\n`;
-    report += `Fecha y Hora: ${timestamp}\n`;
-    report += `=====================================\n\n`;
+    const section = (title: string, rows: string[]) => {
+      if (rows.length === 0) return;
+      lines.push(`${title} (${rows.length}):`, '='.repeat(50), ...rows, '');
+    };
 
-    report += `RESUMEN EJECUTIVO:\n`;
-    report += `- Total de registros procesados: ${summary.total_processed}\n`;
-    report += `- Líneas creadas exitosamente: ${summary.total_created}\n`;
-    report += `- Líneas actualizadas: ${summary.total_updated}\n`;
-    report += `- Líneas con errores: ${summary.total_errors}\n`;
-    report += `- Tiempo de procesamiento: ${results.summary?.processing_time_seconds?.toFixed(2) || 'N/A'} segundos\n\n`;
-
-    if (details.created_records && details.created_records.length > 0) {
-      report += `LÍNEAS CREADAS (${details.created_records.length}):\n`;
-      report += `${'='.repeat(50)}\n`;
-      details.created_records.forEach((record, index) => {
-        const employeeName = record.employee_name || record.employee_id || 'N/A';
-        const noveltyInfo = record.novelty_name ? ` - Novedad: ${record.novelty_name}` : '';
-        report += `${(index + 1).toString().padStart(3, ' ')}. ${employeeName} - ${moment(record.date).format('DD/MM/YYYY')}${noveltyInfo}\n`;
-      });
-      report += `\n`;
-    }
-
-    if (details.updated_records && details.updated_records.length > 0) {
-      report += `LÍNEAS ACTUALIZADAS (${details.updated_records.length}):\n`;
-      report += `${'='.repeat(50)}\n`;
-      details.updated_records.forEach((record, index) => {
-        const employeeName = record.employee_name || record.employee_id || 'N/A';
-        const previousNovelty = record.previous_novelty_name
-          ? ` - Novedad Anterior: ${record.previous_novelty_name}`
-          : '';
-        const newNovelty = record.novelty_name ? ` - Novedad Nueva: ${record.novelty_name}` : '';
-        report += `${(index + 1).toString().padStart(3, ' ')}. ${employeeName} - ${moment(record.date).format('DD/MM/YYYY')}${previousNovelty}${newNovelty}\n`;
-      });
-      report += `\n`;
-    }
-
-    if (details.error_records && details.error_records.length > 0) {
-      report += `LÍNEAS CON ERRORES (${details.error_records.length}):\n`;
-      report += `${'='.repeat(50)}\n`;
-      details.error_records.forEach((record, index) => {
-        const employeeName = record.employee_name || 'N/A';
-        report += `${(index + 1).toString().padStart(3, ' ')}. ${employeeName} - ${record.date ? moment(record.date).format('DD/MM/YYYY') : 'N/A'}\n`;
-        report += `     Tipo de Error: ${record.error_type}\n`;
-        report += `     Descripción: ${record.error_message}\n`;
-        report += `\n`;
-      });
-    }
-
-    report += `\nFIN DEL REPORTE\n`;
-    report += `Generado automáticamente por el sistema de gestión de diagramas\n`;
-
-    return report;
+    section(
+      'CREADOS',
+      created.map(
+        (record, index) =>
+          `${String(index + 1).padStart(3, ' ')}. ${nameOf(record.employee_id, record.employee_name)} - ${dayLabel(record.date)}${record.novelty_name ? ` - Novedad: ${record.novelty_name}` : ''}`
+      )
+    );
+    section(
+      'REEMPLAZADOS',
+      updated.map(
+        (record, index) =>
+          `${String(index + 1).padStart(3, ' ')}. ${nameOf(record.employee_id, record.employee_name)} - ${dayLabel(record.date)}${record.previous_novelty_name ? ` - Anterior: ${record.previous_novelty_name}` : ''}${record.novelty_name ? ` - Nueva: ${record.novelty_name}` : ''}`
+      )
+    );
+    section(
+      'CON ERROR',
+      errors.flatMap((record, index) => [
+        `${String(index + 1).padStart(3, ' ')}. ${nameOf(record.employee_id, record.employee_name)} - ${record.date ? dayLabel(record.date) : 'N/A'}`,
+        `     Tipo de error: ${record.error_type}`,
+        `     Descripción: ${record.error_message}`,
+      ])
+    );
+    lines.push('FIN DEL REPORTE');
+    return lines.join('\n');
   };
 
-  const downloadReport = async () => {
+  const downloadReport = () => {
     setDownloading(true);
-
     try {
-      const report = generateTxtReport();
-      const blob = new Blob([report], { type: 'text/plain;charset=utf-8' });
+      const blob = new Blob([generateTxtReport()], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
-
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `reporte-diagramas-masivos-${argentinaDate()}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `reporte-diagramas-masivos-${argentinaDate()}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
       URL.revokeObjectURL(url);
-
       toast.success('Reporte descargado correctamente');
     } catch (error) {
-      logger.error('Error downloading report', { data: { error } });
-      toast.error('Error al descargar el reporte');
+      logger.error('Error al descargar el reporte', { data: { error } });
+      toast.error('No se pudo descargar el reporte');
     } finally {
       setDownloading(false);
     }
   };
 
-  const summary = getSummary();
-
   return (
-    <div className="flex min-w-0 flex-col gap-5">
-      <div role="status" className="space-y-1">
-        <h3 className="text-lg font-semibold">Carga terminada</h3>
-        <p className="text-muted-foreground text-sm">
-          {summary.total_errors === 0
-            ? `Se procesaron ${summary.total_processed} ${summary.total_processed === 1 ? 'día' : 'días'} sin errores.`
-            : `Se procesaron ${summary.total_processed} ${summary.total_processed === 1 ? 'día' : 'días'}; ${summary.total_errors} con error.`}
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricCard label="Creados" value={summary.total_created} hint="Novedades nuevas" tone="ok" />
-        <MetricCard label="Actualizados" value={summary.total_updated} hint="Reemplazaron otra novedad" tone="brand" />
-        <MetricCard
-          label="Con error"
-          value={summary.total_errors}
-          hint="No se cargaron"
-          tone={summary.total_errors > 0 ? 'danger' : 'default'}
-        />
-        <MetricCard label="Procesados" value={summary.total_processed} hint="Días evaluados" />
-      </div>
-
+    <LoadResultPanel
+      totals={{
+        created: summary.created_records,
+        replaced: summary.updated_records,
+        skipped: summary.skipped_records,
+        errors: summary.errors_count ?? 0,
+      }}
+      description={`Se evaluaron ${summary.processed_days} ${summary.processed_days === 1 ? 'día' : 'días'} de ${summary.total_employees} ${summary.total_employees === 1 ? 'empleado' : 'empleados'}.`}
+      onReset={onReset}
+      calendarHref={calendarHref}
+      extraActions={
+        <Button type="button" variant="outline" className="min-h-10" onClick={downloadReport} disabled={downloading}>
+          <Download aria-hidden="true" />
+          {downloading ? 'Descargando…' : 'Descargar reporte (.txt)'}
+        </Button>
+      }
+    >
       <div className="flex flex-col gap-3">
-        <ResultGroup
-          title="Con error"
-          count={details.error_records.length}
-          defaultOpen={details.error_records.length > 0}
-        >
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Empleado</TableHead>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Tipo de error</TableHead>
-                <TableHead>Descripción</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {details.error_records.map((record, index) => (
-                <TableRow key={index}>
-                  <TableCell className="font-medium">{record.employee_name}</TableCell>
-                  <TableCell className="font-mono tabular-nums">
-                    {record.date ? moment(record.date).format('DD/MM/YYYY') : '—'}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="destructive">{record.error_type}</Badge>
-                  </TableCell>
-                  <TableCell className="text-danger-subtle-foreground text-sm">{record.error_message}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        <ResultGroup title="Con error" count={errors.length} defaultOpen>
+          <ErrorRows rows={errors} nameOf={nameOf} />
         </ResultGroup>
 
-        <ResultGroup title="Creados" count={details.created_records.length}>
+        <ResultGroup title="Creados" count={created.length}>
           <Table>
             <TableHeader>
               <TableRow>
@@ -221,10 +142,10 @@ export function DiagramMassiveResults({ results, onStartOver }: Props) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {details.created_records.map((record, index) => (
-                <TableRow key={index}>
-                  <TableCell className="font-medium">{record.employee_name || record.employee_id}</TableCell>
-                  <TableCell className="font-mono tabular-nums">{moment(record.date).format('DD/MM/YYYY')}</TableCell>
+              {created.slice(0, MAX_VISIBLE_ROWS).map((record) => (
+                <TableRow key={`${record.employee_id}-${record.date}`}>
+                  <TableCell className="font-medium">{nameOf(record.employee_id, record.employee_name)}</TableCell>
+                  <TableCell className="font-mono tabular-nums">{dayLabel(record.date)}</TableCell>
                   <TableCell>
                     <NoveltyBadge name={record.novelty_name} color={record.novelty_color} />
                   </TableCell>
@@ -232,9 +153,10 @@ export function DiagramMassiveResults({ results, onStartOver }: Props) {
               ))}
             </TableBody>
           </Table>
+          <TruncationNote total={created.length} />
         </ResultGroup>
 
-        <ResultGroup title="Actualizados" count={details.updated_records.length}>
+        <ResultGroup title="Reemplazados" count={updated.length}>
           <Table>
             <TableHeader>
               <TableRow>
@@ -245,10 +167,10 @@ export function DiagramMassiveResults({ results, onStartOver }: Props) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {details.updated_records.map((record, index) => (
-                <TableRow key={index}>
-                  <TableCell className="font-medium">{record.employee_name || record.employee_id}</TableCell>
-                  <TableCell className="font-mono tabular-nums">{moment(record.date).format('DD/MM/YYYY')}</TableCell>
+              {updated.slice(0, MAX_VISIBLE_ROWS).map((record) => (
+                <TableRow key={`${record.employee_id}-${record.date}`}>
+                  <TableCell className="font-medium">{nameOf(record.employee_id, record.employee_name)}</TableCell>
+                  <TableCell className="font-mono tabular-nums">{dayLabel(record.date)}</TableCell>
                   <TableCell>
                     <NoveltyBadge name={record.previous_novelty_name} color={record.previous_novelty_color} />
                   </TableCell>
@@ -259,24 +181,59 @@ export function DiagramMassiveResults({ results, onStartOver }: Props) {
               ))}
             </TableBody>
           </Table>
+          <TruncationNote total={updated.length} />
         </ResultGroup>
       </div>
-
-      <div className="flex flex-wrap justify-end gap-2">
-        <Button type="button" variant="outline" className="min-h-10" onClick={downloadReport} disabled={downloading}>
-          <Download aria-hidden="true" className="size-4" />
-          {downloading ? 'Descargando…' : 'Descargar reporte (.txt)'}
-        </Button>
-        <Button type="button" variant="brand" className="min-h-10" onClick={onStartOver}>
-          <RotateCcw aria-hidden="true" className="size-4" />
-          Nueva carga
-        </Button>
-      </div>
-    </div>
+    </LoadResultPanel>
   );
 }
 
-/** Grupo plegable de resultados; sin filas no se puede abrir. */
+function ErrorRows({
+  rows,
+  nameOf,
+}: {
+  rows: ErrorRecord[];
+  nameOf: (id: string, fallback?: string | null) => string;
+}) {
+  return (
+    <>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Empleado</TableHead>
+            <TableHead>Fecha</TableHead>
+            <TableHead>Tipo de error</TableHead>
+            <TableHead>Descripción</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.slice(0, MAX_VISIBLE_ROWS).map((record, index) => (
+            <TableRow key={`${record.employee_id}-${record.date ?? 'sin-fecha'}-${index}`}>
+              <TableCell className="font-medium">{nameOf(record.employee_id, record.employee_name)}</TableCell>
+              <TableCell className="font-mono tabular-nums">{record.date ? dayLabel(record.date) : '—'}</TableCell>
+              <TableCell>
+                <Badge variant="destructive">{record.error_type}</Badge>
+              </TableCell>
+              <TableCell className="text-danger-subtle-foreground text-sm">{record.error_message}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <TruncationNote total={rows.length} />
+    </>
+  );
+}
+
+function TruncationNote({ total }: { total: number }) {
+  if (total <= MAX_VISIBLE_ROWS) return null;
+  return (
+    <p className="text-muted-foreground border-t px-4 py-2 text-xs">
+      Se muestran {MAX_VISIBLE_ROWS} de {total}. El reporte descargable incluye todos.
+    </p>
+  );
+}
+
+/** Grupo plegable de resultados; sin filas no se abre y el contenido se monta recién al abrirlo. */
 function ResultGroup({
   title,
   count,
@@ -288,6 +245,8 @@ function ResultGroup({
   defaultOpen?: boolean;
   children: ReactNode;
 }) {
+  const [opened, setOpened] = useState(defaultOpen && count > 0);
+
   if (count === 0) {
     return (
       <div className="text-muted-foreground flex min-h-11 items-center justify-between rounded-lg border px-4 text-sm">
@@ -298,28 +257,19 @@ function ResultGroup({
   }
 
   return (
-    <details open={defaultOpen} className="group rounded-lg border">
-      <summary className="focus-visible:ring-ring flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-4 text-sm font-medium outline-none focus-visible:ring-2 [&::-webkit-details-marker]:hidden">
+    <details
+      open={defaultOpen}
+      onToggle={(event) => setOpened((event.currentTarget as HTMLDetailsElement).open)}
+      className="group rounded-lg border"
+    >
+      <summary className="focus-visible:ring-ring/50 flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-4 text-sm font-medium outline-none focus-visible:ring-[3px] [&::-webkit-details-marker]:hidden">
         <span>{title}</span>
         <span className="flex items-center gap-2">
           <span className="tabular-nums">{count}</span>
           <ChevronDown aria-hidden="true" className="size-4 transition-transform group-open:rotate-180" />
         </span>
       </summary>
-      <div className="max-h-80 overflow-auto border-t">{children}</div>
+      {opened ? <div className="max-h-80 overflow-auto border-t">{children}</div> : null}
     </details>
-  );
-}
-
-function NoveltyBadge({ name, color }: { name?: string | null; color?: string | null }) {
-  if (!name) return <span className="text-muted-foreground text-sm">—</span>;
-  return (
-    <Badge
-      variant="outline"
-      className="border-0 text-white"
-      style={{ backgroundColor: color || 'var(--muted-foreground)' }}
-    >
-      {name}
-    </Badge>
   );
 }

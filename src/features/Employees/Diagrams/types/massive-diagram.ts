@@ -51,6 +51,8 @@ export interface ConflictCheckResult {
   active_novelty_id?: string;
   inactive_novelty_id?: string;
   diagram_type_id?: string;
+  /** Registros que generaría la carga (empleados × días), con y sin conflicto. */
+  total_records: number;
 }
 
 export interface ConflictData {
