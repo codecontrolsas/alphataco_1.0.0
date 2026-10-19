@@ -65,3 +65,9 @@ src/generated/
 
 # Plans / notes (local only)
 docs/plans/
+.codex/agents/linear-sync.toml
+.gitignore
+.codex/agents/table-expert.toml
+.gitignore
+AGENTS.md
+.codex/agents/performance-auditor.toml

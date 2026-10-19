@@ -1,45 +1,131 @@
-LICENCIA DE SOFTWARE PROPIETARIO
-=================================
+LICENCIA DE SOFTWARE PROPIETARIO Y COMERCIAL
+============================================
 
-Copyright © [AÑO] Grupo Horizonte SRL
+Copyright © 2026 Codecontrol SAS
 Desarrollado por: Codecontrol SAS
 Todos los derechos reservados.
 
-TITULARIDAD
------------
-Este software es propiedad exclusiva de Grupo Horizonte SRL (CUIT: [COMPLETAR]).
-El desarrollo fue realizado por Codecontrol SAS (CUIT: [COMPLETAR]).
+1. TITULARIDAD
+--------------
+Este software, incluyendo su código fuente, código objeto, bases de datos,
+diseño, documentación, manuales y toda obra derivada (en adelante, "el
+Software"), es propiedad exclusiva de Codecontrol SAS (CUIT: 30-71857848-1),
+quien lo ha desarrollado y es titular de todos los derechos de propiedad
+intelectual sobre el mismo.
 
-USO RESTRINGIDO
----------------
-Este software es de uso interno exclusivo de Grupo Horizonte SRL.
+Ninguna disposición de esta licencia implica la transferencia o cesión de la
+titularidad del Software ni de ninguno de sus derechos de propiedad
+intelectual.
 
-Queda PROHIBIDO:
-- Copiar, modificar o distribuir este software
-- Realizar ingeniería inversa o descompilar
-- Usar el software fuera de Grupo Horizonte SRL
-- Divulgar el código fuente a terceros no autorizados
+2. OTORGAMIENTO DE LICENCIA
+---------------------------
+Codecontrol SAS comercializa el Software bajo la modalidad de licencia de uso.
+El derecho a usar el Software se otorga únicamente a los clientes que hayan
+celebrado con Codecontrol SAS el contrato o la orden de compra
+correspondiente y se encuentren al día con el pago de la licencia (en
+adelante, "el Licenciatario").
 
-PROTECCIÓN LEGAL
+La licencia es:
+- No exclusiva
+- Intransferible y no sublicenciable
+- Onerosa, sujeta al pago del precio acordado
+- Limitada al plazo, alcance, cantidad de usuarios, empresas, módulos y
+  entornos establecidos en el contrato con el Licenciatario
+- Revocable en los supuestos previstos en esta licencia o en el contrato
+
+3. USO PERMITIDO
 ----------------
-Este software está protegido por:
+El Licenciatario podrá usar el Software exclusivamente para la gestión de sus
+propias operaciones internas, dentro de los límites del contrato vigente.
+
+4. RESTRICCIONES
+----------------
+Salvo autorización previa y por escrito de Codecontrol SAS, queda PROHIBIDO:
+- Copiar, reproducir, modificar, adaptar, traducir o crear obras derivadas
+  del Software
+- Vender, revender, alquilar, prestar, ceder, sublicenciar, distribuir o
+  poner el Software a disposición de terceros
+- Explotar el Software como servicio para terceros (SaaS, hosting,
+  outsourcing o modalidades similares)
+- Realizar ingeniería inversa, descompilar o desensamblar el Software, salvo
+  en la medida en que la ley aplicable lo permita expresamente
+- Acceder, divulgar o utilizar el código fuente, cuando éste no haya sido
+  entregado expresamente al Licenciatario
+- Eludir, desactivar o alterar mecanismos de licenciamiento, control de uso
+  o seguridad
+- Eliminar o alterar avisos de copyright, marcas o leyendas de propiedad
+- Usar el Software para desarrollar un producto competidor
+
+5. PAGO Y VIGENCIA
+------------------
+El uso del Software está condicionado al pago en término de la licencia en
+las condiciones pactadas. La falta de pago, el vencimiento del plazo
+contratado o el incumplimiento de cualquiera de las restricciones de esta
+licencia facultan a Codecontrol SAS a suspender o dar por terminada la
+licencia, sin perjuicio de las acciones legales que correspondan.
+
+Al terminar la licencia, el Licenciatario deberá cesar todo uso del Software.
+Codecontrol SAS pondrá a disposición del Licenciatario sus datos en las
+condiciones y plazos que establezca el contrato.
+
+6. DATOS DEL LICENCIATARIO
+--------------------------
+Los datos que el Licenciatario cargue en el Software son de su propiedad.
+Codecontrol SAS los tratará únicamente para la prestación del servicio
+contratado, conforme a la Ley 25.326 de Protección de Datos Personales y a lo
+establecido en el contrato.
+
+7. SOPORTE Y ACTUALIZACIONES
+----------------------------
+El soporte técnico, mantenimiento y actualizaciones se prestan según lo
+acordado en el contrato. Las actualizaciones entregadas quedan sujetas a esta
+misma licencia.
+
+8. GARANTÍA Y RESPONSABILIDAD
+-----------------------------
+Salvo lo expresamente pactado en el contrato, el Software se proporciona
+"TAL CUAL", sin garantías de ningún tipo, expresas o implícitas, incluyendo
+las de comerciabilidad o adecuación a un propósito particular.
+
+En la máxima medida permitida por la ley, Codecontrol SAS no será
+responsable por daños indirectos, lucro cesante, pérdida de datos o de
+negocios derivados del uso o la imposibilidad de uso del Software. La
+responsabilidad total de Codecontrol SAS no excederá el monto efectivamente
+abonado por el Licenciatario en concepto de licencia durante los doce (12)
+meses anteriores al hecho que la origine.
+
+9. CONFIDENCIALIDAD
+-------------------
+El Licenciatario se obliga a mantener la confidencialidad del Software, su
+documentación y cualquier información técnica o comercial de Codecontrol SAS
+a la que acceda, aun después de terminada la licencia.
+
+10. PROTECCIÓN LEGAL
+--------------------
+Este Software está protegido por:
 - Ley 11.723 de Propiedad Intelectual (Argentina)
 - Ley 25.036 de Software (Argentina)
 - Código Civil y Comercial de la Nación Argentina
+- Tratados internacionales de propiedad intelectual aplicables
 
-GARANTÍA
---------
-Este software se proporciona "TAL CUAL" sin garantías de ningún tipo.
+11. PRELACIÓN
+-------------
+En caso de contradicción entre esta licencia y el contrato celebrado entre
+Codecontrol SAS y el Licenciatario, prevalecerá el contrato.
 
-JURISDICCIÓN
+12. LEY APLICABLE Y JURISDICCIÓN
+--------------------------------
+Esta licencia se rige por las leyes de la República Argentina. Para cualquier
+controversia, las partes se someten a los Tribunales Ordinarios de la ciudad
+de Neuquén, Provincia del Neuquén, con renuncia a cualquier otro fuero o
+jurisdicción.
+
+13. CONTACTO
 ------------
-Tribunales Ordinarios de Neuquén, Argentina.
+Codecontrol SAS |
+Pilhue 402 Mza A7 Lote 16, Rincón de los Sauces - Neuquén - Argentina |
+fspiritosi@codecontrol.com.ar |
++54 9 299 5 810476
 
-CONTACTO
---------
-Grupo Horizonte SRL
-[Domicilio, Email, Teléfono]
-
-Para soporte técnico:
-Codecontrol SAS
-[Domicilio, Email, Teléfono]
+Licenciamiento, soporte técnico y consultas comerciales:
+fspiritosi@codecontrol.com.ar | +54 9 299 5 810476
