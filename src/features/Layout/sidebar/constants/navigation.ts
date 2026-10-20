@@ -7,7 +7,6 @@ import {
   BookOpenText,
   Building2,
   Car,
-  ChartColumn,
   CircleDot,
   ClipboardList,
   FileCheck,
@@ -18,7 +17,6 @@ import {
   GitBranch,
   HandCoins,
   HandHelping,
-  House,
   Landmark,
   Layers,
   LifeBuoy,
@@ -37,8 +35,6 @@ import {
   TrendingUp,
   TriangleAlert,
   Truck,
-  UserCheck,
-  UserX,
   Users,
   WalletCards,
   Warehouse,
@@ -59,6 +55,11 @@ export type NavIcon = ModuleIcon;
 export type NavigationSubLink = {
   name: string;
   tabSlug: string;
+  /**
+   * Otras tabs del mismo módulo que también habilitan este sub-item (una sección que junta varias tabs
+   * con permiso propio, ej. Mantenimiento > Gestión = Supervisión + Taller).
+   */
+  visibleWhenAny?: string[];
   /**
    * Segundo nivel de la tab (`?subtab=<subTabSlug>`), para las secciones cuyas subtabs se
    * eligen desde el sidebar (hoy: Empleados > Activos / Bajas). Es también el slug de permiso.
@@ -120,13 +121,7 @@ export const navigationLinks: NavigationLink[] = [
     href: '/dashboard',
     icon: MODULE_ICONS.dashboard,
     position: 1,
-    // Accesos a los tableros por defecto: `?tab=` se resuelve al tablero con ese `template`
-    // (`templateKeyFromLegacyParams` en Dashboard/lib/widget-registry.ts).
-    items: [
-      { name: 'Resumen', tabSlug: 'principal' },
-      { name: 'Vencimientos', tabSlug: 'documentacion' },
-      { name: 'Análisis', tabSlug: 'estadisticas' },
-    ],
+    // Link directo: los tableros se eligen con el selector «Tablero» dentro del Dashboard.
   },
   {
     name: 'Empleados',
@@ -135,8 +130,8 @@ export const navigationLinks: NavigationLink[] = [
     icon: MODULE_ICONS.empleados,
     position: 2,
     items: [
-      { name: 'Activos', tabSlug: 'employees', subTabSlug: 'empleados-activos' },
-      { name: 'Bajas', tabSlug: 'employees', subTabSlug: 'empleados-inactivos' },
+      // Activos / Bajas se eligen con el selector de vista del listado, no desde acá.
+      { name: 'Personal', tabSlug: 'employees' },
       { name: 'Diagramas', tabSlug: 'diagrams' },
     ],
   },
@@ -206,9 +201,8 @@ export const navigationLinks: NavigationLink[] = [
     icon: MODULE_ICONS.mantenimiento,
     position: 8,
     items: [
-      { name: 'Supervisión', tabSlug: 'maint_operaciones' },
-      { name: 'Vista taller', tabSlug: 'workshop_view' },
-      { name: 'Taller', tabSlug: 'maint_taller' },
+      { name: 'Gestión', tabSlug: 'maint_operaciones', visibleWhenAny: ['maint_taller'] },
+      { name: 'Sectores', tabSlug: 'workshop_view' },
       { name: 'Nuevo pedido', tabSlug: 'nuevo_pedido' },
       { name: 'Equipos con desvíos', tabSlug: 'equipments_with_deviations' },
       { name: 'Gomería', tabSlug: 'gomeria' },
@@ -312,17 +306,13 @@ export const navigationLinks: NavigationLink[] = [
  * equipos y configuracion).
  */
 export const SUB_ITEM_ICONS: Record<string, NavIcon> = {
-  'dashboard:principal': House,
-  'dashboard:documentacion': FileText,
-  'dashboard:estadisticas': ChartColumn,
   'configuracion:general': Building2,
   'configuracion:users': ShieldCheck,
   'configuracion:rrhh': Users,
   'configuracion:vehicles': Truck,
   'configuracion:mantenimiento': Wrench,
   'configuracion:documentos': FileType,
-  'empleados:empleados-activos': UserCheck,
-  'empleados:empleados-inactivos': UserX,
+  'empleados:employees': Users,
   'empleados:diagrams': GitBranch,
   'equipos:vehicles': Car,
   'equipos:others': Package,
@@ -341,7 +331,6 @@ export const SUB_ITEM_ICONS: Record<string, NavIcon> = {
   'operaciones:dailyreportstable': ClipboardList,
   'mantenimiento:maint_operaciones': ClipboardList,
   'mantenimiento:workshop_view': Building2,
-  'mantenimiento:maint_taller': Warehouse,
   'mantenimiento:nuevo_pedido': Plus,
   'mantenimiento:equipments_with_deviations': TriangleAlert,
   'mantenimiento:gomeria': CircleDot,
@@ -380,8 +369,7 @@ export const SUB_ITEM_ICONS: Record<string, NavIcon> = {
  * badge). El valor lo calcula `getModuleSectionCounts`.
  */
 export const SECTION_COUNTER_LABELS: Record<string, string> = {
-  'mantenimiento:maint_operaciones': 'solicitudes por validar',
-  'mantenimiento:maint_taller': 'pedidos en el circuito de taller',
+  'mantenimiento:maint_operaciones': 'solicitudes por validar y pedidos en el circuito de taller',
   'mantenimiento:equipments_with_deviations': 'equipos con desvíos',
   'almacenes:stock': 'materiales bajo mínimo y lotes por vencer',
   'almacenes:prestamos': 'préstamos abiertos',

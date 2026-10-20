@@ -71,6 +71,13 @@ export interface TabDefinition<M extends ModuleSlug = ModuleSlug> {
   tabSlug?: AllTabSlugsUnion<M>;
   /** Deshabilita la pestaña */
   disabled?: boolean;
+  /** Otros valores de la URL que también abren esta pestaña (enlaces viejos o marcadores). */
+  aliases?: string[];
+  /**
+   * La pestaña es visible si el usuario puede ver ALGUNA de estas tabs (mismo checker que `moduleSlug`/`tabSlug`,
+   * que además se evalúa si están presentes). Para una pestaña que junta varias tabs con permiso propio.
+   */
+  visibleWhenAny?: Array<{ moduleSlug: M; tabSlug: AllTabSlugsUnion<M> }>;
   /**
    * `SectionManagerServer`: no dibuja el `<h1>` con el `label` porque el contenido trae su propio
    * título (ej. el Centro de Ayuda del módulo de TaskApp). Sin esto quedaban dos títulos.

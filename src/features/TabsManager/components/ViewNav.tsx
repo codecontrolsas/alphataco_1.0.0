@@ -51,7 +51,9 @@ function ViewMenu({
           <ChevronDown aria-hidden="true" className="size-4 shrink-0 transition-transform group-open:rotate-180" />
         </>
       }
-      panelClassName="bg-popover absolute left-0 top-full z-10 mt-1 max-h-96 w-full overflow-y-auto rounded-md border p-1 shadow-md sm:w-80"
+      // z-50 como los popovers: el contenido de la vista usa capas propias (las columnas fijas de la
+      // grilla de Diagramas llegan a z-30) y con menos el desplegable quedaba debajo.
+      panelClassName="bg-popover absolute left-0 top-full z-50 mt-1 max-h-96 w-full overflow-y-auto rounded-md border p-1 shadow-md sm:w-80"
     >
       <ul>
         {items.map((item) => {

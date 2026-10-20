@@ -1,11 +1,11 @@
 import 'server-only';
 
-import { sendMail, type SendMail } from '@/shared/lib/mail';
+import { notify } from '@/features/Notifications/lib/dispatch.server';
+import type { SendMail } from '@/shared/lib/mail';
 import { prisma } from '@/shared/lib/prisma';
 import { argentinaDate } from '../lib/dates';
 import { buildDocumentsExpirySummary } from '../lib/documents-expiry-summary.server';
 import { runForEachCompany, runJobWithBitacora } from '../lib/per-company';
-import { getCompanyRecipients } from '../lib/recipients';
 import type { JobSummary } from '../lib/types';
 import { renderDocumentsExpiryEmail } from '../templates/documents-expiry';
 
@@ -31,8 +31,8 @@ import { renderDocumentsExpiryEmail } from '../templates/documents-expiry';
  * humana, no un reintento.
  *
  * **Multi-empresa.** El resumen se arma siempre para UNA empresa (recursos, tipos y documentos
- * filtrados por `company_id`). Los destinatarios se piden con el
- * mismo `company_id` y se manda un `sendMail` por empresa.
+ * filtrados por `company_id`). Lo entrega `notify` (#786): campanita y mail a los usuarios de la
+ * empresa cuyos roles tienen el aviso activo, más la lista fija de la empresa (`notification_settings`).
  */
 export interface DocumentsExpiryJobDeps {
   date?: string;
@@ -51,7 +51,6 @@ export async function runDocumentsExpiryJob(deps: DocumentsExpiryJobDeps = {}): 
   const date = deps.date ?? argentinaDate();
   const daysAhead = deps.daysAhead ?? DEFAULT_DAYS_AHEAD;
   const detailLimit = deps.detailLimit ?? DEFAULT_DETAIL_LIMIT;
-  const send = deps.sendMail ?? sendMail;
 
   // Todo va DENTRO de la bitácora: si el `findMany` falla (base caída, pool agotado), la fila
   // `corrida:<fecha>` ya está abierta y el error queda registrado.
@@ -66,14 +65,6 @@ export async function runDocumentsExpiryJob(deps: DocumentsExpiryJobDeps = {}): 
       date,
       companies,
       work: async (company) => {
-        const recipients = await getCompanyRecipients(company.id, 'documents_expiry');
-
-        if (recipients.length === 0) {
-          // `skipped`: la clave queda reclamable para el mismo día, así cargar la lista y
-          // redisparar alcanza. Con `ok` la empresa quedaba afuera hasta el lunes siguiente.
-          return { skipped: true, reason: 'la empresa no tiene destinatarios configurados' };
-        }
-
         const summary = await buildDocumentsExpirySummary(prisma, {
           companyId: company.id,
           daysAhead,
@@ -81,26 +72,43 @@ export async function runDocumentsExpiryJob(deps: DocumentsExpiryJobDeps = {}): 
         });
 
         const email = renderDocumentsExpiryEmail({ companyName: company.company_name, data: summary });
+        const expired =
+          summary.expired_counts.employees + summary.expired_counts.equipment + summary.expired_counts.company;
+        const expiringSoon =
+          summary.expiring_soon.employees.total +
+          summary.expiring_soon.equipment.total +
+          summary.expiring_soon.company.total;
 
-        const emailSent = await send({
-          to: recipients,
-          subject: email.subject,
-          html: email.html,
-          text: email.text,
-        });
+        const result = await notify(
+          {
+            event: 'documents.expiry_weekly',
+            companyId: company.id,
+            dedupeKey: `documents.expiry_weekly:${date}`,
+            title: `Vencimientos de la semana: ${expired} vencidos y ${expiringSoon} por vencer`,
+            href: '/dashboard/document',
+            email,
+            metadata: { daysAhead },
+          },
+          { sendMail: deps.sendMail }
+        );
+
+        if (result.status === 'no_recipients') {
+          // `skipped`: la clave queda reclamable para el mismo día, así cargar destinatarios y
+          // redisparar alcanza. Con `ok` la empresa quedaba afuera hasta el lunes siguiente.
+          return { skipped: true, reason: 'la empresa no tiene destinatarios (roles ni lista fija)' };
+        }
+        const emailSent = result.emailSent;
+        const recipientCount = result.status === 'sent' ? result.emailRecipients + result.inApp : 0;
 
         const totals = {
-          expiringSoon:
-            summary.expiring_soon.employees.total +
-            summary.expiring_soon.equipment.total +
-            summary.expiring_soon.company.total,
-          expired: summary.expired_counts.employees + summary.expired_counts.equipment + summary.expired_counts.company,
+          expiringSoon,
+          expired,
           pending: summary.pending_counts.employees + summary.pending_counts.equipment + summary.pending_counts.company,
         };
 
         return {
           reason: emailSent ? 'correo enviado' : 'correo NO enviado (SMTP sin configurar o error de envío)',
-          recipients: recipients.length,
+          recipients: recipientCount,
           emailSent,
           metadata: { daysAhead, totals },
         };

@@ -47,6 +47,22 @@ export const getOperacionesSectionCount = cache(async (): Promise<number | null>
   return counts.validate ?? null;
 });
 
+/**
+ * Gestión = Operaciones + Taller. Se suma lo que el usuario puede ver; si una parte visible no se pudo contar,
+ * el total es `null` (sería un número inventado).
+ */
+export const getGestionSectionCount = cache(async (): Promise<number | null> => {
+  const [canOperaciones, canTaller] = await Promise.all([
+    checkPermissionServer('mantenimiento', 'maint_operaciones', 'view'),
+    checkPermissionServer('mantenimiento', 'maint_taller', 'view'),
+  ]);
+  const [operaciones, taller] = await Promise.all([
+    canOperaciones ? getOperacionesSectionCount() : 0,
+    canTaller ? getTallerSectionCount() : 0,
+  ]);
+  return operaciones !== null && taller !== null ? operaciones + taller : null;
+});
+
 /** Equipos con Desvíos = cantidad de equipos con desvíos pendientes. */
 export const getDeviationsSectionCount = cache(async (): Promise<number | null> => {
   const metrics = await getDeviationsMetricsCached();

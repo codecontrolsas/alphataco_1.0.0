@@ -1,4 +1,8 @@
 import { ContextualHelp } from '@/features/Ayuda/Manual/components/header/ContextualHelp';
+import {
+  NotificationBellAsync,
+  NotificationBellFallback,
+} from '@/features/Notifications/components/NotificationBellAsync';
 import { Suspense } from 'react';
 import { HeaderNavAsync } from './components/HeaderNavAsync';
 import { HeaderNavFallback } from './components/HeaderNavFallback';
@@ -9,7 +13,7 @@ import { ThemeToggle } from './components/ThemeToggle';
  *
  * Su trabajo es ubicar (módulo / sección activa) y mover (menú "Ir a…", Ctrl/⌘ K). La marca, el
  * selector de empresa y el menú de usuario viven en el sidebar. A la derecha quedan la ayuda
- * contextual ("?", abre la guía del manual de la pantalla actual) y el cambio de tema.
+ * contextual ("?", abre la guía del manual de la pantalla actual), la campanita de avisos y el cambio de tema.
  *
  * En md+ es una grilla de tres zonas para que el disparador quede centrado; en móvil, un flex
  * donde el contexto trunca. `HeaderNavAsync` lee `useSearchParams` (vía el cliente) y permisos:
@@ -25,6 +29,10 @@ export function DashboardHeader() {
         {/* Lee permisos y el manual: dinámico, necesita su propio límite de Suspense. */}
         <Suspense fallback={null}>
           <ContextualHelp />
+        </Suspense>
+        {/* Lee la sesión y el contador: dinámico, con su propio límite de Suspense. */}
+        <Suspense fallback={<NotificationBellFallback />}>
+          <NotificationBellAsync />
         </Suspense>
         <ThemeToggle />
       </div>

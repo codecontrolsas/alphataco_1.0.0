@@ -57,6 +57,12 @@ import { RrhhSection } from '@/features/Dashboard/Principal/components/RrhhSecti
 import { ServicesSectionLoader } from '@/features/Dashboard/Principal/components/ServicesSectionLoader';
 import { KpiCardSkeleton } from '@/features/Dashboard/Principal/fallback/KpiCardsSkeleton';
 import { SectionSkeleton } from '@/features/Dashboard/Principal/fallback/SectionSkeleton';
+import {
+  AttentionInboxCounter,
+  AttentionInboxWidget,
+} from '@/features/Dashboard/Resumen/components/AttentionInboxWidget';
+import { CashPositionWidget } from '@/features/Dashboard/Resumen/components/CashPositionWidget';
+import { AttentionInboxSkeleton, CashPositionSkeleton } from '@/features/Dashboard/Resumen/fallback/ResumenSkeletons';
 import type { WidgetDefinition, WidgetId } from '@/features/Dashboard/lib/widget-registry';
 import { SectionCard } from '@/shared/components/common/SectionCard';
 import { SectionErrorBoundary } from '@/shared/components/common/SectionErrorBoundary';
@@ -88,6 +94,18 @@ const counterFallback = <span aria-hidden="true" className="bg-muted inline-bloc
 
 /** Cómo se dibuja cada widget del registro. Mismos componentes y cálculos que las secciones anteriores. */
 const RENDERERS: Record<WidgetId, WidgetRenderer> = {
+  'attention-inbox': {
+    skeleton: <AttentionInboxSkeleton />,
+    render: () => <AttentionInboxWidget />,
+    frame: {
+      counter: (
+        <Suspense fallback={counterFallback}>
+          <AttentionInboxCounter />
+        </Suspense>
+      ),
+    },
+  },
+  'cash-position': { skeleton: <CashPositionSkeleton />, render: () => <CashPositionWidget />, frame: {} },
   'kpi-employees': { skeleton: <KpiCardSkeleton />, render: () => <EmployeesCard /> },
   'kpi-active-vehicles': { skeleton: <KpiCardSkeleton />, render: () => <ActiveVehiclesCard /> },
   'kpi-operative-fleet': { skeleton: <KpiCardSkeleton />, render: () => <OperativeFleetCard /> },

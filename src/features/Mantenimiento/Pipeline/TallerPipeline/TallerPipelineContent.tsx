@@ -1,15 +1,18 @@
 import { Suspense } from 'react';
 
+import { getTallerSummaryCached } from '../../lib/section-counts';
 import { PipelineLayout, type PipelineStepEntry } from '../components/PipelineLayout';
 import type { PipelineStep } from '../types';
 import { getTallerPipelineSummary } from './actions/pipeline-summary.server';
-import { getTallerSummaryCached } from '../../lib/section-counts';
 
 import { ApprovalInboxSkeleton, ApprovalInboxTabContent } from '@/features/Mantenimiento/ApprovalInbox';
 import { MaintenanceOrdersSkeleton, MaintenanceOrdersTabContent } from '@/features/Mantenimiento/MaintenanceOrders';
 import { ConfirmadosTabContent } from '@/features/Mantenimiento/PedidosMantenimiento/Confirmados/ConfirmadosTabContent';
 import { PendientesTabContent } from '@/features/Mantenimiento/PedidosMantenimiento/Pendientes/PendientesTabContent';
-import { ConfirmadosTableSkeleton, PendientesTableSkeleton } from '@/features/Mantenimiento/PedidosMantenimiento/fallback';
+import {
+  ConfirmadosTableSkeleton,
+  PendientesTableSkeleton,
+} from '@/features/Mantenimiento/PedidosMantenimiento/fallback';
 import { StateBlock } from '@/shared/components/common/StateBlock';
 
 const PARAM_NAME = 'taller_step';
@@ -19,7 +22,7 @@ const TALLER_STEPS: PipelineStep[] = [
   {
     id: 'schedule',
     stepNumber: 1,
-    label: 'Por Programar',
+    label: 'Programación pendiente',
     description: 'Pedidos aprobados sin fecha. Asigná fecha y reparaciones',
     iconName: 'Clock',
     permissionTab: 'pedidos_pendientes',
@@ -27,7 +30,7 @@ const TALLER_STEPS: PipelineStep[] = [
   {
     id: 'confirmed',
     stepNumber: 2,
-    label: 'Por Ingresar',
+    label: 'Para ingreso',
     description: 'Pedidos con fecha asignada. Registrá el ingreso al taller',
     // Calendar (no CheckCircle): el paso está pendiente, y lo que lo define es
     // que ya tiene fecha. El tilde daba a entender que el trabajo estaba hecho.
@@ -37,7 +40,7 @@ const TALLER_STEPS: PipelineStep[] = [
   {
     id: 'in_workshop',
     stepNumber: 3,
-    label: 'En Taller',
+    label: 'En mantenimiento',
     description: 'Equipos activos en taller. Gestioná sectores y OTs',
     iconName: 'Warehouse',
     permissionTab: 'ordenes_mantenimiento',

@@ -13,17 +13,18 @@ El Dashboard es la pantalla de inicio. Se arma con **tableros**: cada tablero es
 
 Mientras no cambies nada, ves estos tableros (solo los que tengan al menos un widget que puedas ver):
 
-| Tablero                | Qué muestra                                                                                                                          | Acceso del menú lateral      |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------- |
-| **Resumen**            | Personal, flota y servicios de hoy (<GuideLink to="dashboard-principal">Dashboard principal</GuideLink>).                            | **Dashboard → Resumen**      |
-| **Vencimientos**       | Documentos vencidos o que vencen en los próximos 30 días (<GuideLink to="dashboard-vencimientos">Próximos vencimientos</GuideLink>). | **Dashboard → Vencimientos** |
-| **Operación**          | Histórico de servicios, ranking de clientes y centros de costo.                                                                      | **Dashboard → Análisis**     |
-| **Flota y taller**     | Equipos en mantenimiento, origen y tipo de solicitudes.                                                                              | **Dashboard → Análisis**     |
-| **Personal**           | Ausentismo, dotación y distribución del personal.                                                                                    | **Dashboard → Análisis**     |
-| **Control de desvíos** | Desvíos de partes diarios y gestión de pedidos.                                                                                      | **Dashboard → Análisis**     |
-| **Indicadores**        | Evolución de los KPIs contra su umbral (<GuideLink to="kpis">KPIs</GuideLink>).                                                      | **Dashboard → Análisis**     |
+| Tablero                | Qué muestra                                                                                                                                               |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Resumen**            | **Para atender** (lo vencido y lo que espera una aprobación en cada módulo, con acceso directo) y **Plata** (disponible, a cobrar y facturado en el mes). |
+| **Operación del día**  | Personal, flota y servicios de hoy (<GuideLink to="dashboard-principal">Operación del día</GuideLink>).                                                   |
+| **Vencimientos**       | Documentos vencidos o que vencen en los próximos 30 días (<GuideLink to="dashboard-vencimientos">Próximos vencimientos</GuideLink>).                      |
+| **Operación**          | Histórico de servicios, ranking de clientes y centros de costo.                                                                                           |
+| **Flota y taller**     | Equipos en mantenimiento, origen y tipo de solicitudes.                                                                                                   |
+| **Personal**           | Ausentismo, dotación y distribución del personal.                                                                                                         |
+| **Control de desvíos** | Desvíos de partes diarios y gestión de pedidos.                                                                                                           |
+| **Indicadores**        | Evolución de los KPIs contra su umbral (<GuideLink to="kpis">KPIs</GuideLink>).                                                                           |
 
-Para cambiar de tablero usá el selector **Tablero** arriba a la izquierda. El menú lateral y la línea de ubicación del encabezado marcan el tablero que estás viendo; un tablero propio aparece en el encabezado con su nombre.
+Se entra desde **Dashboard** en el menú lateral y se cambia de tablero con el selector **Tablero** arriba a la izquierda. La línea de ubicación del encabezado marca el tablero que estás viendo; un tablero propio aparece en el encabezado con su nombre.
 
 El enlace de la barra del navegador incluye el tablero: si lo guardás o lo compartís, abre ese mismo tablero (a quien lo abra le muestra su propia versión).
 
@@ -57,15 +58,16 @@ La primera vez que guardás un cambio, el sistema guarda una copia de todos tus 
 
 Cada widget se muestra solo si tenés permiso para ver la sección del Dashboard de la que sale **y** los datos de origen. Por eso dos personas pueden ver el mismo tablero con widgets distintos.
 
-| Sección del widget     | Permisos que hacen falta (Ver)                                                                                                                             |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Resumen**            | **Dashboard → Resumen**, y además el módulo de cada dato: **Empleados**, **Equipos**, **Partes de operaciones**, **Diagramas** o **Checklist** de equipos. |
-| **Vencimientos**       | **Dashboard → Vencimientos de personal** o **Vencimientos de equipos**, y **Documentos de empleados** o **Documentos de equipos**.                         |
-| **Operación**          | **Dashboard → Operación** y **Partes de operaciones**.                                                                                                     |
-| **Flota y taller**     | **Dashboard → Flota y taller** y **Mantenimiento → Taller**.                                                                                               |
-| **Personal**           | **Dashboard → Personal**, **Empleados** y **Diagramas**.                                                                                                   |
-| **Control de desvíos** | **Dashboard → Control de desvíos**, y **Equipos con desvíos** o **Planificador** según el widget.                                                          |
-| **Indicadores**        | **Configuración → Gráficos** o **Configuración → Indicadores**.                                                                                            |
+| Sección del widget     | Permisos que hacen falta (Ver)                                                                                                                                 |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Resumen**            | **Dashboard → Resumen**. Cada fila de **Para atender** y cada número de **Plata** se ve solo con permiso en su módulo (Compras, Tesorería, Facturación, etc.). |
+| **Operación del día**  | **Dashboard → Resumen**, y además el módulo de cada dato: **Empleados**, **Equipos**, **Partes de operaciones**, **Diagramas** o **Checklist** de equipos.     |
+| **Vencimientos**       | **Dashboard → Vencimientos de personal** o **Vencimientos de equipos**, y **Documentos de empleados** o **Documentos de equipos**.                             |
+| **Operación**          | **Dashboard → Operación** y **Partes de operaciones**.                                                                                                         |
+| **Flota y taller**     | **Dashboard → Flota y taller** y **Mantenimiento → Taller**.                                                                                                   |
+| **Personal**           | **Dashboard → Personal**, **Empleados** y **Diagramas**.                                                                                                       |
+| **Control de desvíos** | **Dashboard → Control de desvíos**, y **Equipos con desvíos** o **Planificador** según el widget.                                                              |
+| **Indicadores**        | **Configuración → Gráficos** o **Configuración → Indicadores**.                                                                                                |
 
 Si te quitan un permiso, los widgets que dependen de él desaparecen de tus tableros sin dejar huecos; si te lo vuelven a dar, reaparecen. Si no tenés ningún widget habilitado, el Dashboard muestra **No tenés indicadores habilitados**. Los permisos los asigna un administrador (<GuideLink to="usuarios-y-roles">Usuarios y roles</GuideLink>).
 

@@ -26,7 +26,8 @@ const mails = vi.hoisted(() => ({ any: vi.fn(async () => true) }));
 
 vi.mock('@/shared/lib/tenant', () => ({ getActiveCompanyId: async () => 'd5000000-0000-4000-8000-000000000001' }));
 vi.mock('@/features/Permissions', () => ({
-  checkPermissionServer: async (module: string, tab: string, action: string) => !state.denied.has(`${module}:${tab}:${action}`),
+  checkPermissionServer: async (module: string, tab: string, action: string) =>
+    !state.denied.has(`${module}:${tab}:${action}`),
 }));
 vi.mock('@/shared/actions/auth.actions', () => {
   const current = () => ({
@@ -37,11 +38,13 @@ vi.mock('@/shared/actions/auth.actions', () => {
   });
   return { getServerAuthProfile: async () => current(), requireServerAuthProfile: async () => current() };
 });
-vi.mock('@/shared/lib/mail/templates/purchases', () => ({
-  sendPurchaseRequestDecisionEmail: mails.any,
-  sendPurchaseOrderDecisionEmail: mails.any,
+// Las plantillas de aviso solo arman el contenido (#786); el envío al proveedor sí se captura.
+vi.mock('@/shared/lib/mail/templates/purchases', async (importActual) => ({
+  ...(await importActual<typeof import('@/shared/lib/mail/templates/purchases')>()),
   sendSupplierDocumentEmail: mails.any,
 }));
+// Los avisos internos los entrega el despachador de #786; acá no se prueban.
+vi.mock('@/features/Notifications/lib/dispatch.server', () => ({ notifySafe: async () => undefined }));
 vi.mock('next/cache', () => ({ revalidatePath: () => undefined }));
 
 const RUN = Boolean(process.env.DATABASE_URL);
@@ -53,7 +56,10 @@ async function db() {
 async function cleanup() {
   const prisma = await db();
   const company_id = { in: [COMPANY, OTHER_COMPANY] };
-  await prisma.purchase_orders.updateMany({ where: { company_id }, data: { complements_order_id: null, complements_receipt_id: null } });
+  await prisma.purchase_orders.updateMany({
+    where: { company_id },
+    data: { complements_order_id: null, complements_receipt_id: null },
+  });
   await prisma.purchase_receipts.deleteMany({ where: { company_id } });
   await prisma.purchase_orders.deleteMany({ where: { company_id } });
   await prisma.purchase_quotes.deleteMany({ where: { company_id } });
@@ -133,7 +139,13 @@ async function sentOrder(plans: LinePlan[]) {
   return { id: created.data.id, number: created.data.number, requestId: request.id, lineIds: lines.map((l) => l.id) };
 }
 
-type ReceiptLine = { orderLineId: string; quantity: string; batchNumber?: string; batchExpiresOn?: string; serialNumbers?: string };
+type ReceiptLine = {
+  orderLineId: string;
+  quantity: string;
+  batchNumber?: string;
+  batchExpiresOn?: string;
+  serialNumbers?: string;
+};
 
 const receiptForm = (orderId: string, lines: ReceiptLine[], overrides: Record<string, unknown> = {}) => ({
   orderId,
@@ -162,7 +174,10 @@ async function orderStatus(id: string) {
 
 async function balance(materialId: string) {
   const prisma = await db();
-  const agg = await prisma.stock_balances.aggregate({ where: { company_id: COMPANY, material_id: materialId }, _sum: { quantity: true } });
+  const agg = await prisma.stock_balances.aggregate({
+    where: { company_id: COMPANY, material_id: materialId },
+    _sum: { quantity: true },
+  });
   return agg._sum.quantity?.toNumber() ?? 0;
 }
 
@@ -191,22 +206,47 @@ describe.skipIf(!RUN)('recepciones (integracion)', () => {
       });
     }
     await prisma.profile.create({ data: { id: BUYER, credential_id: BUYER, email: 'recepciones@alphataco.local' } });
-    await prisma.measurement_units.create({ data: { id: UNIT, company_id: COMPANY, name: 'Unidad rc', abbreviation: 'u' } });
+    await prisma.measurement_units.create({
+      data: { id: UNIT, company_id: COMPANY, name: 'Unidad rc', abbreviation: 'u' },
+    });
     await prisma.materials.createMany({
       data: [
         { id: OIL, company_id: COMPANY, code: 'AC-1', name: 'Aceite', unit_id: UNIT },
         { id: FILTER_BATCH, company_id: COMPANY, code: 'FI-1', name: 'Filtro', unit_id: UNIT, tracking_type: 'BATCH' },
-        { id: TOOL_SERIAL, company_id: COMPANY, code: 'HE-1', name: 'Amoladora', unit_id: UNIT, tracking_type: 'SERIAL' },
-        { id: TIRE_MATERIAL, company_id: COMPANY, code: 'CUB-1', name: 'Cubierta 295', unit_id: UNIT, tracking_type: 'SERIAL' },
+        {
+          id: TOOL_SERIAL,
+          company_id: COMPANY,
+          code: 'HE-1',
+          name: 'Amoladora',
+          unit_id: UNIT,
+          tracking_type: 'SERIAL',
+        },
+        {
+          id: TIRE_MATERIAL,
+          company_id: COMPANY,
+          code: 'CUB-1',
+          name: 'Cubierta 295',
+          unit_id: UNIT,
+          tracking_type: 'SERIAL',
+        },
       ],
     });
-    await prisma.tire_types.create({ data: { id: TIRE_TYPE, company_id: COMPANY, name: '295 mixta', size: '295/80R22.5', tread_type: 'MIXED' } });
+    await prisma.tire_types.create({
+      data: { id: TIRE_TYPE, company_id: COMPANY, name: '295 mixta', size: '295/80R22.5', tread_type: 'MIXED' },
+    });
     await prisma.tire_brands.create({ data: { id: TIRE_BRAND, company_id: COMPANY, name: 'Marca rc' } });
     await prisma.tire_materials.create({
       data: { company_id: COMPANY, tire_type_id: TIRE_TYPE, tire_brand_id: TIRE_BRAND, material_id: TIRE_MATERIAL },
     });
     await prisma.suppliers.create({
-      data: { id: SUPPLIER, company_id: COMPANY, name: 'Proveedor rc', cuit: BigInt('20123456786'), vat_condition_id: 1, payment_term_days: 30 },
+      data: {
+        id: SUPPLIER,
+        company_id: COMPANY,
+        name: 'Proveedor rc',
+        cuit: BigInt('20123456786'),
+        vat_condition_id: 1,
+        payment_term_days: 30,
+      },
     });
     await prisma.warehouses.createMany({
       data: [
@@ -230,27 +270,39 @@ describe.skipIf(!RUN)('recepciones (integracion)', () => {
     const order = await sentOrder([{ material: OIL, quantity: 10, price: '250' }]);
     const before = await balance(OIL);
 
-    const first = expectOk(await actions.createPurchaseReceipt(receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '4' }])));
+    const first = expectOk(
+      await actions.createPurchaseReceipt(receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '4' }]))
+    );
     expect(first.number).toMatch(/^RC-\d{6}$/);
     expect(first.movementNumber).toMatch(/^MOV-/);
     expect(first.complementNumber).toBeNull();
     expect(await orderStatus(order.id)).toBe('PARTIALLY_RECEIVED');
     expect(await balance(OIL)).toBe(before + 4);
     const prisma = await db();
-    expect((await prisma.materials.findUniqueOrThrow({ where: { id: OIL }, select: { average_cost: true } })).average_cost.toString()).toBe('250');
+    expect(
+      (
+        await prisma.materials.findUniqueOrThrow({ where: { id: OIL }, select: { average_cost: true } })
+      ).average_cost.toString()
+    ).toBe('250');
 
-    expectOk(await actions.createPurchaseReceipt(receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '6' }])));
-    expect(await orderStatus(order.id)).toBe('RECEIVED');
-    expect(expectFail(await actions.createPurchaseReceipt(receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '1' }])))).toContain(
-      'ya fue recibida'
+    expectOk(
+      await actions.createPurchaseReceipt(receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '6' }]))
     );
+    expect(await orderStatus(order.id)).toBe('RECEIVED');
+    expect(
+      expectFail(
+        await actions.createPurchaseReceipt(receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '1' }]))
+      )
+    ).toContain('ya fue recibida');
   });
 
   it('servicio: sin deposito y sin movimiento', async () => {
     const actions = await import('./receipts.server');
     const order = await sentOrder([{ description: 'Rectificado', quantity: 1 }]);
     const done = expectOk(
-      await actions.createPurchaseReceipt(receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '1' }], { warehouseId: '' }))
+      await actions.createPurchaseReceipt(
+        receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '1' }], { warehouseId: '' })
+      )
     );
     expect(done.movementNumber).toBeNull();
     expect(await orderStatus(order.id)).toBe('RECEIVED');
@@ -282,7 +334,9 @@ describe.skipIf(!RUN)('recepciones (integracion)', () => {
     const actions = await import('./receipts.server');
     const order = await sentOrder([{ material: TOOL_SERIAL, quantity: 3 }]);
     const error = expectFail(
-      await actions.createPurchaseReceipt(receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '3', serialNumbers: 'AM-1\nAM-9\nAM-10' }]))
+      await actions.createPurchaseReceipt(
+        receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '3', serialNumbers: 'AM-1\nAM-9\nAM-10' }])
+      )
     );
     expect(error).toContain('AM-1');
     const prisma = await db();
@@ -295,7 +349,9 @@ describe.skipIf(!RUN)('recepciones (integracion)', () => {
     const actions = await import('./receipts.server');
     const orders = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const order = await sentOrder([{ material: OIL, quantity: 10, price: '100' }]);
-    const done = expectOk(await actions.createPurchaseReceipt(receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '12' }])));
+    const done = expectOk(
+      await actions.createPurchaseReceipt(receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '12' }]))
+    );
     expect(done.complementNumber).toMatch(/^OC-/);
     expect(await orderStatus(order.id)).toBe('RECEIVED');
 
@@ -314,8 +370,13 @@ describe.skipIf(!RUN)('recepciones (integracion)', () => {
 
     // Otro excedente, y esta vez la complementaria se anula.
     const second = await sentOrder([{ material: OIL, quantity: 1 }]);
-    const r = expectOk(await actions.createPurchaseReceipt(receiptForm(second.id, [{ orderLineId: second.lineIds[0]!, quantity: '3' }])));
-    const c2 = await prisma.purchase_orders.findFirstOrThrow({ where: { complements_order_id: second.id }, select: { id: true } });
+    const r = expectOk(
+      await actions.createPurchaseReceipt(receiptForm(second.id, [{ orderLineId: second.lineIds[0]!, quantity: '3' }]))
+    );
+    const c2 = await prisma.purchase_orders.findFirstOrThrow({
+      where: { complements_order_id: second.id },
+      select: { id: true },
+    });
     expectOk(await orders.cancelPurchaseOrder(c2.id, 'No se compra'));
     const detail = await actions.getPurchaseReceiptDetail(r.id);
     expect(detail?.excessWithoutOrder).toBe(true);
@@ -331,7 +392,10 @@ describe.skipIf(!RUN)('recepciones (integracion)', () => {
     const done = results.map(expectOk);
     expect(done.filter((d) => d.complementNumber).length).toBe(1);
     const prisma = await db();
-    const withinOrder = await prisma.purchase_receipt_lines.aggregate({ where: { order_line_id: order.lineIds[0]! }, _sum: { quantity: true } });
+    const withinOrder = await prisma.purchase_receipt_lines.aggregate({
+      where: { order_line_id: order.lineIds[0]! },
+      _sum: { quantity: true },
+    });
     expect(withinOrder._sum.quantity?.toNumber()).toBe(10);
     const complement = await prisma.purchase_orders.findFirstOrThrow({
       where: { complements_order_id: order.id },
@@ -347,7 +411,9 @@ describe.skipIf(!RUN)('recepciones (integracion)', () => {
 
     const order = await sentOrder([{ material: OIL, quantity: 5 }]);
     const before = await balance(OIL);
-    const r = expectOk(await actions.createPurchaseReceipt(receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '5' }])));
+    const r = expectOk(
+      await actions.createPurchaseReceipt(receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '5' }]))
+    );
     expect(expectFail(await actions.cancelPurchaseReceipt(r.id, ''))).toBeTruthy();
     expectOk(await actions.cancelPurchaseReceipt(r.id, 'Se cargó mal'));
     expect(await orderStatus(order.id)).toBe('SENT');
@@ -356,7 +422,9 @@ describe.skipIf(!RUN)('recepciones (integracion)', () => {
 
     // Stock ya salido: un ajuste negativo se lleva todo el aceite.
     const out = await sentOrder([{ material: OIL, quantity: 2 }]);
-    const r2 = expectOk(await actions.createPurchaseReceipt(receiptForm(out.id, [{ orderLineId: out.lineIds[0]!, quantity: '2' }])));
+    const r2 = expectOk(
+      await actions.createPurchaseReceipt(receiptForm(out.id, [{ orderLineId: out.lineIds[0]!, quantity: '2' }]))
+    );
     const { registerStockMovement } = await import('@/features/Warehouses/lib/stock-engine');
     const { withActor } = await import('@/shared/lib/actor');
     const total = await balance(OIL);
@@ -397,9 +465,14 @@ describe.skipIf(!RUN)('recepciones (integracion)', () => {
     // Complementaria aprobada.
     const ex = await sentOrder([{ description: 'Horas de grúa', quantity: 1 }]);
     const r3 = expectOk(
-      await actions.createPurchaseReceipt(receiptForm(ex.id, [{ orderLineId: ex.lineIds[0]!, quantity: '2' }], { warehouseId: '' }))
+      await actions.createPurchaseReceipt(
+        receiptForm(ex.id, [{ orderLineId: ex.lineIds[0]!, quantity: '2' }], { warehouseId: '' })
+      )
     );
-    const c3 = await prisma.purchase_orders.findFirstOrThrow({ where: { complements_order_id: ex.id }, select: { id: true, number: true } });
+    const c3 = await prisma.purchase_orders.findFirstOrThrow({
+      where: { complements_order_id: ex.id },
+      select: { id: true, number: true },
+    });
     expectOk(await orders.submitPurchaseOrder(c3.id));
     expectOk(await orders.approvePurchaseOrder(c3.id));
     // Con la complementaria aprobada tambien se anula (revision final, I-2): se anula con ella.
@@ -409,7 +482,9 @@ describe.skipIf(!RUN)('recepciones (integracion)', () => {
     // Cubiertas.
     const tires = await sentOrder([{ material: TIRE_MATERIAL, quantity: 1 }]);
     const r4 = expectOk(
-      await actions.createPurchaseReceipt(receiptForm(tires.id, [{ orderLineId: tires.lineIds[0]!, quantity: '1', serialNumbers: 'CUB-RC-9' }]))
+      await actions.createPurchaseReceipt(
+        receiptForm(tires.id, [{ orderLineId: tires.lineIds[0]!, quantity: '1', serialNumbers: 'CUB-RC-9' }])
+      )
     );
     expect(expectFail(await actions.cancelPurchaseReceipt(r4.id, 'x'))).toContain('Gomería');
   }, 60_000);
@@ -418,9 +493,14 @@ describe.skipIf(!RUN)('recepciones (integracion)', () => {
     const actions = await import('./receipts.server');
     const warehouse = await import('@/features/Warehouses/actions/movements.server');
     const order = await sentOrder([{ material: OIL, quantity: 1 }]);
-    const r = expectOk(await actions.createPurchaseReceipt(receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '1' }])));
+    const r = expectOk(
+      await actions.createPurchaseReceipt(receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '1' }]))
+    );
     const prisma = await db();
-    const receipt = await prisma.purchase_receipts.findUniqueOrThrow({ where: { id: r.id }, select: { stock_movement_id: true } });
+    const receipt = await prisma.purchase_receipts.findUniqueOrThrow({
+      where: { id: r.id },
+      select: { stock_movement_id: true },
+    });
     expect(expectFail(await warehouse.reverseStockMovementAction(receipt.stock_movement_id!, 'x'))).toContain(r.number);
   });
 
@@ -428,13 +508,16 @@ describe.skipIf(!RUN)('recepciones (integracion)', () => {
     const actions = await import('./receipts.server');
     const orders = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const order = await sentOrder([{ material: OIL, quantity: 10 }]);
-    expectOk(await actions.createPurchaseReceipt(receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '4' }])));
+    expectOk(
+      await actions.createPurchaseReceipt(receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '4' }]))
+    );
     expect(expectFail(await orders.cancelPurchaseOrder(order.id, 'x'))).toContain('tiene recepciones');
     expectOk(await orders.closePurchaseOrder(order.id, 'No llega el resto'));
     const prisma = await db();
-    expect((await prisma.purchase_requests.findUniqueOrThrow({ where: { id: order.requestId }, select: { status: true } })).status).toBe(
-      'PARTIALLY_ORDERED'
-    );
+    expect(
+      (await prisma.purchase_requests.findUniqueOrThrow({ where: { id: order.requestId }, select: { status: true } }))
+        .status
+    ).toBe('PARTIALLY_ORDERED');
     const { items } = await orders.searchOrderableRequestLines('', { requestId: order.requestId });
     expect(items.map((i) => i.remaining)).toEqual(['6.0000']);
   });
@@ -444,19 +527,33 @@ describe.skipIf(!RUN)('recepciones (integracion)', () => {
     const order = await sentOrder([{ material: OIL, quantity: 1 }]);
     const other = await sentOrder([{ material: OIL, quantity: 1 }]);
     const line = (orderLineId: string) => [{ orderLineId, quantity: '1' }];
-    expect(expectFail(await actions.createPurchaseReceipt(receiptForm(order.id, line(other.lineIds[0]!))))).toContain('no es de esta orden');
-    expect(expectFail(await actions.createPurchaseReceipt(receiptForm(order.id, line(order.lineIds[0]!), { warehouseId: FOREIGN_WAREHOUSE })))).toBe(
-      'El depósito no existe'
+    expect(expectFail(await actions.createPurchaseReceipt(receiptForm(order.id, line(other.lineIds[0]!))))).toContain(
+      'no es de esta orden'
     );
-    expect(expectFail(await actions.createPurchaseReceipt(receiptForm(order.id, line(order.lineIds[0]!), { warehouseId: INACTIVE_WAREHOUSE })))).toContain(
-      'inactivo'
-    );
-    expect(expectFail(await actions.createPurchaseReceipt(receiptForm(order.id, line(order.lineIds[0]!), { warehouseId: '' })))).toContain(
-      'depósito'
-    );
+    expect(
+      expectFail(
+        await actions.createPurchaseReceipt(
+          receiptForm(order.id, line(order.lineIds[0]!), { warehouseId: FOREIGN_WAREHOUSE })
+        )
+      )
+    ).toBe('El depósito no existe');
+    expect(
+      expectFail(
+        await actions.createPurchaseReceipt(
+          receiptForm(order.id, line(order.lineIds[0]!), { warehouseId: INACTIVE_WAREHOUSE })
+        )
+      )
+    ).toContain('inactivo');
+    expect(
+      expectFail(
+        await actions.createPurchaseReceipt(receiptForm(order.id, line(order.lineIds[0]!), { warehouseId: '' }))
+      )
+    ).toContain('depósito');
     const prisma = await db();
     await prisma.purchase_orders.update({ where: { id: order.id }, data: { company_id: OTHER_COMPANY } });
-    expect(expectFail(await actions.createPurchaseReceipt(receiptForm(order.id, line(order.lineIds[0]!))))).toBe('La orden de compra no existe');
+    expect(expectFail(await actions.createPurchaseReceipt(receiptForm(order.id, line(order.lineIds[0]!))))).toBe(
+      'La orden de compra no existe'
+    );
     await prisma.purchase_orders.update({ where: { id: order.id }, data: { company_id: COMPANY } });
     state.denied.add('compras:recepciones:create');
     expect(expectFail(await actions.createPurchaseReceipt(receiptForm(order.id, line(order.lineIds[0]!))))).toBe(
@@ -471,8 +568,13 @@ describe.skipIf(!RUN)('recepciones (integracion)', () => {
     const orders = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const prisma = await db();
     const order = await sentOrder([{ material: OIL, quantity: 1, price: '100' }]);
-    expectOk(await actions.createPurchaseReceipt(receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '3' }])));
-    const complement = await prisma.purchase_orders.findFirstOrThrow({ where: { complements_order_id: order.id }, select: { id: true } });
+    expectOk(
+      await actions.createPurchaseReceipt(receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '3' }]))
+    );
+    const complement = await prisma.purchase_orders.findFirstOrThrow({
+      where: { complements_order_id: order.id },
+      select: { id: true },
+    });
     expectOk(await orders.submitPurchaseOrder(complement.id));
     expectOk(await orders.rejectPurchaseOrder(complement.id, 'Revisá el precio'));
     const detail = (await orders.getPurchaseOrderDetail(complement.id))!;
@@ -497,9 +599,14 @@ describe.skipIf(!RUN)('recepciones (integracion)', () => {
     const prisma = await db();
     const order = await sentOrder([{ description: 'Horas de grúa', quantity: 1 }]);
     const r = expectOk(
-      await actions.createPurchaseReceipt(receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '2' }], { warehouseId: '' }))
+      await actions.createPurchaseReceipt(
+        receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '2' }], { warehouseId: '' })
+      )
     );
-    const complement = await prisma.purchase_orders.findFirstOrThrow({ where: { complements_order_id: order.id }, select: { id: true } });
+    const complement = await prisma.purchase_orders.findFirstOrThrow({
+      where: { complements_order_id: order.id },
+      select: { id: true },
+    });
     expectOk(await orders.submitPurchaseOrder(complement.id));
     expectOk(await orders.approvePurchaseOrder(complement.id));
     expectOk(await actions.cancelPurchaseReceipt(r.id, 'Se cargó mal'));
@@ -513,8 +620,13 @@ describe.skipIf(!RUN)('recepciones (integracion)', () => {
     const prisma = await db();
     for (let round = 0; round < 15; round++) {
       const order = await sentOrder([{ material: OIL, quantity: 1 }]);
-      const r = expectOk(await actions.createPurchaseReceipt(receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '2' }])));
-      const complement = await prisma.purchase_orders.findFirstOrThrow({ where: { complements_order_id: order.id }, select: { id: true } });
+      const r = expectOk(
+        await actions.createPurchaseReceipt(receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '2' }]))
+      );
+      const complement = await prisma.purchase_orders.findFirstOrThrow({
+        where: { complements_order_id: order.id },
+        select: { id: true },
+      });
       const [cancel, submit] = await Promise.all([
         actions.cancelPurchaseReceipt(r.id, 'Se cargó mal'),
         orders.submitPurchaseOrder(complement.id),

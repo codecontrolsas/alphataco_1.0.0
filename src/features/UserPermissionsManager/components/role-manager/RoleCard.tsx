@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
-import { Pencil, Shield, Trash2, Users } from 'lucide-react';
+import { Bell, Pencil, Shield, Trash2, Users } from 'lucide-react';
 import type { RoleWithCount } from '../../actions.server';
 
 interface RoleCardProps {
@@ -12,11 +12,21 @@ interface RoleCardProps {
   permissionsCount: number;
   onEdit: (role: RoleWithCount) => void;
   onManageUsers: (role: RoleWithCount) => void;
+  /** Roles de sistema: abre solo la configuración de avisos (sus permisos no se editan). */
+  onEditNotifications: (role: RoleWithCount) => void;
   onDelete: (roleId: number, roleName: string) => void;
   isDeleting: boolean;
 }
 
-export function RoleCard({ role, permissionsCount, onEdit, onManageUsers, onDelete, isDeleting }: RoleCardProps) {
+export function RoleCard({
+  role,
+  permissionsCount,
+  onEdit,
+  onManageUsers,
+  onEditNotifications,
+  onDelete,
+  isDeleting,
+}: RoleCardProps) {
   const hasUsers = role.userCount > 0;
   const canDelete = !role.is_system && !hasUsers;
 
@@ -61,12 +71,22 @@ export function RoleCard({ role, permissionsCount, onEdit, onManageUsers, onDele
       {role.description && <p className="mb-4 line-clamp-2 text-sm text-muted-foreground">{role.description}</p>}
 
       <div className="flex gap-2">
-        {/* Roles de sistema: solo botón de asignar */}
+        {/* Roles de sistema: asignar usuarios y configurar sus avisos (los permisos no se editan) */}
         {role.is_system ? (
           <PermissionGuard module="configuracion" tab="gestion-roles" action="update">
             <Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => onManageUsers(role)}>
               <Users className="mr-2 h-4 w-4" aria-hidden="true" />
               Asignar Usuarios
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onEditNotifications(role)}
+              title="Notificaciones del rol"
+              aria-label={`Notificaciones del rol ${role.name}`}
+            >
+              <Bell className="h-3 w-3" aria-hidden="true" />
             </Button>
           </PermissionGuard>
         ) : (

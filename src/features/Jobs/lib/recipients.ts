@@ -4,7 +4,9 @@ import type { notification_kind } from '@/generated/prisma/client';
 import { prisma } from '@/shared/lib/prisma';
 
 /**
- * Destinatarios de los correos automáticos, resueltos POR EMPRESA.
+ * Destinatarios ADICIONALES de los correos automáticos, resueltos POR EMPRESA. Desde #786 los avisos
+ * los entrega `notify` (features/Notifications): esta lista se suma a los usuarios de los roles que tienen
+ * el aviso activo, deduplicada por dirección.
  *
  * **Por qué no son variables de entorno.** Las edge functions leían una lista global
  * (`DEVIATIONS_RECIPIENTS`, `DOCUMENTS_EXPIRY_RECIPIENTS`), que servía cuando el sistema era

@@ -1,5 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { MailMessage } from '@/shared/lib/mail';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 /**
  * Integración real de los tres jobs de P5 contra el Postgres del compose.
@@ -52,7 +52,7 @@ const COUNTRY_ID = '66666666-6666-4666-8666-666666666666';
 const TEST_DATE = '2026-06-15';
 const TEST_DATE_UTC = new Date(`${TEST_DATE}T00:00:00Z`);
 
-type Prisma = typeof import('@/shared/lib/prisma')['prisma'];
+type Prisma = (typeof import('@/shared/lib/prisma'))['prisma'];
 let prisma: Prisma;
 
 /**
@@ -489,6 +489,12 @@ describe.skipIf(!RUN)('jobs de P5 (integración contra el compose)', () => {
       await prisma.jobs_runs.update({
         where: { job_run_key: { job: 'daily-report-deviations', run_key: `${COMPANY_B}:${TEST_DATE}` } },
         data: { status: 'error', error: 'fallo simulado' },
+      });
+      // Desde #786 el aviso queda registrado (`notification_events`) y no se reenvía si ya salió. Una
+      // corrida termina en error cuando el envío falló: se simula marcando el mail de B como fallido.
+      await prisma.notification_events.updateMany({
+        where: { company_id: COMPANY_B, event_key: 'operations.daily_report_deviations' },
+        data: { email_status: 'failed' },
       });
 
       const { runDailyReportDeviationsJob } = await import('./daily-report-deviations');

@@ -11,6 +11,7 @@ interface RoleGroupsProps {
   getPermissionsCount: (roleId: number) => number;
   onEdit: (role: RoleWithCount) => void;
   onManageUsers: (role: RoleWithCount) => void;
+  onEditNotifications: (role: RoleWithCount) => void;
   onDelete: (roleId: number, roleName: string) => void;
   isDeleting: boolean;
 }
@@ -23,6 +24,7 @@ export function RoleGroups({
   getPermissionsCount,
   onEdit,
   onManageUsers,
+  onEditNotifications,
   onDelete,
   isDeleting,
 }: RoleGroupsProps) {
@@ -43,6 +45,7 @@ export function RoleGroups({
           permissionsCount={getPermissionsCount(role.id)}
           onEdit={onEdit}
           onManageUsers={onManageUsers}
+          onEditNotifications={onEditNotifications}
           onDelete={onDelete}
           isDeleting={isDeleting}
         />

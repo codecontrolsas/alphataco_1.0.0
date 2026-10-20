@@ -1,9 +1,9 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
 import { MaintenanceStatusPill } from '@/features/Mantenimiento/shared/components/MaintenanceStatusPill';
 import { ResourceCell, toResourceCellResource } from '@/features/Mantenimiento/shared/components/ResourceCell';
+import { cn } from '@/lib/utils';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { argentinaDate, formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';
@@ -88,7 +88,9 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
       accessorFn: (row) => getResourceLabel(row),
       meta: { title: 'Equipo' },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Equipo" />,
-      cell: ({ row }) => <ResourceCell resource={toResourceCellResource(row.original, row.original.resourceSubtitle)} />,
+      cell: ({ row }) => (
+        <ResourceCell resource={toResourceCellResource(row.original, row.original.resourceSubtitle)} />
+      ),
       filterFn: (row, _id, value: string[]) => {
         const id = row.original.vehicles?.id ?? row.original.other_equipment?.id;
         if (id == null) return value.includes(NULL_FILTER_VALUE);
@@ -119,10 +121,7 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
       cell: ({ row }) => (
         <span className="font-mono tabular-nums">
           {row.original.completedTaskCount}/{row.original.taskCount}
-          <span className="sr-only">
-            {' '}
-            tareas completadas de {row.original.taskCount}
-          </span>
+          <span className="sr-only"> tareas completadas de {row.original.taskCount}</span>
         </span>
       ),
     },
@@ -178,7 +177,7 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
             {orders.map((order) => {
               const label = order.order_number ?? order.id.slice(0, 8);
               const href = order.order_number
-                ? `/dashboard/maintenance?tab=maint_taller&taller_step=in_workshop&maintenance-orders__order_number=${encodeURIComponent(
+                ? `/dashboard/maintenance?tab=maint_operaciones&vista=taller&taller_step=in_workshop&maintenance-orders__order_number=${encodeURIComponent(
                     order.order_number
                   )}`
                 : null;

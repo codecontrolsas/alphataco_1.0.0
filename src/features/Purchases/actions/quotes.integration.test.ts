@@ -25,17 +25,25 @@ const mails = vi.hoisted(() => ({
 
 vi.mock('@/shared/lib/tenant', () => ({ getActiveCompanyId: async () => 'd4000000-0000-4000-8000-000000000001' }));
 vi.mock('@/features/Permissions', () => ({
-  checkPermissionServer: async (module: string, tab: string, action: string) => !state.denied.has(`${module}:${tab}:${action}`),
+  checkPermissionServer: async (module: string, tab: string, action: string) =>
+    !state.denied.has(`${module}:${tab}:${action}`),
 }));
 vi.mock('@/shared/actions/auth.actions', () => {
-  const current = () => ({ id: 'd4000000-0000-4000-8000-000000000003', credentialId: 'x', fullname: null, email: null });
+  const current = () => ({
+    id: 'd4000000-0000-4000-8000-000000000003',
+    credentialId: 'x',
+    fullname: null,
+    email: null,
+  });
   return { getServerAuthProfile: async () => current(), requireServerAuthProfile: async () => current() };
 });
-vi.mock('@/shared/lib/mail/templates/purchases', () => ({
-  sendPurchaseRequestDecisionEmail: mails.decision,
-  sendPurchaseOrderDecisionEmail: mails.decision,
+// Las plantillas de aviso solo arman el contenido (#786); el envío al proveedor sí se captura.
+vi.mock('@/shared/lib/mail/templates/purchases', async (importActual) => ({
+  ...(await importActual<typeof import('@/shared/lib/mail/templates/purchases')>()),
   sendSupplierDocumentEmail: mails.supplier,
 }));
+// Los avisos internos los entrega el despachador de #786; acá no se prueban.
+vi.mock('@/features/Notifications/lib/dispatch.server', () => ({ notifySafe: async () => undefined }));
 vi.mock('next/cache', () => ({ revalidatePath: () => undefined }));
 
 const RUN = Boolean(process.env.DATABASE_URL);
@@ -150,13 +158,23 @@ describe.skipIf(!RUN)('pedidos de cotizacion (integracion)', () => {
       });
     }
     await prisma.profile.create({ data: { id: BUYER, credential_id: BUYER, email: 'comprador-pc@alphataco.local' } });
-    await prisma.measurement_units.create({ data: { id: UNIT, company_id: COMPANY, name: 'Unidad test', abbreviation: 'u' } });
-    await prisma.materials.create({ data: { id: MATERIAL, company_id: COMPANY, code: 'FIL-01', name: 'Filtro', unit_id: UNIT } });
+    await prisma.measurement_units.create({
+      data: { id: UNIT, company_id: COMPANY, name: 'Unidad test', abbreviation: 'u' },
+    });
+    await prisma.materials.create({
+      data: { id: MATERIAL, company_id: COMPANY, code: 'FIL-01', name: 'Filtro', unit_id: UNIT },
+    });
     await prisma.suppliers.createMany({
       data: [
         { id: SUPPLIER_A, company_id: COMPANY, name: 'A Proveedor', cuit: BigInt('20123456786'), vat_condition_id: 1 },
         { id: SUPPLIER_B, company_id: COMPANY, name: 'B Proveedor', cuit: BigInt('20111111112'), vat_condition_id: 1 },
-        { id: FOREIGN_SUPPLIER, company_id: OTHER_COMPANY, name: 'Ajeno', cuit: BigInt('20123456786'), vat_condition_id: 1 },
+        {
+          id: FOREIGN_SUPPLIER,
+          company_id: OTHER_COMPANY,
+          name: 'Ajeno',
+          cuit: BigInt('20123456786'),
+          vat_condition_id: 1,
+        },
       ],
     });
   }, 60_000);
@@ -203,7 +221,9 @@ describe.skipIf(!RUN)('pedidos de cotizacion (integracion)', () => {
   it('enviar por mail: OK queda enviada con PDF; si el mail falla sigue en borrador; marcar como enviada', async () => {
     const actions = { ...(await import('./quotes.server')), ...(await import('./quote-queries.server')) };
     const req = await approvedRequest([3]);
-    const { quotes } = expectOk(await actions.requestQuotes({ requestLineIds: req.lineIds, supplierIds: [SUPPLIER_A, SUPPLIER_B], notes: '' }));
+    const { quotes } = expectOk(
+      await actions.requestQuotes({ requestLineIds: req.lineIds, supplierIds: [SUPPLIER_A, SUPPLIER_B], notes: '' })
+    );
 
     state.supplierMailOk = false;
     expect(expectFail(await actions.sendPurchaseQuote(quotes[0].id, { to: ['ventas@a.test'], message: '' }))).toContain(
@@ -214,12 +234,16 @@ describe.skipIf(!RUN)('pedidos de cotizacion (integracion)', () => {
     state.supplierMailOk = true;
     expectOk(await actions.sendPurchaseQuote(quotes[0].id, { to: ['ventas@a.test'], message: '' }));
     expect(await quoteStatus(quotes[0].id)).toBe('SENT');
-    const [call] = mails.supplier.mock.calls.at(-1) as unknown as [{ kind: string; attachment: { filename: string; content: Uint8Array } }];
+    const [call] = mails.supplier.mock.calls.at(-1) as unknown as [
+      { kind: string; attachment: { filename: string; content: Uint8Array } },
+    ];
     expect(call.kind).toBe('quote');
     expect(call.attachment.filename).toBe(`${quotes[0].number}.pdf`);
     expect(Buffer.from(call.attachment.content).subarray(0, 4).toString()).toBe('%PDF');
 
-    expect(expectFail(await actions.sendPurchaseQuote(quotes[0].id, { to: ['ventas@a.test'], message: '' }))).toContain('ya fue enviada');
+    expect(expectFail(await actions.sendPurchaseQuote(quotes[0].id, { to: ['ventas@a.test'], message: '' }))).toContain(
+      'ya fue enviada'
+    );
 
     expectOk(await actions.markPurchaseQuoteSent(quotes[1].id));
     expect(await quoteStatus(quotes[1].id)).toBe('SENT');
@@ -229,7 +253,9 @@ describe.skipIf(!RUN)('pedidos de cotizacion (integracion)', () => {
     const actions = { ...(await import('./quotes.server')), ...(await import('./quote-queries.server')) };
     const orders = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([10, 1]);
-    const { quotes } = expectOk(await actions.requestQuotes({ requestLineIds: req.lineIds, supplierIds: [SUPPLIER_A, SUPPLIER_B], notes: '' }));
+    const { quotes } = expectOk(
+      await actions.requestQuotes({ requestLineIds: req.lineIds, supplierIds: [SUPPLIER_A, SUPPLIER_B], notes: '' })
+    );
     const [qa, qb] = quotes;
     expectOk(await actions.markPurchaseQuoteSent(qa.id));
     expectOk(await actions.markPurchaseQuoteSent(qb.id));
@@ -268,7 +294,11 @@ describe.skipIf(!RUN)('pedidos de cotizacion (integracion)', () => {
     const prisma = await db();
     const created = await prisma.purchase_orders.findUniqueOrThrow({
       where: { id: fromB.id },
-      select: { quote_id: true, supplier_id: true, lines: { select: { quantity: true, unit_price: true }, orderBy: { position: 'asc' } } },
+      select: {
+        quote_id: true,
+        supplier_id: true,
+        lines: { select: { quantity: true, unit_price: true }, orderBy: { position: 'asc' } },
+      },
     });
     expect(created.quote_id).toBe(qb.id);
     expect(created.supplier_id).toBe(SUPPLIER_B);
@@ -279,13 +309,17 @@ describe.skipIf(!RUN)('pedidos de cotizacion (integracion)', () => {
 
     // Con OC, la cotizacion ya no se corrige; y desde A no queda nada por pedir.
     expect(expectFail(await respond(qb.id, req.lineIds, ['98', '30']))).toContain('ya tiene una orden de compra');
-    expect(expectFail(await orders.createPurchaseOrderFromQuote(qa.id))).toBe('No queda nada por pedir de esta cotización');
+    expect(expectFail(await orders.createPurchaseOrderFromQuote(qa.id))).toBe(
+      'No queda nada por pedir de esta cotización'
+    );
   });
 
   it('no cotiza, anular y transiciones invalidas', async () => {
     const actions = { ...(await import('./quotes.server')), ...(await import('./quote-queries.server')) };
     const req = await approvedRequest([1]);
-    const { quotes } = expectOk(await actions.requestQuotes({ requestLineIds: req.lineIds, supplierIds: [SUPPLIER_A, SUPPLIER_B], notes: '' }));
+    const { quotes } = expectOk(
+      await actions.requestQuotes({ requestLineIds: req.lineIds, supplierIds: [SUPPLIER_A, SUPPLIER_B], notes: '' })
+    );
     expect(expectFail(await actions.declinePurchaseQuote(quotes[0].id))).toContain('ya fue');
     expectOk(await actions.markPurchaseQuoteSent(quotes[0].id));
     expectOk(await actions.declinePurchaseQuote(quotes[0].id));
@@ -296,7 +330,9 @@ describe.skipIf(!RUN)('pedidos de cotizacion (integracion)', () => {
     expect(await quoteStatus(quotes[1].id)).toBe('CANCELLED');
     expect(expectFail(await actions.cancelPurchaseQuote(quotes[1].id, 'otra vez'))).toContain('ya fue anulada');
 
-    const answered = expectOk(await actions.requestQuotes({ requestLineIds: req.lineIds, supplierIds: [SUPPLIER_A], notes: '' })).quotes[0];
+    const answered = expectOk(
+      await actions.requestQuotes({ requestLineIds: req.lineIds, supplierIds: [SUPPLIER_A], notes: '' })
+    ).quotes[0];
     expectOk(await actions.markPurchaseQuoteSent(answered.id));
     expectOk(await respond(answered.id, req.lineIds, ['5']));
     expect(expectFail(await actions.cancelPurchaseQuote(answered.id, 'x'))).toContain('ya fue respondida');
@@ -306,15 +342,21 @@ describe.skipIf(!RUN)('pedidos de cotizacion (integracion)', () => {
     const actions = { ...(await import('./quotes.server')), ...(await import('./quote-queries.server')) };
     const req = await approvedRequest([1]);
     expect(
-      expectFail(await actions.requestQuotes({ requestLineIds: req.lineIds, supplierIds: [FOREIGN_SUPPLIER], notes: '' }))
+      expectFail(
+        await actions.requestQuotes({ requestLineIds: req.lineIds, supplierIds: [FOREIGN_SUPPLIER], notes: '' })
+      )
     ).toBe('Uno de los proveedores no existe');
 
-    const other = expectOk(await actions.requestQuotes({ requestLineIds: req.lineIds, supplierIds: [SUPPLIER_A], notes: '' })).quotes[0];
+    const other = expectOk(
+      await actions.requestQuotes({ requestLineIds: req.lineIds, supplierIds: [SUPPLIER_A], notes: '' })
+    ).quotes[0];
     const otherReq = await approvedRequest([1]);
     expectOk(await actions.markPurchaseQuoteSent(other.id));
     const foreignLine = (await quoteLines(other.id))[0];
     // Una linea que no es de la cotizacion: rechazada.
-    const mine = expectOk(await actions.requestQuotes({ requestLineIds: otherReq.lineIds, supplierIds: [SUPPLIER_A], notes: '' })).quotes[0];
+    const mine = expectOk(
+      await actions.requestQuotes({ requestLineIds: otherReq.lineIds, supplierIds: [SUPPLIER_A], notes: '' })
+    ).quotes[0];
     expectOk(await actions.markPurchaseQuoteSent(mine.id));
     expect(
       expectFail(
@@ -334,8 +376,8 @@ describe.skipIf(!RUN)('pedidos de cotizacion (integracion)', () => {
     await prisma.purchase_quotes.update({ where: { id: mine.id }, data: { company_id: COMPANY } });
 
     state.denied.add('compras:cotizaciones:create');
-    expect(expectFail(await actions.requestQuotes({ requestLineIds: req.lineIds, supplierIds: [SUPPLIER_A], notes: '' }))).toBe(
-      'No tenés permiso para realizar esta acción'
-    );
+    expect(
+      expectFail(await actions.requestQuotes({ requestLineIds: req.lineIds, supplierIds: [SUPPLIER_A], notes: '' }))
+    ).toBe('No tenés permiso para realizar esta acción');
   });
 });

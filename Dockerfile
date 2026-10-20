@@ -35,6 +35,21 @@ RUN --mount=type=cache,target=/root/.npm \
        "@prisma/adapter-pg@$(V @prisma/adapter-pg)" "pg@$(V pg)" "dotenv@$(V dotenv)" \
   && rm -f package.json package-lock.json
 
+##### pdf #####
+# react-pdf se importa en runtime fuera del bundle (ver src/shared/lib/pdf/react-pdf.server.ts):
+# el trazado del standalone no ve ese import y la imagen quedaba sin @react-pdf/renderer, asi que
+# todos los PDF (certificaciones, facturas, compras) fallaban solo en produccion.
+# --legacy-peer-deps: no instala react; usa el que ya trae el standalone.
+FROM node:24-bookworm-slim AS pdf
+WORKDIR /pdf
+COPY package-lock.json .npmrc ./
+RUN --mount=type=cache,target=/root/.npm \
+  V() { node -p "require('./package-lock.json').packages['node_modules/$1'].version"; }; \
+  npm init -y >/dev/null \
+  && npm install --no-audit --no-fund --omit=dev --legacy-peer-deps \
+       "@react-pdf/renderer@$(V @react-pdf/renderer)" \
+  && rm -f package.json package-lock.json
+
 ##### demo-tools #####
 # Dependencias del reset diario de la demo (scripts/demo/reset.ts). Van a un
 # node_modules PROPIO dentro de scripts/demo y no al de la app: npm resolveria las
@@ -110,8 +125,11 @@ COPY --from=build --chown=nextjs:nodejs /app/scripts/seed-company.ts ./scripts/s
 COPY --from=build --chown=nextjs:nodejs /app/scripts/seed/permission-rows.ts ./scripts/seed/permission-rows.ts
 COPY --from=build --chown=nextjs:nodejs /app/src/features/Permissions/permissions-map.ts ./src/features/Permissions/permissions-map.ts
 COPY --from=build --chown=nextjs:nodejs /app/src/features/Warehouses/lib/default-units.ts ./src/features/Warehouses/lib/default-units.ts
+COPY --from=build --chown=nextjs:nodejs /app/src/features/Notifications/notification-catalog.ts ./src/features/Notifications/notification-catalog.ts
 # CLI de Prisma + deps del seed, encima del node_modules trazado del standalone.
 COPY --from=tools --chown=nextjs:nodejs /tools/node_modules ./node_modules
+# Motor de los PDF (ver stage `pdf`).
+COPY --from=pdf --chown=nextjs:nodejs /pdf/node_modules ./node_modules
 # Reset diario de la demo (lo corre un Schedule de Dokploy, ver scripts/demo/reset.ts)
 # con sus dependencias aparte.
 COPY --from=build --chown=nextjs:nodejs /app/scripts/demo ./scripts/demo
