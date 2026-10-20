@@ -166,12 +166,21 @@ export const PERMISSIONS = {
             parent: 'general',
             allowedActions: ['view', 'create', 'update'],
           },
+          // El slug `organigrama` quedó de cuando esta tab era el "organigrama": en realidad es la lista
+          // de sectores. Se renombró sin tocar slug ni id para no perder permisos asignados.
           organigrama: {
             slug: 'organigrama',
-            name: 'Organigrama',
+            name: 'Sectores',
             tabId: '10000000-0000-0000-0000-000000000013',
             parent: 'general',
             allowedActions: ['view', 'create', 'update'],
+          },
+          'org-chart': {
+            slug: 'org-chart',
+            name: 'Organigrama',
+            tabId: '10000000-0000-0000-0000-000000000018',
+            parent: 'general',
+            allowedActions: ['view', 'create', 'update', 'delete'],
           },
           users: {
             slug: 'users',

@@ -1,0 +1,47 @@
+/* Plano del organigrama: lo propio de esta figura sobre el kit isométrico (iso.css). */
+
+.org-plan-plate {
+  border-radius: 0.75rem;
+  padding: 44px 20px 48px;
+}
+
+/* La lectura puede ser larga (sector · puesto · legajo): no debe pisar la ayuda de la izquierda. */
+.org-plan-readout {
+  max-width: 70%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+}
+
+.org-plan-stage {
+  border-radius: 0.5rem;
+  outline: none;
+}
+
+.org-plan-stage:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+/* Área de captura invisible de cada pieza. */
+.org-plan-hit {
+  fill: transparent;
+  stroke: none;
+}
+
+.org-plan-token {
+  transition: transform 280ms var(--anatomy-ease);
+}
+
+.org-plan-token.is-clickable {
+  cursor: pointer;
+}
+
+.org-plan-tray.is-inactive {
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .org-plan-token {
+    transition: none;
+  }
+}

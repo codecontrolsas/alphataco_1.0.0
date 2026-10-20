@@ -1,7 +1,7 @@
 import { Skeleton } from '@/components/ui/skeleton';
 
 /**
- * Skeleton para la tabla de Organigrama (Sectores) mientras carga el Server Component.
+ * Skeleton para la tabla de Sectores mientras carga el Server Component.
  * Simula el layout con formulario a la izquierda y tabla a la derecha.
  */
 export function HierarchyTableSkeleton() {
