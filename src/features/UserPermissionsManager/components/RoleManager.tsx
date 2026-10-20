@@ -16,16 +16,20 @@ import { Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import type { ModulesWithTabsData, RoleWithCount } from '../actions.server';
+import type { RoleNotificationChanges } from '../actions/roleNotifications.server';
 import {
   equipmentTypeVisibilityKeys,
   useRoleEquipmentTypesDraft,
   type RoleEquipmentTypeChanges,
 } from '../hooks/useEquipmentTypeVisibility';
+import { roleNotificationKeys, useRoleNotificationsDraft } from '../hooks/useRoleNotificationsDraft';
 import { ManageRoleUsersDialog } from './ManageRoleUsersDialog';
 import { DeleteRoleDialog } from './role-manager/DeleteRoleDialog';
 import { RoleEditorSheet } from './role-manager/RoleEditorSheet';
 import { RoleGroups } from './role-manager/RoleGroups';
+import { RoleNotificationsSheet } from './role-manager/RoleNotificationsSheet';
 import { describeEquipmentTypesOutcome, saveRoleEquipmentTypeChanges } from './role-manager/equipment-types-save';
+import { describeNotificationsOutcome, saveRoleNotificationChanges } from './role-manager/notifications-save';
 
 const logger = new Logger('RoleManager');
 
@@ -61,11 +65,22 @@ export function RoleManager({ initialRoles, initialRolePermissions, initialModul
   const [manageUsersRole, setManageUsersRole] = useState<RoleWithCount | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [equipmentTypesSaveError, setEquipmentTypesSaveError] = useState<string | null>(null);
+  const [notificationsSaveError, setNotificationsSaveError] = useState<string | null>(null);
+  // Avisos de un rol recién creado que no se pudieron guardar: se reintentan con el próximo «Guardar».
+  const [pendingNotificationAdds, setPendingNotificationAdds] = useState<RoleNotificationChanges['add']>([]);
+  // Rol de sistema abierto solo para configurar sus avisos (sus permisos no se editan)
+  const [notificationsOnlyRole, setNotificationsOnlyRole] = useState<RoleWithCount | null>(null);
 
   // Tipos de equipamiento visibles del rol: baseline de la BD al abrir + borrador local
   const equipmentTypesDraft = useRoleEquipmentTypesDraft({
     roleId: editingRole?.id ?? null,
     enabled: isDialogOpen,
+  });
+
+  // Avisos del rol (#786): mismo esquema de baseline + borrador
+  const notificationsDraft = useRoleNotificationsDraft({
+    roleId: notificationsOnlyRole?.id ?? editingRole?.id ?? null,
+    enabled: isDialogOpen || notificationsOnlyRole !== null,
   });
 
   const invalidateEquipmentTypeVisibility = (roleId: number) => {
@@ -95,23 +110,44 @@ export function RoleManager({ initialRoles, initialRolePermissions, initialModul
     mutationFn: async ({
       role,
       equipmentTypeChanges,
+      notificationChanges,
     }: {
       role: Parameters<typeof createRoleWithPermissions>[0];
       equipmentTypeChanges: RoleEquipmentTypeChanges;
+      notificationChanges: RoleNotificationChanges;
     }) => {
       const newRole = await createRoleWithPermissions(role);
-      const equipmentTypes = await saveRoleEquipmentTypeChanges(newRole.id, equipmentTypeChanges);
-      return { newRole, equipmentTypes };
+      const [equipmentTypes, notifications] = await Promise.all([
+        saveRoleEquipmentTypeChanges(newRole.id, equipmentTypeChanges),
+        saveRoleNotificationChanges(newRole.id, notificationChanges),
+      ]);
+      return { newRole, equipmentTypes, notifications };
     },
-    onSuccess: ({ newRole, equipmentTypes }) => {
+    onSuccess: ({ newRole, equipmentTypes, notifications }, { notificationChanges: sentNotifications }) => {
       queryClient.invalidateQueries({ queryKey: ['roles'] });
       // Actualizar cache local de permisos
       setLocalRolePermissions((prev) => ({ ...prev, [newRole.id]: rolePermissions }));
       invalidateEquipmentTypeVisibility(newRole.id);
+      queryClient.invalidateQueries({ queryKey: roleNotificationKeys.role(newRole.id) });
 
-      if (equipmentTypes.status === 'failed') {
+      if (notifications.status === 'failed') {
+        setNotificationsSaveError(
+          'El rol se creó, pero no se pudieron guardar sus avisos. Vuelve a guardar para reintentar.'
+        );
+        // Al pasar a edición el borrador se mide contra la base (vacía): lo elegido se guarda aparte.
+        setPendingNotificationAdds(sentNotifications.add);
+      }
+      if (equipmentTypes.status === 'failed' || notifications.status === 'failed') {
         // El rol ya existe: el diálogo pasa a edición para reintentar sin crear un duplicado
         setEditingRole({ ...newRole, userCount: 0, _count: { user_roles: 0 } });
+        // Los permisos ya se guardaron: son el baseline del reintento (sin esto el editor queda esperándolo)
+        setPermissionsBaseline(rolePermissions);
+        if (equipmentTypes.status !== 'failed') {
+          toast.error('Notificaciones sin guardar', {
+            description: `El rol "${newRole.name}" se creó, pero no se pudieron guardar sus avisos.`,
+          });
+          return;
+        }
         setEquipmentTypesSaveError(
           'El rol se creó, pero no se pudo guardar qué tipos de equipamiento ve. Vuelve a guardar para reintentar.'
         );
@@ -122,7 +158,7 @@ export function RoleManager({ initialRoles, initialRolePermissions, initialModul
       }
 
       toast.success('Rol creado', {
-        description: `El rol "${newRole.name}" ha sido creado exitosamente.${describeEquipmentTypesOutcome(equipmentTypes)}`,
+        description: `El rol "${newRole.name}" ha sido creado exitosamente.${describeEquipmentTypesOutcome(equipmentTypes)}${describeNotificationsOutcome(notifications)}`,
       });
       setIsDialogOpen(false);
     },
@@ -139,24 +175,37 @@ export function RoleManager({ initialRoles, initialRolePermissions, initialModul
     mutationFn: async ({
       role,
       equipmentTypeChanges,
+      notificationChanges,
     }: {
       role: Parameters<typeof updateRoleWithPermissions>[0];
       equipmentTypeChanges: RoleEquipmentTypeChanges;
+      notificationChanges: RoleNotificationChanges;
     }) => {
       const updatedRole = await updateRoleWithPermissions(role);
-      const equipmentTypes = await saveRoleEquipmentTypeChanges(updatedRole.id, equipmentTypeChanges);
-      return { updatedRole, equipmentTypes };
+      const [equipmentTypes, notifications] = await Promise.all([
+        saveRoleEquipmentTypeChanges(updatedRole.id, equipmentTypeChanges),
+        saveRoleNotificationChanges(updatedRole.id, notificationChanges),
+      ]);
+      return { updatedRole, equipmentTypes, notifications };
     },
-    onSuccess: ({ updatedRole, equipmentTypes }) => {
+    onSuccess: ({ updatedRole, equipmentTypes, notifications }) => {
       queryClient.invalidateQueries({ queryKey: ['roles'] });
       // Actualizar cache local de permisos
       setLocalRolePermissions((prev) => ({ ...prev, [updatedRole.id]: rolePermissions }));
       // El nuevo estado guardado es el baseline para un eventual reintento
       setPermissionsBaseline(rolePermissions);
       invalidateEquipmentTypeVisibility(updatedRole.id);
+      queryClient.invalidateQueries({ queryKey: roleNotificationKeys.role(updatedRole.id) });
+      if (notifications.status === 'saved') notificationsDraft.reset();
       const permissionsOutcome = `Permisos: ${updatedRole.added} agregados, ${updatedRole.removed} quitados.`;
 
+      if (notifications.status === 'saved') setPendingNotificationAdds([]);
       if (equipmentTypes.status === 'failed') {
+        if (notifications.status === 'failed') {
+          setNotificationsSaveError(
+            'Tampoco se pudieron guardar los avisos del rol. Vuelve a guardar para reintentar.'
+          );
+        }
         // Los permisos se guardaron; el borrador de tipos queda para reintentar
         setEquipmentTypesSaveError(
           'Los permisos del rol se guardaron, pero no se pudo guardar qué tipos de equipamiento ve. Vuelve a guardar para reintentar.'
@@ -167,8 +216,18 @@ export function RoleManager({ initialRoles, initialRolePermissions, initialModul
         return;
       }
 
+      if (notifications.status === 'failed') {
+        setNotificationsSaveError(
+          'Los permisos del rol se guardaron, pero no sus avisos. Vuelve a guardar para reintentar.'
+        );
+        toast.error('Notificaciones sin guardar', {
+          description: `Los permisos de "${updatedRole.name}" se guardaron, pero no sus avisos.`,
+        });
+        return;
+      }
+
       toast.success('Rol actualizado', {
-        description: `El rol "${updatedRole.name}" ha sido actualizado exitosamente. ${permissionsOutcome}${describeEquipmentTypesOutcome(equipmentTypes)}`,
+        description: `El rol "${updatedRole.name}" ha sido actualizado exitosamente. ${permissionsOutcome}${describeEquipmentTypesOutcome(equipmentTypes)}${describeNotificationsOutcome(notifications)}`,
       });
       setIsDialogOpen(false);
     },
@@ -179,6 +238,31 @@ export function RoleManager({ initialRoles, initialRolePermissions, initialModul
       });
     },
   });
+
+  // Mutación: guardar solo los avisos de un rol de sistema
+  const saveNotificationsOnlyMutation = useMutation({
+    mutationFn: ({ roleId, changes }: { roleId: number; changes: RoleNotificationChanges }) =>
+      saveRoleNotificationChanges(roleId, changes),
+    onSuccess: (outcome, { roleId }) => {
+      queryClient.invalidateQueries({ queryKey: roleNotificationKeys.role(roleId) });
+      if (outcome.status === 'failed') {
+        setNotificationsSaveError('No se pudieron guardar los avisos del rol. Volvé a intentar.');
+        return;
+      }
+      toast.success('Avisos guardados', {
+        description: `Rol "${notificationsOnlyRole?.name ?? ''}".${describeNotificationsOutcome(outcome)}`,
+      });
+      notificationsDraft.reset();
+      setNotificationsOnlyRole(null);
+    },
+  });
+
+  const handleEditNotifications = (role: RoleWithCount) => {
+    notificationsDraft.reset();
+    setNotificationsSaveError(null);
+    setPendingNotificationAdds([]);
+    setNotificationsOnlyRole(role);
+  };
 
   // Mutación: eliminar rol
   const deleteRoleMutation = useMutation({
@@ -209,6 +293,9 @@ export function RoleManager({ initialRoles, initialRolePermissions, initialModul
     setTemplateRoleIds([]);
     equipmentTypesDraft.reset();
     setEquipmentTypesSaveError(null);
+    notificationsDraft.reset();
+    setNotificationsSaveError(null);
+    setPendingNotificationAdds([]);
     setIsDialogOpen(true);
   };
 
@@ -228,6 +315,9 @@ export function RoleManager({ initialRoles, initialRolePermissions, initialModul
       setTemplateRoleIds([]);
       equipmentTypesDraft.reset();
       setEquipmentTypesSaveError(null);
+      notificationsDraft.reset();
+      setNotificationsSaveError(null);
+      setPendingNotificationAdds([]);
       setRolePermissions(permissions);
       setPermissionsBaseline(permissions);
       setLocalRolePermissions((prev) => ({ ...prev, [role.id]: permissions }));
@@ -262,9 +352,19 @@ export function RoleManager({ initialRoles, initialRolePermissions, initialModul
 
     // Sin baseline no se puede calcular qué cambió en los tipos de equipamiento
     if (equipmentTypesDraft.hasChanges && !equipmentTypesDraft.isBaselineReady) return;
+    if (notificationsDraft.hasChanges && !notificationsDraft.isBaselineReady) return;
 
     setEquipmentTypesSaveError(null);
+    setNotificationsSaveError(null);
     const equipmentTypeChanges = equipmentTypesDraft.changes;
+    // Si quedaron avisos sin guardar de la creación del rol, viajan con este guardado
+    const notificationChanges: RoleNotificationChanges =
+      pendingNotificationAdds.length > 0
+        ? {
+            add: [...pendingNotificationAdds, ...notificationsDraft.changes.add],
+            remove: notificationsDraft.changes.remove,
+          }
+        : notificationsDraft.changes;
 
     if (editingRole) {
       // Sin baseline no se puede calcular qué cambió: no se guarda
@@ -278,6 +378,7 @@ export function RoleManager({ initialRoles, initialRolePermissions, initialModul
           permissions: computePermissionsDelta(permissionsBaseline),
         },
         equipmentTypeChanges,
+        notificationChanges,
       });
     } else {
       createRoleMutation.mutate({
@@ -288,12 +389,15 @@ export function RoleManager({ initialRoles, initialRolePermissions, initialModul
           permissions: rolePermissions,
         },
         equipmentTypeChanges,
+        notificationChanges,
       });
     }
   };
 
   const isSavingRole = createRoleMutation.isPending || updateRoleMutation.isPending;
-  const isWaitingEquipmentTypesBaseline = equipmentTypesDraft.hasChanges && !equipmentTypesDraft.isBaselineReady;
+  const isWaitingEquipmentTypesBaseline =
+    (equipmentTypesDraft.hasChanges && !equipmentTypesDraft.isBaselineReady) ||
+    (notificationsDraft.hasChanges && !notificationsDraft.isBaselineReady);
   const isWaitingPermissionsBaseline = editingRole !== null && permissionsBaseline === null;
 
   const handleImportPermissions = async () => {
@@ -407,6 +511,8 @@ export function RoleManager({ initialRoles, initialRolePermissions, initialModul
               onImportPermissions={handleImportPermissions}
               equipmentTypesDraft={equipmentTypesDraft}
               equipmentTypesSaveError={equipmentTypesSaveError}
+              notificationsDraft={notificationsDraft}
+              notificationsSaveError={notificationsSaveError}
               isSaving={isSavingRole}
               isWaitingEquipmentTypesBaseline={isWaitingEquipmentTypesBaseline}
               isWaitingPermissionsBaseline={isWaitingPermissionsBaseline}
@@ -437,10 +543,29 @@ export function RoleManager({ initialRoles, initialRolePermissions, initialModul
           getPermissionsCount={getPermissionsCountForRole}
           onEdit={handleEditRole}
           onManageUsers={handleManageUsers}
+          onEditNotifications={handleEditNotifications}
           onDelete={handleDeleteRole}
           isDeleting={deleteRoleMutation.isPending}
         />
       </Card>
+
+      <RoleNotificationsSheet
+        role={notificationsOnlyRole}
+        onOpenChange={(open) => {
+          if (!open) setNotificationsOnlyRole(null);
+        }}
+        draft={notificationsDraft}
+        saveError={notificationsSaveError}
+        isSaving={saveNotificationsOnlyMutation.isPending}
+        onSave={() => {
+          if (!notificationsOnlyRole) return;
+          setNotificationsSaveError(null);
+          saveNotificationsOnlyMutation.mutate({
+            roleId: notificationsOnlyRole.id,
+            changes: notificationsDraft.changes,
+          });
+        }}
+      />
 
       <DeleteRoleDialog
         open={deleteConfirmOpen}

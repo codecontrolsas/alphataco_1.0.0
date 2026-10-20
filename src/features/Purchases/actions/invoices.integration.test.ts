@@ -21,7 +21,8 @@ const mails = vi.hoisted(() => ({ any: vi.fn(async () => true) }));
 
 vi.mock('@/shared/lib/tenant', () => ({ getActiveCompanyId: async () => 'd6000000-0000-4000-8000-000000000001' }));
 vi.mock('@/features/Permissions', () => ({
-  checkPermissionServer: async (module: string, tab: string, action: string) => !state.denied.has(`${module}:${tab}:${action}`),
+  checkPermissionServer: async (module: string, tab: string, action: string) =>
+    !state.denied.has(`${module}:${tab}:${action}`),
 }));
 vi.mock('@/shared/actions/auth.actions', () => {
   const current = () => ({
@@ -32,11 +33,13 @@ vi.mock('@/shared/actions/auth.actions', () => {
   });
   return { getServerAuthProfile: async () => current(), requireServerAuthProfile: async () => current() };
 });
-vi.mock('@/shared/lib/mail/templates/purchases', () => ({
-  sendPurchaseRequestDecisionEmail: mails.any,
-  sendPurchaseOrderDecisionEmail: mails.any,
+// Las plantillas de aviso solo arman el contenido (#786); el envío al proveedor sí se captura.
+vi.mock('@/shared/lib/mail/templates/purchases', async (importActual) => ({
+  ...(await importActual<typeof import('@/shared/lib/mail/templates/purchases')>()),
   sendSupplierDocumentEmail: mails.any,
 }));
+// Los avisos internos los entrega el despachador de #786; acá no se prueban.
+vi.mock('@/features/Notifications/lib/dispatch.server', () => ({ notifySafe: async () => undefined }));
 vi.mock('next/cache', () => ({ revalidatePath: () => undefined }));
 
 const RUN = Boolean(process.env.DATABASE_URL);
@@ -53,7 +56,10 @@ async function cleanup() {
   await prisma.supplier_invoices.updateMany({ where: { company_id }, data: { related_invoice_id: null } });
   await prisma.supplier_invoices.deleteMany({ where: { company_id } });
   await prisma.purchase_expense_categories.deleteMany({ where: { company_id } });
-  await prisma.purchase_orders.updateMany({ where: { company_id }, data: { complements_order_id: null, complements_receipt_id: null } });
+  await prisma.purchase_orders.updateMany({
+    where: { company_id },
+    data: { complements_order_id: null, complements_receipt_id: null },
+  });
   await prisma.purchase_receipts.deleteMany({ where: { company_id } });
   await prisma.purchase_orders.deleteMany({ where: { company_id } });
   await prisma.purchase_requests.deleteMany({ where: { company_id } });
@@ -74,11 +80,13 @@ function expectFail(result: { ok: true } | { ok: false; error: string }): string
   return result.error;
 }
 
-
 let counter = 0;
 
 /** Solicitud aprobada + OC enviada con lineas de servicio, recibida en `received` (si se indica). */
-async function receivedOrder(plans: { quantity: number; price?: string; received?: number; vatRateId?: number }[], supplierId = SUPPLIER) {
+async function receivedOrder(
+  plans: { quantity: number; price?: string; received?: number; vatRateId?: number }[],
+  supplierId = SUPPLIER
+) {
   const prisma = await db();
   const orders = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
   const receipts = await import('./receipts.server');
@@ -92,7 +100,12 @@ async function receivedOrder(plans: { quantity: number; price?: string; received
       decided_by: BUYER,
       decided_at: new Date(),
       lines: {
-        create: plans.map((p, i) => ({ position: i + 1, description: `Servicio ${i + 1}`, quantity: p.quantity, unit_id: UNIT })),
+        create: plans.map((p, i) => ({
+          position: i + 1,
+          description: `Servicio ${i + 1}`,
+          quantity: p.quantity,
+          unit_id: UNIT,
+        })),
       },
     },
     select: { id: true, lines: { select: { id: true }, orderBy: { position: 'asc' } } },
@@ -124,7 +137,9 @@ async function receivedOrder(plans: { quantity: number; price?: string; received
     orderBy: { position: 'asc' },
     select: { id: true },
   });
-  const toReceive = plans.flatMap((p, i) => (p.received ? [{ orderLineId: lines[i]!.id, quantity: String(p.received) }] : []));
+  const toReceive = plans.flatMap((p, i) =>
+    p.received ? [{ orderLineId: lines[i]!.id, quantity: String(p.received) }] : []
+  );
   if (toReceive.length > 0) {
     const receipt = await receipts.createPurchaseReceipt({
       orderId: created.data.id,
@@ -164,7 +179,10 @@ function computedVat(cbteType: number, lines: FormLine[]): FormValues['vat'] {
     bases.set(Number(l.vatRateId), (bases.get(Number(l.vatRateId)) ?? 0) + net);
   }
   const rates: Record<number, number> = { 3: 0, 4: 10.5, 5: 21, 6: 27, 8: 5, 9: 2.5 };
-  return [...bases.entries()].map(([vatRateId, base]) => ({ vatRateId, amount: (Math.round(base * rates[vatRateId]!) / 100).toFixed(2) }));
+  return [...bases.entries()].map(([vatRateId, base]) => ({
+    vatRateId,
+    amount: (Math.round(base * rates[vatRateId]!) / 100).toFixed(2),
+  }));
 }
 
 function invoiceForm(lines: FormLine[], over: Partial<FormValues> = {}): FormValues {
@@ -236,16 +254,44 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
       },
     });
     await prisma.profile.create({ data: { id: BUYER, credential_id: BUYER, email: 'facturas@alphataco.local' } });
-    await prisma.measurement_units.create({ data: { id: UNIT, company_id: COMPANY, name: 'Unidad fc', abbreviation: 'u' } });
+    await prisma.measurement_units.create({
+      data: { id: UNIT, company_id: COMPANY, name: 'Unidad fc', abbreviation: 'u' },
+    });
     await prisma.suppliers.createMany({
       data: [
-        { id: SUPPLIER, company_id: COMPANY, name: 'Repuestos del Sur', cuit: BigInt('30712345678'), vat_condition_id: 1 },
-        { id: MONO_SUPPLIER, company_id: COMPANY, name: 'Juan Electricista', cuit: BigInt('20123456786'), vat_condition_id: 6 },
-        { id: OTHER_SUPPLIER, company_id: COMPANY, name: 'Otro proveedor', cuit: BigInt('30711111119'), vat_condition_id: 1 },
-        { id: FOREIGN_SUPPLIER, company_id: OTHER_COMPANY, name: 'Ajeno', cuit: BigInt('30722222228'), vat_condition_id: 1 },
+        {
+          id: SUPPLIER,
+          company_id: COMPANY,
+          name: 'Repuestos del Sur',
+          cuit: BigInt('30712345678'),
+          vat_condition_id: 1,
+        },
+        {
+          id: MONO_SUPPLIER,
+          company_id: COMPANY,
+          name: 'Juan Electricista',
+          cuit: BigInt('20123456786'),
+          vat_condition_id: 6,
+        },
+        {
+          id: OTHER_SUPPLIER,
+          company_id: COMPANY,
+          name: 'Otro proveedor',
+          cuit: BigInt('30711111119'),
+          vat_condition_id: 1,
+        },
+        {
+          id: FOREIGN_SUPPLIER,
+          company_id: OTHER_COMPANY,
+          name: 'Ajeno',
+          cuit: BigInt('30722222228'),
+          vat_condition_id: 1,
+        },
       ],
     });
-    await prisma.purchase_expense_categories.create({ data: { id: FOREIGN_CATEGORY, company_id: OTHER_COMPANY, name: 'Ajeno' } });
+    await prisma.purchase_expense_categories.create({
+      data: { id: FOREIGN_CATEGORY, company_id: OTHER_COMPANY, name: 'Ajeno' },
+    });
   }, 60_000);
 
   afterAll(async () => {
@@ -262,7 +308,9 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
       const light = expectOk(await actions.createExpenseCategory({ name: 'Luz' }));
       expect(expectFail(await actions.createExpenseCategory({ name: ' luz ' }))).toBe('Ya existe el concepto «Luz»');
       const fees = expectOk(await actions.createExpenseCategory({ name: 'Honorarios' }));
-      expect(expectFail(await actions.renameExpenseCategory(fees.id, { name: 'LUZ' }))).toBe('Ya existe el concepto «Luz»');
+      expect(expectFail(await actions.renameExpenseCategory(fees.id, { name: 'LUZ' }))).toBe(
+        'Ya existe el concepto «Luz»'
+      );
       expectOk(await actions.renameExpenseCategory(light.id, { name: 'Energía eléctrica' }));
       expectOk(await actions.setExpenseCategoryActive(light.id, false));
       const rows = await actions.getExpenseCategories();
@@ -274,10 +322,14 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
 
     it('perimetro y permisos', async () => {
       const actions = await import('./expense-categories.server');
-      expect(expectFail(await actions.renameExpenseCategory(FOREIGN_CATEGORY, { name: 'X' }))).toBe('El concepto no existe');
+      expect(expectFail(await actions.renameExpenseCategory(FOREIGN_CATEGORY, { name: 'X' }))).toBe(
+        'El concepto no existe'
+      );
       expect(expectFail(await actions.setExpenseCategoryActive(FOREIGN_CATEGORY, false))).toBe('El concepto no existe');
       state.denied.add('compras:config-compras:update');
-      expect(expectFail(await actions.createExpenseCategory({ name: 'Fletes' }))).toBe('No tenés permiso para realizar esta acción');
+      expect(expectFail(await actions.createExpenseCategory({ name: 'Fletes' }))).toBe(
+        'No tenés permiso para realizar esta acción'
+      );
     });
   });
 
@@ -287,7 +339,9 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
       const order = await receivedOrder([{ quantity: 10, received: 10 }]);
       const created = expectOk(
         await actions.createSupplierInvoice(
-          invoiceForm([orderLine(order.lineIds[0]!, '10')], { taxes: [{ kind: 'VAT_PERCEPTION', provinceId: '', description: '', amount: '300' }] })
+          invoiceForm([orderLine(order.lineIds[0]!, '10')], {
+            taxes: [{ kind: 'VAT_PERCEPTION', provinceId: '', description: '', amount: '300' }],
+          })
         )
       );
       expect(created.status).toBe('CONFORMING');
@@ -296,13 +350,19 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
       const row = await invoiceRow(created.id);
       expect(row.total.toString()).toBe('14820');
       const prisma = await db();
-      const vat = await prisma.supplier_invoice_vat.findMany({ where: { invoice_id: created.id }, select: { vat_rate_id: true, base: true, amount: true } });
+      const vat = await prisma.supplier_invoice_vat.findMany({
+        where: { invoice_id: created.id },
+        select: { vat_rate_id: true, base: true, amount: true },
+      });
       expect(vat.map((v) => [v.vat_rate_id, v.base.toString(), v.amount.toString()])).toEqual([[5, '12000', '2520']]);
     });
 
     it('observaciones: letra, IVA, precio, alicuota y cantidad', async () => {
       const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
-      const order = await receivedOrder([{ quantity: 10, received: 10 }, { quantity: 5, received: 5 }]);
+      const order = await receivedOrder([
+        { quantity: 10, received: 10 },
+        { quantity: 5, received: 5 },
+      ]);
       const lines = [orderLine(order.lineIds[0]!, '12', '1250'), orderLine(order.lineIds[1]!, '5', '1200', '4')];
       const values = invoiceForm(lines, { cbteType: 6 });
       values.vat = values.vat.map((v) => (v.vatRateId === 5 ? { ...v, amount: (Number(v.amount) + 5).toFixed(2) } : v));
@@ -317,12 +377,20 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     it('errores: OC de otro proveedor, OC no aprobada, duplicado', async () => {
       const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
       const order = await receivedOrder([{ quantity: 2, received: 2 }]);
-      expect(expectFail(await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '2')], { supplierId: OTHER_SUPPLIER })))).toBe(
-        `Servicio 1: la ${order.number} es de otro proveedor`
-      );
+      expect(
+        expectFail(
+          await actions.createSupplierInvoice(
+            invoiceForm([orderLine(order.lineIds[0]!, '2')], { supplierId: OTHER_SUPPLIER })
+          )
+        )
+      ).toBe(`Servicio 1: la ${order.number} es de otro proveedor`);
 
       const prisma = await db();
-      const draft = await prisma.purchase_orders.update({ where: { id: order.id }, data: { status: 'DRAFT' }, select: { id: true } });
+      const draft = await prisma.purchase_orders.update({
+        where: { id: order.id },
+        data: { status: 'DRAFT' },
+        select: { id: true },
+      });
       expect(expectFail(await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '2')])))).toBe(
         `La ${order.number} no está aprobada`
       );
@@ -341,15 +409,21 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
       const conform = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1')])));
       expect(expectFail(await actions.approveSupplierInvoice(conform.id, 'ok'))).toContain('no está observada');
 
-      const observed = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1', '1300')])));
+      const observed = expectOk(
+        await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1', '1300')]))
+      );
       state.denied.add('compras:facturas:approve');
-      expect(expectFail(await actions.approveSupplierInvoice(observed.id, 'ok'))).toBe('No tenés permiso para realizar esta acción');
+      expect(expectFail(await actions.approveSupplierInvoice(observed.id, 'ok'))).toBe(
+        'No tenés permiso para realizar esta acción'
+      );
       state.denied.clear();
       expect(expectFail(await actions.approveSupplierInvoice(observed.id, ' '))).toBe('Indicá el motivo');
       expectOk(await actions.approveSupplierInvoice(observed.id, 'Aumento acordado por teléfono'));
       expect((await invoiceRow(observed.id)).status).toBe('APPROVED');
 
-      const other = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1', '1300')])));
+      const other = expectOk(
+        await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1', '1300')]))
+      );
       expectOk(await actions.rejectSupplierInvoice(other.id, 'Precio no acordado'));
       const rejected = await invoiceRow(other.id);
       expect(rejected.status).toBe('REJECTED');
@@ -362,16 +436,18 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
       const line = order.lineIds[0]!;
       const invoice = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(line, '10')])));
       const credit = expectOk(
-        await actions.createSupplierInvoice(invoiceForm([orderLine(line, '2')], { cbteType: 3, relatedInvoiceId: invoice.id }))
+        await actions.createSupplierInvoice(
+          invoiceForm([orderLine(line, '2')], { cbteType: 3, relatedInvoiceId: invoice.id })
+        )
       );
       expect(credit.status).toBe('CONFORMING');
       const next = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(line, '2')])));
       expect(next.status).toBe('CONFORMING');
 
       // NC que deja lo facturado en negativo
-      expect(expectFail(await actions.createSupplierInvoice(invoiceForm([orderLine(line, '11')], { cbteType: 3 })))).toBe(
-        `Servicio 1: la nota de crédito acredita 11 u y en la ${order.number} hay 10 u facturadas`
-      );
+      expect(
+        expectFail(await actions.createSupplierInvoice(invoiceForm([orderLine(line, '11')], { cbteType: 3 })))
+      ).toBe(`Servicio 1: la nota de crédito acredita 11 u y en la ${order.number} hay 10 u facturadas`);
 
       // Rechazada: no cuenta
       const extra = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(line, '3')])));
@@ -405,7 +481,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
       const order = await receivedOrder([{ quantity: 2, received: 2 }]);
       const invoice = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1')])));
       expect(
-        expectFail(await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1')], { cbteType: 8, relatedInvoiceId: invoice.id })))
+        expectFail(
+          await actions.createSupplierInvoice(
+            invoiceForm([orderLine(order.lineIds[0]!, '1')], { cbteType: 8, relatedInvoiceId: invoice.id })
+          )
+        )
       ).toBe('La nota tiene que vincularse a una factura vigente del mismo proveedor y la misma letra');
     });
 
@@ -426,9 +506,15 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
       const second = await receivedOrder([{ quantity: 5, received: 2 }]);
       const invoice = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(first.lineIds[0]!, '5')])));
       const prisma = await db();
-      const current = await prisma.supplier_invoices.findUniqueOrThrow({ where: { id: invoice.id }, select: { number: true } });
+      const current = await prisma.supplier_invoices.findUniqueOrThrow({
+        where: { id: invoice.id },
+        select: { number: true },
+      });
       const edited = expectOk(
-        await actions.updateSupplierInvoice(invoice.id, invoiceForm([orderLine(second.lineIds[0]!, '5')], { number: String(current.number) }))
+        await actions.updateSupplierInvoice(
+          invoice.id,
+          invoiceForm([orderLine(second.lineIds[0]!, '5')], { number: String(current.number) })
+        )
       );
       expect(codes(edited.observations)).toEqual(['QUANTITY']);
       const again = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(first.lineIds[0]!, '5')])));
@@ -441,7 +527,13 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
       const values = invoiceForm([orderLine(order.lineIds[0]!, '4', '1300')]);
       const observed = expectOk(await actions.createSupplierInvoice(values));
       expectOk(await actions.approveSupplierInvoice(observed.id, 'Acordado'));
-      const edited = expectOk(await actions.updateSupplierInvoice(observed.id, { ...values, lines: [orderLine(order.lineIds[0]!, '4')], vat: computedVat(1, [orderLine(order.lineIds[0]!, '4')]) }));
+      const edited = expectOk(
+        await actions.updateSupplierInvoice(observed.id, {
+          ...values,
+          lines: [orderLine(order.lineIds[0]!, '4')],
+          vat: computedVat(1, [orderLine(order.lineIds[0]!, '4')]),
+        })
+      );
       expect(edited.status).toBe('CONFORMING');
       expect((await invoiceRow(observed.id)).resolution_comment).toBeNull();
     });
@@ -460,12 +552,18 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
         net,
         vatRateId,
       });
-      const c = expectOk(await actions.createSupplierInvoice(invoiceForm([expense('5000', '')], { cbteType: 11, supplierId: MONO_SUPPLIER })));
+      const c = expectOk(
+        await actions.createSupplierInvoice(
+          invoiceForm([expense('5000', '')], { cbteType: 11, supplierId: MONO_SUPPLIER })
+        )
+      );
       expect(c.status).toBe('CONFORMING');
       expect((await invoiceRow(c.id)).total.toString()).toBe('5000');
 
       const order = await receivedOrder([{ quantity: 1, received: 1 }]);
-      const mixed = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1'), expense('100', '5')])));
+      const mixed = expectOk(
+        await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1'), expense('100', '5')]))
+      );
       expect(mixed.status).toBe('CONFORMING');
       expect((await invoiceRow(mixed.id)).total.toString()).toBe('1573');
     });
@@ -485,12 +583,18 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     it('perimetro: proveedor, linea de OC, vinculado y concepto de otra empresa', async () => {
       const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
       const prisma = await db();
-      expect(expectFail(await actions.createSupplierInvoice(invoiceForm([orderLine('d6000000-0000-4000-8000-0000000000ff', '1')], { supplierId: FOREIGN_SUPPLIER })))).toBe(
-        'El proveedor no existe'
-      );
-      expect(expectFail(await actions.createSupplierInvoice(invoiceForm([orderLine('d6000000-0000-4000-8000-0000000000ff', '1')])))).toBe(
-        'La línea de OC no existe'
-      );
+      expect(
+        expectFail(
+          await actions.createSupplierInvoice(
+            invoiceForm([orderLine('d6000000-0000-4000-8000-0000000000ff', '1')], { supplierId: FOREIGN_SUPPLIER })
+          )
+        )
+      ).toBe('El proveedor no existe');
+      expect(
+        expectFail(
+          await actions.createSupplierInvoice(invoiceForm([orderLine('d6000000-0000-4000-8000-0000000000ff', '1')]))
+        )
+      ).toBe('La línea de OC no existe');
       const foreign = await prisma.supplier_invoices.create({
         data: {
           company_id: OTHER_COMPANY,
@@ -515,10 +619,25 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
       });
       const order = await receivedOrder([{ quantity: 1, received: 1 }]);
       expect(
-        expectFail(await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1')], { cbteType: 3, relatedInvoiceId: foreign.id })))
+        expectFail(
+          await actions.createSupplierInvoice(
+            invoiceForm([orderLine(order.lineIds[0]!, '1')], { cbteType: 3, relatedInvoiceId: foreign.id })
+          )
+        )
       ).toBe('La nota tiene que vincularse a una factura vigente del mismo proveedor y la misma letra');
-      const expense: FormLine = { kind: 'expense', orderLineId: '', expenseCategoryId: FOREIGN_CATEGORY, description: 'x', quantity: '', unitPrice: '', net: '10', vatRateId: '5' };
-      expect(expectFail(await actions.createSupplierInvoice(invoiceForm([expense])))).toBe('El concepto de gasto no existe');
+      const expense: FormLine = {
+        kind: 'expense',
+        orderLineId: '',
+        expenseCategoryId: FOREIGN_CATEGORY,
+        description: 'x',
+        quantity: '',
+        unitPrice: '',
+        net: '10',
+        vatRateId: '5',
+      };
+      expect(expectFail(await actions.createSupplierInvoice(invoiceForm([expense])))).toBe(
+        'El concepto de gasto no existe'
+      );
       expect(await actions.getSupplierInvoiceDetail(foreign.id)).toBeNull();
       state.denied.add('compras:facturas:create');
       expect(expectFail(await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1')])))).toBe(
@@ -546,11 +665,16 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     it('aprobada: guarda el resultado y no cambia el estado', async () => {
       const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
       const order = await receivedOrder([{ quantity: 1, received: 1 }]);
-      const invoice = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1')], { cae: '76543210987654' })));
+      const invoice = expectOk(
+        await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1')], { cae: '76543210987654' }))
+      );
       const checked = expectOk(await withScenario(undefined, () => actions.checkSupplierInvoiceInArca(invoice.id)));
       expect(checked.result).toBe('APPROVED');
       const prisma = await db();
-      const row = await prisma.supplier_invoices.findUniqueOrThrow({ where: { id: invoice.id }, select: { status: true, arca_check_result: true, arca_checked_at: true } });
+      const row = await prisma.supplier_invoices.findUniqueOrThrow({
+        where: { id: invoice.id },
+        select: { status: true, arca_check_result: true, arca_checked_at: true },
+      });
       expect(row.status).toBe('CONFORMING');
       expect(row.arca_check_result).toBe('APPROVED');
       expect(row.arca_checked_at).not.toBeNull();
@@ -560,7 +684,9 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
       const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
       const order = await receivedOrder([{ quantity: 1, received: 1 }]);
       const invoice = expectOk(
-        await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1', '1300')], { cae: '76543210987654' }))
+        await actions.createSupplierInvoice(
+          invoiceForm([orderLine(order.lineIds[0]!, '1', '1300')], { cae: '76543210987654' })
+        )
       );
       expectOk(await actions.approveSupplierInvoice(invoice.id, 'Acordado'));
       const checked = expectOk(await withScenario('reject', () => actions.checkSupplierInvoiceInArca(invoice.id)));
@@ -574,11 +700,16 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     it('sin respuesta: queda "no respondio" y el estado no cambia', async () => {
       const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
       const order = await receivedOrder([{ quantity: 1, received: 1 }]);
-      const invoice = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1')], { cae: '76543210987654' })));
+      const invoice = expectOk(
+        await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1')], { cae: '76543210987654' }))
+      );
       const checked = expectOk(await withScenario('timeout', () => actions.checkSupplierInvoiceInArca(invoice.id)));
       expect(checked).toEqual({ result: 'UNAVAILABLE', message: 'ARCA no respondió: probá de nuevo más tarde' });
       const prisma = await db();
-      const row = await prisma.supplier_invoices.findUniqueOrThrow({ where: { id: invoice.id }, select: { status: true, arca_check_result: true } });
+      const row = await prisma.supplier_invoices.findUniqueOrThrow({
+        where: { id: invoice.id },
+        select: { status: true, arca_check_result: true },
+      });
       expect(row).toEqual({ status: 'CONFORMING', arca_check_result: 'UNAVAILABLE' });
     });
 
@@ -592,10 +723,15 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
       expect(same.status).toBe('OBSERVED');
       expect(codes(same.observations)).toEqual(['ARCA']);
       const lines = [orderLine(order.lineIds[0]!, '2')];
-      const changed = expectOk(await actions.updateSupplierInvoice(invoice.id, { ...values, lines, vat: computedVat(1, lines) }));
+      const changed = expectOk(
+        await actions.updateSupplierInvoice(invoice.id, { ...values, lines, vat: computedVat(1, lines) })
+      );
       expect(changed.status).toBe('CONFORMING');
       const prisma = await db();
-      const row = await prisma.supplier_invoices.findUniqueOrThrow({ where: { id: invoice.id }, select: { arca_check_result: true } });
+      const row = await prisma.supplier_invoices.findUniqueOrThrow({
+        where: { id: invoice.id },
+        select: { arca_check_result: true },
+      });
       expect(row.arca_check_result).toBeNull();
     });
 
@@ -603,7 +739,9 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
       const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
       const order = await receivedOrder([{ quantity: 1, received: 1 }]);
       const invoice = expectOk(
-        await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1', '1300')], { cae: '76543210987654' }))
+        await actions.createSupplierInvoice(
+          invoiceForm([orderLine(order.lineIds[0]!, '1', '1300')], { cae: '76543210987654' })
+        )
       );
       expectOk(await actions.rejectSupplierInvoice(invoice.id, 'Precio no acordado'));
       expectOk(await withScenario('reject', () => actions.checkSupplierInvoiceInArca(invoice.id)));
@@ -616,8 +754,12 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
       const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
       const prisma = await db();
       const order = await receivedOrder([{ quantity: 2, received: 2 }]);
-      const invoice = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1')], { cae: '76543210987654' })));
-      const total = (await prisma.supplier_invoices.findUniqueOrThrow({ where: { id: invoice.id }, select: { total: true } })).total;
+      const invoice = expectOk(
+        await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1')], { cae: '76543210987654' }))
+      );
+      const total = (
+        await prisma.supplier_invoices.findUniqueOrThrow({ where: { id: invoice.id }, select: { total: true } })
+      ).total;
       const payment = await prisma.payment_orders.create({
         data: {
           company_id: COMPANY,
@@ -646,7 +788,9 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
       expect(codes(row.observations as { code: string }[])).toEqual(['ARCA']);
       // Si igual quedara observado dentro de una orden, rechazarlo no se permite.
       await prisma.supplier_invoices.update({ where: { id: invoice.id }, data: { status: 'OBSERVED' } });
-      expect(expectFail(await actions.rejectSupplierInvoice(invoice.id, 'No va'))).toBe('Está en la OP-900001: anulala o sacalo de ahí primero');
+      expect(expectFail(await actions.rejectSupplierInvoice(invoice.id, 'No va'))).toBe(
+        'Está en la OP-900001: anulala o sacalo de ahí primero'
+      );
       await prisma.payment_orders.delete({ where: { id: payment.id } });
     });
 
@@ -664,7 +808,10 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     it('periodo: filas ordenadas, NC restando, alicuotas usadas y totales', async () => {
       const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
       const book = await import('./vat-book.server');
-      const order = await receivedOrder([{ quantity: 10, received: 10 }, { quantity: 4, received: 4, vatRateId: 4 }]);
+      const order = await receivedOrder([
+        { quantity: 10, received: 10 },
+        { quantity: 4, received: 4, vatRateId: 4 },
+      ]);
       const period = '2026-11';
       const invoice = expectOk(
         await actions.createSupplierInvoice(
@@ -680,11 +827,18 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
       );
       expectOk(
         await actions.createSupplierInvoice(
-          invoiceForm([orderLine(order.lineIds[0]!, '2')], { cbteType: 3, relatedInvoiceId: invoice.id, vatPeriod: period, issueDate: '2026-10-08' })
+          invoiceForm([orderLine(order.lineIds[0]!, '2')], {
+            cbteType: 3,
+            relatedInvoiceId: invoice.id,
+            vatPeriod: period,
+            issueDate: '2026-10-08',
+          })
         )
       );
       const cancelled = expectOk(
-        await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1')], { vatPeriod: period, issueDate: '2026-10-01' }))
+        await actions.createSupplierInvoice(
+          invoiceForm([orderLine(order.lineIds[0]!, '1')], { vatPeriod: period, issueDate: '2026-10-01' })
+        )
       );
       expectOk(await actions.cancelSupplierInvoice(cancelled.id, 'Mal cargada'));
 
@@ -724,7 +878,9 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
       expect(expectFail(await book.exportPurchasesVatBookTxt('x'))).toBe('Período inválido');
       state.denied.add('compras:libro-iva:view');
       expect(await book.getPurchasesVatBook('2026-11')).toBeNull();
-      expect(expectFail(await book.exportPurchasesVatBookTxt('2026-11'))).toBe('No tenés permiso para realizar esta acción');
+      expect(expectFail(await book.exportPurchasesVatBookTxt('2026-11'))).toBe(
+        'No tenés permiso para realizar esta acción'
+      );
     });
   });
 
@@ -735,7 +891,9 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
       const line = order.lineIds[0]!;
       const f1 = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(line, '10')])));
       expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(line, '2')], { cbteType: 3 })));
-      expect(expectFail(await actions.cancelSupplierInvoice(f1.id, 'Mal cargada'))).toContain('quedaría con facturado negativo');
+      expect(expectFail(await actions.cancelSupplierInvoice(f1.id, 'Mal cargada'))).toContain(
+        'quedaría con facturado negativo'
+      );
       expect((await invoiceRow(f1.id)).status).toBe('CONFORMING');
     });
 
@@ -744,8 +902,14 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
       const order = await receivedOrder([{ quantity: 10, received: 10 }]);
       const line = order.lineIds[0]!;
       const f1 = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(line, '10', '1300')])));
-      expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(line, '2', '1300')], { cbteType: 3, relatedInvoiceId: f1.id })));
-      expect(expectFail(await actions.rejectSupplierInvoice(f1.id, 'No corresponde'))).toContain('quedaría con facturado negativo');
+      expectOk(
+        await actions.createSupplierInvoice(
+          invoiceForm([orderLine(line, '2', '1300')], { cbteType: 3, relatedInvoiceId: f1.id })
+        )
+      );
+      expect(expectFail(await actions.rejectSupplierInvoice(f1.id, 'No corresponde'))).toContain(
+        'quedaría con facturado negativo'
+      );
     });
 
     it('C-1: editar la factura base por debajo de lo acreditado → error', async () => {
@@ -756,17 +920,21 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
       const f1 = expectOk(await actions.createSupplierInvoice(values));
       expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(line, '2')], { cbteType: 3 })));
       const lines = [orderLine(line, '1')];
-      expect(expectFail(await actions.updateSupplierInvoice(f1.id, { ...values, lines, vat: computedVat(1, lines) }))).toContain(
-        'quedaría con facturado negativo'
-      );
+      expect(
+        expectFail(await actions.updateSupplierInvoice(f1.id, { ...values, lines, vat: computedVat(1, lines) }))
+      ).toContain('quedaría con facturado negativo');
     });
 
     it('I-6: fecha de emision futura → error', async () => {
       const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
       const order = await receivedOrder([{ quantity: 1, received: 1 }]);
-      expect(expectFail(await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1')], { issueDate: '2099-01-01', vatPeriod: '2099-01' })))).toBe(
-        'La fecha de emisión no puede ser futura'
-      );
+      expect(
+        expectFail(
+          await actions.createSupplierInvoice(
+            invoiceForm([orderLine(order.lineIds[0]!, '1')], { issueDate: '2099-01-01', vatPeriod: '2099-01' })
+          )
+        )
+      ).toBe('La fecha de emisión no puede ser futura');
     });
   });
 });

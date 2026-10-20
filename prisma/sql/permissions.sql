@@ -187,6 +187,46 @@ BEGIN
 END;
 $function$;
 
+-- function resolve_notification_recipients (#786)
+-- Destinatarios de un aviso en UNA consulta: miembros activos de la empresa con algún rol activo que
+-- tenga el evento, con los canales combinados de todos sus roles, y que además tengan alguno de los
+-- permisos mínimos del evento (`p_permissions` = [{module, tab, action}]). El permiso se resuelve con
+-- `user_has_permission`, la fórmula canónica, así respeta también los ajustes personales.
+-- `p_only_user_ids` acota a personas puntuales (avisos para quien pidió o creó un documento).
+CREATE OR REPLACE FUNCTION public.resolve_notification_recipients(
+  p_company_id uuid,
+  p_event_key text,
+  p_permissions jsonb,
+  p_only_user_ids uuid[] DEFAULT NULL
+)
+ RETURNS TABLE(user_id uuid, email text, in_app boolean, email_enabled boolean)
+ LANGUAGE sql
+ STABLE
+ SET "TimeZone" TO 'America/Argentina/Buenos_Aires'
+AS $function$
+  SELECT c.user_id, c.email, c.in_app, c.email_enabled
+  FROM (
+    SELECT p.credential_id AS user_id,
+           NULLIF(btrim(p.email), '') AS email,
+           bool_or(rn.channel = 'in_app') AS in_app,
+           bool_or(rn.channel = 'email') AS email_enabled
+    FROM public.share_company_users scu
+    JOIN public.profile p ON p.id = scu.profile_id AND p.credential_id IS NOT NULL
+    JOIN public.user_roles ur ON ur.user_id = p.credential_id AND ur.company_id = p_company_id
+    JOIN public.roles r ON r.id = ur.role_id AND COALESCE(r.is_active, true)
+    JOIN public.role_notifications rn ON rn.role_id = r.id AND rn.event_key = p_event_key
+    WHERE scu.company_id = p_company_id
+      AND scu.is_active
+      AND (p_only_user_ids IS NULL OR p.credential_id = ANY(p_only_user_ids))
+    GROUP BY p.credential_id, p.email
+  ) c
+  WHERE EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(p_permissions) perm
+    WHERE public.user_has_permission(c.user_id, p_company_id, perm->>'module', perm->>'tab', perm->>'action')
+  );
+$function$;
+
 -- ============================================================================
 -- TRIGGERS (0)
 -- ============================================================================

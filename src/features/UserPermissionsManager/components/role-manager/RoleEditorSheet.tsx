@@ -11,9 +11,11 @@ import { ChevronDown, Download, Plus } from 'lucide-react';
 import { useMemo } from 'react';
 import { getModulesWithTabsServer, type ModulesWithTabsData, type RoleWithCount } from '../../actions.server';
 import type { useRoleEquipmentTypesDraft } from '../../hooks/useEquipmentTypeVisibility';
+import type { RoleNotificationsDraft } from '../../hooks/useRoleNotificationsDraft';
 import { buildPermissionIndex, diffPermissionSets, permissionKey } from '../../lib/permission-rules';
 import type { PermissionPair } from '../../lib/permission-types';
 import { RoleEquipmentTypesSection } from '../RoleEquipmentTypesSection';
+import { RoleNotificationsSection } from '../RoleNotificationsSection';
 import { RoleTemplateSelector } from '../RoleTemplateSelector';
 import { PermissionEditor } from '../permission-editor/PermissionEditor';
 
@@ -41,6 +43,8 @@ interface RoleEditorSheetProps {
   onImportPermissions: () => void;
   equipmentTypesDraft: ReturnType<typeof useRoleEquipmentTypesDraft>;
   equipmentTypesSaveError: string | null;
+  notificationsDraft: RoleNotificationsDraft;
+  notificationsSaveError: string | null;
   isSaving: boolean;
   isWaitingEquipmentTypesBaseline: boolean;
   isWaitingPermissionsBaseline: boolean;
@@ -49,7 +53,7 @@ interface RoleEditorSheetProps {
 
 const toKeySet = (pairs: PermissionPair[]) => new Set(pairs.map((p) => permissionKey(p.tabId, p.actionId)));
 
-/** Panel lateral de alta/edición de rol: datos, copiar de otros roles, permisos y tipos de equipamiento. */
+/** Panel lateral de alta/edición de rol: datos, copiar de otros roles, permisos, tipos de equipamiento y avisos. */
 export function RoleEditorSheet({
   open,
   onOpenChange,
@@ -73,6 +77,8 @@ export function RoleEditorSheet({
   onImportPermissions,
   equipmentTypesDraft,
   equipmentTypesSaveError,
+  notificationsDraft,
+  notificationsSaveError,
   isSaving,
   isWaitingEquipmentTypesBaseline,
   isWaitingPermissionsBaseline,
@@ -221,6 +227,13 @@ export function RoleEditorSheet({
                 />
               )}
             </section>
+
+            <RoleNotificationsSection
+              draft={notificationsDraft}
+              disabled={isSaving}
+              saveError={notificationsSaveError}
+              permissionCheck={{ modules, permissions }}
+            />
           </div>
 
           <footer className="bg-background flex flex-col gap-3 border-t px-5 py-3 sm:flex-row sm:items-center sm:justify-between">

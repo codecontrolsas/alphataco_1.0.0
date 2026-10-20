@@ -27,9 +27,9 @@ const state = vi.hoisted(() => ({
   duringSend: null as null | (() => Promise<void>),
 }));
 const mails = vi.hoisted(() => ({
-  decision: vi.fn(async () => {
+  // Avisos de #786 que se le piden al despachador (campanita + mail según los roles).
+  decision: vi.fn(async (_input: { event: string; userIds?: readonly string[]; actorId?: string | null }) => {
     if (state.decisionMailFails) throw new Error('SMTP caído');
-    return true;
   }),
   supplier: vi.fn(async () => {
     // Simula que otro usuario cambia el documento mientras sale el mail.
@@ -40,25 +40,30 @@ const mails = vi.hoisted(() => ({
 
 vi.mock('@/shared/lib/tenant', () => ({ getActiveCompanyId: async () => 'd3000000-0000-4000-8000-000000000001' }));
 vi.mock('@/features/Permissions', () => ({
-  checkPermissionServer: async (module: string, tab: string, action: string) => !state.denied.has(`${module}:${tab}:${action}`),
+  checkPermissionServer: async (module: string, tab: string, action: string) =>
+    !state.denied.has(`${module}:${tab}:${action}`),
 }));
 vi.mock('@/shared/actions/auth.actions', () => {
   const current = () => ({ id: state.profileId, credentialId: state.profileId, fullname: null, email: null });
   return { getServerAuthProfile: async () => current(), requireServerAuthProfile: async () => current() };
 });
-vi.mock('@/shared/lib/mail/templates/purchases', () => ({
-  sendPurchaseRequestDecisionEmail: mails.decision,
-  sendPurchaseOrderDecisionEmail: mails.decision,
+// Las plantillas de aviso solo arman el contenido (#786); el envío al proveedor sí se captura.
+vi.mock('@/shared/lib/mail/templates/purchases', async (importActual) => ({
+  ...(await importActual<typeof import('@/shared/lib/mail/templates/purchases')>()),
   sendSupplierDocumentEmail: mails.supplier,
 }));
 vi.mock('../pdf/render-purchase-pdf.server', async (importActual) => {
   const actual = await importActual<typeof import('../pdf/render-purchase-pdf.server')>();
   const fake = async (_id: string) => ({ filename: 'fake.pdf', content: new Uint8Array([37, 80, 68, 70]) });
   return {
-    renderPurchaseOrderPdf: (id: string, companyId: string) => (state.realPdf ? actual.renderPurchaseOrderPdf(id, companyId) : fake(id)),
-    renderPurchaseQuotePdf: (id: string, companyId: string) => (state.realPdf ? actual.renderPurchaseQuotePdf(id, companyId) : fake(id)),
+    renderPurchaseOrderPdf: (id: string, companyId: string) =>
+      state.realPdf ? actual.renderPurchaseOrderPdf(id, companyId) : fake(id),
+    renderPurchaseQuotePdf: (id: string, companyId: string) =>
+      state.realPdf ? actual.renderPurchaseQuotePdf(id, companyId) : fake(id),
   };
 });
+vi.mock('@/features/Notifications/lib/dispatch.server', () => ({ notifySafe: mails.decision }));
+vi.mock('@/shared/lib/session', () => ({ getSessionUserId: async () => state.profileId }));
 vi.mock('next/cache', () => ({ revalidatePath: () => undefined }));
 
 const RUN = Boolean(process.env.DATABASE_URL);
@@ -196,12 +201,34 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
         { id: FOREIGN_UNIT, company_id: OTHER_COMPANY, name: 'Unidad ajena', abbreviation: 'ua' },
       ],
     });
-    await prisma.materials.create({ data: { id: MATERIAL, company_id: COMPANY, code: 'AC-15', name: 'Aceite 15W40', unit_id: UNIT } });
+    await prisma.materials.create({
+      data: { id: MATERIAL, company_id: COMPANY, code: 'AC-15', name: 'Aceite 15W40', unit_id: UNIT },
+    });
     await prisma.suppliers.createMany({
       data: [
-        { id: SUPPLIER, company_id: COMPANY, name: 'Lubricantes test', cuit: BigInt('20123456786'), vat_condition_id: 1, payment_term_days: 30 },
-        { id: INACTIVE_SUPPLIER, company_id: COMPANY, name: 'Inactivo test', cuit: BigInt('20111111112'), vat_condition_id: 1, is_active: false },
-        { id: FOREIGN_SUPPLIER, company_id: OTHER_COMPANY, name: 'Ajeno test', cuit: BigInt('20123456786'), vat_condition_id: 1 },
+        {
+          id: SUPPLIER,
+          company_id: COMPANY,
+          name: 'Lubricantes test',
+          cuit: BigInt('20123456786'),
+          vat_condition_id: 1,
+          payment_term_days: 30,
+        },
+        {
+          id: INACTIVE_SUPPLIER,
+          company_id: COMPANY,
+          name: 'Inactivo test',
+          cuit: BigInt('20111111112'),
+          vat_condition_id: 1,
+          is_active: false,
+        },
+        {
+          id: FOREIGN_SUPPLIER,
+          company_id: OTHER_COMPANY,
+          name: 'Ajeno test',
+          cuit: BigInt('20123456786'),
+          vat_condition_id: 1,
+        },
       ],
     });
     await prisma.supplier_contacts.create({
@@ -238,7 +265,9 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
     const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([10, 4]);
 
-    const created = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '6')]), { submit: false }));
+    const created = expectOk(
+      await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '6')]), { submit: false })
+    );
     expect(created.number).toMatch(/^OC-\d{6}$/);
     expect(await requestStatus(req.id)).toBe('PARTIALLY_ORDERED');
     // Sin plazo en el formulario: el del proveedor.
@@ -250,7 +279,12 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
     let stored = await order(created.id);
     expect(stored.status).toBe('DRAFT');
     expect(stored.rejection_notes).toBe('Precio alto');
-    expect(mails.decision).toHaveBeenCalledTimes(1);
+    // Enviarla avisó a quienes aprueban; rechazarla, solo a quien la creó.
+    const events = mails.decision.mock.calls.map(([input]) => input);
+    expect(events.filter((input) => input.event === 'purchases.order_submitted')).toHaveLength(1);
+    expect(events.filter((input) => input.event === 'purchases.order_decided')).toEqual([
+      expect.objectContaining({ event: 'purchases.order_decided', userIds: [BUYER] }),
+    ]);
 
     state.profileId = BUYER;
     expectOk(
@@ -270,7 +304,9 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
     stored = await order(created.id);
     expect(stored.status).toBe('APPROVED');
     expect(stored.rejection_notes).toBeNull();
-    expect(stored.rejections.map((r) => r.reason)).toEqual(expect.arrayContaining(['Precio alto', 'Falta el lugar de entrega']));
+    expect(stored.rejections.map((r) => r.reason)).toEqual(
+      expect.arrayContaining(['Precio alto', 'Falta el lugar de entrega'])
+    );
 
     state.profileId = BUYER;
     expectOk(await actions.cancelPurchaseOrder(created.id, 'El proveedor no tiene stock'));
@@ -285,7 +321,10 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
     const req = await approvedRequest([3, 2]);
     const created = expectOk(
       await actions.createPurchaseOrder(
-        orderForm([orderLine(req.lineIds[0], '3', { unitPrice: '0,3333' }), orderLine(req.lineIds[1], '2', { vatRateId: 4 })]),
+        orderForm([
+          orderLine(req.lineIds[0], '3', { unitPrice: '0,3333' }),
+          orderLine(req.lineIds[1], '2', { vatRateId: 4 }),
+        ]),
         { submit: false }
       )
     );
@@ -303,7 +342,9 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
     );
     expect((await order(created.id)).lines[0].quantity.toString()).toBe('1234.5');
     const error = expectFail(
-      await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1', { unitPrice: '1,23456' })]), { submit: false })
+      await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1', { unitPrice: '1,23456' })]), {
+        submit: false,
+      })
     );
     expect(error).toContain('Precio inválido');
   });
@@ -313,25 +354,38 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
     const req = await approvedRequest([10]);
     expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '6')]), { submit: false }));
 
-    const error = expectFail(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '5')]), { submit: false }));
+    const error = expectFail(
+      await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '5')]), { submit: false })
+    );
     expect(error).toBe(`De la línea 1 de ${req.number} ([AC-15] Aceite 15W40) quedan 4 l`);
 
     const split = expectFail(
-      await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '3'), orderLine(req.lineIds[0], '2')]), { submit: false })
+      await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '3'), orderLine(req.lineIds[0], '2')]), {
+        submit: false,
+      })
     );
     expect(split).toContain('quedan 4 l');
 
     expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '4')]), { submit: false }));
-    const full = expectFail(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')]), { submit: false }));
+    const full = expectFail(
+      await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')]), { submit: false })
+    );
     expect(full).toContain('no se pueden pedir'); // la solicitud quedo PEDIDA
   });
 
   it('editar un borrador sin cambios con la solicitud ya pedida por ese borrador', async () => {
     const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([5]);
-    const created = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '5')]), { submit: false }));
+    const created = expectOk(
+      await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '5')]), { submit: false })
+    );
     expect(await requestStatus(req.id)).toBe('ORDERED');
-    expectOk(await actions.updatePurchaseOrderDraft(created.id, orderForm([orderLine(req.lineIds[0], '5', { unitPrice: '120' })])));
+    expectOk(
+      await actions.updatePurchaseOrderDraft(
+        created.id,
+        orderForm([orderLine(req.lineIds[0], '5', { unitPrice: '120' })])
+      )
+    );
     expectOk(await actions.submitPurchaseOrder(created.id));
   });
 
@@ -353,7 +407,9 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
     const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const requests = await import('./requests.server');
     const req = await approvedRequest([10]);
-    const created = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '4')]), { submit: false }));
+    const created = expectOk(
+      await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '4')]), { submit: false })
+    );
 
     expect(expectFail(await requests.closePurchaseRequest(req.id, ''))).toBeTruthy();
     expectOk(await requests.closePurchaseRequest(req.id, 'Se consiguió en otra obra'));
@@ -378,32 +434,48 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
     const req = await approvedRequest([10]);
     const foreign = await approvedRequest([10], OTHER_COMPANY);
 
-    expect(expectFail(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')], { supplierId: FOREIGN_SUPPLIER }), { submit: false }))).toBe(
-      'El proveedor no existe'
-    );
     expect(
-      expectFail(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')], { supplierId: INACTIVE_SUPPLIER }), { submit: false }))
+      expectFail(
+        await actions.createPurchaseOrder(
+          orderForm([orderLine(req.lineIds[0], '1')], { supplierId: FOREIGN_SUPPLIER }),
+          { submit: false }
+        )
+      )
+    ).toBe('El proveedor no existe');
+    expect(
+      expectFail(
+        await actions.createPurchaseOrder(
+          orderForm([orderLine(req.lineIds[0], '1')], { supplierId: INACTIVE_SUPPLIER }),
+          { submit: false }
+        )
+      )
     ).toContain('inactivo');
-    expect(expectFail(await actions.createPurchaseOrder(orderForm([orderLine(foreign.lineIds[0], '1')]), { submit: false }))).toContain(
-      'no existe'
-    );
+    expect(
+      expectFail(await actions.createPurchaseOrder(orderForm([orderLine(foreign.lineIds[0], '1')]), { submit: false }))
+    ).toContain('no existe');
 
     const pending = await approvedRequest([1]);
     const prisma = await db();
     await prisma.purchase_requests.update({ where: { id: pending.id }, data: { status: 'PENDING_APPROVAL' } });
-    expect(expectFail(await actions.createPurchaseOrder(orderForm([orderLine(pending.lineIds[0], '1')]), { submit: false }))).toContain(
-      'pendiente de aprobación'
-    );
+    expect(
+      expectFail(await actions.createPurchaseOrder(orderForm([orderLine(pending.lineIds[0], '1')]), { submit: false }))
+    ).toContain('pendiente de aprobación');
 
-    const created = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')]), { submit: true }));
+    const created = expectOk(
+      await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')]), { submit: true })
+    );
     state.denied.add('compras:ordenes:approve');
-    expect(expectFail(await actions.approvePurchaseOrder(created.id))).toBe('No tenés permiso para realizar esta acción');
+    expect(expectFail(await actions.approvePurchaseOrder(created.id))).toBe(
+      'No tenés permiso para realizar esta acción'
+    );
   });
 
   it('el mail de la decision que falla no deshace la aprobacion', async () => {
     const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([1]);
-    const created = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')]), { submit: true }));
+    const created = expectOk(
+      await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')]), { submit: true })
+    );
     state.decisionMailFails = true;
     expectOk(await actions.approvePurchaseOrder(created.id));
     expect((await order(created.id)).status).toBe('APPROVED');
@@ -412,25 +484,34 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
   it('envio al proveedor: con mail OK queda enviada con el PDF; si el mail falla sigue aprobada', async () => {
     const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([2]);
-    const draft = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')]), { submit: true }));
-    expect(expectFail(await actions.sendPurchaseOrder(draft.id, { to: ['ventas@lubricantes.test'], message: '' }))).toContain(
-      'no está aprobada'
+    const draft = expectOk(
+      await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')]), { submit: true })
     );
+    expect(
+      expectFail(await actions.sendPurchaseOrder(draft.id, { to: ['ventas@lubricantes.test'], message: '' }))
+    ).toContain('no está aprobada');
     expectOk(await actions.approvePurchaseOrder(draft.id));
 
     state.supplierMailOk = false;
-    expect(expectFail(await actions.sendPurchaseOrder(draft.id, { to: ['ventas@lubricantes.test'], message: '' }))).toContain(
-      'la orden sigue aprobada'
-    );
+    expect(
+      expectFail(await actions.sendPurchaseOrder(draft.id, { to: ['ventas@lubricantes.test'], message: '' }))
+    ).toContain('la orden sigue aprobada');
     expect((await order(draft.id)).status).toBe('APPROVED');
 
     state.supplierMailOk = true;
     state.realPdf = true;
-    expectOk(await actions.sendPurchaseOrder(draft.id, { to: ['ventas@lubricantes.test', 'compras@lubricantes.test'], message: 'Gracias' }));
+    expectOk(
+      await actions.sendPurchaseOrder(draft.id, {
+        to: ['ventas@lubricantes.test', 'compras@lubricantes.test'],
+        message: 'Gracias',
+      })
+    );
     const stored = await order(draft.id);
     expect(stored.status).toBe('SENT');
     expect(stored.sent_to).toEqual(['ventas@lubricantes.test', 'compras@lubricantes.test']);
-    const [call] = mails.supplier.mock.calls.at(-1) as unknown as [{ attachment: { filename: string; content: Uint8Array } }];
+    const [call] = mails.supplier.mock.calls.at(-1) as unknown as [
+      { attachment: { filename: string; content: Uint8Array } },
+    ];
     expect(call.attachment.filename).toMatch(/^OC-\d{6}\.pdf$/);
     expect(Buffer.from(call.attachment.content).subarray(0, 4).toString()).toBe('%PDF');
 
@@ -441,7 +522,9 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
   it('marcar como enviada y PDF en borrador', async () => {
     const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([1]);
-    const created = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')]), { submit: true }));
+    const created = expectOk(
+      await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')]), { submit: true })
+    );
     expectOk(await actions.approvePurchaseOrder(created.id));
     expectOk(await actions.markPurchaseOrderSent(created.id));
     const stored = await order(created.id);
@@ -456,7 +539,9 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
   it('detalle: avisos de documentos vencidos y destinatarios', async () => {
     const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([1]);
-    const created = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')]), { submit: false }));
+    const created = expectOk(
+      await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')]), { submit: false })
+    );
     const detail = await actions.getPurchaseOrderDetail(created.id);
     expect(detail?.expiredDocuments.map((d) => d.name)).toEqual(['Constancia ARCA']);
     expect(detail?.recipients).toEqual([{ name: 'Ventas', email: 'ventas@lubricantes.test', isPrimary: true }]);
@@ -469,8 +554,12 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
     const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const r1 = await approvedRequest([10]);
     const r2 = await approvedRequest([10]);
-    const o1 = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(r2.lineIds[0], '5')]), { submit: false }));
-    const o2 = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(r1.lineIds[0], '5')]), { submit: false }));
+    const o1 = expectOk(
+      await actions.createPurchaseOrder(orderForm([orderLine(r2.lineIds[0], '5')]), { submit: false })
+    );
+    const o2 = expectOk(
+      await actions.createPurchaseOrder(orderForm([orderLine(r1.lineIds[0], '5')]), { submit: false })
+    );
     for (let round = 0; round < 5; round++) {
       const [a, b] = await Promise.all([
         actions.updatePurchaseOrderDraft(o1.id, orderForm([orderLine(round % 2 ? r2.lineIds[0] : r1.lineIds[0], '5')])),
@@ -487,7 +576,8 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
         })
       )._sum.quantity?.toNumber() ?? 0;
     for (const r of [r1, r2]) {
-      const expected = (await ordered(r.id)) === 0 ? 'APPROVED' : (await ordered(r.id)) >= 10 ? 'ORDERED' : 'PARTIALLY_ORDERED';
+      const expected =
+        (await ordered(r.id)) === 0 ? 'APPROVED' : (await ordered(r.id)) >= 10 ? 'ORDERED' : 'PARTIALLY_ORDERED';
       expect(await requestStatus(r.id)).toBe(expected);
     }
   }, 60_000);
@@ -496,17 +586,30 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
     const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([1000]);
     expect(
-      expectFail(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1', { unitPrice: '100000000000' })]), { submit: false }))
+      expectFail(
+        await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1', { unitPrice: '100000000000' })]), {
+          submit: false,
+        })
+      )
     ).toContain('Precio demasiado grande');
     expect(
-      expectFail(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1000', { unitPrice: '50000000000' })]), { submit: false }))
+      expectFail(
+        await actions.createPurchaseOrder(
+          orderForm([orderLine(req.lineIds[0], '1000', { unitPrice: '50000000000' })]),
+          { submit: false }
+        )
+      )
     ).toContain('supera el máximo');
   });
 
   it('M-1: al editar con el plazo vacio se toma el del proveedor', async () => {
     const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([1]);
-    const created = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')], { paymentTermDays: '10' }), { submit: false }));
+    const created = expectOk(
+      await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')], { paymentTermDays: '10' }), {
+        submit: false,
+      })
+    );
     expectOk(await actions.updatePurchaseOrderDraft(created.id, orderForm([orderLine(req.lineIds[0], '1')])));
     expect((await order(created.id)).payment_term_days).toBe(30);
   });
@@ -515,9 +618,9 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
     const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([1]);
     state.denied.add('compras:ordenes:update');
-    expect(expectFail(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')]), { submit: true }))).toBe(
-      'No tenés permiso para realizar esta acción'
-    );
+    expect(
+      expectFail(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')]), { submit: true }))
+    ).toBe('No tenés permiso para realizar esta acción');
     expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')]), { submit: false }));
   });
 
@@ -525,7 +628,9 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
     const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const quotes = await import('./quotes.server');
     const req = await approvedRequest([2]);
-    const { quotes: [quote] } = expectOk(await quotes.requestQuotes({ requestLineIds: req.lineIds, supplierIds: [SUPPLIER], notes: '' }));
+    const {
+      quotes: [quote],
+    } = expectOk(await quotes.requestQuotes({ requestLineIds: req.lineIds, supplierIds: [SUPPLIER], notes: '' }));
     expectOk(await quotes.markPurchaseQuoteSent(quote.id));
     const prisma = await db();
     const quoteLine = await prisma.purchase_quote_lines.findFirstOrThrow({ where: { quote_id: quote.id } });
@@ -557,24 +662,30 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
     const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const requests = await import('./requests.server');
     const req = await approvedRequest([10]);
-    const created = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '4')]), { submit: false }));
+    const created = expectOk(
+      await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '4')]), { submit: false })
+    );
     expectOk(await requests.closePurchaseRequest(req.id, 'No se compra más'));
-    expect(expectFail(await actions.updatePurchaseOrderDraft(created.id, orderForm([orderLine(req.lineIds[0], '6')])))).toContain('cerrada');
+    expect(
+      expectFail(await actions.updatePurchaseOrderDraft(created.id, orderForm([orderLine(req.lineIds[0], '6')])))
+    ).toContain('cerrada');
     expectOk(await actions.updatePurchaseOrderDraft(created.id, orderForm([orderLine(req.lineIds[0], '3')])));
   });
 
   it('M-7: si la OC se anula mientras sale el mail, se avisa en vez de decir enviada', async () => {
     const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([1]);
-    const created = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')]), { submit: true }));
+    const created = expectOk(
+      await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '1')]), { submit: true })
+    );
     expectOk(await actions.approvePurchaseOrder(created.id));
     state.duringSend = async () => {
       state.duringSend = null;
       expectOk(await actions.cancelPurchaseOrder(created.id, 'Anulada mientras salía el mail'));
     };
-    expect(expectFail(await actions.sendPurchaseOrder(created.id, { to: ['ventas@lubricantes.test'], message: '' }))).toContain(
-      'El mail salió'
-    );
+    expect(
+      expectFail(await actions.sendPurchaseOrder(created.id, { to: ['ventas@lubricantes.test'], message: '' }))
+    ).toContain('El mail salió');
     expect((await order(created.id)).status).toBe('CANCELLED');
   });
 
@@ -583,7 +694,9 @@ describe.skipIf(!RUN)('ordenes de compra (integracion)', () => {
   it('cerrar una OC enviada sin recibir devuelve lo pedido a la solicitud', async () => {
     const actions = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
     const req = await approvedRequest([10]);
-    const draft = expectOk(await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '10')]), { submit: true }));
+    const draft = expectOk(
+      await actions.createPurchaseOrder(orderForm([orderLine(req.lineIds[0], '10')]), { submit: true })
+    );
     expect(expectFail(await actions.closePurchaseOrder(draft.id, 'No llega'))).toContain('ya fue');
     expectOk(await actions.approvePurchaseOrder(draft.id));
     expectOk(await actions.markPurchaseOrderSent(draft.id));

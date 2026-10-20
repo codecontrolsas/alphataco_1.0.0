@@ -1,11 +1,11 @@
 import 'server-only';
 
+import { notify } from '@/features/Notifications/lib/dispatch.server';
+import type { SendMail } from '@/shared/lib/mail';
 import { prisma } from '@/shared/lib/prisma';
-import { sendMail, type SendMail } from '@/shared/lib/mail';
 import { callScalar } from '@/shared/lib/sql';
 import { argentinaDate } from '../lib/dates';
 import { runForEachCompany, runJobWithBitacora } from '../lib/per-company';
-import { getCompanyRecipients } from '../lib/recipients';
 import type { JobSummary } from '../lib/types';
 import { deviationsResultSchema } from '../schemas/deviations';
 import { renderDeviationsEmail } from '../templates/deviations';
@@ -49,7 +49,6 @@ const JOB = 'daily-report-deviations' as const;
 
 export async function runDailyReportDeviationsJob(deps: DeviationsJobDeps = {}): Promise<JobSummary> {
   const date = deps.date ?? argentinaDate();
-  const send = deps.sendMail ?? sendMail;
 
   // Todo va DENTRO de la bitácora: si el `findMany` falla (base caída, pool agotado), la fila
   // `corrida:<fecha>` ya está abierta y el error queda registrado. Sin esto, el modo de falla
@@ -90,38 +89,43 @@ export async function runDailyReportDeviationsJob(deps: DeviationsJobDeps = {}):
           };
         }
 
-        // Los destinatarios se resuelven recién acá, ya confirmado que hay algo que informar:
-        // una empresa sin lista configurada pero sin desvíos no tiene por qué figurar como
-        // problema. (Es el mismo orden que tenía la edge function.)
-        const recipients = await getCompanyRecipients(company.id, 'daily_report_deviations');
-
-        if (recipients.length === 0) {
-          // `skipped`: si un admin carga los destinatarios a media mañana y redispara, la
-          // empresa se reintenta. Con `ok` quedaba salteada hasta el día siguiente.
-          return {
-            skipped: true,
-            reason: 'hay desvíos pero la empresa no tiene destinatarios configurados',
-            metadata: { dailyReportId: report.id, rowsWithDeviations: deviations.rows_with_deviations.length },
-          };
-        }
-
         const email = renderDeviationsEmail({
           companyName: company.company_name,
           reportDate: date,
           dailyReportId: report.id,
           data: deviations,
         });
+        const rowsWithDeviations = deviations.rows_with_deviations.length;
 
-        const emailSent = await send({
-          to: recipients,
-          subject: email.subject,
-          html: email.html,
-          text: email.text,
-        });
+        // Los destinatarios (roles con el aviso + lista fija) se resuelven recién acá, ya confirmado
+        // que hay algo que informar. (Es el mismo orden que tenía la edge function.)
+        const result = await notify(
+          {
+            event: 'operations.daily_report_deviations',
+            companyId: company.id,
+            dedupeKey: `operations.daily_report_deviations:${report.id}`,
+            title: `Parte del ${date.split('-').reverse().join('/')}: ${rowsWithDeviations} servicios con desvíos`,
+            href: `/dashboard/operations/${report.id}`,
+            email,
+            metadata: { dailyReportId: report.id, rowsWithDeviations },
+          },
+          { sendMail: deps.sendMail }
+        );
+
+        if (result.status === 'no_recipients') {
+          // `skipped`: si un admin configura destinatarios a media mañana y redispara, la
+          // empresa se reintenta. Con `ok` quedaba salteada hasta el día siguiente.
+          return {
+            skipped: true,
+            reason: 'hay desvíos pero la empresa no tiene destinatarios (roles ni lista fija)',
+            metadata: { dailyReportId: report.id, rowsWithDeviations },
+          };
+        }
+        const emailSent = result.emailSent;
 
         return {
           reason: emailSent ? 'correo enviado' : 'correo NO enviado (SMTP sin configurar o error de envío)',
-          recipients: recipients.length,
+          recipients: result.status === 'sent' ? result.emailRecipients + result.inApp : 0,
           emailSent,
           metadata: {
             dailyReportId: report.id,

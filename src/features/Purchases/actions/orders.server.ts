@@ -2,14 +2,20 @@
 
 import { QUANTITY_SCALE, formatScaled, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
+import { notifySafe } from '@/features/Notifications/lib/dispatch.server';
 import { checkPermissionServer } from '@/features/Permissions';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
-import { sendPurchaseOrderDecisionEmail, sendSupplierDocumentEmail } from '@/shared/lib/mail/templates/purchases';
+import {
+  renderPurchaseApprovalPendingEmail,
+  renderPurchaseOrderDecisionEmail,
+  sendSupplierDocumentEmail,
+} from '@/shared/lib/mail/templates/purchases';
 import { toPdfDownload } from '@/shared/lib/pdf/react-pdf.server';
 import type { PdfDownload } from '@/shared/lib/pdf/types';
 import { prisma } from '@/shared/lib/prisma';
+import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
 import { NO_PERMISSION, UUID_RE, firstIssue, toPurchaseActionError } from '../lib/action-errors';
@@ -222,6 +228,8 @@ export async function createPurchaseOrder(
       insertPurchaseOrder(tx, companyId, profile.id, toPurchaseOrderInput(parsed.data), { submit: options.submit })
     );
     logger.info('Orden de compra creada', { data: { number: created.number, submit: options.submit } });
+    // «Crear y enviar» la deja esperando aprobación sin pasar por `submitPurchaseOrder`: también avisa.
+    if (options.submit) await notifyOrderSubmitted(created.id, companyId, new Date());
     revalidate();
     return ok(created);
   } catch (error) {
@@ -367,6 +375,7 @@ export async function submitPurchaseOrder(id: string): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'ordenes', 'update'))) return fail(NO_PERMISSION);
   if (!UUID_RE.test(id)) return fail('La orden de compra no existe');
   const companyId = await getActiveCompanyId();
+  const submittedAt = new Date();
   try {
     await prisma.$transaction(async (tx) => {
       await lockPurchaseOrder(tx, companyId, id, 'submit');
@@ -376,9 +385,10 @@ export async function submitPurchaseOrder(id: string): Promise<ActionResult> {
       });
       await tx.purchase_orders.update({
         where: { id },
-        data: { status: purchaseOrderStatusAfter('submit'), submitted_at: new Date() },
+        data: { status: purchaseOrderStatusAfter('submit'), submitted_at: submittedAt },
       });
     });
+    await notifyOrderSubmitted(id, companyId, submittedAt);
     revalidate();
     return ok(null);
   } catch (error) {
@@ -386,24 +396,77 @@ export async function submitPurchaseOrder(id: string): Promise<ActionResult> {
   }
 }
 
-/** Aviso a quien creo la OC, DESPUES de confirmar la decision: si el mail falla, la decision queda. */
-async function notifyOrderDecision(orderId: string, approved: boolean, notes: string | null) {
+/** Aviso a quienes pueden aprobar (#786), DESPUES de confirmar el envío: si falla, la OC igual quedó enviada. */
+async function notifyOrderSubmitted(orderId: string, companyId: string, submittedAt: Date) {
   try {
-    const order = await prisma.purchase_orders.findUniqueOrThrow({
-      where: { id: orderId },
-      select: { number: true, creator: { select: { email: true, fullname: true } } },
-    });
-    if (!order.creator.email) return;
-    await sendPurchaseOrderDecisionEmail({
-      to: order.creator.email,
-      name: order.creator.fullname,
-      number: order.number,
-      approved,
-      notes,
-      orderId,
+    const [order, actorId] = await Promise.all([
+      prisma.purchase_orders.findUnique({
+        where: { id: orderId },
+        select: { number: true, supplier: { select: { name: true } } },
+      }),
+      getSessionUserId(),
+    ]);
+    if (!order) return;
+    const sender = actorId
+      ? (await prisma.profile.findUnique({ where: { credential_id: actorId }, select: { fullname: true } }))
+          ?.fullname ?? null
+      : null;
+    await notifySafe({
+      event: 'purchases.order_submitted',
+      companyId,
+      dedupeKey: `purchases.order_submitted:${orderId}:${submittedAt.toISOString()}`,
+      title: `Orden de compra ${order.number} para aprobar`,
+      body: order.supplier?.name ? `Proveedor: ${order.supplier.name}` : undefined,
+      href: `/dashboard/purchases/orders/${orderId}`,
+      actorId,
+      email: renderPurchaseApprovalPendingEmail({
+        kind: 'order',
+        number: order.number,
+        submittedBy: sender,
+        id: orderId,
+      }),
     });
   } catch (error) {
-    logger.error('No se pudo avisar la decision de la orden de compra', { data: { error, orderId } });
+    // El aviso nunca rompe la operación que ya quedó guardada.
+    logger.error('No se pudo preparar el aviso', { data: { error, orderId } });
+  }
+}
+
+/** Aviso a quien creo la OC, DESPUES de confirmar la decision: si el aviso falla, la decision queda. */
+async function notifyOrderDecision(
+  orderId: string,
+  companyId: string,
+  approved: boolean,
+  notes: string | null,
+  decidedAt: Date
+) {
+  try {
+    const order = await prisma.purchase_orders.findUnique({
+      where: { id: orderId },
+      select: { number: true, creator: { select: { credential_id: true, fullname: true } } },
+    });
+    const userId = order?.creator.credential_id;
+    if (!order || !userId) return;
+    const verdict = approved ? 'aprobada' : 'rechazada';
+    await notifySafe({
+      event: 'purchases.order_decided',
+      companyId,
+      dedupeKey: `purchases.order_decided:${orderId}:${decidedAt.toISOString()}`,
+      title: `Tu orden de compra ${order.number} fue ${verdict}`,
+      body: notes ?? undefined,
+      href: `/dashboard/purchases/orders/${orderId}`,
+      userIds: [userId],
+      email: renderPurchaseOrderDecisionEmail({
+        name: order.creator.fullname,
+        number: order.number,
+        approved,
+        notes,
+        orderId,
+      }),
+    });
+  } catch (error) {
+    // El aviso nunca rompe la operación que ya quedó guardada.
+    logger.error('No se pudo preparar el aviso', { data: { error, orderId } });
   }
 }
 
@@ -413,6 +476,7 @@ export async function approvePurchaseOrder(id: string): Promise<ActionResult> {
   const profile = await getServerAuthProfile();
   if (!profile) return fail(SESSION_EXPIRED);
   const companyId = await getActiveCompanyId();
+  const decidedAt = new Date();
   try {
     await prisma.$transaction(async (tx) => {
       await lockPurchaseOrder(tx, companyId, id, 'approve');
@@ -423,7 +487,7 @@ export async function approvePurchaseOrder(id: string): Promise<ActionResult> {
         data: {
           status: complement ? 'RECEIVED' : purchaseOrderStatusAfter('approve'),
           approved_by: profile.id,
-          approved_at: new Date(),
+          approved_at: decidedAt,
           rejection_notes: null,
         },
       });
@@ -431,7 +495,7 @@ export async function approvePurchaseOrder(id: string): Promise<ActionResult> {
   } catch (error) {
     return toPurchaseActionError(error, logger, 'aprobar la orden de compra');
   }
-  await notifyOrderDecision(id, true, null);
+  await notifyOrderDecision(id, companyId, true, null, decidedAt);
   revalidate();
   return ok(null);
 }
@@ -445,10 +509,10 @@ export async function rejectPurchaseOrder(id: string, reason: string): Promise<A
   const profile = await getServerAuthProfile();
   if (!profile) return fail(SESSION_EXPIRED);
   const companyId = await getActiveCompanyId();
+  const now = new Date();
   try {
     await prisma.$transaction(async (tx) => {
       await lockPurchaseOrder(tx, companyId, id, 'reject');
-      const now = new Date();
       await tx.purchase_orders.update({
         where: { id },
         data: {
@@ -465,7 +529,7 @@ export async function rejectPurchaseOrder(id: string, reason: string): Promise<A
   } catch (error) {
     return toPurchaseActionError(error, logger, 'rechazar la orden de compra');
   }
-  await notifyOrderDecision(id, false, motive.data);
+  await notifyOrderDecision(id, companyId, false, motive.data, now);
   revalidate();
   return ok(null);
 }

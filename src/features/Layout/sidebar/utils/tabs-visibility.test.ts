@@ -51,10 +51,10 @@ describe('resolveVisibleTabs', () => {
   });
 
   it('infiere la tab padre cuando el permiso está en una subtab', () => {
-    // `dashboard:documentacion` no tiene view propio, pero sí su subtab `empleados`.
-    const visible = resolveVisibleTabs({ 'dashboard:empleados:view': true });
+    // `empleados:employees` (Personal) no tiene view propio, pero sí su subtab `empleados-inactivos` (Bajas).
+    const visible = resolveVisibleTabs({ 'empleados:empleados-inactivos:view': true });
 
-    expect(visible.dashboard).toEqual(['documentacion']);
+    expect(visible.empleados).toEqual(['employees']);
   });
 
   it('no mezcla módulos que comparten el slug de tab', () => {

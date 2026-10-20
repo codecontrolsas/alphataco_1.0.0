@@ -100,20 +100,28 @@ export function PipelineLayout({ steps, summaryQuery, initialStep, paramName, st
   );
 
   return (
-    // pt-4: separa los pasos del encabezado de la sección.
-    <div className="pt-4 space-y-6">
+    <div className="space-y-4">
       <PipelineSteps
         steps={steps}
         counts={summary.counts}
         attention={summary.attention}
         activeStep={activeStep}
         onStepClick={handleStepClick}
+        idPrefix={paramName}
       />
 
       {stepContents.map(({ id, content }) => (
-        <div key={id} className={activeStep === id ? undefined : 'hidden'}>
+        <div
+          key={id}
+          role="tabpanel"
+          id={`${paramName}-panel-${id}`}
+          aria-labelledby={`${paramName}-tab-${id}`}
+          className={activeStep === id ? undefined : 'hidden'}
+        >
           {/* Un error de render en un paso no tumba a los demás. */}
-          <SectionErrorBoundary title={`No se pudo mostrar el paso "${steps.find((s) => s.id === id)?.label ?? id}"`}>
+          <SectionErrorBoundary
+            title={`No se pudo mostrar la pestaña "${steps.find((s) => s.id === id)?.label ?? id}"`}
+          >
             {content}
           </SectionErrorBoundary>
         </div>

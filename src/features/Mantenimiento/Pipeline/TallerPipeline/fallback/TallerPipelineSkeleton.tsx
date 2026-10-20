@@ -2,12 +2,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 export function TallerPipelineSkeleton() {
   return (
-    // Mismo pt-4 que PipelineLayout para que no salte el layout al hidratar
-    <div className="pt-4 space-y-6" role="status" aria-busy="true" aria-label="Cargando el circuito de Taller">
-      {/* Tarjetas de los 4 pasos: misma grilla que PipelineSteps (2 columnas hasta xl, 4 en línea) */}
-      <div className="grid grid-cols-2 gap-2 max-md:gap-1.5 xl:auto-cols-fr xl:grid-flow-col xl:grid-cols-none" aria-hidden="true">
+    <div className="space-y-4" role="status" aria-busy="true" aria-label="Cargando el circuito de Taller">
+      {/* Barra de las 4 pestañas (PipelineSteps) */}
+      <div className="border-border flex gap-1 border-b" aria-hidden="true">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-[120px] rounded-xl max-md:h-[84px]" />
+          <Skeleton key={i} className="mb-1 h-8 w-36" />
         ))}
       </div>
       {/* Tarjetas de métricas + tabla del paso inicial */}

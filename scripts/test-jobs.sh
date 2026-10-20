@@ -56,4 +56,5 @@ echo "==> Corriendo los tests de integracion de los jobs..."
 npx vitest run --no-file-parallelism \
   src/features/Jobs/lib/auth.test.ts \
   src/features/Jobs/jobs/jobs.integration.test.ts \
-  src/features/Jobs/jobs/warehouse-batch-expiry.integration.test.ts
+  src/features/Jobs/jobs/warehouse-batch-expiry.integration.test.ts \
+  src/features/Notifications/lib/dispatch.integration.test.ts

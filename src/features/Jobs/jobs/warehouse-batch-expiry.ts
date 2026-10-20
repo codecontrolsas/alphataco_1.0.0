@@ -1,12 +1,12 @@
 import 'server-only';
 
-import { prisma } from '@/shared/lib/prisma';
-import { sendMail, type SendMail } from '@/shared/lib/mail';
+import { notify } from '@/features/Notifications/lib/dispatch.server';
 import { EXPIRING_WINDOW_DAYS } from '@/features/Warehouses/lib/batch-expiry';
 import { findExpiringBatches } from '@/features/Warehouses/lib/expiring-batches';
+import type { SendMail } from '@/shared/lib/mail';
+import { prisma } from '@/shared/lib/prisma';
 import { argentinaDate } from '../lib/dates';
 import { runForEachCompany, runJobWithBitacora } from '../lib/per-company';
-import { getCompanyRecipients } from '../lib/recipients';
 import type { JobSummary } from '../lib/types';
 import { renderWarehouseBatchExpiryEmail } from '../templates/warehouse-batch-expiry';
 
@@ -14,8 +14,8 @@ import { renderWarehouseBatchExpiryEmail } from '../templates/warehouse-batch-ex
  * Job semanal de los lunes 08:05 (hora argentina) — `GET /api/jobs/warehouse-batch-expiry`.
  *
  * Por cada empresa busca los lotes CON SALDO vencidos o que vencen en los proximos 30 dias
- * (`findExpiringBatches`, la misma consulta que el aviso de Stock) y los manda a los
- * destinatarios de `notification_settings` (`stock_batch_expiry`).
+ * (`findExpiringBatches`, la misma consulta que el aviso de Stock) y los avisa con `notify` (#786):
+ * roles con el aviso activo más la lista fija de `notification_settings` (`stock_batch_expiry`).
  *
  * A diferencia del de documentos, sin nada que avisar NO manda correo: la empresa queda
  * `skipped`. Un "todo al dia" semanal de un almacen sin lotes seria ruido para la mayoria de
@@ -33,7 +33,6 @@ const JOB = 'warehouse-batch-expiry' as const;
 
 export async function runWarehouseBatchExpiryJob(deps: WarehouseBatchExpiryJobDeps = {}): Promise<JobSummary> {
   const date = deps.date ?? argentinaDate();
-  const send = deps.sendMail ?? sendMail;
 
   return runJobWithBitacora(JOB, date, async () => {
     const companies = await prisma.company.findMany({
@@ -51,23 +50,32 @@ export async function runWarehouseBatchExpiryJob(deps: WarehouseBatchExpiryJobDe
           return { skipped: true, reason: 'sin lotes vencidos ni por vencer' };
         }
 
-        const recipients = await getCompanyRecipients(company.id, 'stock_batch_expiry');
-        if (recipients.length === 0) {
-          return { skipped: true, reason: 'la empresa no tiene destinatarios configurados' };
-        }
-
         const email = renderWarehouseBatchExpiryEmail({
           companyName: company.company_name,
           today: date,
           windowDays: EXPIRING_WINDOW_DAYS,
           items,
         });
-        const emailSent = await send({ to: recipients, subject: email.subject, html: email.html, text: email.text });
-
         const expired = items.filter((i) => i.status === 'EXPIRED').length;
+        const result = await notify(
+          {
+            event: 'warehouses.batch_expiry',
+            companyId: company.id,
+            dedupeKey: `warehouses.batch_expiry:${date}`,
+            title: `Lotes: ${expired} vencidos y ${items.length - expired} por vencer`,
+            href: '/dashboard/warehouse?tab=stock',
+            email,
+          },
+          { sendMail: deps.sendMail }
+        );
+        if (result.status === 'no_recipients') {
+          return { skipped: true, reason: 'la empresa no tiene destinatarios (roles ni lista fija)' };
+        }
+        const emailSent = result.emailSent;
+
         return {
           reason: emailSent ? 'correo enviado' : 'correo NO enviado (SMTP sin configurar o error de envío)',
-          recipients: recipients.length,
+          recipients: result.status === 'sent' ? result.emailRecipients + result.inApp : 0,
           emailSent,
           metadata: { expired, expiring: items.length - expired },
         };

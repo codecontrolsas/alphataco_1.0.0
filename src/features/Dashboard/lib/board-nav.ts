@@ -46,6 +46,7 @@ export function findActiveBoardIndex(
  */
 export const DASHBOARD_NAV_TAB_BY_TEMPLATE: Record<BoardTemplateKey, string> = {
   resumen: 'principal',
+  dia: 'principal',
   vencimientos: 'documentacion',
   operacion: 'estadisticas',
   flota: 'estadisticas',

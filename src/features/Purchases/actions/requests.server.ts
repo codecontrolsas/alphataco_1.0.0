@@ -1,14 +1,19 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
+import { notifySafe } from '@/features/Notifications/lib/dispatch.server';
 import { checkPermissionServer } from '@/features/Permissions';
+import { lockRequest } from '@/features/Warehouses/lib/requests';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
-import { sendPurchaseRequestDecisionEmail } from '@/shared/lib/mail/templates/purchases';
+import {
+  renderPurchaseApprovalPendingEmail,
+  renderPurchaseRequestDecisionEmail,
+} from '@/shared/lib/mail/templates/purchases';
 import { prisma } from '@/shared/lib/prisma';
+import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { lockRequest } from '@/features/Warehouses/lib/requests';
+import { revalidatePath } from 'next/cache';
 import { NO_PERMISSION, UUID_RE, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import { materialRequestShortfall, type MaterialRequestShortfall } from '../lib/from-material-request';
 import { PurchaseError } from '../lib/purchase-errors';
@@ -96,6 +101,8 @@ export async function createPurchaseRequest(
       })
     );
     logger.info('Solicitud de compra creada', { data: { number: created.number, submit: options.submit } });
+    // «Crear y enviar» la deja esperando aprobación sin pasar por `submitPurchaseRequest`: también avisa.
+    if (options.submit) await notifySubmitted(created.id, companyId, profile.fullname, new Date());
     revalidate();
     return ok(created);
   } catch (error) {
@@ -142,7 +149,11 @@ export async function updatePurchaseRequestDraft(id: string, values: PurchaseReq
  * Un borrador generado desde un pedido de Almacenes sigue atado al pedido al editarlo: conserva
  * el destino del pedido (el del formulario se ignora) y solo admite materiales del pedido.
  */
-async function constrainToMaterialRequest(tx: Tx, requestId: string, input: PurchaseRequestInput): Promise<PurchaseRequestInput> {
+async function constrainToMaterialRequest(
+  tx: Tx,
+  requestId: string,
+  input: PurchaseRequestInput
+): Promise<PurchaseRequestInput> {
   const stored = await tx.purchase_requests.findUniqueOrThrow({
     where: { id: requestId },
     select: {
@@ -193,7 +204,14 @@ async function inputFromStored(tx: Tx, requestId: string): Promise<PurchaseReque
       needed_by: true,
       notes: true,
       lines: {
-        select: { material_id: true, description: true, quantity: true, unit_id: true, suggested_supplier_id: true, notes: true },
+        select: {
+          material_id: true,
+          description: true,
+          quantity: true,
+          unit_id: true,
+          suggested_supplier_id: true,
+          notes: true,
+        },
         orderBy: { position: 'asc' },
       },
     },
@@ -228,6 +246,7 @@ export async function submitPurchaseRequest(id: string): Promise<ActionResult> {
   const profile = await getServerAuthProfile();
   if (!profile) return fail(SESSION_EXPIRED);
   const companyId = await getActiveCompanyId();
+  const submittedAt = new Date();
   try {
     await prisma.$transaction(async (tx) => {
       const request = await lockPurchaseRequest(tx, companyId, id, 'submit');
@@ -235,9 +254,10 @@ export async function submitPurchaseRequest(id: string): Promise<ActionResult> {
       await validatePurchaseRequestInput(tx, companyId, await inputFromStored(tx, id));
       await tx.purchase_requests.update({
         where: { id },
-        data: { status: purchaseRequestStatusAfter('submit'), submitted_at: new Date() },
+        data: { status: purchaseRequestStatusAfter('submit'), submitted_at: submittedAt },
       });
     });
+    await notifySubmitted(id, companyId, profile.fullname, submittedAt);
     revalidate(id);
     return ok(null);
   } catch (error) {
@@ -245,24 +265,70 @@ export async function submitPurchaseRequest(id: string): Promise<ActionResult> {
   }
 }
 
-/** Aviso al solicitante, DESPUES de confirmar la decision: si el mail falla, la decision queda. */
-async function notifyDecision(requestId: string, approved: boolean, notes: string | null) {
+/** Aviso a quienes pueden aprobar (#786), DESPUES de confirmar el envío: si falla, la solicitud igual quedó enviada. */
+async function notifySubmitted(requestId: string, companyId: string, submittedBy: string | null, submittedAt: Date) {
   try {
-    const request = await prisma.purchase_requests.findUniqueOrThrow({
-      where: { id: requestId },
-      select: { number: true, requester: { select: { email: true, fullname: true } } },
-    });
-    if (!request.requester.email) return;
-    await sendPurchaseRequestDecisionEmail({
-      to: request.requester.email,
-      name: request.requester.fullname,
-      number: request.number,
-      approved,
-      notes,
-      requestId,
+    const [request, actorId] = await Promise.all([
+      prisma.purchase_requests.findUnique({ where: { id: requestId }, select: { number: true } }),
+      getSessionUserId(),
+    ]);
+    if (!request) return;
+    await notifySafe({
+      event: 'purchases.request_submitted',
+      companyId,
+      dedupeKey: `purchases.request_submitted:${requestId}:${submittedAt.toISOString()}`,
+      title: `Solicitud ${request.number} para aprobar`,
+      body: submittedBy ? `Enviada por ${submittedBy}` : undefined,
+      href: `/dashboard/purchases/requests/${requestId}`,
+      actorId,
+      email: renderPurchaseApprovalPendingEmail({
+        kind: 'request',
+        number: request.number,
+        submittedBy,
+        id: requestId,
+      }),
     });
   } catch (error) {
-    logger.error('No se pudo avisar la decision de la solicitud', { data: { error, requestId } });
+    // El aviso nunca rompe la operación que ya quedó guardada.
+    logger.error('No se pudo preparar el aviso', { data: { error, requestId } });
+  }
+}
+
+/** Aviso al solicitante, DESPUES de confirmar la decision: si el aviso falla, la decision queda. */
+async function notifyDecision(
+  requestId: string,
+  companyId: string,
+  approved: boolean,
+  notes: string | null,
+  decidedAt: Date
+) {
+  try {
+    const request = await prisma.purchase_requests.findUnique({
+      where: { id: requestId },
+      select: { number: true, requester: { select: { credential_id: true, fullname: true } } },
+    });
+    const userId = request?.requester.credential_id;
+    if (!request || !userId) return;
+    const verdict = approved ? 'aprobada' : 'rechazada';
+    await notifySafe({
+      event: 'purchases.request_decided',
+      companyId,
+      dedupeKey: `purchases.request_decided:${requestId}:${decidedAt.toISOString()}`,
+      title: `Tu solicitud ${request.number} fue ${verdict}`,
+      body: notes ?? undefined,
+      href: `/dashboard/purchases/requests/${requestId}`,
+      userIds: [userId],
+      email: renderPurchaseRequestDecisionEmail({
+        name: request.requester.fullname,
+        number: request.number,
+        approved,
+        notes,
+        requestId,
+      }),
+    });
+  } catch (error) {
+    // El aviso nunca rompe la operación que ya quedó guardada.
+    logger.error('No se pudo preparar el aviso', { data: { error, requestId } });
   }
 }
 
@@ -275,6 +341,7 @@ async function decide(id: string, approved: boolean, rawNotes: string): Promise<
   if (!profile) return fail(SESSION_EXPIRED);
   const companyId = await getActiveCompanyId();
   const action = approved ? 'approve' : 'reject';
+  const decidedAt = new Date();
   try {
     await prisma.$transaction(async (tx) => {
       await lockPurchaseRequest(tx, companyId, id, action);
@@ -283,7 +350,7 @@ async function decide(id: string, approved: boolean, rawNotes: string): Promise<
         data: {
           status: purchaseRequestStatusAfter(action),
           decided_by: profile.id,
-          decided_at: new Date(),
+          decided_at: decidedAt,
           decision_notes: notes.data || null,
         },
       });
@@ -291,7 +358,7 @@ async function decide(id: string, approved: boolean, rawNotes: string): Promise<
   } catch (error) {
     return toPurchaseActionError(error, logger, approved ? 'aprobar la solicitud' : 'rechazar la solicitud');
   }
-  await notifyDecision(id, approved, notes.data || null);
+  await notifyDecision(id, companyId, approved, notes.data || null, decidedAt);
   revalidate(id);
   return ok(null);
 }
@@ -426,7 +493,9 @@ async function assertMaterialRequestVisible(materialRequestId: string, profileId
 }
 
 /** Faltante del pedido para precargar la solicitud (pendiente de entrega - stock de la empresa). */
-export async function getMaterialRequestShortfall(materialRequestId: string): Promise<ActionResult<MaterialRequestShortfall>> {
+export async function getMaterialRequestShortfall(
+  materialRequestId: string
+): Promise<ActionResult<MaterialRequestShortfall>> {
   if (!(await checkPermissionServer('compras', 'solicitudes', 'create'))) return fail(NO_PERMISSION);
   if (!UUID_RE.test(materialRequestId)) return fail('El pedido de materiales no existe');
   const profile = await getServerAuthProfile();
@@ -487,6 +556,7 @@ export async function createPurchaseRequestFromMaterialRequest(
       );
     });
     logger.info('Solicitud de compra creada desde un pedido', { data: { number: created.number, materialRequestId } });
+    if (options.submit) await notifySubmitted(created.id, companyId, profile.fullname, new Date());
     revalidate();
     revalidatePath(`/dashboard/warehouse/requests/${materialRequestId}`);
     return ok(created);

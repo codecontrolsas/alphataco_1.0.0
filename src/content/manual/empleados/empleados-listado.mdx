@@ -9,21 +9,21 @@ El listado de empleados es la puerta de entrada al personal de la empresa. Desde
 
 <OpenScreen />
 
-Se entra desde el menú lateral, en **Empleados**. La pestaña **Empleados** tiene dos solapas: **Empleados Activos** (la que se abre por defecto) y **Empleados Inactivos** (los dados de baja). Al lado está la pestaña **Diagramas** (ver <GuideLink to="diagramas">Diagramas</GuideLink>).
+Se entra desde el menú lateral, en **Empleados → Personal**. Arriba del listado, el selector **Vista** cambia entre **Activos** (la que se abre por defecto) y **Bajas** (los dados de baja). En el mismo menú está **Diagramas** (ver <GuideLink to="diagramas">Diagramas</GuideLink>).
 
 ## Qué ves en la pantalla
 
 Cada fila es un empleado. Estas son las columnas que se ven de entrada:
 
-| Columna | Qué muestra |
-|---|---|
-| **Nombre completo** | Foto, apellido y nombre. Hacé clic en el nombre para abrir la ficha; clic en la foto para agrandarla. |
-| **Email** | Correo del empleado. |
-| **Legajo** | Número de legajo. Es el dato que identifica al empleado: los nombres pueden repetirse, el legajo no. |
-| **Estado** | Estado de su documentación (ver abajo). |
-| **Sector** y **Puesto** | Dónde trabaja. |
-| **Fecha de ingreso** | Fecha de alta en la empresa. |
-| **Afectaciones** | Clientes a los que está afectado. Si son varios, muestra el primero y "+N" (pasá el mouse para ver todos). **Sin afectar** si no tiene ninguno. |
+| Columna                 | Qué muestra                                                                                                                                     |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Nombre completo**     | Foto, apellido y nombre. Hacé clic en el nombre para abrir la ficha; clic en la foto para agrandarla.                                           |
+| **Email**               | Correo del empleado.                                                                                                                            |
+| **Legajo**              | Número de legajo. Es el dato que identifica al empleado: los nombres pueden repetirse, el legajo no.                                            |
+| **Estado**              | Estado de su documentación (ver abajo).                                                                                                         |
+| **Sector** y **Puesto** | Dónde trabaja.                                                                                                                                  |
+| **Fecha de ingreso**    | Fecha de alta en la empresa.                                                                                                                    |
+| **Afectaciones**        | Clientes a los que está afectado. Si son varios, muestra el primero y "+N" (pasá el mouse para ver todos). **Sin afectar** si no tiene ninguno. |
 
 Con el botón **Columnas** podés mostrar muchos datos más: nacionalidad, nacimiento, CUIL, documento, género, estado civil, nivel de educación, domicilio completo, teléfono, horas, tipo de contrato, diagrama, centro de costo, tipo de costo, estado de afiliación (dentro o fuera de convenio), aptitudes técnicas, categoría, convenio, sindicato, sectores de taller, país de nacimiento, fecha de creación y si está activo. El sistema recuerda qué columnas elegiste.
 
@@ -33,11 +33,11 @@ En **Empleados Inactivos** se suman dos columnas: **Motivo de baja** y **Fecha d
 
 La columna **Estado** resume cómo está la documentación obligatoria del empleado. El sistema la calcula sola cada vez que se sube, vence o deja de aplicar un documento:
 
-| Estado | Qué significa |
-|---|---|
-| **Completo** | Tiene presentados todos los documentos que le corresponden y ninguno está vencido. |
-| **Completo con doc vencida** | Tiene todo presentado, pero algún documento está vencido. |
-| **Incompleto** | Le falta presentar al menos un documento obligatorio. |
+| Estado                       | Qué significa                                                                      |
+| ---------------------------- | ---------------------------------------------------------------------------------- |
+| **Completo**                 | Tiene presentados todos los documentos que le corresponden y ninguno está vencido. |
+| **Completo con doc vencida** | Tiene todo presentado, pero algún documento está vencido.                          |
+| **Incompleto**               | Le falta presentar al menos un documento obligatorio.                              |
 
 Qué documentos le corresponden a cada empleado depende de su puesto, convenio, categoría, clientes y otras condiciones. Lo explica <GuideLink to="documentos-alertas-y-estado">Documentos, alertas y estado</GuideLink>.
 
@@ -52,7 +52,8 @@ Con el botón **Filtros** podés activar un filtro por cada columna: texto (nomb
 - **Ordenamiento** permite ordenar por una o varias columnas.
 
 <Callout type="tip" title="Buscar un empleado puntual">
-No hay un buscador general: para encontrar a alguien activá el filtro de **Legajo** (o el de nombre) y escribí ahí. El legajo es la forma más segura.
+  No hay un buscador general: para encontrar a alguien activá el filtro de **Legajo** (o el de nombre) y escribí ahí. El
+  legajo es la forma más segura.
 </Callout>
 
 ## Cómo exportar a Excel
@@ -62,19 +63,21 @@ Hacé clic en **Excel** (**Exportar todos los datos filtrados a Excel**). Se des
 ## Cómo dar de alta un empleado
 
 <Steps>
-  <Step title="Abrí el alta">
-    En **Empleados Activos**, hacé clic en **Agregar empleado**.
-  </Step>
+  <Step title="Abrí el alta">En **Empleados Activos**, hacé clic en **Agregar empleado**.</Step>
   <Step title="Completá la ficha">
-    Se abre la ficha en blanco con las pestañas **Datos Personales**, **Datos de Contacto** y **Datos Laborales**. El detalle de cada campo está en <GuideLink to="ficha-del-empleado#dar-de-alta-un-empleado">Ficha del empleado</GuideLink>.
+    Se abre la ficha en blanco con las pestañas **Datos Personales**, **Datos de Contacto** y **Datos Laborales**. El
+    detalle de cada campo está en{' '}
+    <GuideLink to="ficha-del-empleado#dar-de-alta-un-empleado">Ficha del empleado</GuideLink>.
   </Step>
   <Step title="Guardá">
-    Hacé clic en **Agregar empleado** al pie del formulario. El empleado aparece en el listado y se abre su ficha, donde ya podés cargarle la documentación.
+    Hacé clic en **Agregar empleado** al pie del formulario. El empleado aparece en el listado y se abre su ficha, donde
+    ya podés cargarle la documentación.
   </Step>
 </Steps>
 
 <Callout type="info" title="Si el empleado viene de Selección">
-Si el ingreso se gestionó en el módulo **Selección**, no lo cargues a mano: al aprobar al candidato el sistema crea el legajo con todos sus datos y documentos. Ver <GuideLink to="candidatos">Candidatos</GuideLink>.
+  Si el ingreso se gestionó en el módulo **Selección**, no lo cargues a mano: al aprobar al candidato el sistema crea el
+  legajo con todos sus datos y documentos. Ver <GuideLink to="candidatos">Candidatos</GuideLink>.
 </Callout>
 
 ## Cómo ver o editar un empleado
@@ -99,18 +102,19 @@ Un empleado dado de baja no se borra: pasa de **Empleados Activos** a **Empleado
 
 ## Permisos
 
-| Permiso | Qué habilita |
-|---|---|
-| **Ver** en **Empleados Activos** / **Empleados Inactivos** | Ver cada solapa. |
-| **Crear** en **Empleados** | El botón **Agregar empleado**. |
-| **Editar** en **Empleados** | La opción **Editar** del menú de cada fila y el botón **Editar** de la ficha. |
+| Permiso                                                    | Qué habilita                                                                  |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| **Ver** en **Empleados Activos** / **Empleados Inactivos** | Ver cada solapa.                                                              |
+| **Crear** en **Empleados**                                 | El botón **Agregar empleado**.                                                |
+| **Editar** en **Empleados**                                | La opción **Editar** del menú de cada fila y el botón **Editar** de la ficha. |
 
 ## Problemas frecuentes
 
 <Callout type="info" title="No veo el botón Agregar empleado">
-Te falta el permiso **Crear**, o estás parado en **Empleados Inactivos**: el botón solo aparece en la solapa de activos.
+  Te falta el permiso **Crear**, o estás parado en **Empleados Inactivos**: el botón solo aparece en la solapa de
+  activos.
 </Callout>
 
 <Callout type="info" title="Un empleado figura Incompleto y no sé qué le falta">
-Abrí su ficha, pestaña **Documentación**: los documentos en estado **Pendiente** son los que faltan presentar.
+  Abrí su ficha, pestaña **Documentación**: los documentos en estado **Pendiente** son los que faltan presentar.
 </Callout>

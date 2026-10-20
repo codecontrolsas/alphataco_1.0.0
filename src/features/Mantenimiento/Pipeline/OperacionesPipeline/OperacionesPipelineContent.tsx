@@ -1,9 +1,9 @@
 import { StateBlock } from '@/shared/components/common/StateBlock';
 import { Suspense } from 'react';
+import { getOperacionesSummaryCached } from '../../lib/section-counts';
 import { PipelineLayout, type PipelineStepEntry } from '../components/PipelineLayout';
 import type { PipelineStep } from '../types';
 import { getOperacionesPipelineSummary } from './actions/pipeline-summary.server';
-import { getOperacionesSummaryCached } from '../../lib/section-counts';
 
 // TabContent components existentes
 import { SolicitudesMantenimientoTabContent } from '@/features/Mantenimiento/SolicitudesMantenimiento';
@@ -25,7 +25,7 @@ const OPERACIONES_STEPS: PipelineStep[] = [
   {
     id: 'validate',
     stepNumber: 1,
-    label: 'Validar Solicitud',
+    label: 'Por validar',
     description: 'Solicitudes nuevas pendientes de tu aprobación',
     iconName: 'ClipboardCheck',
     permissionTab: 'maintenance_requests',

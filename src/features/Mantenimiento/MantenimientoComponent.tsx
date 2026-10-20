@@ -1,10 +1,13 @@
+import { Skeleton } from '@/components/ui/skeleton';
+import SectoresTab from '@/features/Empresa/General/components/mantenimiento/SectoresTab';
 import { EquiposConDesviosTabContent } from '@/features/Mantenimiento/EquiposConDesvios';
 import { EquipmentsWithDeviationsSkeleton } from '@/features/Mantenimiento/EquiposConDesvios/fallback';
 import GomeriaTabContent from '@/features/Mantenimiento/Gomeria/GomeriaTabContent';
 import { NuevoPedidoSkeleton, NuevoPedidoTabContent } from '@/features/Mantenimiento/NuevoPedido';
 import { WorkshopSectorsSkeleton, WorkshopViewTabContent } from '@/features/Mantenimiento/WorkshopView';
-import { SectionManagerServer } from '@/features/TabsManager';
-import { AlertTriangle, Building2, CircleDot, ClipboardList, Plus, Warehouse } from 'lucide-react';
+import { SectionManagerServer, ViewManagerServer } from '@/features/TabsManager';
+import { CatalogTableSurface } from '@/shared/components/common/CatalogFormSheet';
+import { AlertTriangle, Building2, CircleDot, ClipboardList, Plus } from 'lucide-react';
 import { Suspense } from 'react';
 import { GomeriaSkeleton } from './Gomeria/fallback/GomeriaSkeleton';
 import { OperacionesPipelineContent } from './Pipeline/OperacionesPipeline/OperacionesPipelineContent';
@@ -21,8 +24,9 @@ interface MantenimientoComponentProps {
  * Componente principal del módulo Mantenimiento.
  *
  * Estructura de tabs raíz:
- * - Supervisión: pipeline visual con 4 pasos (Validar → Aprobar Fecha → Para Taller → Seguimiento)
- * - Taller: pipeline visual con 4 pasos (Por Programar → Confirmados → En Taller → Aprobaciones)
+ * - Gestión: selector de vista Supervisión (Por validar | Seguimiento) / Taller (Programación pendiente |
+ *   Para ingreso | En mantenimiento | Aprobaciones), según permisos
+ * - Sectores: tablero por sector y administración de los sectores del taller
  * - Nuevo Pedido: formulario de nuevo pedido de mantenimiento
  * - Equipos con Desvíos: tabla de equipos con desvíos pendientes
  * - Configuración: tipos de reparación y grupos
@@ -36,60 +40,109 @@ export default async function MantenimientoComponent({ searchParams, permissions
       permissions={permissions}
       tabs={[
         // ============================================
-        // TAB: SUPERVISIÓN (Pipeline visual; mismo rótulo que el sidebar y el mapa de permisos)
+        // TAB: GESTIÓN (Supervisión + Taller, cada una con sus pestañas; el selector de vista muestra
+        // solo las que el usuario puede ver). Mismo `tabSlug` que Supervisión: el permiso no cambia.
         // ============================================
         {
           value: 'maint_operaciones',
+          aliases: ['maint_taller'],
           label: (
             <span className="flex items-center gap-2">
               <ClipboardList className="h-4 w-4" />
-              Supervisión
+              Gestión
             </span>
           ),
           moduleSlug: 'mantenimiento',
-          tabSlug: 'maint_operaciones',
+          visibleWhenAny: [
+            { moduleSlug: 'mantenimiento', tabSlug: 'maint_operaciones' },
+            { moduleSlug: 'mantenimiento', tabSlug: 'maint_taller' },
+          ],
           content: (
-            <Suspense fallback={<OperacionesPipelineSkeleton />}>
-              <OperacionesPipelineContent searchParams={searchParams} permissions={permissions} />
-            </Suspense>
+            <ViewManagerServer
+              paramName="vista"
+              searchParams={searchParams}
+              // Un enlace viejo `?tab=maint_taller` abre la vista de Taller.
+              defaultView={searchParams.tab === 'maint_taller' ? 'taller' : 'supervision'}
+              permissions={permissions}
+              layout="menu"
+              ariaLabel="Vista de gestión"
+              views={[
+                {
+                  value: 'supervision',
+                  label: 'Supervisión',
+                  description: 'Solicitudes por validar y seguimiento de equipos',
+                  moduleSlug: 'mantenimiento',
+                  tabSlug: 'maint_operaciones',
+                  content: (
+                    <Suspense fallback={<OperacionesPipelineSkeleton />}>
+                      <OperacionesPipelineContent searchParams={searchParams} permissions={permissions} />
+                    </Suspense>
+                  ),
+                },
+                {
+                  value: 'taller',
+                  label: 'Taller',
+                  description: 'Programación, ingreso, mantenimiento y aprobaciones',
+                  moduleSlug: 'mantenimiento',
+                  tabSlug: 'maint_taller',
+                  content: (
+                    <Suspense fallback={<TallerPipelineSkeleton />}>
+                      <TallerPipelineContent searchParams={searchParams} permissions={permissions} />
+                    </Suspense>
+                  ),
+                },
+              ]}
+            />
           ),
         },
         // ============================================
-        // TAB: VISTA TALLER (acordeones por sector — COD-394)
+        // TAB: SECTORES (tablero por sector + alta y edición de los sectores del taller)
         // ============================================
         {
           value: 'workshop_view',
           label: (
             <span className="flex items-center gap-2">
               <Building2 className="h-4 w-4" />
-              Vista Taller
+              Sectores
             </span>
           ),
           moduleSlug: 'mantenimiento',
           tabSlug: 'workshop_view',
           content: (
-            <Suspense fallback={<WorkshopSectorsSkeleton />}>
-              <WorkshopViewTabContent searchParams={searchParams} />
-            </Suspense>
-          ),
-        },
-        // ============================================
-        // TAB: TALLER (Pipeline visual)
-        // ============================================
-        {
-          value: 'maint_taller',
-          label: (
-            <span className="flex items-center gap-2">
-              <Warehouse className="h-4 w-4" />
-              Taller
-            </span>
-          ),
-          moduleSlug: 'mantenimiento',
-          tabSlug: 'maint_taller',
-          content: (
-            <Suspense fallback={<TallerPipelineSkeleton />}>
-              <TallerPipelineContent searchParams={searchParams} permissions={permissions} />
-            </Suspense>
+            <ViewManagerServer
+              paramName="vista"
+              searchParams={searchParams}
+              defaultView="tablero"
+              permissions={permissions}
+              layout="menu"
+              ariaLabel="Vista de sectores"
+              views={[
+                {
+                  value: 'tablero',
+                  label: 'Tablero',
+                  description: 'Carga de trabajo y órdenes de cada sector',
+                  content: (
+                    <Suspense fallback={<WorkshopSectorsSkeleton />}>
+                      <WorkshopViewTabContent searchParams={searchParams} />
+                    </Suspense>
+                  ),
+                },
+                {
+                  value: 'administrar',
+                  label: 'Administrar sectores',
+                  description: 'Alta, edición y baja de los sectores de taller',
+                  moduleSlug: 'configuracion',
+                  tabSlug: 'sectores_taller',
+                  content: (
+                    <CatalogTableSurface id="sectores-taller" title="Sectores de taller">
+                      <Suspense fallback={<Skeleton className="h-[400px] w-full rounded-md" />}>
+                        <SectoresTab />
+                      </Suspense>
+                    </CatalogTableSurface>
+                  ),
+                },
+              ]}
+            />
           ),
         },
         // ============================================

@@ -3,25 +3,26 @@ import 'server-only';
 import { appUrl, renderActionEmail } from '../shell';
 import { sendMail } from '../transport';
 
-/**
- * Aviso al solicitante de que su solicitud de compra se aprobo o se rechazo (Compras etapa 1).
- * Quien lo llama lo hace DESPUES de confirmar la transaccion y no deja que un fallo de envio
- * cambie el resultado de la decision.
- */
-export async function sendPurchaseRequestDecisionEmail(params: {
-  to: string;
+/** Contenido de un aviso por mail; lo entrega `notify` (features/Notifications) a quien corresponda. */
+export interface RenderedEmail {
+  subject: string;
+  text: string;
+  html: string;
+}
+
+/** Aviso al solicitante de que su solicitud de compra se aprobó o se rechazó (Compras etapa 1). */
+export function renderPurchaseRequestDecisionEmail(params: {
   name: string | null;
   number: string;
   approved: boolean;
   notes: string | null;
   requestId: string;
-}): Promise<boolean> {
+}): RenderedEmail {
   const url = `${appUrl()}/dashboard/purchases/requests/${params.requestId}`;
   const verdict = params.approved ? 'aprobada' : 'rechazada';
   const greeting = params.name ? `Hola ${params.name}` : 'Hola';
   const reason = params.notes ? ` ${params.approved ? 'Comentario' : 'Motivo'}: ${params.notes}` : '';
-  return sendMail({
-    to: params.to,
+  return {
     subject: `Solicitud de compra ${params.number} ${verdict}`,
     text: `${greeting}, tu solicitud de compra ${params.number} fue ${verdict}.${reason} Detalle: ${url}`,
     // `renderActionEmail` escapa titulo y cuerpo: van en texto plano.
@@ -30,28 +31,23 @@ export async function sendPurchaseRequestDecisionEmail(params: {
       `${greeting}, tu solicitud de compra ${params.number} fue ${verdict}.${reason}`,
       { url, label: 'Ver la solicitud' }
     ),
-  });
+  };
 }
 
-/**
- * Aviso a quien creo la orden de compra de que se aprobo o se rechazo (Compras etapa 2). Mismo
- * contrato que el de la solicitud: se llama despues de la transaccion y un fallo no cambia nada.
- */
-export async function sendPurchaseOrderDecisionEmail(params: {
-  to: string;
+/** Aviso a quien creó la orden de compra de que se aprobó o se rechazó (Compras etapa 2). */
+export function renderPurchaseOrderDecisionEmail(params: {
   name: string | null;
   number: string;
   approved: boolean;
   notes: string | null;
   orderId: string;
-}): Promise<boolean> {
+}): RenderedEmail {
   const url = `${appUrl()}/dashboard/purchases/orders/${params.orderId}`;
   const verdict = params.approved ? 'aprobada' : 'rechazada';
   const greeting = params.name ? `Hola ${params.name}` : 'Hola';
   const reason = params.notes ? ` Motivo: ${params.notes}` : '';
   const next = params.approved ? ' Ya se puede enviar al proveedor.' : ' Volvió a borrador para corregirla.';
-  return sendMail({
-    to: params.to,
+  return {
     subject: `Orden de compra ${params.number} ${verdict}`,
     text: `${greeting}, la orden de compra ${params.number} fue ${verdict}.${reason}${next} Detalle: ${url}`,
     html: renderActionEmail(
@@ -59,7 +55,29 @@ export async function sendPurchaseOrderDecisionEmail(params: {
       `${greeting}, la orden de compra ${params.number} fue ${verdict}.${reason}${next}`,
       { url, label: 'Ver la orden de compra' }
     ),
-  });
+  };
+}
+
+/** Aviso a quienes pueden aprobar: hay una solicitud o una orden de compra esperando (#786). */
+export function renderPurchaseApprovalPendingEmail(params: {
+  kind: 'request' | 'order';
+  number: string;
+  submittedBy: string | null;
+  id: string;
+}): RenderedEmail {
+  const isRequest = params.kind === 'request';
+  const url = `${appUrl()}/dashboard/purchases/${isRequest ? 'requests' : 'orders'}/${params.id}`;
+  const what = isRequest ? `La solicitud de compra ${params.number}` : `La orden de compra ${params.number}`;
+  const who = params.submittedBy ? ` (enviada por ${params.submittedBy})` : '';
+  const body = `${what}${who} está esperando aprobación.`;
+  return {
+    subject: `${isRequest ? 'Solicitud' : 'Orden de compra'} ${params.number} para aprobar`,
+    text: `${body} Detalle: ${url}`,
+    html: renderActionEmail(`${isRequest ? 'Solicitud' : 'Orden de compra'} ${params.number} para aprobar`, body, {
+      url,
+      label: isRequest ? 'Ver la solicitud' : 'Ver la orden de compra',
+    }),
+  };
 }
 
 /**
@@ -76,20 +94,29 @@ export async function sendSupplierDocumentEmail(params: {
   message: string | null;
   attachment: { filename: string; content: Uint8Array };
 }): Promise<boolean> {
-  const label = params.kind === 'quote' ? 'Pedido de cotización' : params.kind === 'order' ? 'Orden de compra' : 'Orden de pago';
+  const label =
+    params.kind === 'quote' ? 'Pedido de cotización' : params.kind === 'order' ? 'Orden de compra' : 'Orden de pago';
   const intro =
     params.kind === 'quote'
       ? `${params.companyName} le solicita cotización por los ítems del pedido ${params.number}, que va adjunto en PDF.`
       : params.kind === 'order'
         ? `${params.companyName} le envía la orden de compra ${params.number}, adjunta en PDF.`
         : `${params.companyName} le informa el pago de la orden ${params.number}. Adjuntamos en PDF el detalle y los certificados de las retenciones practicadas.`;
-  const body = [`Estimados ${params.supplierName}:`, '', intro, ...(params.message ? ['', params.message] : []), '', 'Saludos cordiales,', params.companyName].join(
-    '\n'
-  );
+  const body = [
+    `Estimados ${params.supplierName}:`,
+    '',
+    intro,
+    ...(params.message ? ['', params.message] : []),
+    '',
+    'Saludos cordiales,',
+    params.companyName,
+  ].join('\n');
   return sendMail({
     to: params.to,
     subject: `${label} ${params.number} — ${params.companyName}`,
     text: body,
-    attachments: [{ filename: params.attachment.filename, content: params.attachment.content, contentType: 'application/pdf' }],
+    attachments: [
+      { filename: params.attachment.filename, content: params.attachment.content, contentType: 'application/pdf' },
+    ],
   });
 }

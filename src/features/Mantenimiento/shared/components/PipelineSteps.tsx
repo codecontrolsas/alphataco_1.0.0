@@ -2,86 +2,107 @@
 
 import { cn } from '@/lib/utils';
 import { AlertTriangle } from 'lucide-react';
+import { useRef, type KeyboardEvent } from 'react';
 import type { PipelineStep } from '../../Pipeline/types';
 
 interface PipelineStepsProps {
   steps: PipelineStep[];
-  /** Pendientes por paso. `null` (o ausente) = no se pudo calcular: se muestra "—". */
+  /** Pendientes por pestaña. `null` (o ausente) = no se pudo calcular: se muestra "—". */
   counts: Record<string, number | null>;
-  /** Texto de atención por paso (por ejemplo "3 con más de 48 h"). `null` = nada que avisar. */
+  /** Texto de atención por pestaña (por ejemplo "3 con más de 48 h"). `null` = nada que avisar. */
   attention?: Record<string, string | null>;
   activeStep: string;
   onStepClick: (id: string) => void;
+  /** Prefijo de los `id` de pestaña y panel (`<prefix>-tab-<id>`, `<prefix>-panel-<id>`). */
+  idPrefix: string;
 }
 
 /**
- * Pasos del circuito como tarjetas con número, nombre, descripción, contador y aviso de atención.
- * La navegación (URL, mostrar/ocultar) vive en `PipelineLayout`; esto solo dibuja.
+ * Pestañas del circuito con contador y aviso de atención (patrón APG de tabs: flechas, Inicio y Fin
+ * mueven la selección; solo la pestaña activa entra en el orden de Tab).
+ * La navegación (URL, mostrar/ocultar paneles) vive en `PipelineLayout`; esto solo dibuja.
  */
-export function PipelineSteps({ steps, counts, attention, activeStep, onStepClick }: PipelineStepsProps) {
+export function PipelineSteps({ steps, counts, attention, activeStep, onStepClick, idPrefix }: PipelineStepsProps) {
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    const last = steps.length - 1;
+    const target =
+      event.key === 'ArrowRight'
+        ? index === last
+          ? 0
+          : index + 1
+        : event.key === 'ArrowLeft'
+          ? index === 0
+            ? last
+            : index - 1
+          : event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? last
+              : null;
+    if (target === null) return;
+
+    event.preventDefault();
+    const next = steps[target];
+    onStepClick(next.id);
+    tabRefs.current[next.id]?.focus();
+  };
+
   return (
-    <ul
-      role="list"
-      aria-label="Pasos del circuito"
-      className="grid grid-cols-2 gap-2 max-md:gap-1.5 xl:auto-cols-fr xl:grid-flow-col xl:grid-cols-none"
-    >
+    <div role="tablist" aria-label="Secciones" className="border-border flex min-w-0 gap-1 overflow-x-auto border-b">
       {steps.map((step, index) => {
         const isActive = step.id === activeStep;
         const count = counts[step.id] ?? null;
         const warning = attention?.[step.id] ?? null;
 
         return (
-          <li key={step.id} className="min-w-0">
-            <button
-              type="button"
-              onClick={() => onStepClick(step.id)}
-              aria-current={isActive ? 'step' : undefined}
+          <button
+            key={step.id}
+            ref={(node) => {
+              tabRefs.current[step.id] = node;
+            }}
+            type="button"
+            role="tab"
+            id={`${idPrefix}-tab-${step.id}`}
+            aria-selected={isActive}
+            aria-controls={`${idPrefix}-panel-${step.id}`}
+            tabIndex={isActive ? 0 : -1}
+            title={step.description}
+            onClick={() => onStepClick(step.id)}
+            onKeyDown={(event) => handleKeyDown(event, index)}
+            className={cn(
+              '-mb-px flex shrink-0 cursor-pointer items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium whitespace-nowrap transition-colors',
+              'focus-visible:outline-ring focus-visible:outline-2 focus-visible:-outline-offset-2',
+              isActive
+                ? 'border-brand text-foreground'
+                : 'text-muted-foreground hover:text-foreground hover:border-border border-transparent'
+            )}
+          >
+            {step.label}
+            <span
               className={cn(
-                'bg-card flex h-full w-full min-w-0 cursor-pointer items-start gap-3.5 rounded-xl border p-4 text-left transition-colors',
-                'focus-visible:outline-ring focus-visible:outline-2 focus-visible:outline-offset-2',
-                'max-md:gap-2.5 max-md:p-3',
-                isActive
-                  ? 'border-brand bg-brand-subtle ring-brand/20 ring-[3px]'
-                  : 'hover:border-brand/45'
+                'min-w-6 rounded-full px-1.5 py-px text-center font-mono text-xs font-semibold tabular-nums',
+                isActive ? 'bg-brand-subtle text-brand-subtle-foreground' : 'bg-muted text-muted-foreground'
               )}
             >
-              <span
-                aria-hidden="true"
-                className={cn(
-                  'flex size-[30px] shrink-0 items-center justify-center rounded-full font-mono text-[13px] font-semibold',
-                  'max-md:size-6 max-md:text-xs',
-                  isActive ? 'bg-brand text-brand-foreground' : 'bg-muted text-muted-foreground'
-                )}
-              >
-                {step.stepNumber ?? index + 1}
-              </span>
-
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm leading-tight font-semibold max-md:text-[14px]">{step.label}</span>
-                <span className="text-muted-foreground mt-0.5 block text-[13px] leading-snug max-md:hidden">
-                  {step.description}
+              {count == null ? (
+                <span role="img" aria-label="sin datos">
+                  —
                 </span>
-                {warning ? (
-                  <span className="bg-danger-subtle text-danger-subtle-foreground mt-2 inline-flex max-w-full items-center gap-1 rounded-full px-2 py-px text-xs font-semibold max-md:mt-1">
-                    <AlertTriangle className="size-3 shrink-0" aria-hidden="true" />
-                    <span className="truncate">{warning}</span>
-                  </span>
-                ) : null}
+              ) : (
+                count
+              )}
+            </span>
+            {warning ? (
+              <span className="bg-danger-subtle text-danger-subtle-foreground inline-flex max-w-48 items-center gap-1 rounded-full px-2 py-px text-xs font-semibold">
+                <AlertTriangle className="size-3 shrink-0" aria-hidden="true" />
+                <span className="truncate">{warning}</span>
               </span>
-
-              <span className="ml-auto shrink-0 font-mono text-2xl leading-none font-semibold tabular-nums max-md:text-lg">
-                {count == null ? (
-                  <span role="img" aria-label="sin datos">
-                    —
-                  </span>
-                ) : (
-                  count
-                )}
-              </span>
-            </button>
-          </li>
+            ) : null}
+          </button>
         );
       })}
-    </ul>
+    </div>
   );
 }

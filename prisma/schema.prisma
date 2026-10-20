@@ -555,7 +555,8 @@ model company {
   guild                         guild[]
   jobs_runs                     jobs_runs[]
   kpis                          kpis[]
-  notifications                 notifications[]
+  notification_events           notification_events[]
+  notification_deliveries       notification_deliveries[]
   notification_settings         notification_settings[]
   fiscal_profile                company_fiscal_profiles?
   sales_points                  sales_points[]
@@ -1843,22 +1844,70 @@ model modules {
   @@schema("public")
 }
 
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model notifications {
-  id          String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  title       String?
-  description String?
-  category    notification_categories?
-  company_id  String?                  @db.Uuid
-  created_at  DateTime?                @default(now()) @db.Timestamptz(6)
-  document_id String?                  @db.Uuid
-  reference   String?
-  company     company?                 @relation(fields: [company_id], references: [id], onDelete: Cascade, map: "public_notifications_company_id_fkey")
+/// Notificaciones (#786): un hecho por empresa. Quién lo recibe está en `notification_deliveries`.
+/// `dedupe_key` evita repetir el mismo aviso (reintentos de un job, doble click en una acción).
+model notification_events {
+  id              String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id      String                    @db.Uuid
+  event_key       String
+  title           String
+  body            String?
+  href            String?
+  dedupe_key      String
+  actor_id        String?                   @db.Uuid
+  metadata        Json?
+  /// Direcciones de la lista fija de la empresa (`notification_settings`) a las que también se mandó el mail.
+  external_emails String[]                  @default([])
+  /// none | pending | sending | sent | failed
+  email_status    String                    @default("none")
+  created_at      DateTime                  @default(now()) @db.Timestamptz(6)
+  company         company                   @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  deliveries      notification_deliveries[]
 
+  @@unique([company_id, dedupe_key])
+  @@index([company_id, created_at])
   @@schema("public")
 }
 
-/// Destinatarios de los correos automaticos, POR EMPRESA (P5). Es lo que evita que un
+/// Una fila por destinatario de un aviso. `user_id` es el `credential_id` (el id de la sesión).
+/// La migración agrega a mano el índice parcial `idx_notification_deliveries_unread`
+/// (`WHERE in_app AND read_at IS NULL`): Prisma no lo modela, así que `migrate diff` va a proponer
+/// borrarlo y hay que ignorar esa línea.
+model notification_deliveries {
+  id         String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id   String              @db.Uuid
+  user_id    String              @db.Uuid
+  company_id String              @db.Uuid
+  in_app     Boolean             @default(false)
+  email      Boolean             @default(false)
+  read_at    DateTime?           @db.Timestamptz(6)
+  created_at DateTime            @default(now()) @db.Timestamptz(6)
+  event      notification_events @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  profile    profile             @relation(fields: [user_id], references: [credential_id], onDelete: Cascade)
+  company    company             @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@unique([event_id, user_id])
+  @@index([user_id, company_id, created_at(sort: Desc)], map: "idx_notification_deliveries_user_company_created")
+  @@schema("public")
+}
+
+/// Qué avisos y por qué canal recibe cada rol (#786). Que exista la fila = el canal está activo,
+/// igual que `role_permissions`. `event_key` es texto: sumar un evento al catálogo no requiere DDL.
+model role_notifications {
+  id         String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  role_id    BigInt
+  event_key  String
+  channel    notification_channel
+  created_at DateTime             @default(now()) @db.Timestamptz(6)
+  roles      roles                @relation(fields: [role_id], references: [id], onDelete: Cascade)
+
+  @@unique([role_id, event_key, channel])
+  @@index([event_key])
+  @@schema("public")
+}
+
+/// Destinatarios ADICIONALES de los correos automaticos, POR EMPRESA (P5; desde #786 se suman a los
+/// usuarios de los roles que tienen el aviso activo). Es lo que evita que un
 /// correo de una empresa llegue a gente de otra: el job resuelve la lista con el mismo
 /// `company_id` con el que consulto los datos. Sin fila (o con `recipients` vacio) la
 /// empresa se saltea y queda registrada en `jobs_runs`. No hay fallback por variable de
@@ -2188,6 +2237,7 @@ model profile {
   user_permissions_user_permissions_user_idToprofile                                 user_permissions[]               @relation("user_permissions_user_idToprofile")
   user_roles_user_roles_assigned_byToprofile                                         user_roles[]                     @relation("user_roles_assigned_byToprofile")
   user_roles_user_roles_user_idToprofile                                             user_roles[]                     @relation("user_roles_user_idToprofile")
+  notification_deliveries                                                            notification_deliveries[]
 
   stock_movements      stock_movements[]  @relation("stock_movement_creator")
   material_write_offs  material_unit_write_offs[] @relation("material_write_off_creator")
@@ -2327,6 +2377,7 @@ model roles {
   role_permissions            role_permissions[]
   user_roles                  user_roles[]
   role_hidden_equipment_types role_hidden_equipment_types[]
+  role_notifications          role_notifications[]
 
   @@schema("public")
 }
@@ -3433,12 +3484,9 @@ enum nationality_enum {
   @@schema("public")
 }
 
-enum notification_categories {
-  vencimiento
-  noticia
-  advertencia
-  aprobado
-  rechazado
+enum notification_channel {
+  in_app
+  email
 
   @@schema("public")
 }

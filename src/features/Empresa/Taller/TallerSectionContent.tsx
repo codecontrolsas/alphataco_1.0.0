@@ -5,13 +5,13 @@ import { createTabVisibilityChecker } from '@/features/Permissions/lib/tab-visib
 import { ViewManagerServer } from '@/features/TabsManager';
 import { CatalogTableSurface } from '@/shared/components/common/CatalogFormSheet';
 import { Suspense } from 'react';
-import SectoresTab from '../General/components/mantenimiento/SectoresTab';
 import TalleresTab from '../General/components/mantenimiento/TalleresTab';
 
 /**
  * Sección Taller de Configuración: las cuatro pantallas que definen cómo trabaja el taller
- * (talleres, sus sectores, los tipos de reparación y los grupos de mantenimiento), reagrupadas
- * en dos vistas; los enlaces viejos `?subtab=sectores_taller|maintenance_groups` caen en la vista fusionada.
+ * (talleres, los tipos de reparación y los grupos de mantenimiento), reagrupadas en dos vistas.
+ * Los sectores de taller se administran desde Mantenimiento > Sectores; los enlaces viejos
+ * `?subtab=sectores_taller|maintenance_groups` caen en la vista de su grupo.
  */
 export default function TallerSectionContent({
   searchParams,
@@ -36,25 +36,16 @@ export default function TallerSectionContent({
         {
           value: 'talleres',
           aliases: ['sectores_taller'],
-          label: 'Talleres y sectores',
-          description: 'Talleres propios y externos, y los sectores en los que se divide el trabajo de cada uno',
-          visibleWhenAny: [
-            { moduleSlug: 'configuracion', tabSlug: 'talleres' },
-            { moduleSlug: 'configuracion', tabSlug: 'sectores_taller' },
-          ],
+          label: 'Talleres',
+          description: 'Talleres propios y externos. Los sectores se administran en Mantenimiento > Sectores',
+          moduleSlug: 'configuracion',
+          tabSlug: 'talleres',
           content: (
             <div className="flex min-w-0 flex-col gap-6">
               {isTabVisible('configuracion', 'talleres') ? (
                 <CatalogTableSurface id="talleres-taller" title="Talleres">
                   <Suspense fallback={<Skeleton className="h-[400px] w-full rounded-md" />}>
                     <TalleresTab />
-                  </Suspense>
-                </CatalogTableSurface>
-              ) : null}
-              {isTabVisible('configuracion', 'sectores_taller') ? (
-                <CatalogTableSurface id="sectores-taller" title="Sectores de taller">
-                  <Suspense fallback={<Skeleton className="h-[400px] w-full rounded-md" />}>
-                    <SectoresTab />
                   </Suspense>
                 </CatalogTableSurface>
               ) : null}

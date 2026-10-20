@@ -20,6 +20,7 @@
  */
 import { PrismaPg } from '@prisma/adapter-pg';
 import { createHash } from 'node:crypto';
+import { NOTIFICATION_EVENTS, NOTIFICATION_EVENT_KEYS } from '../src/features/Notifications/notification-catalog.ts';
 import { ACTION_DESCRIPTIONS, TAB_DESCRIPTIONS } from '../src/features/Permissions/permission-catalog.ts';
 import { ACTIONS, PERMISSIONS } from '../src/features/Permissions/permissions-map.ts';
 import { DEFAULT_MEASUREMENT_UNITS } from '../src/features/Warehouses/lib/default-units.ts';
@@ -228,7 +229,7 @@ async function main(): Promise<void> {
     }
 
     // Se upsertea por `name` (la clave que usa la FK de profile.role), no por slug.
-    await prisma.roles.upsert({
+    const defaultProfileRole = await prisma.roles.upsert({
       where: { name: DEFAULT_PROFILE_ROLE.name },
       update: { is_system: true, is_active: true },
       create: {
@@ -254,8 +255,27 @@ async function main(): Promise<void> {
       rolePermissionCount += 1;
     }
 
+    // Avisos por defecto (#786), los mismos que carga la migración 20261024110000_role_notifications: en una
+    // base nueva esa migración corre antes de que existan los roles. Solo si el rol no tiene NINGUNO, así
+    // volver a correr el seed no reactiva lo que un admin apagó.
+    const personalEvents = NOTIFICATION_EVENT_KEYS.filter((key) => NOTIFICATION_EVENTS[key].audience === 'actor');
+    const defaultsByRole: [bigint, readonly string[]][] = [
+      ...[...roleIdBySlug.values()].map((roleId): [bigint, readonly string[]] => [roleId, NOTIFICATION_EVENT_KEYS]),
+      [defaultProfileRole.id, personalEvents],
+    ];
+    let roleNotificationCount = 0;
+    for (const [roleId, events] of defaultsByRole) {
+      if ((await prisma.role_notifications.count({ where: { role_id: roleId } })) > 0) continue;
+      const rows = events.flatMap((eventKey) => {
+        const def = NOTIFICATION_EVENTS[eventKey as keyof typeof NOTIFICATION_EVENTS];
+        return def.defaultChannels.map((channel) => ({ role_id: roleId, event_key: eventKey, channel }));
+      });
+      const created = await prisma.role_notifications.createMany({ data: rows, skipDuplicates: true });
+      roleNotificationCount += created.count;
+    }
+
     console.log(
-      `Seed OK - company: ${company.company_name} (${company.id}) | modules: ${modules.length} | tabs: ${tabs.length} | actions: ${actions.length} | roles: ${roleIdBySlug.size + 1} | role_permissions: ${rolePermissionCount}`
+      `Seed OK - company: ${company.company_name} (${company.id}) | modules: ${modules.length} | tabs: ${tabs.length} | actions: ${actions.length} | roles: ${roleIdBySlug.size + 1} | role_permissions: ${rolePermissionCount} | role_notifications: ${roleNotificationCount}`
     );
   } finally {
     await prisma.$disconnect();

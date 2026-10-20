@@ -29,22 +29,32 @@ const state = vi.hoisted(() => ({
   denied: new Set<string>(),
   mailFails: false,
 }));
-const { sendDecisionMail } = vi.hoisted(() => ({
-  sendDecisionMail: vi.fn(async () => {
-    if (state.mailFails) throw new Error('SMTP caído');
-    return true;
-  }),
+// Los avisos los entrega el despachador de #786 (campanita + mail según los roles); acá se captura lo que
+// se le pide avisar. Su lógica de destinatarios tiene su propio test (dispatch.integration.test.ts).
+const { notifyMock } = vi.hoisted(() => ({
+  notifyMock: vi.fn(
+    async (_input: {
+      event: string;
+      userIds?: readonly string[];
+      actorId?: string | null;
+      email?: { subject: string };
+    }) => {
+      if (state.mailFails) throw new Error('SMTP caído');
+    }
+  ),
 }));
 
 vi.mock('@/shared/lib/tenant', () => ({ getActiveCompanyId: async () => 'd2000000-0000-4000-8000-000000000001' }));
 vi.mock('@/features/Permissions', () => ({
-  checkPermissionServer: async (module: string, tab: string, action: string) => !state.denied.has(`${module}:${tab}:${action}`),
+  checkPermissionServer: async (module: string, tab: string, action: string) =>
+    !state.denied.has(`${module}:${tab}:${action}`),
 }));
 vi.mock('@/shared/actions/auth.actions', () => {
   const current = () => ({ id: state.profileId, credentialId: state.profileId, fullname: null, email: null });
   return { getServerAuthProfile: async () => current(), requireServerAuthProfile: async () => current() };
 });
-vi.mock('@/shared/lib/mail/templates/purchases', () => ({ sendPurchaseRequestDecisionEmail: sendDecisionMail }));
+vi.mock('@/features/Notifications/lib/dispatch.server', () => ({ notifySafe: notifyMock }));
+vi.mock('@/shared/lib/session', () => ({ getSessionUserId: async () => state.profileId }));
 vi.mock('next/cache', () => ({ revalidatePath: () => undefined }));
 
 const RUN = Boolean(process.env.DATABASE_URL);
@@ -158,13 +168,26 @@ describe.skipIf(!RUN)('solicitudes de compra (integracion)', () => {
     await prisma.materials.createMany({
       data: [
         { id: MATERIAL, company_id: COMPANY, code: 'FIL-01', name: 'Filtro de aceite', unit_id: UNIT },
-        { id: INACTIVE_MATERIAL, company_id: COMPANY, code: 'FIL-99', name: 'Filtro viejo', unit_id: UNIT, is_active: false },
+        {
+          id: INACTIVE_MATERIAL,
+          company_id: COMPANY,
+          code: 'FIL-99',
+          name: 'Filtro viejo',
+          unit_id: UNIT,
+          is_active: false,
+        },
         { id: FOREIGN_MATERIAL, company_id: OTHER_COMPANY, code: 'X-01', name: 'Ajeno', unit_id: FOREIGN_UNIT },
         { id: MATERIAL_IN_STOCK, company_id: COMPANY, code: 'GRA-01', name: 'Grasa', unit_id: UNIT },
       ],
     });
     await prisma.suppliers.create({
-      data: { id: SUPPLIER, company_id: COMPANY, name: 'Repuestos test', cuit: BigInt('20123456786'), vat_condition_id: 1 },
+      data: {
+        id: SUPPLIER,
+        company_id: COMPANY,
+        name: 'Repuestos test',
+        cuit: BigInt('20123456786'),
+        vat_condition_id: 1,
+      },
     });
     await prisma.employees.create({
       data: {
@@ -222,7 +245,7 @@ describe.skipIf(!RUN)('solicitudes de compra (integracion)', () => {
     state.profileId = REQUESTER;
     state.denied.clear();
     state.mailFails = false;
-    sendDecisionMail.mockClear();
+    notifyMock.mockClear();
   });
 
   it('ciclo completo: borrador, edicion, envio y aprobacion con mail al solicitante', async () => {
@@ -231,17 +254,29 @@ describe.skipIf(!RUN)('solicitudes de compra (integracion)', () => {
     expect(draft.number).toMatch(/^SC-\d{6}$/);
     expect(await statusOf(draft.id)).toBe('DRAFT');
 
-    expectOk(await actions.updatePurchaseRequestDraft(draft.id, request({ lines: [materialLine({ quantity: '6,5' })] })));
+    expectOk(
+      await actions.updatePurchaseRequestDraft(draft.id, request({ lines: [materialLine({ quantity: '6,5' })] }))
+    );
     const prisma = await db();
     const lines = await prisma.purchase_request_lines.findMany({ where: { request_id: draft.id } });
     expect(lines.map((l) => [l.quantity.toString(), l.unit_id])).toEqual([['6.5', UNIT]]);
 
     expectOk(await actions.submitPurchaseRequest(draft.id));
+    // Enviarla avisa a quienes pueden aprobar, sin incluir a quien la envió.
+    expect(notifyMock).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'purchases.request_submitted', actorId: REQUESTER, companyId: COMPANY })
+    );
     state.profileId = APPROVER;
     expectOk(await actions.approvePurchaseRequest(draft.id, 'Ok, urgente'));
     expect(await statusOf(draft.id)).toBe('APPROVED');
-    expect(sendDecisionMail).toHaveBeenCalledWith(
-      expect.objectContaining({ to: 'solicitante@alphataco.local', approved: true, number: draft.number })
+    // La decisión le llega solo al solicitante, con el mail de siempre.
+    expect(notifyMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'purchases.request_decided',
+        userIds: [REQUESTER],
+        title: `Tu solicitud ${draft.number} fue aprobada`,
+        email: expect.objectContaining({ subject: `Solicitud de compra ${draft.number} aprobada` }),
+      })
     );
 
     // Ya aprobada: no se edita ni se vuelve a aprobar.
@@ -255,6 +290,10 @@ describe.skipIf(!RUN)('solicitudes de compra (integracion)', () => {
   it('rechazo con motivo obligatorio; anulacion; copia como nueva', async () => {
     const actions = { ...(await import('./requests.server')), ...(await import('./request-queries.server')) };
     const pending = expectOk(await actions.createPurchaseRequest(request(), { submit: true }));
+    // «Crear y enviar» también avisa a quienes aprueban.
+    expect(notifyMock).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'purchases.request_submitted', actorId: REQUESTER })
+    );
     state.profileId = APPROVER;
     expect(await actions.rejectPurchaseRequest(pending.id, '  ')).toEqual({ ok: false, error: 'Indicá el motivo' });
     expectOk(await actions.rejectPurchaseRequest(pending.id, 'Comprar en el próximo trimestre'));
@@ -285,7 +324,9 @@ describe.skipIf(!RUN)('solicitudes de compra (integracion)', () => {
     const actions = { ...(await import('./requests.server')), ...(await import('./request-queries.server')) };
     const prisma = await db();
     const draft = expectOk(
-      await actions.createPurchaseRequest(request({ destinationType: 'EMPLOYEE', employeeId: EMPLOYEE }), { submit: false })
+      await actions.createPurchaseRequest(request({ destinationType: 'EMPLOYEE', employeeId: EMPLOYEE }), {
+        submit: false,
+      })
     );
 
     await prisma.suppliers.update({ where: { id: SUPPLIER }, data: { is_active: false } });
@@ -307,15 +348,25 @@ describe.skipIf(!RUN)('solicitudes de compra (integracion)', () => {
 
   it('perimetro: material, unidad y proveedor de otra empresa o inactivos se rechazan', async () => {
     const { createPurchaseRequest } = await import('./requests.server');
-    expect(await createPurchaseRequest(request({ lines: [materialLine({ materialId: FOREIGN_MATERIAL })] }), { submit: false })).toEqual({
+    expect(
+      await createPurchaseRequest(request({ lines: [materialLine({ materialId: FOREIGN_MATERIAL })] }), {
+        submit: false,
+      })
+    ).toEqual({
       ok: false,
       error: 'Línea 1: el material no existe',
     });
-    expect(await createPurchaseRequest(request({ lines: [materialLine({ materialId: INACTIVE_MATERIAL })] }), { submit: false })).toEqual({
+    expect(
+      await createPurchaseRequest(request({ lines: [materialLine({ materialId: INACTIVE_MATERIAL })] }), {
+        submit: false,
+      })
+    ).toEqual({
       ok: false,
       error: 'Línea 1: Filtro viejo (FIL-99) está inactivo',
     });
-    expect(await createPurchaseRequest(request({ lines: [freeTextLine({ unitId: FOREIGN_UNIT })] }), { submit: false })).toEqual({
+    expect(
+      await createPurchaseRequest(request({ lines: [freeTextLine({ unitId: FOREIGN_UNIT })] }), { submit: false })
+    ).toEqual({
       ok: false,
       error: 'Línea 1: elegí la unidad',
     });
@@ -348,7 +399,7 @@ describe.skipIf(!RUN)('solicitudes de compra (integracion)', () => {
     state.mailFails = true;
     expectOk(await actions.approvePurchaseRequest(pending.id));
     expect(await statusOf(pending.id)).toBe('APPROVED');
-    expect(sendDecisionMail).toHaveBeenCalledTimes(1);
+    expect(notifyMock).toHaveBeenCalledWith(expect.objectContaining({ event: 'purchases.request_decided' }));
   });
 
   it('desde un pedido de Almacenes: propone solo el faltante y hereda el destino', async () => {
@@ -368,13 +419,22 @@ describe.skipIf(!RUN)('solicitudes de compra (integracion)', () => {
     );
     const prisma = await db();
     const stored = await prisma.purchase_requests.findUniqueOrThrow({ where: { id: created.id } });
-    expect(stored).toMatchObject({ material_request_id: PEDIDO, destination_type: 'EMPLOYEE', employee_id: EMPLOYEE, status: 'PENDING_APPROVAL' });
+    expect(stored).toMatchObject({
+      material_request_id: PEDIDO,
+      destination_type: 'EMPLOYEE',
+      employee_id: EMPLOYEE,
+      status: 'PENDING_APPROVAL',
+    });
 
     // Se permite una segunda solicitud para el mismo pedido, y el pedido las lista.
     expectOk(
-      await actions.createPurchaseRequestFromMaterialRequest(PEDIDO, request({ lines: [materialLine({ quantity: '1' })] }), {
-        submit: false,
-      })
+      await actions.createPurchaseRequestFromMaterialRequest(
+        PEDIDO,
+        request({ lines: [materialLine({ quantity: '1' })] }),
+        {
+          submit: false,
+        }
+      )
     );
     expect(await actions.getPurchaseRequestsForMaterialRequest(PEDIDO)).toHaveLength(2);
   });
@@ -382,7 +442,9 @@ describe.skipIf(!RUN)('solicitudes de compra (integracion)', () => {
   it('desde un pedido: material ajeno al pedido, texto libre, pedido sin aprobar o sin faltante se rechazan', async () => {
     const actions = { ...(await import('./requests.server')), ...(await import('./request-queries.server')) };
     expect(
-      await actions.createPurchaseRequestFromMaterialRequest(PEDIDO, request({ lines: [freeTextLine()] }), { submit: false })
+      await actions.createPurchaseRequestFromMaterialRequest(PEDIDO, request({ lines: [freeTextLine()] }), {
+        submit: false,
+      })
     ).toEqual({ ok: false, error: 'Línea 1: solo se piden materiales del pedido PED-T1' });
     expect(await actions.getMaterialRequestShortfall(PEDIDO_PENDING)).toEqual({
       ok: false,
@@ -399,13 +461,20 @@ describe.skipIf(!RUN)('solicitudes de compra (integracion)', () => {
   it('un borrador generado desde un pedido sigue atado al pedido al editarlo', async () => {
     const actions = { ...(await import('./requests.server')), ...(await import('./request-queries.server')) };
     const draft = expectOk(
-      await actions.createPurchaseRequestFromMaterialRequest(PEDIDO, request({ lines: [materialLine({ quantity: '2' })] }), {
-        submit: false,
-      })
+      await actions.createPurchaseRequestFromMaterialRequest(
+        PEDIDO,
+        request({ lines: [materialLine({ quantity: '2' })] }),
+        {
+          submit: false,
+        }
+      )
     );
     // Otro material: rechazado.
     expect(
-      await actions.updatePurchaseRequestDraft(draft.id, request({ lines: [materialLine({ materialId: INACTIVE_MATERIAL })] }))
+      await actions.updatePurchaseRequestDraft(
+        draft.id,
+        request({ lines: [materialLine({ materialId: INACTIVE_MATERIAL })] })
+      )
     ).toEqual({ ok: false, error: 'Línea 1: solo se piden materiales del pedido PED-T1' });
     // Destino distinto en el formulario: se ignora y queda el del pedido.
     expectOk(await actions.updatePurchaseRequestDraft(draft.id, request({ lines: [materialLine({ quantity: '5' })] })));
@@ -426,11 +495,18 @@ describe.skipIf(!RUN)('solicitudes de compra (integracion)', () => {
     expect(await actions.getPurchaseRequestsForMaterialRequest(PEDIDO)).toEqual([]);
 
     state.denied.add('almacenes:pedidos:view_all_requests');
-    expect(await actions.getMaterialRequestShortfall(PEDIDO)).toEqual({ ok: false, error: 'El pedido de materiales no existe' });
+    expect(await actions.getMaterialRequestShortfall(PEDIDO)).toEqual({
+      ok: false,
+      error: 'El pedido de materiales no existe',
+    });
     expect(
-      await actions.createPurchaseRequestFromMaterialRequest(PEDIDO, request({ lines: [materialLine({ quantity: '1' })] }), {
-        submit: false,
-      })
+      await actions.createPurchaseRequestFromMaterialRequest(
+        PEDIDO,
+        request({ lines: [materialLine({ quantity: '1' })] }),
+        {
+          submit: false,
+        }
+      )
     ).toEqual({ ok: false, error: 'El pedido de materiales no existe' });
 
     // El solicitante del pedido si puede.
@@ -438,4 +514,3 @@ describe.skipIf(!RUN)('solicitudes de compra (integracion)', () => {
     expectOk(await actions.getMaterialRequestShortfall(PEDIDO));
   });
 });
-

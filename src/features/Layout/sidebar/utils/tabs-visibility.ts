@@ -19,7 +19,13 @@ export function resolveVisibleTabs(permissions: Readonly<Record<string, boolean>
   for (const link of navigationLinks) {
     if (!link.items) continue;
 
-    visibleTabs[link.moduleSlug] = link.items.map(subLinkKey).filter((key) => isTabVisible(link.moduleSlug, key));
+    visibleTabs[link.moduleSlug] = link.items
+      .filter((item) =>
+        item.subTabSlug
+          ? isTabVisible(link.moduleSlug, item.subTabSlug)
+          : [item.tabSlug, ...(item.visibleWhenAny ?? [])].some((tab) => isTabVisible(link.moduleSlug, tab))
+      )
+      .map(subLinkKey);
   }
 
   return visibleTabs;
