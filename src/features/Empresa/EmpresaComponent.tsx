@@ -43,7 +43,7 @@ export default async function EmpresaComponent({
         {
           value: 'general',
           label: 'Organización',
-          description: 'Datos de la empresa, fiscales, centros de costo, organigrama, usuarios e indicadores',
+          description: 'Datos de la empresa, fiscales, estructura (organigrama, sectores y centros de costo), usuarios e indicadores',
           moduleSlug: 'configuracion',
           tabSlug: 'general',
           content: <GeneralTabContent searchParams={searchParams} permissions={permissions} />,

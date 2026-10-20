@@ -12,8 +12,10 @@ import {
   type DataTableSearchParams,
   type FacetResult,
 } from '@/shared/components/common/DataTable';
+import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
+import { CircleOff } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { activeStatusLabel, buildActiveFacetResult } from '../../lib/active-status';
 import HierarchyForm from './HierarchyForm';
@@ -23,7 +25,7 @@ import {
   getHierarchySingleFacet,
   type HierarchyListItem,
 } from './actions.server';
-import { HIDDEN_COLUMNS_BY_DEFAULT, getColumns } from './columns';
+import { HIDDEN_COLUMNS_BY_DEFAULT, ROOT_SECTOR_LABEL, getColumns } from './columns';
 import { useHierarchyStore } from './store/hierarchy.store';
 
 // ============================================================================
@@ -100,12 +102,12 @@ export default function _HierarchyDataTable({
   }, [initialColumnVisibility]);
 
   // ── Filter visibility — 3 visibles por defecto ────────────────────────────
-  const DEFAULT_VISIBLE_FILTERS = ['is_active', 'name', 'created_at'];
+  const DEFAULT_VISIBLE_FILTERS = ['is_active', 'parent', 'name'];
   const mergedFilterVisibility = useMemo(() => {
     if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
       return initialFilterVisibility;
     }
-    const allFilterIds = ['name', 'is_active', 'created_at'];
+    const allFilterIds = ['is_active', 'parent', 'name', 'created_at'];
     return Object.fromEntries(allFilterIds.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
   }, [initialFilterVisibility]);
 
@@ -116,6 +118,17 @@ export default function _HierarchyDataTable({
     return buildActiveFacetResult(result.counts);
   }, []);
 
+  // ── Lazy-load facet: parent (FK "Depende de") ──────────────────────────────
+  const fetchParentFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
+    const result = await getHierarchySingleFacet('parent', params);
+    if (!result) return { options: [], counts: new Map() };
+    return {
+      // El servidor no puede serializar iconos: el de "sector raíz" se agrega acá
+      options: result.options.map((o) => (o.value === NULL_FILTER_VALUE ? { ...o, icon: CircleOff } : o)),
+      counts: result.counts,
+    };
+  }, []);
+
   // ── Faceted filters ───────────────────────────────────────────────────────
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
     () => [
@@ -124,6 +137,13 @@ export default function _HierarchyDataTable({
         columnId: 'is_active',
         title: 'Estado',
         fetchFacet: fetchIsActiveFacet,
+      },
+
+      // ── parent (FK nullable) ───────────────────────────────────────────────
+      {
+        columnId: 'parent',
+        title: 'Depende de',
+        fetchFacet: fetchParentFacet,
       },
 
       // ── name (texto libre) ─────────────────────────────────────────────────
@@ -141,7 +161,7 @@ export default function _HierarchyDataTable({
         type: 'dateRange' as const,
       },
     ],
-    [fetchIsActiveFacet]
+    [fetchIsActiveFacet, fetchParentFacet]
   );
 
   // ── DataTable ─────────────────────────────────────────────────────────────
@@ -166,11 +186,12 @@ export default function _HierarchyDataTable({
       exportConfig={{
         fetchAllData: async () => unwrapExportResult(await getAllHierarchiesForExport(currentParams)),
         options: {
-          filename: 'organigrama-sectores',
-          sheetName: 'Organigrama',
-          title: 'Organigrama — Sectores',
+          filename: 'sectores',
+          sheetName: 'Sectores',
+          title: 'Sectores',
         },
         formatters: {
+          parent: (value) => (value ? String(value) : ROOT_SECTOR_LABEL),
           is_active: (value) => activeStatusLabel(value),
           created_at: (value) => (value ? formatArgentinaDay(value as string | Date) : '-'),
         },

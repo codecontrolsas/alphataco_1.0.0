@@ -13,6 +13,7 @@ export type ConfigTab =
   | 'accesos-externos'
   | 'cost-center'
   | 'organigrama'
+  | 'org-chart'
   | 'listado'
   | 'diagrams'
   | 'contract-types'

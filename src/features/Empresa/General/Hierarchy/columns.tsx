@@ -8,6 +8,9 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { ActiveStatusBadge } from '../../components/ActiveStatusBadge';
 import type { HierarchyListItem } from './actions.server';
 
+/** Rótulo de los sectores sin padre; igual al del filtro "Depende de". */
+export const ROOT_SECTOR_LABEL = 'Ninguno (sector raíz)';
+
 // ============================================================================
 // HIDDEN COLUMNS BY DEFAULT
 // ============================================================================
@@ -40,6 +43,25 @@ export function getColumns(
       header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
       cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
       // filterFn no necesario para filtros text
+    },
+
+    // ── Depende de (FK nullable a hierarchy) ─────────────────────────────────
+    {
+      id: 'parent',
+      accessorFn: (row) => row.parent?.name ?? '',
+      meta: { title: 'Depende de' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Depende de" />,
+      cell: ({ row }) =>
+        row.original.parent ? (
+          <span>{row.original.parent.name}</span>
+        ) : (
+          <span className="text-muted-foreground">{ROOT_SECTOR_LABEL}</span>
+        ),
+      filterFn: (row, _id, value: string[]) => {
+        const parentId = row.original.parent?.id;
+        if (parentId == null) return value.includes(NULL_FILTER_VALUE);
+        return value.includes(parentId);
+      },
     },
 
     // ── Estado (is_active — booleano nullable) ───────────────────────────────

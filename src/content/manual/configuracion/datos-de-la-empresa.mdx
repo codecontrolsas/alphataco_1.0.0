@@ -1,8 +1,8 @@
 ---
 title: Datos de la empresa
-summary: Los datos generales de la empresa, cómo editarlos, los centros de costo, el organigrama, los documentos de la empresa y cómo agregar otra compañía.
-keywords: empresa, compañía, razón social, CUIT, logo, editar empresa, centro de costo, organigrama, sector, documentos de la empresa, agregar compañía, registrar compañía
-updated: 2026-10-07
+summary: Los datos generales de la empresa, cómo editarlos, los centros de costo, los sectores, el organigrama con sus cargos y titulares, los documentos de la empresa y cómo agregar otra compañía.
+keywords: empresa, compañía, razón social, CUIT, logo, editar empresa, centro de costo, organigrama, sector, depende de, cargo, titular, vacante, reporta a, documentos de la empresa, agregar compañía, registrar compañía
+updated: 2026-10-19
 ---
 
 **Configuración** reúne todo lo que se carga una vez y después usa el resto del sistema. Su primera pestaña, **General**, empieza por la propia empresa: sus datos, sus centros de costo, su organigrama y su documentación. Normalmente la usa el propietario de la empresa o quien administra el sistema.
@@ -17,7 +17,7 @@ Al entrar a **Configuración** se abre la pestaña **General**. Arriba están to
 |---|---|---|
 | **Empresa** | Ver y editar los datos de la empresa. | Esta guía |
 | **Centro de Costos** | Mantener la lista de centros de costo. | Esta guía |
-| **Organigrama** | Mantener los sectores de la empresa. | Esta guía |
+| **Estructura** | El organigrama (cargos, a quién reportan y sus titulares), los sectores y los centros de costo. | Esta guía |
 | **Usuarios** | Usuarios, roles y accesos externos. | <GuideLink to="usuarios-y-roles">Usuarios y roles</GuideLink> |
 | **KPIs** | Los indicadores de la empresa y sus gráficos. | <GuideLink to="kpis">KPIs</GuideLink> |
 | **Datos fiscales** | Lo necesario para facturar con ARCA. | <GuideLink to="datos-fiscales">Datos fiscales</GuideLink> |
@@ -117,16 +117,60 @@ Hacé clic en **Crear**. Para corregir uno existente, hacé clic en **Editar** e
 
 Los centros de costo no se borran: si uno ya no se usa, pasalo a **Inactivo**.
 
-## Organigrama
+## Sectores
 
-La subpestaña **Organigrama** es la lista de **sectores** de la empresa (por ejemplo Administración, Operaciones, Taller). Funciona igual que los centros de costo: formulario a la izquierda (**Crear Sector**, con **Nombre del Sector** y **Estado**) y tabla a la derecha, con búsqueda (**Buscar sectores...**), filtros y Excel.
+La lista **Sectores** (dentro de **Estructura**) tiene los sectores de la empresa: por ejemplo Gerencia General, Operaciones, Taller. Antes se llamaba **Organigrama**; es la misma lista, con los mismos permisos.
 
-Los sectores se usan en dos lugares:
+Cada sector tiene **Nombre**, **Estado** y **Depende de**: el sector del que depende. Un sector sin **Depende de** es un sector raíz (en la tabla figura como **Ninguno (sector raíz)**). Con ese dato se arma el árbol del organigrama. Un sector no puede depender de sí mismo ni de uno de los sectores que dependen de él: el selector ya no los ofrece.
+
+Los sectores se usan en varios lugares:
 
 - En la ficha del empleado, el campo **Sector** sale de esta lista. Y al elegir un sector, el campo **Puesto en la empresa** muestra los puestos de ese sector.
-- En los puestos (Configuración → RRHH → **Puestos**), el campo **Sector/Departamento** indica a qué sectores pertenece cada puesto (ver <GuideLink to="catalogos-de-rrhh">Catálogos de RRHH</GuideLink>).
+- En los puestos (Configuración → Personal → **Puestos**), el campo **Sector/Departamento** indica a qué sectores pertenece cada puesto (ver <GuideLink to="catalogos-de-rrhh">Catálogos de RRHH</GuideLink>).
+- En el organigrama, cada sector agrupa sus cargos.
 
 Además, el sector del empleado (**Posición Jerárquica**) se puede usar como condición de un tipo de documento: por ejemplo, pedir un documento solo a la gente de Taller (ver <GuideLink to="tipos-de-documento">Tipos de documento</GuideLink>).
+
+## Organigrama
+
+El **Organigrama** (arriba de todo en **Estructura**) muestra la estructura formal de la empresa: los **cargos** de cada sector, a quién reporta cada uno y quién es su **titular**.
+
+Un **cargo** es un puesto dentro de un sector. Si un sector tiene tres supervisores, se cargan tres cargos de Supervisor. Cada cargo tiene:
+
+| Dato | Qué es |
+|---|---|
+| **Sector** | El sector al que pertenece. |
+| **Puesto** | Uno de los puestos de ese sector (los que tienen el sector en su **Sector/Departamento**). |
+| **Reporta a** | El cargo superior, de cualquier sector. **Nadie (cargo superior)** si es la cabeza de la cadena. |
+| **Titular** | El legajo que ocupa el cargo, o **Vacante**. |
+
+La pantalla tiene dos vistas de lo mismo:
+
+- **La lista** (a la derecha en pantallas anchas; la única en el celular): los sectores anidados según de quién dependen y, dentro de cada uno, sus cargos anidados según a quién reportan. Si el superior está en otro sector, se indica abajo del cargo ("Reporta a …").
+- **El plano** (en pantallas anchas): una maqueta sobre un banco escalonado. Cada bandeja es un sector, con su nombre grabado; cada escalón, un nivel de dependencia. Las piezas son los cargos: con tapa si tienen titular, encastre vacío si están vacantes. Al pasar el mouse (o recorrer con las flechas del teclado) se ilumina la cadena de mando del cargo y abajo a la derecha se lee "Sector · Puesto · titular". Con un clic o **Enter** se abre el cargo para editarlo.
+
+<Steps>
+<Step title="Agregá un cargo">
+En la lista, hacé clic en **Agregar cargo** en el sector que corresponda. Se abre el panel **Nuevo cargo** con el sector ya elegido.
+</Step>
+<Step title="Elegí puesto y superior">
+Elegí el **Puesto** (solo aparecen los del sector) y, en **Reporta a**, el cargo superior.
+</Step>
+<Step title="Asigná el titular (opcional)">
+En **Titular** aparecen los legajos activos que tienen **ese sector y ese puesto** en su ficha y que no son titulares de otro cargo. Si queda vacío, el cargo figura como **Vacante**.
+</Step>
+<Step title="Guardá">
+Hacé clic en **Crear cargo**. Para cambiar un cargo existente, hacé clic sobre él en la lista o en el plano.
+</Step>
+</Steps>
+
+El organigrama **no modifica la ficha del empleado**: para que alguien pueda ser titular de un cargo, primero hay que cargarle ese sector y ese puesto en su legajo (<GuideLink to="ficha-del-empleado">Ficha del empleado</GuideLink>).
+
+Al **eliminar** un cargo (botón **Eliminar** dentro del panel), los cargos que le reportaban pasan a reportarle a su superior, para que la cadena no quede cortada. El legajo del titular no se toca.
+
+<Callout type="warning" title="Cargos desfasados">
+Si después de armar el organigrama el titular se da de baja o le cambian el sector o el puesto, o si el puesto o el sector se desactivan, o si el puesto deja de pertenecer al sector, el cargo queda marcado como **desfasado**: un triángulo rojo en la lista, un aro rojo en el plano y un aviso arriba con la cantidad. No se corrige solo; abrí el cargo, que explica qué pasó, y reasignalo.
+</Callout>
 
 ## Documentos de la empresa
 
@@ -151,6 +195,7 @@ Arriba de la tabla, **Crear tipo de documento** crea un tipo nuevo ya marcado co
 
 - **Razón social y CUIT** se imprimen en las facturas electrónicas (<GuideLink to="datos-fiscales">Datos fiscales</GuideLink>). El **logo** es el que se ve junto al nombre de la empresa en el selector de empresas.
 - **Centros de costo** y **sectores** se eligen en la ficha de cada empleado (<GuideLink to="ficha-del-empleado">Ficha del empleado</GuideLink>) y se pueden usar como condiciones de los tipos de documento.
+- El **organigrama** solo lee los legajos: el titular de un cargo tiene que tener ese sector y ese puesto en su ficha. Los puestos de cada sector se definen en <GuideLink to="catalogos-de-rrhh">Catálogos de RRHH</GuideLink>.
 - **Documentación** de la empresa: los documentos obligatorios para la empresa aparecen como pendientes hasta que se suben, y los vencimientos se siguen igual que los de empleados y equipos (<GuideLink to="documentos-alertas-y-estado">Documentos, alertas y estado</GuideLink>).
 - **Agregar compañía** crea una empresa independiente, con sus propios datos, usuarios y permisos (<GuideLink to="empresa-usuarios-y-permisos">Empresa, usuarios y permisos</GuideLink>).
 
@@ -163,8 +208,10 @@ Arriba de la tabla, **Crear tipo de documento** crea un tipo nuevo ya marcado co
 | **Editar Empresa** | **Editar** en **General** |
 | Ver los centros de costo | **Ver** en **Centro de Costos** |
 | Crear o editar centros de costo | **Crear** o **Editar** en **Centro de Costos** |
+| Ver los sectores | **Ver** en **Sectores** |
+| Crear o editar sectores | **Crear** o **Editar** en **Sectores** |
 | Ver el organigrama | **Ver** en **Organigrama** |
-| Crear o editar sectores | **Crear** o **Editar** en **Organigrama** |
+| Agregar, editar o eliminar cargos | **Crear**, **Editar** o **Eliminar** en **Organigrama** |
 | Ver los documentos de la empresa | **Ver** en **Documentación** |
 | **Crear tipo de documento** desde acá | **Crear** en **Documentación** |
 | **Agregar compañía** | Cualquier usuario puede registrar una compañía nueva |

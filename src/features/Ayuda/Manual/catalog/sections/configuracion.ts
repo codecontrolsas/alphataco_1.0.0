@@ -15,6 +15,7 @@ export const configuracionSection = defineSection({
         tab('configuracion', 'company'),
         tab('configuracion', 'cost-center'),
         tab('configuracion', 'organigrama'),
+        tab('configuracion', 'org-chart'),
         tab('configuracion', 'documentacion'),
       ],
       screens: [
