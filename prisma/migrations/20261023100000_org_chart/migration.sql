@@ -45,11 +45,15 @@ ALTER TABLE "org_chart_positions" ADD CONSTRAINT "org_chart_positions_employee_i
 UPDATE tabs SET name = 'Sectores', description = 'Sectores de la empresa y de qué sector depende cada uno'
 WHERE id = '10000000-0000-0000-0000-000000000013';
 
+-- Solo si el catálogo ya está sembrado: en una base nueva la crea scripts/seed-company.ts desde
+-- permissions-map.ts, que ya la incluye.
 INSERT INTO tabs (id, module_id, slug, name, description, order_index, parent_tab_id)
-VALUES
-  ('10000000-0000-0000-0000-000000000018', 'e0478383-1287-4b5e-a727-985baf867173', 'org-chart',
+SELECT v.* FROM (VALUES
+  ('10000000-0000-0000-0000-000000000018'::uuid, 'e0478383-1287-4b5e-a727-985baf867173'::uuid, 'org-chart',
    'Organigrama', 'Cargos de cada sector, a quién reportan y quién es su titular', 3,
-   '10000000-0000-0000-0000-000000000001')
+   '10000000-0000-0000-0000-000000000001'::uuid)
+) AS v(id, module_id, slug, name, description, order_index, parent_tab_id)
+WHERE EXISTS (SELECT 1 FROM tabs t WHERE t.id = '10000000-0000-0000-0000-000000000001')
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, order_index = EXCLUDED.order_index;
 
 -- Mismo orden que declara permissions-map.ts (el seed lo recalcula igual).
@@ -63,4 +67,5 @@ SELECT r.id, '10000000-0000-0000-0000-000000000018'::uuid, a.id
 FROM roles r
 JOIN actions a ON a.slug IN ('view', 'create', 'update', 'delete')
 WHERE r.slug IN ('admin', 'administrador', 'full-access-provisional')
+  AND EXISTS (SELECT 1 FROM tabs t WHERE t.id = '10000000-0000-0000-0000-000000000018')
 ON CONFLICT (role_id, tab_id, action_id) DO NOTHING;
