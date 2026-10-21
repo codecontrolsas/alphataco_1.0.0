@@ -243,28 +243,3 @@ export const fetchCustomFormsWithAnswerCount = async () => {
 };
 
 export type CustomFormWithAnswerCount = Awaited<ReturnType<typeof fetchCustomFormsWithAnswerCount>>[number];
-
-/**
- * Guarda una respuesta de formulario personalizado.
- *
- * El `formId` llega del cliente: se valida que el formulario sea de la empresa activa antes
- * de escribir (sin RLS, cada action exportada es un endpoint público).
- */
-export const createFormAnswer = async (formId: string, answer: string) => {
-  await requireFormsPermission('create');
-  const company_id = await getActiveCompanyId();
-
-  const form = await prisma.custom_form.findFirst({
-    where: withCompany({ id: formId }, company_id),
-    select: { id: true },
-  });
-  if (!form) throw new Error('El formulario no pertenece a la empresa activa');
-
-  const created = await prisma.form_answers.create({
-    data: { form_id: form.id, answer },
-    select: { id: true },
-  });
-
-  logger.info('Respuesta de formulario guardada', { data: { formId: form.id, answerId: created.id } });
-  return created;
-};

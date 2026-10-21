@@ -1,39 +1,10 @@
 'use server';
-
-import { daily_report_header_status_new } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import moment from 'moment';
 
 const logger = new Logger('features/Operaciones/PartesDiarios/mutations');
-
-/**
- * Cambia el estado de varios partes diarios a la vez.
- *
- * Perímetro: el `updateMany` va acotado a la empresa activa, así un id de otra empresa
- * simplemente no se toca.
- */
-export async function updateMultipleDailyReportStatus(ids: string[], status: string) {
-  if (!ids.length) return { updated: 0 };
-
-  const parsedStatus = Object.values(daily_report_header_status_new).find((value) => value === status);
-  if (!parsedStatus) {
-    throw new Error(`Estado de parte diario inválido: ${status}`);
-  }
-
-  try {
-    const companyId = await getActiveCompanyId();
-    const result = await prisma.dailyreport.updateMany({
-      where: { id: { in: ids }, company_id: companyId },
-      data: { status: parsedStatus, updated_at: new Date() },
-    });
-    return { updated: result.count };
-  } catch (error) {
-    logger.error('Error al actualizar el estado de varios partes diarios', { data: { error, ids } });
-    throw error;
-  }
-}
 
 /**
  * Crea los partes diarios de las fechas indicadas para la empresa activa.

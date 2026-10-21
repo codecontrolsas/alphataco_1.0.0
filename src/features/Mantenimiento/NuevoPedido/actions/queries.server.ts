@@ -56,17 +56,6 @@ async function getCachedExistingMaintenanceOrder(
 }
 
 /**
- * Wrapper público: la empresa sale del equipo, nunca de la sesión (este chequeo también
- * corre desde el alta de pedido del flujo QR).
- */
-export async function checkExistingMaintenanceOrder(equipmentId: string, repairTypeId: string): Promise<boolean> {
-  const { companyId } = await requireResourceAccess('vehicle', equipmentId, {
-    dashboardPermissions: [NUEVO_PEDIDO_VIEW, NUEVO_PEDIDO_CREATE],
-  });
-  return getCachedExistingMaintenanceOrder(equipmentId, repairTypeId, companyId);
-}
-
-/**
  * Templates de checklist disponibles para un equipo, según su type y/o subType.
  *
  * `companyId` llega por parámetro y no de la sesión: una función `'use cache'` no tiene

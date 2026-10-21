@@ -56,20 +56,3 @@ export async function getSubTabCookie(path: string, mainTab: string): Promise<st
   const cookieStore = await cookies();
   return cookieStore.get(cookieKey)?.value || null;
 }
-
-// Mantener la función original para compatibilidad
-export async function setTabStateCookie(path: string, mainTab: string, subTab?: string) {
-  if (subTab) {
-    await setSubTabCookie(path, mainTab, subTab);
-  } else {
-    await setMainTabCookie(path, mainTab);
-  }
-}
-
-export async function getTabStateCookie(path: string): Promise<{ mainTab: string; subTab?: string } | null> {
-  const mainTab = await getMainTabCookie(path);
-  if (!mainTab) return null;
-
-  const subTab = await getSubTabCookie(path, mainTab);
-  return { mainTab, subTab: subTab || undefined };
-}

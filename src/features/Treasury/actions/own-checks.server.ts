@@ -10,7 +10,7 @@ import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { NO_PERMISSION, UUID_RE, firstIssue, toTreasuryActionError } from '../lib/action-errors';
 import { assertBankAccount, cancelMovements } from '../lib/movements';
 import { checkbookStatus, normalizeCheckNumber, ownCheckAlert } from '../lib/own-check-transitions';
-import { assertOwnTransition, debitOwnCheck, lockCheckbook, lockOwnChecks, moveOwnCheck, nextFreeNumber, voidCheckNumber } from '../lib/own-checks';
+import { assertOwnTransition, debitOwnCheck, lockCheckbook, lockOwnChecks, moveOwnCheck, voidCheckNumber } from '../lib/own-checks';
 import { supplierCheckDebts } from '../lib/rejected-checks';
 import { TreasuryError } from '../lib/treasury-errors';
 import {
@@ -434,15 +434,5 @@ export async function getCheckbookFormData() {
     orderBy: { name: 'asc' },
   });
   return { accounts };
-}
-
-/** Próximo número libre de una chequera (para sugerir el número a inutilizar). */
-export async function getCheckbookNextNumber(checkbookId: string): Promise<string | null> {
-  if (!(await checkPermissionServer('tesoreria', 'cheques-propios', 'view'))) return null;
-  if (!UUID_RE.test(checkbookId)) return null;
-  const companyId = await getActiveCompanyId();
-  const checkbook = await prisma.checkbooks.findFirst({ where: { id: checkbookId, company_id: companyId }, select: { account_id: true, first_number: true, last_number: true } });
-  if (!checkbook) return null;
-  return nextFreeNumber(prisma, { accountId: checkbook.account_id, firstNumber: checkbook.first_number, lastNumber: checkbook.last_number });
 }
 

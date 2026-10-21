@@ -1,31 +1,11 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import { callScalar } from '@/shared/lib/sql';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { z } from 'zod';
 import { preparteCompanyScope } from '../lib/preparte-scope';
 
 const logger = new Logger('features/Operaciones/Preparte/queries');
-
-/**
- * Último número de pedido (`PED-nnnn`) de la empresa activa.
- *
- * `get_max_order_number(p_company_id uuid)` calcula el máximo en Postgres; la empresa
- * viaja SIEMPRE explícita (con `NULL` la función conserva el comportamiento mono-empresa
- * viejo, que acá no queremos).
- */
-export async function getLastOrderNumber(): Promise<string> {
-  try {
-    const companyId = await getActiveCompanyId();
-    const value = await callScalar('get_max_order_number', [{ uuid: companyId }], z.string().nullable());
-    return value ?? 'PED-0000';
-  } catch (error) {
-    logger.error('Error al obtener el último número de pedido', { data: { error } });
-    return 'PED-0000';
-  }
-}
 
 /** Select común del historial de cambios, con el nombre de quien hizo el cambio. */
 const CHANGE_LOG_INCLUDE = {
