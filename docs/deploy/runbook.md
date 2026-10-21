@@ -317,8 +317,23 @@ Una migración es de riesgo si borra o reescribe datos (`DROP`, `UPDATE`/`DELETE
    base nueva, apuntar `DATABASE_URL` a ella y redeployar la imagen anterior (workflow `rollback`).
 4. Guardar el volcado fuera de la VPS y borrarlo cuando la migración lleve una semana sin problemas.
 
-Los respaldos programados por instancia son parte de la fábrica de instancias (P2-D); hasta entonces este
-procedimiento es manual.
+### Respaldo programado y restauración (scripts)
+
+- **Respaldo:** `scripts/backup/backup.sh --container <postgres> --user <usuario> --db <base> --out <carpeta> [--keep 14]`.
+  Vuelca en formato personalizado a un archivo temporal, comprueba que no esté vacío y que `pg_restore --list` lo lea, y recién
+  entonces lo deja como `<base>-AAAAMMDD-HHMMSS.dump` y borra los más viejos que los últimos N. Si algo falla no queda un
+  respaldo "bueno" a medias y el script sale con error (el cron del host lo ve).
+- **Programarlo (host de la VPS):** una línea de cron diaria, por ejemplo `30 3 * * * /ruta/scripts/backup/backup.sh --container <postgres> --user <usuario> --db <base> --out /var/backups/alphataco`,
+  y copiar la carpeta fuera de la VPS. El almacenamiento de archivos (RustFS) NO está en el volcado: se respalda aparte con
+  `rclone` (ver la sección de almacenamiento).
+- **Restauración:** `scripts/backup/restore.sh --container <postgres> --user <usuario> --db <base_nueva> --file <respaldo.dump>`.
+  Siempre en una base NUEVA (si ya existe, aborta), borra la base si la restauración falla a medias y compara la cantidad de
+  tablas con la del respaldo. Para dejarla en uso, apuntar `DATABASE_URL` a la base restaurada después de comprobarla.
+- Probado con dos Postgres 16 en Docker: respaldo, retención (2 de 3), restauración con 500 filas y los tres casos de falla
+  (base inexistente, base destino ya existente y respaldo ilegible).
+
+> Producción de esta instancia corre en Dokploy y sus **jobs** (incluido `processed-commands-purge`) no los dispara el
+> `docker/cron/crontab` del compose: hay que darlos de alta en Dokploy (acción del usuario).
 
 ## Roles de base de datos para RLS (preparados, apagados)
 
