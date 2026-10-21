@@ -13,6 +13,8 @@ const SIZE = 'c6000000-0000-4000-8000-000000000030';
 
 vi.mock('@/shared/lib/tenant', () => ({ getActiveCompanyId: async () => COMPANY }));
 vi.mock('next/cache', () => ({ revalidatePath: () => undefined }));
+// Las acciones del catalogo exigen el permiso de configuracion: la prueba corre fuera de un request, sin sesion.
+vi.mock('@/features/Permissions', () => ({ checkPermissionServer: async () => true }));
 
 const RUN = Boolean(process.env.DATABASE_URL);
 

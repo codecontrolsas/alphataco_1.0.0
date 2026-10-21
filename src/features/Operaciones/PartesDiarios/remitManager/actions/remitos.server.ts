@@ -3,6 +3,7 @@
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { storagePublicUrl, storageRemove, storageDownloadUrls, storageUpload } from '@/shared/lib/storage';
+import { checkPermissionServer } from '@/features/Permissions';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 
 const logger = new Logger('features/Operaciones/PartesDiarios/remitos');
@@ -16,6 +17,16 @@ const REMIT_BUCKET = 'daily-reports';
  */
 function rowScope(companyId: string) {
   return { dailyreportrows: { dailyreport: { company_id: companyId } } };
+}
+
+/**
+ * Los remitos se gestionan desde Certificación (`comercial › daily_reports`): ver exige `view` y escribir exige `update`,
+ * lo mismo que ya pide esa pantalla. Una Server Action se puede invocar sin pasar por ella.
+ */
+async function requireRemitoPermission(action: 'view' | 'update') {
+  if (!(await checkPermissionServer('comercial', 'daily_reports', action))) {
+    throw new Error('No tenés permiso para gestionar los remitos.');
+  }
 }
 
 async function assertRowInCompany(dailyReportRowId: string, companyId: string): Promise<void> {
@@ -41,6 +52,7 @@ async function requireRemitInCompany(remitId: string, companyId: string) {
 
 /** Remitos de una línea con sus documentos. */
 export async function getRemitosWithDocuments(dailyReportRowId: string) {
+  await requireRemitoPermission('view');
   const companyId = await getActiveCompanyId();
 
   return prisma.remitos.findMany({
@@ -52,6 +64,7 @@ export async function getRemitosWithDocuments(dailyReportRowId: string) {
 
 /** Documentos de OTROS remitos de la misma línea, para poder vincularlos. */
 export async function getAvailableDocumentsForLinking(dailyReportRowId: string, currentRemitId?: string) {
+  await requireRemitoPermission('view');
   const companyId = await getActiveCompanyId();
 
   return prisma.remito_documents.findMany({
@@ -69,6 +82,7 @@ export async function getAvailableDocumentsForLinking(dailyReportRowId: string, 
 
 /** Remitos de otras líneas que se pueden vincular a la actual (máximo 10). */
 export async function getAvailableRemitosForLinking(currentDailyReportRowId: string, searchQuery?: string) {
+  await requireRemitoPermission('view');
   const companyId = await getActiveCompanyId();
 
   const currentRow = await prisma.dailyreportrows.findFirst({
@@ -116,6 +130,7 @@ export async function getAvailableRemitosForLinking(currentDailyReportRowId: str
 
 /** Crea un remito en una línea. El número no se puede repetir dentro de la misma línea. */
 export async function createRemito(dailyReportRowId: string, remitNumber: string) {
+  await requireRemitoPermission('update');
   const companyId = await getActiveCompanyId();
   await assertRowInCompany(dailyReportRowId, companyId);
 
@@ -137,6 +152,7 @@ export async function createRemito(dailyReportRowId: string, remitNumber: string
  * para no dejar basura en el storage.
  */
 export async function uploadDocumentToRemito(remitId: string, formData: FormData, customerName?: string) {
+  await requireRemitoPermission('update');
   const companyId = await getActiveCompanyId();
   const remito = await requireRemitInCompany(remitId, companyId);
 
@@ -167,6 +183,7 @@ export async function uploadDocumentToRemito(remitId: string, formData: FormData
 
 /** Copia un remito (y las referencias a sus documentos) a otra línea, marcándolo vinculado. */
 export async function linkExistingRemito(sourceRemitId: string, targetDailyReportRowId: string) {
+  await requireRemitoPermission('update');
   const companyId = await getActiveCompanyId();
   await assertRowInCompany(targetDailyReportRowId, companyId);
 
@@ -215,6 +232,7 @@ export async function linkExistingRemito(sourceRemitId: string, targetDailyRepor
 
 /** Borra un documento y su archivo del storage. */
 export async function deleteRemitDocument(documentId: string) {
+  await requireRemitoPermission('update');
   const companyId = await getActiveCompanyId();
 
   const document = await prisma.remito_documents.findFirst({
@@ -232,6 +250,7 @@ export async function deleteRemitDocument(documentId: string) {
 
 /** Borra un remito con todos sus documentos y archivos. */
 export async function deleteRemito(remitId: string) {
+  await requireRemitoPermission('update');
   const companyId = await getActiveCompanyId();
   await requireRemitInCompany(remitId, companyId);
 
@@ -253,6 +272,7 @@ export async function deleteRemito(remitId: string) {
 
 /** Desvincula un remito copiado: borra las referencias, nunca los archivos originales. */
 export async function unlinkRemito(remitId: string) {
+  await requireRemitoPermission('update');
   const companyId = await getActiveCompanyId();
   const remito = await requireRemitInCompany(remitId, companyId);
 
@@ -277,6 +297,7 @@ export async function unlinkRemito(remitId: string) {
  * pero la action no devuelve la URL de un documento ajeno ni para confirmar que existe.
  */
 export async function getRemitDocumentUrl(documentPath: string): Promise<string> {
+  await requireRemitoPermission('view');
   const companyId = await getActiveCompanyId();
   const document = await prisma.remito_documents.findFirst({
     where: { document_path: documentPath, remitos: rowScope(companyId) },
@@ -295,6 +316,7 @@ export async function getRemitDocumentUrl(documentPath: string): Promise<string>
  * que sirve el archivo lo vuelve a verificar.
  */
 export async function getRemitDocumentDownloadUrl(documentPath: string): Promise<string> {
+  await requireRemitoPermission('view');
   const companyId = await getActiveCompanyId();
 
   const document = await prisma.remito_documents.findFirst({
