@@ -119,7 +119,9 @@ model category {
   covenant          covenant?           @relation(fields: [covenant_id], references: [id], onDelete: Cascade)
   category_employee category_employee[]
   employees         employees[]
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
 
+  @@index([company_id], map: "idx_category_company_id")
   @@schema("public")
 }
 
@@ -131,7 +133,9 @@ model category_employee {
   id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   category    category?  @relation(fields: [category_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "public_covenant_category_category_id_fkey")
   employees   employees? @relation(fields: [emplyee_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "public_covenant_employee_emplyee_id_fkey")
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
 
+  @@index([company_id], map: "idx_category_employee_company_id")
   @@schema("public")
 }
 
@@ -748,15 +752,6 @@ model contractor_other_equipment {
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model contractors {
-  id         String   @id(map: "contractor-companies_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  created_at DateTime @default(now()) @db.Timestamptz(6)
-  name       String
-
-  @@schema("public")
-}
-
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model cost_center {
   id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   created_at      DateTime          @default(now()) @db.Timestamptz(6)
@@ -1038,9 +1033,11 @@ model dailyreportrows_history {
   reassignment_reason String?
   profile             profile?        @relation("dailyreportrows_history_changed_byToprofile", fields: [changed_by], references: [credential_id], onDelete: SetNull, onUpdate: NoAction)
   dailyreportrows     dailyreportrows @relation(fields: [daily_report_row_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
 
   @@index([related_table, related_id], map: "idx_dailyreportrows_history_related", where: raw("(related_table IS NOT NULL)"))
   @@index([daily_report_row_id], map: "idx_dailyreportrows_history_row_id")
+  @@index([company_id], map: "idx_dailyreportrows_history_company_id")
   @@schema("public")
 }
 
@@ -1186,7 +1183,9 @@ model documents_employees_logs {
   modified_by            String              @db.Uuid
   updated_at             DateTime            @default(now()) @db.Timestamptz(6)
   documents_employees    documents_employees @relation(fields: [documents_employees_id], references: [id], onDelete: Cascade, map: "public_documents_employees_logs_documents_employees_id_fkey")
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
 
+  @@index([company_id], map: "idx_documents_employees_logs_company_id")
   @@schema("public")
 }
 
@@ -1223,7 +1222,9 @@ model documents_equipment_logs {
   modified_by            String              @db.Uuid
   updated_at             DateTime            @default(now()) @db.Timestamptz(6)
   documents_equipment    documents_equipment @relation(fields: [documents_equipment_id], references: [id], onDelete: Cascade, map: "public_documents_equipment_logs_documents_equipment_id_fkey")
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
 
+  @@index([company_id], map: "idx_documents_equipment_logs_company_id")
   @@schema("public")
 }
 
@@ -3830,11 +3831,13 @@ model external_api_access_logs {
   response_time_ms       Int?
   error_message          String?
   created_at             DateTime @default(now()) @db.Timestamptz(6)
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
 
   external_api_client external_api_clients? @relation(fields: [external_api_client_id], references: [id], onDelete: SetNull)
 
   @@index([external_api_client_id, created_at(sort: Desc)], map: "idx_external_api_access_logs_client_date")
   @@index([created_at], map: "idx_external_api_access_logs_created_at")
+  @@index([company_id], map: "idx_external_api_access_logs_company_id")
   @@schema("public")
 }
 
