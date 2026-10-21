@@ -140,3 +140,18 @@ jobs:
           fi
           echo "::error::el contenedor no llego a responder $ESPERADO en 7,5 minutos (ultimo visto: ${ultimo:-ninguno})"
           exit 1
+
+      # Prueba de humo: la pantalla de ingreso responde. No usa credenciales ni toca datos; el
+      # health ya probo base y storage, esto prueba que Next renderiza paginas.
+      - name: Prueba de humo
+        env:
+          HEALTH_URL: ${{ inputs.health_url }}
+        run: |
+          base="${HEALTH_URL%/api/health}"
+          for i in $(seq 1 6); do
+            codigo=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$base/login" || true)
+            if [ "$codigo" = "200" ]; then echo "login responde 200"; exit 0; fi
+            echo "login respondio '$codigo' ($i/6)"; sleep 10
+          done
+          echo "::error::la pantalla de ingreso no responde 200 tras el deploy; considerar rollback (workflow rollback)"
+          exit 1

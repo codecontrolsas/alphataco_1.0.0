@@ -268,11 +268,29 @@ subir.
   (la imagen ya existe): promueve, llama al webhook y espera el health.
 - **Cambiar una `NEXT_PUBLIC_*`**: cambiar la variable de repo y pushear un commit. Un Run workflow
   sobre el mismo commit **no** la hornea (reusa la imagen existente).
-- **Rollback**: `docker buildx imagetools create -t registry-31-97-42-82.sslip.io/alphataco:main registry-31-97-42-82.sslip.io/alphataco:sha-<commit-bueno>`
+- **Rollback por workflow** (preferido): Actions → `rollback` → Run workflow sobre `main` con el commit completo (40 caracteres) cuya imagen `sha-<commit>` ya existe. Hace el retag, dispara Dokploy y espera `/api/health` con ese commit; no reconstruye nada. Tras cada deploy y rollback corre una prueba de humo (`/login` responde 200).
+- **Rollback manual**: `docker buildx imagetools create -t registry-31-97-42-82.sslip.io/alphataco:main registry-31-97-42-82.sslip.io/alphataco:sha-<commit-bueno>`
   (logueado al registry) y Redeploy en Dokploy. Verificar con `/api/health` que responde ese
   commit. Las migraciones no se revierten solas: si el commit malo migró, evaluar antes.
 - **Verificar un deploy**: `gh run list --workflow deploy.yml`, `gh run view <id>`, y
   `curl <health>` comparando `sha` con el head de `main`.
+
+## Respaldo de la base antes de una migración de riesgo
+
+Una migración es de riesgo si borra o reescribe datos (`DROP`, `UPDATE`/`DELETE` masivos, cambio de tipo,
+`NOT NULL` sobre columnas con datos) o cambia políticas de acceso (RLS). Antes de mergearla:
+
+1. En la VPS del cliente, volcar la base con el formato personalizado y comprobar que el archivo no está vacío:
+   `docker exec <contenedor-postgres> pg_dump -U <usuario> -Fc <base> > /ruta/respaldo-$(date +%Y%m%d-%H%M).dump`
+   (el usuario, la base y el contenedor salen de las variables del servicio en Dokploy; no se copian a este repo).
+2. Probar que se puede restaurar: `pg_restore --list respaldo.dump | head` y, para cambios grandes, restaurarlo en
+   una base descartable (`createdb prueba && pg_restore -d prueba respaldo.dump`).
+3. Mergear. Si la migración sale mal, el rollback de la imagen NO revierte la base: restaurar el volcado en una
+   base nueva, apuntar `DATABASE_URL` a ella y redeployar la imagen anterior (workflow `rollback`).
+4. Guardar el volcado fuera de la VPS y borrarlo cuando la migración lleve una semana sin problemas.
+
+Los respaldos programados por instancia son parte de la fábrica de instancias (P2-D); hasta entonces este
+procedimiento es manual.
 
 ## Instancia demo: reset diario
 
