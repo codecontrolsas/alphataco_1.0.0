@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { canUseCompanyAsTenant } from '@/shared/lib/company-membership';
-import { prisma } from '@/shared/lib/prisma';
+import { prismaBase as prisma } from '@/shared/lib/prisma';
 
 /**
  * ESCRITURA de los claims de sesión (`auth_session.company`, `auth_session.employee_id`).

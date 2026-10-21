@@ -11,7 +11,7 @@ import {
   type RateLimitRule,
 } from '@/shared/lib/login-rate-limit';
 import { sendPasswordResetEmail } from '@/shared/lib/mail';
-import { prisma } from '@/shared/lib/prisma';
+import { prismaBase as prisma } from '@/shared/lib/prisma';
 import { resolveDefaultCompanyId } from '@/shared/lib/session-claims';
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';

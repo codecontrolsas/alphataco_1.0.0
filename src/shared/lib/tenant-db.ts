@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { prisma } from '@/shared/lib/prisma';
+import { prismaBase as prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
@@ -23,6 +23,15 @@ export const getTenantContext = cache(async (): Promise<TenantContext> => {
   const [companyId, userId] = await Promise.all([getActiveCompanyId(), getSessionUserId()]);
   return { companyId, userId, kind: userId ? 'user' : 'guest' };
 });
+
+/** Como `getTenantContext`, pero devuelve null en vez de lanzar (login, jobs, cache sin request). Lo usa `prisma`. */
+export async function getTenantContextOrNull(): Promise<TenantContext | null> {
+  try {
+    return await getTenantContext();
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Cliente de Prisma para leer y escribir una sola operación por vez con el contexto del request fijado.

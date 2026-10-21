@@ -2,7 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { PrismaClient } from '@/generated/prisma/client';
 
-import { createTenantClient, runWithTenantContext, setTenantContext, type TenantContext } from './tenant-context';
+import {
+  createContextualClient,
+  createTenantClient,
+  runWithTenantContext,
+  setTenantContext,
+  type TenantContext,
+} from './tenant-context';
 
 const CTX: TenantContext = {
   companyId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
@@ -98,5 +104,62 @@ describe('createTenantClient', () => {
     expect(result).toEqual(['fila']);
     expect(batch).toHaveBeenCalledTimes(1);
     expect(query).toHaveBeenCalledWith({ where: {} });
+  });
+});
+
+describe('createContextualClient', () => {
+  /** `$extends` falso que devuelve la extensión para poder invocar sus hooks. */
+  function build(resolve: () => Promise<TenantContext | null>) {
+    let extension: {
+      client: { $transaction: (arg: unknown, opts?: unknown) => Promise<unknown> };
+      query: { $allOperations: (a: unknown) => Promise<unknown> };
+    };
+    const $transaction = vi.fn(async (arg: unknown) =>
+      typeof arg === 'function' ? (arg as (t: unknown) => Promise<unknown>)({ $executeRaw: vi.fn(async () => 1) }) : Promise.all(arg as unknown[])
+    );
+    const base = {
+      $extends: vi.fn((ext) => {
+        extension = ext;
+        return ext;
+      }),
+      $transaction,
+      $executeRaw: vi.fn(async () => 1),
+    } as unknown as PrismaClient;
+    createContextualClient(base, resolve);
+    return { ext: extension!, $transaction };
+  }
+
+  it('sin contexto la operación corre directa, sin lote', async () => {
+    const { ext, $transaction } = build(async () => null);
+    const query = vi.fn(async () => 'directo');
+    expect(await ext.query.$allOperations({ args: {}, query })).toBe('directo');
+    expect($transaction).not.toHaveBeenCalled();
+  });
+
+  it('si el resolver falla se comporta como sin contexto', async () => {
+    const { ext } = build(async () => {
+      throw new Error('sin request');
+    });
+    expect(await ext.query.$allOperations({ args: {}, query: async () => 'ok' })).toBe('ok');
+  });
+
+  it('con contexto, $transaction en arreglo antepone el set_config y lo saca del resultado', async () => {
+    const { ext, $transaction } = build(async () => CTX);
+    const result = await ext.client.$transaction([Promise.resolve('a'), Promise.resolve('b')]);
+    expect(result).toEqual(['a', 'b']);
+    expect(($transaction.mock.calls[0][0] as unknown[]).length).toBe(3);
+  });
+
+  it('una operación suelta dentro de un arreglo no abre su propio lote', async () => {
+    const { ext, $transaction } = build(async () => CTX);
+    const query = vi.fn(async () => 'x');
+    $transaction.mockImplementationOnce(async (ops: unknown) => {
+      // simula que Prisma ejecuta la operación (lazy) mientras corre el lote
+      const r = await ext.query.$allOperations({ args: {}, query });
+      return [1, r];
+    });
+    await ext.client.$transaction([Promise.resolve('a')]);
+    expect(query).toHaveBeenCalledTimes(1);
+    expect($transaction).toHaveBeenCalledTimes(1);
   });
 });
