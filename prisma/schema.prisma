@@ -932,7 +932,9 @@ model dailyreport_customer_equipment_relations {
   equipos_clientes      equipos_clientes @relation(fields: [customer_equipment_id], references: [id], onDelete: Cascade, map: "dailyreport_customer_equipment_relat_customer_equipment_id_fkey")
   dailyreportrows       dailyreportrows  @relation(fields: [daily_report_row_id], references: [id], onDelete: Cascade, map: "dailyreport_customer_equipment_relatio_daily_report_row_id_fkey")
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@schema("public")
+  @@index([company_id], map: "idx_dailyreport_customer_equipment_relations_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -945,8 +947,10 @@ model dailyreportemployeerelations {
   dailyreportrows     dailyreportrows?            @relation(fields: [daily_report_row_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   employees           employees?                  @relation(fields: [employee_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([daily_report_row_id], map: "idx_dailyreportemployeerelations_row_id")
   @@schema("public")
+  @@index([company_id], map: "idx_dailyreportemployeerelations_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -960,9 +964,11 @@ model dailyreportequipmentrelations {
   vehicles            vehicles?        @relation(fields: [equipment_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   other_equipment     other_equipment? @relation(fields: [other_equipment_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([daily_report_row_id], map: "idx_dailyreportequipmentrelations_row_id")
   @@index([other_equipment_id], map: "idx_daily_equip_rel_other_equipment", where: raw("(other_equipment_id IS NOT NULL)"))
   @@schema("public")
+  @@index([company_id], map: "idx_dailyreportequipmentrelations_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -1010,9 +1016,11 @@ model dailyreportrows {
   dailyreportrows_history                  dailyreportrows_history[]
   remitos                                  remitos[]
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([daily_report_id], map: "idx_dailyreportrows_daily_report_id")
   @@index([cloned_from_row_id], map: "idx_dailyreportrows_cloned_from_row_id", where: raw("(cloned_from_row_id IS NOT NULL)"))
   @@schema("public")
+  @@index([company_id], map: "idx_dailyreportrows_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -1165,9 +1173,11 @@ model documents_employees {
   profile                  profile?                   @relation(fields: [user_id], references: [id], onDelete: Cascade)
   documents_employees_logs documents_employees_logs[]
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([applies, id_document_types], map: "idx_documents_employees_applies_type")
   @@index([id_document_types], map: "idx_documents_employees_type")
   @@schema("public")
+  @@index([company_id], map: "idx_documents_employees_company_id")
 }
 
 model documents_employees_logs {
@@ -1200,9 +1210,11 @@ model documents_equipment {
   profile                  profile?                   @relation(fields: [user_id], references: [id], onDelete: Cascade)
   documents_equipment_logs documents_equipment_logs[]
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([applies, id_document_types], map: "idx_documents_equipment_applies_type")
   @@index([id_document_types], map: "idx_documents_equipment_type")
   @@schema("public")
+  @@index([company_id], map: "idx_documents_equipment_company_id")
 }
 
 model documents_equipment_logs {
@@ -2361,8 +2373,10 @@ model remito_documents {
   updated_at    DateTime? @default(now()) @db.Timestamptz(6)
   remitos       remitos   @relation(fields: [remit_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([remit_id], map: "idx_remito_documents_remit_id")
   @@schema("public")
+  @@index([company_id], map: "idx_remito_documents_company_id")
 }
 
 model remitos {
@@ -2375,9 +2389,11 @@ model remitos {
   remito_documents    remito_documents[]
   dailyreportrows     dailyreportrows    @relation(fields: [daily_report_row_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([daily_report_row_id], map: "idx_remitos_daily_report_row_id")
   @@index([is_linked], map: "idx_remitos_is_linked")
   @@schema("public")
+  @@index([company_id], map: "idx_remitos_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
