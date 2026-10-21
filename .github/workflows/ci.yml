@@ -70,3 +70,11 @@ jobs:
     uses: ./.github/workflows/_e2e.yml
     with:
       runs_on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+
+  # Mismo e2e con la app conectada como `alphataco_app` (sin BYPASSRLS) y TENANT_CONTEXT=on. Informativo por ahora.
+  e2e-rls:
+    needs: types-and-lint
+    uses: ./.github/workflows/_e2e.yml
+    with:
+      runs_on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+      rls: true

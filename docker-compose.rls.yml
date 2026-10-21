@@ -1,0 +1,13 @@
+# Override para correr la instancia BAJO RLS (job `e2e-rls` de CI y pruebas locales):
+#   docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.rls.yml up -d --build --wait app
+# La app conecta como `alphataco_app` (sin BYPASSRLS) y lleva la empresa activa a la base (`TENANT_CONTEXT=on`);
+# las migraciones corren con el usuario duenio y el seed/scripts con `alphataco_system`.
+# Los roles se crean NOLOGIN en una migracion: antes de levantar `app` hay que habilitarlos (ver `_e2e.yml`).
+# Las contrasenas de este archivo son solo para CI/desarrollo local, NUNCA para una instancia real.
+services:
+  app:
+    environment:
+      DATABASE_URL: postgresql://alphataco_app:rlsapp@postgres:5432/alphataco
+      MIGRATE_DATABASE_URL: postgresql://alphataco:${POSTGRES_PASSWORD}@postgres:5432/alphataco
+      SYSTEM_DATABASE_URL: postgresql://alphataco_system:rlssystem@postgres:5432/alphataco
+      TENANT_CONTEXT: "on"
