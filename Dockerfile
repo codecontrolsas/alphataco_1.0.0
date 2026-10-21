@@ -153,6 +153,9 @@ COPY --from=pdf --chown=nextjs:nodejs /pdf/node_modules ./node_modules
 # Reset diario de la demo (lo corre un Schedule de Dokploy, ver scripts/demo/reset.ts)
 # con sus dependencias aparte.
 COPY --from=build --chown=nextjs:nodejs /app/scripts/demo ./scripts/demo
+# Modulos de src que importa el reset (scripts/demo/domains/hr.ts y maintenance.ts): sin ellos falla con ERR_MODULE_NOT_FOUND.
+COPY --from=build --chown=nextjs:nodejs /app/src/features/Warehouses/lib/clothing-material-code.ts ./src/features/Warehouses/lib/clothing-material-code.ts
+COPY --from=build --chown=nextjs:nodejs /app/src/features/Warehouses/lib/tire-material-code.ts ./src/features/Warehouses/lib/tire-material-code.ts
 COPY --from=demo-tools --chown=nextjs:nodejs /demo-tools/node_modules ./scripts/demo/node_modules
 # SDK de S3 de los scripts de arranque (ver stage `s3-tools`). Prisma y pg los resuelve desde ./node_modules.
 COPY --from=s3-tools --chown=nextjs:nodejs /s3-tools/node_modules ./scripts/node_modules

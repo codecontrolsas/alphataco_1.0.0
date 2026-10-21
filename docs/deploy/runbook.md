@@ -361,6 +361,10 @@ La instancia que corre hoy es la **demo** (`SEED_COMPANY_NAME=Empresa Demo`, `DE
   archivo es un volcado de formato personalizado aunque se llame `.sql.gz`: se restaura con `pg_restore`** (probado: restauración en un Postgres
   descartable, 115 migraciones). Está en el mismo servidor: falta un destino **fuera de la VPS** (credenciales del usuario).
 - **No hacer cerca de las 00:05 AR:** cambios de storage o de roles; el reset de la demo reescribe datos.
+- **RLS real habilitada en la demo (2026-10-22):** `DATABASE_URL` = rol `alphataco_app` (sin BYPASSRLS), `SYSTEM_DATABASE_URL` = `alphataco_system`, `MIGRATE_DATABASE_URL` = el dueño
+  (migraciones y rollback) en `alphataco-app` y `alphataco-api`. Probado con datos reales: login, lectura, escritura idempotente y páginas web; los jobs corren con el rol de sistema.
+  **Rollback:** poner `DATABASE_URL` = el valor de `MIGRATE_DATABASE_URL` y redeployar.
+- **App móvil:** repo `codecontrolsas/alphataco-mobile` (Expo). Se conecta a `https://<dominio>/api/mobile/v1`.
 
 ## Roles de base de datos para RLS (preparados, apagados)
 
@@ -392,7 +396,7 @@ apagado nada cambia**: el contenedor `app` no acepta `Authorization: Bearer` (el
 - **Producción en Dokploy:** hoy es una *Application* con Traefik hacia `app`; la API móvil no existe ahí hasta que se pase a Compose
   con el perfil `mobile` (decisión del usuario). Mientras tanto la imagen trae las rutas apagadas.
 - **Contrato v1 (congelado, solo cambios compatibles):** `GET /capabilities` (sin auth), `POST|DELETE /session` (login/logout, devuelve
-  el token de portador), `GET /me`, `GET /daily-report-rows/{rowId}`, `POST .../resources`, `POST .../status`. Errores con código estable
+  el token de portador), `GET /me`, `GET /daily-reports?date=` (partes del día), `GET /daily-reports/{reportId}/rows` (líneas con recursos), `GET /resources/employees?q=` y `GET /resources/equipment?q=` (recursos activos para asignar), `GET /daily-report-rows/{rowId}`, `POST .../resources`, `POST .../status`. Errores con código estable
   (`UNAUTHENTICATED`, `FORBIDDEN`, `NO_ACTIVE_COMPANY`, `INVALID_INPUT`, `NOT_FOUND`, `VERSION_CONFLICT`, `COMMAND_ID_REUSED`, etc.).
 - **Prueba con curl:** `curl $URL/api/mobile/v1/capabilities`; login con `POST /session {"email","password"}`; después `Authorization: Bearer <token>`.
 
