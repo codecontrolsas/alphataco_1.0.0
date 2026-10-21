@@ -33,7 +33,6 @@ export const checkMultiplePermissionsRowSchema = z.object({
   action_slug: z.string(),
   has_permission: z.boolean(),
 });
-export type CheckMultiplePermissionsRow = z.infer<typeof checkMultiplePermissionsRowSchema>;
 
 /** Fila de `get_user_accessible_modules(p_user_id uuid, p_company_id uuid)`. */
 export const accessibleModuleRowSchema = z.object({
@@ -42,4 +41,3 @@ export const accessibleModuleRowSchema = z.object({
   module_name: z.string(),
   module_icon: z.string().nullable(),
 });
-export type AccessibleModuleRow = z.infer<typeof accessibleModuleRowSchema>;

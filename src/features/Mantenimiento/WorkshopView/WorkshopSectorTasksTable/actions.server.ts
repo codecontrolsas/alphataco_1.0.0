@@ -525,7 +525,6 @@ export async function getWorkOrderTasks(workOrderId: string) {
 }
 
 export type WorkOrderTasksResult = Awaited<ReturnType<typeof getWorkOrderTasks>>;
-export type WorkOrderTaskItem = WorkOrderTasksResult['tasks'][number];
 
 // ============================================================================
 // SINGLE FACET (lazy-load individual)

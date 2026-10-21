@@ -53,5 +53,3 @@ export const priceRuleFormSchema = z.discriminatedUnion('method', [
 ]);
 
 export type PriceRuleFormValues = z.infer<typeof priceRuleFormSchema>;
-export type PolynomialConfig = z.infer<typeof polynomialConfigSchema>;
-export type IndexConfig = z.infer<typeof indexConfigSchema>;

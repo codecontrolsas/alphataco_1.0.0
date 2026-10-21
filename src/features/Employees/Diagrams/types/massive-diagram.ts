@@ -23,8 +23,6 @@ export interface NoveltyFormData extends MassiveFormDataBase {
   diagramTypeId: string;
 }
 
-export type MassiveFormData = DiagramFormData | NoveltyFormData;
-
 // ─── Conflict Types ─────────────────────────────────────────────────────────
 
 export interface ConflictRecord {
@@ -53,11 +51,6 @@ export interface ConflictCheckResult {
   diagram_type_id?: string;
   /** Registros que generaría la carga (empleados × días), con y sin conflicto. */
   total_records: number;
-}
-
-export interface ConflictData {
-  operationConflicts: ConflictRecord[];
-  simpleConflicts: ConflictRecord[];
 }
 
 // ─── Processing Result Types ────────────────────────────────────────────────

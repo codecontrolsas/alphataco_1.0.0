@@ -87,5 +87,3 @@ export async function getTodayServicesKpi() {
     throw error;
   }
 }
-
-export type FleetKpisData = Awaited<ReturnType<typeof getFleetKpis>>;

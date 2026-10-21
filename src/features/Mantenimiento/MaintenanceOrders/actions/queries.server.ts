@@ -289,4 +289,3 @@ export async function getValidationHistory(orderId: string) {
 }
 
 export type ValidationHistoryData = Awaited<ReturnType<typeof getValidationHistory>>;
-export type ValidationHistoryEntry = ValidationHistoryData[number];

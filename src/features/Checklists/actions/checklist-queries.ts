@@ -142,8 +142,6 @@ export const fetchChecklistTemplateById = async (templateId: string, options?: {
   }
 };
 
-export type ChecklistTemplateDetail = Awaited<ReturnType<typeof fetchChecklistTemplateById>>;
-
 const equipmentForChecklistSelect = {
   id: true,
   domain: true,
@@ -267,8 +265,6 @@ export const fetchFilteredEquipmentForChecklistByEquipment = async (templateId: 
   }
 };
 
-export type EquipmentForChecklist = Awaited<ReturnType<typeof fetchFilteredEquipmentForChecklist>>[number];
-
 /**
  * Kilometraje y horómetro del equipo escaneado, para los valores por defecto del checklist.
  * Devuelve `null` si el equipo no existe o no tiene empresa: es la comprobación de
@@ -391,8 +387,6 @@ export const fetchChecklistAnswerById = async (answerId: string) => {
     return null;
   }
 };
-
-export type ChecklistAnswerDetail = Awaited<ReturnType<typeof fetchChecklistAnswerById>>;
 
 /**
  * Obtiene la información del tipo de un equipo para verificar si tiene enganche.

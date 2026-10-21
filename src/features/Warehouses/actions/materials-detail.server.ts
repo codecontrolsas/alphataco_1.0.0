@@ -156,8 +156,6 @@ export async function getMaterialDetail(id: string) {
   }
 }
 
-export type MaterialDetail = NonNullable<Awaited<ReturnType<typeof getMaterialDetail>>>;
-
 /**
  * Kardex del material: sus lineas de movimiento con el saldo de la empresa y el costo promedio
  * resultante despues de cada una.

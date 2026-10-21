@@ -69,5 +69,3 @@ export async function getCertificationRowPersonalDetail(rowId: string) {
     throw new Error('No se pudo obtener el detalle de la línea. Intente nuevamente.');
   }
 }
-
-export type CertificationRowPersonalDetail = Awaited<ReturnType<typeof getCertificationRowPersonalDetail>>;

@@ -27,8 +27,6 @@ export const fetchCustomFormById = async (formId: string) => {
   }
 };
 
-export type CustomFormRow = Awaited<ReturnType<typeof fetchCustomFormById>>[number];
-
 const formAnswerSelect = {
   id: true,
   created_at: true,
@@ -144,8 +142,6 @@ export const fetchAnswerById = async (answerId: string) => {
   }
 };
 
-export type FormAnswerDetail = Awaited<ReturnType<typeof fetchAnswerById>>[number];
-
 const equipmentOptionSelect = {
   id: true,
   domain: true,
@@ -218,8 +214,6 @@ export const getCurrentProfile = async () => {
   }
 };
 
-export type CurrentProfile = Awaited<ReturnType<typeof getCurrentProfile>>[number];
-
 /**
  * Formularios personalizados de la empresa activa con la cantidad de respuestas de cada uno
  * (reemplaza el `select('*,form_answers(form_id)')` legacy, que traía una fila por respuesta
@@ -241,5 +235,3 @@ export const fetchCustomFormsWithAnswerCount = async () => {
     return [];
   }
 };
-
-export type CustomFormWithAnswerCount = Awaited<ReturnType<typeof fetchCustomFormsWithAnswerCount>>[number];

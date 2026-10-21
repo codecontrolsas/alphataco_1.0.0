@@ -99,8 +99,6 @@ export async function getItemsForDelivery() {
   }
 }
 
-export type ItemForDelivery = Awaited<ReturnType<typeof getItemsForDelivery>>[number];
-
 /**
  * Marcas con al menos un talle configurado para el artículo dado.
  * Perímetro: el artículo tiene que ser de la empresa del operario.
@@ -125,8 +123,6 @@ export async function getBrandsForItem(itemId: string) {
     throw error;
   }
 }
-
-export type BrandForItem = Awaited<ReturnType<typeof getBrandsForItem>>[number];
 
 /**
  * Talles disponibles para la combinación artículo + marca, con el stock del depósito elegido
@@ -187,5 +183,3 @@ export async function getDeliveryWarehouses() {
 }
 
 export type DeliveryWarehouse = Awaited<ReturnType<typeof getDeliveryWarehouses>>[number];
-
-export type SizeForItemBrand = Awaited<ReturnType<typeof getSizesForItemBrand>>[number];

@@ -407,5 +407,3 @@ export async function searchSupplierOptions(query: string) {
     total,
   };
 }
-
-export type SupplierOption = Awaited<ReturnType<typeof searchSupplierOptions>>['items'][number];

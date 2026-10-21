@@ -186,8 +186,6 @@ export async function addItemToOrder(
   }
 }
 
-export type AddItemResult = Awaited<ReturnType<typeof addItemToOrder>>;
-
 // =============================================================================
 // BATCH SAVE
 // =============================================================================

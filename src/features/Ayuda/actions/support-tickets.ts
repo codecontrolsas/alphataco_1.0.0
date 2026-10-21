@@ -160,12 +160,6 @@ export async function getMyTicketsWithUnread(): Promise<TicketWithUnread[]> {
   return enrichWithUnread(tickets, reporter);
 }
 
-export interface MyTicketsPage {
-  tickets: TicketWithUnread[];
-  total: number;
-  completed: number;
-}
-
 async function enrichWithUnread(
   tickets: Ticket[],
   reporter: NonNullable<Awaited<ReturnType<typeof getReporterEmail>>>

@@ -147,8 +147,6 @@ export async function createMaintenanceOrderDirect(input: CreateMaintenanceOrder
   return { order, items };
 }
 
-export type CreateMaintenanceOrderDirectResult = Awaited<ReturnType<typeof createMaintenanceOrderDirect>>;
-
 /**
  * Tipo para crear desvíos desde el formulario de Nuevo Pedido
  */
@@ -554,7 +552,3 @@ export async function createMaintenanceOrderFromDeviations(input: {
 
   return { request, order };
 }
-
-export type CreateMaintenanceOrderFromDeviationsResult = Awaited<
-  ReturnType<typeof createMaintenanceOrderFromDeviations>
->;

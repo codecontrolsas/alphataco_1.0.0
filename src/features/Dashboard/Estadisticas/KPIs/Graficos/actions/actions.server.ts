@@ -60,5 +60,3 @@ export async function getAllKpisMetadata() {
     return [];
   }
 }
-
-export type KpiMetadataItem = Awaited<ReturnType<typeof getAllKpisMetadata>>[number];

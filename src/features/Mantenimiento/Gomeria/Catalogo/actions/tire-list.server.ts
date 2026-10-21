@@ -256,8 +256,6 @@ export async function getTireRackData() {
   }
 }
 
-export type TireRackData = Awaited<ReturnType<typeof getTireRackData>>;
-
 // ============================================================================
 // COST (view_prices)
 // ============================================================================

@@ -1,4 +1,4 @@
-import type { Comment, Ticket, TicketPriority } from '@/shared/lib/taskapp/types';
+import type { TicketPriority } from '@/shared/lib/taskapp/types';
 import type { CategorySlug } from '../constants/categories';
 
 export type { CategoryDef, CategorySlug } from '../constants/categories';
@@ -24,6 +24,3 @@ export interface CreateSupportCommentInput {
   ticketId: number;
   body: string;
 }
-
-export type MyTicketsData = Ticket[];
-export type TicketCommentsData = Comment[];

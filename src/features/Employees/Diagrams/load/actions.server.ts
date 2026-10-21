@@ -70,8 +70,6 @@ export async function getMassiveLoadCatalogs() {
   }
 }
 
-export type MassiveLoadCatalogs = Awaited<ReturnType<typeof getMassiveLoadCatalogs>>;
-
 // ─── Buscador de empleados ──────────────────────────────────────────────────
 
 const employeeSearchSchema = z.object({

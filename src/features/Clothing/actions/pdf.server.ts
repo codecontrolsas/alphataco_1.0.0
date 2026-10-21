@@ -102,4 +102,3 @@ export async function getDeliveriesForPdfBulk(deliveryIds: string[]) {
 }
 
 export type DeliveryPdfData = Awaited<ReturnType<typeof getDeliveryForPdf>>;
-export type DeliveryBulkPdfData = Awaited<ReturnType<typeof getDeliveriesForPdfBulk>>[number];

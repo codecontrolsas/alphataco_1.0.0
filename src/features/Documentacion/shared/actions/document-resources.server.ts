@@ -49,8 +49,6 @@ export async function getActiveDocumentTypesByResource(resource: DocumentResourc
   }
 }
 
-export type DocumentTypeOption = Awaited<ReturnType<typeof getActiveDocumentTypesByResource>>[number];
-
 /**
  * Recursos ACTIVOS de la empresa activa para vincular documentos: `{ id, name, document }`.
  * Empleados: `[legajo] Apellido Nombre` + DNI (búsqueda por número). Equipos: dominio o serie.

@@ -13,7 +13,6 @@ import { DATE_RE, isCalendarDay, isPositiveAmount } from './shared';
  */
 
 export const FOREIGN_CURRENCIES = ['USD', 'EUR'] as const;
-export type ForeignCurrency = (typeof FOREIGN_CURRENCIES)[number];
 
 /** Etiquetas propias: en Compras "IIBB" es la retención de Neuquén que practica la empresa. */
 export const CUSTOMER_WITHHOLDING_TAX_LABELS: Record<(typeof WITHHOLDING_TAXES)[number], string> = {

@@ -72,8 +72,6 @@ export async function getActiveCompany() {
   }
 }
 
-export type CompanyData = Awaited<ReturnType<typeof getActiveCompany>>;
-
 /** Catálogo global de industrias (selector del formulario de empresa). */
 export async function getIndustryTypes() {
   const rows = await prisma.industry_type.findMany({

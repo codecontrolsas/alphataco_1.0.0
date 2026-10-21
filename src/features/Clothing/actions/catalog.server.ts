@@ -329,16 +329,3 @@ export async function getActiveClothingSizes() {
     throw error;
   }
 }
-
-// ============================================================================
-// EXPORTED TYPES
-// ============================================================================
-
-export type ClothingBrand = Awaited<ReturnType<typeof createClothingBrand>>;
-export type ClothingSize = Awaited<ReturnType<typeof createClothingSize>>;
-export type ClothingItem = Awaited<ReturnType<typeof createClothingItem>>;
-
-export type ItemBrandSizeEntry = Awaited<ReturnType<typeof getItemBrandSizes>>[number];
-
-export type ActiveClothingBrand = Awaited<ReturnType<typeof getActiveClothingBrands>>[number];
-export type ActiveClothingSize = Awaited<ReturnType<typeof getActiveClothingSizes>>[number];

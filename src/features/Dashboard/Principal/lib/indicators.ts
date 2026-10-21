@@ -15,8 +15,6 @@ import type {
 /** Condiciones que dejan a un equipo fuera de servicio. */
 export const NOT_OPERATIVE_CONDITIONS = ['no_operativo', 'en_reparacion', 'en_preparacion'] as const;
 
-export type NotOperativeCondition = (typeof NOT_OPERATIVE_CONDITIONS)[number];
-
 /** `true` si la condición del equipo lo deja fuera de servicio. */
 export function isNotOperative(condition: string | null | undefined): boolean {
   return condition != null && (NOT_OPERATIVE_CONDITIONS as readonly string[]).includes(condition);

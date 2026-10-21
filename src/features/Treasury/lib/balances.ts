@@ -62,7 +62,6 @@ export async function getIssuedOwnChecks(db: Pick<Prisma.TransactionClient, 'own
   }));
 }
 
-
 /** Extracto de una cuenta entre `from` y `to` (inclusive): saldo anterior, filas con acumulado y saldo final. */
 export async function getAccountStatement(db: BalancesDb, companyId: string, accountId: string, from: string, to: string, today: string) {
   const previousRows = await db.$queryRaw<{ previous: string }[]>`
@@ -117,8 +116,6 @@ export async function getAccountStatement(db: BalancesDb, companyId: string, acc
   const previous = previousRows[0]?.previous ?? '0.00';
   return { previous, ...withRunningBalance(previous, rows) };
 }
-
-export type AccountStatement = Awaited<ReturnType<typeof getAccountStatement>>;
 
 /**
  * Saldo de la cuenta al final de `date` (vigentes con fecha <= date), sin contar `excludeMovementId`

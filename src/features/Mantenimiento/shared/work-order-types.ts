@@ -1,20 +1,8 @@
-import type {
-  work_order_item_repairs,
-  work_order_item_status,
-  work_order_items,
-  work_order_priority,
-  work_order_status,
-  work_orders,
-} from '@/generated/prisma/client';
+import type { work_order_item_status, work_order_priority, work_order_status } from '@/generated/prisma/client';
 import { REPAIR_STATUS_UI, WORK_ORDER_STATUS_UI } from '../lib/status-presentation';
-
-// Tipos base de la BD (modelos y enums generados por Prisma)
-export type WorkOrder = work_orders;
-export type WorkOrderItem = work_order_items;
 export type WorkOrderStatus = work_order_status;
 export type WorkOrderItemStatus = work_order_item_status;
 export type WorkOrderPriority = work_order_priority;
-export type WorkOrderItemRepairRow = work_order_item_repairs;
 
 // Tipo para un trabajo individual (tipo de reparación) dentro de un item
 export interface WorkOrderItemRepair {

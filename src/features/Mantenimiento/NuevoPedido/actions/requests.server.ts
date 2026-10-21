@@ -1,6 +1,4 @@
 'use server';
-
-import { isNonPropagatingChecklistItem } from '@/features/Mantenimiento/constants/non-propagating-checklist-items';
 import { ACTIVITY_LOG } from '@/features/Mantenimiento/shared/activity-log/action-types';
 import { logActivity } from '@/features/Mantenimiento/shared/activity-log/log-activity';
 import { resourceIdFields, type MaintenanceResourceKind } from '@/features/Mantenimiento/shared/maintenance-resource';
@@ -357,10 +355,6 @@ export async function createMaintenanceRequestPendingApproval(input: {
 
   return { request, requestItems };
 }
-
-export type CreateMaintenanceRequestPendingApprovalResult = Awaited<
-  ReturnType<typeof createMaintenanceRequestPendingApproval>
->;
 
 /**
  * Crea una solicitud de mantenimiento por CARGA MANUAL (ticket 592).

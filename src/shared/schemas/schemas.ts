@@ -312,4 +312,3 @@ export const SharedCompaniesSchema = z.array(
     id: z.string(),
   })
 );
-export type SharedCompanies = z.infer<typeof SharedCompaniesSchema>;

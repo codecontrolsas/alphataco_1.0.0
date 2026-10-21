@@ -69,5 +69,3 @@ export async function getServicesDetailByClient(date?: string): Promise<ServiceD
     throw error;
   }
 }
-
-export type ServicesDetailByClientData = Awaited<ReturnType<typeof getServicesDetailByClient>>;

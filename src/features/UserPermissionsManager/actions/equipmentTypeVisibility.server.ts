@@ -82,7 +82,6 @@ export async function getEquipmentTypesForVisibility() {
 }
 
 export type EquipmentTypesForVisibility = Awaited<ReturnType<typeof getEquipmentTypesForVisibility>>;
-export type EquipmentTypeForVisibility = EquipmentTypesForVisibility[number];
 
 // ─── Rol ──────────────────────────────────────────────────────────────────────
 

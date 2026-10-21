@@ -799,5 +799,3 @@ export async function getVehiclesForSelect() {
     throw new Error('Error al obtener los vehículos');
   }
 }
-
-export type VehicleSelectItem = Awaited<ReturnType<typeof getVehiclesForSelect>>[number];

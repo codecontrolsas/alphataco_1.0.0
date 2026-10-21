@@ -167,7 +167,6 @@ export async function getAllPositions() {
 }
 
 export type AllPositionsData = Awaited<ReturnType<typeof getAllPositions>>;
-export type PositionItem = AllPositionsData[number];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Diálogo de empleados disponibles — DataTable server-side

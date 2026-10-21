@@ -43,5 +43,3 @@ export function createTabVisibilityChecker(permissions: Readonly<Record<string, 
     return hasInferredView(findTabDef(PERMISSIONS, moduleSlug, tabSlug), granted);
   };
 }
-
-export type TabVisibilityChecker = ReturnType<typeof createTabVisibilityChecker>;

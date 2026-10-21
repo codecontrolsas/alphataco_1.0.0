@@ -299,11 +299,6 @@ export function ringSeam(ring: Plane[], z: number, projection: Projection) {
 
 export const sideSeam = (plan: Plan, z: number, projection: Projection, steps = 8) => ringSeam(ringOf(plan, steps), z, projection);
 
-export interface Ticks {
-  minor: string;
-  major: string;
-}
-
 export const haloOf = (plan: Plan, z: number, height: number, projection: Projection) => slabOf(plan, z, height, projection).fill;
 
 export function axisVector(projection: Projection, [dx, dy, dz]: Point3): Flat {
@@ -433,25 +428,6 @@ export function dotsSvg(points: Array<Flat | [number, number, number]>, { size =
   return `<g class="iso-dots" data-tone="${tone}">${dots}</g>`;
 }
 
-export type Faded = { d: string; alpha: number } | [string, number];
-
-export interface FadeLineStyle {
-  fade?: number | [number, number];
-  tone?: LineTone;
-  className?: string;
-  stops?: number;
-}
-
-export interface WireStyle {
-  via?: Flat[];
-  tone?: LineTone;
-  dotted?: boolean;
-  dashed?: boolean;
-  flow?: boolean;
-  ends?: "both" | "from" | "to" | "none";
-  size?: number;
-}
-
 export function faceTextSvg(transform: string, text: string, { size = 3, tone = "mid", anchor = "start" }: { size?: number; tone?: Tone; anchor?: "start" | "middle" | "end" } = {}) {
   return `<text class="iso-face-text" data-tone="${tone}" transform="${transform}" font-size="${size}" text-anchor="${anchor}">${escape(text)}</text>`;
 }
@@ -493,24 +469,6 @@ function swatchSvg(mark: KeyMark) {
     return `<svg class="iso-swatch" data-mark="${mark}" viewBox="0 0 16 10" aria-hidden="true"><path d="${body}"/>${crease}</svg>`;
   }
   return `<svg class="iso-swatch" data-mark="${mark}" viewBox="0 0 16 10" aria-hidden="true"><path d="M1.5 5h13"/></svg>`;
-}
-
-export interface PlateOptions {
-  fig: string;
-  title?: string;
-  hint?: string;
-  readout?: string;
-  keys?: LegendKey[];
-  caption?: string;
-  body: string;
-}
-
-export interface PageOptions {
-  title: string;
-  theme?: Theme;
-  body: string;
-  script?: string;
-  width?: number;
 }
 
 const PAGE_CSS = `

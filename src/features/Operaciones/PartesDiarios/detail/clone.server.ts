@@ -304,8 +304,6 @@ export async function cloneDailyReportRows(rowIds: string[], targetDates: string
   }
 }
 
-export type CloneDailyReportRowsResult = Awaited<ReturnType<typeof cloneDailyReportRows>>;
-
 // ============================================================================
 // 10a. CLONE CONFLICTS (verificación previa al clonado)
 // ============================================================================
@@ -449,6 +447,4 @@ export async function getDailyReportTypeServiceSummary(dailyReportId: string) {
     return {};
   }
 }
-
-export type DailyReportTypeServiceSummary = Awaited<ReturnType<typeof getDailyReportTypeServiceSummary>>;
 

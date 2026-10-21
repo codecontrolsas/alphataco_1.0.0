@@ -78,8 +78,6 @@ export async function getPriceRevisions(serviceItemId: string) {
   }
 }
 
-export type PriceRevisionRow = Awaited<ReturnType<typeof getPriceRevisions>>[number];
-
 interface ApplyPriceRevisionInput {
   serviceItemId: string;
   /** Precio nuevo. Llega como texto: convertirlo a `number` antes de tiempo pierde decimales. */

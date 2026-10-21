@@ -410,7 +410,6 @@ export async function getPendingDeviations(equipmentId: string, options?: Pendin
 }
 
 export type PendingDeviationsData = Awaited<ReturnType<typeof getPendingDeviations>>;
-export type PendingDeviation = PendingDeviationsData[number];
 
 /**
  * Cierra la sesión del operario en el flujo de mantenimiento.

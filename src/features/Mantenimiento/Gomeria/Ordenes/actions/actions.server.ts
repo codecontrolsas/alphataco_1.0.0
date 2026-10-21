@@ -66,9 +66,3 @@ export async function getServiceOrderById(id: string) {
     throw error;
   }
 }
-
-// ============================================================================
-// EXPORTED TYPES
-// ============================================================================
-
-export type ServiceOrderDetail = Awaited<ReturnType<typeof getServiceOrderById>>;

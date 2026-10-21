@@ -38,8 +38,6 @@ export const getBelowMinimumMaterials = cache(async (companyId: string) => {
     }));
 });
 
-export type BelowMinimumMaterial = Awaited<ReturnType<typeof getBelowMinimumMaterials>>[number];
-
 /** Cantidad de materiales bajo su mínimo (misma regla que `getBelowMinimumMaterials`). */
 export async function countBelowMinimum(companyId: string): Promise<number> {
   return (await getBelowMinimumMaterials(companyId)).length;

@@ -214,5 +214,3 @@ export async function analyzeDocumentTypeImpact(docTypeId: string) {
     throw error;
   }
 }
-
-export type DocumentTypeImpact = Awaited<ReturnType<typeof analyzeDocumentTypeImpact>>;

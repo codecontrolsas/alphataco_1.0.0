@@ -594,5 +594,3 @@ export async function getDocTypeSingleFacet(
 // ============================================================================
 
 export type DocumentTypeListItem = Awaited<ReturnType<typeof getDocTypesPaginated>>['data'][number];
-export type DocumentTypeExportItem = DocumentTypeListItem;
-export type DocumentTypeForEdit = Awaited<ReturnType<typeof getDocumentTypeForEdit>>;

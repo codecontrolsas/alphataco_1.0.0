@@ -65,5 +65,3 @@ export async function fetchEquipmentForDashboard(equipmentId: string) {
     return null;
   }
 }
-
-export type EquipmentForDashboard = NonNullable<Awaited<ReturnType<typeof fetchEquipmentForDashboard>>>;

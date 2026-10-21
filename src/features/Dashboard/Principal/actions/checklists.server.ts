@@ -43,5 +43,3 @@ export async function getChecklistMissingIndicator() {
     throw error;
   }
 }
-
-export type ChecklistMissingIndicatorData = Awaited<ReturnType<typeof getChecklistMissingIndicator>>;

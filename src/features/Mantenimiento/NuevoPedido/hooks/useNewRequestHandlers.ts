@@ -233,5 +233,3 @@ export function useNewRequestHandlers(state: NewRequestState, data: NewRequestDa
     handleChangeRequestType,
   };
 }
-
-export type NewRequestHandlers = ReturnType<typeof useNewRequestHandlers>;

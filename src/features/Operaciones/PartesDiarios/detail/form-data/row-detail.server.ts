@@ -112,5 +112,3 @@ export async function getDailyReportRowDetail(rowId: string) {
   }
 }
 
-export type DailyReportRowDetailData = Awaited<ReturnType<typeof getDailyReportRowDetail>>;
-
