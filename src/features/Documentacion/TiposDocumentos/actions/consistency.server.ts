@@ -172,7 +172,7 @@ export async function analyzeDocumentTypeImpact(docTypeId: string) {
 
   try {
     await assertDocTypeIdPermission(docTypeId, companyId, 'view');
-    // Perímetro de escritura: el impacto se analiza para mutar; un global lanza GLOBAL_DOCUMENT_TYPE_READ_ONLY.
+    // Perímetro de escritura: el impacto se analiza para mutar.
     const docType = await findScopedDocumentType(
       prisma,
       docTypeId,

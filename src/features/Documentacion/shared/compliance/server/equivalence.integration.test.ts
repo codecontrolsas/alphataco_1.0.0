@@ -717,7 +717,7 @@ async function buildScenario(tx: Tx, now: Date): Promise<string> {
   const conds = (selections: Record<string, string[]>) =>
     selectionsToConditionsJson(selections, 'Persona', {}) as Prisma.InputJsonValue[];
 
-  const tGlobal = await mkType('Global', { company_id: null, explired: true });
+  const tGlobal = await mkType('Global', { explired: true });
   const tOwn1 = await mkType('Propio 1');
   const tOwn2 = await mkType('Propio 2', { explired: true });
   const tPos = await mkType('Posición+Categoría', {
@@ -903,7 +903,7 @@ async function buildVehicleScenario(
   const conds = (selections: Record<string, string[]>) =>
     selectionsToConditionsJson(selections, 'Equipos', {}) as Prisma.InputJsonValue[];
 
-  const qGlobal = await mkType('Equipo global', { company_id: null, explired: true });
+  const qGlobal = await mkType('Equipo global', { explired: true });
   const qType = await mkType('Equipo por tipo', { special: true, conditions: conds({ vehicleType: [ty1.id] }) });
   const qSub = await mkType('Equipo por subtipo', { special: true, conditions: conds({ vehicleSubType: [st2.id] }) });
   const qCust = await mkType('Equipo por cliente', { special: true, conditions: conds({ contractorEquipment: [k1] }) });

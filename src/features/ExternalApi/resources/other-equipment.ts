@@ -1,5 +1,6 @@
 import type { Prisma } from '@/generated/prisma/client';
-import { prisma } from '@/shared/lib/prisma';
+import { prismaBase } from '@/shared/lib/prisma';
+import { createTenantClient } from '@/shared/lib/tenant-context';
 import { buildCreatedAtFilter, type ExternalListQuery, type ExternalListResult } from '../lib/request';
 import { toPublicDate, toPublicReference, type PublicReference } from './shared';
 
@@ -69,6 +70,7 @@ export async function fetchExternalOtherEquipment(params: {
   query: ExternalListQuery;
 }): Promise<ExternalListResult<OtherEquipmentRow>> {
   const { companyId, query } = params;
+  const db = createTenantClient(prismaBase, { companyId, userId: null, kind: 'api' });
 
   const createdAtFilter = buildCreatedAtFilter(query);
 
@@ -79,14 +81,14 @@ export async function fetchExternalOtherEquipment(params: {
   };
 
   const [data, total] = await Promise.all([
-    prisma.other_equipment.findMany({
+    db.other_equipment.findMany({
       where,
       select: OTHER_EQUIPMENT_SELECT,
       orderBy: { serial_number: 'asc' },
       skip: (query.page - 1) * query.pageSize,
       take: query.pageSize,
     }),
-    prisma.other_equipment.count({ where }),
+    db.other_equipment.count({ where }),
   ]);
 
   return { data, total };

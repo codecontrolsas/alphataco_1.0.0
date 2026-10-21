@@ -2,7 +2,7 @@ import 'server-only';
 
 import { notify } from '@/features/Notifications/lib/dispatch.server';
 import type { SendMail } from '@/shared/lib/mail';
-import { prisma } from '@/shared/lib/prisma';
+import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
 import { argentinaDate } from '../lib/dates';
 import { buildDocumentsExpirySummary } from '../lib/documents-expiry-summary.server';
 import { runForEachCompany, runJobWithBitacora } from '../lib/per-company';

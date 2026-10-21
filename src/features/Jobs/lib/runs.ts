@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { Prisma } from '@/generated/prisma/client';
-import { prisma } from '@/shared/lib/prisma';
+import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
 import type { JobName } from './types';
 
 /**

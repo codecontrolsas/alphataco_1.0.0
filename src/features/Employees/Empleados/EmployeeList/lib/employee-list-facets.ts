@@ -103,7 +103,7 @@ const FK_UUID_FACETS: Record<
     // Los sindicatos pueden ser globales (company_id NULL).
     resolve: (ids, companyId) =>
       prisma.guild.findMany({
-        where: { id: { in: ids }, OR: [{ company_id: null }, { company_id: companyId }] },
+        where: { id: { in: ids }, company_id: companyId },
         select: { id: true, name: true },
       }),
   },

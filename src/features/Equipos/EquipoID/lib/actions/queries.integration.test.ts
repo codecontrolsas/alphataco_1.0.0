@@ -65,7 +65,7 @@ describe.skipIf(!process.env.DATABASE_URL)('ficha de vehículo (integración)', 
     expect(orders).toEqual([]);
 
     const owners = await prisma.equipment_owners.findMany({
-      where: { OR: [{ company_id: companyId }, { company_id: null }], is_active: true },
+      where: { company_id: companyId, is_active: true },
       select: { id: true, equipment_owner_contract_types: { select: { contract_type: true } } },
     });
     expect(Array.isArray(owners)).toBe(true);

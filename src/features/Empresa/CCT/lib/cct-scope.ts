@@ -13,11 +13,9 @@
  *
  * Mismo criterio que `Documentacion/TiposDocumentos/lib/document-type-policy.ts`.
  */
-export const GLOBAL_GUILD_READ_ONLY = 'Los sindicatos globales no se editan desde una empresa';
-
-/** `where` de lectura de sindicatos: globales + propios. */
-export function guildReadScope(companyId: string): { OR: [{ company_id: null }, { company_id: string }] } {
-  return { OR: [{ company_id: null }, { company_id: companyId }] };
+/** `where` de lectura de sindicatos: sólo propios (cada empresa tiene los suyos). */
+export function guildReadScope(companyId: string): { company_id: string } {
+  return { company_id: companyId };
 }
 
 /** `where`/`data` de escritura de sindicatos: sólo propios. */

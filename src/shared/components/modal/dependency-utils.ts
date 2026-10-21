@@ -201,7 +201,7 @@ async function findReplacementRows(
   };
   // Catálogos con company_id nullable: propios + globales.
   const scopedArgs = {
-    where: { ...base, OR: [{ company_id: null }, { company_id: companyId }] },
+    where: { ...base, company_id: companyId },
     select: { id: true, name: true },
     orderBy: { name: 'asc' as const },
   };

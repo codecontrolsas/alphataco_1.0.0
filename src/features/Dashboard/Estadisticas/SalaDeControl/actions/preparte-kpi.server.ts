@@ -78,7 +78,7 @@ export async function getPreparteKpiData(): Promise<PreparteKpiData> {
       FROM preparte p
       JOIN customers c ON c.id = p.cliente_id
       WHERE p.created_at >= ${sinceInstant}
-        AND (p.company_id = ${companyId}::uuid OR p.company_id IS NULL)
+        AND p.company_id = ${companyId}::uuid
       GROUP BY 1, 2, 3
       ORDER BY 1
     `;

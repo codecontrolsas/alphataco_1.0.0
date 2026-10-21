@@ -24,14 +24,13 @@ const logger = new Logger('features/Empresa/Clientes/measure-units');
 const COMERCIAL_PATH = '/dashboard/comercial';
 
 /**
- * Unidades de medida: catálogo global (sin `company_id`). Se exige sesión con empresa activa
- * para no exponer el catálogo sin autenticación.
+ * Unidades de medida: catálogo POR EMPRESA (`company_id` obligatorio, lo completa la base desde la empresa activa).
  */
 export async function getMeasureUnits() {
   await assertComercialView(['mensure_units', 'service', 'items-contrato']);
-  await getActiveCompanyId();
+  const companyId = await getActiveCompanyId();
   try {
-    return await prisma.measure_units.findMany({ orderBy: { unit: 'asc' } });
+    return await prisma.measure_units.findMany({ where: { company_id: companyId }, orderBy: { unit: 'asc' } });
   } catch (error) {
     logger.error('Error al obtener unidades de medida', { data: { error } });
     throw error;
@@ -53,11 +52,12 @@ function parseState(searchParams: DataTableSearchParams | undefined) {
   return sanitizeFilters(parseSearchParams(searchParams ?? {}), ALLOWED_FILTER_KEYS);
 }
 
-/** Mismo where para lista, export y facets. Catálogo global: sin filtro por empresa. */
-function buildWhereClause(state: ReturnType<typeof parseState>) {
+/** Mismo where para lista, export y facets. */
+function buildWhereClause(companyId: string, state: ReturnType<typeof parseState>) {
   const tipo = state.filters['tipo'];
   return {
     AND: [
+      { company_id: companyId },
       buildSearchWhere(state.search, ['simbol', 'unit', 'tipo']),
       buildTextFiltersWhere(state.filters, ['simbol', 'unit']),
       tipo?.length ? { tipo: { in: tipo } } : {},
@@ -77,11 +77,11 @@ const LIST_SELECT = { id: true, simbol: true, unit: true, tipo: true } as const;
 
 export async function getMeasureUnitsPaginated(searchParams: DataTableSearchParams) {
   await assertComercialView([TABLE_TAB]);
-  await getActiveCompanyId();
+  const companyId = await getActiveCompanyId();
   try {
     const state = parseState(searchParams);
     const { skip, take } = stateToPrismaParams(state);
-    const where = buildWhereClause(state);
+    const where = buildWhereClause(companyId, state);
     const [data, total] = await Promise.all([
       prisma.measure_units.findMany({ where, orderBy: buildOrderBy(state), skip, take, select: LIST_SELECT }),
       prisma.measure_units.count({ where }),
@@ -99,11 +99,11 @@ export async function getAllMeasureUnitsForExport(
   searchParams: DataTableSearchParams
 ): Promise<ExportResult<MeasureUnitListItem[]>> {
   await assertComercialView([TABLE_TAB]);
-  await getActiveCompanyId();
+  const companyId = await getActiveCompanyId();
   try {
     const state = parseState(searchParams);
     const rows = await prisma.measure_units.findMany({
-      where: buildWhereClause(state),
+      where: buildWhereClause(companyId, state),
       orderBy: buildOrderBy(state),
       select: LIST_SELECT,
       take: EXPORT_MAX_ROWS + 1,
@@ -132,12 +132,12 @@ export async function getMeasureUnitSingleFacet(
   searchParams?: DataTableSearchParams
 ): Promise<FacetResult | null> {
   await assertComercialView([TABLE_TAB]);
-  await getActiveCompanyId();
+  const companyId = await getActiveCompanyId();
   try {
     const state = parseState(searchParams);
     const crossState = { ...state, filters: { ...state.filters } };
     delete crossState.filters[columnId];
-    const where = buildWhereClause(crossState);
+    const where = buildWhereClause(companyId, crossState);
 
     if (columnId !== 'tipo') return null;
     const rows = await prisma.measure_units.groupBy({ by: ['tipo'], where, _count: true, orderBy: { tipo: 'asc' } });
@@ -156,11 +156,11 @@ export async function createMeasureUnit(input: MeasureUnitFormValues): Promise<A
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos');
   const permissionError = await requireComercialPermission('mensure_units', 'create');
   if (permissionError) return fail(permissionError);
-  await getActiveCompanyId();
+  const companyId = await getActiveCompanyId();
 
   try {
     const existing = await prisma.measure_units.findFirst({
-      where: { simbol: parsed.data.simbol },
+      where: { company_id: companyId, simbol: parsed.data.simbol },
       select: { id: true },
     });
     if (existing) return fail('Ya existe una unidad de medida con este símbolo');
@@ -183,16 +183,16 @@ export async function updateMeasureUnit(
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos');
   const permissionError = await requireComercialPermission('mensure_units', 'update');
   if (permissionError) return fail(permissionError);
-  await getActiveCompanyId();
+  const companyId = await getActiveCompanyId();
 
   try {
     const existing = await prisma.measure_units.findFirst({
-      where: { simbol: parsed.data.simbol, id: { not: id } },
+      where: { company_id: companyId, simbol: parsed.data.simbol, id: { not: id } },
       select: { id: true },
     });
     if (existing) return fail('Ya existe otra unidad de medida con este símbolo');
 
-    await prisma.measure_units.update({ where: { id }, data: parsed.data });
+    await prisma.measure_units.update({ where: { id, company_id: companyId }, data: parsed.data });
     logger.info('Unidad de medida actualizada', { data: { id } });
     revalidatePath(COMERCIAL_PATH);
     return ok({ id });
@@ -208,13 +208,13 @@ export async function updateMeasureUnit(
 export async function deleteMeasureUnit(id: number): Promise<ActionResult> {
   const permissionError = await requireComercialPermission('mensure_units', 'delete');
   if (permissionError) return fail(permissionError);
-  await getActiveCompanyId();
+  const companyId = await getActiveCompanyId();
   try {
-    const inUse = await prisma.service_items.count({ where: { item_measure_units: id } });
+    const inUse = await prisma.service_items.count({ where: { item_measure_units: id, company_id: companyId } });
     if (inUse > 0) {
       return fail(`No se puede eliminar: la unidad está en uso por ${inUse} item${inUse === 1 ? '' : 's'} de contrato`);
     }
-    await prisma.measure_units.delete({ where: { id } });
+    await prisma.measure_units.delete({ where: { id, company_id: companyId } });
     logger.info('Unidad de medida eliminada', { data: { id } });
     revalidatePath(COMERCIAL_PATH);
     return ok(null);

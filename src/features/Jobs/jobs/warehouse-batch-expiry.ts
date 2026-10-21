@@ -4,7 +4,7 @@ import { notify } from '@/features/Notifications/lib/dispatch.server';
 import { EXPIRING_WINDOW_DAYS } from '@/features/Warehouses/lib/batch-expiry';
 import { findExpiringBatches } from '@/features/Warehouses/lib/expiring-batches';
 import type { SendMail } from '@/shared/lib/mail';
-import { prisma } from '@/shared/lib/prisma';
+import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
 import { argentinaDate } from '../lib/dates';
 import { runForEachCompany, runJobWithBitacora } from '../lib/per-company';
 import type { JobSummary } from '../lib/types';

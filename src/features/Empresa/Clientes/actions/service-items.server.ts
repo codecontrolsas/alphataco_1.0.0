@@ -92,8 +92,8 @@ function toItemData(values: ServiceItemFormValues) {
   };
 }
 
-async function assertMeasureUnitExists(id: number): Promise<void> {
-  const unit = await prisma.measure_units.findUnique({ where: { id }, select: { id: true } });
+async function assertMeasureUnitExists(companyId: string, id: number): Promise<void> {
+  const unit = await prisma.measure_units.findFirst({ where: { id, company_id: companyId }, select: { id: true } });
   if (!unit) throw new Error('Unidad de medida inválida');
 }
 
@@ -116,7 +116,7 @@ export async function createServiceItem(
     });
     if (!service) return fail('Contrato no encontrado');
     const data = toItemData(parsed.data);
-    await assertMeasureUnitExists(data.item_measure_units);
+    await assertMeasureUnitExists(companyId, data.item_measure_units);
 
     // Fijar un precio inicial es fijar un importe: exige `update_prices`.
     if (!data.item_price.isZero()) {
@@ -166,7 +166,7 @@ export async function updateServiceItem(
   const companyId = await getActiveCompanyId();
   try {
     const data = toItemData(parsed.data);
-    await assertMeasureUnitExists(data.item_measure_units);
+    await assertMeasureUnitExists(companyId, data.item_measure_units);
 
     const actual = await prisma.service_items.findFirst({
       where: { id: itemId, company_id: companyId },

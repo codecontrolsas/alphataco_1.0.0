@@ -1,5 +1,6 @@
 import type { Prisma } from '@/generated/prisma/client';
-import { prisma } from '@/shared/lib/prisma';
+import { prismaBase } from '@/shared/lib/prisma';
+import { createTenantClient } from '@/shared/lib/tenant-context';
 import { VEHICLE_SELECT } from '@/shared/prisma-selects/vehicle-select';
 import { buildCreatedAtFilter, type ExternalListQuery, type ExternalListResult } from '../lib/request';
 import { toPublicDate, toPublicReference, type PublicReference } from './shared';
@@ -21,6 +22,7 @@ export async function fetchExternalVehicles(params: {
   query: ExternalListQuery;
 }): Promise<ExternalListResult<VehicleRow>> {
   const { companyId, query } = params;
+  const db = createTenantClient(prismaBase, { companyId, userId: null, kind: 'api' });
 
   const where: Prisma.vehiclesWhereInput = {
     company_id: companyId,
@@ -30,14 +32,14 @@ export async function fetchExternalVehicles(params: {
   };
 
   const [data, total] = await Promise.all([
-    prisma.vehicles.findMany({
+    db.vehicles.findMany({
       where,
       select: VEHICLE_SELECT,
       orderBy: { domain: 'asc' },
       skip: (query.page - 1) * query.pageSize,
       take: query.pageSize,
     }),
-    prisma.vehicles.count({ where }),
+    db.vehicles.count({ where }),
   ]);
 
   return { data, total };

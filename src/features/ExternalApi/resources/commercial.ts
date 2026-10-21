@@ -1,5 +1,6 @@
 import type { Prisma } from '@/generated/prisma/client';
-import { prisma } from '@/shared/lib/prisma';
+import { prismaBase } from '@/shared/lib/prisma';
+import { createTenantClient } from '@/shared/lib/tenant-context';
 import { buildCreatedAtFilter, type ExternalListQuery, type ExternalListResult } from '../lib/request';
 import { toPublicDate, type PublicReference } from './shared';
 
@@ -34,6 +35,7 @@ export async function fetchExternalCustomers(params: {
   query: ExternalListQuery;
 }): Promise<ExternalListResult<CustomerRow>> {
   const { companyId, query } = params;
+  const db = createTenantClient(prismaBase, { companyId, userId: null, kind: 'api' });
 
   const where: Prisma.customersWhereInput = {
     company_id: companyId,
@@ -42,14 +44,14 @@ export async function fetchExternalCustomers(params: {
   };
 
   const [data, total] = await Promise.all([
-    prisma.customers.findMany({
+    db.customers.findMany({
       where,
       select: CUSTOMER_SELECT,
       orderBy: { name: 'asc' },
       skip: (query.page - 1) * query.pageSize,
       take: query.pageSize,
     }),
-    prisma.customers.count({ where }),
+    db.customers.count({ where }),
   ]);
 
   return { data, total };
@@ -101,6 +103,7 @@ export async function fetchExternalCommercialSectors(params: {
   query: ExternalListQuery;
 }): Promise<ExternalListResult<CommercialSectorRow>> {
   const { companyId, query } = params;
+  const db = createTenantClient(prismaBase, { companyId, userId: null, kind: 'api' });
 
   const where: Prisma.sectorsWhereInput = {
     customers: {
@@ -110,14 +113,14 @@ export async function fetchExternalCommercialSectors(params: {
   };
 
   const [data, total] = await Promise.all([
-    prisma.sectors.findMany({
+    db.sectors.findMany({
       where,
       select: COMMERCIAL_SECTOR_SELECT,
       orderBy: { name: 'asc' },
       skip: (query.page - 1) * query.pageSize,
       take: query.pageSize,
     }),
-    prisma.sectors.count({ where }),
+    db.sectors.count({ where }),
   ]);
 
   return { data, total };
@@ -164,6 +167,7 @@ export async function fetchExternalCustomerAreas(params: {
   query: ExternalListQuery;
 }): Promise<ExternalListResult<CustomerAreaRow>> {
   const { companyId, query } = params;
+  const db = createTenantClient(prismaBase, { companyId, userId: null, kind: 'api' });
 
   const where: Prisma.areas_clienteWhereInput = {
     customers: {
@@ -173,14 +177,14 @@ export async function fetchExternalCustomerAreas(params: {
   };
 
   const [data, total] = await Promise.all([
-    prisma.areas_cliente.findMany({
+    db.areas_cliente.findMany({
       where,
       select: CUSTOMER_AREA_SELECT,
       orderBy: { nombre: 'asc' },
       skip: (query.page - 1) * query.pageSize,
       take: query.pageSize,
     }),
-    prisma.areas_cliente.count({ where }),
+    db.areas_cliente.count({ where }),
   ]);
 
   return { data, total };

@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { refreshDocumentStatus } from '@/features/Documentacion/shared/compliance/server/document-status.server';
-import { prisma } from '@/shared/lib/prisma';
+import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
 import { argentinaDate } from '../lib/dates';
 import { runForEachCompany, runJobWithBitacora } from '../lib/per-company';
 import type { JobSummary } from '../lib/types';

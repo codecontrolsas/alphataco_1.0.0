@@ -111,10 +111,10 @@ let vehicle = await prisma.vehicles.findFirst({ where: { company_id: COMPANY, do
 if (!vehicle) {
   let tv = await prisma.types_of_vehicles.findFirst();
   if (!tv) tv = await prisma.types_of_vehicles.create({ data: { name: 'Camion' } });
-  let tp = await prisma.type.findFirst();
-  if (!tp) tp = await prisma.type.create({ data: { name: 'Vehiculo', applies_to: 'vehicle' } });
-  let brand = await prisma.brand_vehicles.findFirst();
-  if (!brand) brand = await prisma.brand_vehicles.create({ data: { name: 'MarcaP4' } });
+  let tp = await prisma.type.findFirst({ where: { company_id: COMPANY } });
+  if (!tp) tp = await prisma.type.create({ data: { name: 'Vehiculo', applies_to: 'vehicle', company_id: COMPANY } });
+  let brand = await prisma.brand_vehicles.findFirst({ where: { company_id: COMPANY } });
+  if (!brand) brand = await prisma.brand_vehicles.create({ data: { name: 'MarcaP4', company_id: COMPANY } });
   let model = await prisma.model_vehicles.findFirst({ where: { brand: brand.id } });
   if (!model) model = await prisma.model_vehicles.create({ data: { name: 'ModeloP4', brand: brand.id, company_id: COMPANY } });
   vehicle = await prisma.vehicles.create({

@@ -332,7 +332,7 @@ function toScalarData(input: ParsedOtherEquipmentInput) {
  * catálogos con `company_id NULL` son globales y se aceptan.
  */
 async function assertReferencesInCompany(client: Client, companyId: string, input: ParsedOtherEquipmentInput) {
-  const companyOrGlobal = { OR: [{ company_id: companyId }, { company_id: null }] };
+  const companyOrGlobal = { company_id: companyId };
   const checks: Array<readonly [label: string, count: Promise<number>]> = [
     ['tipo', client.type.count({ where: { id: input.type_id, ...companyOrGlobal } })],
   ];

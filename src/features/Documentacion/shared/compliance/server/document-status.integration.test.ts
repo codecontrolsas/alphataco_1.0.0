@@ -11,9 +11,8 @@ import { arCurrentPeriod } from '../dates';
  *   DATABASE_URL=postgresql://alphataco:<pass>@127.0.0.1:5432/alphataco_test \
  *     npx vitest run src/features/Documentacion src/features/Jobs
  *
- * Crea su propia empresa (con recursos y tipos propios) y la borra al terminar. Como los tipos
- * globales de la base (company_id NULL) también se exigen a los recursos de la empresa de prueba,
- * cada recurso recibe un documento vigente por cada tipo global obligatorio aplicable.
+ * Crea su propia empresa (con recursos y tipos propios) y la borra al terminar. Los tipos de documento son
+ * por empresa (no hay globales), así que a los recursos solo se les exigen los tipos de esa empresa.
  */
 const RUN = Boolean(process.env.DATABASE_URL);
 const DAY = 86_400_000;
@@ -111,20 +110,6 @@ async function addDoc(
   }
 }
 
-/** Un documento vigente por cada tipo global obligatorio aplicable a recursos activos. */
-async function coverGlobals(kind: 'Persona' | 'Equipos', resourceId: string) {
-  const globals = await prisma.document_types.findMany({
-    where: { company_id: null, applies: kind, is_active: true, mandatory: true, down_document: { not: true } },
-    select: { id: true, is_it_montlhy: true },
-  });
-  for (const g of globals) {
-    await addDoc(kind, resourceId, g.id, {
-      validity: future(),
-      period: g.is_it_montlhy ? arCurrentPeriod(new Date()) : null,
-    });
-  }
-}
-
 const baseType = { multiresource: false, mandatory: true, explired: false, special: false };
 
 describe.skipIf(!RUN)('refreshDocumentStatus y job documents-status (integración)', () => {
@@ -219,35 +204,30 @@ describe.skipIf(!RUN)('refreshDocumentStatus y job documents-status (integració
 
     // e1 (posB): todo vigente → Completo
     ids.e1 = await mkEmployee(posB);
-    await coverGlobals('Persona', ids.e1);
     await addDoc('Persona', ids.e1, types.base);
     await addDoc('Persona', ids.e1, types.exp, { validity: future() });
     await addDoc('Persona', ids.e1, types.monthly, { period });
 
     // e2 (posA): igual que e1 pero sin el documento de su posición → Incompleto
     ids.e2 = await mkEmployee(posA);
-    await coverGlobals('Persona', ids.e2);
     await addDoc('Persona', ids.e2, types.base);
     await addDoc('Persona', ids.e2, types.exp, { validity: future() });
     await addDoc('Persona', ids.e2, types.monthly, { period });
 
     // e3 (posB): documento con vencimiento vencido → Completo con doc vencida
     ids.e3 = await mkEmployee(posB);
-    await coverGlobals('Persona', ids.e3);
     await addDoc('Persona', ids.e3, types.base);
     await addDoc('Persona', ids.e3, types.exp, { validity: past() });
     await addDoc('Persona', ids.e3, types.monthly, { period });
 
     // e4 (posB): el mensual es del período anterior → no cubre el corriente → Incompleto
     ids.e4 = await mkEmployee(posB);
-    await coverGlobals('Persona', ids.e4);
     await addDoc('Persona', ids.e4, types.base);
     await addDoc('Persona', ids.e4, types.exp, { validity: future() });
     await addDoc('Persona', ids.e4, types.monthly, { period: previous });
 
     // e5 (posB): cubierto; se usa para afectarlo a un cliente
     ids.e5 = await mkEmployee(posB);
-    await coverGlobals('Persona', ids.e5);
     await addDoc('Persona', ids.e5, types.base);
     await addDoc('Persona', ids.e5, types.exp, { validity: future() });
     await addDoc('Persona', ids.e5, types.monthly, { period });
@@ -296,8 +276,6 @@ describe.skipIf(!RUN)('refreshDocumentStatus y job documents-status (integració
     };
     ids.v1 = await mkVehicle('operativo'); // exige el tipo por condición y no lo tiene → Incompleto
     ids.v2 = await mkVehicle('no_operativo'); // no lo exige → Completo
-    await coverGlobals('Equipos', ids.v1);
-    await coverGlobals('Equipos', ids.v2);
   }, 120_000);
 
   afterAll(async () => {
