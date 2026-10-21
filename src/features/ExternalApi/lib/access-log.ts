@@ -1,6 +1,6 @@
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
-import { prisma } from '@/shared/lib/prisma';
+import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
 import type { NextRequest } from 'next/server';
 
 const logger = new Logger('features/ExternalApi/access-log');

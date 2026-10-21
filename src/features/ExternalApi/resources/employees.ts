@@ -1,5 +1,6 @@
 import type { Prisma } from '@/generated/prisma/client';
-import { prisma } from '@/shared/lib/prisma';
+import { prismaBase } from '@/shared/lib/prisma';
+import { createTenantClient } from '@/shared/lib/tenant-context';
 import { EMPLOYEE_SELECT } from '@/shared/prisma-selects/employee-select';
 import { buildCreatedAtFilter, type ExternalListQuery, type ExternalListResult } from '../lib/request';
 import { toPublicDate, toPublicReference, type PublicReference } from './shared';
@@ -19,6 +20,7 @@ export async function fetchExternalEmployees(params: {
   query: ExternalListQuery;
 }): Promise<ExternalListResult<EmployeeRow>> {
   const { companyId, query } = params;
+  const db = createTenantClient(prismaBase, { companyId, userId: null, kind: 'api' });
 
   const where: Prisma.employeesWhereInput = {
     company_id: companyId,
@@ -28,14 +30,14 @@ export async function fetchExternalEmployees(params: {
   };
 
   const [data, total] = await Promise.all([
-    prisma.employees.findMany({
+    db.employees.findMany({
       where,
       select: EMPLOYEE_SELECT,
       orderBy: { file: 'asc' },
       skip: (query.page - 1) * query.pageSize,
       take: query.pageSize,
     }),
-    prisma.employees.count({ where }),
+    db.employees.count({ where }),
   ]);
 
   return { data, total };

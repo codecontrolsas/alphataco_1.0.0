@@ -1,5 +1,5 @@
 import { Logger } from '@/lib/logger';
-import { prisma } from '@/shared/lib/prisma';
+import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
 import type { NextRequest } from 'next/server';
 import { hashSecret, verifySecret } from './hash';
 

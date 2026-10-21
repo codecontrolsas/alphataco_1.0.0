@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { notification_kind } from '@/generated/prisma/client';
-import { prisma } from '@/shared/lib/prisma';
+import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
 
 /**
  * Destinatarios ADICIONALES de los correos automáticos, resueltos POR EMPRESA. Desde #786 los avisos
