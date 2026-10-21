@@ -145,8 +145,6 @@ export async function getAllVehicleTypes() {
   return loadAllVehicleTypes();
 }
 
-export type AllVehicleTypesData = Awaited<ReturnType<typeof getAllVehicleTypes>>;
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Diálogos — DataTable server-side (disponibles + en reparación)
 // ─────────────────────────────────────────────────────────────────────────────

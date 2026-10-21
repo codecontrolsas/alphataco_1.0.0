@@ -198,28 +198,6 @@ type Document2 = {
   document_url: string;
 };
 
-export type Applies = {
-  id: string;
-  type: Type;
-  year: string;
-  brand: Brand;
-  model: Brand;
-  serie: string;
-  domain: string;
-  engine: string;
-  status: string;
-  chassis: string;
-  picture: string;
-  user_id: string;
-  is_active: boolean;
-  company_id: string;
-  created_at: Date;
-  intern_number: string;
-  type_of_vehicle: Brand;
-  termination_date: null;
-  reason_for_termination: null;
-};
-
 export type Type = {
   id: string;
   name: string;
@@ -244,21 +222,6 @@ export enum types {
   SectionDate = 'SectionDate',
   SectionObservaciones = 'SectionObservaciones',
 }
-
-export type DocumentTypes = {
-  id: string;
-  name: string;
-  applies: string;
-  special: boolean;
-  explired: boolean;
-  is_active: boolean;
-  mandatory: boolean;
-  created_at: Date;
-  description: null;
-  multiresource: boolean;
-  private: boolean;
-  down_document: boolean;
-};
 export interface Campo {
   tipo: types;
   placeholder?: string;
@@ -304,13 +267,6 @@ export interface Document {
   id_document_types?: string;
 }
 
-export type VehiclesTable = {
-  id: string;
-  domain: string;
-  company_id: string;
-  intern_number: string;
-};
-
 export interface SectionCampo {
   id: string;
   date: boolean;
@@ -351,40 +307,6 @@ export type Category = {
   is_active: boolean;
   created_at: string;
   covenant_id: string;
-};
-
-// Tipo para los convenios dentro de un sindicato
-export type Covenant = {
-  id: string;
-  name: string;
-  category: Category[];
-  guild_id: string;
-  is_active: boolean;
-  company_id: string;
-  created_at: string;
-};
-
-// Tipo para una categoría formateada en el objeto de salida
-export type FormattedCategory = {
-  name: string;
-  type: 'categoria';
-  id: string;
-};
-
-// Tipo para un convenio formateado en el objeto de salida
-export type FormattedCovenant = {
-  name: string;
-  type: 'convenio';
-  id: string;
-  children: FormattedCategory[];
-};
-
-// Tipo para un sindicato formateado en el objeto de salida
-export type FormattedGuild = {
-  name: string;
-  type: 'sindicato';
-  id: string;
-  children: FormattedCovenant[];
 };
 
 export type WorkDiagram = {

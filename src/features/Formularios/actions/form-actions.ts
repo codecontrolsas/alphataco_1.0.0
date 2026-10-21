@@ -213,25 +213,3 @@ export const getCurrentProfile = async () => {
     return [];
   }
 };
-
-/**
- * Formularios personalizados de la empresa activa con la cantidad de respuestas de cada uno
- * (reemplaza el `select('*,form_answers(form_id)')` legacy, que traía una fila por respuesta
- * sólo para contarlas).
- */
-export const fetchCustomFormsWithAnswerCount = async () => {
-  await requireFormsPermission('view');
-  try {
-    const company_id = await getActiveCompanyId();
-    const forms = await prisma.custom_form.findMany({
-      where: withCompany({}, company_id),
-      select: { ...customFormSelect, _count: { select: { form_answers: true } } },
-      orderBy: { created_at: 'desc' },
-    });
-
-    return forms.map(({ _count, ...form }) => ({ ...form, answersCount: _count.form_answers }));
-  } catch (error) {
-    logger.error('Error al obtener los formularios personalizados', { data: { error } });
-    return [];
-  }
-};

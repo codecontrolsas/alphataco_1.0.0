@@ -165,25 +165,6 @@ export async function uploadDocumentToRemito(remitId: string, formData: FormData
   }
 }
 
-/** Vincula un archivo ya existente en el storage a otro remito (sin duplicarlo). */
-export async function linkExistingDocument(remitId: string, documentPath: string, documentName: string) {
-  const companyId = await getActiveCompanyId();
-  await requireRemitInCompany(remitId, companyId);
-
-  // El archivo tiene que venir de un documento de la misma empresa.
-  const source = await prisma.remito_documents.findFirst({
-    where: { document_path: documentPath, remitos: rowScope(companyId) },
-    select: { id: true },
-  });
-  if (!source) {
-    throw new Error('El documento no existe o no pertenece a la empresa activa.');
-  }
-
-  return prisma.remito_documents.create({
-    data: { remit_id: remitId, document_path: documentPath, document_name: documentName },
-  });
-}
-
 /** Copia un remito (y las referencias a sus documentos) a otra línea, marcándolo vinculado. */
 export async function linkExistingRemito(sourceRemitId: string, targetDailyReportRowId: string) {
   const companyId = await getActiveCompanyId();
@@ -226,61 +207,6 @@ export async function linkExistingRemito(sourceRemitId: string, targetDailyRepor
 
     return newRemito;
   });
-}
-
-// ============================================================================
-// ACTUALIZACIONES
-// ============================================================================
-
-/** Cambia el número de un remito. */
-export async function updateRemitoNumber(remitId: string, newRemitNumber: string) {
-  const companyId = await getActiveCompanyId();
-  await requireRemitInCompany(remitId, companyId);
-
-  return prisma.remitos.update({
-    where: { id: remitId },
-    data: { remit_number: newRemitNumber, updated_at: new Date() },
-  });
-}
-
-/** Reemplaza el archivo de un documento y borra el anterior del storage. */
-export async function replaceDocument(documentId: string, formData: FormData, customerName?: string) {
-  const companyId = await getActiveCompanyId();
-
-  const currentDoc = await prisma.remito_documents.findFirst({
-    where: { id: documentId, remitos: rowScope(companyId) },
-    select: { id: true, document_path: true, remitos: { select: { remit_number: true } } },
-  });
-  if (!currentDoc) {
-    throw new Error('El documento no existe o no pertenece a la empresa activa.');
-  }
-
-  const file = formData.get('file');
-  if (!(file instanceof File)) {
-    throw new Error('No se recibió ningún archivo.');
-  }
-
-  const fileExtension = file.name.split('.').pop();
-  const fileName = `remito-${currentDoc.remitos.remit_number}-${Date.now()}.${fileExtension}`;
-  const storagePath = customerName ? `${customerName}/${fileName}` : `remitos/${fileName}`;
-
-  const uploaded = await storageUpload(REMIT_BUCKET, storagePath, file, { upsert: true });
-  if (!uploaded.ok) {
-    throw new Error(uploaded.error);
-  }
-
-  try {
-    const updated = await prisma.remito_documents.update({
-      where: { id: documentId },
-      data: { document_path: uploaded.data.path, document_name: file.name, updated_at: new Date() },
-    });
-    await storageRemove(REMIT_BUCKET, [currentDoc.document_path]);
-    return updated;
-  } catch (error) {
-    await storageRemove(REMIT_BUCKET, [uploaded.data.path]);
-    logger.error('Error al reemplazar el documento del remito', { data: { error, documentId } });
-    throw error;
-  }
 }
 
 // ============================================================================

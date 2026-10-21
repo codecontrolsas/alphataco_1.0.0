@@ -594,8 +594,6 @@ export async function getMaintenanceOrderActivityLog(orderId: string) {
   return getMaintenanceOrderActivityLogCached(companyId, orderId);
 }
 
-export type MaintenanceActivityLogData = Awaited<ReturnType<typeof getMaintenanceOrderActivityLog>>;
-
 export async function getMaintenanceRequestFullActivityLog(requestId: string) {
   const companyId = await requireActivityLogAccess();
   return getMaintenanceRequestFullActivityLogCached(companyId, requestId);

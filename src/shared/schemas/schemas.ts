@@ -302,13 +302,3 @@ const CompanyIdSchema =
     companies_employees: z.array(CompaniesEmployeeSchema) || null,
     share_company_users: z.array(ShareCompanyUserSchema) || null,
   }) || undefined;
-
-export const SharedCompaniesSchema = z.array(
-  z.object({
-    created_at: z.coerce.date(),
-    profile_id: z.string(),
-    company_id: CompanyIdSchema,
-    role: z.string(),
-    id: z.string(),
-  })
-);
