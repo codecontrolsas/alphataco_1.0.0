@@ -13,7 +13,7 @@ on:
   workflow_call:
     inputs:
       # Runner. Vacio = el de GitHub. Con un label `blacksmith-*` usa su builder (useblacksmith/*).
-      runs_on: { required: false, type: string, default: 'ubuntu-latest' }
+      runs_on: { required: true, type: string }
       artifact_name: { required: false, type: string, default: 'e2e-image' }
       # Tag con el que queda la imagen al hacer `docker load` (docker-compose.ci.yml usa APP_IMAGE).
       image_tag: { required: false, type: string, default: 'alphataco-e2e:ci' }
