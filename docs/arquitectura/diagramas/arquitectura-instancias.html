@@ -1,0 +1,561 @@
+<title>Arquitectura de instancias</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Concepto: plano de despliegue. Cuatro familias de color fijas (base, cliente, móvil, infraestructura). Borde punteado = a construir. */
+  :root {
+    --bg: #f3f5f4;
+    --surface: #ffffff;
+    --ink: #16211f;
+    --muted: #55655f;
+    --line: #cfd8d4;
+    --line-strong: #8a9a94;
+    --base: #1e4fb8;
+    --base-soft: #dce7fb;
+    --client: #a8560a;
+    --client-soft: #f9e8d0;
+    --mobile: #b0235f;
+    --mobile-soft: #fadce9;
+    --infra: #0e6f66;
+    --infra-soft: #d6efeb;
+    --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1614; --surface: #172220; --ink: #e6efec; --muted: #9db0a9;
+      --line: #2b3b37; --line-strong: #5f7770;
+      --base: #8fb2ff; --base-soft: #1a2a4d;
+      --client: #f0b469; --client-soft: #3a2810;
+      --mobile: #f58ab5; --mobile-soft: #431631;
+      --infra: #5fd3c6; --infra-soft: #0f3a35;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1614; --surface: #172220; --ink: #e6efec; --muted: #9db0a9;
+    --line: #2b3b37; --line-strong: #5f7770;
+    --base: #8fb2ff; --base-soft: #1a2a4d;
+    --client: #f0b469; --client-soft: #3a2810;
+    --mobile: #f58ab5; --mobile-soft: #431631;
+    --infra: #5fd3c6; --infra-soft: #0f3a35;
+    color-scheme: dark;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.55;
+    padding-block: 28px 56px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 44px; }
+  h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+  h1 { font-size: clamp(28px, 5vw, 40px); letter-spacing: -0.01em; }
+  h2 { font-size: clamp(21px, 3.2vw, 26px); }
+  h3 { font-size: 17px; }
+  p { margin: 0; max-width: 70ch; }
+  code, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+  code { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+  .intro { display: flex; flex-direction: column; gap: 14px; }
+  .intro p, .lead { color: var(--muted); }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .sw { width: 14px; height: 14px; border-radius: 3px; border: 2px solid; display: inline-block; }
+  .sw.base { background: var(--base-soft); border-color: var(--base); }
+  .sw.client { background: var(--client-soft); border-color: var(--client); }
+  .sw.mobile { background: var(--mobile-soft); border-color: var(--mobile); }
+  .sw.infra { background: var(--infra-soft); border-color: var(--infra); }
+  .sw.plan { background: transparent; border-color: var(--line-strong); border-style: dashed; }
+  section { display: flex; flex-direction: column; gap: 16px; }
+  .kicker { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+  .scroll { overflow-x: auto; }
+
+  svg { display: block; width: 100%; height: auto; min-width: 760px; }
+  svg text { font-family: var(--font-body); fill: var(--ink); font-size: 13px; }
+  svg .t-title { font-family: var(--font-display); font-weight: 700; font-size: 14px; }
+  svg .t-sub { fill: var(--muted); font-size: 11.5px; }
+  svg .t-mono { font-family: var(--font-mono); font-size: 11px; fill: var(--muted); }
+  svg .b-base { fill: var(--base-soft); stroke: var(--base); stroke-width: 2; }
+  svg .b-client { fill: var(--client-soft); stroke: var(--client); stroke-width: 2; }
+  svg .b-mobile { fill: var(--mobile-soft); stroke: var(--mobile); stroke-width: 2; }
+  svg .b-infra { fill: var(--infra-soft); stroke: var(--infra); stroke-width: 2; }
+  svg .b-vps { fill: var(--surface); stroke: var(--line-strong); stroke-width: 2; }
+  svg .b-ext { fill: var(--bg); stroke: var(--line-strong); stroke-width: 1.5; }
+  svg .plan { stroke-dasharray: 6 5; }
+  svg .ln { fill: none; stroke: var(--line-strong); stroke-width: 2; }
+  svg .ln-m { fill: none; stroke: var(--mobile); stroke-width: 2; stroke-dasharray: 2 6; stroke-linecap: round; }
+  svg .ln-fail { fill: none; stroke: var(--client); stroke-width: 2; stroke-dasharray: 5 4; }
+  svg .ah { fill: var(--line-strong); }
+  svg .ah-m { fill: var(--mobile); }
+  svg .ah-c { fill: var(--client); }
+
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 14px; }
+  .cols .panel { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .cols ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 14px; display: flex; flex-direction: column; gap: 5px; }
+  .cols li b { color: var(--ink); font-weight: 600; }
+  pre { margin: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; overflow-x: auto; color: var(--ink); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  td:first-child { font-weight: 600; white-space: nowrap; }
+  td .mono { color: var(--ink); }
+  .tag { font-family: var(--font-mono); font-size: 11.5px; padding: 1px 8px; border-radius: 99px; border: 1px solid; white-space: nowrap; }
+  .tag.ok { color: var(--infra); border-color: var(--infra); }
+  .tag.plan { color: var(--muted); border-color: var(--line-strong); border-style: dashed; }
+  .foot { font-size: 13px; color: var(--muted); }
+  ol.dec { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+  ol.dec li { color: var(--muted); font-size: 14px; }
+  ol.dec li b { color: var(--ink); font-weight: 600; }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+
+  <header class="intro">
+    <div class="kicker">Alphataco · arquitectura de despliegue</div>
+    <h1>La base, cada instancia y lo que lleva cada una</h1>
+    <p>Un repo base, un repo y una VPS por cliente, y siempre el mismo conjunto de servicios por instancia. La app móvil viaja por defecto y se puede apagar para un cliente. Las partes que hoy existen en el repo llevan borde sólido; las que hay que construir, borde punteado.</p>
+    <div class="legend" aria-label="Referencias">
+      <span><i class="sw base"></i>Base</span>
+      <span><i class="sw client"></i>Cliente</span>
+      <span><i class="sw mobile"></i>Móvil</span>
+      <span><i class="sw infra"></i>Infraestructura y datos</span>
+      <span><i class="sw plan"></i>A construir</span>
+    </div>
+  </header>
+
+  <!-- 1. MAPA -->
+  <section aria-labelledby="s1">
+    <div class="kicker">1 · Vista general</div>
+    <h2 id="s1">Del base a N instancias</h2>
+    <p class="lead">Lo único compartido entre clientes es el base, el CI, el registro de imágenes, Dokploy y la app móvil. Datos, base de datos y bucket son de cada instancia.</p>
+    <div class="panel scroll">
+      <svg viewBox="0 0 960 520" role="img" aria-label="Mapa general: el repo base alimenta a los repos de cliente, que se despliegan como instancias en una VPS cada una usando CI, registro de imágenes y Dokploy compartidos. La app móvil genérica se conecta a todas las instancias.">
+        <defs>
+          <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah" d="M0 0 L10 5 L0 10 z"/></marker>
+          <marker id="a1m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah-m" d="M0 0 L10 5 L0 10 z"/></marker>
+        </defs>
+
+        <!-- Compartido -->
+        <rect class="b-infra" x="250" y="10" width="200" height="40" rx="8"/><text class="t-title" x="350" y="35" text-anchor="middle">CI · GitHub Actions</text>
+        <rect class="b-infra" x="470" y="10" width="200" height="40" rx="8"/><text class="t-title" x="570" y="35" text-anchor="middle">Registro de imágenes</text>
+        <rect class="b-infra" x="690" y="10" width="200" height="40" rx="8"/><text class="t-title" x="790" y="35" text-anchor="middle">Dokploy</text>
+        <text class="t-sub" x="570" y="70" text-anchor="middle">compartido por todas las instancias · cada despliegue se identifica por el tag de la imagen</text>
+
+        <!-- Base -->
+        <rect class="b-base" x="20" y="90" width="200" height="270" rx="8"/>
+        <text class="t-title" x="120" y="118" text-anchor="middle">BASE · plataforma</text>
+        <text class="t-sub" x="36" y="148">core/ · módulos y políticas</text>
+        <text class="t-sub" x="36" y="172">contracts/ · API móvil v1</text>
+        <text class="t-sub" x="36" y="196">prisma/schema/core</text>
+        <text class="t-sub" x="36" y="220">e2e/base · parametrizado</text>
+        <text class="t-sub" x="36" y="244">plantilla de instancia</text>
+        <text class="t-sub" x="36" y="268">  compose · Caddyfile · .env</text>
+        <text class="t-sub" x="36" y="292">bot de upstream</text>
+        <text class="t-mono" x="120" y="338" text-anchor="middle">tags v1.4.0 · v1.4.1</text>
+        <text class="t-sub" x="20" y="385">Cada tag nuevo llega a los clientes</text>
+        <text class="t-sub" x="20" y="401">como PR automático en su repo</text>
+
+        <!-- Troncal -->
+        <path class="ln" d="M220 225 H250"/>
+        <path class="ln" d="M250 135 V315"/>
+        <path class="ln" d="M250 135 H286" marker-end="url(#a1)"/>
+        <path class="ln" d="M250 225 H286" marker-end="url(#a1)"/>
+        <path class="ln" d="M250 315 H286" marker-end="url(#a1)"/>
+
+        <!-- Repos cliente -->
+        <rect class="b-client" x="290" y="90" width="230" height="90" rx="8"/>
+        <text class="t-title" x="405" y="114" text-anchor="middle">Repo Cliente A</text>
+        <text class="t-sub" x="305" y="136">custom/ · prisma/schema/custom</text>
+        <text class="t-sub" x="305" y="154">e2e/custom · deploy/instance.yaml</text>
+        <text class="t-mono" x="405" y="171" text-anchor="middle">origin propio · upstream = base</text>
+        <rect class="b-client" x="290" y="195" width="230" height="60" rx="8"/>
+        <text class="t-title" x="405" y="220" text-anchor="middle">Repo Cliente B</text>
+        <text class="t-sub" x="405" y="240" text-anchor="middle">misma estructura · otra versión del base</text>
+        <rect class="b-client" x="290" y="285" width="230" height="60" rx="8"/>
+        <text class="t-title" x="405" y="310" text-anchor="middle">Repo Cliente C</text>
+        <text class="t-sub" x="405" y="330" text-anchor="middle">misma estructura</text>
+
+        <!-- Build y deploy -->
+        <path class="ln" d="M520 135 H596" marker-end="url(#a1)"/>
+        <text class="t-mono" x="558" y="127" text-anchor="middle">build</text>
+        <path class="ln" d="M520 225 H596" marker-end="url(#a1)"/>
+        <path class="ln" d="M520 315 H596" marker-end="url(#a1)"/>
+
+        <!-- Instancias -->
+        <rect class="b-vps" x="600" y="90" width="330" height="90" rx="8"/>
+        <text class="t-title" x="616" y="114">Instancia A · VPS</text>
+        <text class="t-sub" x="616" y="136">caddy · app (web) · api · worker</text>
+        <text class="t-sub" x="616" y="154">postgres · storage · sync</text>
+        <text class="t-mono" x="616" y="171">detalle en la sección 2</text>
+        <rect class="b-vps" x="600" y="195" width="330" height="60" rx="8"/>
+        <text class="t-title" x="616" y="220">Instancia B · VPS</text>
+        <text class="t-sub" x="616" y="240">mismos servicios · su propia base y su bucket</text>
+        <rect class="b-vps" x="600" y="285" width="330" height="60" rx="8"/>
+        <text class="t-title" x="616" y="310">Instancia C · VPS</text>
+        <text class="t-sub" x="616" y="330">app móvil apagada · sin api ni sync</text>
+
+        <!-- Móvil -->
+        <rect class="b-mobile" x="20" y="430" width="200" height="60" rx="8"/>
+        <text class="t-title" x="120" y="455" text-anchor="middle">Repo MÓVIL (único)</text>
+        <text class="t-sub" x="120" y="474" text-anchor="middle">Expo · cliente OpenAPI</text>
+        <path class="ln" d="M220 460 H286" marker-end="url(#a1)"/>
+        <text class="t-mono" x="253" y="452" text-anchor="middle">EAS</text>
+        <rect class="b-mobile" x="290" y="430" width="230" height="60" rx="8"/>
+        <text class="t-title" x="405" y="455" text-anchor="middle">App Store · Google Play</text>
+        <text class="t-sub" x="405" y="474" text-anchor="middle">una app genérica para todos</text>
+        <path class="ln-m" d="M520 460 H950 V135 H934" marker-end="url(#a1m)"/>
+        <path class="ln-m" d="M950 225 H934" marker-end="url(#a1m)"/>
+        <text class="t-mono" x="740" y="452" text-anchor="middle">HTTPS · el usuario ingresa el código de su empresa o escanea un QR</text>
+      </svg>
+    </div>
+  </section>
+
+  <!-- 2. ANATOMIA -->
+  <section aria-labelledby="s2">
+    <div class="kicker">2 · Anatomía de una instancia</div>
+    <h2 id="s2">Qué corre en la VPS de cada cliente</h2>
+    <p class="lead">Es siempre la misma plantilla de compose. Se basa en los servicios que ya existen (<code>caddy</code>, <code>app</code>, <code>cron</code>, <code>migrate</code>, <code>postgres</code>, <code>storage</code>) y suma la API y el sync.</p>
+    <div class="panel scroll">
+      <svg viewBox="0 0 960 620" role="img" aria-label="Servicios de una instancia: Caddy enruta el tráfico web a la app Next, el tráfico móvil a la API y al motor de sincronización, y las URLs prefirmadas a RustFS. App, API, worker y sync usan PostgreSQL y RustFS. El worker envía push y correo hacia afuera.">
+        <defs>
+          <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah" d="M0 0 L10 5 L0 10 z"/></marker>
+          <marker id="a2m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah-m" d="M0 0 L10 5 L0 10 z"/></marker>
+        </defs>
+
+        <!-- Actores -->
+        <rect class="b-ext" x="20" y="70" width="140" height="60" rx="8"/>
+        <text class="t-title" x="90" y="96" text-anchor="middle">Navegador</text>
+        <text class="t-sub" x="90" y="114" text-anchor="middle">web de gestión</text>
+        <rect class="b-mobile" x="20" y="230" width="140" height="60" rx="8"/>
+        <text class="t-title" x="90" y="256" text-anchor="middle">App móvil</text>
+        <text class="t-sub" x="90" y="274" text-anchor="middle">genérica</text>
+        <path class="ln" d="M160 100 H214" marker-end="url(#a2)"/>
+        <path class="ln-m" d="M160 260 H214" marker-end="url(#a2m)"/>
+        <text class="t-mono" x="187" y="92" text-anchor="middle">HTTPS</text>
+
+        <!-- VPS -->
+        <rect class="b-vps" x="190" y="20" width="600" height="500" rx="10"/>
+        <text class="t-title" x="206" y="42">VPS · Cliente X · red Docker interna</text>
+
+        <!-- Caddy -->
+        <rect class="b-infra" x="214" y="60" width="116" height="340" rx="8"/>
+        <text class="t-title" x="272" y="84" text-anchor="middle">caddy</text>
+        <text class="t-sub" x="272" y="102" text-anchor="middle">TLS + rutas</text>
+        <text class="t-mono" x="272" y="300" text-anchor="middle">/*</text>
+        <text class="t-mono" x="272" y="316" text-anchor="middle">/api/mobile/*</text>
+        <text class="t-mono" x="272" y="332" text-anchor="middle">/sync/*</text>
+        <text class="t-mono" x="272" y="348" text-anchor="middle">s3.dominio</text>
+
+        <!-- Servicios -->
+        <rect class="b-base" x="380" y="60" width="190" height="60" rx="8"/>
+        <text class="t-title" x="475" y="84" text-anchor="middle">app · Next</text>
+        <text class="t-sub" x="475" y="102" text-anchor="middle">web + server actions</text>
+        <rect class="b-mobile plan" x="380" y="138" width="190" height="60" rx="8"/>
+        <text class="t-title" x="475" y="162" text-anchor="middle">api · misma imagen</text>
+        <text class="t-sub" x="475" y="180" text-anchor="middle">/api/mobile/v1 · otro proceso</text>
+        <rect class="b-base" x="380" y="216" width="190" height="60" rx="8"/>
+        <text class="t-title" x="475" y="240" text-anchor="middle">worker (hoy: cron)</text>
+        <text class="t-sub" x="475" y="258" text-anchor="middle">jobs · outbox y push (nuevo)</text>
+        <rect class="b-mobile plan" x="380" y="294" width="190" height="60" rx="8"/>
+        <text class="t-title" x="475" y="318" text-anchor="middle">sync (opcional)</text>
+        <text class="t-sub" x="475" y="336" text-anchor="middle">lee el WAL · slot lógico</text>
+        <rect class="b-infra" x="380" y="372" width="190" height="40" rx="8" style="stroke-dasharray:0"/>
+        <text class="t-title" x="475" y="390" text-anchor="middle">migrate</text>
+        <text class="t-sub" x="475" y="405" text-anchor="middle">una vez por deploy</text>
+
+        <!-- Caddy -> servicios -->
+        <path class="ln" d="M330 90 H376" marker-end="url(#a2)"/>
+        <path class="ln-m" d="M330 168 H376" marker-end="url(#a2m)"/>
+        <path class="ln-m" d="M330 324 H376" marker-end="url(#a2m)"/>
+
+        <!-- Bracket a datos -->
+        <path class="ln" d="M570 90 H596 M570 168 H596 M570 246 H596 M570 324 H596 M570 392 H596 M596 90 V392"/>
+        <path class="ln" d="M596 150 H636" marker-end="url(#a2)"/>
+        <path class="ln" d="M596 340 H636" marker-end="url(#a2)"/>
+
+        <!-- Datos -->
+        <rect class="b-infra" x="640" y="60" width="130" height="190" rx="8"/>
+        <text class="t-title" x="705" y="84" text-anchor="middle">PostgreSQL</text>
+        <text class="t-sub" x="705" y="108" text-anchor="middle">datos del cliente</text>
+        <text class="t-sub" x="705" y="126" text-anchor="middle">triggers e historial</text>
+        <text class="t-sub" x="705" y="144" text-anchor="middle">outbox</text>
+        <text class="t-sub" x="705" y="162" text-anchor="middle">processed_commands</text>
+        <text class="t-sub" x="705" y="180" text-anchor="middle">withCompany</text>
+        <text class="t-mono" x="705" y="204" text-anchor="middle">RLS: objetivo</text>
+        <text class="t-sub" x="705" y="228" text-anchor="middle">volumen pgdata</text>
+        <rect class="b-infra" x="640" y="290" width="130" height="110" rx="8"/>
+        <text class="t-title" x="705" y="314" text-anchor="middle">RustFS</text>
+        <text class="t-sub" x="705" y="338" text-anchor="middle">bucket privado</text>
+        <text class="t-sub" x="705" y="356" text-anchor="middle">ensure-buckets crea</text>
+        <text class="t-sub" x="705" y="372" text-anchor="middle">los buckets</text>
+        <text class="t-sub" x="705" y="390" text-anchor="middle">volumen storage-data</text>
+
+        <!-- Ruta prefirmadas -->
+        <path class="ln-m" d="M272 400 V448 H705 V404" marker-end="url(#a2m)"/>
+        <text class="t-mono" x="490" y="440" text-anchor="middle">URLs prefirmadas · la app sube las fotos directo</text>
+        <text class="t-sub" x="206" y="500">Volúmenes: pgdata · storage-data · caddy-data</text>
+
+        <!-- Externos -->
+        <rect class="b-ext" x="20" y="550" width="170" height="54" rx="8"/>
+        <text class="t-title" x="105" y="573" text-anchor="middle">Expo Push</text>
+        <text class="t-sub" x="105" y="591" text-anchor="middle">FCM / APNs · lo usa el worker</text>
+        <rect class="b-ext" x="210" y="550" width="170" height="54" rx="8"/>
+        <text class="t-title" x="295" y="573" text-anchor="middle">Correo SMTP</text>
+        <text class="t-sub" x="295" y="591" text-anchor="middle">app y worker</text>
+        <rect class="b-ext" x="400" y="550" width="170" height="54" rx="8"/>
+        <text class="t-title" x="485" y="573" text-anchor="middle">Registro de imágenes</text>
+        <text class="t-sub" x="485" y="591" text-anchor="middle">Dokploy hace el pull</text>
+        <rect class="b-ext" x="590" y="550" width="170" height="54" rx="8"/>
+        <text class="t-title" x="675" y="573" text-anchor="middle">Backups externos</text>
+        <text class="t-sub" x="675" y="591" text-anchor="middle">pg_dump + bucket</text>
+        <rect class="b-ext" x="780" y="550" width="160" height="54" rx="8"/>
+        <text class="t-title" x="860" y="573" text-anchor="middle">Monitoreo</text>
+        <text class="t-sub" x="860" y="591" text-anchor="middle">GET /api/health</text>
+        <path class="ln" d="M105 550 V520 M295 550 V520 M485 550 V520 M675 550 V520 M860 550 V520" />
+      </svg>
+    </div>
+    <p class="foot">Aislamiento entre empresas: hoy lo da <code>withCompany()</code> en cada consulta y no hay políticas RLS en las migraciones. Se mantiene como objetivo, y es requisito si el motor de sync lee la base directamente. El WAL del sync necesita límites (<code>max_slot_wal_keep_size</code>) y alertas de disco para no llenar la VPS.</p>
+  </section>
+
+  <!-- 3. FICHA -->
+  <section aria-labelledby="s3">
+    <div class="kicker">3 · Qué lleva cada instancia</div>
+    <h2 id="s3">Lo fijo, lo que se apaga y lo que cambia por cliente</h2>
+    <div class="panel scroll">
+      <table>
+        <thead><tr><th>Servicio</th><th>Siempre</th><th>Se apaga si el cliente no lleva la app</th><th>Estado</th></tr></thead>
+        <tbody>
+          <tr><td>caddy</td><td>Sí</td><td>—</td><td><span class="tag ok">existe</span></td></tr>
+          <tr><td>app (Next)</td><td>Sí</td><td>—</td><td><span class="tag ok">existe</span></td></tr>
+          <tr><td>postgres + storage</td><td>Sí</td><td>—</td><td><span class="tag ok">existe</span></td></tr>
+          <tr><td>migrate, ensure-buckets</td><td>Sí</td><td>—</td><td><span class="tag ok">existe</span></td></tr>
+          <tr><td>worker (jobs)</td><td>Sí, reemplaza al cron</td><td>Queda solo con jobs</td><td><span class="tag ok">existe como cron</span></td></tr>
+          <tr><td>api móvil</td><td>—</td><td>No se levanta</td><td><span class="tag plan">a construir</span></td></tr>
+          <tr><td>outbox y push</td><td>—</td><td>No se levanta</td><td><span class="tag plan">a construir</span></td></tr>
+          <tr><td>sync</td><td>—</td><td>No se levanta (y puede apagarse aparte si la app es solo online)</td><td><span class="tag plan">a construir</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="cols">
+      <div class="panel">
+        <h3>Ficha de instancia</h3>
+        <p class="foot">Un solo archivo por cliente que gobierna el compose, las variables y los tests. Es una propuesta de formato.</p>
+<pre>cliente: acme
+base: v1.4.1
+dominio: gestion.acme.com
+modulos: [operaciones, mantenimiento,
+          almacenes, documentacion]
+mobile:
+  enabled: true     # false: sin api ni sync
+  offline: true     # false: solo online
+  push: true
+vps: { cpu: 4, ram_gb: 8 }
+backups: diario</pre>
+      </div>
+      <div class="panel">
+        <h3>Zonas del repo</h3>
+        <p class="foot">Cada carpeta tiene un dueño. El CI del cliente mide cuánto se aleja del base fuera de <code>custom/</code>.</p>
+<pre>core/            base (se edita con excepción registrada)
+custom/          código del cliente
+contracts/       API móvil v1 (el cliente no la edita)
+prisma/schema/
+  core/          tablas del base
+  custom/        tablas laterales del cliente
+e2e/
+  base/          suite parametrizada por la ficha
+  custom/        specs propios o reemplazos
+deploy/
+  compose.yml  Caddyfile  instance.yaml</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. PIPELINE -->
+  <section aria-labelledby="s4">
+    <div class="kicker">4 · Despliegue</div>
+    <h2 id="s4">Del cambio a producción, y cómo llega un tag del base</h2>
+    <p class="lead">El pipeline reutiliza los workflows que ya tiene el repo (<code>ci.yml</code>, <code>_build-image.yml</code>, <code>deploy.yml</code>, <code>_deploy.yml</code>). Lo que cambia es que los corre cada repo de cliente.</p>
+    <div class="panel scroll">
+      <svg viewBox="0 0 960 260" role="img" aria-label="Pipeline: un PR en el repo del cliente pasa por el CI, se construye la imagen, se despliega con Dokploy, se aplican las migraciones y se verifica la salud. Si falla, vuelve a la imagen anterior. Un bot abre el PR cuando sale un tag nuevo del base.">
+        <defs>
+          <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah" d="M0 0 L10 5 L0 10 z"/></marker>
+          <marker id="a3c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah-c" d="M0 0 L10 5 L0 10 z"/></marker>
+        </defs>
+
+        <rect class="b-base plan" x="20" y="8" width="150" height="40" rx="8"/>
+        <text class="t-title" x="95" y="26" text-anchor="middle">Bot de upstream</text>
+        <text class="t-sub" x="95" y="41" text-anchor="middle">PR con cada tag del base</text>
+        <path class="ln" d="M95 48 V84" marker-end="url(#a3)"/>
+
+        <rect class="b-client" x="20" y="88" width="130" height="92" rx="8"/>
+        <text class="t-title" x="85" y="112" text-anchor="middle">1 · PR</text>
+        <text class="t-sub" x="85" y="132" text-anchor="middle">repo del cliente</text>
+        <text class="t-sub" x="85" y="148" text-anchor="middle">custom/ o merge</text>
+        <text class="t-sub" x="85" y="164" text-anchor="middle">del tag</text>
+
+        <rect class="b-infra" x="175" y="88" width="130" height="92" rx="8"/>
+        <text class="t-title" x="240" y="112" text-anchor="middle">2 · CI</text>
+        <text class="t-sub" x="240" y="132" text-anchor="middle">tipos y tests</text>
+        <text class="t-sub" x="240" y="148" text-anchor="middle">e2e en compose</text>
+        <text class="t-sub" x="240" y="164" text-anchor="middle">efímero (a construir)</text>
+
+        <rect class="b-infra" x="330" y="88" width="130" height="92" rx="8"/>
+        <text class="t-title" x="395" y="112" text-anchor="middle">3 · Imagen</text>
+        <text class="t-sub" x="395" y="132" text-anchor="middle">un tag por commit</text>
+        <text class="t-sub" x="395" y="148" text-anchor="middle">al registro</text>
+        <text class="t-mono" x="395" y="168" text-anchor="middle">_build-image.yml</text>
+
+        <rect class="b-infra" x="485" y="88" width="130" height="92" rx="8"/>
+        <text class="t-title" x="550" y="112" text-anchor="middle">4 · Deploy</text>
+        <text class="t-sub" x="550" y="132" text-anchor="middle">Dokploy actualiza</text>
+        <text class="t-sub" x="550" y="148" text-anchor="middle">la VPS</text>
+        <text class="t-mono" x="550" y="168" text-anchor="middle">deploy.yml</text>
+
+        <rect class="b-infra" x="640" y="88" width="130" height="92" rx="8"/>
+        <text class="t-title" x="705" y="112" text-anchor="middle">5 · Migraciones</text>
+        <text class="t-sub" x="705" y="132" text-anchor="middle">migrate deploy:</text>
+        <text class="t-sub" x="705" y="148" text-anchor="middle">primero base,</text>
+        <text class="t-sub" x="705" y="164" text-anchor="middle">después custom</text>
+
+        <rect class="b-infra" x="795" y="88" width="145" height="92" rx="8"/>
+        <text class="t-title" x="867" y="112" text-anchor="middle">6 · Verificación</text>
+        <text class="t-sub" x="867" y="132" text-anchor="middle">/api/health</text>
+        <text class="t-sub" x="867" y="148" text-anchor="middle">y smoke e2e</text>
+        <text class="t-sub" x="867" y="164" text-anchor="middle">(a construir)</text>
+
+        <path class="ln" d="M150 134 H171" marker-end="url(#a3)"/>
+        <path class="ln" d="M305 134 H326" marker-end="url(#a3)"/>
+        <path class="ln" d="M460 134 H481" marker-end="url(#a3)"/>
+        <path class="ln" d="M615 134 H636" marker-end="url(#a3)"/>
+        <path class="ln" d="M770 134 H791" marker-end="url(#a3)"/>
+
+        <path class="ln-fail" d="M867 180 V222 H550 V184" marker-end="url(#a3c)"/>
+        <text class="t-mono" x="708" y="240" text-anchor="middle">si falla: vuelve a la imagen anterior</text>
+      </svg>
+    </div>
+  </section>
+
+  <!-- 5. OPERACION -->
+  <section aria-labelledby="s5">
+    <div class="kicker">5 · Operación</div>
+    <h2 id="s5">Alta de un cliente nuevo y módulos portables</h2>
+    <p class="lead">Sale de revisar el pipeline, el Dockerfile y los scripts actuales. Hoy un cliente nuevo lleva horas y varios pasos manuales. Con el trabajo de la lista de abajo queda en cerca de una hora, casi toda esperando VPS, DNS y el build.</p>
+
+    <div class="panel scroll">
+      <h3 style="margin-bottom:10px">Alta de instancia · <span class="mono">scripts/instance/new.sh &lt;slug&gt;</span></h3>
+      <table>
+        <thead><tr><th>Paso</th><th>Cómo</th><th>Tiempo</th><th>Hoy</th></tr></thead>
+        <tbody>
+          <tr><td>1 · Repo</td><td>Copia del base con su historia (<span class="mono">clone --bare</span> y <span class="mono">push --mirror</span>), <span class="mono">upstream</span> y <span class="mono">instance.yml</span></td><td>2 min</td><td><span class="tag plan">script</span></td></tr>
+          <tr><td>2 · Secretos</td><td>Generados con <span class="mono">openssl</span> y cargados con <span class="mono">gh secret set</span></td><td>1 min</td><td><span class="tag plan">script</span></td></tr>
+          <tr><td>3 · VPS</td><td>Contratar, instalar Dokploy o sumarla como servidor remoto</td><td>15-30 min</td><td><span class="tag">manual</span></td></tr>
+          <tr><td>4 · DNS</td><td>Registro A hacia la IP; TLS automático</td><td>5 min + propagación</td><td><span class="tag">manual</span></td></tr>
+          <tr><td>5 · Dokploy</td><td>Proyecto, postgres, minio, app o compose, variables, dominio y webhook, por API</td><td>2 min</td><td><span class="tag plan">script</span></td></tr>
+          <tr><td>6 · Primer deploy</td><td>Build, migraciones, seed y buckets</td><td>~10 min</td><td><span class="tag ok">existe</span> con 2 bugs</td></tr>
+          <tr><td>7 · Primer admin</td><td><span class="mono">bootstrap-admin.ts</span> devuelve el link para definir contraseña</td><td>1 min</td><td><span class="tag plan">a construir</span></td></tr>
+          <tr><td>8 · Jobs y backups</td><td>Schedules y <span class="mono">pg_dump</span> + copia del bucket fuera de la VPS</td><td>2 min</td><td><span class="tag plan">a construir</span></td></tr>
+          <tr><td>9 · App móvil</td><td>Si está activa, registrar la instancia para la app (código o QR → URL)</td><td>2 min</td><td><span class="tag plan">a construir</span></td></tr>
+          <tr><td>10 · Verificación</td><td><span class="mono">/api/health</span> con el sha esperado y login</td><td>2 min</td><td><span class="tag ok">existe</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="cols">
+      <div class="panel">
+        <h3>Decisiones de diseño</h3>
+        <ul>
+          <li><b>Copia con historia común,</b> no repo plantilla: un template pierde la historia y rompe <span class="mono">cherry-pick</span> y <span class="mono">merge-base</span>.</li>
+          <li><b>Workflows de build y deploy en el base,</b> fijados a <span class="mono">@v1</span>, con un caller de ~20 líneas por clon. Ya son <span class="mono">workflow_call</span>. Falta verificar el acceso entre repos.</li>
+          <li><b>Registro de imágenes por instancia</b> en lugar del registro central, que hoy sería un punto único de falla para todas las VPS.</li>
+          <li><b>Un servicio Compose en Dokploy</b> con perfil <span class="mono">mobile</span>, en vez de servicios sueltos.</li>
+          <li><b>Rollback</b> como workflow con el sha a restaurar, y migraciones solo aditivas.</li>
+          <li><b>Secretos fuera de la ficha:</b> <span class="mono">instance.yml</span> gobierna dominio, imagen, módulos, móvil y backups.</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>Fallas verificadas que rompen el alta hoy</h3>
+        <ul>
+          <li><b>El seed no corre en la imagen de producción:</b> importa <span class="mono">permission-catalog.ts</span> y <span class="mono">prisma-pg-config.ts</span> y el Dockerfile no los copia (líneas 124-127). Lo verifiqué leyendo, no ejecuté la imagen.</li>
+          <li><b>Nadie crea los buckets en producción:</b> solo el compose local y los scripts de demo.</li>
+          <li><b><span class="mono">deploy.yml</span> trae la imagen y el registro escritos a mano,</b> y <span class="mono">NEXT_PUBLIC_*</span> son argumentos de build: hace falta una imagen por cliente.</li>
+          <li><b>El primer admin es un bloque SQL</b> pegado a mano (runbook).</li>
+          <li><b>Los IDs de permisos se fijan a mano:</b> dos clones que agreguen un módulo cada uno pueden chocar.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="panel scroll">
+      <h3 style="margin-bottom:10px">Llevar un módulo de una instancia al base o a otra</h3>
+      <p class="foot" style="margin-bottom:10px">El módulo viaja como una carpeta autocontenida con un manifiesto que declara sus permisos, navegación, buckets y jobs.</p>
+<pre>cliente-A                          alphataco-base                      cliente-B
+src/features/X/                    │                                   │
+  module.ts (permisos, nav,        │                                   │
+  buckets, jobs)                   │                                   │
+prisma/schema/x.prisma             │                                   │
+prisma/migrations/&lt;ts&gt;_x_*         │                                   │
+e2e/specs/x                        │                                   │
+   │ module.sh export X            │                                   │
+   └── X.patch ───────────────────►│ module.sh import X                │
+                                   │  git apply --3way                 │
+                                   │  + línea en src/modules.ts        │
+                                   │  check-types + migrate diff       │
+                                   │  PR → main → tag                  │
+                                   │────── git fetch upstream ────────►│ cherry-pick o import
+                                   │                                   │ migraciones con el mismo
+                                   │                                   │ nombre y checksum</pre>
+      <ul style="margin:12px 0 0;padding-left:18px;color:var(--muted);font-size:14px;display:flex;flex-direction:column;gap:5px">
+        <li><b style="color:var(--ink)">Cambios que habilitan esto:</b> esquema Prisma en varios archivos (uno por módulo), un manifiesto por módulo con agregadores centrales para permisos, navegación y buckets, e IDs de permisos deterministas (UUIDv5 de <span class="mono">módulo:tab</span>) para que no choquen.</li>
+        <li><b style="color:var(--ink)">Fricción que queda:</b> si el módulo modificó código compartido (<span class="mono">src/shared</span>, <span class="mono">components/ui</span>), el import lo avisa y se integra a mano.</li>
+        <li><b style="color:var(--ink)">Por verificar:</b> que Prisma 7 acepte la carpeta de esquemas con el <span class="mono">COPY prisma</span> del Dockerfile.</li>
+      </ul>
+    </div>
+
+    <div class="panel scroll">
+      <h3 style="margin-bottom:10px">Qué falta, en orden</h3>
+      <table>
+        <thead><tr><th>#</th><th>Tarea</th><th>Esfuerzo</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Copiar al runner los archivos que importa el seed y probar <span class="mono">RUN_SEED</span> con una base vacía</td><td>S</td></tr>
+          <tr><td>2</td><td>Crear los buckets de forma idempotente al arrancar, desde una sola lista</td><td>S</td></tr>
+          <tr><td>3</td><td><span class="mono">bootstrap-admin.ts</span> en reemplazo del SQL</td><td>S</td></tr>
+          <tr><td>4</td><td><span class="mono">instance.yml</span> y parametrizar <span class="mono">deploy.yml</span> (imagen, registro, health)</td><td>M</td></tr>
+          <tr><td>5</td><td>Workflows reutilizables versionados y caller mínimo; <span class="mono">rollback.yml</span></td><td>S</td></tr>
+          <tr><td>6</td><td>Backups, <span class="mono">restore.sh</span> y una prueba de restauración</td><td>M</td></tr>
+          <tr><td>7</td><td><span class="mono">scripts/instance/new.sh</span> (repo, secretos, API de Dokploy)</td><td>M-L</td></tr>
+          <tr><td>8</td><td>Monitoreo central: salud y sha por instancia, jobs y último backup</td><td>S-M</td></tr>
+          <tr><td>9</td><td>Esquema multiarchivo, manifiesto de módulo, agregadores, UUIDv5 y <span class="mono">module.sh</span></td><td>M</td></tr>
+          <tr><td>10</td><td>Suite e2e base con Playwright y un <span class="mono">test:all</span> que encadene las suites actuales</td><td>M</td></tr>
+          <tr><td>11</td><td>API móvil, outbox y push, sync y directorio de instancias</td><td>L</td></tr>
+        </tbody>
+      </table>
+      <p class="foot" style="margin-top:10px">Los puntos 1 a 7 dan "cliente nuevo en un día". El 11 es el bloque grande y es independiente de los demás.</p>
+    </div>
+  </section>
+
+  <!-- 6. DECISIONES -->
+  <section aria-labelledby="s6">
+    <div class="kicker">6 · Antes del primer clon</div>
+    <h2 id="s6">Lo que hay que fijar ahora</h2>
+    <div class="panel">
+      <ol class="dec">
+        <li><b>Contexto explícito en los casos de uso</b> (usuario, empresa, permisos). Hoy salen de <span class="mono">next/headers</span>.</li>
+        <li><b>Cómo se extienden las tablas del núcleo:</b> tablas laterales 1:1 o una columna JSONB, y esquema Prisma en varios archivos.</li>
+        <li><b>Propiedad de las funciones y triggers SQL.</b> Un <span class="mono">CREATE OR REPLACE FUNCTION</span> del base puede pisar una personalización del cliente sin conflicto de git.</li>
+        <li><b>Contrato <span class="mono">/api/mobile/v1</span> congelado.</b> Lo propio de un cliente va en otra ruta o por configuración del servidor.</li>
+        <li><b>Cadencia de merge del base</b> y un umbral de distancia del fork que avise en el CI.</li>
+        <li><b>El proceso <span class="mono">api</span> separado de la web desde el inicio,</b> con la misma imagen y el mismo tag.</li>
+        <li><b>Versiones en lockstep:</b> un tag para web, API y worker.</li>
+        <li><b>Push:</b> el token de Expo en cada VPS o un relay central.</li>
+      </ol>
+    </div>
+    <p class="foot">Este diagrama se pensó a partir de la revisión de un agente con el modelo Opus sobre la propuesta de tu colega y lo que acordamos en la conversación. Lo marcado como existente se verificó en el repo (<code>docker-compose.yml</code>, <code>Caddyfile</code>, workflows); el resto es diseño propuesto.</p>
+  </section>
+
+</div>

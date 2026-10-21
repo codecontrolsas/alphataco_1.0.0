@@ -23,7 +23,7 @@ push a main ──► changes (filtro de paths: docs, *.md, .claude… no dispar
   deploy daría verde contra la versión anterior.
 - **Cache de capas** en el propio registry (`alphataco:buildcache`), no en el cache de GitHub.
   Los `RUN --mount=type=cache` (npm y `.next/cache`) se persisten con `actions/cache`.
-- **Postgres y MinIO son servicios aparte en Dokploy**: no van en la imagen. El contenedor corre
+- **Postgres y el almacenamiento S3 (RustFS) son servicios aparte en Dokploy**: no van en la imagen. El contenedor corre
   `prisma migrate deploy` en cada arranque (`docker/entrypoint.sh`) y después `node server.js`.
 - `ci.yml` (check-types, vitest, tests de base con pgTAP, auth, jobs) sigue corriendo igual en
   push y PR. El deploy **no** espera a `db-tests`: repite solo `check-types` + `vitest` en su job
@@ -64,6 +64,9 @@ Variables:
 | `NEXT_PUBLIC_POSTHOG_HOST` | `https://us.i.posthog.com`                                                                                                                                                                          |
 | `NEXT_PUBLIC_SHOW_LOGS`    | `false` en producción (default si no se carga).                                                                                                                                                     |
 | `CI_RUNNER`                | Opcional. Vacía = `ubuntu-latest`. Con un label `blacksmith-*` el build usa el builder persistente de Blacksmith (requiere la app instalada en la organización). El deploy siempre corre en GitHub. |
+| `REGISTRY_HOST`            | Opcional. Host del registro de imágenes. Vacía = el registro de esta instancia (`registry-31-97-42-82.sslip.io`). Un clon para otro cliente define el suyo. |
+| `IMAGE_NAME`               | Opcional. Nombre de la imagen dentro del registro. Vacía = `alphataco`. Que cada cliente tenga el suyo evita que dos instancias se pisen el tag `:main`. |
+| `STORAGE_IMAGE`            | Opcional (solo CI y compose). Imagen del almacenamiento S3. Vacía = `rustfs/rustfs:1.0.3`, la que fija `docker-compose.yml`. Definirla para usar un espejo propio u otra versión. |
 
 Las `NEXT_PUBLIC_*` **se hornean en el bundle durante el build**: cargarlas en Dokploy no sirve, y
 cambiarlas exige una imagen nueva (ver "Operación").
@@ -86,8 +89,8 @@ Proyecto **Demos**, app `alphataco`:
 | `DATABASE_URL`                                                                                    | `postgresql://<user>:<pass>@<servicio-postgres>:5432/<db>` — nombre del servicio en `dokploy-network`, no la IP pública.                   |
 | `DIRECT_URL`                                                                                      | Igual que `DATABASE_URL` (no hay pooler). `prisma.config.ts` usa `DATABASE_URL` primero.                                                   |
 | `BETTER_AUTH_SECRET`                                                                              | `openssl rand -base64 32`. Cambiarla cierra todas las sesiones.                                                                            |
-| `S3_ENDPOINT`                                                                                     | `http://alphataco-minio:9000`                                                                                                              |
-| `S3_ACCESS_KEY` / `S3_SECRET_KEY`                                                                 | Credenciales de MinIO.                                                                                                                     |
+| `S3_ENDPOINT`                                                                                     | `http://alphataco-storage:9000`                                                                                                             |
+| `S3_ACCESS_KEY` / `S3_SECRET_KEY`                                                                 | Credenciales de RustFS (no dejar las de fábrica de la imagen).                                                                                                                     |
 | `S3_REGION`                                                                                       | `us-east-1`                                                                                                                                |
 | `S3_FORCE_PATH_STYLE`                                                                             | `true`                                                                                                                                     |
 | `JOBS_TOKEN`                                                                                      | `openssl rand -hex 32`. Vacío = `/api/jobs/*` responde 401 (ver "Pendientes").                                                             |
@@ -117,6 +120,17 @@ Proyecto **Demos**, app `alphataco`:
    redeploy inmediato: rige desde el próximo arranque.
 
 ## Primer usuario admin
+
+**Forma recomendada:** `scripts/bootstrap-admin.ts` (viene en la imagen). Dentro del contenedor de la app:
+
+```sh
+node scripts/bootstrap-admin.ts --email admin@dominio.com --name "Nombre Apellido" --company "<SEED_COMPANY_NAME>"
+```
+
+Hace en una transacción lo mismo que el SQL de más abajo (usuario sin contraseña, perfil, pertenencia a la
+empresa, rol `admin` y token de "definir contraseña" de 24 h) e imprime el enlace; deja a la persona como
+dueña de la empresa solo si todavía no tenía dueño. Si el mail ya existe falla con un mensaje claro;
+`--reissue-link` emite otro enlace para un usuario que ya existe. El SQL queda como alternativa manual.
 
 No hay registro abierto (`disableSignUp: true`): los usuarios entran por invitación desde
 Configuración → Usuarios, y eso requiere un admin que ya exista. El primero se da de alta por SQL
@@ -171,6 +185,81 @@ No usar `scripts/seed-auth-fixtures.ts`: son datos de prueba (contraseña fija c
 4. Ya como admin: **Configuración → General** para reemplazar los placeholders del seed (CUIT,
    mail, dirección) y revisar los destinatarios de los mails automáticos. El resto de los usuarios
    se invita desde Configuración → Usuarios.
+
+## Almacenamiento S3: RustFS en Dokploy y migración desde MinIO
+
+El almacenamiento de objetos es **RustFS** (S3 compatible, escrito en Rust), el mismo que ya usan
+`control-documental-ai`, `credere` y `taskapp`. Reemplaza a MinIO porque la imagen oficial
+(`minio/minio`, `minio/mc`) ya no se puede bajar de Docker Hub. La app habla con él solo por el SDK de AWS
+(`forcePathStyle`, región `us-east-1`), así que no cambió nada del código: sí cambió el servicio y, en el compose,
+su nombre (`minio` → `storage`) y las variables de puertos (`STORAGE_PORT`, `STORAGE_CONSOLE_PORT`).
+
+### Servicio en Dokploy (instancia nueva)
+
+- **Imagen** fijada por versión **y digest**: `rustfs/rustfs:1.0.3@sha256:9ca9559533b537d10482fe923288b676ad08f92a7069d9a17327fbae3cab688b` (no `latest`: un tag se puede volver a publicar con otro contenido). Lo ideal es **copiarla al registro propio** (`docker pull` + `docker tag` + `docker push`) y usar esa: es justo lo que le pasó a MinIO cuando su imagen dejó de estar en Docker Hub.
+- **Env**: `RUSTFS_ACCESS_KEY` y `RUSTFS_SECRET_KEY` propias (la imagen advierte si queda el valor de fábrica
+  `rustfsadmin`). Son las mismas `S3_ACCESS_KEY` / `S3_SECRET_KEY` que recibe la app.
+- **Volumen** en `/data`. El proceso corre como usuario no root (uid 10001). Un **volumen administrado por Docker**
+  (el `storage-data` del compose, o un volumen de Dokploy) funciona sin hacer nada. Con una **carpeta del host**
+  (bind mount) y permisos de otro usuario, RustFS **no arranca** (`Permission denied (os error 13)`, sale con
+  código 1): darle la carpeta al usuario con `chown 10001:10001 <carpeta>`, o arrancar el contenedor como root con
+  `RUSTFS_UID=10001` y `RUSTFS_GID=10001` (el entrypoint hace el `chown` solo). Probado las dos formas.
+- **Puertos** 9000 (S3) y 9001 (consola) solo en la red interna de Dokploy: **no se publican** (la app es la única
+  que lee los archivos, por `/api/files`).
+- **Healthcheck**: `curl -f http://localhost:9000/health` (la imagen trae `curl`).
+- **Buckets**: no se crean a mano. El entrypoint de la app corre `scripts/ensure-buckets.ts` en cada arranque
+  y crea los que falten.
+- `S3_ENDPOINT` de la app: `http://<appName del servicio>:9000`. Dokploy genera el `appName` (se ve en la pestaña General del servicio) y no se puede cambiar después; los nombres `alphataco-storage` / `alphataco-minio` de abajo son los de esta instancia.
+
+### Migrar una instancia que hoy usa MinIO
+
+Probado entre un MinIO y un RustFS 1.0.3 con claves con espacios y tildes, distintos tipos de contenido y un
+archivo de 300 KB: los objetos llegan idénticos (`rclone check`: 0 diferencias) y una segunda pasada no copia nada.
+Las instancias que ya corren **no se tocan hasta hacer estos pasos**; **no borrar de la caché de la VPS la imagen de MinIO** (por ejemplo con `docker image prune`), porque ya no se puede volver a bajar; mientras conserven su imagen de MinIO siguen
+funcionando.
+
+1. **Crear el servicio RustFS** al lado del MinIO (sección anterior), sin tocar MinIO ni la app.
+2. **Copiar los datos** con `rclone` desde un contenedor temporal en la misma red de Dokploy, bucket por bucket
+   (los 13 de `STORAGE_BUCKETS`, ver `src/shared/lib/storage-buckets.ts`). `sync` crea el bucket si falta:
+
+   ```bash
+   for B in document-files document-files-expired contract-documents daily-reports logo avatar \
+            clothing-signatures repair-images tire-discards preparte-img invoice-pdfs \
+            supplier-documents customer-documents; do
+     docker run --rm --network dokploy-network \
+       -e RCLONE_CONFIG_OLD_TYPE=s3 -e RCLONE_CONFIG_OLD_PROVIDER=Minio \
+       -e RCLONE_CONFIG_OLD_ENDPOINT=http://alphataco-minio:9000 \
+       -e RCLONE_CONFIG_OLD_ACCESS_KEY_ID -e RCLONE_CONFIG_OLD_SECRET_ACCESS_KEY \
+       -e RCLONE_CONFIG_NEW_TYPE=s3 -e RCLONE_CONFIG_NEW_PROVIDER=Other \
+       -e RCLONE_CONFIG_NEW_ENDPOINT=http://alphataco-storage:9000 \
+       -e RCLONE_CONFIG_NEW_ACCESS_KEY_ID -e RCLONE_CONFIG_NEW_SECRET_ACCESS_KEY \
+       rclone/rclone:1.75.2 sync OLD:$B NEW:$B --checksum
+   done
+   ```
+
+   Antes de correrlo, exportar en el shell `RCLONE_CONFIG_OLD_ACCESS_KEY_ID`, `RCLONE_CONFIG_OLD_SECRET_ACCESS_KEY`,
+   `RCLONE_CONFIG_NEW_ACCESS_KEY_ID` y `RCLONE_CONFIG_NEW_SECRET_ACCESS_KEY`: `-e NOMBRE` sin valor las toma del entorno, así
+   las claves no quedan escritas en el comando ni en `ps`. Los nombres de host (`alphataco-minio`, `alphataco-storage`)
+   son los `appName` de Dokploy; confirmar la red con `docker network inspect dokploy-network`. Se puede repetir las
+   veces que haga falta: solo copia lo que cambió. `--checksum` compara MD5/ETag, válido porque la app no hace subidas
+   multipart.
+3. **Verificar**: la misma corrida con `check OLD:$B NEW:$B --one-way` en lugar de `sync` debe decir
+   `0 differences found` en cada bucket.
+4. **Pasada final y cambio** (ventana corta): con la app sin uso, repetir el `sync` del paso 2 para llevar lo último,
+   cambiar en el env de la app `S3_ENDPOINT`, `S3_ACCESS_KEY` y `S3_SECRET_KEY` por los de RustFS y redeployar.
+5. **Comprobar** `GET /api/health` → `"storage":"ok"` y abrir un documento y un logo desde la app.
+6. **Dejar MinIO sin tocar** una o dos semanas como respaldo. **Rollback:** lo que se subió a RustFS después del
+   cambio no está en MinIO, así que antes de volver el env hay que copiarlo de vuelta con `rclone copy NEW:$B OLD:$B`
+   (`copy`, no `sync`), bucket por bucket; recién después volver `S3_ENDPOINT` y credenciales y redeployar. Mientras
+   los dos servicios están vivos hay riesgo de **escribir en el servidor equivocado sin ningún error** (por ejemplo,
+   si alguien redeploya con el env viejo): dejar MinIO apagado o en solo lectura apenas se comprueba el paso 5.
+   Después, dar de baja el servicio MinIO y su volumen.
+
+**Monitoreo:** un redeploy con el `S3_ENDPOINT` viejo (o con claves que no corresponden) no tumba la app: arranca sin archivos y `/api/health` informa `"storage":"error"` con HTTP 200. El workflow de deploy lo deja en rojo; un "Redeploy" manual en Dokploy no. El monitor de uptime tiene que buscar `"storage":"ok"` en el cuerpo del health, no solo el código 200.
+
+Notas: la app no usa versionado de objetos, URLs firmadas ni políticas de bucket, por eso no hay nada más que
+copiar. Los datos de desarrollo local en un volumen de MinIO no se migran (RustFS no lee su formato): se vuelven a
+subir.
 
 ## Operación
 

@@ -82,14 +82,14 @@ comandos del repo, pegar su contenido como prompt del loop.
 
 ### C.4 Postgres: opciones, de mejor a peor
 
-1. **Docker disponible**: `bash scripts/dev-up.sh` (crea `.env.docker` desde `.env.docker.example`: completar contraseñas; levanta `postgres` y `minio`),
+1. **Docker disponible**: `bash scripts/dev-up.sh` (crea `.env.docker` desde `.env.docker.example`: completar contraseñas; levanta `postgres` y `storage`),
    luego `set -a; source .env.docker; set +a; export DATABASE_URL=postgresql://alphataco:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_PORT:-5432}/alphataco_test`
    (crear la base: `docker compose --env-file .env.docker exec -T postgres createdb -U alphataco alphataco_test`),
    `npm run db:deploy` (aplica migraciones), `npm run db:seed` (empresa/módulos/roles) y `npm run demo:reset` (datos demo "Patagonia"; ver `scripts/demo/`).
    Poner `ARCA_MODE=mock` en el `.env` (facturación simulada sin certificado).
 2. **Sin Docker pero con permisos de instalación**: instalar PostgreSQL 16 local (`apt install postgresql` / `brew install postgresql@16`),
    crear usuario y base `alphataco_test`, apuntar `DATABASE_URL`/`DIRECT_URL` ahí y seguir con `db:deploy` + `db:seed` + `demo:reset`.
-   Extensión necesaria: `pgcrypto`. El storage (MinIO) es opcional: sin él fallan solo subidas de archivos.
+   Extensión necesaria: `pgcrypto`. El storage (RustFS) es opcional: sin él fallan solo subidas de archivos.
 3. **Postgres administrado/remoto de prueba** (Neon, Supabase, contenedor ajeno): mismo procedimiento con su `DATABASE_URL`. NUNCA producción.
 4. **Sin ninguna base**: se trabaja en **modo estático** y se dice explícitamente: verificar con `tsc` + `next build` (el build no necesita
    datos), revisar por lectura y comparar con GH por código; en `ESTADO.md` marcar cada pantalla como "🟡 sin verificar en navegador" y

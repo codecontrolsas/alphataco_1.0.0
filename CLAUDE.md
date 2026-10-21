@@ -8,6 +8,11 @@
 > (ignorar la tabla "Skills (Superpowers)" de más abajo): usar `/dev`. No commitear sin pedido explícito; commits de una línea sin
 > atribución a IA; sin tests nuevos hasta el OK del usuario.
 
+> **ARQUITECTURA DE INSTANCIAS Y APP MOBILE (aprobada 2026-10-21) — leer `docs/arquitectura/README.md` y `docs/arquitectura/LOOP-ESTADO.md`.**
+> Un repo y una VPS por cliente, casos de uso por módulo, API móvil como proceso aparte de la misma imagen, app Expo apagable por cliente.
+> Cómo crear, desplegar y actualizar una instancia: `docs/arquitectura/RUNBOOK-NUEVA-INSTANCIA.md`. Opus planifica y revisa, Sonnet implementa
+> (`docs/arquitectura/MODELO-DE-TRABAJO.md`).
+
 ## Project Overview
 
 Sistema de gestion integral para Grupo Horizonte (GH). Administra empleados, equipos, documentacion, operaciones (partes diarios), mantenimiento de vehiculos, formularios, y modulo comercial. Multi-empresa con RLS en Supabase.
@@ -19,7 +24,7 @@ Sistema de gestion integral para Grupo Horizonte (GH). Administra empleados, equ
 - **Auth**: Better Auth sobre el adaptador de Prisma (`src/shared/lib/auth.ts`). Lectura de sesión
   SIEMPRE por `src/shared/lib/session.ts`; los claims de empresa/legajo sólo los escribe
   `src/shared/lib/session-claims.ts` (server-only) — ver la invariante en `auth.ts`
-- **Storage**: MinIO (S3) por `src/shared/lib/storage.ts`
+- **Storage**: RustFS (S3 compatible; reemplazó a MinIO) por `src/shared/lib/storage.ts`
 - **State**: Zustand (global), React Query (server state), Jotai (atomic)
 - **UI**: shadcn/ui + Tailwind CSS + Lucide icons
 - **Forms**: React Hook Form + Zod validation
@@ -38,7 +43,7 @@ Verification loop for quality:
 ```sh
 # Development
 npm run dev              # Start Next.js dev server
-bash scripts/dev-up.sh   # Start postgres + minio (Docker) para dev local
+bash scripts/dev-up.sh   # Start postgres + storage (RustFS) y crear los buckets, para dev local
 
 # Verification
 npm run check-types      # TypeScript type checking

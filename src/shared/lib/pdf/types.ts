@@ -12,7 +12,7 @@ export type ReactPdf = Pick<
   'Document' | 'Page' | 'Text' | 'View' | 'Image' | 'renderToBuffer'
 >;
 
-/** Logo ya leído de MinIO. Sin logo, el membrete va solo con texto. */
+/** Logo ya leído de RustFS. Sin logo, el membrete va solo con texto. */
 export type PdfLogo = { data: Buffer; format: 'png' | 'jpg' } | null;
 
 /** PDF ya renderizado en el servidor. */

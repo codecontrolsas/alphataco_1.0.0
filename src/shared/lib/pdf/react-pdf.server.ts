@@ -44,7 +44,7 @@ export function companySource(company: CompanyRow): PdfCompanySource {
 }
 
 /**
- * Logo de la empresa leído directo de MinIO (la URL guardada apunta al proxy `/api/files`, que
+ * Logo de la empresa leído directo de RustFS (la URL guardada apunta al proxy `/api/files`, que
  * pide sesión). Si no se puede leer, el PDF sale sin logo: nunca se cae por eso.
  */
 export async function loadCompanyLogo(logoUrl: string | null): Promise<PdfLogo> {

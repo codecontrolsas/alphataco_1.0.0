@@ -2,12 +2,12 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildStorageFileUrl, parseStorageFileUrl } from '@/shared/lib/storage-url';
 
 /**
- * `movePreparteFile` contra el MinIO del compose. Corre sólo con `DATABASE_URL` (el módulo
+ * `movePreparteFile` contra el RustFS del compose. Corre sólo con `DATABASE_URL` (el módulo
  * importa Prisma al cargarse) y `S3_ENDPOINT`:
  *
  *   set -a; source .env.docker; set +a
  *   DATABASE_URL=postgresql://alphataco:$POSTGRES_PASSWORD@127.0.0.1:$POSTGRES_PORT/alphataco \
- *   S3_ENDPOINT=http://127.0.0.1:$MINIO_PORT \
+ *   S3_ENDPOINT=http://127.0.0.1:$STORAGE_PORT \
  *   npx vitest run src/features/Operaciones/Preparte/actions/move-preparte-file.integration.test.ts
  *
  * El camino que importa es el REINTENTO: mover falla porque el destino existe, se borra el
@@ -45,7 +45,7 @@ async function read(key: string): Promise<string | null> {
   return result.ok ? result.data.text() : null;
 }
 
-describe.skipIf(!RUN)('movePreparteFile (integración contra MinIO)', () => {
+describe.skipIf(!RUN)('movePreparteFile (integración contra RustFS)', () => {
   beforeEach(async () => {
     const { storageRemove } = await import('@/shared/lib/storage');
     await storageRemove(BUCKET, [TARGET, `${COMPANY_ID}/nueva.jpg`, `${COMPANY_ID}/otra.jpg`]);

@@ -1,5 +1,5 @@
 /**
- * Subida de los archivos de la demo a MinIO. Mismas variables de entorno que la app
+ * Subida de los archivos de la demo a RustFS. Mismas variables de entorno que la app
  * (`src/shared/lib/s3.ts`), que no se puede importar desde un script (`server-only`, alias).
  */
 import {

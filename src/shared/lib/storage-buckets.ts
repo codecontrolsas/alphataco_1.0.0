@@ -1,6 +1,6 @@
 /**
- * Buckets del storage. Única fuente de verdad: el `minio-init` del compose crea
- * exactamente esta lista (ver `docker-compose.yml`).
+ * Buckets del storage. Única fuente de verdad: `scripts/ensure-buckets.ts` crea exactamente
+ * esta lista (en cada arranque del contenedor y en `scripts/dev-up.sh`); el compose no la duplica.
  *
  * Módulo PURO: lo importan la costura de storage, la ruta proxy y los tests.
  */

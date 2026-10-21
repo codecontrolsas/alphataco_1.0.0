@@ -2,17 +2,17 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { buildStorageFileUrl } from '@/shared/lib/storage-url';
 
 /**
- * Integración real de la ruta `/api/files/...` contra el Postgres y el MinIO del compose.
+ * Integración real de la ruta `/api/files/...` contra el Postgres y el RustFS del compose.
  * Corre sólo con `DATABASE_URL` y `S3_ENDPOINT` definidos:
  *
- *   docker compose --env-file .env.docker up -d postgres minio minio-init
+ *   bash scripts/dev-up.sh   # postgres + almacenamiento + buckets
  *   set -a; source .env.docker; set +a
  *   DATABASE_URL=postgresql://alphataco:$POSTGRES_PASSWORD@127.0.0.1:$POSTGRES_PORT/alphataco \
- *   S3_ENDPOINT=http://127.0.0.1:$MINIO_PORT \
+ *   S3_ENDPOINT=http://127.0.0.1:$STORAGE_PORT \
  *   npx vitest run src/app/api/files/files-route.integration.test.ts
  *
  * Lo único que se sustituye es la sesión (sigue siendo Supabase Auth hasta P4): el resto
- * —resolver de dueño, predicado de empresa contra la base y lectura del objeto en MinIO—
+ * —resolver de dueño, predicado de empresa contra la base y lectura del objeto en RustFS—
  * corre de verdad. Es la única forma de probar el camino que SÍ sirve el archivo: los
  * tests unitarios no distinguen una ruta que valida de una que niega todo.
  */
@@ -200,7 +200,7 @@ describe.skipIf(!RUN)('GET /api/files/[bucket]/[...path] (integración)', () => 
     expect(response.headers.get('Content-Disposition')).toBeNull();
   });
 
-  it('404 para el archivo de OTRA empresa, aunque exista en MinIO', async () => {
+  it('404 para el archivo de OTRA empresa, aunque exista en RustFS', async () => {
     sessionUserId.current = CREDENTIAL_ID;
     const response = await request('logo', `${OTHER_COMPANY}/${KEY_SUFFIX}`);
     expect(response.status).toBe(404);

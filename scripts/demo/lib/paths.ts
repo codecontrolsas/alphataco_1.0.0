@@ -1,4 +1,4 @@
-/** Rutas de los archivos de la demo en MinIO. */
+/** Rutas de los archivos de la demo en RustFS. */
 import { COMPANY_PROFILE } from '../data/catalog.ts';
 
 /**

@@ -4,9 +4,15 @@ on:
     branches: [dev, main]
   push:
     branches: [dev, main]
+# Un push nuevo cancela el run anterior de la misma rama: el E2E tarda ~20 minutos y no tiene sentido terminarlo.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   types-and-lint:
-    runs-on: ubuntu-latest
+    # Variable de repo `CI_RUNNER`; vacia = runner de GitHub. Con un label `blacksmith-*` corre en Blacksmith
+    # (requiere instalar su GitHub App en la organizacion: sin ella el job queda en cola para siempre).
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,7 +29,7 @@ jobs:
       - run: npm test
 
   db-tests:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     needs: types-and-lint
     steps:
       - uses: actions/checkout@v4
@@ -57,3 +63,10 @@ jobs:
       - run: bash scripts/test-warehouses.sh
       - run: bash scripts/test-purchases.sh
       - run: bash scripts/test-treasury.sh
+
+  # E2E de la instancia completa (imagen de produccion + RustFS real + Playwright). Ver `_e2e.yml`.
+  e2e:
+    needs: types-and-lint
+    uses: ./.github/workflows/_e2e.yml
+    with:
+      runs_on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}

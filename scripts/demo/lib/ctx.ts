@@ -1,6 +1,6 @@
 /**
  * Contexto que recorre todos los dominios del reset: la transaccion, el calendario, el
- * generador de datos y la lista de archivos a subir a MinIO. Tambien los helpers de base que
+ * generador de datos y la lista de archivos a subir a RustFS. Tambien los helpers de base que
  * usan varios dominios.
  */
 import type { Faker } from '@faker-js/faker';

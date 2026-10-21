@@ -1,0 +1,98 @@
+name: _e2e
+# E2E de una instancia completa: levanta el compose de produccion de este repo (la MISMA imagen que se despliega,
+# con su entrypoint: migraciones, buckets del almacenamiento S3 y seed de empresa) y corre Playwright contra ella.
+# Es reutilizable: cada clon de una instancia lo llama desde su CI y adapta los specs de `e2e/` a su proyecto.
+# Referencia de estructura: el _e2e.yml de Ecokit (shards y fast lane se pueden sumar cuando la suite crezca).
+on:
+  workflow_call:
+    inputs:
+      # Runner. Vacio = el de GitHub. Con un label `blacksmith-*` corre en Blacksmith (requiere la GitHub App).
+      runs_on: { required: false, type: string, default: 'ubuntu-latest' }
+
+jobs:
+  e2e:
+    runs-on: ${{ inputs.runs_on }}
+    timeout-minutes: 40
+    env:
+      # Imagen del almacenamiento (RustFS). Vacio = la que fija docker-compose.yml. Variable de repo STORAGE_IMAGE para
+      # usar un espejo propio.
+      STORAGE_IMAGE: ${{ vars.STORAGE_IMAGE }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # El runner de GitHub arranca con ~14 GB libres y aca se construyen la imagen de la app (stage build + runner),
+      # se baja Chromium y las imagenes de Postgres y del almacenamiento. Blacksmith trae disco de sobra.
+      - name: Liberar espacio en el runner
+        if: ${{ !startsWith(inputs.runs_on, 'blacksmith') }}
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/powershell || true
+          df -h / | tail -1
+
+      - uses: actions/setup-node@v4
+        with:
+          # scripts/seed-company.ts y seed-auth-fixtures.ts se ejecutan con `node` en modo nativo TS.
+          node-version: 24
+          cache: npm
+
+      - name: Preparar .env.docker
+        # Los puertos por defecto de .env.docker.example (Postgres 5432, app 3000) estan libres en el runner.
+        # RUN_SEED hace que el entrypoint cree la empresa: asi se prueba el camino real de una instancia nueva.
+        run: |
+          cp .env.docker.example .env.docker
+          sed -i 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=devpass/' .env.docker
+          sed -i 's/^S3_SECRET_KEY=.*/S3_SECRET_KEY=devpassdevpass/' .env.docker
+          sed -i 's/^JOBS_TOKEN=.*/JOBS_TOKEN=devtoken/' .env.docker
+          sed -i "s/^BETTER_AUTH_SECRET=.*/BETTER_AUTH_SECRET=$(openssl rand -hex 24)/" .env.docker
+          printf 'RUN_SEED=true\nSEED_COMPANY_NAME=E2E Empresa\n' >> .env.docker
+          [ -z "$STORAGE_IMAGE" ] || echo "STORAGE_IMAGE=$STORAGE_IMAGE" >> .env.docker
+
+      - run: npm ci
+        env:
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+
+      - name: Levantar la instancia
+        # Construye la imagen y espera a que `app` quede sana (migrate -> app, ver docker-compose.yml).
+        run: docker compose --env-file .env.docker up -d --build --wait --wait-timeout 900 app
+
+      - name: Verificar el arranque de la imagen
+        # Prueba lo que un deploy real necesita y que ningun test unitario cubre: el seed corre en el runner
+        # (sin ERR_MODULE_NOT_FOUND), los buckets se crean contra un RustFS real y el health informa storage sano.
+        run: |
+          logs=$(docker compose --env-file .env.docker logs app)
+          echo "$logs" | grep -q "Buckets OK" || { echo "::error::ensure-buckets no corrio bien"; echo "$logs" | tail -40; exit 1; }
+          echo "$logs" | grep -q "Seed OK" || { echo "::error::el seed no corrio bien"; echo "$logs" | tail -40; exit 1; }
+          if echo "$logs" | grep -q "ERR_MODULE_NOT_FOUND"; then echo "::error::falta un archivo en el runner de la imagen"; exit 1; fi
+          curl -fsS http://localhost:3000/api/health | tee /dev/stderr | grep -q '"storage":"ok"'
+
+      - name: Datos de prueba para el login
+        env:
+          DATABASE_URL: postgresql://alphataco:devpass@127.0.0.1:5432/alphataco
+        run: |
+          node scripts/seed-company.ts --name "P4 Verificacion" --id 00000000-0000-0000-0000-0000000000f4
+          node scripts/seed-auth-fixtures.ts
+
+      - name: Instalar Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Ejecutar E2E
+        env:
+          CI: 'true'
+          # Mismo host que NEXT_PUBLIC_BASE_URL: Better Auth valida el origen de los POST.
+          E2E_BASE_URL: http://localhost:3000
+        run: npx playwright test
+
+      - name: Logs de la app si falla
+        if: failure()
+        run: docker compose --env-file .env.docker logs app --tail 200 || true
+
+      - name: Subir el reporte
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-resultados
+          path: |
+            blob-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7

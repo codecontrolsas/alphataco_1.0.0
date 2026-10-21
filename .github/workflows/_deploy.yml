@@ -104,6 +104,7 @@ jobs:
           # es una imagen mal construida, no una version vieja.
           INTENTOS=90
           ultimo=""
+          ultimo_storage=""
           for i in $(seq 1 "$INTENTOS"); do
             respuesta=$(curl -fsS --max-time 10 "$HEALTH_URL" || true)
             case "$respuesta" in
@@ -112,6 +113,18 @@ jobs:
                 # vacio y la comparacion podria dar verde sin comprobar nada.
                 actual=$(printf '%s' "$respuesta" | sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
                 if [ -n "$actual" ] && [ "$actual" = "$ESPERADO" ]; then
+                  # `storage` (ok|error) avisa que RustFS o los buckets fallan sin tumbar la
+                  # web: el deploy queda rojo para que se note. Si el campo falta (imagen
+                  # vieja en un rollback) no se exige.
+                  storage=$(printf '%s' "$respuesta" | sed -n 's/.*"storage"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+                  if [ -n "$storage" ] && [ "$storage" != "ok" ]; then
+                    # Puede ser un error pasajero (cliente en frio, RustFS arrancando): no se
+                    # corta al primero, se sigue esperando y recien al final queda en rojo.
+                    ultimo_storage=$storage
+                    echo "la app corre en $ESPERADO pero el storage informa '$storage' ($i/$INTENTOS)"
+                    sleep 5
+                    continue
+                  fi
                   echo "healthy en $ESPERADO (intento $i)"; exit 0
                 fi
                 ultimo=${actual:-sin-commit}
@@ -121,5 +134,9 @@ jobs:
             esac
             sleep 5
           done
+          if [ -n "$ultimo_storage" ]; then
+            echo "::error::la app llego a responder $ESPERADO pero el storage siguio informando '$ultimo_storage' (las subidas de archivos no funcionan)"
+            exit 1
+          fi
           echo "::error::el contenedor no llego a responder $ESPERADO en 7,5 minutos (ultimo visto: ${ultimo:-ninguno})"
           exit 1
