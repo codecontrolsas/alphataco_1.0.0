@@ -1,4 +1,4 @@
-import { validarCUIL } from '@/lib/utils';
+
 import { isCompanyCuitAvailable } from '@/shared/actions/company-validation.server';
 import * as z from 'zod';
 
@@ -34,41 +34,6 @@ export const loginSchema = z.object({
 
 export type LoginValues = z.infer<typeof loginSchema>;
 
-export const registerSchema = z
-  .object({
-    firstname: z
-      .string()
-      .min(2, {
-        message: 'El nombre debe tener al menos 2 caracteres.',
-      })
-      .max(20, {
-        message: 'El nombre debe tener menos de 20 caracteres.',
-      })
-      .regex(/^[a-zA-Z ]+$/, {
-        message: 'El nombre solo puede contener letras.',
-      })
-      .trim(),
-    lastname: z
-      .string()
-      .min(2, {
-        message: 'El apellido debe tener al menos 2 caracteres.',
-      })
-      .max(20, {
-        message: 'El apellido debe tener menos de 20 caracteres.',
-      })
-      .regex(/^[a-zA-Z ]+$/, {
-        message: 'El apellido solo puede contener letras.',
-      })
-      .trim(),
-    email: z.string().email({ message: 'Email inválido' }),
-    password: passwordSchema,
-    confirmPassword: passwordSchema,
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: 'Las contraseñas no coinciden.',
-    path: ['confirmPassword'],
-  });
-
 export const recoveryPassSchema = z.object({
   email: z.string().email({ message: 'Email inválido' }),
 });
@@ -82,176 +47,6 @@ export const changePassSchema = z
     message: 'Las contraseñas no coinciden.',
     path: ['confirmPassword'],
   });
-
-export const companySchema = z.object({
-  company_name: z
-    .string({ required_error: 'El nombre de la compañía es requerido' })
-    .min(2, {
-      message: 'El nombre debe tener al menos 2 caracteres.',
-    })
-    .max(30, { message: 'La compañia debe tener menos de 30 caracteres.' }),
-  company_cuit: z
-    .string()
-    .refine((value) => /^\d{11}$/.test(value), {
-      message: 'El CUIT debe contener 11 números.',
-    })
-    .refine(
-      (cuil) => {
-        return validarCUIL(cuil);
-      },
-      { message: 'El CUIT es inválido' }
-    )
-    .refine(
-      async (value) => {
-        return await validateDuplicatedCuil(value);
-      },
-      {
-        message: 'Ya existe una compañía con este CUIT.',
-      }
-    ),
-
-  description: z
-    .string()
-    .min(3, {
-      message: 'La descripción debe tener al menos 3 caracteres.',
-    })
-    .max(200, {
-      message: 'La descripción debe tener menos de 200 caracteres.',
-    }),
-  website: z
-    .string()
-    .refine(
-      (value) => {
-        if (value === '') return true;
-
-        const urlRegex = /^(?:(?:https?|ftp):\/\/)?(?:www\.)?[a-z0-9-]+(\.[a-z0-9-]+)+([/?].*)?$/i;
-
-        return urlRegex.test(value);
-      },
-      {
-        message: 'La URL proporcionada no es válida.',
-      }
-    )
-    .optional(),
-  contact_email: z.string().email({ message: 'Email inválido' }),
-  contact_phone: z
-    .string()
-    .min(5, {
-      message: 'El número de teléfono debe tener al menos 5 caracteres.',
-    })
-    .max(25, {
-      message: 'El número de teléfono debe tener menos de 25 caracteres.',
-    })
-    .regex(/^\+?[0-9]{1,25}$/, {
-      message: 'El número de teléfono debe contener solo números',
-    })
-    .refine((value) => /^\+?[0-9]{1,25}$/.test(value), {
-      message: 'El número de teléfono debe contener solo números',
-    }),
-  address: z
-    .string()
-    .min(4, { message: 'Address debe tener al menos 4 caracteres.' })
-    .max(50, {
-      message: 'Address debe tener menos de 50 caracteres.',
-    })
-    .regex(/^[a-zA-Z0-9\s]*$/, {
-      message: 'Address debe contener solo letras y números y tener hasta 50 caracteres',
-    }),
-  country: z.string().min(2, { message: 'Country debe tener al menos 2 caracteres.' }),
-  province_id: z.string().min(1, { message: 'Province debe tener al menos 1 caracteres.' }),
-  industry: z.string().min(2, { message: 'Industry debe tener al menos 2 caracteres.' }),
-  city: z.string().min(1, { message: 'City debe tener al menos 1 caracteres.' }),
-  company_logo: z.string().optional(),
-  by_defect: z.boolean().optional(),
-});
-
-export const editCompanySchema = z.object({
-  company_name: z
-    .string({ required_error: 'El nombre de la compañía es requerido' })
-    .min(2, {
-      message: 'El nombre debe tener al menos 2 caracteres.',
-    })
-    .max(30, { message: 'La compañia debe tener menos de 30 caracteres.' }),
-  company_cuit: z
-    .string()
-    .refine((value) => /^\d{11}$/.test(value), {
-      message: 'El CUIT debe contener 11 números.',
-    })
-    .refine(
-      (cuil) => {
-        return validarCUIL(cuil);
-      },
-      { message: 'El CUIT es inválido' }
-    )
-    .refine((value) => {
-      return new Promise(async (resolve, reject) => {
-        try {
-          const isDuplicated = await validateDuplicatedCuil(value);
-          if (!isDuplicated) {
-            resolve(true);
-          } else {
-            reject(new Error('Ya existe una compañía con este CUIT.'));
-          }
-        } catch (error) {
-          reject(error);
-        }
-      });
-    }),
-
-  description: z
-    .string()
-    .min(3, {
-      message: 'La descripción debe tener al menos 3 caracteres.',
-    })
-    .max(200, {
-      message: 'La descripción debe tener menos de 200 caracteres.',
-    }),
-  website: z
-    .string()
-    .refine(
-      (value) => {
-        if (value === '') return true;
-
-        const urlRegex = /^(?:(?:https?|ftp):\/\/)?(?:www\.)?[a-z0-9-]+(\.[a-z0-9-]+)+([/?].*)?$/i;
-
-        return urlRegex.test(value);
-      },
-      {
-        message: 'La URL proporcionada no es válida.',
-      }
-    )
-    .optional(),
-  contact_email: z.string().email({ message: 'Email inválido' }),
-  contact_phone: z
-    .string()
-    .min(5, {
-      message: 'El número de teléfono debe tener al menos 5 caracteres.',
-    })
-    .max(25, {
-      message: 'El número de teléfono debe tener menos de 25 caracteres.',
-    })
-    .regex(/^\+?[0-9]{1,25}$/, {
-      message: 'El número de teléfono debe contener solo números',
-    })
-    .refine((value) => /^\+?[0-9]{1,25}$/.test(value), {
-      message: 'El número de teléfono debe contener solo números',
-    }),
-  address: z
-    .string()
-    .min(4, { message: 'Address debe tener al menos 4 caracteres.' })
-    .max(50, {
-      message: 'Address debe tener menos de 50 caracteres.',
-    })
-    .regex(/^[a-zA-Z0-9\s]*$/, {
-      message: 'Address debe contener solo letras y números y tener hasta 50 caracteres',
-    }),
-  country: z.string().min(2, { message: 'Country debe tener al menos 2 caracteres.' }),
-  province_id: z.string().min(1, { message: 'Province debe tener al menos 1 caracteres.' }),
-  industry: z.string().min(2, { message: 'Industry debe tener al menos 2 caracteres.' }),
-  city: z.string().min(1, { message: 'City debe tener al menos 1 caracteres.' }),
-  company_logo: z.string().optional(),
-  by_defect: z.boolean().optional(),
-});
 
 export const SharedUser = z.object({
   email: z.string(),
@@ -299,46 +94,6 @@ export const VehicleSchema =
 
 export type Vehicle = z.infer<typeof VehicleSchema>;
 
-export const customersSchema = z.object({
-  company_name: z
-    .string({ required_error: 'El nombre es requerido' })
-    .min(2, {
-      message: 'El nombre debe tener al menos 2 caracteres.',
-    })
-    .max(40, { message: 'EL nombre debe tener menos de 40 caracteres.' }),
-
-  client_cuit: z
-    .string({ required_error: 'El cuit es requerido' })
-    .refine((value) => /^\d{11}$/.test(value), {
-      message: 'El CUIT debe contener 11 números.',
-    })
-    .refine(
-      (cuil) => {
-        return validarCUIL(cuil);
-      },
-      { message: 'El CUIT es inválido' }
-    ),
-
-  address: z.string({ required_error: 'la calle es requerida' }).min(2, {
-    message: 'La dirección debe tener al menos 2 caracteres.',
-  }),
-
-  client_phone: z
-    .string({ required_error: 'El numero de teléfono es requerido' })
-    .min(4, {
-      message: 'El teléfono debe tener al menos 4 caracteres.',
-    })
-    .max(15, {
-      message: 'El teléfono debe tener menos de 15 caracteres.',
-    }),
-  client_email: z
-    .string()
-    .email({
-      message: 'Email inválido',
-    })
-    .optional(),
-});
-
 export const contactSchema = z.object({
   contact_name: z
     .string({ required_error: 'El nombre es requerido' })
@@ -369,43 +124,6 @@ export const contactSchema = z.object({
     .max(30, { message: 'EL cargo debe tener menos de 30 caracteres.' }),
   customer: z.string({ required_error: 'El cliente es requerido' }).optional(),
 });
-
-export const covenantSchema = z.object({
-  name: z
-    .string({ required_error: 'El nombre es requerido' })
-    .min(2, {
-      message: 'El nombre debe tener al menos 2 caracteres.',
-    })
-    .max(100, { message: 'EL nombre debe tener menos de 100 caracteres.' }),
-  category: z.string().optional(),
-});
-
-export const dailyReportSchema = z
-  .object({
-    customer: z.string().min(1, 'El cliente es obligatorio'),
-    services: z.string().min(1, 'El servicio es obligatorio'),
-    item: z.string().min(1, 'El item es obligatorio'),
-    employees: z.array(z.string()).optional(),
-    equipment: z.array(z.string()).optional(),
-    working_day: z.string().optional(),
-    start_time: z.string().optional(),
-    end_time: z.string().optional(),
-    status: z.string().optional(),
-    description: z.string().optional(),
-    document_path: z.string().optional(),
-  })
-  .refine(
-    (data) => {
-      if (data.working_day === 'por horario') {
-        return data.start_time && data.end_time;
-      }
-      return true;
-    },
-    {
-      message: 'Debe ingresar start_time y end_time si working_day es igual a "por horario".',
-      path: ['start_time', 'end_time'],
-    }
-  );
 
 // --- Schemas used only for type inference (consumed by store and legacy components) ---
 

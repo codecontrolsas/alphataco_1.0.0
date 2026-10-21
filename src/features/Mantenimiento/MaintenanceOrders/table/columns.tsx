@@ -16,7 +16,7 @@ import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers'
 import type { ColumnDef } from '@tanstack/react-table';
 import { AlertTriangle, Eye, MoreHorizontal, Settings2, Wrench } from 'lucide-react';
 import { formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';
-import { ORDER_STATUS_UI, TONE_TO_BADGE } from '../../lib/status-presentation';
+import { ORDER_STATUS_UI } from '../../lib/status-presentation';
 import { ATTENTION_THRESHOLDS } from '../../lib/attention-thresholds';
 import { buildSectorRoute } from '../../lib/sector-route';
 import { MaintenanceStatusPill } from '../../shared/components/MaintenanceStatusPill';
@@ -53,16 +53,6 @@ type StatusType =
 export const statusLabels: Record<string, string> = Object.fromEntries(
   Object.entries(ORDER_STATUS_UI).map(([status, ui]) => [status, ui.label])
 );
-
-export const statusVariants: Record<StatusType, BadgeVariant> = {
-  scheduled: TONE_TO_BADGE[ORDER_STATUS_UI.scheduled.tone],
-  in_workshop: TONE_TO_BADGE[ORDER_STATUS_UI.in_workshop.tone],
-  pending_workshop_validation: TONE_TO_BADGE[ORDER_STATUS_UI.pending_workshop_validation.tone],
-  pending_operations_validation: TONE_TO_BADGE[ORDER_STATUS_UI.pending_operations_validation.tone],
-  operations_rejected: TONE_TO_BADGE[ORDER_STATUS_UI.operations_rejected.tone],
-  workshop_rejected: TONE_TO_BADGE[ORDER_STATUS_UI.workshop_rejected.tone],
-  completed: TONE_TO_BADGE[ORDER_STATUS_UI.completed.tone],
-};
 
 // ============================================================================
 // HIDDEN COLUMNS BY DEFAULT

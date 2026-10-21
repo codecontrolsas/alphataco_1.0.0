@@ -39,11 +39,6 @@ export class DocumentPermissionError extends Error {
   }
 }
 
-/** Tab de la lista del recurso (`documentos-de-empleados|equipos|empresa`). */
-export function documentTabForKind(kind: DocumentResourceKind): string {
-  return TAB_BY_KIND[kind];
-}
-
 /**
  * Exige el permiso para operar sobre documentos de un recurso:
  * - `view` / `view_private` / `create`: sobre la tab de la lista del recurso.

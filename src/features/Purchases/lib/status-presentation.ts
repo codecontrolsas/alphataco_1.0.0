@@ -93,13 +93,3 @@ export const RECEIPT_STATUS_UI: Record<ReceiptStatusKey, StatusUi> = {
   active: { label: 'Vigente', tone: 'ok', icon: CheckCircle2 },
   cancelled: { label: 'Anulada', tone: 'danger', icon: Ban },
 };
-
-/** Entidades de Compras con estado presentable. */
-export const PURCHASES_STATUS_UI = {
-  request: REQUEST_STATUS_UI,
-  quote: QUOTE_STATUS_UI,
-  order: ORDER_STATUS_UI,
-  invoice: INVOICE_STATUS_UI,
-  paymentOrder: PAYMENT_ORDER_STATUS_UI,
-  receipt: RECEIPT_STATUS_UI,
-} as const;

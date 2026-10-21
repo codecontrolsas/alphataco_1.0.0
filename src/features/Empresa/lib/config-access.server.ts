@@ -54,12 +54,6 @@ export async function requireConfigTabPermission(tab: ConfigTab, action: ConfigA
   if (message) throw new ConfigPermissionError(message);
 }
 
-/** Mensaje legible para el cliente: los errores lanzados se enmascaran en producción. */
-export function configFailureMessage(error: unknown, fallback: string): string {
-  if (error instanceof ConfigPermissionError) return error.message;
-  return fallback;
-}
-
 /** Pestaña que consume un selector: `[módulo, tab]` con las mismas claves que `permissions-map.ts`. */
 export type ViewerTab = readonly [moduleSlug: string, tabSlug: string];
 

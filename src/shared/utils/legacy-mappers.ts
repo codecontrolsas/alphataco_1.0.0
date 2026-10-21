@@ -1,9 +1,4 @@
-import {
-  CompaniesTableOptions,
-  DocumentsTableOptions,
-  EmployeesTableOptions,
-  VehiclesTableOptions,
-} from '@/shared/types/legacy';
+
 export const formatDate = (dateString: string) => {
   if (!dateString) return 'No vence';
   const [day, month, year] = dateString.split('/');
@@ -146,74 +141,6 @@ export const formatPathSegment = (value: string) => {
 
 export const formatDocumentTypeName = (documentType: string) => {
   return formatPathSegment(documentType);
-};
-export const EMPLOYEES_TABLE: EmployeesTableOptions = {
-  nationality: 'Nacionalidad',
-  lastname: 'Apellido',
-  firstname: 'Nombre',
-  cuil: 'CUIL',
-  document_type: 'Tipo de documento',
-  document_number: 'Numero de documento',
-  birthplace: 'Lugar de nacimiento',
-  gender: 'Genero',
-  marital_status: 'Estado civil',
-  level_of_education: 'Nivel de educacion',
-  province: 'Provincia',
-  file: 'Legajo',
-  normal_hours: 'Horas normales',
-  date_of_admission: 'Fecha de admision',
-  affiliate_status: 'Estado de afiliacion',
-  company_position: 'Posicion en la compañia',
-  hierarchical_position: 'Posicion Jerarquica',
-  workflow_diagram: 'Diagrama de trabajo',
-  type_of_contract: 'Tipo de contrato',
-  allocated_to: 'Afectaciones',
-  status: 'Estado',
-  created_at: 'Fecha de creación',
-  is_active: 'Activo',
-};
-
-export const VEHICLES_TABLE: VehiclesTableOptions = {
-  created_at: 'Fecha de creación',
-  type_of_vehicle: 'Tipo de vehículo',
-  domain: 'Dominio',
-  chassis: 'Chasis',
-  engine: 'Motor',
-  serie: 'Serie',
-  intern_number: 'Número interno',
-  year: 'Año',
-  brand: 'Marca',
-  model: 'Modelo',
-  is_active: 'Activo',
-  termination_date: 'Fecha de terminación',
-  reason_for_termination: 'Razón de terminación',
-  type: 'Tipo',
-  status: 'Estado',
-  allocated_to: 'Asignado a',
-};
-export const COMPANIES_TABLE: CompaniesTableOptions = {
-  company_name: 'Nombre de la compañía',
-  contact_email: 'Correo electrónico de contacto',
-  contact_phone: 'Teléfono de contacto',
-  address: 'Dirección',
-  city: 'Ciudad',
-  country: 'País',
-  industry: 'Industria',
-  company_logo: 'Logo de la compañía',
-  company_cuit: 'CUIT de la compañía',
-};
-export const DOCUMENTS_TABLE: DocumentsTableOptions = {
-  created_at: 'Fecha de creación',
-  applies: 'Aplica a',
-  description: 'Descripción',
-  down_document: 'Descargar documento',
-  explired: 'Vencimiento',
-  is_it_montlhy: 'Mensual',
-  mandatory: 'Mandatorio',
-  multiresource: 'Multirecursos',
-  name: 'Nombre',
-  private: 'Privados',
-  special: 'Especiales',
 };
 // export const stylesPDF = StyleSheet.create({
 //   page: {

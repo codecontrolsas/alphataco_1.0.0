@@ -48,16 +48,3 @@ export function getInitialKilometer(
 
   return { value: '', source: 'none' };
 }
-
-/**
- * Valida que el kilometraje ingresado no sea menor al valor precargado.
- * Retorna un mensaje de error si la validación falla, null si es válido.
- */
-export function validateKilometer(inputValue: string, minKilometer: number): string | null {
-  if (!inputValue.trim()) return null;
-  const numValue = parseInt(inputValue, 10);
-  if (!isNaN(numValue) && minKilometer > 0 && numValue < minKilometer) {
-    return `El kilometraje no puede ser menor a ${minKilometer.toLocaleString()} km (valor registrado)`;
-  }
-  return null;
-}

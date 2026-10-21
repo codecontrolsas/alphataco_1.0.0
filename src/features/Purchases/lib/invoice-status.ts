@@ -17,11 +17,6 @@ export const ARCA_CHECK_LABELS: Record<arca_check_result, string> = {
   UNAVAILABLE: 'ARCA no respondió',
 };
 
-/** "A pagar" en la etapa 5: conforme o aprobado. */
-export function isPayableInvoiceStatus(status: SupplierInvoiceStatus): boolean {
-  return status === 'CONFORMING' || status === 'APPROVED';
-}
-
 /** Cuenta como facturado contra la OC: vigente y no rechazado. */
 export const INVOICED_STATUSES: SupplierInvoiceStatus[] = ['CONFORMING', 'OBSERVED', 'APPROVED'];
 

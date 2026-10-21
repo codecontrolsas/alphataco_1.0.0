@@ -84,11 +84,6 @@ export async function resolveReturnWarehouse(
   throw new StockError('INVALID_INPUT', `Elegí el depósito al que vuelve la cubierta ${serialNumber}`);
 }
 
-/** Si la cubierta tiene unidad, esta en un deposito: la usan los pickers para avisar. */
-export function isTireMountable(unit: { status: string } | null): boolean {
-  return unit === null || unit.status === 'IN_STOCK';
-}
-
 // ── Montar, desmontar y dar de baja ─────────────────────────────────────────
 
 export interface MountTireInput {

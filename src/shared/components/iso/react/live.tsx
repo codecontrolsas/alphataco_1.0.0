@@ -8,18 +8,6 @@ const LONGEST_FRAME = 1 / 30;
 
 export const asksForStillness = () => typeof window !== "undefined" && window.matchMedia(STILLNESS).matches;
 
-export function useStillness() {
-  return React.useSyncExternalStore(
-    (changed) => {
-      const query = window.matchMedia(STILLNESS);
-      query.addEventListener("change", changed);
-      return () => query.removeEventListener("change", changed);
-    },
-    asksForStillness,
-    () => false,
-  );
-}
-
 export function useInView<T extends Element>(ref: React.RefObject<T | null>) {
   const [inView, setInView] = React.useState(false);
   const watched = React.useRef<Element | null>(null);
@@ -54,15 +42,6 @@ export function Stage({ className, children }: { className: string; children: Re
       {children}
     </div>
   );
-}
-
-export function useReadout<T extends Element>() {
-  const anchor = React.useRef<T>(null);
-  const say = React.useCallback((text: string) => {
-    const slot = anchor.current?.closest(".iso-plate")?.querySelector("[data-readout]");
-    if (slot && slot.textContent !== text) slot.textContent = text;
-  }, []);
-  return { anchor, say };
 }
 
 export function useLoop(tick: (dt: number, calm: boolean) => boolean, running: boolean) {
@@ -119,15 +98,4 @@ export function spring(state: Spring, target: number, dt: number, stiffness: num
     state.rate = 0;
   }
   return state.at === target && state.rate === 0;
-}
-
-export function useEased(target: number, seconds = 0.12) {
-  const [value, setValue] = React.useState(target);
-  const shown = React.useRef(target);
-  useLoop((dt, calm) => {
-    shown.current = follow(shown.current, target, dt, seconds, calm);
-    setValue(shown.current);
-    return shown.current !== target;
-  }, shown.current !== target);
-  return value;
 }

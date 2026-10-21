@@ -6,12 +6,7 @@ import type {
   work_order_status,
   work_orders,
 } from '@/generated/prisma/client';
-import {
-  REPAIR_STATUS_UI,
-  TONE_TO_BADGE,
-  WORK_ORDER_STATUS_UI,
-  type BadgeVariant,
-} from '../lib/status-presentation';
+import { REPAIR_STATUS_UI, WORK_ORDER_STATUS_UI } from '../lib/status-presentation';
 
 // Tipos base de la BD (modelos y enums generados por Prisma)
 export type WorkOrder = work_orders;
@@ -139,31 +134,12 @@ export const WORK_ORDER_STATUS_LABELS: Record<WorkOrderStatus, string> = {
   cancelled: WORK_ORDER_STATUS_UI.cancelled.label,
 };
 
-export const WORK_ORDER_STATUS_VARIANTS: Record<WorkOrderStatus, BadgeVariant> = {
-  pending: TONE_TO_BADGE[WORK_ORDER_STATUS_UI.pending.tone],
-  in_progress: TONE_TO_BADGE[WORK_ORDER_STATUS_UI.in_progress.tone],
-  paused: TONE_TO_BADGE[WORK_ORDER_STATUS_UI.paused.tone],
-  completed: TONE_TO_BADGE[WORK_ORDER_STATUS_UI.completed.tone],
-  completed_partial: TONE_TO_BADGE[WORK_ORDER_STATUS_UI.completed_partial.tone],
-  cancelled: TONE_TO_BADGE[WORK_ORDER_STATUS_UI.cancelled.tone],
-};
-
 // Constantes de prioridad
 export const WORK_ORDER_PRIORITY_LABELS: Record<WorkOrderPriority, string> = {
   urgent: 'Urgente',
   high: 'Alta',
   medium: 'Media',
   low: 'Baja',
-};
-
-export const WORK_ORDER_PRIORITY_VARIANTS: Record<
-  WorkOrderPriority,
-  'destructive' | 'warning' | 'secondary' | 'default'
-> = {
-  urgent: 'destructive',
-  high: 'warning',
-  medium: 'secondary',
-  low: 'default',
 };
 
 export const WORK_ORDER_ITEM_STATUS_LABELS: Record<WorkOrderItemStatus, string> = {

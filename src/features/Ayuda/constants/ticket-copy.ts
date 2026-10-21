@@ -252,23 +252,3 @@ export function parseVerificationSteps(raw: string | null): string[] {
     .map((line) => line.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())
     .filter((line) => line.length > 0);
 }
-
-/**
- * Resumen del banner de pendientes, en strings completos. No se arma
- * concatenando fragmentos alrededor de un número: en español el plural cambia
- * el artículo y el verbo, y "1 tickets necesitan" queda roto.
- */
-export function pendingSummary(counts: { confirm: number; approve: number }): string | null {
-  const parts: string[] = [];
-  if (counts.confirm > 0) {
-    parts.push(
-      counts.confirm === 1 ? '1 ticket resuelto para revisar' : `${counts.confirm} tickets resueltos para revisar`
-    );
-  }
-  if (counts.approve > 0) {
-    parts.push(
-      counts.approve === 1 ? '1 presupuesto para aprobar' : `${counts.approve} presupuestos para aprobar`
-    );
-  }
-  return parts.length > 0 ? parts.join(' · ') : null;
-}

@@ -19,30 +19,3 @@ export type TableFilterState = {
 
 const logger = new Logger('lib/cookies');
 const STORAGE_KEY_PREFIX = 'table-filters-';
-
-export function getTableFilters(tableId: string): TableFilterState | null {
-  if (typeof window === 'undefined') return null;
-
-  try {
-    const storedData = localStorage.getItem(`${STORAGE_KEY_PREFIX}${tableId}`);
-    return storedData ? JSON.parse(storedData) : null;
-  } catch (e) {
-    logger.error('Error leyendo filtros de localStorage', { data: { error: e } });
-    return null;
-  }
-}
-
-export function setTableFilters(tableId: string, filters: TableFilterState) {
-  if (typeof window === 'undefined') return;
-
-  try {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}${tableId}`, JSON.stringify(filters));
-  } catch (e) {
-    logger.error('Error guardando filtros en localStorage', { data: { error: e } });
-  }
-}
-
-export function clearTableFilters(tableId: string) {
-  if (typeof window === 'undefined') return;
-  localStorage.removeItem(`${STORAGE_KEY_PREFIX}${tableId}`);
-}

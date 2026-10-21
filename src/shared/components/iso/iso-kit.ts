@@ -77,8 +77,6 @@ export function pathOf(points: Flat[], closed = false) {
   return points.map(([x, y], at) => `${at ? "L" : "M"}${tenth(x)} ${tenth(y)}`).join("") + (closed ? "Z" : "");
 }
 
-export const joinPaths = (paths: string[]) => paths.filter(Boolean).join("");
-
 export function roundedPlan({ x, y, w, d, r }: Plan, steps = 8): Plane[] {
   const radius = Math.max(0, Math.min(r, w / 2, d / 2));
   const corners: [number, number, number][] = [
@@ -270,14 +268,6 @@ export const ring = (cx: number, cy: number, radius: number, z: number, projecti
 
 export const pointsAt = (points: Point3[], projection: Projection): Flat[] => points.map((point) => iso(point, projection));
 
-export function dotGrid(x: number, y: number, columns: number, rows: number, gap: number, z: number, projection: Projection): Flat[] {
-  const dots: Flat[] = [];
-  for (let row = 0; row < rows; row++) {
-    for (let column = 0; column < columns; column++) dots.push(iso([x + column * gap, y + row * gap, z], projection));
-  }
-  return dots;
-}
-
 export function corners({ x, y, w, d }: Plan, inset = 0): Plane[] {
   return [
     [x + inset, y + inset],
@@ -291,30 +281,6 @@ export function boxCorners({ x, y, w, d }: Plan, z0: number, z1: number): Point3
   const out: Point3[] = [];
   for (const px of [x, x + w]) for (const py of [y, y + d]) for (const z of [z0, z1]) out.push([px, py, z]);
   return out;
-}
-
-export function knurl(cx: number, cy: number, radius: number, z0: number, z1: number, count: number, projection: Projection, inset = 0.4) {
-  const [vx, vy] = towardViewer(projection);
-  const lines: string[] = [];
-  for (let index = 0; index < count; index++) {
-    const angle = (index / count) * Math.PI * 2;
-    const nx = Math.cos(angle);
-    const ny = Math.sin(angle);
-    if (nx * vx + ny * vy < 0.15) continue;
-    lines.push(segment([cx + radius * nx, cy + radius * ny, z0 + inset], [cx + radius * nx, cy + radius * ny, z1 - inset], projection));
-  }
-  return lines.join("");
-}
-
-export function sideArc(cx: number, cy: number, radius: number, z: number, projection: Projection, steps = 24) {
-  const [vx, vy] = towardViewer(projection);
-  const facing = Math.atan2(vy, vx);
-  const points: Flat[] = [];
-  for (let step = 0; step <= steps; step++) {
-    const angle = facing - Math.PI / 2 + (step / steps) * Math.PI;
-    points.push(iso([cx + radius * Math.cos(angle), cy + radius * Math.sin(angle), z], projection));
-  }
-  return pathOf(points);
 }
 
 export function ringSeam(ring: Plane[], z: number, projection: Projection) {
@@ -333,95 +299,9 @@ export function ringSeam(ring: Plane[], z: number, projection: Projection) {
 
 export const sideSeam = (plan: Plan, z: number, projection: Projection, steps = 8) => ringSeam(ringOf(plan, steps), z, projection);
 
-export function sideRing(center: Point3, radius: number, axis: "x" | "y", projection: Projection, steps = 20) {
-  const [px, py, pz] = center;
-  const points: Flat[] = [];
-  for (let step = 0; step < steps; step++) {
-    const angle = (step / steps) * Math.PI * 2;
-    const u = radius * Math.cos(angle);
-    const v = radius * Math.sin(angle);
-    points.push(iso(axis === "x" ? [px, py + u, pz + v] : [px + u, py, pz + v], projection));
-  }
-  return pathOf(points, true);
-}
-
-export function coil(from: number, to: number, center: Plane, radius: number, turns: number, axis: "x" | "y", projection: Projection, perTurn = 16) {
-  const count = Math.max(1, Math.round(turns * perTurn));
-  const back: string[] = [];
-  const front: string[] = [];
-  let run: Flat[] = [];
-  let near: boolean | null = null;
-  for (let index = 0; index <= count; index++) {
-    const share = index / count;
-    const angle = share * turns * Math.PI * 2;
-    const u = radius * Math.cos(angle);
-    const v = radius * Math.sin(angle);
-    const along = from + (to - from) * share;
-    const point: Point3 = axis === "x" ? [along, center[0] + u, center[1] + v] : [center[0] + u, along, center[1] + v];
-    const normal: Point3 = axis === "x" ? [0, Math.cos(angle), Math.sin(angle)] : [Math.cos(angle), 0, Math.sin(angle)];
-    const facing = depthOf(normal, projection) > 0;
-    const flat = iso(point, projection);
-    if (near === null) near = facing;
-    if (facing !== near) {
-      run.push(flat);
-      (near ? front : back).push(pathOf(run));
-      run = [flat];
-      near = facing;
-      continue;
-    }
-    run.push(flat);
-  }
-  if (run.length > 1) (near ? front : back).push(pathOf(run));
-  return { back: back.join(""), front: front.join("") };
-}
-
 export interface Ticks {
   minor: string;
   major: string;
-}
-
-export function topTicks(from: number, to: number, step: number, every: number, edge: number, z: number, lengths: [number, number], projection: Projection, axis: "x" | "y" = "x"): Ticks {
-  const minor: string[] = [];
-  const major: string[] = [];
-  const first = Math.ceil(from / step) * step;
-  for (let at = first, index = Math.round(first / step); at <= to + 1e-9; at += step, index++) {
-    const big = index % every === 0;
-    const length = big ? lengths[1] : lengths[0];
-    const a: Plane = axis === "x" ? [at, edge] : [edge, at];
-    const b: Plane = axis === "x" ? [at, edge + length] : [edge + length, at];
-    (big ? major : minor).push(lineOnTop(a, b, z, projection));
-  }
-  return { minor: minor.join(""), major: major.join("") };
-}
-
-export function sideTicks(from: number, to: number, step: number, every: number, face: number, top: number, lengths: [number, number], projection: Projection, axis: "x" | "y" = "x"): Ticks {
-  const minor: string[] = [];
-  const major: string[] = [];
-  const first = Math.ceil(from / step) * step;
-  for (let at = first, index = Math.round(first / step); at <= to + 1e-9; at += step, index++) {
-    const big = index % every === 0;
-    const length = big ? lengths[1] : lengths[0];
-    const a: Point3 = axis === "x" ? [at, face, top] : [face, at, top];
-    const b: Point3 = axis === "x" ? [at, face, top - length] : [face, at, top - length];
-    (big ? major : minor).push(segment(a, b, projection));
-  }
-  return { minor: minor.join(""), major: major.join("") };
-}
-
-export function radialTicks(cx: number, cy: number, radius: number, count: number, every: number, z: number, lengths: [number, number], projection: Projection, from = 0, span = Math.PI * 2): Ticks {
-  const minor: string[] = [];
-  const major: string[] = [];
-  const closed = Math.abs(span - Math.PI * 2) < 1e-9;
-  const steps = closed ? count : count + 1;
-  for (let index = 0; index < steps; index++) {
-    const angle = from + (index / count) * span;
-    const big = index % every === 0;
-    const inner = radius - (big ? lengths[1] : lengths[0]);
-    const sx = Math.sin(angle);
-    const sy = -Math.cos(angle);
-    (big ? major : minor).push(lineOnTop([cx + sx * inner, cy + sy * inner], [cx + sx * radius, cy + sy * radius], z, projection));
-  }
-  return { minor: minor.join(""), major: major.join("") };
 }
 
 export const haloOf = (plan: Plan, z: number, height: number, projection: Projection) => slabOf(plan, z, height, projection).fill;
@@ -433,11 +313,6 @@ export function axisVector(projection: Projection, [dx, dy, dz]: Point3): Flat {
 }
 
 const fine = (value: number) => Math.round(value * 100) / 100;
-
-export function translateAlong(projection: Projection, by: Point3) {
-  const [x, y] = axisVector(projection, by);
-  return `translate(${fine(x)} ${fine(y)})`;
-}
 
 const thousandth = (value: number) => Math.round(value * 1000) / 1000;
 
@@ -452,11 +327,6 @@ function axesAt(at: Plane, z: number, projection: Projection) {
 
 const matrixOf = (u: Flat, v: Flat, origin: Flat) =>
   `matrix(${thousandth(u[0])} ${thousandth(u[1])} ${thousandth(v[0])} ${thousandth(v[1])} ${thousandth(origin[0])} ${thousandth(origin[1])})`;
-
-export function holdStill(element: Element, [dx, dy]: Flat) {
-  const text = dx || dy ? `translate(${-dx} ${-dy})` : "";
-  element.querySelectorAll("[data-hold]").forEach((node) => (text ? node.setAttribute("transform", text) : node.removeAttribute("transform")));
-}
 
 export function topMatrix(at: Plane, z: number, projection: Projection, along: "x" | "y" = "x") {
   const { origin, x, y } = axesAt(at, z, projection);
@@ -565,69 +435,11 @@ export function dotsSvg(points: Array<Flat | [number, number, number]>, { size =
 
 export type Faded = { d: string; alpha: number } | [string, number];
 
-export function fadedSvg(list: Faded[], style: LineStyle = {}) {
-  const groups = new Map<number, string>();
-  for (const entry of list) {
-    const [d, alpha] = Array.isArray(entry) ? entry : [entry.d, entry.alpha];
-    if (!d || !(alpha > 0.02)) continue;
-    const level = Math.min(1, Math.round(alpha * 20) / 20);
-    groups.set(level, (groups.get(level) ?? "") + d);
-  }
-  return [...groups].map(([alpha, d]) => (alpha >= 1 ? lineSvg(d, style) : `<g opacity="${alpha.toFixed(2)}">${lineSvg(d, style)}</g>`)).join("");
-}
-
 export interface FadeLineStyle {
   fade?: number | [number, number];
   tone?: LineTone;
   className?: string;
   stops?: number;
-}
-
-export function fadeLineSvg(points: Flat[], { fade = [0, 0], tone = "lo", className, stops = 6 }: FadeLineStyle = {}) {
-  if (points.length < 2) return "";
-  const ease = (t: number) => t * t * (3 - 2 * t);
-  const hashOf = (text: string) => {
-    let hash = 2166136261;
-    for (let index = 0; index < text.length; index++) hash = Math.imul(hash ^ text.charCodeAt(index), 16777619);
-    return (hash >>> 0).toString(36);
-  };
-  const lengths = [0];
-  for (let index = 1; index < points.length; index++) lengths.push(lengths[index - 1] + Math.hypot(points[index][0] - points[index - 1][0], points[index][1] - points[index - 1][1]));
-  const at = (length: number): Flat => {
-    let index = 1;
-    while (index < points.length - 1 && lengths[index] < length) index++;
-    const span = lengths[index] - lengths[index - 1] || 1;
-    const t = Math.max(0, Math.min(1, (length - lengths[index - 1]) / span));
-    return [points[index - 1][0] + (points[index][0] - points[index - 1][0]) * t, points[index - 1][1] + (points[index][1] - points[index - 1][1]) * t];
-  };
-  const pieceOf = (from: number, to: number): Flat[] => [at(from), ...points.filter((_, index) => lengths[index] > from + 1e-6 && lengths[index] < to - 1e-6), at(to)];
-  const total = lengths[lengths.length - 1];
-  if (total < 1e-6) return "";
-  let [start, end] = Array.isArray(fade) ? fade : [fade, fade];
-  if (start + end > total) {
-    const share = total / (start + end);
-    start *= share;
-    end *= share;
-  }
-  const paint = `var(--anatomy-${tone})`;
-  const ramp = (piece: Flat[], rising: boolean) => {
-    const d = pathOf(piece);
-    const [x1, y1] = piece[0];
-    const [x2, y2] = piece[piece.length - 1];
-    const id = `iso-fade-${hashOf(`${d}|${tone}|${rising}`)}`;
-    const marks = Array.from({ length: stops + 1 }, (_, index) => {
-      const t = index / stops;
-      const alpha = ease(rising ? t : 1 - t);
-      return `<stop offset="${t.toFixed(3)}" stop-opacity="${alpha.toFixed(3)}" style="stop-color:${paint}"/>`;
-    }).join("");
-    const gradient = `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${tenth(x1)}" y1="${tenth(y1)}" x2="${tenth(x2)}" y2="${tenth(y2)}">${marks}</linearGradient>`;
-    return `<defs>${gradient}</defs><path${attrs({ class: className ? `iso-line ${className}` : "iso-line", "data-tone": tone, "data-free": rising ? "start" : "end", d, style: `stroke:url(#${id})` })}/>`;
-  };
-  const parts: string[] = [];
-  if (start > 0.05) parts.push(ramp(pieceOf(0, start), true));
-  if (total - end - start > 0.05) parts.push(lineSvg(pathOf(pieceOf(start, total - end)), { tone, className }));
-  if (end > 0.05) parts.push(ramp(pieceOf(total - end, total), false));
-  return `<g class="iso-fade">${parts.join("")}</g>`;
 }
 
 export interface WireStyle {
@@ -640,18 +452,8 @@ export interface WireStyle {
   size?: number;
 }
 
-export function wireSvg(from: Flat, to: Flat, { via = [], tone = "lo", dotted = false, dashed = false, flow = false, ends = "both", size = 1.2 }: WireStyle = {}) {
-  const d = pathOf([from, ...via, to]);
-  const end = ([x, y]: Flat) => `<circle class="iso-wire-end" cx="${tenth(x)}" cy="${tenth(y)}" r="${size}"/>`;
-  return `<g class="iso-wire" data-tone="${tone}">${lineSvg(d, { tone, dotted, dashed, flow })}${ends === "both" || ends === "from" ? end(from) : ""}${ends === "both" || ends === "to" ? end(to) : ""}</g>`;
-}
-
 export function faceTextSvg(transform: string, text: string, { size = 3, tone = "mid", anchor = "start" }: { size?: number; tone?: Tone; anchor?: "start" | "middle" | "end" } = {}) {
   return `<text class="iso-face-text" data-tone="${tone}" transform="${transform}" font-size="${size}" text-anchor="${anchor}">${escape(text)}</text>`;
-}
-
-export function groupSvg(children: string | string[], extra: Record<string, string | number | undefined | false> = {}) {
-  return `<g${attrs(extra)}>${Array.isArray(children) ? children.join("") : children}</g>`;
 }
 
 export type Theme = "dark" | "light";
@@ -703,25 +505,12 @@ export interface PlateOptions {
   body: string;
 }
 
-export function plateHtml({ fig, title, hint, readout = "", keys = [], caption, body }: PlateOptions) {
-  const corner = (name: string, text: string, extra = "") => `<span class="iso-plate-corner" data-corner="${name}"${extra}>${escape(text)}</span>`;
-  const legend =
-    keys.length || caption
-      ? `<figcaption class="iso-legend">${keys.length ? `<span class="iso-keys">${keys.map((key) => `<span class="iso-key">${swatchSvg(key.mark)}${escape(key.label)}</span>`).join("")}</span>` : ""}${caption ? `<span class="iso-caption">${escape(caption)}</span>` : ""}</figcaption>`
-      : "";
-  return `<figure class="iso-figure"><div class="iso-plate"><div class="iso-plate-corners" aria-hidden="true">${corner("fig", fig)}${title ? corner("title", title) : ""}${hint ? corner("hint", hint) : ""}${corner("readout", readout, " data-readout")}</div>${body}</div>${legend}</figure>`;
-}
-
 export interface PageOptions {
   title: string;
   theme?: Theme;
   body: string;
   script?: string;
   width?: number;
-}
-
-export function pageHtml({ title, theme = "dark", body, script = "", width = 650 }: PageOptions) {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(title)}</title><style>${ISO_CSS}${PAGE_CSS.replace("__WIDTH__", String(width))}</style></head><body class="iso" data-theme="${theme}"><main class="iso-page">${body}</main>${script ? `<script type="module">${script.replace(/<\/(script)/gi, "<\\/$1")}</script>` : ""}</body></html>`;
 }
 
 const PAGE_CSS = `

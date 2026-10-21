@@ -91,10 +91,3 @@ export const DEFAULT_VISIBLE_SERIES: DeviationSeriesKey[] = [
   'duplicated_employees',
   'duplicated_equipment',
 ];
-
-/**
- * Solo los desvios de equipo dependen de `vehicles.condition`, que no guarda
- * historial. El aviso de dato estimado se ancla a esta serie y no al grafico
- * entero: los otros cuatro indicadores son exactos.
- */
-export const ESTIMATED_SERIES_KEY: DeviationSeriesKey = 'equipment_deviations';

@@ -3,8 +3,6 @@ import type { RejectPendingOrderInput, ScheduleOrderInput } from '../../types';
 import { invalidateAllMaintenanceQueries } from '../../utils/queryInvalidation';
 import { rejectPendingOrder, scheduleMaintenanceOrder } from '../actions/actionsServer';
 
-export const PEDIDOS_PENDIENTES_QUERY_KEY = ['maintenance', 'pedidos', 'pendientes'];
-
 /**
  * Hook para planificar un pedido (proponer fecha → viaja a aprobación de fecha)
  */

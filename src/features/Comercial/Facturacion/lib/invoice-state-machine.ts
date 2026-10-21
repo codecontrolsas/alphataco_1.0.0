@@ -39,11 +39,6 @@ export function canIssue(status: invoice_status): boolean {
   return status === 'borrador' || status === 'rechazada';
 }
 
-/** Hay que consultar a ARCA antes de cualquier otra cosa. */
-export function needsReconciliation(status: invoice_status): boolean {
-  return status === 'pendiente' || status === 'emitiendo';
-}
-
 /**
  * Un `emitiendo` sin novedades después de este tiempo se considera abandonado (el proceso murió).
  * Se mide desde el envío a ARCA (o el reclamo) y supera el peor caso de una emisión en curso:
