@@ -8,11 +8,17 @@ on:
     inputs:
       # Runner. Vacio = el de GitHub. Con un label `blacksmith-*` corre en Blacksmith (requiere la GitHub App).
       runs_on: { required: false, type: string, default: 'ubuntu-latest' }
+      # true = la app conecta como `alphataco_app` (sin BYPASSRLS) con TENANT_CONTEXT=on (docker-compose.rls.yml):
+      # prueba la instancia bajo RLS. Los roles se habilitan despues de migrar y antes de levantar la app.
+      rls: { required: false, type: boolean, default: false }
 
 jobs:
   e2e:
     runs-on: ${{ inputs.runs_on }}
     timeout-minutes: 40
+    # El e2e bajo RLS es INFORMATIVO mientras la app se adapta (docs/arquitectura/LOOP-ESTADO.md, P2-C): si falla no
+    # bloquea el merge, pero deja el error en el reporte. Se vuelve obligatorio al cambiar DATABASE_URL en produccion.
+    continue-on-error: ${{ inputs.rls }}
     env:
       # Imagen del almacenamiento (RustFS). Vacio = la que fija docker-compose.yml. Variable de repo STORAGE_IMAGE para
       # usar un espejo propio.
@@ -51,8 +57,20 @@ jobs:
         env:
           DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
 
+      - name: Habilitar los roles de aplicación y sistema (RLS)
+        if: ${{ inputs.rls }}
+        # Los roles nacen NOLOGIN en la migracion `app_and_system_roles`: se migra primero y se habilitan despues.
+        run: |
+          docker compose --env-file .env.docker up -d --wait postgres
+          docker compose --env-file .env.docker run --rm --build migrate
+          docker compose --env-file .env.docker exec -T postgres psql -U alphataco -d alphataco -v ON_ERROR_STOP=1 \
+            -c "ALTER ROLE alphataco_app LOGIN PASSWORD 'rlsapp'" \
+            -c "ALTER ROLE alphataco_system LOGIN PASSWORD 'rlssystem'"
+
       - name: Levantar la instancia
         # Construye la imagen y espera a que `app` quede sana (migrate -> app, ver docker-compose.yml).
+        env:
+          COMPOSE_FILE: ${{ inputs.rls && 'docker-compose.yml:docker-compose.rls.yml' || 'docker-compose.yml' }}
         run: docker compose --env-file .env.docker up -d --build --wait --wait-timeout 900 app
 
       - name: Verificar el arranque de la imagen
@@ -66,6 +84,7 @@ jobs:
           curl -fsS http://localhost:3000/api/health | tee /dev/stderr | grep -q '"storage":"ok"'
 
       - name: Datos de prueba para el login
+        # Siempre con el usuario duenio: son datos de preparacion, no tráfico de la app.
         env:
           DATABASE_URL: postgresql://alphataco:devpass@127.0.0.1:5432/alphataco
         run: |
@@ -82,8 +101,23 @@ jobs:
           E2E_BASE_URL: http://localhost:3000
         run: npx playwright test
 
+      - name: Errores de RLS en los logs de la app
+        if: ${{ inputs.rls }}
+        # Una escritura rechazada por una politica o una consulta sin empresa activa deja rastro en el log.
+        env:
+          COMPOSE_FILE: docker-compose.yml:docker-compose.rls.yml
+        run: |
+          logs=$(docker compose --env-file .env.docker logs app 2>&1)
+          if echo "$logs" | grep -qiE "row-level security|violates row-level"; then
+            echo "::error::la app tuvo escrituras rechazadas por RLS"
+            echo "$logs" | grep -iE "row-level security|violates row-level" | head -20
+            exit 1
+          fi
+
       - name: Logs de la app si falla
         if: failure()
+        env:
+          COMPOSE_FILE: ${{ inputs.rls && 'docker-compose.yml:docker-compose.rls.yml' || 'docker-compose.yml' }}
         run: docker compose --env-file .env.docker logs app --tail 200 || true
 
       - name: Subir el reporte
