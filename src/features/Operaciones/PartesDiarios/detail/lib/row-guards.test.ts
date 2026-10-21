@@ -233,19 +233,19 @@ describe('authorizeBulkRowUpdate', () => {
 describe('reevaluación con la fila bloqueada (carreras)', () => {
   it('rechaza editar si en el medio la línea pasó a certificación', async () => {
     await expect(
-      assertRowEditableUnderLock(lockedTx('en_certificacion'), 'row-1', { scope: 'full', reportDate: TODAY })
+      assertRowEditableUnderLock(lockedTx('en_certificacion'), 'row-1', { scope: 'full', reportDate: TODAY, preparteId: null })
     ).rejects.toThrow(RowRuleError);
   });
 
   it('permite editar si la línea sigue pendiente', async () => {
     await expect(
-      assertRowEditableUnderLock(lockedTx('pendiente'), 'row-1', { scope: 'resources', reportDate: PAST })
+      assertRowEditableUnderLock(lockedTx('pendiente'), 'row-1', { scope: 'resources', reportDate: PAST, preparteId: null })
     ).resolves.toBeUndefined();
   });
 
   it('rechaza editar si en el medio la línea quedó ejecutada y el parte no es de hoy', async () => {
     await expect(
-      assertRowEditableUnderLock(lockedTx('ejecutado'), 'row-1', { scope: 'full', reportDate: PAST })
+      assertRowEditableUnderLock(lockedTx('ejecutado'), 'row-1', { scope: 'full', reportDate: PAST, preparteId: null })
     ).rejects.toThrow(RowRuleError);
   });
 
@@ -256,7 +256,7 @@ describe('reevaluación con la fila bloqueada (carreras)', () => {
 
   it('falla si la línea ya no existe', async () => {
     await expect(
-      assertRowEditableUnderLock(lockedTx(null), 'row-1', { scope: 'full', reportDate: TODAY })
+      assertRowEditableUnderLock(lockedTx(null), 'row-1', { scope: 'full', reportDate: TODAY, preparteId: null })
     ).rejects.toThrow(RowRuleError);
   });
 });
