@@ -63,7 +63,9 @@ async function main(): Promise<void> {
   const elapsed = () => ((Date.now() - started) / 1000).toFixed(1);
   const log = (message: string) => console.log(`[demo ${elapsed()}s] ${message}`);
 
-  const prisma = new PrismaClient({ adapter: new PrismaPg(prismaPgConfig(process.env.SYSTEM_DATABASE_URL ?? process.env.DATABASE_URL)) });
+  // Conexion del DUENIO (`MIGRATE_DATABASE_URL`): el reset desactiva triggers con `session_replication_role`, que exige superusuario;
+  // `alphataco_system` (BYPASSRLS, sin superusuario) no puede. Solo es mantenimiento de la demo, no una ruta de la app.
+  const prisma = new PrismaClient({ adapter: new PrismaPg(prismaPgConfig(process.env.DEMO_RESET_DATABASE_URL ?? process.env.MIGRATE_DATABASE_URL ?? process.env.SYSTEM_DATABASE_URL ?? process.env.DATABASE_URL)) });
   try {
     const s3 = createS3();
     const cal = buildCalendar(argentinaToday());
