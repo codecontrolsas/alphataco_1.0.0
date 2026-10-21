@@ -259,7 +259,7 @@ export async function getRequiredPreEmployeeDocumentsCount() {
         is_active: true,
         applies: 'Persona',
         mandatory: true,
-        OR: [{ company_id: null }, { company_id: companyId }],
+        company_id: companyId,
       },
     });
   } catch (error) {

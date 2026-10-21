@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  GLOBAL_CATALOG_READ_ONLY,
   catalogAccessError,
   catalogReadScope,
   catalogWriteScope,
@@ -11,13 +10,13 @@ const COMPANY = '11111111-1111-1111-1111-111111111111';
 const OTHER = '22222222-2222-2222-2222-222222222222';
 
 describe('catalogReadScope', () => {
-  it('incluye las filas globales y las de la empresa activa', () => {
-    expect(catalogReadScope(COMPANY)).toEqual({ OR: [{ company_id: null }, { company_id: COMPANY }] });
+  it('se acota a las filas de la empresa activa (no hay globales)', () => {
+    expect(catalogReadScope(COMPANY)).toEqual({ company_id: COMPANY });
   });
 });
 
 describe('catalogWriteScope', () => {
-  it('se acota a la empresa activa (nunca a las globales)', () => {
+  it('se acota a la empresa activa', () => {
     expect(catalogWriteScope(COMPANY)).toEqual({ company_id: COMPANY });
   });
 });
@@ -28,9 +27,9 @@ describe('resolveCatalogAccess', () => {
     expect(resolveCatalogAccess({ company_id: COMPANY }, COMPANY, 'write')).toBe('ok');
   });
 
-  it('fila global: se lee, no se escribe', () => {
-    expect(resolveCatalogAccess({ company_id: null }, COMPANY, 'read')).toBe('ok');
-    expect(resolveCatalogAccess({ company_id: null }, COMPANY, 'write')).toBe('global_read_only');
+  it('una fila sin empresa (dato inconsistente) no es visible para ninguna empresa', () => {
+    expect(resolveCatalogAccess({ company_id: null }, COMPANY, 'read')).toBe('not_found');
+    expect(resolveCatalogAccess({ company_id: null }, COMPANY, 'write')).toBe('not_found');
   });
 
   it('fila de otra empresa: no existe, en los dos modos', () => {
@@ -47,10 +46,6 @@ describe('resolveCatalogAccess', () => {
 describe('catalogAccessError', () => {
   it('no hay error cuando el acceso es ok', () => {
     expect(catalogAccessError('ok', 'Marca no encontrada')).toBeNull();
-  });
-
-  it('una fila global devuelve el mensaje de sólo lectura', () => {
-    expect(catalogAccessError('global_read_only', 'Marca no encontrada')).toBe(GLOBAL_CATALOG_READ_ONLY);
   });
 
   it('not_found devuelve el mensaje del catálogo, sin revelar de quién es la fila', () => {

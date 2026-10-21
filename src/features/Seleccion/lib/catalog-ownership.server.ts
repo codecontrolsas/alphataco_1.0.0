@@ -75,7 +75,7 @@ export async function assertWorkCatalogsOwned(client: CatalogClient, companyId: 
       label: 'Gremio',
       ids: unique([ids.guild_id]),
       count: (list) =>
-        client.guild.count({ where: { id: { in: list }, OR: [{ company_id: companyId }, { company_id: null }] } }),
+        client.guild.count({ where: { id: { in: list }, company_id: companyId } }),
     },
     {
       label: 'Categoría',

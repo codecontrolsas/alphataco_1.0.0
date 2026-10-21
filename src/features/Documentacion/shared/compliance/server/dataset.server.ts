@@ -247,7 +247,7 @@ function relevantPivots(types: ComplianceType[], kind: ComplianceKind): string[]
 
 async function loadTypes(db: ComplianceDb, companyId: string, kind: ComplianceKind): Promise<ComplianceType[]> {
   const rows = await db.document_types.findMany({
-    where: { applies: kind, OR: [{ company_id: null }, { company_id: companyId }] },
+    where: { applies: kind, company_id: companyId },
     select: {
       id: true,
       company_id: true,

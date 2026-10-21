@@ -100,7 +100,7 @@ model brand_vehicles {
   created_at      DateTime          @default(now()) @db.Timestamptz(6)
   name            String?           @unique
   is_active       Boolean?          @default(true)
-  company_id      String?  @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company         company?          @relation(fields: [company_id], references: [id], onDelete: Cascade)
   model_vehicles  model_vehicles[]
   other_equipment other_equipment[]
@@ -1096,7 +1096,7 @@ model document_types {
   special                 Boolean
   is_active               Boolean                   @default(true)
   description             String?
-  company_id              String?  @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  company_id              String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_it_montlhy           Boolean?
   private                 Boolean?
   down_document           Boolean?
@@ -1372,7 +1372,7 @@ model equipment_owners {
   cuit                           String
   contract_type                  contract_type_enum
   created_at                     DateTime?                        @default(now()) @db.Timestamptz(6)
-  company_id                     String?  @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  company_id                     String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_active                      Boolean?                         @default(true)
   equipment_owner_contract_types equipment_owner_contract_types[]
   company                        company?                         @relation(fields: [company_id], references: [id], onDelete: Cascade)
@@ -1416,7 +1416,7 @@ model guild {
   id         String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   created_at DateTime    @default(now()) @db.Timestamptz(6)
   name       String?
-  company_id String?  @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  company_id String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_active  Boolean     @default(true)
   covenant   covenant[]
   employees  employees[]
@@ -2598,7 +2598,7 @@ model sub_type {
   created_at                   DateTime                       @default(now()) @db.Timestamptz(6)
   name                         String
   is_active                    Boolean?                       @default(true)
-  company_id                   String?  @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  company_id                   String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   type                         String?                        @db.Uuid
   tire_template_id             String?                        @db.Uuid
   checklist_template_sub_types checklist_template_sub_types[]
@@ -2673,7 +2673,7 @@ model type {
   created_at                                                 DateTime                         @default(now()) @db.Timestamptz(6)
   name                                                       String
   is_active                                                  Boolean?                         @default(true)
-  company_id                                                 String?  @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  company_id                                                 String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   has_hitch                                                  Boolean?                         @default(false)
   is_tractor_unit                                            Boolean?                         @default(false)
   applies_to                                                 String?                          @default("vehicle") @db.VarChar(20)

@@ -161,7 +161,7 @@ export async function assertEmployeeRefsAllowed(
       label: 'Sindicato',
       ids: unique([data.guild_id]),
       count: (ids) =>
-        reader.guild.count({ where: { id: { in: ids }, OR: [{ company_id: companyId }, { company_id: null }] } }),
+        reader.guild.count({ where: { id: { in: ids }, company_id: companyId } }),
     },
     {
       label: 'Convenio',

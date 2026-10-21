@@ -110,7 +110,7 @@ const loadSharedDataset = cache(
         includeDocExtras: true,
       }),
       prisma.document_types.findMany({
-        where: { applies: kind, OR: [{ company_id: null }, { company_id: companyId }] },
+        where: { applies: kind, company_id: companyId },
         select: { id: true, name: true },
       }),
     ])
