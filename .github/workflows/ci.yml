@@ -12,7 +12,7 @@ jobs:
   types-and-lint:
     # Variable de repo `CI_RUNNER`; vacia = runner de GitHub. Con un label `blacksmith-*` corre en Blacksmith
     # (requiere instalar su GitHub App en la organizacion: sin ella el job queda en cola para siempre).
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.CI_RUNNER }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,7 +29,7 @@ jobs:
       - run: npm test
 
   db-tests:
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.CI_RUNNER }}
     needs: types-and-lint
     steps:
       - uses: actions/checkout@v4
@@ -69,12 +69,12 @@ jobs:
     needs: types-and-lint
     uses: ./.github/workflows/_e2e.yml
     with:
-      runs_on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+      runs_on: ${{ vars.CI_RUNNER }}
 
   # Mismo e2e con la app conectada como `alphataco_app` (sin BYPASSRLS) y TENANT_CONTEXT=on. Informativo por ahora.
   e2e-rls:
     needs: types-and-lint
     uses: ./.github/workflows/_e2e.yml
     with:
-      runs_on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+      runs_on: ${{ vars.CI_RUNNER }}
       rls: true

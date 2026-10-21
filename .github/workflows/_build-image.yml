@@ -19,7 +19,7 @@ on:
       skip_if_exists: { required: false, type: boolean, default: true }
       # Runner. Con un label `blacksmith-*` se usa su builder persistente (cache
       # de capas y de mounts en disco) en vez de exportar el cache al registry.
-      runs_on: { required: false, type: string, default: 'ubuntu-latest' }
+      runs_on: { required: true, type: string }
     secrets:
       registry_password: { required: true }
     outputs:

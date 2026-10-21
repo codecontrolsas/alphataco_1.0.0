@@ -21,7 +21,7 @@ permissions:
 jobs:
   validate:
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER }}
     steps:
       - name: Validar el commit
         env:
@@ -38,6 +38,7 @@ jobs:
     needs: validate
     uses: ./.github/workflows/_deploy.yml
     with:
+      runs_on: ${{ vars.CI_RUNNER }}
       source_tag: ${{ vars.REGISTRY_HOST || 'registry-31-97-42-82.sslip.io' }}/${{ vars.IMAGE_NAME || 'alphataco' }}:sha-${{ inputs.sha }}
       target_tag: ${{ vars.REGISTRY_HOST || 'registry-31-97-42-82.sslip.io' }}/${{ vars.IMAGE_NAME || 'alphataco' }}:main
       health_url: ${{ vars.DOKPLOY_HEALTH_URL }}
