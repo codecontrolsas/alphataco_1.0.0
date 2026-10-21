@@ -268,7 +268,7 @@ subir.
   (la imagen ya existe): promueve, llama al webhook y espera el health.
 - **Cambiar una `NEXT_PUBLIC_*`**: cambiar la variable de repo y pushear un commit. Un Run workflow
   sobre el mismo commit **no** la hornea (reusa la imagen existente).
-- **Rollback por workflow** (preferido): Actions → `rollback` → Run workflow sobre `main` con el commit completo (40 caracteres) cuya imagen `sha-<commit>` ya existe. Hace el retag, dispara Dokploy y espera `/api/health` con ese commit; no reconstruye nada. Tras cada deploy y rollback corre una prueba de humo (`/login` responde 200).
+- **Rollback por workflow** (preferido): Actions → `rollback` → Run workflow sobre `main` con el commit completo (40 caracteres) cuya imagen `sha-<commit>` ya existe. Hace el retag, dispara Dokploy y espera `/api/health` con ese commit; no reconstruye nada. Tras cada deploy y rollback corre una prueba de humo (`/login` responde 200). **Si el deploy malo dejó una migración fallida** (`migrate deploy` da P3009 y el contenedor no arranca con ninguna imagen), el rollback de imagen no alcanza: primero resolver la migración (`prisma migrate resolve --rolled-back <nombre>` tras revertir a mano lo que haya aplicado) y recién después correr el workflow.
 - **Rollback manual**: `docker buildx imagetools create -t registry-31-97-42-82.sslip.io/alphataco:main registry-31-97-42-82.sslip.io/alphataco:sha-<commit-bueno>`
   (logueado al registry) y Redeploy en Dokploy. Verificar con `/api/health` que responde ese
   commit. Las migraciones no se revierten solas: si el commit malo migró, evaluar antes.
