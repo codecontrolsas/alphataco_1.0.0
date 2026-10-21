@@ -307,7 +307,8 @@ Si quien migra no puede crear roles, la migración avisa con un `WARNING` y sigu
 
 1. Como superusuario: `ALTER ROLE alphataco_app LOGIN PASSWORD '<generada>'` y lo mismo con `alphataco_system`. Las contraseñas se guardan solo en los secretos de Dokploy, nunca en el repo.
 2. En Dokploy: `MIGRATE_DATABASE_URL` = la URL actual (usuario que migra), `SYSTEM_DATABASE_URL` = la URL de `alphataco_system`, y recién entonces `DATABASE_URL` = la URL de `alphataco_app`. Se redeploya.
-3. Verificar `/api/health` y una pantalla con datos. **Rollback:** volver `DATABASE_URL` al usuario original y redeployar.
+3. Prender `TENANT_CONTEXT=on` (misma variable de Dokploy, mismo redeploy): hace que cada consulta de las features lleve la empresa activa a la base. Sin ella, con `alphataco_app` las políticas devuelven filas vacías. Mientras la app conecte como el usuario dueño no hace falta y queda apagada (cuesta ~2 ms por consulta).
+4. Verificar `/api/health` y una pantalla con datos. **Rollback:** volver `DATABASE_URL` al usuario original y redeployar.
 
 ## Instancia demo: reset diario
 

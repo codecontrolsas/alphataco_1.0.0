@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const prismaMock = vi.hoisted(() => ({
   tire_service_orders: { findFirst: vi.fn(), updateMany: vi.fn() },
 }));
-vi.mock('@/shared/lib/prisma', () => ({ prisma: prismaMock }));
+vi.mock('@/shared/lib/prisma', () => ({ prisma: prismaMock, prismaBase: prismaMock }));
 
 vi.mock('@/features/Mantenimiento/Gomeria/shared/access.server', () => ({
   requireGomeriaPermission: vi.fn().mockResolvedValue('company-1'),

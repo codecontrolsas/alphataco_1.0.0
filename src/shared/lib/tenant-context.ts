@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 import type { Prisma, PrismaClient } from '@/generated/prisma/client';
 
 /**
@@ -78,6 +80,65 @@ export function createTenantClient(base: PrismaClient, ctx: TenantContext) {
     },
     query: {
       $allOperations: async ({ args, query }) => {
+        const [, result] = await base.$transaction([setTenantContext(base, ctx), query(args)]);
+        return result;
+      },
+    },
+  });
+}
+
+/** Resuelve el contexto del request actual, o null si no hay (login, jobs, tests, cache sin request). */
+export type TenantContextResolver = () => Promise<TenantContext | null>;
+
+/**
+ * Cliente "global" que resuelve solo el contexto de empresa: las features siguen importando `prisma` y cada operación
+ * corre con `app.company_id` fijado, sin tocar los ~400 archivos que lo usan. La que aísla es la RLS, no el punto de
+ * llamada.
+ *
+ * - Sin contexto (resolver devuelve null o falla) la operación corre directo, sin lote: login, jobs y tests siguen igual.
+ * - `$transaction` conserva su forma: la interactiva usa el cliente base (sin extensión, para no perder el rollback)
+ *   y fija el contexto al inicio; la de arreglo agrega el `set_config` al principio del mismo lote.
+ * - Los clientes que resuelven el contexto (sesión, empresa activa) deben usar el cliente BASE, nunca este: si no,
+ *   la resolución se espera a sí misma.
+ */
+export function createContextualClient(base: PrismaClient, resolve: TenantContextResolver) {
+  /** Verdadero mientras corre el lote de un `$transaction([...])`: sus operaciones ya van dentro de la transaccion. */
+  const inBatch = new AsyncLocalStorage<true>();
+
+  const safeResolve = async () => {
+    try {
+      return await resolve();
+    } catch {
+      return null;
+    }
+  };
+
+  return base.$extends({
+    name: 'tenant-context-auto',
+    client: {
+      async $transaction(arg: unknown, options?: unknown) {
+        const ctx = await safeResolve();
+        if (typeof arg === 'function') {
+          const fn = arg as (tx: TenantTx) => Promise<unknown>;
+          return ctx
+            ? runWithTenantContext(base, ctx, fn, options as TenantTransactionOptions | undefined)
+            : base.$transaction(fn, options as never);
+        }
+        // Las operaciones del arreglo son lazy: se ejecutan dentro de `base.$transaction`, o sea dentro de este
+        // `inBatch.run`, y ahi no deben abrir una transaccion propia (perderian la atomicidad del arreglo).
+        const ops = arg as never[];
+        if (!ctx) return inBatch.run(true, () => base.$transaction(ops, options as never));
+        const results = await inBatch.run(true, () =>
+          base.$transaction([setTenantContext(base, ctx), ...ops] as never, options as never)
+        );
+        return (results as unknown[]).slice(1);
+      },
+    },
+    query: {
+      $allOperations: async ({ args, query }) => {
+        if (inBatch.getStore()) return query(args);
+        const ctx = await safeResolve();
+        if (!ctx) return query(args);
         const [, result] = await base.$transaction([setTenantContext(base, ctx), query(args)]);
         return result;
       },
