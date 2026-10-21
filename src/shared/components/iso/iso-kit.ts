@@ -301,12 +301,6 @@ export const sideSeam = (plan: Plan, z: number, projection: Projection, steps = 
 
 export const haloOf = (plan: Plan, z: number, height: number, projection: Projection) => slabOf(plan, z, height, projection).fill;
 
-export function axisVector(projection: Projection, [dx, dy, dz]: Point3): Flat {
-  const origin = iso([0, 0, 0], projection);
-  const moved = iso([dx, dy, dz], projection);
-  return [moved[0] - origin[0], moved[1] - origin[1]];
-}
-
 const fine = (value: number) => Math.round(value * 100) / 100;
 
 const thousandth = (value: number) => Math.round(value * 1000) / 1000;

@@ -6,8 +6,6 @@ const STILLNESS = "(prefers-reduced-motion: reduce)";
 const MARGIN = "120px 0px";
 const LONGEST_FRAME = 1 / 30;
 
-export const asksForStillness = () => typeof window !== "undefined" && window.matchMedia(STILLNESS).matches;
-
 export function useInView<T extends Element>(ref: React.RefObject<T | null>) {
   const [inView, setInView] = React.useState(false);
   const watched = React.useRef<Element | null>(null);
@@ -42,42 +40,6 @@ export function Stage({ className, children }: { className: string; children: Re
       {children}
     </div>
   );
-}
-
-export function useLoop(tick: (dt: number, calm: boolean) => boolean, running: boolean) {
-  const latest = React.useRef(tick);
-  latest.current = tick;
-  const frame = React.useRef(0);
-  const last = React.useRef(0);
-  const kick = React.useCallback(() => {
-    if (frame.current) return;
-    last.current = 0;
-    const step = (now: number) => {
-      const dt = last.current ? Math.min((now - last.current) / 1000, LONGEST_FRAME) : 1 / 60;
-      last.current = now;
-      const more = latest.current(dt, asksForStillness());
-      frame.current = more ? requestAnimationFrame(step) : 0;
-    };
-    frame.current = requestAnimationFrame(step);
-  }, []);
-  React.useEffect(() => {
-    if (running) kick();
-    else {
-      cancelAnimationFrame(frame.current);
-      frame.current = 0;
-    }
-    return () => {
-      cancelAnimationFrame(frame.current);
-      frame.current = 0;
-    };
-  }, [running, kick]);
-  return kick;
-}
-
-export function follow(current: number, target: number, dt: number, seconds: number, calm = false) {
-  if (calm) return target;
-  const next = current + (target - current) * (1 - Math.exp(-dt / seconds));
-  return Math.abs(target - next) < 1e-3 ? target : next;
 }
 
 export interface Spring {

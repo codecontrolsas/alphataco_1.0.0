@@ -12,17 +12,6 @@ interface MassiveFormDataBase {
   };
 }
 
-export interface DiagramFormData extends MassiveFormDataBase {
-  mode: 'diagram';
-  workDiagramId: string;
-  activeNoveltyId?: string;
-}
-
-export interface NoveltyFormData extends MassiveFormDataBase {
-  mode: 'novelty';
-  diagramTypeId: string;
-}
-
 // ─── Conflict Types ─────────────────────────────────────────────────────────
 
 export interface ConflictRecord {

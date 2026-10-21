@@ -2,15 +2,7 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandSeparator,
-} from '@/components/ui/command';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { CheckIcon, ChevronsUpDownIcon, XIcon } from 'lucide-react';
@@ -289,10 +281,6 @@ export function MultiSelectItem({
 
 export function MultiSelectGroup(props: ComponentPropsWithoutRef<typeof CommandGroup>) {
   return <CommandGroup {...props} />;
-}
-
-export function MultiSelectSeparator(props: ComponentPropsWithoutRef<typeof CommandSeparator>) {
-  return <CommandSeparator {...props} />;
 }
 
 function useMultiSelectContext() {

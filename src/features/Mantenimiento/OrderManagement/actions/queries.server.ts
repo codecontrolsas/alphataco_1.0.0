@@ -558,5 +558,3 @@ export async function getMaintenanceTaskGroupsWithRepairTypes() {
     throw error;
   }
 }
-
-export type MaintenanceTaskGroupsWithRepairTypes = Awaited<ReturnType<typeof getMaintenanceTaskGroupsWithRepairTypes>>;

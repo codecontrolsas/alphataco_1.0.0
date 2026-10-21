@@ -392,7 +392,6 @@ export type DiagramTypeOption = Awaited<ReturnType<typeof getDiagramTypes>>[numb
 export async function getEmployeeDiagramHistory(employeeId: string) {
   return readEmployeeDiagramHistory(employeeId);
 }
-export type EmployeeDiagramHistoryData = Awaited<ReturnType<typeof getEmployeeDiagramHistory>>;
 
 /** Diagramas asignados a un empleado, con el tipo incluido (requiere `empleados:employees:view`). */
 export async function getEmployeeDiagrams(employeeId: string) {

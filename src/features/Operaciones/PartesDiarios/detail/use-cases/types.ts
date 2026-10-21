@@ -96,5 +96,3 @@ export interface RowWriteResult {
 export type UseCaseResult<T> =
   | { ok: true; data: T; replayed: boolean }
   | { ok: false; code: RowErrorCode; message: string; currentVersion?: number };
-
-export const EMPTY_RESOURCES: ResourceSet = { employees: [], equipment: [], otherEquipment: [], customerEquipment: [] };

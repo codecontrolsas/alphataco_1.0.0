@@ -220,5 +220,3 @@ export const fetchAllOtherEquipmentBasicData = async () => {
     throw error;
   }
 };
-
-export type OtherEquipmentBasicData = Awaited<ReturnType<typeof fetchAllOtherEquipmentBasicData>>;
