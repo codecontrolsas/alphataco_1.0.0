@@ -97,6 +97,28 @@ services:
       start_period: 30s
     networks: [alphataco]
 
+  # API móvil (`/api/mobile/v1`): la MISMA imagen que `app`, en un proceso aparte (ráfagas de reintentos al volver la
+  # señal y exportaciones pesadas no deben tirar la web). Detrás del perfil `mobile`: sin él no existe y Caddy manda
+  # todo a `app`, que responde 404 a /api/mobile/*. Con el perfil: `COMPOSE_PROFILES=mobile MOBILE_UPSTREAM=api:3000`.
+  # No pasa por el entrypoint (migraciones, buckets y seed son de `app`/`migrate`): arranca Next directo.
+  api:
+    profiles: [mobile]
+    build:
+      context: .
+      args: *next-build-args
+    restart: unless-stopped
+    command: ["node", "server.js"]
+    env_file: .env.docker
+    environment:
+      DATABASE_URL: postgresql://alphataco:${POSTGRES_PASSWORD}@postgres:5432/alphataco
+      DIRECT_URL: postgresql://alphataco:${POSTGRES_PASSWORD}@postgres:5432/alphataco
+      S3_ENDPOINT: http://storage:9000
+      MOBILE_API_ENABLED: "true"
+    depends_on:
+      app:
+        condition: service_healthy
+    networks: [alphataco]
+
   cron:
     build: ./docker/cron
     restart: unless-stopped
@@ -132,6 +154,8 @@ services:
       - "${CADDY_HTTPS_PORT:-443}:443"
     environment:
       APP_DOMAIN: ${APP_DOMAIN:-localhost}
+      # Sin el perfil `mobile` la API móvil cae en `app` (que responde 404); con él se exporta MOBILE_UPSTREAM=api:3000.
+      MOBILE_UPSTREAM: ${MOBILE_UPSTREAM:-app:3000}
     volumes:
       - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
