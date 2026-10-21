@@ -29,7 +29,7 @@ model aptitudes_tecnicas {
   is_active                  Boolean?                     @default(true)
   aptitudes_tecnicas_puestos aptitudes_tecnicas_puestos[]
   empleado_aptitudes         empleado_aptitudes[]
-  company_id                 String                       @db.Uuid
+  company_id                 String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                    company                      @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([company_id], map: "idx_aptitudes_tecnicas_company_id")
@@ -92,7 +92,7 @@ model brand_vehicles {
   created_at      DateTime          @default(now()) @db.Timestamptz(6)
   name            String?           @unique
   is_active       Boolean?          @default(true)
-  company_id      String?           @db.Uuid
+  company_id      String?  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company         company?          @relation(fields: [company_id], references: [id], onDelete: Cascade)
   model_vehicles  model_vehicles[]
   other_equipment other_equipment[]
@@ -157,7 +157,7 @@ model checklist_answers {
   other_checklist_answers                                   checklist_answers[]    @relation("checklist_answersTochecklist_answers")
   checklist_deviations                                      checklist_deviations[]
   maintenance_requests                                      maintenance_requests[]
-  company_id                                                String                 @db.Uuid
+  company_id                                                String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                                                   company                @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([created_at(sort: Desc)], map: "idx_checklist_answers_created")
@@ -185,7 +185,7 @@ model checklist_deviations {
   profile                   profile?                    @relation(fields: [created_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   vehicles                  vehicles                    @relation(fields: [equipment_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   maintenance_request_items maintenance_request_items[]
-  company_id                String                      @db.Uuid
+  company_id                String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                   company                     @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([checklist_answer_id], map: "idx_checklist_deviations_checklist_answer_id")
@@ -311,7 +311,7 @@ model checklist_template_types {
   created_at          DateTime?           @default(now()) @db.Timestamptz(6)
   checklist_templates checklist_templates @relation(fields: [template_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   type                type?               @relation(fields: [type_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  company_id          String              @db.Uuid
+  company_id          String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company             company             @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@unique([template_id, type_id])
@@ -324,7 +324,7 @@ model checklist_template_types {
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model checklist_templates {
   id                           String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id                   String                         @db.Uuid
+  company_id                   String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   name                         String
   description                  String?
   code                         String
@@ -365,7 +365,7 @@ model clothing_brands {
   id                        String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                      String
   is_active                 Boolean                     @default(true)
-  company_id                String                      @db.Uuid
+  company_id                String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   created_at                DateTime                    @default(now()) @db.Timestamptz(6)
   updated_at                DateTime                    @default(now()) @db.Timestamptz(6)
   company                   company                     @relation(fields: [company_id], references: [id], onDelete: Cascade)
@@ -386,7 +386,7 @@ model clothing_deliveries {
   signature_url                                            String?
   notes                                                    String?
   delivered_at                                             DateTime                  @db.Timestamptz(6)
-  company_id                                               String                    @db.Uuid
+  company_id                                               String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   created_at                                               DateTime                  @default(now()) @db.Timestamptz(6)
   updated_at                                               DateTime                  @default(now()) @db.Timestamptz(6)
   employees_clothing_deliveries_employee_idToemployees     employees                 @relation("clothing_deliveries_employee_idToemployees", fields: [employee_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -446,7 +446,7 @@ model clothing_item_brand_sizes {
 /// se vuelve a habilitar, recupera el mismo material con su stock e historial.
 model clothing_item_materials {
   id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id        String          @db.Uuid
+  company_id        String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   clothing_item_id  String          @db.Uuid
   clothing_brand_id String          @db.Uuid
   clothing_size_id  String          @db.Uuid
@@ -470,7 +470,7 @@ model clothing_items {
   code                      String?
   description               String?
   is_active                 Boolean                     @default(true)
-  company_id                String                      @db.Uuid
+  company_id                String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   created_at                DateTime                    @default(now()) @db.Timestamptz(6)
   updated_at                DateTime                    @default(now()) @db.Timestamptz(6)
   company                   company                     @relation(fields: [company_id], references: [id], onDelete: Cascade)
@@ -487,7 +487,7 @@ model clothing_sizes {
   id                        String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                      String
   is_active                 Boolean                     @default(true)
-  company_id                String                      @db.Uuid
+  company_id                String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   created_at                DateTime                    @default(now()) @db.Timestamptz(6)
   updated_at                DateTime                    @default(now()) @db.Timestamptz(6)
   company                   company                     @relation(fields: [company_id], references: [id], onDelete: Cascade)
@@ -503,7 +503,7 @@ model clothing_sizes {
 model companies_employees {
   employee_id String    @db.Uuid
   id          String    @id(map: "companies_employees_pkey1") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id  String?   @db.Uuid
+  company_id  String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company     company?  @relation(fields: [company_id], references: [id], onDelete: Cascade)
   employees   employees @relation(fields: [employee_id], references: [id], onDelete: Cascade)
 
@@ -661,7 +661,7 @@ model company_positions {
   employees                  employees[]
   pre_employees              pre_employees[]
   org_chart_positions        org_chart_positions[]
-  company_id                 String                       @db.Uuid
+  company_id                 String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                    company                      @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([company_id], map: "idx_company_positions_company_id")
@@ -676,7 +676,7 @@ model contacts {
   constact_email         String?
   contact_phone          BigInt?
   contact_charge         String?
-  company_id             String?    @db.Uuid
+  company_id             String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   customer_id            String?    @db.Uuid
   is_active              Boolean?   @default(true)
   reason_for_termination String?
@@ -745,7 +745,7 @@ model cost_center {
   employees       employees[]
   other_equipment other_equipment[]
   vehicles        vehicles[]
-  company_id      String            @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company         company           @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([company_id], map: "idx_cost_center_company_id")
@@ -768,7 +768,7 @@ model covenant {
   id         String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   created_at DateTime    @default(now()) @db.Timestamptz(6)
   name       String?
-  company_id String      @db.Uuid
+  company_id String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_active  Boolean?    @default(true)
   guild_id   String      @db.Uuid
   category   category[]
@@ -783,7 +783,7 @@ model covenant {
 model custom_form {
   id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   created_at   DateTime       @default(now()) @db.Timestamptz(6)
-  company_id   String         @db.Uuid
+  company_id   String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   form         Json
   name         String
   company      company        @relation(fields: [company_id], references: [id], onDelete: Cascade)
@@ -799,7 +799,7 @@ model customer_services {
   customer_id        String?              @db.Uuid
   service_name       String?
   service_validity   DateTime?            @db.Date
-  company_id         String?              @db.Uuid
+  company_id         String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_active          Boolean?             @default(true)
   service_start      DateTime?            @db.Date
   contract_number    String?
@@ -834,7 +834,7 @@ model customers {
   address                    String?
   id                         String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   is_active                  Boolean?                     @default(true)
-  company_id                 String                       @db.Uuid
+  company_id                 String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   reason_for_termination     String?
   termination_date           DateTime?                    @db.Date
   /// Datos fiscales del receptor (facturación ARCA). Nullable: se exigen recién al facturar.
@@ -874,7 +874,7 @@ model customers {
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model daily_indicators {
   id            String             @id(map: "kpi_daily_indicators_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id    String             @db.Uuid
+  company_id    String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   snapshot_date DateTime           @db.Date
   metrics       Json               @default("{}")
   source        indicator_function
@@ -894,7 +894,7 @@ model dailyreport {
   date            DateTime                       @db.Date
   created_at      DateTime?                      @default(now()) @db.Timestamp(6)
   updated_at      DateTime?                      @default(now()) @db.Timestamp(6)
-  company_id      String                         @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_active       Boolean?                       @default(true)
   status          daily_report_header_status_new @default(abierto)
   company         company                        @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "public_dailyreport_company_id_fkey")
@@ -1021,7 +1021,7 @@ model diagram_type {
   id                                                             String                          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   created_at                                                     DateTime                        @default(now()) @db.Timestamptz(6)
   name                                                           String?
-  company_id                                                     String                          @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id                                                     String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   color                                                          String
   short_description                                              String
   work_active                                                    Boolean?                        @default(false)
@@ -1066,7 +1066,7 @@ model document_types {
   special                 Boolean
   is_active               Boolean                   @default(true)
   description             String?
-  company_id              String?                   @db.Uuid
+  company_id              String?  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_it_montlhy           Boolean?
   private                 Boolean?
   down_document           Boolean?
@@ -1094,7 +1094,7 @@ model documents_company {
   is_active         Boolean?        @default(true)
   id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   user_id           String?         @db.Uuid
-  applies           String          @db.Uuid
+  applies           String          @default(dbgenerated("app_current_company_id()")) @db.Uuid
   deny_reason       String?
   document_path     String?         @unique
   period            String?
@@ -1239,7 +1239,7 @@ model employees {
   workflow_diagram                                                  String?                        @db.Uuid
   id                                                                String                         @id(map: "companies_employees_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   allocated_to                                                      String[]                       @db.Uuid
-  company_id                                                        String?                        @db.Uuid
+  company_id                                                        String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_active                                                         Boolean?                       @default(true)
   reason_for_termination                                            reason_for_termination_enum?
   termination_date                                                  DateTime?                      @db.Date
@@ -1332,7 +1332,7 @@ model equipment_owners {
   cuit                           String
   contract_type                  contract_type_enum
   created_at                     DateTime?                        @default(now()) @db.Timestamptz(6)
-  company_id                     String?                          @db.Uuid
+  company_id                     String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_active                      Boolean?                         @default(true)
   equipment_owner_contract_types equipment_owner_contract_types[]
   company                        company?                         @relation(fields: [company_id], references: [id], onDelete: Cascade)
@@ -1372,7 +1372,7 @@ model guild {
   id         String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   created_at DateTime    @default(now()) @db.Timestamptz(6)
   name       String?
-  company_id String?     @db.Uuid
+  company_id String?  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_active  Boolean     @default(true)
   covenant   covenant[]
   employees  employees[]
@@ -1406,7 +1406,7 @@ model hierarchy {
   other_equipment other_equipment[]
   vehicles        vehicles[]
   pre_employees   pre_employees[]
-  company_id      String            @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company         company           @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([company_id], map: "idx_hierarchy_company_id")
@@ -1418,7 +1418,7 @@ model hierarchy {
 /// El titular solo puede ser un legajo activo con ese mismo sector y puesto en su ficha (lo valida la server action).
 model org_chart_positions {
   id            String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id    String               @db.Uuid
+  company_id    String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   sector_id     String               @db.Uuid
   position_id   String               @db.Uuid
   reports_to_id String?              @db.Uuid
@@ -1473,7 +1473,7 @@ model kpi_revisions {
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model kpis {
   id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id                String          @db.Uuid
+  company_id                String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   name                      String
   code                      String
   number                    String?
@@ -1537,7 +1537,7 @@ model maintenance_activity_log {
   maintenance_requests   maintenance_requests? @relation(fields: [maintenance_request_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   profile                profile?              @relation(fields: [performed_by], references: [id], onUpdate: NoAction)
   work_orders            work_orders?          @relation(fields: [work_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  company_id             String                @db.Uuid
+  company_id             String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                company               @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([maintenance_order_id], map: "idx_activity_log_order", where: raw("(maintenance_order_id IS NOT NULL)"))
@@ -1612,7 +1612,7 @@ model maintenance_order_items {
   /// Grupo de reparaciones del que salio el item (null = se cargo suelto)
   maintenance_group_id                                               String?                               @db.Uuid
   maintenance_request_groups                                         maintenance_request_groups?           @relation(fields: [maintenance_group_id], references: [id], map: "maintenance_order_items_group_fkey")
-  company_id                                                         String                                @db.Uuid
+  company_id                                                         String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                                                            company                               @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([maintenance_order_id], map: "idx_maintenance_order_items_order")
@@ -1673,7 +1673,7 @@ model maintenance_orders {
   profile_maintenance_orders_rejected_byToprofile             profile?                   @relation("maintenance_orders_rejected_byToprofile", fields: [rejected_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   profile_maintenance_orders_scheduled_byToprofile            profile?                   @relation("maintenance_orders_scheduled_byToprofile", fields: [scheduled_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   profile_maintenance_orders_workshop_approved_byToprofile    profile?                   @relation("maintenance_orders_workshop_approved_byToprofile", fields: [workshop_approved_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  company_id                                                  String                     @db.Uuid
+  company_id                                                  String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                                                     company                    @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   stock_movements      stock_movements[]
@@ -1696,7 +1696,7 @@ model maintenance_request_groups {
   description                       String?
   is_active                         Boolean                             @default(true)
   created_at                        DateTime                            @default(now()) @db.Timestamptz(6)
-  company_id                        String                              @db.Uuid
+  company_id                        String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                           company                             @relation(fields: [company_id], references: [id], onDelete: Cascade)
   maintenance_group_type_of_repairs maintenance_group_type_of_repairs[]
   maintenance_order_items           maintenance_order_items[]
@@ -1739,7 +1739,7 @@ model maintenance_request_items {
   /// Grupo de reparaciones del que salio el item (null = se cargo suelto)
   maintenance_group_id                                             String?                     @db.Uuid
   maintenance_request_groups                                       maintenance_request_groups? @relation(fields: [maintenance_group_id], references: [id], map: "maintenance_request_items_group_fkey")
-  company_id                                                       String                      @db.Uuid
+  company_id                                                       String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                                                          company                     @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@unique([maintenance_request_id, checklist_deviation_id])
@@ -1789,7 +1789,7 @@ model maintenance_requests {
   profile_maintenance_requests_rejected_byToprofile   profile?                    @relation("maintenance_requests_rejected_byToprofile", fields: [rejected_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   profile_maintenance_requests_supervisor_idToprofile profile?                    @relation("maintenance_requests_supervisor_idToprofile", fields: [supervisor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   profile_maintenance_requests_user_idToprofile       profile?                    @relation("maintenance_requests_user_idToprofile", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  company_id                                          String                      @db.Uuid
+  company_id                                          String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                                             company                     @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([checklist_answer_id], map: "idx_maintenance_requests_checklist")
@@ -1820,7 +1820,7 @@ model model_vehicles {
   brand_vehicles  brand_vehicles?   @relation(fields: [brand], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "public_model_vehicles_brand_fkey")
   other_equipment other_equipment[]
   vehicles        vehicles[]
-  company_id      String            @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company         company           @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([company_id], map: "idx_model_vehicles_company_id")
@@ -1848,7 +1848,7 @@ model modules {
 /// `dedupe_key` evita repetir el mismo aviso (reintentos de un job, doble click en una acción).
 model notification_events {
   id              String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id      String                    @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   event_key       String
   title           String
   body            String?
@@ -1877,7 +1877,7 @@ model notification_deliveries {
   id         String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   event_id   String              @db.Uuid
   user_id    String              @db.Uuid
-  company_id String              @db.Uuid
+  company_id String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   in_app     Boolean             @default(false)
   email      Boolean             @default(false)
   read_at    DateTime?           @db.Timestamptz(6)
@@ -1914,7 +1914,7 @@ model role_notifications {
 /// entorno a proposito: una lista global recibiria datos de todas las empresas.
 model notification_settings {
   id         String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id String            @db.Uuid
+  company_id String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   kind       notification_kind
   recipients String[]          @default([])
   is_active  Boolean           @default(true)
@@ -1930,7 +1930,7 @@ model notification_settings {
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model other_equipment {
   id                             String                           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id                     String                           @db.Uuid
+  company_id                     String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   type_id                        String                           @db.Uuid
   sub_type_id                    String?                          @db.Uuid
   brand_id                       Int?
@@ -2031,7 +2031,7 @@ model preparte {
   rejected_reason         String?
   reprogram               String?                @db.Uuid
   reprogram_reason        String?
-  company_id              String?                @db.Uuid
+  company_id              String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   sector_service_id       String?                @db.Uuid
   areas_service_id        String?                @db.Uuid
   equipos_cliente         String?                @db.Uuid
@@ -2092,7 +2092,7 @@ model pre_employees {
   id              String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   created_at      DateTime                 @default(now()) @db.Timestamptz(6)
   updated_at      DateTime                 @default(now()) @updatedAt @db.Timestamptz(6)
-  company_id      String                   @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   pre_file_number String
   status          pre_employee_status_enum @default(en_proceso)
 
@@ -2162,7 +2162,7 @@ model documents_pre_employees {
   pre_employees  pre_employees  @relation(fields: [pre_employee_id], references: [id], onDelete: Cascade)
   document_types document_types @relation(fields: [document_type_id], references: [id], onDelete: Cascade)
   profile        profile?       @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  company_id     String         @db.Uuid
+  company_id     String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company        company        @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@unique([pre_employee_id, document_type_id])
@@ -2468,7 +2468,7 @@ model service_items {
   id                  String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   created_at          DateTime                       @default(now()) @db.Timestamptz(6)
   customer_service_id String                         @db.Uuid
-  company_id          String                         @db.Uuid
+  company_id          String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   item_name           String
   item_description    String
   /// Precio vigente. Lo escribe SOLO la action que aplica una revision, en la misma
@@ -2516,7 +2516,7 @@ model service_sectors {
 model share_company_users {
   created_at  DateTime   @default(now()) @db.Timestamptz(6)
   profile_id  String?    @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id  String?    @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id  String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   id          String     @id @unique(map: "share_company_users_id2_key") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   customer_id String?    @db.Uuid
   modules     modulos[]
@@ -2534,7 +2534,7 @@ model sub_type {
   created_at                   DateTime                       @default(now()) @db.Timestamptz(6)
   name                         String
   is_active                    Boolean?                       @default(true)
-  company_id                   String?                        @db.Uuid
+  company_id                   String?  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   type                         String?                        @db.Uuid
   tire_template_id             String?                        @db.Uuid
   checklist_template_sub_types checklist_template_sub_types[]
@@ -2607,7 +2607,7 @@ model type {
   created_at                                                 DateTime                         @default(now()) @db.Timestamptz(6)
   name                                                       String
   is_active                                                  Boolean?                         @default(true)
-  company_id                                                 String?                          @db.Uuid
+  company_id                                                 String?  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   has_hitch                                                  Boolean?                         @default(false)
   is_tractor_unit                                            Boolean?                         @default(false)
   applies_to                                                 String?                          @default("vehicle") @db.VarChar(20)
@@ -2635,7 +2635,7 @@ model type_hitch_types {
   created_at                                     DateTime? @default(now()) @db.Timestamptz(6)
   type_type_hitch_types_compatible_type_idTotype type      @relation("type_hitch_types_compatible_type_idTotype", fields: [compatible_type_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   type_type_hitch_types_type_idTotype            type      @relation("type_hitch_types_type_idTotype", fields: [type_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  company_id                                     String    @db.Uuid
+  company_id                                     String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                                        company   @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@unique([type_id, compatible_type_id])
@@ -2663,7 +2663,7 @@ model types_of_contract {
   description String?
   is_active   Boolean?    @default(true)
   employees   employees[]
-  company_id  String      @db.Uuid
+  company_id  String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company     company     @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([company_id], map: "idx_types_of_contract_company_id")
@@ -2678,7 +2678,7 @@ model types_of_repairs {
   description                         String
   criticity                           String?
   is_active                           Boolean                               @default(true)
-  company_id                          String                                @db.Uuid
+  company_id                          String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   type_of_maintenance                 type_of_maintenance_ENUM?
   id                                  String                                @id @unique(map: "types_of_repairs_id-2_key") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   multi_equipment                     Boolean                               @default(false)
@@ -2712,7 +2712,7 @@ model user_permissions {
   user_id                                       String    @db.Uuid
   tab_id                                        String    @db.Uuid
   action_id                                     String    @db.Uuid
-  company_id                                    String    @db.Uuid
+  company_id                                    String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_granted                                    Boolean?  @default(true)
   assigned_by                                   String?   @db.Uuid
   created_at                                    DateTime? @default(now()) @db.Timestamptz(6)
@@ -2735,7 +2735,7 @@ model user_roles {
   id                                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   user_id                                 String    @db.Uuid
   role_id                                 BigInt
-  company_id                              String    @db.Uuid
+  company_id                              String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   assigned_by                             String?   @db.Uuid
   assigned_at                             DateTime? @default(now()) @db.Timestamptz(6)
   profile_user_roles_assigned_byToprofile profile?  @relation("user_roles_assigned_byToprofile", fields: [assigned_by], references: [credential_id], onDelete: SetNull, onUpdate: NoAction)
@@ -2767,7 +2767,7 @@ model vehicles {
   termination_date              DateTime?                       @db.Date
   reason_for_termination        termination_reason_enum?
   user_id                       String?                         @default(dbgenerated("app_current_user_id()")) @db.Uuid
-  company_id                    String?                         @db.Uuid
+  company_id                    String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   id                            String                          @id @unique(map: "vehicles_id2_key") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   type                          String                          @db.Uuid
   status                        status_type?                    @default(Incompleto)
@@ -2829,7 +2829,7 @@ model vehicles {
 model tire_brands {
   id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name       String
-  company_id String   @db.Uuid
+  company_id String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_active  Boolean  @default(true)
   created_at DateTime @default(now()) @db.Timestamptz(6)
 
@@ -2846,7 +2846,7 @@ model tire_types {
   name       String
   size       String
   tread_type TireTreadType
-  company_id String        @db.Uuid
+  company_id String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_active  Boolean       @default(true)
   created_at DateTime      @default(now()) @db.Timestamptz(6)
   updated_at DateTime      @updatedAt @db.Timestamptz(6)
@@ -2862,7 +2862,7 @@ model tire_types {
 /// Vinculo tipo + marca de cubierta -> material SERIAL de Almacenes (etapa 6). Nunca se borra.
 model tire_materials {
   id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id    String      @db.Uuid
+  company_id    String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   tire_type_id  String      @db.Uuid
   tire_brand_id String      @db.Uuid
   material_id   String      @unique @db.Uuid
@@ -2889,7 +2889,7 @@ model tires {
   discard_photo   String?
   discard_comment String?
   discarded_at    DateTime?         @db.Timestamptz(6)
-  company_id      String            @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_active       Boolean           @default(true)
   created_at      DateTime          @default(now()) @db.Timestamptz(6)
   updated_at      DateTime          @updatedAt @db.Timestamptz(6)
@@ -2914,7 +2914,7 @@ model tire_templates {
   description         String?
   is_vehicle_override Boolean  @default(false)
   source_template_id  String?  @db.Uuid
-  company_id          String   @db.Uuid
+  company_id          String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_active           Boolean  @default(true)
   created_at          DateTime @default(now()) @db.Timestamptz(6)
 
@@ -2987,7 +2987,7 @@ model tire_service_orders {
   service_date       DateTime               @db.Timestamptz(6)
   status             TireServiceOrderStatus @default(OPEN)
   created_by         String                 @db.Uuid
-  company_id         String                 @db.Uuid
+  company_id         String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   created_at         DateTime               @default(now()) @db.Timestamptz(6)
   closed_at          DateTime?              @db.Timestamptz(6)
   axle_snapshot      Json?
@@ -3043,7 +3043,7 @@ model work_diagram {
   employees                     employees[]
   diagram_type                  diagram_type?                   @relation(fields: [inactive_novelty], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "work-diagram_inactive_novelty_fkey")
   work_diagram_active_novelties work_diagram_active_novelties[]
-  company_id                    String                          @db.Uuid
+  company_id                    String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                       company                         @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([company_id], map: "idx_work_diagram_company_id")
@@ -3058,7 +3058,7 @@ model work_diagram_active_novelties {
   created_at      DateTime     @default(now()) @db.Timestamptz(6)
   diagram_type    diagram_type @relation(fields: [diagram_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   work_diagram    work_diagram @relation(fields: [work_diagram_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  company_id      String       @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company         company      @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@unique([work_diagram_id, diagram_type_id], map: "work_diagram_active_novelties_unique")
@@ -3093,7 +3093,7 @@ model work_order_item_repairs {
   types_of_repairs                                             types_of_repairs       @relation(fields: [repair_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   profile_work_order_item_repairs_technician_notes_byToprofile profile?               @relation("work_order_item_repairs_technician_notes_byToprofile", fields: [technician_notes_by], references: [id], onUpdate: NoAction)
   work_order_items                                             work_order_items       @relation(fields: [work_order_item_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  company_id                                                   String                 @db.Uuid
+  company_id                                                   String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                                                      company                @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@unique([work_order_item_id, repair_type_id], map: "unique_work_order_item_repair")
@@ -3130,7 +3130,7 @@ model work_orders {
   id                                        String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   order_number                              String                     @unique
   sequence_number                           Int
-  company_id                                String                     @db.Uuid
+  company_id                                String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   /// Ticket 596: nullable — la OT puede ser de un vehiculo O de un equipamiento
   equipment_id                              String?                    @db.Uuid
   /// Ticket 596: equipamiento (other_equipment). Excluyente con equipment_id (CHECK en BD)
@@ -3212,7 +3212,7 @@ model workshop_sectors {
   work_order_item_repairs   work_order_item_repairs[]
   work_orders               work_orders[]
   workshops                 workshops                   @relation(fields: [workshop_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  company_id                String                      @db.Uuid
+  company_id                String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                   company                     @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([is_active], map: "idx_workshop_sectors_is_active")
@@ -3237,7 +3237,7 @@ model workshops {
   provider_phone          String?
   provider_email          String?
   is_active               Boolean                   @default(true)
-  company_id              String                    @db.Uuid
+  company_id              String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   maintenance_order_items maintenance_order_items[]
   work_orders             work_orders[]
   workshop_sectors        workshop_sectors[]
@@ -3267,7 +3267,7 @@ model user_table_preferences {
 /// marca los tableros creados a partir de un tablero por defecto (alias de los links viejos `?tab=`).
 model user_dashboards {
   id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id String   @db.Uuid
+  company_id String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   user_id    String   @db.Uuid
   name       String   @db.VarChar(60)
   position   Int      @default(0)
@@ -3708,7 +3708,7 @@ enum clothing_delivery_type {
 /// (ticket 671). El secreto NUNCA se guarda en claro: solo su hash scrypt.
 model external_api_clients {
   id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id    String    @db.Uuid
+  company_id    String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   name          String
   /// Identificador publico que viaja como usuario en el Basic Auth
   client_id     String    @unique
@@ -3941,7 +3941,7 @@ model service_item_price_revisions {
 /// polinomio). Va en jsonb y no en columnas fijas porque las tres formas no se parecen entre si.
 model price_update_rules {
   id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id          String              @db.Uuid
+  company_id          String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   customer_service_id String?             @db.Uuid
   name                String
   method              price_update_method
@@ -3963,7 +3963,7 @@ model price_update_rules {
 /// un precio siempre puede explicar de donde salio. `rule_id` nulo = ajuste manual suelto.
 model price_update_runs {
   id              String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id      String                         @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   rule_id         String?                        @db.Uuid
   applied_at      DateTime                       @default(now()) @db.Timestamptz(6)
   applied_by      String?                        @db.Uuid
@@ -3986,7 +3986,7 @@ model price_update_runs {
 /// y se emite otra.
 model certifications {
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id          String                @db.Uuid
+  company_id          String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   customer_id         String                @db.Uuid
   customer_service_id String                @db.Uuid
   number              String
@@ -4093,7 +4093,7 @@ enum arca_credential_status {
 /// Datos fiscales del emisor (1:1 con la empresa). Razón social y CUIT salen de `company`.
 model company_fiscal_profiles {
   id                     String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id             String                @unique @db.Uuid
+  company_id             String  @unique @default(dbgenerated("app_current_company_id()")) @db.Uuid
   tax_condition          fiscal_tax_condition
   gross_income_number    String?               @db.VarChar(30)
   gross_income_regime    gross_income_regime?
@@ -4118,7 +4118,7 @@ model company_fiscal_profiles {
 /// comprobantes no se borra: se desactiva.
 model sales_points {
   id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id String   @db.Uuid
+  company_id String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   number     Int
   name       String   @db.VarChar(120)
   is_active  Boolean  @default(true)
@@ -4136,7 +4136,7 @@ model sales_points {
 /// se devuelve al cliente ni se loguea. A lo sumo un `activo` y un `pendiente` por ambiente.
 model arca_credentials {
   id               String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id       String                 @db.Uuid
+  company_id       String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   environment      arca_environment
   status           arca_credential_status
   alias            String                 @db.VarChar(60)
@@ -4169,7 +4169,7 @@ model arca_credentials {
 /// así que se persiste ANTES de usarlo y se reutiliza. Va atado a la credencial que lo firmó.
 model arca_tokens {
   id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id    String           @db.Uuid
+  company_id    String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   environment   arca_environment
   service       String           @default("wsfe") @db.VarChar(20)
   credential_id String           @db.Uuid
@@ -4199,7 +4199,7 @@ model arca_locks {
 /// de guardar.
 model arca_call_logs {
   id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id   String           @db.Uuid
+  company_id   String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   environment  arca_environment
   operation    String           @db.VarChar(60)
   invoice_id   String?          @db.Uuid
@@ -4240,7 +4240,7 @@ enum invoice_status {
 /// ARCA no responde, es lo que permite reconciliar con `FECompConsultar` sin duplicar.
 model invoices {
   id                        String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id                String                   @db.Uuid
+  company_id                String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   /// Ambiente con el que se emitió (o se va a emitir). La numeración es por ambiente.
   environment               arca_environment
   status                    invoice_status           @default(borrador)
@@ -4439,7 +4439,7 @@ enum stock_destination_type {
 
 model warehouses {
   id                  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id          String            @db.Uuid
+  company_id          String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   code                String
   name                String
   address             String?
@@ -4464,7 +4464,7 @@ model warehouses {
 
 model material_categories {
   id         String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id String      @db.Uuid
+  company_id String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   name       String
   is_active  Boolean     @default(true)
   created_at DateTime    @default(now()) @db.Timestamptz(6)
@@ -4478,7 +4478,7 @@ model material_categories {
 
 model measurement_units {
   id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id   String      @db.Uuid
+  company_id   String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   name         String
   abbreviation String
   is_active    Boolean     @default(true)
@@ -4496,7 +4496,7 @@ model measurement_units {
 
 model materials {
   id                String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id        String                 @db.Uuid
+  company_id        String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   code              String
   name              String
   description       String?
@@ -4534,7 +4534,7 @@ model materials {
 
 model material_batches {
   id             String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id     String                 @db.Uuid
+  company_id     String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   material_id    String                 @db.Uuid
   batch_number   String
   expires_at     DateTime?              @db.Date
@@ -4551,7 +4551,7 @@ model material_batches {
 
 model material_units {
   id               String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id       String                 @db.Uuid
+  company_id       String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   material_id      String                 @db.Uuid
   serial_number    String
   status           material_unit_status   @default(IN_STOCK)
@@ -4578,7 +4578,7 @@ model material_units {
 /// son BATCH). La unicidad real es un indice NULLS NOT DISTINCT escrito a mano en la migracion.
 model stock_balances {
   id           String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id   String            @db.Uuid
+  company_id   String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   material_id  String            @db.Uuid
   warehouse_id String            @db.Uuid
   batch_id     String?           @db.Uuid
@@ -4599,7 +4599,7 @@ model stock_balances {
 /// (`reverses_movement_id`), nunca editando.
 model stock_movements {
   id                   String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id           String                  @db.Uuid
+  company_id           String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   number               String
   type                 stock_movement_type
   warehouse_id         String                  @db.Uuid
@@ -4688,7 +4688,7 @@ model stock_movement_lines {
 /// movimiento de stock: la unidad ya habia salido y su costo queda imputado a quien la tenia.
 model material_unit_write_offs {
   id               String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id       String                    @db.Uuid
+  company_id       String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   unit_id          String                    @db.Uuid
   /// Ultimo movimiento de la unidad al darla de baja: el prestamo que cierra.
   loan_movement_id String                    @db.Uuid
@@ -4710,7 +4710,7 @@ model material_unit_write_offs {
 /// (`stock_movements.material_request_id`); lo entregado se calcula de esas salidas.
 model material_requests {
   id                   String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id           String                  @db.Uuid
+  company_id           String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   number               String
   status               material_request_status @default(PENDING_APPROVAL)
   requested_by         String                  @db.Uuid
@@ -4770,7 +4770,7 @@ model material_request_lines {
 
 /// Configuracion de Almacenes por empresa (etapa 3).
 model warehouse_settings {
-  company_id             String   @id @db.Uuid
+  company_id             String  @id @default(dbgenerated("app_current_company_id()")) @db.Uuid
   /// Monto maximo de una salida directa (sin pedido). NULL = sin limite.
   direct_exit_max_amount Decimal? @db.Decimal(15, 2)
   updated_at             DateTime @default(now()) @updatedAt @db.Timestamptz(6)
@@ -4801,7 +4801,7 @@ enum purchase_request_status {
 /// Proveedor. No se borra si tiene uso: se desactiva.
 model suppliers {
   id                String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id        String                    @db.Uuid
+  company_id        String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   name              String
   trade_name        String?
   /// CUIT normalizado (solo digitos).
@@ -4857,7 +4857,7 @@ model supplier_contacts {
 /// Rubros de proveedor, catalogo por empresa.
 model supplier_categories {
   id         String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id String                    @db.Uuid
+  company_id String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   name       String
   is_active  Boolean                   @default(true)
   created_at DateTime                  @default(now()) @db.Timestamptz(6)
@@ -4903,7 +4903,7 @@ model supplier_documents {
 /// Solicitud de compra. Destino opcional (sin destino = para stock).
 model purchase_requests {
   id                   String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id           String                   @db.Uuid
+  company_id           String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   number               String
   status               purchase_request_status  @default(DRAFT)
   requested_by         String                   @db.Uuid
@@ -5005,7 +5005,7 @@ enum purchase_order_status {
 /// respuesta del proveedor.
 model purchase_quotes {
   id              String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id      String                 @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   number          String
   supplier_id     String                 @db.Uuid
   status          purchase_quote_status  @default(DRAFT)
@@ -5060,7 +5060,7 @@ model purchase_quote_lines {
 /// Orden de compra (OC-000001). Sus lineas cubren lineas de solicitudes aprobadas (N<->N).
 model purchase_orders {
   id                String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id        String                 @db.Uuid
+  company_id        String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   number            String
   supplier_id       String                 @db.Uuid
   quote_id          String?                @db.Uuid
@@ -5157,7 +5157,7 @@ model purchase_order_rejections {
 /// por el motor de stock (un movimiento ENTRY); las de servicio no tocan el stock.
 model purchase_receipts {
   id                   String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id           String                   @db.Uuid
+  company_id           String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   number               String
   order_id             String                   @db.Uuid
   supplier_id          String                   @db.Uuid
@@ -5214,7 +5214,7 @@ model purchase_receipt_lines {
 /// y se controla contra la OC y lo recibido. "A pagar" (etapa 5) = CONFORMING o APPROVED.
 model supplier_invoices {
   id                       String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id               String                   @db.Uuid
+  company_id               String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   supplier_id              String                   @db.Uuid
   /// Id de CBTE_TYPES (1/2/3 A, 6/7/8 B, 11/12/13 C). Unico por proveedor + tipo + punto de venta +
   /// numero entre los NO anulados: indice parcial `supplier_invoices_voucher_key` (en SQL).
@@ -5332,7 +5332,7 @@ model supplier_invoice_taxes {
 /// Conceptos para las lineas de gasto sin OC (luz, honorarios, fletes sueltos).
 model purchase_expense_categories {
   id         String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id String                   @db.Uuid
+  company_id String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   name       String
   is_active  Boolean                  @default(true)
   created_at DateTime                 @default(now()) @db.Timestamptz(6)
@@ -5374,7 +5374,7 @@ enum arca_check_result {
 /// Configuración de Compras; el módulo de Tesorería le suma saldos, chequeras y conciliación.
 model treasury_accounts {
   id             String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id     String                    @db.Uuid
+  company_id     String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   kind           treasury_account_kind
   name           String
   bank_name      String?
@@ -5407,7 +5407,7 @@ model treasury_accounts {
 /// Orden de pago a un proveedor (OP-000001): comprobantes, NC y anticipos aplicados, retenciones y medios.
 model payment_orders {
   id                 String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id         String                       @db.Uuid
+  company_id         String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   number             String
   supplier_id        String                       @db.Uuid
   status             payment_order_status
@@ -5556,7 +5556,7 @@ model payment_order_payments {
 /// Régimen de retención (Ganancias, IVA, IIBB, SUSS) con sus alícuotas y mínimos.
 model withholding_regimes {
   id                    String                          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id            String                          @db.Uuid
+  company_id            String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   tax                   withholding_tax
   /// Código de régimen de SICORE/SIRE (3 dígitos).
   code                  String                          @db.VarChar(3)
@@ -5631,7 +5631,7 @@ enum treasury_concept_direction {
 /// El saldo es la suma de los vigentes con fecha hasta hoy (no se guarda).
 model treasury_movements {
   id                       String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id               String                  @db.Uuid
+  company_id               String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   account_id               String                  @db.Uuid
   /// Fecha valor: el dia en que la plata entra o sale de la cuenta.
   date                     DateTime                @db.Date
@@ -5681,7 +5681,7 @@ model treasury_movements {
 /// Concepto para clasificar los movimientos manuales (gastos bancarios, aporte de socios...).
 model treasury_concepts {
   id         String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id String                     @db.Uuid
+  company_id String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   name       String
   direction  treasury_concept_direction
   is_active  Boolean                    @default(true)
@@ -5696,7 +5696,7 @@ model treasury_concepts {
 /// Transferencia entre dos cuentas de la empresa (TR-000001). Genera dos movimientos TRANSFER.
 model treasury_transfers {
   id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id      String               @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   number          String
   date            DateTime             @db.Date
   from_account_id String               @db.Uuid
@@ -5788,7 +5788,7 @@ enum customer_receipt_line_kind {
 /// Recibo de cobranza a un cliente. Sin número mientras es borrador: lo toma al confirmar.
 model customer_receipts {
   id                     String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id             String                    @db.Uuid
+  company_id             String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   customer_id            String                    @db.Uuid
   number                 String?
   status                 customer_receipt_status   @default(DRAFT)
@@ -5865,7 +5865,7 @@ model customer_receipt_lines {
 model customer_receipt_withholdings {
   id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   receipt_id         String            @db.Uuid
-  company_id         String            @db.Uuid
+  company_id         String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   customer_id        String            @db.Uuid
   tax                withholding_tax
   /// Solo IIBB.
@@ -5946,7 +5946,7 @@ enum check_returned_by {
 /// vencimiento para depositar (fecha de pago + 30 días) se calcula, no se guarda.
 model third_party_checks {
   id                   String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id           String                        @db.Uuid
+  company_id           String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   kind                 third_party_check_kind
   number               String
   /// Normalizado (trim, espacios simples, mayúsculas): es parte de la clave de repetidos.
@@ -5993,7 +5993,7 @@ model third_party_checks {
 /// Documento que agrupa cheques: carga inicial, depósito (CD-), descuento (CL-) o rechazo (CR-).
 model third_party_check_operations {
   id              String                              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id      String                              @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   kind            check_operation_kind
   number          String?
   date            DateTime                            @db.Date
@@ -6065,7 +6065,7 @@ model third_party_check_events {
 /// físicos. "Agotada" y "activa" se calculan; la baja lleva motivo.
 model checkbooks {
   id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id    String       @db.Uuid
+  company_id    String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   account_id    String       @db.Uuid
   first_number  Int
   last_number   Int
@@ -6089,7 +6089,7 @@ model checkbooks {
 /// cambia solo `lib/own-checks.ts`; el débito lo confirma un usuario (movimiento OWN_CHECK).
 model own_checks {
   id                       String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id               String                  @db.Uuid
+  company_id               String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   kind                     own_check_kind
   account_id               String                  @db.Uuid
   checkbook_id             String?                 @db.Uuid
@@ -6162,7 +6162,7 @@ enum own_check_status {
 /// Perfil de columnas del extracto de una cuenta bancaria (spec Tesorería etapa 4 §2.1). Uno por cuenta.
 model bank_statement_profiles {
   id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id         String            @db.Uuid
+  company_id         String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   account_id         String            @unique @db.Uuid
   header_row         Int
   date_column        String            @db.VarChar(3)
@@ -6185,7 +6185,7 @@ model bank_statement_profiles {
 /// Importación de un extracto bancario: sus líneas y el período que cubren.
 model bank_statements {
   id            String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id    String                 @db.Uuid
+  company_id    String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   account_id    String                 @db.Uuid
   file_name     String
   date_from     DateTime               @db.Date
@@ -6207,7 +6207,7 @@ model bank_statements {
 model bank_statement_lines {
   id            String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   statement_id  String              @db.Uuid
-  company_id    String              @db.Uuid
+  company_id    String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   account_id    String              @db.Uuid
   row_number    Int
   date          DateTime            @db.Date
