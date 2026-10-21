@@ -15,9 +15,10 @@ import {
 
 const logger = new Logger('features/Clothing/catalog');
 
-/** Las acciones del catálogo se pueden invocar sin pasar por la pantalla: exigen el mismo permiso que el botón. */
-async function requireCatalogPermission(tab: 'marcas_indumentaria' | 'talles_indumentaria' | 'articulos_indumentaria', action: 'create' | 'update' | 'delete') {
-  if (!(await checkPermissionServer('configuracion', tab, action))) {
+/** Las acciones del catálogo se pueden invocar sin pasar por la pantalla: exigen el mismo permiso que el botón (alcanza con alguno de los indicados). */
+async function requireCatalogPermission(tab: 'marcas_indumentaria' | 'talles_indumentaria' | 'articulos_indumentaria', ...actions: Array<'create' | 'update' | 'delete'>) {
+  const allowed = await Promise.all(actions.map((action) => checkPermissionServer('configuracion', tab, action)));
+  if (!allowed.some(Boolean)) {
     throw new Error('No tenés permiso para modificar el catálogo de indumentaria.');
   }
 }
@@ -279,7 +280,7 @@ type BrandSizePair = { brandId: string; sizeId: string };
  * manipulación, y un guardado parcial dejaría al usuario creyendo que se grabó lo que mandó.
  */
 export async function setItemBrandSizes(itemId: string, changes: { add: BrandSizePair[]; remove: BrandSizePair[] }) {
-  await requireCatalogPermission('articulos_indumentaria', 'update');
+  await requireCatalogPermission('articulos_indumentaria', 'create', 'update');
   const companyId = await getActiveCompanyId();
   logger.debug('Updating item brand sizes', { data: { itemId, add: changes.add.length, remove: changes.remove.length } });
 
