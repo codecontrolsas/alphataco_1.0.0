@@ -43,7 +43,8 @@ export function changeRowResources(
       const removed = await removeRowResources(tx, cmd.rowId, cmd.remove);
       const added = await addRowResources(tx, cmd.rowId, cmd.add);
       await reconcileStatus(tx, cmd.rowId);
-      await touchRow(tx, cmd.rowId);
+      // Sin cambios no se toca la versión: otro usuario con el formulario abierto no debe ver un conflicto falso.
+      if (added + removed > 0) await touchRow(tx, cmd.rowId);
 
       return { ...(await readRowOutcome(tx, cmd.rowId)), added, removed };
     }

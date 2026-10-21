@@ -1051,7 +1051,7 @@ CREATE TRIGGER tr_dailyreportrows_history_before_update
   FOR EACH STATEMENT EXECUTE FUNCTION public.log_dailyreportrows_update_history();
 
 -- function dailyreportrows_bump_version: version de la linea (baseVersion de los casos de uso). Sube con cualquier UPDATE
--- que cambie algo; corre despues del trigger de historial (orden alfabetico) y `version` no es un campo auditado.
+-- que cambie algo. `version` no es un campo auditado: el trigger de historial (AFTER, por sentencia) la ignora.
 CREATE OR REPLACE FUNCTION public.dailyreportrows_bump_version()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -1067,3 +1067,14 @@ CREATE TRIGGER trg_dailyreportrows_version
   BEFORE UPDATE ON public.dailyreportrows
   FOR EACH ROW WHEN (OLD.* IS DISTINCT FROM NEW.*)
   EXECUTE FUNCTION public.dailyreportrows_bump_version();
+
+-- Unicidad de las pivotes de recursos de la linea (altas idempotentes de los casos de uso). Los parciales de equipos no
+-- se pueden declarar en schema.prisma: viven solo en SQL y en la migracion.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_dr_employee_rel_row_employee
+  ON public.dailyreportemployeerelations (daily_report_row_id, employee_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_dr_equipment_rel_row_equipment
+  ON public.dailyreportequipmentrelations (daily_report_row_id, equipment_id) WHERE equipment_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_dr_equipment_rel_row_other_equipment
+  ON public.dailyreportequipmentrelations (daily_report_row_id, other_equipment_id) WHERE other_equipment_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_dr_customer_equipment_rel_row_equipment
+  ON public.dailyreport_customer_equipment_relations (daily_report_row_id, customer_equipment_id);

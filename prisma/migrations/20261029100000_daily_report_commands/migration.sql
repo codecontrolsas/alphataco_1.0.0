@@ -2,7 +2,7 @@
 -- (altas idempotentes) y tabla processed_commands (idempotencia por commandId).
 
 -- 1. Version de la linea: sube con cualquier UPDATE que cambie algo (bulk, certificacion, clonado, reconcile, jobs).
---    Corre despues del trigger de historial (orden alfabetico) y `version` no entra en sus campos cambiados.
+--    `version` no entra en los campos que audita el trigger de historial (AFTER, por sentencia).
 ALTER TABLE public.dailyreportrows ADD COLUMN IF NOT EXISTS version integer NOT NULL DEFAULT 1;
 
 CREATE OR REPLACE FUNCTION public.dailyreportrows_bump_version()

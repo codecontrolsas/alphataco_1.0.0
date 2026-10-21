@@ -1,9 +1,11 @@
 import type { TenantContext } from '@/shared/lib/tenant-context';
 import { RowRuleError } from './errors';
-import { assertBaseVersion, assertCanChangeStatus, loadRowPermissions, lockRow } from './row-access';
+import { assertBaseVersion, assertCanChangeStatus, assertStatusSettable, loadRowPermissions, lockRow } from './row-access';
 import { readRowOutcome, reconcileStatus } from './row-state';
 import { runCommand } from './run-command';
 import type { ChangeRowStatusCommand, RowWriteResult, UseCaseDeps, UseCaseResult } from './types';
+
+const SETTABLE_STATUSES: readonly string[] = ['ejecutado', 'cancelado', 'pendiente'];
 
 /**
  * CU-3: cambiar el estado de una línea (`ejecutado`, `cancelado`, `pendiente`) o completar un turno. Con los dos turnos
@@ -33,6 +35,13 @@ export function changeRowStatus(
     },
     async (tx) => {
       const completing = Boolean(cmd.completeDay || cmd.completeNight);
+      // Los tipos no se aplican en runtime: solo estos estados se pueden fijar por acá.
+      if (cmd.status !== undefined) {
+        assertStatusSettable(cmd.status);
+        if (!SETTABLE_STATUSES.includes(cmd.status)) {
+          throw new RowRuleError('Estado no permitido en este comando.', 'INVALID_INPUT');
+        }
+      }
       if (completing === (cmd.status !== undefined)) {
         throw new RowRuleError('El pedido debe indicar un estado o un turno a completar, no ambos ni ninguno.', 'INVALID_INPUT');
       }

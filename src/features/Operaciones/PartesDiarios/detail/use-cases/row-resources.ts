@@ -3,11 +3,40 @@ import type { ResourceSet } from './types';
 
 /**
  * Altas y bajas EXPLÍCITAS de los recursos de una línea. Nunca "borrar todo y volver a crear": cada alta es un INSERT
- * idempotente (índices únicos de las pivotes) y cada baja es un DELETE acotado a los ids pedidos, así el historial
+ * idempotente (se filtra lo ya asignado y los índices únicos de las pivotes son la red de seguridad) y cada baja es un DELETE acotado a los ids pedidos, así el historial
  * registra exactamente un LINK o un UNLINK por recurso que cambió.
  */
 
-export async function addRowResources(tx: TenantTx, rowId: string, add: ResourceSet): Promise<number> {
+/**
+ * Lo que `add` trae y la línea todavía no tiene. Hace falta filtrar antes de insertar: el trigger de historial de las
+ * pivotes es BEFORE INSERT por fila y escribiría un LINK aunque `ON CONFLICT DO NOTHING` descartara la fila.
+ */
+async function onlyMissing(tx: TenantTx, rowId: string, add: ResourceSet): Promise<ResourceSet> {
+  const [employees, equipment, customerEquipment] = await Promise.all([
+    tx.dailyreportemployeerelations.findMany({ where: { daily_report_row_id: rowId }, select: { employee_id: true } }),
+    tx.dailyreportequipmentrelations.findMany({
+      where: { daily_report_row_id: rowId },
+      select: { equipment_id: true, other_equipment_id: true },
+    }),
+    tx.dailyreport_customer_equipment_relations.findMany({
+      where: { daily_report_row_id: rowId },
+      select: { customer_equipment_id: true },
+    }),
+  ]);
+  const hasEmployee = new Set(employees.map((relation) => relation.employee_id));
+  const hasEquipment = new Set(equipment.map((relation) => relation.equipment_id));
+  const hasOther = new Set(equipment.map((relation) => relation.other_equipment_id));
+  const hasCustomerEquipment = new Set(customerEquipment.map((relation) => relation.customer_equipment_id));
+  return {
+    employees: add.employees.filter((employee) => !hasEmployee.has(employee.id)),
+    equipment: add.equipment.filter((id) => !hasEquipment.has(id)),
+    otherEquipment: add.otherEquipment.filter((id) => !hasOther.has(id)),
+    customerEquipment: add.customerEquipment.filter((id) => !hasCustomerEquipment.has(id)),
+  };
+}
+
+export async function addRowResources(tx: TenantTx, rowId: string, requested: ResourceSet): Promise<number> {
+  const add = await onlyMissing(tx, rowId, requested);
   let added = 0;
 
   if (add.employees.length > 0) {

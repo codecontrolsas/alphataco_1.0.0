@@ -30,16 +30,12 @@ import {
 import { prismaBase } from '@/shared/lib/prisma';
 import { getTenantContext } from '@/shared/lib/tenant-db';
 import { changeRowResources } from './use-cases/change-row-resources';
+import { changeRowResourcesSchema, changeRowStatusSchema } from './use-cases/command-schemas';
 import { changeRowStatus } from './use-cases/change-row-status';
 import { createRow } from './use-cases/create-row';
 import { syncRowResources } from './use-cases/row-resources';
-import type {
-  ChangeRowResourcesCommand,
-  ChangeRowStatusCommand,
-  DailyReportRowInput,
-  RowWriteResult,
-  UseCaseResult,
-} from './use-cases/types';
+import { touchRow } from './use-cases/row-state';
+import type { DailyReportRowInput, RowWriteResult, UseCaseResult } from './use-cases/types';
 
 const logger = new Logger('features/Operaciones/PartesDiarios/detail/mutations');
 
@@ -125,19 +121,25 @@ export async function createDailyReportRowPrisma(data: DailyReportRowInput & { d
 // 6b. COMANDOS CON IDEMPOTENCIA Y VERSION (casos de uso)
 // ============================================================================
 
+function invalidCommand(detail?: string): UseCaseResult<RowWriteResult> {
+  return { ok: false, code: 'INVALID_INPUT', message: detail ? `Pedido inválido: ${detail}` : 'Pedido inválido.' };
+}
+
 /**
  * Cambia los recursos de una línea con altas y bajas EXPLÍCITAS. Devuelve la unión del caso de uso: quien llama
  * decide qué mostrar según `code` (y debe lanzar si `!ok` en su `mutationFn`, para no mostrar un "guardado" falso).
  */
-export async function changeDailyReportRowResources(
-  command: ChangeRowResourcesCommand
-): Promise<UseCaseResult<RowWriteResult>> {
-  return changeRowResources({ db: prismaBase }, await getTenantContext(), command);
+export async function changeDailyReportRowResources(command: unknown): Promise<UseCaseResult<RowWriteResult>> {
+  const parsed = changeRowResourcesSchema.safeParse(command);
+  if (!parsed.success) return invalidCommand(parsed.error.issues[0]?.message);
+  return changeRowResources({ db: prismaBase }, await getTenantContext(), parsed.data);
 }
 
 /** Cambia el estado de una línea (o completa un turno) con control de versión. */
-export async function changeDailyReportRowStatus(command: ChangeRowStatusCommand): Promise<UseCaseResult<RowWriteResult>> {
-  return changeRowStatus({ db: prismaBase }, await getTenantContext(), command);
+export async function changeDailyReportRowStatus(command: unknown): Promise<UseCaseResult<RowWriteResult>> {
+  const parsed = changeRowStatusSchema.safeParse(command);
+  if (!parsed.success) return invalidCommand(parsed.error.issues[0]?.message);
+  return changeRowStatus({ db: prismaBase }, await getTenantContext(), parsed.data);
 }
 
 // ============================================================================
@@ -194,8 +196,10 @@ export async function updateDailyReportRowPrisma(rowId: string, data: DailyRepor
         : null;
 
       // 2. Llevar los recursos al conjunto pedido aplicando solo la diferencia (altas y bajas reales)
-      await syncRowResources(tx, rowId, { employees, equipment, otherEquipment, customerEquipment });
+      const synced = await syncRowResources(tx, rowId, { employees, equipment, otherEquipment, customerEquipment });
       await reconcileRowResourceStatus(tx, [rowId]);
+      // Cambiar solo recursos no toca la fila: se sube la versión para que los comandos con `baseVersion` lo vean.
+      if (!updatedRow && synced.added + synced.removed > 0) await touchRow(tx, rowId);
 
       return updatedRow ?? tx.dailyreportrows.findUniqueOrThrow({ where: { id: rowId } });
     });

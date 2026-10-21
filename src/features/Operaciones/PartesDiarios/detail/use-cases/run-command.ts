@@ -47,7 +47,7 @@ export async function runCommand<T extends { rowId: string }>(
 
         if (claimed.length === 0) {
           const previous = await tx.$queryRaw<{ command_type: string; payload_hash: string; result: T | null }[]>`
-            SELECT command_type, payload_hash, result FROM processed_commands WHERE command_id = ${spec.commandId}::uuid`;
+            SELECT command_type, payload_hash, result FROM processed_commands WHERE command_id = ${spec.commandId}::uuid AND company_id = ${ctx.companyId}::uuid`;
           const found = previous[0];
           if (!found || found.command_type !== spec.type || found.payload_hash !== payloadHash || !found.result) {
             throw new RowRuleError('El identificador del comando ya se usó con otro pedido.', 'COMMAND_ID_REUSED');
@@ -58,7 +58,7 @@ export async function runCommand<T extends { rowId: string }>(
         const data = await handler(tx);
         await tx.$executeRaw`
           UPDATE processed_commands SET result = ${JSON.stringify(data)}::jsonb, entity_id = ${data.rowId}::uuid
-          WHERE command_id = ${spec.commandId}::uuid`;
+          WHERE command_id = ${spec.commandId}::uuid AND company_id = ${ctx.companyId}::uuid`;
         return { ok: true as const, data, replayed: false };
       },
       { timeout: COMMAND_TIMEOUT_MS }
