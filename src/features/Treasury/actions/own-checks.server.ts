@@ -8,6 +8,7 @@ import { withActor } from '@/shared/lib/actor';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { NO_PERMISSION, UUID_RE, firstIssue, toTreasuryActionError } from '../lib/action-errors';
+import { lockTreasuryAccount } from '../lib/account-lock';
 import { assertBankAccount, cancelMovements } from '../lib/movements';
 import { checkbookStatus, normalizeCheckNumber, ownCheckAlert } from '../lib/own-check-transitions';
 import { assertOwnTransition, debitOwnCheck, lockCheckbook, lockOwnChecks, moveOwnCheck, voidCheckNumber } from '../lib/own-checks';
@@ -64,7 +65,7 @@ export async function createCheckbook(values: CheckbookValues): Promise<ActionRe
       async (tx) => {
         const account = await assertBankAccount(tx, companyId, parsed.data.accountId);
         // La cuenta se bloquea: dos altas a la vez no pueden superponer rangos.
-        await tx.$queryRaw`SELECT id FROM treasury_accounts WHERE id = ${account.id}::uuid FOR UPDATE`;
+        await lockTreasuryAccount(tx, account.id);
         const overlap = await tx.checkbooks.findFirst({
           where: { account_id: account.id, first_number: { lte: last }, last_number: { gte: first } },
           select: { first_number: true, last_number: true },

@@ -6,6 +6,8 @@ import { prisma } from '@/shared/lib/prisma';
 import type { BulkRowUpdateData } from '../mutations.server';
 import type { Permissions } from '../columns/types';
 import { toReportDateString } from './report-date';
+import { RowRuleError, type RowErrorCode } from '../use-cases/errors';
+import { assertStatusSettable as assertStatusSettableInTx } from '../use-cases/row-access';
 import type { PrismaTransactionClient } from './row-query';
 import { canAssignRow, canCreateRows, canDeleteRow, canEditRow } from './row-permissions';
 
@@ -26,13 +28,7 @@ const logger = new Logger('features/Operaciones/PartesDiarios/detail/lib/row-gua
  * fila bloqueada (`FOR UPDATE`): un cambio de estado concurrente espera a que esta transacción termine.
  */
 
-/** Regla de negocio incumplida (permiso, estado de la línea o del parte). */
-export class RowRuleError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'RowRuleError';
-  }
-}
+export { RowRuleError };
 
 const MODULE = 'operaciones';
 const TAB = 'detalle-parte-diario';
@@ -68,9 +64,9 @@ async function loadRow(rowId: string, companyId: string): Promise<RowContext | n
   };
 }
 
-function deny(action: string, reason: string): never {
-  logger.warn('Operación rechazada por reglas del parte diario', { data: { action, reason } });
-  throw new RowRuleError(reason);
+function deny(action: string, reason: string, code: RowErrorCode = 'FORBIDDEN'): never {
+  logger.warn('Operación rechazada por reglas del parte diario', { data: { action, reason, code } });
+  throw new RowRuleError(reason, code);
 }
 
 const NO_ROW = 'La línea del parte diario no existe o no pertenece a la empresa activa.';
@@ -80,7 +76,7 @@ async function lockRowStatus(tx: PrismaTransactionClient, rowId: string): Promis
   const rows = await tx.$queryRaw<Array<{ status: string }>>`
     SELECT status::text AS status FROM dailyreportrows WHERE id = ${rowId}::uuid FOR UPDATE`;
   const status = rows[0]?.status;
-  if (!status) deny('lock', NO_ROW);
+  if (!status) deny('lock', NO_ROW, 'NOT_FOUND');
   return status;
 }
 
@@ -91,9 +87,7 @@ async function lockRowStatus(tx: PrismaTransactionClient, rowId: string): Promis
  * esas líneas, pero `resolveRowStatus` respeta cualquier estado terminal que llegue: sin esta guarda, una llamada
  * armada a mano mandaba una línea a certificación salteando ese flujo.
  */
-export function assertStatusSettable(status: string): void {
-  if (status === 'en_certificacion') deny('status', 'El estado "en certificación" solo lo asigna el flujo de certificación.');
-}
+export const assertStatusSettable = assertStatusSettableInTx;
 
 // ── Crear ────────────────────────────────────────────────────────────────────
 
@@ -106,7 +100,7 @@ export async function authorizeRowCreate(dailyReportId: string, companyId: strin
       select: { status: true, date: true },
     }),
   ]);
-  if (!report) deny('create', 'El parte diario no existe o no pertenece a la empresa activa.');
+  if (!report) deny('create', 'El parte diario no existe o no pertenece a la empresa activa.', 'NOT_FOUND');
 
   const allowed = canCreateRows({
     canUpdate: permissions.canUpdate,
@@ -141,7 +135,7 @@ export interface RowUpdateAuthorization {
 
 export async function authorizeRowUpdate(rowId: string, companyId: string): Promise<RowUpdateAuthorization> {
   const [permissions, row] = await Promise.all([loadPermissions(), loadRow(rowId, companyId)]);
-  if (!row) deny('update', NO_ROW);
+  if (!row) deny('update', NO_ROW, 'NOT_FOUND');
 
   const base = { reportDate: row.reportDate, preparteId: row.preparteId };
   if (canEditRow(row, permissions, row.reportDate)) return { scope: 'full', ...base };
@@ -174,7 +168,7 @@ export async function assertRowEditableUnderLock(
 /** Eliminar una línea: permiso `delete` y parte de hoy o futuro, o línea sin recursos asignados. */
 export async function authorizeRowDelete(rowId: string, companyId: string): Promise<{ reportDate: string }> {
   const [permissions, row] = await Promise.all([loadPermissions(), loadRow(rowId, companyId)]);
-  if (!row) deny('delete', NO_ROW);
+  if (!row) deny('delete', NO_ROW, 'NOT_FOUND');
 
   if (!canDeleteRow(row, permissions, row.reportDate)) {
     deny(
@@ -219,18 +213,18 @@ export async function authorizeBulkRowUpdate(data: BulkRowUpdateData): Promise<v
 
   const completing = Boolean(data.completar_diurno || data.completar_nocturno);
   if (completing) {
-    if (data.status !== undefined) deny('bulk', 'Pedido de edición masiva inválido.');
+    if (data.status !== undefined) deny('bulk', 'Pedido de edición masiva inválido.', 'INVALID_INPUT');
     return;
   }
 
   const status = data.status;
   if (!status || !(BULK_STATUSES as readonly string[]).includes(status)) {
-    deny('bulk', 'Estado no permitido en la edición masiva.');
+    deny('bulk', 'Estado no permitido en la edición masiva.', 'INVALID_INPUT');
   }
   if (status === 'cancelado' && !data.cancel_reason?.trim()) {
-    deny('bulk', 'Para cancelar hace falta indicar el motivo.');
+    deny('bulk', 'Para cancelar hace falta indicar el motivo.', 'INVALID_INPUT');
   }
   if (status === 'reprogramado' && !(data.reschedule_date && ISO_DAY_RE.test(data.reschedule_date))) {
-    deny('bulk', 'Para reprogramar hace falta una fecha destino válida.');
+    deny('bulk', 'Para reprogramar hace falta una fecha destino válida.', 'INVALID_INPUT');
   }
 }

@@ -300,3 +300,23 @@ BEGIN
   EXECUTE format('CREATE POLICY perm_write_delete ON %s AS RESTRICTIVE FOR DELETE USING (%s)', p_table, v_check);
 END
 $function$;
+
+-- function app_require_any_permission_for_writes: igual que la anterior pero con varios permisos alternativos
+-- ('modulo:tab:accion'); alcanza con tener alguno. Para tablas cuyas acciones piden create, update o delete segun la operacion.
+CREATE OR REPLACE FUNCTION public.app_require_any_permission_for_writes(p_table regclass, p_perms text[])
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  v_check text;
+BEGIN
+  SELECT string_agg(format('public.app_has_permission(%L, %L, %L)', split_part(p, ':', 1), split_part(p, ':', 2), split_part(p, ':', 3)), ' OR ')
+    INTO v_check FROM unnest(p_perms) AS p;
+  EXECUTE format('DROP POLICY IF EXISTS perm_write_insert ON %s', p_table);
+  EXECUTE format('DROP POLICY IF EXISTS perm_write_update ON %s', p_table);
+  EXECUTE format('DROP POLICY IF EXISTS perm_write_delete ON %s', p_table);
+  EXECUTE format('CREATE POLICY perm_write_insert ON %s AS RESTRICTIVE FOR INSERT WITH CHECK (%s)', p_table, v_check);
+  EXECUTE format('CREATE POLICY perm_write_update ON %s AS RESTRICTIVE FOR UPDATE USING (%s) WITH CHECK (%s)', p_table, v_check, v_check);
+  EXECUTE format('CREATE POLICY perm_write_delete ON %s AS RESTRICTIVE FOR DELETE USING (%s)', p_table, v_check);
+END
+$function$;

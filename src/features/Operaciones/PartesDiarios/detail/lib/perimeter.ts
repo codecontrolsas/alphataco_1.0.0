@@ -1,9 +1,7 @@
 import 'server-only';
 
-import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
-
-const logger = new Logger('features/Operaciones/PartesDiarios/detail/lib/perimeter');
+import { assertResourcesInCompany, type RowResourceRefs } from '../use-cases/row-perimeter';
 
 // ============================================================================
 // PERÍMETRO DE EMPRESA (sin RLS: cada action verifica lo que escribe)
@@ -41,97 +39,9 @@ export async function filterRowsInCompany(rowIds: string[], companyId: string): 
   return rows.map((row) => row.id);
 }
 
-export interface RowResourceRefs {
-  /** Preparte vinculado a la línea: sin esto se podía vincular (y después revertir) un preparte de otra empresa. */
-  preparteId?: string | null;
-  customerId?: string | null;
-  serviceId?: string | null;
-  itemId?: string | null;
-  sectorServiceId?: string | null;
-  areasServiceId?: string | null;
-  employeeIds?: string[];
-  equipmentIds?: string[];
-  otherEquipmentIds?: string[];
-  customerEquipmentIds?: string[];
-}
+export type { RowResourceRefs };
 
-/**
- * Verifica que cliente, contrato, ítem, sector, área, empleados y equipos pertenezcan a la
- * empresa activa antes de asociarlos a una línea. Sin RLS es la única defensa: la FK acepta
- * cualquier uuid que llegue del cliente.
- */
+/** Verifica que lo que la línea referencia sea de la empresa activa (misma regla que los casos de uso). */
 export async function assertRowResourcesInCompany(companyId: string, refs: RowResourceRefs): Promise<void> {
-  const employeeIds = [...new Set(refs.employeeIds ?? [])];
-  const equipmentIds = [...new Set(refs.equipmentIds ?? [])];
-  const otherEquipmentIds = [...new Set(refs.otherEquipmentIds ?? [])];
-  const customerEquipmentIds = [...new Set(refs.customerEquipmentIds ?? [])];
-
-  const [customer, service, item, sector, area, employees, vehicles, otherEquipment, customerEquipment, preparte] =
-    await Promise.all([
-      refs.customerId
-        ? prisma.customers.findFirst({ where: { id: refs.customerId, company_id: companyId }, select: { id: true } })
-        : Promise.resolve(null),
-      refs.serviceId
-        ? prisma.customer_services.findFirst({
-            where: { id: refs.serviceId, customers: { company_id: companyId } },
-            select: { id: true },
-          })
-        : Promise.resolve(null),
-      refs.itemId
-        ? prisma.service_items.findFirst({
-            where: { id: refs.itemId, customer_services: { customers: { company_id: companyId } } },
-            select: { id: true },
-          })
-        : Promise.resolve(null),
-      refs.sectorServiceId
-        ? prisma.service_sectors.findFirst({
-            where: { id: refs.sectorServiceId, customer_services: { customers: { company_id: companyId } } },
-            select: { id: true },
-          })
-        : Promise.resolve(null),
-      refs.areasServiceId
-        ? prisma.service_areas.findFirst({
-            where: { id: refs.areasServiceId, customer_services: { customers: { company_id: companyId } } },
-            select: { id: true },
-          })
-        : Promise.resolve(null),
-      employeeIds.length
-        ? prisma.employees.findMany({ where: { id: { in: employeeIds }, company_id: companyId }, select: { id: true } })
-        : Promise.resolve([]),
-      equipmentIds.length
-        ? prisma.vehicles.findMany({ where: { id: { in: equipmentIds }, company_id: companyId }, select: { id: true } })
-        : Promise.resolve([]),
-      otherEquipmentIds.length
-        ? prisma.other_equipment.findMany({
-            where: { id: { in: otherEquipmentIds }, company_id: companyId },
-            select: { id: true },
-          })
-        : Promise.resolve([]),
-      customerEquipmentIds.length
-        ? prisma.equipos_clientes.findMany({
-            where: { id: { in: customerEquipmentIds }, customers: { company_id: companyId } },
-            select: { id: true },
-          })
-        : Promise.resolve([]),
-      refs.preparteId
-        ? prisma.preparte.findFirst({ where: { id: refs.preparteId, company_id: companyId }, select: { id: true } })
-        : Promise.resolve(null),
-    ]);
-
-  const invalid =
-    (refs.customerId && !customer) ||
-    (refs.serviceId && !service) ||
-    (refs.itemId && !item) ||
-    (refs.sectorServiceId && !sector) ||
-    (refs.areasServiceId && !area) ||
-    (refs.preparteId && !preparte) ||
-    employees.length !== employeeIds.length ||
-    vehicles.length !== equipmentIds.length ||
-    otherEquipment.length !== otherEquipmentIds.length ||
-    customerEquipment.length !== customerEquipmentIds.length;
-
-  if (invalid) {
-    logger.warn('Recursos de otra empresa en una línea de parte diario', { data: { companyId } });
-    throw new Error('Alguno de los recursos de la línea no pertenece a la empresa activa.');
-  }
+  await assertResourcesInCompany(prisma, companyId, refs);
 }

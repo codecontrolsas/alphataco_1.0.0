@@ -9,6 +9,7 @@ import { withActor } from '@/shared/lib/actor';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { NO_PERMISSION, UUID_RE, firstIssue, toTreasuryActionError } from '../lib/action-errors';
+import { lockTreasuryAccount } from '../lib/account-lock';
 import { ZERO_INDICATORS, getAccountIndicators } from '../lib/balances';
 import { createMovement } from '../lib/movements';
 import { TreasuryError } from '../lib/treasury-errors';
@@ -185,8 +186,9 @@ export async function setTreasuryAccountActive(id: string, isActive: boolean): P
       profile.credentialId,
       async (tx) => {
         // Bloquea la cuenta antes de contar: así la emisión de un cheque (que toma la misma fila) no se cuela entre el conteo y el update.
+        await lockTreasuryAccount(tx, id);
         const locked = await tx.$queryRaw<{ id: string }[]>`
-          SELECT id FROM treasury_accounts WHERE id = ${id}::uuid AND company_id = ${companyId}::uuid FOR UPDATE
+          SELECT id FROM treasury_accounts WHERE id = ${id}::uuid AND company_id = ${companyId}::uuid
         `;
         if (locked.length === 0) throw new TreasuryError(NOT_FOUND);
         // Un cheque propio emitido se debita contra su cuenta (etapa 3b): con la cuenta inactiva no se podría confirmar.
