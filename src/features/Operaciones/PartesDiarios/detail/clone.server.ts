@@ -1,6 +1,7 @@
 'use server';
 
 import { withSessionActor } from '@/features/Operaciones/lib/with-session-actor';
+import { checkPermissionServer } from '@/features/Permissions';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
@@ -94,6 +95,11 @@ export async function cloneDailyReportRows(rowIds: string[], targetDates: string
   }
 
   const { includeEmployees = false, includeEquipment = false } = options;
+
+  // Clonar crea líneas y partes en otras fechas: exige el mismo permiso que el botón "Clonar" de la interfaz.
+  if (!(await checkPermissionServer('operaciones', 'detalle-parte-diario', 'update'))) {
+    throw new Error('No tenés permiso para clonar líneas del parte diario.');
+  }
 
   try {
     // Perímetro: se resuelve la empresa activa ANTES de tocar cualquier rowId/reportId que

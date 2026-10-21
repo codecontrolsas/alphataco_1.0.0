@@ -1,5 +1,6 @@
 'use server';
 
+import { checkPermissionServer } from '@/features/Permissions';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
@@ -14,12 +15,20 @@ import {
 
 const logger = new Logger('features/Clothing/catalog');
 
+/** Las acciones del catálogo se pueden invocar sin pasar por la pantalla: exigen el mismo permiso que el botón. */
+async function requireCatalogPermission(tab: 'marcas_indumentaria' | 'talles_indumentaria' | 'articulos_indumentaria', action: 'create' | 'update' | 'delete') {
+  if (!(await checkPermissionServer('configuracion', tab, action))) {
+    throw new Error('No tenés permiso para modificar el catálogo de indumentaria.');
+  }
+}
+
 // ============================================================================
 // BRANDS
 // ============================================================================
 
 /** Crea una marca de ropa en la empresa activa. */
 export async function createClothingBrand(name: string) {
+  await requireCatalogPermission('marcas_indumentaria', 'create');
   const companyId = await getActiveCompanyId();
   logger.debug('Creating clothing brand', { data: { name, companyId } });
 
@@ -36,6 +45,7 @@ export async function createClothingBrand(name: string) {
  * Perímetro: la marca tiene que ser de la empresa activa; antes se escribía por id suelto.
  */
 export async function updateClothingBrand(id: string, name: string) {
+  await requireCatalogPermission('marcas_indumentaria', 'update');
   const companyId = await getActiveCompanyId();
   logger.debug('Updating clothing brand', { data: { id, name } });
 
@@ -55,6 +65,7 @@ export async function updateClothingBrand(id: string, name: string) {
 
 /** Activa/desactiva una marca de ropa de la empresa activa. */
 export async function toggleClothingBrandActive(id: string, isActive: boolean) {
+  await requireCatalogPermission('marcas_indumentaria', 'delete');
   const companyId = await getActiveCompanyId();
   logger.debug('Toggling clothing brand active status', { data: { id, isActive } });
 
@@ -77,6 +88,7 @@ export async function toggleClothingBrandActive(id: string, isActive: boolean) {
 
 /** Crea un talle de ropa en la empresa activa. */
 export async function createClothingSize(name: string) {
+  await requireCatalogPermission('talles_indumentaria', 'create');
   const companyId = await getActiveCompanyId();
   logger.debug('Creating clothing size', { data: { name, companyId } });
 
@@ -90,6 +102,7 @@ export async function createClothingSize(name: string) {
 
 /** Renombra un talle de ropa de la empresa activa. */
 export async function updateClothingSize(id: string, name: string) {
+  await requireCatalogPermission('talles_indumentaria', 'update');
   const companyId = await getActiveCompanyId();
   logger.debug('Updating clothing size', { data: { id, name } });
 
@@ -108,6 +121,7 @@ export async function updateClothingSize(id: string, name: string) {
 
 /** Activa/desactiva un talle de ropa de la empresa activa. */
 export async function toggleClothingSizeActive(id: string, isActive: boolean) {
+  await requireCatalogPermission('talles_indumentaria', 'delete');
   const companyId = await getActiveCompanyId();
   logger.debug('Toggling clothing size active status', { data: { id, isActive } });
 
@@ -130,6 +144,7 @@ export async function toggleClothingSizeActive(id: string, isActive: boolean) {
 
 /** Crea un artículo de ropa en la empresa activa. */
 export async function createClothingItem(data: { name: string; code?: string; description?: string }) {
+  await requireCatalogPermission('articulos_indumentaria', 'create');
   const companyId = await getActiveCompanyId();
   logger.debug('Creating clothing item', { data: { name: data.name, companyId } });
 
@@ -150,6 +165,7 @@ export async function createClothingItem(data: { name: string; code?: string; de
 
 /** Edita un artículo de ropa de la empresa activa. */
 export async function updateClothingItem(id: string, data: { name: string; code?: string; description?: string }) {
+  await requireCatalogPermission('articulos_indumentaria', 'update');
   const companyId = await getActiveCompanyId();
   logger.debug('Updating clothing item', { data: { id, name: data.name } });
 
@@ -177,6 +193,7 @@ export async function updateClothingItem(id: string, data: { name: string; code?
 
 /** Activa/desactiva un artículo de ropa de la empresa activa. */
 export async function toggleClothingItemActive(id: string, isActive: boolean) {
+  await requireCatalogPermission('articulos_indumentaria', 'delete');
   const companyId = await getActiveCompanyId();
   logger.debug('Toggling clothing item active status', { data: { id, isActive } });
 
@@ -262,6 +279,7 @@ type BrandSizePair = { brandId: string; sizeId: string };
  * manipulación, y un guardado parcial dejaría al usuario creyendo que se grabó lo que mandó.
  */
 export async function setItemBrandSizes(itemId: string, changes: { add: BrandSizePair[]; remove: BrandSizePair[] }) {
+  await requireCatalogPermission('articulos_indumentaria', 'update');
   const companyId = await getActiveCompanyId();
   logger.debug('Updating item brand sizes', { data: { itemId, add: changes.add.length, remove: changes.remove.length } });
 

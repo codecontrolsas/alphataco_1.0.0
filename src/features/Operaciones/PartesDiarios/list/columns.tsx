@@ -55,7 +55,9 @@ function DeleteDailyReportCell({ row }: { row: { original: DailyReportListItem }
   const handleDelete = async () => {
     toast.promise(
       async () => {
-        await deleteDailyReport(row.original.id);
+        const result = await deleteDailyReport(row.original.id);
+        // La acción devuelve el motivo en vez de lanzar: sin esto la pantalla decía "eliminado" aunque no se hubiera borrado.
+        if (!result.success) throw new Error(result.message);
         // El prefijo ['daily-reports'] incluye la tabla (['daily-reports', 'list', …]).
         queryClient.invalidateQueries({ queryKey: [...DAILY_REPORTS_QUERY_KEY] });
         queryClient.invalidateQueries({ queryKey: ['datatable-facet'] });
