@@ -1,0 +1,31 @@
+-- Lote L4 de RLS: mantenimiento, checklists, ropa, clientes y partes diarios (company_id NOT NULL).
+-- Inerte mientras la app conecte como el usuario duenio de las tablas; rige para alphataco_app.
+SELECT public.app_enable_tenant_isolation('public.certifications');
+SELECT public.app_enable_tenant_isolation('public.checklist_answers');
+SELECT public.app_enable_tenant_isolation('public.checklist_deviations');
+SELECT public.app_enable_tenant_isolation('public.checklist_templates');
+SELECT public.app_enable_tenant_isolation('public.clothing_deliveries');
+SELECT public.app_enable_tenant_isolation('public.clothing_item_materials');
+SELECT public.app_enable_tenant_isolation('public.clothing_items');
+SELECT public.app_enable_tenant_isolation('public.customers');
+SELECT public.app_enable_tenant_isolation('public.daily_indicators');
+SELECT public.app_enable_tenant_isolation('public.dailyreport');
+SELECT public.app_enable_tenant_isolation('public.documents_company', 'applies');
+SELECT public.app_enable_tenant_isolation('public.documents_pre_employees');
+SELECT public.app_enable_tenant_isolation('public.external_api_clients');
+SELECT public.app_enable_tenant_isolation('public.maintenance_activity_log');
+SELECT public.app_enable_tenant_isolation('public.maintenance_order_items');
+SELECT public.app_enable_tenant_isolation('public.maintenance_orders');
+SELECT public.app_enable_tenant_isolation('public.maintenance_request_groups');
+SELECT public.app_enable_tenant_isolation('public.maintenance_request_items');
+SELECT public.app_enable_tenant_isolation('public.maintenance_requests');
+SELECT public.app_enable_tenant_isolation('public.notification_events');
+SELECT public.app_enable_tenant_isolation('public.other_equipment');
+SELECT public.app_enable_tenant_isolation('public.pre_employees');
+SELECT public.app_enable_tenant_isolation('public.tire_service_orders');
+SELECT public.app_enable_tenant_isolation('public.tire_templates');
+SELECT public.app_enable_tenant_isolation('public.tires');
+SELECT public.app_enable_tenant_isolation('public.work_diagram');
+SELECT public.app_enable_tenant_isolation('public.work_diagram_active_novelties');
+SELECT public.app_enable_tenant_isolation('public.work_order_item_repairs');
+SELECT public.app_enable_tenant_isolation('public.work_orders');
