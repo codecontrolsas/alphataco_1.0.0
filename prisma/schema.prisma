@@ -29,7 +29,7 @@ model aptitudes_tecnicas {
   is_active                  Boolean?                     @default(true)
   aptitudes_tecnicas_puestos aptitudes_tecnicas_puestos[]
   empleado_aptitudes         empleado_aptitudes[]
-  company_id                 String                       @db.Uuid
+  company_id                 String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                    company                      @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([company_id], map: "idx_aptitudes_tecnicas_company_id")
@@ -44,9 +44,11 @@ model aptitudes_tecnicas_puestos {
   aptitudes_tecnicas aptitudes_tecnicas @relation(fields: [aptitud_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   company_positions  company_positions  @relation(fields: [puesto_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@id([aptitud_id, puesto_id])
   @@index([puesto_id], map: "idx_aptitudes_tecnicas_puestos_puesto_id")
   @@schema("public")
+  @@index([company_id], map: "idx_aptitudes_tecnicas_puestos_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -57,7 +59,9 @@ model area_province {
   areas_cliente areas_cliente @relation(fields: [area_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   provinces     provinces     @relation(fields: [province_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@schema("public")
+  @@index([company_id], map: "idx_area_province_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -70,7 +74,9 @@ model areas_cliente {
   customers         customers       @relation(fields: [customer_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   service_areas     service_areas[]
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@schema("public")
+  @@index([company_id], map: "idx_areas_cliente_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -83,7 +89,9 @@ model assing_customer {
   employees    employees @relation(fields: [employee_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "public_assing_customer_employee_id_fkey")
   vehicles     vehicles  @relation(fields: [equipment_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "public_assing_customer_equipment_id_fkey")
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@schema("public")
+  @@index([company_id], map: "idx_assing_customer_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -92,7 +100,7 @@ model brand_vehicles {
   created_at      DateTime          @default(now()) @db.Timestamptz(6)
   name            String?           @unique
   is_active       Boolean?          @default(true)
-  company_id      String?           @db.Uuid
+  company_id      String?  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company         company?          @relation(fields: [company_id], references: [id], onDelete: Cascade)
   model_vehicles  model_vehicles[]
   other_equipment other_equipment[]
@@ -157,7 +165,7 @@ model checklist_answers {
   other_checklist_answers                                   checklist_answers[]    @relation("checklist_answersTochecklist_answers")
   checklist_deviations                                      checklist_deviations[]
   maintenance_requests                                      maintenance_requests[]
-  company_id                                                String                 @db.Uuid
+  company_id                                                String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                                                   company                @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([created_at(sort: Desc)], map: "idx_checklist_answers_created")
@@ -185,7 +193,7 @@ model checklist_deviations {
   profile                   profile?                    @relation(fields: [created_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   vehicles                  vehicles                    @relation(fields: [equipment_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   maintenance_request_items maintenance_request_items[]
-  company_id                String                      @db.Uuid
+  company_id                String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                   company                     @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([checklist_answer_id], map: "idx_checklist_deviations_checklist_answer_id")
@@ -262,10 +270,12 @@ model checklist_template_items {
   checklist_template_sections checklist_template_sections @relation(fields: [section_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   checklist_templates         checklist_templates         @relation(fields: [template_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([template_id, section_id, code])
   @@index([section_id], map: "idx_checklist_template_items_section")
   @@index([template_id], map: "idx_checklist_template_items_template")
   @@schema("public")
+  @@index([company_id], map: "idx_checklist_template_items_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -283,9 +293,11 @@ model checklist_template_sections {
   checklist_sections       checklist_sections?        @relation(fields: [section_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   checklist_templates      checklist_templates        @relation(fields: [template_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([template_id, code])
   @@index([template_id], map: "idx_checklist_template_sections_template")
   @@schema("public")
+  @@index([company_id], map: "idx_checklist_template_sections_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -297,10 +309,12 @@ model checklist_template_sub_types {
   sub_type            sub_type?           @relation(fields: [sub_type_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   checklist_templates checklist_templates @relation(fields: [template_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([template_id, sub_type_id])
   @@index([sub_type_id], map: "idx_checklist_template_sub_types_sub_type")
   @@index([template_id], map: "idx_checklist_template_sub_types_template")
   @@schema("public")
+  @@index([company_id], map: "idx_checklist_template_sub_types_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -311,7 +325,7 @@ model checklist_template_types {
   created_at          DateTime?           @default(now()) @db.Timestamptz(6)
   checklist_templates checklist_templates @relation(fields: [template_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   type                type?               @relation(fields: [type_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  company_id          String              @db.Uuid
+  company_id          String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company             company             @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@unique([template_id, type_id])
@@ -324,7 +338,7 @@ model checklist_template_types {
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model checklist_templates {
   id                           String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id                   String                         @db.Uuid
+  company_id                   String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   name                         String
   description                  String?
   code                         String
@@ -365,7 +379,7 @@ model clothing_brands {
   id                        String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                      String
   is_active                 Boolean                     @default(true)
-  company_id                String                      @db.Uuid
+  company_id                String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   created_at                DateTime                    @default(now()) @db.Timestamptz(6)
   updated_at                DateTime                    @default(now()) @db.Timestamptz(6)
   company                   company                     @relation(fields: [company_id], references: [id], onDelete: Cascade)
@@ -386,7 +400,7 @@ model clothing_deliveries {
   signature_url                                            String?
   notes                                                    String?
   delivered_at                                             DateTime                  @db.Timestamptz(6)
-  company_id                                               String                    @db.Uuid
+  company_id                                               String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   created_at                                               DateTime                  @default(now()) @db.Timestamptz(6)
   updated_at                                               DateTime                  @default(now()) @db.Timestamptz(6)
   employees_clothing_deliveries_employee_idToemployees     employees                 @relation("clothing_deliveries_employee_idToemployees", fields: [employee_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -422,8 +436,10 @@ model clothing_delivery_items {
   clothing_brands      clothing_brands?    @relation(fields: [clothing_brand_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   clothing_sizes       clothing_sizes?     @relation(fields: [clothing_size_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([clothing_delivery_id], map: "idx_clothing_delivery_items_delivery")
   @@schema("public")
+  @@index([company_id], map: "idx_clothing_delivery_items_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -437,8 +453,10 @@ model clothing_item_brand_sizes {
   clothing_brands   clothing_brands @relation(fields: [clothing_brand_id], references: [id], onDelete: Cascade)
   clothing_sizes    clothing_sizes  @relation(fields: [clothing_size_id], references: [id], onDelete: Cascade)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([clothing_item_id, clothing_brand_id, clothing_size_id], map: "clothing_item_brand_sizes_unique_key")
   @@schema("public")
+  @@index([company_id], map: "idx_clothing_item_brand_sizes_company_id")
 }
 
 /// Almacenes etapa 5: material de stock de cada combinacion articulo + marca + talle. NUNCA se
@@ -446,7 +464,7 @@ model clothing_item_brand_sizes {
 /// se vuelve a habilitar, recupera el mismo material con su stock e historial.
 model clothing_item_materials {
   id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id        String          @db.Uuid
+  company_id        String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   clothing_item_id  String          @db.Uuid
   clothing_brand_id String          @db.Uuid
   clothing_size_id  String          @db.Uuid
@@ -470,7 +488,7 @@ model clothing_items {
   code                      String?
   description               String?
   is_active                 Boolean                     @default(true)
-  company_id                String                      @db.Uuid
+  company_id                String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   created_at                DateTime                    @default(now()) @db.Timestamptz(6)
   updated_at                DateTime                    @default(now()) @db.Timestamptz(6)
   company                   company                     @relation(fields: [company_id], references: [id], onDelete: Cascade)
@@ -487,7 +505,7 @@ model clothing_sizes {
   id                        String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                      String
   is_active                 Boolean                     @default(true)
-  company_id                String                      @db.Uuid
+  company_id                String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   created_at                DateTime                    @default(now()) @db.Timestamptz(6)
   updated_at                DateTime                    @default(now()) @db.Timestamptz(6)
   company                   company                     @relation(fields: [company_id], references: [id], onDelete: Cascade)
@@ -503,7 +521,7 @@ model clothing_sizes {
 model companies_employees {
   employee_id String    @db.Uuid
   id          String    @id(map: "companies_employees_pkey1") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id  String?   @db.Uuid
+  company_id  String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company     company?  @relation(fields: [company_id], references: [id], onDelete: Cascade)
   employees   employees @relation(fields: [employee_id], references: [id], onDelete: Cascade)
 
@@ -661,7 +679,7 @@ model company_positions {
   employees                  employees[]
   pre_employees              pre_employees[]
   org_chart_positions        org_chart_positions[]
-  company_id                 String                       @db.Uuid
+  company_id                 String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                    company                      @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([company_id], map: "idx_company_positions_company_id")
@@ -676,7 +694,7 @@ model contacts {
   constact_email         String?
   contact_phone          BigInt?
   contact_charge         String?
-  company_id             String?    @db.Uuid
+  company_id             String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   customer_id            String?    @db.Uuid
   is_active              Boolean?   @default(true)
   reason_for_termination String?
@@ -721,10 +739,12 @@ model contractor_other_equipment {
   customers       customers       @relation(fields: [contractor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   other_equipment other_equipment @relation(fields: [equipment_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([equipment_id, contractor_id])
   @@index([contractor_id], map: "idx_contractor_other_equipment_contractor")
   @@index([equipment_id], map: "idx_contractor_other_equipment_equipment")
   @@schema("public")
+  @@index([company_id], map: "idx_contractor_other_equipment_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -745,7 +765,7 @@ model cost_center {
   employees       employees[]
   other_equipment other_equipment[]
   vehicles        vehicles[]
-  company_id      String            @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company         company           @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([company_id], map: "idx_cost_center_company_id")
@@ -768,7 +788,7 @@ model covenant {
   id         String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   created_at DateTime    @default(now()) @db.Timestamptz(6)
   name       String?
-  company_id String      @db.Uuid
+  company_id String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_active  Boolean?    @default(true)
   guild_id   String      @db.Uuid
   category   category[]
@@ -783,7 +803,7 @@ model covenant {
 model custom_form {
   id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   created_at   DateTime       @default(now()) @db.Timestamptz(6)
-  company_id   String         @db.Uuid
+  company_id   String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   form         Json
   name         String
   company      company        @relation(fields: [company_id], references: [id], onDelete: Cascade)
@@ -799,7 +819,7 @@ model customer_services {
   customer_id        String?              @db.Uuid
   service_name       String?
   service_validity   DateTime?            @db.Date
-  company_id         String?              @db.Uuid
+  company_id         String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_active          Boolean?             @default(true)
   service_start      DateTime?            @db.Date
   contract_number    String?
@@ -834,7 +854,7 @@ model customers {
   address                    String?
   id                         String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   is_active                  Boolean?                     @default(true)
-  company_id                 String                       @db.Uuid
+  company_id                 String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   reason_for_termination     String?
   termination_date           DateTime?                    @db.Date
   /// Datos fiscales del receptor (facturación ARCA). Nullable: se exigen recién al facturar.
@@ -874,7 +894,7 @@ model customers {
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model daily_indicators {
   id            String             @id(map: "kpi_daily_indicators_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id    String             @db.Uuid
+  company_id    String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   snapshot_date DateTime           @db.Date
   metrics       Json               @default("{}")
   source        indicator_function
@@ -894,7 +914,7 @@ model dailyreport {
   date            DateTime                       @db.Date
   created_at      DateTime?                      @default(now()) @db.Timestamp(6)
   updated_at      DateTime?                      @default(now()) @db.Timestamp(6)
-  company_id      String                         @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_active       Boolean?                       @default(true)
   status          daily_report_header_status_new @default(abierto)
   company         company                        @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "public_dailyreport_company_id_fkey")
@@ -1021,7 +1041,7 @@ model diagram_type {
   id                                                             String                          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   created_at                                                     DateTime                        @default(now()) @db.Timestamptz(6)
   name                                                           String?
-  company_id                                                     String                          @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id                                                     String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   color                                                          String
   short_description                                              String
   work_active                                                    Boolean?                        @default(false)
@@ -1051,7 +1071,9 @@ model diagrams_logs {
   employees    employees    @relation(fields: [employee_id], references: [id], onDelete: Cascade)
   profile      profile?     @relation(fields: [modified_by], references: [id], onUpdate: NoAction)
 
+  company_id String? @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@schema("public")
+  @@index([company_id], map: "idx_diagrams_logs_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -1066,7 +1088,7 @@ model document_types {
   special                 Boolean
   is_active               Boolean                   @default(true)
   description             String?
-  company_id              String?                   @db.Uuid
+  company_id              String?  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_it_montlhy           Boolean?
   private                 Boolean?
   down_document           Boolean?
@@ -1094,7 +1116,7 @@ model documents_company {
   is_active         Boolean?        @default(true)
   id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   user_id           String?         @db.Uuid
-  applies           String          @db.Uuid
+  applies           String          @default(dbgenerated("app_current_company_id()")) @db.Uuid
   deny_reason       String?
   document_path     String?         @unique
   period            String?
@@ -1206,8 +1228,10 @@ model empleado_aptitudes {
   aptitudes_tecnicas aptitudes_tecnicas @relation(fields: [aptitud_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   employees          employees          @relation(fields: [empleado_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([empleado_id, aptitud_id])
   @@schema("public")
+  @@index([company_id], map: "idx_empleado_aptitudes_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -1239,7 +1263,7 @@ model employees {
   workflow_diagram                                                  String?                        @db.Uuid
   id                                                                String                         @id(map: "companies_employees_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   allocated_to                                                      String[]                       @db.Uuid
-  company_id                                                        String?                        @db.Uuid
+  company_id                                                        String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_active                                                         Boolean?                       @default(true)
   reason_for_termination                                            reason_for_termination_enum?
   termination_date                                                  DateTime?                      @db.Date
@@ -1309,8 +1333,10 @@ model employees_diagram {
   employees                                                 employees    @relation(fields: [employee_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   diagram_type_employees_diagram_diagram_typeTodiagram_type diagram_type @relation("employees_diagram_diagram_typeTodiagram_type", fields: [diagram_type], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "public_employees_diagram_diagram_type_fkey")
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([employee_id, year, month, day], map: "unique_employee_year_month_day")
   @@schema("public")
+  @@index([company_id], map: "idx_employees_diagram_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -1321,9 +1347,11 @@ model equipment_owner_contract_types {
   created_at         DateTime?          @default(now()) @db.Timestamptz(6)
   equipment_owners   equipment_owners   @relation(fields: [equipment_owner_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([equipment_owner_id, contract_type], map: "equipment_owner_contract_type_equipment_owner_id_contract_t_key")
   @@index([equipment_owner_id], map: "idx_equipment_owner_contract_types_owner")
   @@schema("public")
+  @@index([company_id], map: "idx_equipment_owner_contract_types_company_id")
 }
 
 model equipment_owners {
@@ -1332,7 +1360,7 @@ model equipment_owners {
   cuit                           String
   contract_type                  contract_type_enum
   created_at                     DateTime?                        @default(now()) @db.Timestamptz(6)
-  company_id                     String?                          @db.Uuid
+  company_id                     String?  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_active                      Boolean?                         @default(true)
   equipment_owner_contract_types equipment_owner_contract_types[]
   company                        company?                         @relation(fields: [company_id], references: [id], onDelete: Cascade)
@@ -1353,7 +1381,9 @@ model equipos_clientes {
   customers                                customers                                  @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   preparte                                 preparte[]
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@schema("public")
+  @@index([company_id], map: "idx_equipos_clientes_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -1364,7 +1394,9 @@ model form_answers {
   answer      Json        @db.Json
   custom_form custom_form @relation(fields: [form_id], references: [id], onDelete: Cascade)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@schema("public")
+  @@index([company_id], map: "idx_form_answers_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -1372,7 +1404,7 @@ model guild {
   id         String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   created_at DateTime    @default(now()) @db.Timestamptz(6)
   name       String?
-  company_id String?     @db.Uuid
+  company_id String?  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_active  Boolean     @default(true)
   covenant   covenant[]
   employees  employees[]
@@ -1406,7 +1438,7 @@ model hierarchy {
   other_equipment other_equipment[]
   vehicles        vehicles[]
   pre_employees   pre_employees[]
-  company_id      String            @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company         company           @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([company_id], map: "idx_hierarchy_company_id")
@@ -1418,7 +1450,7 @@ model hierarchy {
 /// El titular solo puede ser un legajo activo con ese mismo sector y puesto en su ficha (lo valida la server action).
 model org_chart_positions {
   id            String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id    String               @db.Uuid
+  company_id    String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   sector_id     String               @db.Uuid
   position_id   String               @db.Uuid
   reports_to_id String?              @db.Uuid
@@ -1464,16 +1496,18 @@ model kpi_revisions {
   profile                profile   @relation("kpi_revisions_changed_byToprofile", fields: [changed_by], references: [credential_id], onDelete: NoAction, onUpdate: NoAction)
   kpis                   kpis      @relation(fields: [kpi_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([changed_by], map: "idx_kpi_revisions_changed_by")
   @@index([is_active], map: "idx_kpi_revisions_is_active")
   @@index([kpi_id], map: "idx_kpi_revisions_kpi_id")
   @@schema("public")
+  @@index([company_id], map: "idx_kpi_revisions_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model kpis {
   id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id                String          @db.Uuid
+  company_id                String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   name                      String
   code                      String
   number                    String?
@@ -1537,7 +1571,7 @@ model maintenance_activity_log {
   maintenance_requests   maintenance_requests? @relation(fields: [maintenance_request_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   profile                profile?              @relation(fields: [performed_by], references: [id], onUpdate: NoAction)
   work_orders            work_orders?          @relation(fields: [work_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  company_id             String                @db.Uuid
+  company_id             String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                company               @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([maintenance_order_id], map: "idx_activity_log_order", where: raw("(maintenance_order_id IS NOT NULL)"))
@@ -1567,10 +1601,12 @@ model maintenance_order_item_repair_types {
   maintenance_order_items   maintenance_order_items @relation(fields: [maintenance_order_item_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "maintenance_order_item_repair_ty_maintenance_order_item_id_fkey")
   types_of_repairs          types_of_repairs        @relation(fields: [repair_type_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([maintenance_order_item_id, repair_type_id], map: "maintenance_order_item_repair_maintenance_order_item_id_rep_key")
   @@index([maintenance_order_item_id], map: "idx_moi_repair_types_item")
   @@index([repair_type_id], map: "idx_moi_repair_types_type")
   @@schema("public")
+  @@index([company_id], map: "idx_maintenance_order_item_repair_types_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -1612,7 +1648,7 @@ model maintenance_order_items {
   /// Grupo de reparaciones del que salio el item (null = se cargo suelto)
   maintenance_group_id                                               String?                               @db.Uuid
   maintenance_request_groups                                         maintenance_request_groups?           @relation(fields: [maintenance_group_id], references: [id], map: "maintenance_order_items_group_fkey")
-  company_id                                                         String                                @db.Uuid
+  company_id                                                         String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                                                            company                               @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([maintenance_order_id], map: "idx_maintenance_order_items_order")
@@ -1673,7 +1709,7 @@ model maintenance_orders {
   profile_maintenance_orders_rejected_byToprofile             profile?                   @relation("maintenance_orders_rejected_byToprofile", fields: [rejected_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   profile_maintenance_orders_scheduled_byToprofile            profile?                   @relation("maintenance_orders_scheduled_byToprofile", fields: [scheduled_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   profile_maintenance_orders_workshop_approved_byToprofile    profile?                   @relation("maintenance_orders_workshop_approved_byToprofile", fields: [workshop_approved_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  company_id                                                  String                     @db.Uuid
+  company_id                                                  String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                                                     company                    @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   stock_movements      stock_movements[]
@@ -1696,7 +1732,7 @@ model maintenance_request_groups {
   description                       String?
   is_active                         Boolean                             @default(true)
   created_at                        DateTime                            @default(now()) @db.Timestamptz(6)
-  company_id                        String                              @db.Uuid
+  company_id                        String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                           company                             @relation(fields: [company_id], references: [id], onDelete: Cascade)
   maintenance_group_type_of_repairs maintenance_group_type_of_repairs[]
   maintenance_order_items           maintenance_order_items[]
@@ -1739,7 +1775,7 @@ model maintenance_request_items {
   /// Grupo de reparaciones del que salio el item (null = se cargo suelto)
   maintenance_group_id                                             String?                     @db.Uuid
   maintenance_request_groups                                       maintenance_request_groups? @relation(fields: [maintenance_group_id], references: [id], map: "maintenance_request_items_group_fkey")
-  company_id                                                       String                      @db.Uuid
+  company_id                                                       String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                                                          company                     @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@unique([maintenance_request_id, checklist_deviation_id])
@@ -1789,7 +1825,7 @@ model maintenance_requests {
   profile_maintenance_requests_rejected_byToprofile   profile?                    @relation("maintenance_requests_rejected_byToprofile", fields: [rejected_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   profile_maintenance_requests_supervisor_idToprofile profile?                    @relation("maintenance_requests_supervisor_idToprofile", fields: [supervisor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   profile_maintenance_requests_user_idToprofile       profile?                    @relation("maintenance_requests_user_idToprofile", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  company_id                                          String                      @db.Uuid
+  company_id                                          String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                                             company                     @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([checklist_answer_id], map: "idx_maintenance_requests_checklist")
@@ -1820,7 +1856,7 @@ model model_vehicles {
   brand_vehicles  brand_vehicles?   @relation(fields: [brand], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "public_model_vehicles_brand_fkey")
   other_equipment other_equipment[]
   vehicles        vehicles[]
-  company_id      String            @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company         company           @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([company_id], map: "idx_model_vehicles_company_id")
@@ -1848,7 +1884,7 @@ model modules {
 /// `dedupe_key` evita repetir el mismo aviso (reintentos de un job, doble click en una acción).
 model notification_events {
   id              String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id      String                    @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   event_key       String
   title           String
   body            String?
@@ -1877,7 +1913,7 @@ model notification_deliveries {
   id         String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   event_id   String              @db.Uuid
   user_id    String              @db.Uuid
-  company_id String              @db.Uuid
+  company_id String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   in_app     Boolean             @default(false)
   email      Boolean             @default(false)
   read_at    DateTime?           @db.Timestamptz(6)
@@ -1914,7 +1950,7 @@ model role_notifications {
 /// entorno a proposito: una lista global recibiria datos de todas las empresas.
 model notification_settings {
   id         String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id String            @db.Uuid
+  company_id String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   kind       notification_kind
   recipients String[]          @default([])
   is_active  Boolean           @default(true)
@@ -1930,7 +1966,7 @@ model notification_settings {
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model other_equipment {
   id                             String                           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id                     String                           @db.Uuid
+  company_id                     String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   type_id                        String                           @db.Uuid
   sub_type_id                    String?                          @db.Uuid
   brand_id                       Int?
@@ -2005,8 +2041,10 @@ model other_equipment_certifications {
   created_at      DateTime        @default(now()) @db.Timestamptz(6)
   other_equipment other_equipment @relation(fields: [equipment_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([equipment_id], map: "idx_other_equipment_certifications_equipment")
   @@schema("public")
+  @@index([company_id], map: "idx_other_equipment_certifications_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -2031,7 +2069,7 @@ model preparte {
   rejected_reason         String?
   reprogram               String?                @db.Uuid
   reprogram_reason        String?
-  company_id              String?                @db.Uuid
+  company_id              String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   sector_service_id       String?                @db.Uuid
   areas_service_id        String?                @db.Uuid
   equipos_cliente         String?                @db.Uuid
@@ -2079,10 +2117,12 @@ model preparte_change_logs {
   profile     profile? @relation(fields: [changed_by], references: [credential_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_preparte_change_logs_profile")
   preparte    preparte @relation(fields: [preparte_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([changed_at(sort: Desc)], map: "idx_preparte_change_logs_changed_at")
   @@index([field_name], map: "idx_preparte_change_logs_field_name")
   @@index([preparte_id], map: "idx_preparte_change_logs_preparte_id")
   @@schema("public")
+  @@index([company_id], map: "idx_preparte_change_logs_company_id")
 }
 
 /// Pre legajo: postulante en proceso de ingreso. Espeja la nullability de `employees`
@@ -2092,7 +2132,7 @@ model pre_employees {
   id              String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   created_at      DateTime                 @default(now()) @db.Timestamptz(6)
   updated_at      DateTime                 @default(now()) @updatedAt @db.Timestamptz(6)
-  company_id      String                   @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   pre_file_number String
   status          pre_employee_status_enum @default(en_proceso)
 
@@ -2162,7 +2202,7 @@ model documents_pre_employees {
   pre_employees  pre_employees  @relation(fields: [pre_employee_id], references: [id], onDelete: Cascade)
   document_types document_types @relation(fields: [document_type_id], references: [id], onDelete: Cascade)
   profile        profile?       @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  company_id     String         @db.Uuid
+  company_id     String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company        company        @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@unique([pre_employee_id, document_type_id])
@@ -2425,10 +2465,12 @@ model sector_repair_types {
   types_of_repairs   types_of_repairs @relation(fields: [repair_type_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   workshop_sectors   workshop_sectors @relation(fields: [workshop_sector_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([workshop_sector_id, repair_type_id])
   @@index([repair_type_id], map: "idx_sector_repair_types_repair")
   @@index([workshop_sector_id], map: "idx_sector_repair_types_sector")
   @@schema("public")
+  @@index([company_id], map: "idx_sector_repair_types_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -2444,9 +2486,11 @@ model sectors {
   customers         customers         @relation(fields: [customer_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   service_sectors   service_sectors[]
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([customer_id, name])
   @@index([customer_id], map: "idx_sectors_customer_id")
   @@schema("public")
+  @@index([company_id], map: "idx_sectors_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -2459,8 +2503,10 @@ model service_areas {
   areas_cliente     areas_cliente     @relation(fields: [area_id], references: [id], onDelete: Cascade)
   customer_services customer_services @relation(fields: [service_id], references: [id], onDelete: Cascade)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@id([service_id, area_id, id])
   @@schema("public")
+  @@index([company_id], map: "idx_service_areas_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -2468,7 +2514,7 @@ model service_items {
   id                  String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   created_at          DateTime                       @default(now()) @db.Timestamptz(6)
   customer_service_id String                         @db.Uuid
-  company_id          String                         @db.Uuid
+  company_id          String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   item_name           String
   item_description    String
   /// Precio vigente. Lo escribe SOLO la action que aplica una revision, en la misma
@@ -2508,15 +2554,17 @@ model service_sectors {
   sectors           sectors           @relation(fields: [sector_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   customer_services customer_services @relation(fields: [service_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([service_id, sector_id], map: "service_sectors_unique")
   @@schema("public")
+  @@index([company_id], map: "idx_service_sectors_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model share_company_users {
   created_at  DateTime   @default(now()) @db.Timestamptz(6)
   profile_id  String?    @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id  String?    @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id  String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   id          String     @id @unique(map: "share_company_users_id2_key") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   customer_id String?    @db.Uuid
   modules     modulos[]
@@ -2534,7 +2582,7 @@ model sub_type {
   created_at                   DateTime                       @default(now()) @db.Timestamptz(6)
   name                         String
   is_active                    Boolean?                       @default(true)
-  company_id                   String?                        @db.Uuid
+  company_id                   String?  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   type                         String?                        @db.Uuid
   tire_template_id             String?                        @db.Uuid
   checklist_template_sub_types checklist_template_sub_types[]
@@ -2558,10 +2606,12 @@ model sub_type_compatible_items {
   created_at         DateTime @default(now()) @db.Timestamptz(6)
   sub_type           sub_type @relation(fields: [sub_type_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([sub_type_id, compatible_item_id, item_type], map: "sub_type_compatible_items_unique")
   @@index([compatible_item_id], map: "idx_sub_type_compatible_items_compatible_item_id")
   @@index([sub_type_id], map: "idx_sub_type_compatible_items_sub_type_id")
   @@schema("public")
+  @@index([company_id], map: "idx_sub_type_compatible_items_company_id")
 }
 
 model support_ticket_views {
@@ -2607,7 +2657,7 @@ model type {
   created_at                                                 DateTime                         @default(now()) @db.Timestamptz(6)
   name                                                       String
   is_active                                                  Boolean?                         @default(true)
-  company_id                                                 String?                          @db.Uuid
+  company_id                                                 String?  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   has_hitch                                                  Boolean?                         @default(false)
   is_tractor_unit                                            Boolean?                         @default(false)
   applies_to                                                 String?                          @default("vehicle") @db.VarChar(20)
@@ -2635,7 +2685,7 @@ model type_hitch_types {
   created_at                                     DateTime? @default(now()) @db.Timestamptz(6)
   type_type_hitch_types_compatible_type_idTotype type      @relation("type_hitch_types_compatible_type_idTotype", fields: [compatible_type_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   type_type_hitch_types_type_idTotype            type      @relation("type_hitch_types_type_idTotype", fields: [type_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  company_id                                     String    @db.Uuid
+  company_id                                     String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                                        company   @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@unique([type_id, compatible_type_id])
@@ -2663,7 +2713,7 @@ model types_of_contract {
   description String?
   is_active   Boolean?    @default(true)
   employees   employees[]
-  company_id  String      @db.Uuid
+  company_id  String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company     company     @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([company_id], map: "idx_types_of_contract_company_id")
@@ -2678,7 +2728,7 @@ model types_of_repairs {
   description                         String
   criticity                           String?
   is_active                           Boolean                               @default(true)
-  company_id                          String                                @db.Uuid
+  company_id                          String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   type_of_maintenance                 type_of_maintenance_ENUM?
   id                                  String                                @id @unique(map: "types_of_repairs_id-2_key") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   multi_equipment                     Boolean                               @default(false)
@@ -2712,7 +2762,7 @@ model user_permissions {
   user_id                                       String    @db.Uuid
   tab_id                                        String    @db.Uuid
   action_id                                     String    @db.Uuid
-  company_id                                    String    @db.Uuid
+  company_id                                    String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_granted                                    Boolean?  @default(true)
   assigned_by                                   String?   @db.Uuid
   created_at                                    DateTime? @default(now()) @db.Timestamptz(6)
@@ -2735,7 +2785,7 @@ model user_roles {
   id                                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   user_id                                 String    @db.Uuid
   role_id                                 BigInt
-  company_id                              String    @db.Uuid
+  company_id                              String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   assigned_by                             String?   @db.Uuid
   assigned_at                             DateTime? @default(now()) @db.Timestamptz(6)
   profile_user_roles_assigned_byToprofile profile?  @relation("user_roles_assigned_byToprofile", fields: [assigned_by], references: [credential_id], onDelete: SetNull, onUpdate: NoAction)
@@ -2767,7 +2817,7 @@ model vehicles {
   termination_date              DateTime?                       @db.Date
   reason_for_termination        termination_reason_enum?
   user_id                       String?                         @default(dbgenerated("app_current_user_id()")) @db.Uuid
-  company_id                    String?                         @db.Uuid
+  company_id                    String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   id                            String                          @id @unique(map: "vehicles_id2_key") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   type                          String                          @db.Uuid
   status                        status_type?                    @default(Incompleto)
@@ -2829,7 +2879,7 @@ model vehicles {
 model tire_brands {
   id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name       String
-  company_id String   @db.Uuid
+  company_id String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_active  Boolean  @default(true)
   created_at DateTime @default(now()) @db.Timestamptz(6)
 
@@ -2846,7 +2896,7 @@ model tire_types {
   name       String
   size       String
   tread_type TireTreadType
-  company_id String        @db.Uuid
+  company_id String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_active  Boolean       @default(true)
   created_at DateTime      @default(now()) @db.Timestamptz(6)
   updated_at DateTime      @updatedAt @db.Timestamptz(6)
@@ -2862,7 +2912,7 @@ model tire_types {
 /// Vinculo tipo + marca de cubierta -> material SERIAL de Almacenes (etapa 6). Nunca se borra.
 model tire_materials {
   id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id    String      @db.Uuid
+  company_id    String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   tire_type_id  String      @db.Uuid
   tire_brand_id String      @db.Uuid
   material_id   String      @unique @db.Uuid
@@ -2889,7 +2939,7 @@ model tires {
   discard_photo   String?
   discard_comment String?
   discarded_at    DateTime?         @db.Timestamptz(6)
-  company_id      String            @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_active       Boolean           @default(true)
   created_at      DateTime          @default(now()) @db.Timestamptz(6)
   updated_at      DateTime          @updatedAt @db.Timestamptz(6)
@@ -2914,7 +2964,7 @@ model tire_templates {
   description         String?
   is_vehicle_override Boolean  @default(false)
   source_template_id  String?  @db.Uuid
-  company_id          String   @db.Uuid
+  company_id          String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_active           Boolean  @default(true)
   created_at          DateTime @default(now()) @db.Timestamptz(6)
 
@@ -2941,8 +2991,10 @@ model tire_template_axles {
   template               tire_templates           @relation(fields: [template_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   vehicle_tire_positions vehicle_tire_positions[]
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([template_id, axle_number])
   @@schema("public")
+  @@index([company_id], map: "idx_tire_template_axles_company_id")
 }
 
 model vehicle_tire_positions {
@@ -2960,8 +3012,10 @@ model vehicle_tire_positions {
   template_axle tire_template_axles @relation(fields: [template_axle_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tire          tires?              @relation(fields: [tire_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([vehicle_id, position_number])
   @@schema("public")
+  @@index([company_id], map: "idx_vehicle_tire_positions_company_id")
 }
 
 model vehicle_axle_tire_sizes {
@@ -2974,9 +3028,11 @@ model vehicle_axle_tire_sizes {
 
   vehicle vehicles @relation(fields: [vehicle_id], references: [id], onDelete: Cascade)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([vehicle_id, axle_number])
   @@index([vehicle_id])
   @@schema("public")
+  @@index([company_id], map: "idx_vehicle_axle_tire_sizes_company_id")
 }
 
 model tire_service_orders {
@@ -2987,7 +3043,7 @@ model tire_service_orders {
   service_date       DateTime               @db.Timestamptz(6)
   status             TireServiceOrderStatus @default(OPEN)
   created_by         String                 @db.Uuid
-  company_id         String                 @db.Uuid
+  company_id         String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   created_at         DateTime               @default(now()) @db.Timestamptz(6)
   closed_at          DateTime?              @db.Timestamptz(6)
   axle_snapshot      Json?
@@ -3028,7 +3084,9 @@ model tire_service_items {
   tire          tires?              @relation("tire_at_position", fields: [tire_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   new_tire      tires?              @relation("replacement_tire", fields: [new_tire_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@schema("public")
+  @@index([company_id], map: "idx_tire_service_items_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -3043,7 +3101,7 @@ model work_diagram {
   employees                     employees[]
   diagram_type                  diagram_type?                   @relation(fields: [inactive_novelty], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "work-diagram_inactive_novelty_fkey")
   work_diagram_active_novelties work_diagram_active_novelties[]
-  company_id                    String                          @db.Uuid
+  company_id                    String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                       company                         @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([company_id], map: "idx_work_diagram_company_id")
@@ -3058,7 +3116,7 @@ model work_diagram_active_novelties {
   created_at      DateTime     @default(now()) @db.Timestamptz(6)
   diagram_type    diagram_type @relation(fields: [diagram_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   work_diagram    work_diagram @relation(fields: [work_diagram_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  company_id      String       @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company         company      @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@unique([work_diagram_id, diagram_type_id], map: "work_diagram_active_novelties_unique")
@@ -3093,7 +3151,7 @@ model work_order_item_repairs {
   types_of_repairs                                             types_of_repairs       @relation(fields: [repair_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   profile_work_order_item_repairs_technician_notes_byToprofile profile?               @relation("work_order_item_repairs_technician_notes_byToprofile", fields: [technician_notes_by], references: [id], onUpdate: NoAction)
   work_order_items                                             work_order_items       @relation(fields: [work_order_item_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  company_id                                                   String                 @db.Uuid
+  company_id                                                   String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                                                      company                @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@unique([work_order_item_id, repair_type_id], map: "unique_work_order_item_repair")
@@ -3118,11 +3176,13 @@ model work_order_items {
   maintenance_order_items   maintenance_order_items   @relation(fields: [maintenance_order_item_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   work_orders               work_orders               @relation(fields: [work_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([maintenance_order_item_id, work_order_id], map: "unique_maintenance_item_per_active_work_order")
   @@index([maintenance_order_item_id], map: "idx_work_order_items_maintenance_item")
   @@index([status], map: "idx_work_order_items_status")
   @@index([work_order_id], map: "idx_work_order_items_work_order")
   @@schema("public")
+  @@index([company_id], map: "idx_work_order_items_company_id")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -3130,7 +3190,7 @@ model work_orders {
   id                                        String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   order_number                              String                     @unique
   sequence_number                           Int
-  company_id                                String                     @db.Uuid
+  company_id                                String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   /// Ticket 596: nullable — la OT puede ser de un vehiculo O de un equipamiento
   equipment_id                              String?                    @db.Uuid
   /// Ticket 596: equipamiento (other_equipment). Excluyente con equipment_id (CHECK en BD)
@@ -3190,10 +3250,12 @@ model employee_workshop_sectors {
   employees          employees        @relation(fields: [employee_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   workshop_sectors   workshop_sectors @relation(fields: [workshop_sector_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@id([employee_id, workshop_sector_id])
   @@index([employee_id], map: "idx_ews_employee_id")
   @@index([workshop_sector_id], map: "idx_ews_workshop_sector_id")
   @@schema("public")
+  @@index([company_id], map: "idx_employee_workshop_sectors_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -3212,7 +3274,7 @@ model workshop_sectors {
   work_order_item_repairs   work_order_item_repairs[]
   work_orders               work_orders[]
   workshops                 workshops                   @relation(fields: [workshop_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  company_id                String                      @db.Uuid
+  company_id                String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   company                   company                     @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([is_active], map: "idx_workshop_sectors_is_active")
@@ -3237,7 +3299,7 @@ model workshops {
   provider_phone          String?
   provider_email          String?
   is_active               Boolean                   @default(true)
-  company_id              String                    @db.Uuid
+  company_id              String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   maintenance_order_items maintenance_order_items[]
   work_orders             work_orders[]
   workshop_sectors        workshop_sectors[]
@@ -3267,7 +3329,7 @@ model user_table_preferences {
 /// marca los tableros creados a partir de un tablero por defecto (alias de los links viejos `?tab=`).
 model user_dashboards {
   id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id String   @db.Uuid
+  company_id String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   user_id    String   @db.Uuid
   name       String   @db.VarChar(60)
   position   Int      @default(0)
@@ -3708,7 +3770,7 @@ enum clothing_delivery_type {
 /// (ticket 671). El secreto NUNCA se guarda en claro: solo su hash scrypt.
 model external_api_clients {
   id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id    String    @db.Uuid
+  company_id    String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   name          String
   /// Identificador publico que viaja como usuario en el Basic Auth
   client_id     String    @unique
@@ -3927,9 +3989,11 @@ model service_item_price_revisions {
   service_items   service_items       @relation(fields: [service_item_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   run             price_update_runs?  @relation(fields: [run_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([service_item_id], map: "idx_price_revisions_service_item_id")
   @@index([run_id], map: "idx_price_revisions_run_id")
   @@schema("public")
+  @@index([company_id], map: "idx_service_item_price_revisions_company_id")
 }
 
 /// Regla de actualizacion de precios.
@@ -3941,7 +4005,7 @@ model service_item_price_revisions {
 /// polinomio). Va en jsonb y no en columnas fijas porque las tres formas no se parecen entre si.
 model price_update_rules {
   id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id          String              @db.Uuid
+  company_id          String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   customer_service_id String?             @db.Uuid
   name                String
   method              price_update_method
@@ -3963,7 +4027,7 @@ model price_update_rules {
 /// un precio siempre puede explicar de donde salio. `rule_id` nulo = ajuste manual suelto.
 model price_update_runs {
   id              String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id      String                         @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   rule_id         String?                        @db.Uuid
   applied_at      DateTime                       @default(now()) @db.Timestamptz(6)
   applied_by      String?                        @db.Uuid
@@ -3986,7 +4050,7 @@ model price_update_runs {
 /// y se emite otra.
 model certifications {
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id          String                @db.Uuid
+  company_id          String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   customer_id         String                @db.Uuid
   customer_service_id String                @db.Uuid
   number              String
@@ -4045,11 +4109,13 @@ model certification_lines {
   service_items     service_items    @relation(fields: [service_item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   dailyreportrows   dailyreportrows? @relation(fields: [dailyreportrow_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([dailyreportrow_id], map: "uq_certification_lines_live_row", where: raw("(is_live AND dailyreportrow_id IS NOT NULL)"))
   @@index([certification_id], map: "idx_certification_lines_certification_id")
   @@index([dailyreportrow_id], map: "idx_certification_lines_dailyreportrow_id")
   @@index([service_item_id], map: "idx_certification_lines_service_item_id")
   @@schema("public")
+  @@index([company_id], map: "idx_certification_lines_company_id")
 }
 
 // ─── Facturación electrónica ARCA ───────────────────────────────────────────────
@@ -4093,7 +4159,7 @@ enum arca_credential_status {
 /// Datos fiscales del emisor (1:1 con la empresa). Razón social y CUIT salen de `company`.
 model company_fiscal_profiles {
   id                     String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id             String                @unique @db.Uuid
+  company_id             String  @unique @default(dbgenerated("app_current_company_id()")) @db.Uuid
   tax_condition          fiscal_tax_condition
   gross_income_number    String?               @db.VarChar(30)
   gross_income_regime    gross_income_regime?
@@ -4118,7 +4184,7 @@ model company_fiscal_profiles {
 /// comprobantes no se borra: se desactiva.
 model sales_points {
   id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id String   @db.Uuid
+  company_id String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   number     Int
   name       String   @db.VarChar(120)
   is_active  Boolean  @default(true)
@@ -4136,7 +4202,7 @@ model sales_points {
 /// se devuelve al cliente ni se loguea. A lo sumo un `activo` y un `pendiente` por ambiente.
 model arca_credentials {
   id               String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id       String                 @db.Uuid
+  company_id       String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   environment      arca_environment
   status           arca_credential_status
   alias            String                 @db.VarChar(60)
@@ -4169,7 +4235,7 @@ model arca_credentials {
 /// así que se persiste ANTES de usarlo y se reutiliza. Va atado a la credencial que lo firmó.
 model arca_tokens {
   id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id    String           @db.Uuid
+  company_id    String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   environment   arca_environment
   service       String           @default("wsfe") @db.VarChar(20)
   credential_id String           @db.Uuid
@@ -4199,7 +4265,7 @@ model arca_locks {
 /// de guardar.
 model arca_call_logs {
   id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id   String           @db.Uuid
+  company_id   String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   environment  arca_environment
   operation    String           @db.VarChar(60)
   invoice_id   String?          @db.Uuid
@@ -4240,7 +4306,7 @@ enum invoice_status {
 /// ARCA no responde, es lo que permite reconciliar con `FECompConsultar` sin duplicar.
 model invoices {
   id                        String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id                String                   @db.Uuid
+  company_id                String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   /// Ambiente con el que se emitió (o se va a emitir). La numeración es por ambiente.
   environment               arca_environment
   status                    invoice_status           @default(borrador)
@@ -4334,8 +4400,10 @@ model invoice_lines {
   service_item     service_items?  @relation(fields: [service_item_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
   certification    certifications? @relation(fields: [certification_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([invoice_id, position])
   @@schema("public")
+  @@index([company_id], map: "idx_invoice_lines_company_id")
 }
 
 /// Subtotal por alícuota (array `Iva` de ARCA). El IVA se redondea UNA vez por alícuota, no por
@@ -4348,8 +4416,10 @@ model invoice_vat {
   vat_amount  Decimal  @db.Decimal(15, 2)
   invoice     invoices @relation(fields: [invoice_id], references: [id], onDelete: Cascade)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([invoice_id, vat_rate_id])
   @@schema("public")
+  @@index([company_id], map: "idx_invoice_vat_company_id")
 }
 
 /// Certificaciones que factura un comprobante. Un borrador ya las reserva. En PRODUCCIÓN una
@@ -4365,10 +4435,12 @@ model invoice_certifications {
   invoice          invoices         @relation(fields: [invoice_id], references: [id], onDelete: Cascade)
   certification    certifications   @relation(fields: [certification_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([invoice_id, certification_id])
   @@unique([certification_id], map: "uq_invoice_certifications_live_prod", where: raw("((environment = 'produccion'::arca_environment) AND (released_at IS NULL))"))
   @@index([certification_id], map: "idx_invoice_certifications_certification")
   @@schema("public")
+  @@index([company_id], map: "idx_invoice_certifications_company_id")
 }
 
 // ── Almacenes (etapa 1) ─────────────────────────────────────────────────────
@@ -4439,7 +4511,7 @@ enum stock_destination_type {
 
 model warehouses {
   id                  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id          String            @db.Uuid
+  company_id          String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   code                String
   name                String
   address             String?
@@ -4464,7 +4536,7 @@ model warehouses {
 
 model material_categories {
   id         String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id String      @db.Uuid
+  company_id String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   name       String
   is_active  Boolean     @default(true)
   created_at DateTime    @default(now()) @db.Timestamptz(6)
@@ -4478,7 +4550,7 @@ model material_categories {
 
 model measurement_units {
   id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id   String      @db.Uuid
+  company_id   String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   name         String
   abbreviation String
   is_active    Boolean     @default(true)
@@ -4496,7 +4568,7 @@ model measurement_units {
 
 model materials {
   id                String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id        String                 @db.Uuid
+  company_id        String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   code              String
   name              String
   description       String?
@@ -4534,7 +4606,7 @@ model materials {
 
 model material_batches {
   id             String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id     String                 @db.Uuid
+  company_id     String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   material_id    String                 @db.Uuid
   batch_number   String
   expires_at     DateTime?              @db.Date
@@ -4551,7 +4623,7 @@ model material_batches {
 
 model material_units {
   id               String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id       String                 @db.Uuid
+  company_id       String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   material_id      String                 @db.Uuid
   serial_number    String
   status           material_unit_status   @default(IN_STOCK)
@@ -4578,7 +4650,7 @@ model material_units {
 /// son BATCH). La unicidad real es un indice NULLS NOT DISTINCT escrito a mano en la migracion.
 model stock_balances {
   id           String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id   String            @db.Uuid
+  company_id   String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   material_id  String            @db.Uuid
   warehouse_id String            @db.Uuid
   batch_id     String?           @db.Uuid
@@ -4599,7 +4671,7 @@ model stock_balances {
 /// (`reverses_movement_id`), nunca editando.
 model stock_movements {
   id                   String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id           String                  @db.Uuid
+  company_id           String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   number               String
   type                 stock_movement_type
   warehouse_id         String                  @db.Uuid
@@ -4678,17 +4750,19 @@ model stock_movement_lines {
   batch       material_batches? @relation(fields: [batch_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   unit        material_units?   @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([movement_id], map: "idx_stock_movement_lines_movement_id")
   @@index([material_id], map: "idx_stock_movement_lines_material_id")
   @@index([request_line_id], map: "idx_stock_movement_lines_request_line")
   @@schema("public")
+  @@index([company_id], map: "idx_stock_movement_lines_company_id")
 }
 
 /// Baja de una unidad serializada que estaba prestada y no vuelve (extraviada o rota). No es un
 /// movimiento de stock: la unidad ya habia salido y su costo queda imputado a quien la tenia.
 model material_unit_write_offs {
   id               String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id       String                    @db.Uuid
+  company_id       String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   unit_id          String                    @db.Uuid
   /// Ultimo movimiento de la unidad al darla de baja: el prestamo que cierra.
   loan_movement_id String                    @db.Uuid
@@ -4710,7 +4784,7 @@ model material_unit_write_offs {
 /// (`stock_movements.material_request_id`); lo entregado se calcula de esas salidas.
 model material_requests {
   id                   String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id           String                  @db.Uuid
+  company_id           String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   number               String
   status               material_request_status @default(PENDING_APPROVAL)
   requested_by         String                  @db.Uuid
@@ -4764,13 +4838,15 @@ model material_request_lines {
   material       materials              @relation(fields: [material_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   delivery_lines stock_movement_lines[]
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([request_id], map: "idx_material_request_lines_request_id")
   @@schema("public")
+  @@index([company_id], map: "idx_material_request_lines_company_id")
 }
 
 /// Configuracion de Almacenes por empresa (etapa 3).
 model warehouse_settings {
-  company_id             String   @id @db.Uuid
+  company_id             String  @id @default(dbgenerated("app_current_company_id()")) @db.Uuid
   /// Monto maximo de una salida directa (sin pedido). NULL = sin limite.
   direct_exit_max_amount Decimal? @db.Decimal(15, 2)
   updated_at             DateTime @default(now()) @updatedAt @db.Timestamptz(6)
@@ -4801,7 +4877,7 @@ enum purchase_request_status {
 /// Proveedor. No se borra si tiene uso: se desactiva.
 model suppliers {
   id                String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id        String                    @db.Uuid
+  company_id        String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   name              String
   trade_name        String?
   /// CUIT normalizado (solo digitos).
@@ -4850,14 +4926,16 @@ model supplier_contacts {
   created_at  DateTime  @default(now()) @db.Timestamptz(6)
   supplier    suppliers @relation(fields: [supplier_id], references: [id], onDelete: Cascade)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([supplier_id], map: "idx_supplier_contacts_supplier_id")
   @@schema("public")
+  @@index([company_id], map: "idx_supplier_contacts_company_id")
 }
 
 /// Rubros de proveedor, catalogo por empresa.
 model supplier_categories {
   id         String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id String                    @db.Uuid
+  company_id String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   name       String
   is_active  Boolean                   @default(true)
   created_at DateTime                  @default(now()) @db.Timestamptz(6)
@@ -4875,9 +4953,11 @@ model supplier_category_links {
   supplier    suppliers           @relation(fields: [supplier_id], references: [id], onDelete: Cascade)
   category    supplier_categories @relation(fields: [category_id], references: [id], onDelete: Cascade)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@id([supplier_id, category_id])
   @@index([category_id], map: "idx_supplier_category_links_category_id")
   @@schema("public")
+  @@index([company_id], map: "idx_supplier_category_links_company_id")
 }
 
 /// Documento del proveedor. Reemplazar crea uno nuevo; el anterior queda con `replaced_by_id`.
@@ -4896,14 +4976,16 @@ model supplier_documents {
   replaced_by    supplier_documents?  @relation("supplier_document_replacement", fields: [replaced_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   replaces       supplier_documents?  @relation("supplier_document_replacement")
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([supplier_id], map: "idx_supplier_documents_supplier_id")
   @@schema("public")
+  @@index([company_id], map: "idx_supplier_documents_company_id")
 }
 
 /// Solicitud de compra. Destino opcional (sin destino = para stock).
 model purchase_requests {
   id                   String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id           String                   @db.Uuid
+  company_id           String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   number               String
   status               purchase_request_status  @default(DRAFT)
   requested_by         String                   @db.Uuid
@@ -4969,9 +5051,11 @@ model purchase_request_lines {
   quote_lines           purchase_quote_lines[]
   order_lines           purchase_order_lines[]
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([request_id], map: "idx_purchase_request_lines_request_id")
   @@index([material_id], map: "idx_purchase_request_lines_material_id")
   @@schema("public")
+  @@index([company_id], map: "idx_purchase_request_lines_company_id")
 }
 
 // ── Compras etapa 2: pedidos de cotizacion y ordenes de compra ──────────────
@@ -5005,7 +5089,7 @@ enum purchase_order_status {
 /// respuesta del proveedor.
 model purchase_quotes {
   id              String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id      String                 @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   number          String
   supplier_id     String                 @db.Uuid
   status          purchase_quote_status  @default(DRAFT)
@@ -5052,15 +5136,17 @@ model purchase_quote_lines {
   request_line    purchase_request_lines @relation(fields: [request_line_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   order_lines     purchase_order_lines[]
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([quote_id, request_line_id], map: "purchase_quote_lines_quote_id_request_line_id_key")
   @@index([request_line_id], map: "idx_purchase_quote_lines_request_line_id")
   @@schema("public")
+  @@index([company_id], map: "idx_purchase_quote_lines_company_id")
 }
 
 /// Orden de compra (OC-000001). Sus lineas cubren lineas de solicitudes aprobadas (N<->N).
 model purchase_orders {
   id                String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id        String                 @db.Uuid
+  company_id        String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   number            String
   supplier_id       String                 @db.Uuid
   quote_id          String?                @db.Uuid
@@ -5134,9 +5220,11 @@ model purchase_order_lines {
   receipt_lines   purchase_receipt_lines[]
   invoice_lines   supplier_invoice_lines[]
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([order_id], map: "idx_purchase_order_lines_order_id")
   @@index([request_line_id], map: "idx_purchase_order_lines_request_line_id")
   @@schema("public")
+  @@index([company_id], map: "idx_purchase_order_lines_company_id")
 }
 
 /// Cada rechazo de una OC (la cabecera guarda solo el ultimo): historial del detalle.
@@ -5149,15 +5237,17 @@ model purchase_order_rejections {
   order       purchase_orders @relation(fields: [order_id], references: [id], onDelete: Cascade)
   rejecter    profile         @relation(fields: [rejected_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([order_id], map: "idx_purchase_order_rejections_order_id")
   @@schema("public")
+  @@index([company_id], map: "idx_purchase_order_rejections_company_id")
 }
 
 /// Recepcion de lo comprado contra una OC (RC-000001). Las lineas de material entran a Almacenes
 /// por el motor de stock (un movimiento ENTRY); las de servicio no tocan el stock.
 model purchase_receipts {
   id                   String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id           String                   @db.Uuid
+  company_id           String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   number               String
   order_id             String                   @db.Uuid
   supplier_id          String                   @db.Uuid
@@ -5205,16 +5295,18 @@ model purchase_receipt_lines {
   receipt          purchase_receipts    @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
   order_line       purchase_order_lines @relation(fields: [order_line_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([receipt_id], map: "idx_purchase_receipt_lines_receipt_id")
   @@index([order_line_id], map: "idx_purchase_receipt_lines_order_line_id")
   @@schema("public")
+  @@index([company_id], map: "idx_purchase_receipt_lines_company_id")
 }
 
 /// Comprobante recibido de un proveedor (factura, ND o NC). No se emite ni se numera: se carga
 /// y se controla contra la OC y lo recibido. "A pagar" (etapa 5) = CONFORMING o APPROVED.
 model supplier_invoices {
   id                       String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id               String                   @db.Uuid
+  company_id               String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   supplier_id              String                   @db.Uuid
   /// Id de CBTE_TYPES (1/2/3 A, 6/7/8 B, 11/12/13 C). Unico por proveedor + tipo + punto de venta +
   /// numero entre los NO anulados: indice parcial `supplier_invoices_voucher_key` (en SQL).
@@ -5295,9 +5387,11 @@ model supplier_invoice_lines {
   order_line          purchase_order_lines?        @relation(fields: [order_line_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   expense_category    purchase_expense_categories? @relation(fields: [expense_category_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([invoice_id], map: "idx_supplier_invoice_lines_invoice_id")
   @@index([order_line_id], map: "idx_supplier_invoice_lines_order_line_id")
   @@schema("public")
+  @@index([company_id], map: "idx_supplier_invoice_lines_company_id")
 }
 
 /// IVA por alicuota del comprobante (lo que va al Libro IVA).
@@ -5309,8 +5403,10 @@ model supplier_invoice_vat {
   amount      Decimal           @db.Decimal(15, 2)
   invoice     supplier_invoices @relation(fields: [invoice_id], references: [id], onDelete: Cascade)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([invoice_id, vat_rate_id], map: "supplier_invoice_vat_invoice_id_vat_rate_id_key")
   @@schema("public")
+  @@index([company_id], map: "idx_supplier_invoice_vat_company_id")
 }
 
 model supplier_invoice_taxes {
@@ -5325,14 +5421,16 @@ model supplier_invoice_taxes {
   invoice     supplier_invoices         @relation(fields: [invoice_id], references: [id], onDelete: Cascade)
   province    provinces?                @relation(fields: [province_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([invoice_id], map: "idx_supplier_invoice_taxes_invoice_id")
   @@schema("public")
+  @@index([company_id], map: "idx_supplier_invoice_taxes_company_id")
 }
 
 /// Conceptos para las lineas de gasto sin OC (luz, honorarios, fletes sueltos).
 model purchase_expense_categories {
   id         String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id String                   @db.Uuid
+  company_id String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   name       String
   is_active  Boolean                  @default(true)
   created_at DateTime                 @default(now()) @db.Timestamptz(6)
@@ -5374,7 +5472,7 @@ enum arca_check_result {
 /// Configuración de Compras; el módulo de Tesorería le suma saldos, chequeras y conciliación.
 model treasury_accounts {
   id             String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id     String                    @db.Uuid
+  company_id     String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   kind           treasury_account_kind
   name           String
   bank_name      String?
@@ -5407,7 +5505,7 @@ model treasury_accounts {
 /// Orden de pago a un proveedor (OP-000001): comprobantes, NC y anticipos aplicados, retenciones y medios.
 model payment_orders {
   id                 String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id         String                       @db.Uuid
+  company_id         String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   number             String
   supplier_id        String                       @db.Uuid
   status             payment_order_status
@@ -5468,8 +5566,10 @@ model payment_order_rejections {
   payment_order    payment_orders @relation(fields: [payment_order_id], references: [id], onDelete: Cascade)
   rejecter         profile        @relation("payment_order_rejection_author", fields: [rejected_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([payment_order_id], map: "idx_payment_order_rejections_order_id")
   @@schema("public")
+  @@index([company_id], map: "idx_payment_order_rejections_company_id")
 }
 
 /// Qué paga la orden: una factura/ND (INVOICE), una NC aplicada (CREDIT_NOTE), un anticipo nuevo
@@ -5496,12 +5596,14 @@ model payment_order_lines {
   source_line       payment_order_lines?  @relation("advance_applications", fields: [source_line_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   applications      payment_order_lines[] @relation("advance_applications")
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([payment_order_id], map: "idx_payment_order_lines_order_id")
   @@index([invoice_id], map: "idx_payment_order_lines_invoice_id")
   @@index([source_line_id], map: "idx_payment_order_lines_source_line_id")
   @@index([third_party_check_id], map: "idx_payment_order_lines_check_id")
   @@index([own_check_id], map: "idx_payment_order_lines_own_check_id")
   @@schema("public")
+  @@index([company_id], map: "idx_payment_order_lines_company_id")
 }
 
 /// Retención practicada en una orden de pago. El número de certificado se asigna al pagar.
@@ -5523,8 +5625,10 @@ model payment_order_withholdings {
   payment_order      payment_orders      @relation(fields: [payment_order_id], references: [id], onDelete: Cascade)
   regime             withholding_regimes @relation(fields: [regime_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([payment_order_id], map: "idx_payment_order_withholdings_order_id")
   @@schema("public")
+  @@index([company_id], map: "idx_payment_order_withholdings_company_id")
 }
 
 /// Medio con el que se pagó (uno o varios por orden), desde una cuenta o caja.
@@ -5547,16 +5651,18 @@ model payment_order_payments {
   /// Cheque propio emitido por este medio (CHECK / ECHECK).
   own_check           own_checks?
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([payment_order_id], map: "idx_payment_order_payments_order_id")
   @@index([treasury_account_id], map: "idx_payment_order_payments_account_id")
   @@index([third_party_check_id], map: "idx_payment_order_payments_check_id")
   @@schema("public")
+  @@index([company_id], map: "idx_payment_order_payments_company_id")
 }
 
 /// Régimen de retención (Ganancias, IVA, IIBB, SUSS) con sus alícuotas y mínimos.
 model withholding_regimes {
   id                    String                          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id            String                          @db.Uuid
+  company_id            String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   tax                   withholding_tax
   /// Código de régimen de SICORE/SIRE (3 dígitos).
   code                  String                          @db.VarChar(3)
@@ -5595,8 +5701,10 @@ model supplier_withholding_profiles {
   supplier              suppliers            @relation(fields: [supplier_id], references: [id], onDelete: Cascade)
   regime                withholding_regimes? @relation(fields: [regime_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([supplier_id, tax], map: "supplier_withholding_profiles_supplier_tax_key")
   @@schema("public")
+  @@index([company_id], map: "idx_supplier_withholding_profiles_company_id")
 }
 
 enum treasury_account_kind {
@@ -5631,7 +5739,7 @@ enum treasury_concept_direction {
 /// El saldo es la suma de los vigentes con fecha hasta hoy (no se guarda).
 model treasury_movements {
   id                       String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id               String                  @db.Uuid
+  company_id               String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   account_id               String                  @db.Uuid
   /// Fecha valor: el dia en que la plata entra o sale de la cuenta.
   date                     DateTime                @db.Date
@@ -5681,7 +5789,7 @@ model treasury_movements {
 /// Concepto para clasificar los movimientos manuales (gastos bancarios, aporte de socios...).
 model treasury_concepts {
   id         String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id String                     @db.Uuid
+  company_id String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   name       String
   direction  treasury_concept_direction
   is_active  Boolean                    @default(true)
@@ -5696,7 +5804,7 @@ model treasury_concepts {
 /// Transferencia entre dos cuentas de la empresa (TR-000001). Genera dos movimientos TRANSFER.
 model treasury_transfers {
   id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id      String               @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   number          String
   date            DateTime             @db.Date
   from_account_id String               @db.Uuid
@@ -5788,7 +5896,7 @@ enum customer_receipt_line_kind {
 /// Recibo de cobranza a un cliente. Sin número mientras es borrador: lo toma al confirmar.
 model customer_receipts {
   id                     String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id             String                    @db.Uuid
+  company_id             String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   customer_id            String                    @db.Uuid
   number                 String?
   status                 customer_receipt_status   @default(DRAFT)
@@ -5854,18 +5962,20 @@ model customer_receipt_lines {
   source_line           customer_receipt_lines?    @relation("customer_receipt_line_source", fields: [source_line_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   applications          customer_receipt_lines[]   @relation("customer_receipt_line_source")
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([receipt_id], map: "idx_customer_receipt_lines_receipt_id")
   @@index([invoice_id], map: "idx_customer_receipt_lines_invoice_id")
   @@index([source_line_id], map: "idx_customer_receipt_lines_source_line_id")
   @@index([third_party_check_id], map: "idx_customer_receipt_lines_check_id")
   @@schema("public")
+  @@index([company_id], map: "idx_customer_receipt_lines_company_id")
 }
 
 /// Retención que practicó el cliente, con su certificado (PDF opcional en `customer-documents`).
 model customer_receipt_withholdings {
   id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   receipt_id         String            @db.Uuid
-  company_id         String            @db.Uuid
+  company_id         String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   customer_id        String            @db.Uuid
   tax                withholding_tax
   /// Solo IIBB.
@@ -5901,9 +6011,11 @@ model customer_receipt_payments {
   movement            treasury_movements?
   check               third_party_checks?
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([receipt_id], map: "idx_customer_receipt_payments_receipt_id")
   @@index([treasury_account_id], map: "idx_customer_receipt_payments_account_id")
   @@schema("public")
+  @@index([company_id], map: "idx_customer_receipt_payments_company_id")
 }
 
 // ── Tesorería etapa 3a: cheques de terceros (spec 2026-10-11-tesoreria-etapa-3a-design.md) ──
@@ -5946,7 +6058,7 @@ enum check_returned_by {
 /// vencimiento para depositar (fecha de pago + 30 días) se calcula, no se guarda.
 model third_party_checks {
   id                   String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id           String                        @db.Uuid
+  company_id           String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   kind                 third_party_check_kind
   number               String
   /// Normalizado (trim, espacios simples, mayúsculas): es parte de la clave de repetidos.
@@ -5993,7 +6105,7 @@ model third_party_checks {
 /// Documento que agrupa cheques: carga inicial, depósito (CD-), descuento (CL-) o rechazo (CR-).
 model third_party_check_operations {
   id              String                              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id      String                              @db.Uuid
+  company_id      String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   kind            check_operation_kind
   number          String?
   date            DateTime                            @db.Date
@@ -6034,9 +6146,11 @@ model third_party_check_operation_items {
   operation       third_party_check_operations @relation(fields: [operation_id], references: [id], onDelete: Cascade)
   check           third_party_checks           @relation(fields: [check_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([operation_id, check_id], map: "third_party_check_operation_items_key")
   @@index([check_id], map: "idx_third_party_check_operation_items_check_id")
   @@schema("public")
+  @@index([company_id], map: "idx_third_party_check_operation_items_company_id")
 }
 
 /// Historial de un cheque: un evento por cambio de estado, con el documento que lo causó. No se borra.
@@ -6057,15 +6171,17 @@ model third_party_check_events {
   payment_order    payment_orders?               @relation(fields: [payment_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   user             profile                       @relation("third_party_check_event_user", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([check_id, created_at], map: "idx_third_party_check_events_check_created")
   @@schema("public")
+  @@index([company_id], map: "idx_third_party_check_events_company_id")
 }
 
 /// Chequera de una cuenta bancaria (spec Tesorería etapa 3b §2.1): rango de números de cheques
 /// físicos. "Agotada" y "activa" se calculan; la baja lleva motivo.
 model checkbooks {
   id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id    String       @db.Uuid
+  company_id    String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   account_id    String       @db.Uuid
   first_number  Int
   last_number   Int
@@ -6089,7 +6205,7 @@ model checkbooks {
 /// cambia solo `lib/own-checks.ts`; el débito lo confirma un usuario (movimiento OWN_CHECK).
 model own_checks {
   id                       String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id               String                  @db.Uuid
+  company_id               String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   kind                     own_check_kind
   account_id               String                  @db.Uuid
   checkbook_id             String?                 @db.Uuid
@@ -6139,8 +6255,10 @@ model own_check_events {
   payment_order    payment_orders?   @relation(fields: [payment_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   user             profile           @relation("own_check_event_user", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([check_id, created_at], map: "idx_own_check_events_check_created")
   @@schema("public")
+  @@index([company_id], map: "idx_own_check_events_company_id")
 }
 
 enum own_check_kind {
@@ -6162,7 +6280,7 @@ enum own_check_status {
 /// Perfil de columnas del extracto de una cuenta bancaria (spec Tesorería etapa 4 §2.1). Uno por cuenta.
 model bank_statement_profiles {
   id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id         String            @db.Uuid
+  company_id         String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   account_id         String            @unique @db.Uuid
   header_row         Int
   date_column        String            @db.VarChar(3)
@@ -6185,7 +6303,7 @@ model bank_statement_profiles {
 /// Importación de un extracto bancario: sus líneas y el período que cubren.
 model bank_statements {
   id            String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  company_id    String                 @db.Uuid
+  company_id    String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   account_id    String                 @db.Uuid
   file_name     String
   date_from     DateTime               @db.Date
@@ -6207,7 +6325,7 @@ model bank_statements {
 model bank_statement_lines {
   id            String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   statement_id  String              @db.Uuid
-  company_id    String              @db.Uuid
+  company_id    String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   account_id    String              @db.Uuid
   row_number    Int
   date          DateTime            @db.Date

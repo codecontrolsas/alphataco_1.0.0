@@ -148,6 +148,7 @@ export function useWizardItems(initialItems: LocalItem[], repairTypes: Array<{ i
             return rt
               ? {
                   id: '',
+                  company_id: '',
                   maintenance_order_item_id: itemId,
                   created_at: null,
                   repair_type_id: rtId,

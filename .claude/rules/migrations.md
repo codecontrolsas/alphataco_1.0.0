@@ -72,6 +72,7 @@ Reglas de contenido:
 
 - Actor de la transaccion: `public.app_current_user_id()` (lee `app.user_id`; la app lo setea con `SET LOCAL app.user_id = '<uuid>'` via `withActor`). NUNCA `auth.uid()`, `auth.jwt()` ni `request.jwt.claims`.
 - Empresa: toda funcion recibe/filtra `company_id`; nada de supuestos "solo GH". Los `document_types` globales tienen `company_id IS NULL`.
+- Toda tabla de negocio nueva lleva `company_id uuid NOT NULL DEFAULT public.app_current_company_id()` (la empresa sale del contexto de la transaccion, la peticion no la envia) y, si tiene RLS, `SELECT public.app_enable_tenant_isolation('public.<tabla>')`; en `schema.prisma`: `company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid`.
 - UUIDs: `gen_random_uuid()` (pgcrypto). NUNCA `uuid_generate_v4()`.
 - Prohibido: `auth.`, `storage.`, `extensions.`, `net.`, `cron.`, `pgsodium`. Las policies RLS solo van dentro del plan por lotes de P2-C (shadow antes de estricto), nunca sueltas en una migracion cualquiera. Los jobs (antes `cron.schedule` + `net.http_post`) se disparan desde el servicio `cron` del compose (P5) llamando a la app.
 
