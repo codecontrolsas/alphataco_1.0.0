@@ -181,13 +181,18 @@ export async function updateDailyReportRowPrisma(rowId: string, data: DailyRepor
       // 0. Volver a validar con la fila bloqueada: otro flujo pudo pasarla a certificación en el medio.
       await assertRowEditableUnderLock(tx, rowId, authorization);
 
-      // 1. Actualizar la fila principal (solo con permiso de edición completa)
+      // 1. Actualizar la fila principal (solo con permiso de edición completa). Entre `pendiente` y
+      //    `sin_recursos_asignados` NO se escribe estado: es derivado de los recursos y lo fija `reconcileRowResourceStatus`;
+      //    escribir uno provisional dejaba dos cambios de estado en el historial por cada edición.
+      const derivedStatuses: string[] = ['pendiente', 'sin_recursos_asignados'];
+      const current = fullEdit ? await tx.dailyreportrows.findUniqueOrThrow({ where: { id: rowId }, select: { status: true } }) : null;
+      const keepDerivedStatus = current !== null && derivedStatuses.includes(current.status) && derivedStatuses.includes(resolvedStatus);
       const updatedRow = fullEdit
         ? await tx.dailyreportrows.update({
             where: { id: rowId },
             data: {
               ...buildRowScalarData(data),
-              status: resolvedStatus,
+              ...(keepDerivedStatus ? {} : { status: resolvedStatus }),
               // No sobreescribir el tipo de servicio a null si el input no lo trae:
               // así una edición parcial (ej. asignar recursos) nunca borra un tipo ya guardado.
               ...(data.type_service != null ? { type_service: data.type_service } : {}),
@@ -198,10 +203,12 @@ export async function updateDailyReportRowPrisma(rowId: string, data: DailyRepor
       // 2. Llevar los recursos al conjunto pedido aplicando solo la diferencia (altas y bajas reales)
       const synced = await syncRowResources(tx, rowId, { employees, equipment, otherEquipment, customerEquipment });
       await reconcileRowResourceStatus(tx, [rowId]);
-      // Cambiar solo recursos no toca la fila: se sube la versión para que los comandos con `baseVersion` lo vean.
-      if (!updatedRow && synced.added + synced.removed > 0) await touchRow(tx, rowId);
+      // Cambiar recursos no toca la fila (ni siquiera en la edición completa si los campos no cambiaron): se sube la
+      // versión para que los comandos con `baseVersion` vean el cambio.
+      if (synced.added + synced.removed > 0) await touchRow(tx, rowId);
 
-      return updatedRow ?? tx.dailyreportrows.findUniqueOrThrow({ where: { id: rowId } });
+      // Solo el id: devolver la fila entera mandaba un `Decimal` (quantity), que React no puede serializar al cliente.
+      return { id: rowId, updated: updatedRow !== null };
     });
 
     return row;
