@@ -72,7 +72,6 @@ export async function createExternalApiClient(
   try {
     const created = await prisma.external_api_clients.create({
       data: {
-        company_id: companyId,
         name: parsed.name,
         notes: parsed.notes || null,
         client_id: clientId,

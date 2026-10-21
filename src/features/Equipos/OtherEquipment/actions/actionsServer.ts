@@ -396,7 +396,7 @@ export async function createOtherEquipment(data: OtherEquipmentInput) {
     // la fila de la otra request, y eso solo pasa con la transaccion ya confirmada.
     const result = await withActor(actor, async (tx) => {
       const equipment = await tx.other_equipment.create({
-        data: { ...toScalarData(input), condition: condition_enum.operativo, company_id: companyId },
+        data: { ...toScalarData(input), condition: condition_enum.operativo, },
         select: { id: true, created_at: true, serial_number: true, intern_number: true },
       });
       const synced = await syncContractors(

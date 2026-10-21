@@ -304,7 +304,6 @@ export async function createAptitudTecnicaPrisma(data: { nombre: string; puestos
       data: {
         nombre: data.nombre,
         is_active: data.is_active,
-        company_id: companyId,
         aptitudes_tecnicas_puestos: {
           create: data.puestos.map((puestoId) => ({ puesto_id: puestoId })),
         },

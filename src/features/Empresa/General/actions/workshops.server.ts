@@ -158,7 +158,7 @@ export async function createWorkshop(workshop: WorkshopInput): Promise<Workshop>
   await assertPermission('talleres', 'create');
   try {
     const created = await prisma.workshops.create({
-      data: { ...toWorkshopData(workshop), company_id: companyId },
+      data: { ...toWorkshopData(workshop), },
       select: workshopSelect,
     });
     logger.info('Taller creado', { data: { workshopId: created.id, companyId } });
@@ -251,7 +251,6 @@ export async function createWorkshopSector(
         workshop_id: sector.workshop_id,
         is_active: sector.is_active,
         max_capacity: sector.max_capacity ?? null,
-        company_id: companyId,
       },
       include: sectorInclude,
     });

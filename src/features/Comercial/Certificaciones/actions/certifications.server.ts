@@ -188,7 +188,6 @@ export async function createCertification(input: CertificationFormValues): Promi
       const number = await nextNumber(tx, companyId, from.getUTCFullYear());
       return tx.certifications.create({
         data: {
-          company_id: companyId,
           customer_id: customerId,
           customer_service_id: values.customerServiceId,
           number,

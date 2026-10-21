@@ -44,7 +44,6 @@ export async function createTransfer(values: TransferFormValues): Promise<Action
         const number = await nextTransferNumber(tx, companyId);
         const transfer = await tx.treasury_transfers.create({
           data: {
-            company_id: companyId,
             number,
             date: dateOnly(v.date),
             from_account_id: v.fromAccountId,

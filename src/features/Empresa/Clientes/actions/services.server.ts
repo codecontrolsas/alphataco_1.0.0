@@ -125,7 +125,6 @@ export async function createCustomerService(input: ServiceFormValues): Promise<A
     const created = await prisma.$transaction(async (tx) => {
       const service = await tx.customer_services.create({
         data: {
-          company_id: companyId,
           customer_id: values.customer_id,
           service_name: values.service_name,
           contract_number: values.contract_number || '',

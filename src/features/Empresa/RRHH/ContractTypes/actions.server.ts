@@ -221,7 +221,6 @@ export async function createContractTypePrisma(data: { name: string; description
         name: data.name,
         description: data.description,
         is_active: true,
-        company_id: await getActiveCompanyId(),
       },
       select: { id: true, name: true, description: true, is_active: true, created_at: true },
     });

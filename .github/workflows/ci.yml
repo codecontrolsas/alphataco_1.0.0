@@ -191,7 +191,7 @@ jobs:
       runs_on: ${{ vars.CI_RUNNER }}
       image_artifact: e2e-image
 
-  # Mismo e2e con la app conectada como `alphataco_app` (sin BYPASSRLS) y TENANT_CONTEXT=on. Informativo por ahora.
+  # Mismo e2e con la app conectada como `alphataco_app` (sin BYPASSRLS). Informativo por ahora.
   # Corre en main (push y PR a main) o cuando el cambio toca lo que puede afectarlo (ver filtro `rls`).
   e2e-rls:
     needs: [changes, image]

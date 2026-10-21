@@ -524,7 +524,6 @@ export async function assignRoleToUserServer(userId: string, roleId: number) {
       data: {
         user_id: userId,
         role_id: BigInt(roleId),
-        company_id: companyId,
         assigned_by: assignedBy,
       },
     });

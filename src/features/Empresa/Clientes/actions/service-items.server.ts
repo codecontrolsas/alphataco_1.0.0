@@ -130,7 +130,7 @@ export async function createServiceItem(
     // precio original del contrato no quedaría registrado en ninguna parte.
     const created = await prisma.$transaction(async (tx) => {
       const item = await tx.service_items.create({
-        data: { ...data, customer_service_id: customerServiceId, company_id: companyId },
+        data: { ...data, customer_service_id: customerServiceId, },
         select: { id: true },
       });
       await writePriceRevision(tx, {

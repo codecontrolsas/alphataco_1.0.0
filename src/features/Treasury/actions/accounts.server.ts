@@ -103,7 +103,6 @@ export async function createTreasuryAccount(values: TreasuryAccountFormValues): 
       async (tx) => {
         const account = await tx.treasury_accounts.create({
           data: {
-            company_id: companyId,
             kind: v.kind,
             name: v.name,
             bank_name: v.kind === 'BANK' ? orNull(v.bankName) : null,

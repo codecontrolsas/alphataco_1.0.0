@@ -55,7 +55,7 @@ export async function createTreasuryConcept(values: TreasuryConceptFormValues): 
     const existing = await findDuplicate(companyId, v.name);
     if (existing) return fail(duplicate(existing.name));
     const created = await prisma.treasury_concepts.create({
-      data: { company_id: companyId, name: v.name, direction: v.direction },
+      data: { name: v.name, direction: v.direction },
       select: { id: true },
     });
     revalidateTreasury();

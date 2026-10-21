@@ -166,7 +166,6 @@ export async function createKPI(input: CreateKPIInput): Promise<{ data: KPI | nu
 
     const created = await prisma.kpis.create({
       data: {
-        company_id: companyId,
         name: input.name,
         code: generatedCode || 'KPI-0001',
         number: input.number || null,

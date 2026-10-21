@@ -73,7 +73,6 @@ export async function generateArcaCsr(env: arca_environment, alias: string): Pro
       prisma.arca_credentials.deleteMany({ where: { company_id: companyId, environment: env, status: 'pendiente' } }),
       prisma.arca_credentials.create({
         data: {
-          company_id: companyId,
           environment: env,
           status: 'pendiente',
           alias: parsedAlias.data,

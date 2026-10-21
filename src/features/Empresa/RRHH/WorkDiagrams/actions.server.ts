@@ -470,7 +470,6 @@ export async function createWorkDiagramPrisma(input: WorkDiagramInput) {
         active_working_days: input.active_working_days,
         inactive_working_days: input.inactive_working_days,
         inactive_novelty: inactiveNovelty,
-        company_id: companyId,
         work_diagram_active_novelties: {
           create: input.active_novelty.map((diagramTypeId) => ({
             diagram_type_id: diagramTypeId,
