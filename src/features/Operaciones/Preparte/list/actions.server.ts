@@ -118,7 +118,7 @@ function sanitizeState(state: ReturnType<typeof parseSearchParams>) {
 
 function buildCompanyScope(companyId: string): Prisma.preparteWhereInput {
   return {
-    OR: [{ company_id: companyId }, { company_id: null }],
+    company_id: companyId,
   };
 }
 

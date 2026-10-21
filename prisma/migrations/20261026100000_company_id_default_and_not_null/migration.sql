@@ -25,6 +25,7 @@ END
 $$;
 
 -- 2) Las tablas donde `company_id` admitia NULL por un defecto del sistema base pasan a NOT NULL.
+--    (`equipment_owners` queda nullable: sus filas globales son un catalogo compartido a proposito, como marcas y tipos.)
 --    Las filas sin empresa se completan solo cuando no hay ambiguedad (la instancia tiene una unica empresa). Si
 --    quedan filas sin empresa la columna sigue nullable y se avisa: hay que completarlas a mano y repetir el
 --    ALTER (no se falla la migracion para no dejar `migrate deploy` bloqueado).
@@ -37,7 +38,7 @@ BEGIN
   SELECT count(*) INTO v_companies FROM public.company;
 
   FOREACH t IN ARRAY ARRAY[
-    'companies_employees', 'contacts', 'customer_services', 'equipment_owners',
+    'companies_employees', 'contacts', 'customer_services',
     'employees', 'vehicles', 'preparte', 'share_company_users'
   ]
   LOOP

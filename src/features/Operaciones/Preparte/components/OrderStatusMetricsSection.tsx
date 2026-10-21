@@ -10,8 +10,7 @@ const logger = new Logger('features/Operaciones/Preparte/OrderStatusMetricsSecti
 const METRIC_STATUSES: OrderMetricStatus[] = ['pendiente', 'confirmado', 'reprogramado', 'rechazado', 'vencido'];
 
 /**
- * Cuenta los pedidos por estado de la empresa activa (los pedidos viejos sin company_id
- * se siguen contando, mismo criterio que el resto del módulo). Un COUNT por estado, en paralelo.
+ * Cuenta los pedidos por estado de la empresa activa. Un COUNT por estado, en paralelo.
  * Se llama sin `await` desde la lista para que arranque junto con la tabla: por eso nunca
  * rechaza. Si falla devuelve `null` y las tarjetas muestran "—" en lugar de romper la pantalla.
  */
@@ -21,7 +20,7 @@ export async function getOrderStatusCounts(): Promise<OrderStatusCounts | null> 
     const results = await Promise.all(
       METRIC_STATUSES.map((status) =>
         prisma.preparte.count({
-          where: { OR: [{ company_id: companyId }, { company_id: null }], status },
+          where: { company_id: companyId, status },
         })
       )
     );

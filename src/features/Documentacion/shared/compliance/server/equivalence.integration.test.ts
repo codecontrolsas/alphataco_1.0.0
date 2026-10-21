@@ -980,12 +980,10 @@ describe.skipIf(!process.env.DATABASE_URL)('equivalencia motor de cumplimiento v
           const [empCompanies, vehCompanies] = await Promise.all([
             tx.employees.findMany({
               distinct: ['company_id'],
-              where: { company_id: { not: null } },
               select: { company_id: true },
             }),
             tx.vehicles.findMany({
               distinct: ['company_id'],
-              where: { company_id: { not: null } },
               select: { company_id: true },
             }),
           ]);

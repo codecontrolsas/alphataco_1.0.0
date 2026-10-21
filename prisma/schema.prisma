@@ -1332,7 +1332,7 @@ model equipment_owners {
   cuit                           String
   contract_type                  contract_type_enum
   created_at                     DateTime?                        @default(now()) @db.Timestamptz(6)
-  company_id                     String  @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  company_id                     String?  @default(dbgenerated("app_current_company_id()")) @db.Uuid
   is_active                      Boolean?                         @default(true)
   equipment_owner_contract_types equipment_owner_contract_types[]
   company                        company?                         @relation(fields: [company_id], references: [id], onDelete: Cascade)
