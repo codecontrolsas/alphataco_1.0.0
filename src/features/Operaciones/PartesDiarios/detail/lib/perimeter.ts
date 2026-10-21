@@ -42,6 +42,8 @@ export async function filterRowsInCompany(rowIds: string[], companyId: string): 
 }
 
 export interface RowResourceRefs {
+  /** Preparte vinculado a la línea: sin esto se podía vincular (y después revertir) un preparte de otra empresa. */
+  preparteId?: string | null;
   customerId?: string | null;
   serviceId?: string | null;
   itemId?: string | null;
@@ -64,7 +66,7 @@ export async function assertRowResourcesInCompany(companyId: string, refs: RowRe
   const otherEquipmentIds = [...new Set(refs.otherEquipmentIds ?? [])];
   const customerEquipmentIds = [...new Set(refs.customerEquipmentIds ?? [])];
 
-  const [customer, service, item, sector, area, employees, vehicles, otherEquipment, customerEquipment] =
+  const [customer, service, item, sector, area, employees, vehicles, otherEquipment, customerEquipment, preparte] =
     await Promise.all([
       refs.customerId
         ? prisma.customers.findFirst({ where: { id: refs.customerId, company_id: companyId }, select: { id: true } })
@@ -111,6 +113,9 @@ export async function assertRowResourcesInCompany(companyId: string, refs: RowRe
             select: { id: true },
           })
         : Promise.resolve([]),
+      refs.preparteId
+        ? prisma.preparte.findFirst({ where: { id: refs.preparteId, company_id: companyId }, select: { id: true } })
+        : Promise.resolve(null),
     ]);
 
   const invalid =
@@ -119,6 +124,7 @@ export async function assertRowResourcesInCompany(companyId: string, refs: RowRe
     (refs.itemId && !item) ||
     (refs.sectorServiceId && !sector) ||
     (refs.areasServiceId && !area) ||
+    (refs.preparteId && !preparte) ||
     employees.length !== employeeIds.length ||
     vehicles.length !== equipmentIds.length ||
     otherEquipment.length !== otherEquipmentIds.length ||
