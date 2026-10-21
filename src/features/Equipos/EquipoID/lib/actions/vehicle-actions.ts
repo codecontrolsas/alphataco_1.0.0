@@ -325,7 +325,6 @@ export async function createVehicle(vehicleData: VehicleInput) {
       const vehicle = await tx.vehicles.create({
         data: {
           ...toVehicleScalarData(input),
-          company_id: companyId,
           condition,
           // La pivote contractor_equipment se escribe explícitamente abajo (ya no hay trigger que
           // la derive de la columna). La columna denormalizada arranca vacía, como siempre.

@@ -103,7 +103,6 @@ async function insertQuote(
   const number = await nextPurchaseDocumentNumber(tx, companyId, 'quote');
   return tx.purchase_quotes.create({
     data: {
-      company_id: companyId,
       number,
       supplier_id: supplierId,
       created_by: profileId,

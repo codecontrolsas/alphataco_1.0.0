@@ -54,7 +54,6 @@ export async function createDocumentType(input: CreateDocumentTypeInput) {
     const created = await withActor(actor, async (tx) => {
       const row = await tx.document_types.create({
         data: {
-          company_id: companyId,
           name: data.name,
           applies: data.applies,
           equipment_type: data.equipment_type ?? null,

@@ -7,6 +7,13 @@ const nextConfig = {
     '/dashboard/help': ['./src/content/manual/**/*']
   },
   cacheComponents: true,
+  // El chequeo de tipos NO se repite en `next build`: ya lo corre `npm run check-types` (job `types-and-lint` del CI y
+  // `verify` del deploy, que es requisito para desplegar). Repetirlo en el build hacia que, segun el orden de
+  // inferencia, `next build` superara el limite de instanciacion de tipos (TS2589) en sitios donde `tsc` no, y le suma
+  // ~2 minutos a cada imagen.
+  typescript: {
+    ignoreBuildErrors: true
+  },
   transpilePackages: ['@react-pdf/renderer'],
   experimental: {
     staleTimes: {

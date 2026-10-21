@@ -103,7 +103,7 @@ export async function createWithholdingRegime(values: WithholdingRegimeFormValue
   if (!parsed.success) return fail(firstIssue(parsed.error));
   const companyId = await getActiveCompanyId();
   try {
-    const created = await prisma.withholding_regimes.create({ data: { company_id: companyId, ...toData(parsed.data) }, select: { id: true } });
+    const created = await prisma.withholding_regimes.create({ data: { ...toData(parsed.data) }, select: { id: true } });
     revalidatePath(PURCHASES_PATH);
     return ok(created);
   } catch (error) {

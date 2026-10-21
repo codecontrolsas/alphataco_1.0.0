@@ -1,0 +1,16 @@
+# Override SOLO para CI (`_e2e.yml` con `image_artifact`): la app corre desde una imagen ya construida
+# (job `image` de `_e2e-image.yml`, cargada con `docker load`) en vez de construirla en cada job de e2e.
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.ci.yml[:docker-compose.rls.yml] docker compose --env-file .env.docker up -d --wait app
+# `pull_policy: never`: si la imagen no esta cargada el comando FALLA, en vez de reconstruir en silencio.
+# `migrate` usa la imagen runner con el mismo comando que `docker/entrypoint.sh` (el CLI de Prisma y
+# prisma.config.ts ya viajan en ella), asi no hace falta construir la stage `build` entera.
+services:
+  migrate:
+    build: !reset null
+    image: ${APP_IMAGE:-alphataco-e2e:ci}
+    pull_policy: never
+    command: ["node", "./node_modules/prisma/build/index.js", "migrate", "deploy"]
+  app:
+    build: !reset null
+    image: ${APP_IMAGE:-alphataco-e2e:ci}
+    pull_policy: never

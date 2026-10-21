@@ -20,7 +20,8 @@ import { cache } from 'react';
  * propios puntos de entrada con `withTenantContext()` cuando migren.
  */
 export const getTenantContext = cache(async (): Promise<TenantContext> => {
-  const [companyId, userId] = await Promise.all([getActiveCompanyId(), getSessionUserId()]);
+  // Sin sesion de usuario (QR, tests con la empresa simulada) el contexto igual lleva la empresa: userId queda null.
+  const [companyId, userId] = await Promise.all([getActiveCompanyId(), getSessionUserId().catch(() => null)]);
   return { companyId, userId, kind: userId ? 'user' : 'guest' };
 });
 

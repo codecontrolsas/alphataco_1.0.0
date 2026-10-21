@@ -57,7 +57,7 @@ export async function createExpenseCategory(values: ExpenseCategoryFormValues): 
     const existing = await findDuplicate(companyId, parsed.data.name);
     if (existing) return fail(duplicate(existing.name));
     const created = await prisma.purchase_expense_categories.create({
-      data: { company_id: companyId, name: parsed.data.name },
+      data: { name: parsed.data.name },
       select: { id: true },
     });
     revalidatePath(PURCHASES_PATH);

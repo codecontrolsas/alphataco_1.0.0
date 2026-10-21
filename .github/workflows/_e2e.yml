@@ -1,16 +1,25 @@
 name: _e2e
-# E2E de una instancia completa: levanta el compose de produccion de este repo (la MISMA imagen que se despliega,
-# con su entrypoint: migraciones, buckets del almacenamiento S3 y seed de empresa) y corre Playwright contra ella.
+# E2E de una instancia completa: levanta el compose de este repo (el MISMO Dockerfile que se despliega, con su
+# entrypoint: migraciones, buckets del almacenamiento S3 y seed de empresa) y corre Playwright contra ella.
 # Es reutilizable: cada clon de una instancia lo llama desde su CI y adapta los specs de `e2e/` a su proyecto.
 # Referencia de estructura: el _e2e.yml de Ecokit (shards y fast lane se pueden sumar cuando la suite crezca).
+#
+# Dos modos:
+#  - `image_artifact` vacio (por defecto): el job construye la imagen con compose, como siempre.
+#  - `image_artifact: <nombre>`: la imagen la construyo UNA vez `_e2e-image.yml`; este job la baja del artifact,
+#    la carga con `docker load` y levanta el compose con `docker-compose.ci.yml` (sin build). Es lo que usa ci.yml.
 on:
   workflow_call:
     inputs:
       # Runner. Vacio = el de GitHub. Con un label `blacksmith-*` corre en Blacksmith (requiere la GitHub App).
-      runs_on: { required: false, type: string, default: 'ubuntu-latest' }
-      # true = la app conecta como `alphataco_app` (sin BYPASSRLS) con TENANT_CONTEXT=on (docker-compose.rls.yml):
+      runs_on: { required: true, type: string }
+      # true = la app conecta como `alphataco_app` (sin BYPASSRLS) (docker-compose.rls.yml):
       # prueba la instancia bajo RLS. Los roles se habilitan despues de migrar y antes de levantar la app.
       rls: { required: false, type: boolean, default: false }
+      # Nombre del artifact con la imagen construida por `_e2e-image.yml` (`docker save | zstd`). Vacio = construir aca.
+      image_artifact: { required: false, type: string, default: '' }
+      # Tag de la imagen cargada; debe coincidir con `image_tag` de `_e2e-image.yml`.
+      image_tag: { required: false, type: string, default: 'alphataco-e2e:ci' }
 
 jobs:
   e2e:
@@ -23,13 +32,19 @@ jobs:
       # Imagen del almacenamiento (RustFS). Vacio = la que fija docker-compose.yml. Variable de repo STORAGE_IMAGE para
       # usar un espejo propio.
       STORAGE_IMAGE: ${{ vars.STORAGE_IMAGE }}
+      # Con imagen prearmada se suma docker-compose.ci.yml (app y migrate sin build); con rls, el override de RLS.
+      COMPOSE_FILE: docker-compose.yml${{ inputs.image_artifact != '' && ':docker-compose.ci.yml' || '' }}${{ inputs.rls && ':docker-compose.rls.yml' || '' }}
+      APP_IMAGE: ${{ inputs.image_tag }}
+      # Solo se construye con compose si no viene la imagen del artifact.
+      BUILD_FLAG: ${{ inputs.image_artifact == '' && '--build' || '' }}
     steps:
       - uses: actions/checkout@v4
 
-      # El runner de GitHub arranca con ~14 GB libres y aca se construyen la imagen de la app (stage build + runner),
-      # se baja Chromium y las imagenes de Postgres y del almacenamiento. Blacksmith trae disco de sobra.
+      # Solo cuando el job construye la imagen: el runner de GitHub arranca con ~14 GB libres y ahi se construyen la
+      # imagen de la app (stage build + runner) y se baja todo lo demas. Con imagen prearmada no hace falta
+      # (borrar dotnet/ghc/android costaba ~100 s por job). Blacksmith trae disco de sobra.
       - name: Liberar espacio en el runner
-        if: ${{ !startsWith(inputs.runs_on, 'blacksmith') }}
+        if: ${{ inputs.image_artifact == '' && !startsWith(inputs.runs_on, 'blacksmith') }}
         run: |
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android \
             /opt/hostedtoolcache/CodeQL /usr/local/share/powershell || true
@@ -53,25 +68,73 @@ jobs:
           printf 'RUN_SEED=true\nSEED_COMPANY_NAME=E2E Empresa\n' >> .env.docker
           [ -z "$STORAGE_IMAGE" ] || echo "STORAGE_IMAGE=$STORAGE_IMAGE" >> .env.docker
 
+      # Version de Playwright del lockfile: es la key del cache del navegador.
+      - name: Version de Playwright
+        id: pw
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache de Chromium (Playwright)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
+      # Lo que no depende de la imagen de la app se hace en segundo plano mientras se baja y se carga:
+      # la imagen de Postgres con pgTAP (compose la construye) y la del almacenamiento. Se espera antes de usar compose.
+      - name: Preparar Postgres y almacenamiento (segundo plano)
+        if: ${{ inputs.image_artifact != '' }}
+        run: |
+          setsid nohup bash -c 'docker compose --env-file .env.docker build postgres && docker compose --env-file .env.docker pull storage; echo $? > "$RUNNER_TEMP/compose-prep.status"' \
+            > "$RUNNER_TEMP/compose-prep.log" 2>&1 &
+
+      - name: Descargar la imagen de la app
+        if: ${{ inputs.image_artifact != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.image_artifact }}
+          path: ${{ runner.temp }}/e2e-image
+
+      - name: Cargar la imagen de la app
+        if: ${{ inputs.image_artifact != '' }}
+        run: |
+          zstd -dc "$RUNNER_TEMP"/e2e-image/*.zst | docker load
+          docker image inspect "$APP_IMAGE" --format '{{.Id}} {{.Size}}'
+          rm -rf "$RUNNER_TEMP/e2e-image"
+
       - run: npm ci
         env:
           DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+
+      # Chromium no depende de la instancia: se instala mientras esta arranca y se espera justo antes de los tests.
+      - name: Instalar Chromium (segundo plano)
+        run: |
+          setsid nohup bash .github/scripts/playwright-chromium.sh "$RUNNER_TEMP/pw.status" \
+            > "$RUNNER_TEMP/pw.log" 2>&1 &
+
+      - name: Esperar Postgres y almacenamiento
+        if: ${{ inputs.image_artifact != '' }}
+        run: |
+          for i in $(seq 1 180); do
+            [ -f "$RUNNER_TEMP/compose-prep.status" ] && break
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/compose-prep.log"
+          [ "$(cat "$RUNNER_TEMP/compose-prep.status" 2>/dev/null)" = "0" ] || { echo "::error::fallo la preparacion de Postgres/almacenamiento"; exit 1; }
 
       - name: Habilitar los roles de aplicación y sistema (RLS)
         if: ${{ inputs.rls }}
         # Los roles nacen NOLOGIN en la migracion `app_and_system_roles`: se migra primero y se habilitan despues.
         run: |
           docker compose --env-file .env.docker up -d --wait postgres
-          docker compose --env-file .env.docker run --rm --build migrate
+          docker compose --env-file .env.docker run --rm $BUILD_FLAG migrate
           docker compose --env-file .env.docker exec -T postgres psql -U alphataco -d alphataco -v ON_ERROR_STOP=1 \
             -c "ALTER ROLE alphataco_app LOGIN PASSWORD 'rlsapp'" \
             -c "ALTER ROLE alphataco_system LOGIN PASSWORD 'rlssystem'"
 
       - name: Levantar la instancia
-        # Construye la imagen y espera a que `app` quede sana (migrate -> app, ver docker-compose.yml).
-        env:
-          COMPOSE_FILE: ${{ inputs.rls && 'docker-compose.yml:docker-compose.rls.yml' || 'docker-compose.yml' }}
-        run: docker compose --env-file .env.docker up -d --build --wait --wait-timeout 900 app
+        # Sin build (imagen prearmada) o construyendo, segun el modo; espera a que `app` quede sana
+        # (migrate -> app, ver docker-compose.yml).
+        run: docker compose --env-file .env.docker up -d $BUILD_FLAG --wait --wait-timeout 900 app
 
       - name: Verificar el arranque de la imagen
         # Prueba lo que un deploy real necesita y que ningun test unitario cubre: el seed corre en el runner
@@ -91,8 +154,14 @@ jobs:
           node scripts/seed-company.ts --name "P4 Verificacion" --id 00000000-0000-0000-0000-0000000000f4
           node scripts/seed-auth-fixtures.ts
 
-      - name: Instalar Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Esperar Chromium
+        run: |
+          for i in $(seq 1 180); do
+            [ -f "$RUNNER_TEMP/pw.status" ] && break
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/pw.log"
+          [ "$(cat "$RUNNER_TEMP/pw.status" 2>/dev/null)" = "0" ] || { echo "::error::no se pudo preparar Chromium"; exit 1; }
 
       - name: Ejecutar E2E
         env:
@@ -104,8 +173,6 @@ jobs:
       - name: Errores de RLS en los logs de la app
         if: ${{ inputs.rls }}
         # Una escritura rechazada por una politica o una consulta sin empresa activa deja rastro en el log.
-        env:
-          COMPOSE_FILE: docker-compose.yml:docker-compose.rls.yml
         run: |
           logs=$(docker compose --env-file .env.docker logs app 2>&1)
           if echo "$logs" | grep -qiE "row-level security|violates row-level"; then
@@ -116,15 +183,14 @@ jobs:
 
       - name: Logs de la app si falla
         if: failure()
-        env:
-          COMPOSE_FILE: ${{ inputs.rls && 'docker-compose.yml:docker-compose.rls.yml' || 'docker-compose.yml' }}
         run: docker compose --env-file .env.docker logs app --tail 200 || true
 
       - name: Subir el reporte
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-resultados
+          # Un nombre por job: con el mismo nombre, el segundo upload de un mismo run falla (artifacts v4).
+          name: e2e-resultados${{ inputs.rls && '-rls' || '' }}
           path: |
             blob-report/
             test-results/

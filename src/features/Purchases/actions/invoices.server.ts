@@ -247,7 +247,6 @@ export async function createSupplierInvoice(values: SupplierInvoiceFormValues): 
         const created = await tx.supplier_invoices.create({
           data: {
             ...built.header,
-            company_id: companyId,
             created_by: profile.id,
             lines: { create: built.children.lines },
             vat: { create: built.children.vat },

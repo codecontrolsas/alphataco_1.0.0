@@ -1,0 +1,116 @@
+name: _e2e-image
+# Construye UNA vez por commit la imagen de la app que usan los e2e (`e2e` y `e2e-rls` la comparten) y la publica
+# como artifact (`docker save | zstd`, retencion 1 dia). Los jobs de `_e2e.yml` la bajan con `docker load`.
+#
+# Por que un artifact y no el registry del VPS:
+#  - NO es la imagen que se despliega. Las NEXT_PUBLIC_* se hornean en el bundle y el e2e necesita las de
+#    `.env.docker.example` (localhost:3000, Better Auth valida el origen). Si esta imagen se publicara como
+#    `alphataco:sha-<commit>`, `_build-image.yml` (skip_if_exists) la encontraria y mandaria a produccion una
+#    imagen con localhost adentro, y el readiness por sha daria verde igual. Un artifact no puede colisionar.
+#  - Funciona en PRs de forks (sin secrets) y no deja nada en el registry que haya que purgar.
+# Es el MISMO Dockerfile que el de produccion: lo unico que cambia son esos build-args.
+on:
+  workflow_call:
+    inputs:
+      # Runner. Vacio = el de GitHub. Con un label `blacksmith-*` usa su builder (useblacksmith/*).
+      runs_on: { required: true, type: string }
+      artifact_name: { required: false, type: string, default: 'e2e-image' }
+      # Tag con el que queda la imagen al hacer `docker load` (docker-compose.ci.yml usa APP_IMAGE).
+      image_tag: { required: false, type: string, default: 'alphataco-e2e:ci' }
+
+jobs:
+  image:
+    runs-on: ${{ inputs.runs_on }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      ON_BLACKSMITH: ${{ startsWith(inputs.runs_on, 'blacksmith') }}
+      TAR: /tmp/e2e-image.tar
+    steps:
+      # El runner de GitHub arranca con ~14 GB libres y `next build` necesita margen. Borrar dotnet/ghc/android
+      # tarda ~100 s: se lanza en segundo plano y se espera recien antes de construir (checkout y setup del
+      # builder lo tapan). Blacksmith trae disco de sobra.
+      - name: Liberar espacio en el runner (segundo plano)
+        if: env.ON_BLACKSMITH != 'true'
+        run: |
+          nohup bash -c 'sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache/CodeQL /usr/local/share/powershell; echo done > "$RUNNER_TEMP/free-space.done"' >/dev/null 2>&1 &
+
+      - uses: actions/checkout@v4
+
+      # Mismos valores que el e2e usaba al construir con compose desde `.env.docker.example`: una sola fuente.
+      - name: Build-args (NEXT_PUBLIC_*) del e2e
+        id: args
+        run: |
+          {
+            echo 'build_args<<EOF'
+            for k in NEXT_PUBLIC_PROJECT_URL NEXT_PUBLIC_BASE_URL NEXT_PUBLIC_POSTHOG_KEY NEXT_PUBLIC_POSTHOG_HOST NEXT_PUBLIC_SHOW_LOGS; do
+              v=$(sed -n "s/^${k}=//p" .env.docker.example | head -1)
+              echo "${k}=${v}"
+            done
+            echo "GIT_SHA=${GITHUB_SHA}"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      # ── Builder ─────────────────────────────────────────────────────────
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        if: env.ON_BLACKSMITH != 'true'
+      - uses: useblacksmith/setup-docker-builder@19215110ab936351210feebdfa5b440b4493e184 # v2.2.0
+        id: bs-builder
+        if: env.ON_BLACKSMITH == 'true'
+        with:
+          cache-key: Dockerfile
+
+      - name: Esperar la limpieza de disco
+        if: env.ON_BLACKSMITH != 'true'
+        run: |
+          for i in $(seq 1 120); do
+            [ -f "$RUNNER_TEMP/free-space.done" ] && break
+            sleep 2
+          done
+          df -h / | tail -1
+
+      # Cache de capas en el cache de Actions (scope propio, NO toca el `:buildcache` del registry de produccion).
+      # Solo se ESCRIBE en push (dev/main): los PR leen el de su base. Escribir desde cada PR llenaria los 10 GB
+      # del repo con capas de ramas que nadie mas ve.
+      # Los `RUN --mount=type=cache` (npm, .next/cache) no se persisten a proposito: el cache-dance de
+      # `_build-image.yml` costaba ~80 s entre restaurar y exportar, mas de lo que ahorra el next build.
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        id: build-gh
+        if: env.ON_BLACKSMITH != 'true'
+        with:
+          context: .
+          push: false
+          tags: ${{ inputs.image_tag }}
+          build-args: ${{ steps.args.outputs.build_args }}
+          provenance: false
+          outputs: type=docker,dest=${{ env.TAR }}
+          cache-from: type=gha,scope=e2e-image
+          cache-to: ${{ github.event_name == 'push' && 'type=gha,scope=e2e-image,mode=max' || '' }}
+
+      # Blacksmith: builder persistente (capas y mounts en disco), sin cache-from/to.
+      - uses: useblacksmith/build-push-action@9b0579bbec7a6cad2f171596c57e7ac1e7658850 # v2.3.0
+        id: build-bs
+        if: env.ON_BLACKSMITH == 'true'
+        with:
+          context: .
+          push: false
+          tags: ${{ inputs.image_tag }}
+          build-args: ${{ steps.args.outputs.build_args }}
+          provenance: false
+          outputs: type=docker,dest=${{ env.TAR }}
+
+      - name: Comprimir la imagen
+        run: |
+          ls -lh "$TAR"
+          zstd -T0 -3 --rm -q "$TAR" -o "${TAR}.zst"
+          ls -lh "${TAR}.zst"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: ${{ env.TAR }}.zst
+          # Ya esta comprimido con zstd: no gastar CPU en gzip.
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error

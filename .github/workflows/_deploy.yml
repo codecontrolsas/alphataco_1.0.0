@@ -2,6 +2,8 @@ name: _deploy
 on:
   workflow_call:
     inputs:
+      # Runner de Blacksmith (variable de repo CI_RUNNER). Sin valor por defecto: nunca cae a runners de GitHub.
+      runs_on: { required: true, type: string }
       source_tag: { required: true, type: string }
       target_tag: { required: true, type: string }
       health_url: { required: true, type: string }
@@ -17,9 +19,8 @@ on:
       deploy_webhook: { required: true }
 
 jobs:
-  # Se queda en ubuntu-latest a proposito: tiene el webhook de produccion.
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs_on }}
     permissions:
       contents: read
     steps:

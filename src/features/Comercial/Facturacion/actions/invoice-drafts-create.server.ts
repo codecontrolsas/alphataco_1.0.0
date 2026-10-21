@@ -166,7 +166,6 @@ export async function createInvoiceDraftFromCertifications(
     const created = await prisma.$transaction(async (tx) => {
       const invoice = await tx.invoices.create({
         data: {
-          company_id: companyId,
           environment: ctx.environment,
           sales_point_id: ctx.salesPointId,
           customer_id: certifications[0].customer_id,
@@ -235,7 +234,6 @@ export async function createManualInvoiceDraft(input: ManualInvoiceInput): Promi
     const userId = await getSessionUserId();
     const created = await prisma.invoices.create({
       data: {
-        company_id: companyId,
         environment: ctx.environment,
         sales_point_id: ctx.salesPointId,
         customer_id: parsed.data.customerId,
@@ -332,7 +330,6 @@ export async function createAdjustmentDraft(input: AdjustmentInput): Promise<Act
     const created = await prisma.$transaction(async (tx) => {
       const note = await tx.invoices.create({
         data: {
-          company_id: companyId,
           environment: original.environment,
           sales_point_id: original.sales_point_id,
           customer_id: original.customer_id,

@@ -249,7 +249,7 @@ export async function createOrgChartCargo(input: OrgChartCargoInput): Promise<Or
     });
 
     const created = await prisma.org_chart_positions.create({
-      data: { ...parsed.data, company_id: companyId, sort_order: (last._max.sort_order ?? -1) + 1 },
+      data: { ...parsed.data, sort_order: (last._max.sort_order ?? -1) + 1 },
       select: { id: true },
     });
     return { ok: true, id: created.id };

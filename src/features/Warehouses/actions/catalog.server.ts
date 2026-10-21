@@ -66,7 +66,6 @@ export async function createWarehouse(values: WarehouseFormValues): Promise<Acti
 
     const created = await prisma.warehouses.create({
       data: {
-        company_id: companyId,
         code: parsed.data.code,
         name: parsed.data.name,
         address: nullable(parsed.data.address),
@@ -246,7 +245,7 @@ export async function createMaterial(values: MaterialFormValues): Promise<Action
     const refError = await assertMaterialRefs(companyId, parsed.data);
     if (refError) return fail(refError);
     const created = await prisma.materials.create({
-      data: { company_id: companyId, ...materialData(parsed.data) },
+      data: { ...materialData(parsed.data) },
       select: { id: true },
     });
     revalidatePath(WAREHOUSE_PATH);
@@ -477,7 +476,7 @@ export async function createMaterialCategory(values: MaterialCategoryFormValues)
   const companyId = await getActiveCompanyId();
   try {
     const created = await prisma.material_categories.create({
-      data: { company_id: companyId, name: parsed.data.name },
+      data: { name: parsed.data.name },
       select: { id: true },
     });
     revalidatePath(WAREHOUSE_PATH);
@@ -547,7 +546,7 @@ export async function createMeasurementUnit(values: MeasurementUnitFormValues): 
   const companyId = await getActiveCompanyId();
   try {
     const created = await prisma.measurement_units.create({
-      data: { company_id: companyId, name: parsed.data.name, abbreviation: parsed.data.abbreviation },
+      data: { name: parsed.data.name, abbreviation: parsed.data.abbreviation },
       select: { id: true },
     });
     revalidatePath(WAREHOUSE_PATH);
