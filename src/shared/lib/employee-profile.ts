@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { prismaBase as prisma } from '@/shared/lib/prisma';
+import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
 
 /**
  * El vínculo `profile.employee_id` visto AL REVÉS: dado un legajo, ¿qué profile lo tiene?

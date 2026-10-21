@@ -4,6 +4,7 @@ import { checkPermissionServer } from '@/features/Permissions/actions/permission
 import { Logger } from '@/lib/logger';
 import { withActor } from '@/shared/lib/actor';
 import { prisma } from '@/shared/lib/prisma';
+import { prismaSystem } from '@/shared/lib/prisma-system';
 import { getSessionToken, getSessionUserId } from '@/shared/lib/session';
 import { writeCompanyClaim } from '@/shared/lib/session-claims';
 import { storagePublicUrl, storageUpload } from '@/shared/lib/storage';
@@ -190,7 +191,7 @@ async function saveCompanyLogo(companyId: string, file: File): Promise<{ ok: tru
   const uploaded = await storageUpload(LOGO_BUCKET, path, file, { upsert: true, cacheControl: '60' });
   if (!uploaded.ok) return { ok: false, error: 'No se pudo subir el logo' };
   const publicUrl = await storagePublicUrl(LOGO_BUCKET, uploaded.data.path);
-  await prisma.company.update({
+  await prismaSystem.company.update({
     where: { id: companyId },
     data: { company_logo: `${publicUrl}?v=${Date.now()}` },
   });
@@ -279,7 +280,9 @@ export async function createCompany(formData: FormData): Promise<CompanyMutation
       }
 
       return company.id;
-    });
+      // Cliente de sistema: la empresa nueva todavia no es la empresa activa, y su alta, la membresia y el rol del dueno
+      // escriben sobre ella (fuera de la empresa activa del request).
+    }, prismaSystem);
 
     // La empresa recién creada pasa a ser la activa de esta sesión. El claim se puede escribir
     // sin más validación porque quien lo pide ACABA de quedar como `owner_id` unas líneas más

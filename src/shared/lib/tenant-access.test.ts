@@ -12,6 +12,7 @@ const prismaMock = vi.hoisted(() => ({
   share_company_users: { findFirst: vi.fn() },
 }));
 vi.mock('@/shared/lib/prisma', () => ({ prisma: prismaMock, prismaBase: prismaMock }));
+vi.mock('@/shared/lib/prisma-system', () => ({ prismaSystem: prismaMock }));
 
 import { getSessionUserId } from '@/shared/lib/session';
 import { assertCompanyAccess, NoActiveCompanyError } from './tenant';

@@ -2,6 +2,7 @@
 
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
+import { prismaSystem } from '@/shared/lib/prisma-system';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getSessionUser, getSessionUserId } from '@/shared/lib/session';
 import { assertCompanyAccess } from '@/shared/lib/tenant';
@@ -62,13 +63,13 @@ export async function getStoreCompanies() {
   try {
     const credentialId = await getSessionUserId();
     if (!credentialId) return { allCompanies: [], sharedCompanies: [] };
-    const profile = await prisma.profile.findUnique({ where: { credential_id: credentialId }, select: { id: true } });
+    const profile = await prismaSystem.profile.findUnique({ where: { credential_id: credentialId }, select: { id: true } });
     if (!profile) return { allCompanies: [], sharedCompanies: [] };
     const profileId = profile.id;
 
     const [owned, shared] = await Promise.all([
-      prisma.company.findMany({ where: { owner_id: profileId }, include: companyForStoreInclude }),
-      prisma.share_company_users.findMany({
+      prismaSystem.company.findMany({ where: { owner_id: profileId }, include: companyForStoreInclude }),
+      prismaSystem.share_company_users.findMany({
         where: { profile_id: profileId },
         include: { profile: true, company: { include: companyForStoreInclude } },
       }),

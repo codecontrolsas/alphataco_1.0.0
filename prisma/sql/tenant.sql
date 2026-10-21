@@ -216,3 +216,37 @@ BEGIN
   END IF;
 END
 $function$;
+
+
+-- function app_current_profile_id: `profile.id` del usuario de la transaccion (app.user_id = profile.credential_id).
+-- SECURITY DEFINER: se usa dentro de politicas de `profile` y de `share_company_users`, que no pueden consultarse a si
+-- mismas sin recursion.
+CREATE OR REPLACE FUNCTION public.app_current_profile_id()
+ RETURNS uuid
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path = public, pg_temp
+AS $function$
+  SELECT p.id FROM public.profile p WHERE p.credential_id = public.app_current_user_id() LIMIT 1
+$function$;
+
+-- function app_profile_in_current_company: el profile pertenece a la empresa activa (miembro activo, dueno o empleado
+-- vinculado). Misma regla que `canUseCompanyAsTenant()`. SECURITY DEFINER por la misma razon.
+CREATE OR REPLACE FUNCTION public.app_profile_in_current_company(p_profile uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path = public, pg_temp
+AS $function$
+  SELECT p_profile IS NOT NULL AND public.app_current_company_id() IS NOT NULL AND (
+    EXISTS (
+      SELECT 1 FROM public.share_company_users s
+      WHERE s.profile_id = p_profile AND s.company_id = public.app_current_company_id() AND s.is_active
+    )
+    OR EXISTS (SELECT 1 FROM public.company c WHERE c.owner_id = p_profile AND c.id = public.app_current_company_id())
+    OR EXISTS (
+      SELECT 1 FROM public.profile p JOIN public.employees e ON e.id = p.employee_id
+      WHERE p.id = p_profile AND e.company_id = public.app_current_company_id()
+    )
+  )
+$function$;
