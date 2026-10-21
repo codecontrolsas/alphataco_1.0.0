@@ -42,8 +42,3 @@ export function s3Client(): S3Client {
   });
   return client;
 }
-
-/** Reinicia el cliente memoizado. Sólo para los tests. */
-export function resetS3Clients(): void {
-  client = null;
-}

@@ -106,24 +106,3 @@ const loadSupervisorFilterInfo = cache(async (): Promise<SupervisorFilterInfo | 
     };
   }
 });
-
-/**
- * Aplica el filtro de supervisor a un array de solicitudes de mantenimiento.
- * Útil cuando ya tienes los datos y quieres filtrar en memoria.
- *
- * @param requests Array de solicitudes que tienen supervisor_id
- * @param filterInfo Información del filtro obtenida con getSupervisorFilterInfo
- * @returns Array filtrado (o el mismo array si el usuario puede ver todo)
- */
-export async function applySupervisorFilter<T extends { supervisor_id?: string | null }>(
-  requests: T[],
-  filterInfo: SupervisorFilterInfo | null
-): Promise<T[]> {
-  // Si no hay info de filtro o el usuario tiene permiso para ver todo, retornar todo
-  if (!filterInfo || filterInfo.hasViewAllPermission) {
-    return requests;
-  }
-
-  // Filtrar solo las solicitudes asignadas al supervisor
-  return requests.filter((request) => request.supervisor_id === filterInfo.userId);
-}

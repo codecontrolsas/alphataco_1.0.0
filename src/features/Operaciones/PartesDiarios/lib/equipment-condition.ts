@@ -24,7 +24,3 @@ export function normalizeEquipmentCondition(condition: string | null | undefined
   const key = (condition ?? '').trim().toLowerCase().replace(/_/g, ' ');
   return key in EQUIPMENT_CONDITION_LABELS ? (key as EquipmentConditionKey) : 'desconocido';
 }
-
-export function equipmentConditionLabel(condition: string | null | undefined): string {
-  return EQUIPMENT_CONDITION_LABELS[normalizeEquipmentCondition(condition)];
-}

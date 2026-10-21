@@ -69,7 +69,6 @@ async function getMaintenanceOrderActivityLogCached(companyId: string, orderId: 
   }
 }
 
-
 /**
  * Obtiene el historial de actividades de una solicitud de mantenimiento.
  */
@@ -235,7 +234,6 @@ async function getMaintenanceRequestFullActivityLogCached(companyId: string, req
     throw error;
   }
 }
-
 
 /**
  * Obtiene el historial COMPLETO de un pedido de mantenimiento (maintenance_order), incluyendo:
@@ -429,7 +427,6 @@ async function getMaintenanceOrderFullActivityLogCached(companyId: string, order
   }
 }
 
-
 /**
  * Obtiene el historial de actividades de una orden de trabajo.
  */
@@ -598,35 +595,18 @@ export async function getMaintenanceOrderActivityLog(orderId: string) {
 }
 
 export type MaintenanceActivityLogData = Awaited<ReturnType<typeof getMaintenanceOrderActivityLog>>;
-export type MaintenanceActivityLogEntry = MaintenanceActivityLogData[number];
-
-export async function getMaintenanceRequestActivityLog(requestId: string) {
-  const companyId = await requireActivityLogAccess();
-  return getMaintenanceRequestActivityLogCached(companyId, requestId);
-}
 
 export async function getMaintenanceRequestFullActivityLog(requestId: string) {
   const companyId = await requireActivityLogAccess();
   return getMaintenanceRequestFullActivityLogCached(companyId, requestId);
 }
 
-export type MaintenanceRequestFullActivityLog = Awaited<ReturnType<typeof getMaintenanceRequestFullActivityLog>>;
-
 export async function getMaintenanceOrderFullActivityLog(orderId: string, requestId?: string) {
   const companyId = await requireActivityLogAccess();
   return getMaintenanceOrderFullActivityLogCached(companyId, orderId, requestId);
-}
-
-export type MaintenanceOrderFullActivityLog = Awaited<ReturnType<typeof getMaintenanceOrderFullActivityLog>>;
-
-export async function getWorkOrderActivityLog(workOrderId: string) {
-  const companyId = await requireActivityLogAccess();
-  return getWorkOrderActivityLogCached(companyId, workOrderId);
 }
 
 export async function getWorkOrderFullActivityLog(workOrderId: string) {
   const companyId = await requireActivityLogAccess();
   return getWorkOrderFullActivityLogCached(companyId, workOrderId);
 }
-
-export type WorkOrderFullActivityLog = Awaited<ReturnType<typeof getWorkOrderFullActivityLog>>;

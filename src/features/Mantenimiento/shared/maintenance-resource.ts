@@ -74,16 +74,6 @@ export type WithMaintenanceResource = {
   other_equipment?: OtherEquipmentShape;
 };
 
-/** `select` de Prisma para traer los datos de identificación de ambos recursos */
-export const MAINTENANCE_RESOURCE_SELECT = {
-  vehicles: {
-    select: { id: true, domain: true, serie: true, intern_number: true, condition: true, kilometer: true },
-  },
-  other_equipment: {
-    select: { id: true, serial_number: true, intern_number: true, condition: true, horometer: true },
-  },
-} as const;
-
 /** De qué tipo es el recurso de esta fila */
 export function getResourceKind(row: WithMaintenanceResource): MaintenanceResourceKind {
   return row.other_equipment ? 'other_equipment' : 'vehicle';

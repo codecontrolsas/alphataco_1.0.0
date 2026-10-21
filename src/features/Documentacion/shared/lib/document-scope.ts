@@ -122,28 +122,3 @@ export async function filterDownloadablePaths(
   collect(company, 'company');
   return allowed;
 }
-
-/**
- * Paths (de `document_path`) que efectivamente pertenecen a documentos de la empresa activa.
- * Un path que no esté en el resultado no se sirve ni se toca.
- */
-export async function filterOwnedDocumentPaths(
-  client: Client,
-  paths: string[],
-  companyId: string
-): Promise<Set<string>> {
-  const unique = [...new Set(paths.filter((p) => p.length > 0))];
-  if (unique.length === 0) return new Set();
-  const where = { document_path: { in: unique } };
-  const select = { document_path: true } as const;
-  const [employees, vehicles, company] = await Promise.all([
-    client.documents_employees.findMany({ where: { ...where, employees: { company_id: companyId } }, select }),
-    client.documents_equipment.findMany({ where: { ...where, vehicles: { company_id: companyId } }, select }),
-    client.documents_company.findMany({ where: { ...where, applies: companyId }, select }),
-  ]);
-  const owned = new Set<string>();
-  for (const row of [...employees, ...vehicles, ...company]) {
-    if (row.document_path) owned.add(row.document_path);
-  }
-  return owned;
-}

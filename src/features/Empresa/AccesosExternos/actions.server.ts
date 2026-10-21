@@ -40,23 +40,6 @@ async function getCurrentProfileId(): Promise<string> {
   return (await requireServerAuthProfile()).id;
 }
 
-export async function getExternalApiClients() {
-  await requireConfigTabPermission('accesos-externos', 'view');
-  const companyId = await getActiveCompanyId();
-  if (!companyId) return [];
-
-  try {
-    return await prisma.external_api_clients.findMany({
-      where: { company_id: companyId },
-      select: CLIENT_SELECT,
-      orderBy: [{ is_active: 'desc' }, { created_at: 'desc' }],
-    });
-  } catch (error) {
-    logger.error('Error al obtener los accesos externos', { data: { error } });
-    throw error;
-  }
-}
-
 export async function createExternalApiClient(
   values: CreateExternalApiClientValues
 ): Promise<CreatedExternalApiClient> {

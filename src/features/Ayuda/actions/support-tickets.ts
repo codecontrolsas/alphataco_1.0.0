@@ -160,38 +160,6 @@ export async function getMyTicketsWithUnread(): Promise<TicketWithUnread[]> {
   return enrichWithUnread(tickets, reporter);
 }
 
-export interface MyTicketsPage {
-  tickets: TicketWithUnread[];
-  total: number;
-  completed: number;
-}
-
-/**
- * Página de tickets del usuario (server-side, más recientes primero) enriquecida
- * con no-leídos. `total`/`completed` vienen del backend sin paginar, para la
- * navegación y las estadísticas.
- */
-export async function getMyTicketsPageWithUnread(page: number, pageSize: number): Promise<MyTicketsPage> {
-  if (!(await canSupportTickets())) return { tickets: [], total: 0, completed: 0 };
-  const reporter = await getReporterEmail();
-  if (!reporter) {
-    notifLogger.warn('No authenticated user, returning empty page');
-    return { tickets: [], total: 0, completed: 0 };
-  }
-
-  try {
-    const { tickets, total, completed } = await taskAppClient.listTicketsByReporter(reporter.email, {
-      limit: pageSize,
-      offset: (page - 1) * pageSize,
-    });
-    const enriched = tickets.length > 0 ? await enrichWithUnread(tickets, reporter) : [];
-    return { tickets: enriched, total, completed };
-  } catch (error) {
-    logger.error('Error listando página de tickets propios', { data: { page, error } });
-    return { tickets: [], total: 0, completed: 0 };
-  }
-}
-
 async function enrichWithUnread(
   tickets: Ticket[],
   reporter: NonNullable<Awaited<ReturnType<typeof getReporterEmail>>>

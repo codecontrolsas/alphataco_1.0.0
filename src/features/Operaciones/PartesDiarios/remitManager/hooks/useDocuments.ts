@@ -2,15 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import {
-  deleteRemitDocument,
-  getAvailableDocumentsForLinking,
-  getRemitDocumentDownloadUrl,
-  getRemitDocumentUrl,
-  linkExistingDocument,
-  replaceDocument,
-  uploadDocumentToRemito,
-} from '../actions/remitos.server';
+import { deleteRemitDocument, getRemitDocumentDownloadUrl, getRemitDocumentUrl, uploadDocumentToRemito } from '../actions/remitos.server';
 import { ALLOWED_FILE_TYPES, MAX_FILE_SIZE } from '../types';
 import { remitoQueryKeys } from './useRemitos';
 
@@ -19,15 +11,6 @@ export const documentQueryKeys = {
   available: (rowId: string, remitId?: string) => ['documents', 'available', rowId, remitId] as const,
   url: (documentPath: string) => ['documents', 'url', documentPath] as const,
 };
-
-export function useAvailableDocuments(dailyReportRowId: string, currentRemitId?: string) {
-  return useQuery({
-    queryKey: documentQueryKeys.available(dailyReportRowId, currentRemitId),
-    queryFn: () => getAvailableDocumentsForLinking(dailyReportRowId, currentRemitId),
-    staleTime: 2 * 60 * 1000,
-    enabled: !!dailyReportRowId,
-  });
-}
 
 export function useDocumentUrl(documentPath: string) {
   return useQuery({
@@ -63,27 +46,6 @@ export function useUploadDocument(dailyReportRowId: string, customerName?: strin
   });
 }
 
-export function useReplaceDocument(dailyReportRowId: string, customerName?: string) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ documentId, newFile }: { documentId: string; newFile: File }) => {
-      const formData = new FormData();
-      formData.append('file', newFile);
-      return replaceDocument(documentId, formData, customerName);
-    },
-    onSuccess: (updatedDocument) => {
-      queryClient.invalidateQueries({
-        queryKey: remitoQueryKeys.byRowId(dailyReportRowId),
-      });
-      toast.success(`Documento ${updatedDocument.document_name} reemplazado`);
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Error al reemplazar el documento');
-    },
-  });
-}
-
 export function useDeleteDocument(dailyReportRowId: string) {
   const queryClient = useQueryClient();
 
@@ -100,31 +62,6 @@ export function useDeleteDocument(dailyReportRowId: string) {
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Error al eliminar el documento');
-    },
-  });
-}
-
-export function useLinkDocument(dailyReportRowId: string) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({
-      remitId,
-      documentPath,
-      documentName,
-    }: {
-      remitId: string;
-      documentPath: string;
-      documentName: string;
-    }) => linkExistingDocument(remitId, documentPath, documentName),
-    onSuccess: (linkedDocument) => {
-      queryClient.invalidateQueries({
-        queryKey: remitoQueryKeys.byRowId(dailyReportRowId),
-      });
-      toast.success(`Documento ${linkedDocument.document_name} vinculado`);
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Error al vincular el documento');
     },
   });
 }

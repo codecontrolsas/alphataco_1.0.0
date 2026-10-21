@@ -60,5 +60,3 @@ export async function getMultiDocumentUploadData(input: { onlyEmployees?: boolea
     currentCompany,
   };
 }
-
-export type MultiDocumentUploadData = Awaited<ReturnType<typeof getMultiDocumentUploadData>>;

@@ -214,13 +214,3 @@ export const loadDocumentEntries = cache(
   ): Promise<LoadedDocumentEntries> =>
     loadEntries({ companyId, kind, monthly, canViewPrivate, resourceId: resourceId || undefined })
 );
-
-/** Conteos por estado para las tarjetas (`pendiente` = faltantes). No incluye las filas "ya no aplica". */
-export function countEntryStates(entries: readonly DocumentEntry[]): Partial<Record<DocumentRowState, number>> {
-  const counts: Partial<Record<DocumentRowState, number>> = {};
-  for (const entry of entries) {
-    if (entry.notApplicable) continue;
-    counts[entry.state] = (counts[entry.state] ?? 0) + 1;
-  }
-  return counts;
-}

@@ -16,24 +16,6 @@ async function assertCanManageUsers(): Promise<void> {
   }
 }
 
-// ── Obtener roles disponibles ─────────────────────────────────────────────────
-/** Lanza error si no hay permiso (nunca devuelve `[]` por denegación: se leería como "sin roles"). */
-export async function getAvailableRoles() {
-  await assertCanManageUsers();
-  logger.debug('Obteniendo roles disponibles');
-
-  try {
-    return await prisma.roles.findMany({
-      where: { intern: false, name: { not: 'Invitado' } },
-      select: { id: true, name: true, color: true },
-      orderBy: { name: 'asc' },
-    });
-  } catch (error) {
-    logger.error('Error obteniendo roles disponibles', { data: { error } });
-    return [];
-  }
-}
-
 // ── Buscar empleados para vincular ────────────────────────────────────────────
 /** Lanza error si no hay permiso (nunca devuelve `[]` por denegación: se leería como "sin resultados"). */
 export async function searchEmployeesForLink(query: string) {

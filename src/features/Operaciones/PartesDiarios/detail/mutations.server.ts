@@ -167,8 +167,6 @@ export async function createDailyReportRowPrisma(data: DailyReportRowInput & { d
   }
 }
 
-export type CreateDailyReportRowResult = Awaited<ReturnType<typeof createDailyReportRowPrisma>>;
-
 // ============================================================================
 // 7. UPDATE ROW
 // ============================================================================
@@ -250,8 +248,6 @@ export async function updateDailyReportRowPrisma(rowId: string, data: DailyRepor
   }
 }
 
-export type UpdateDailyReportRowResult = Awaited<ReturnType<typeof updateDailyReportRowPrisma>>;
-
 // ============================================================================
 // 8. DELETE ROW
 // ============================================================================
@@ -323,8 +319,6 @@ export async function deleteDailyReportRowPrisma(rowId: string) {
     throw new Error('No se pudo eliminar la fila del parte diario. Intente nuevamente.');
   }
 }
-
-export type DeleteDailyReportRowResult = Awaited<ReturnType<typeof deleteDailyReportRowPrisma>>;
 
 // ============================================================================
 // 9. BULK UPDATE ROW STATUS
@@ -431,6 +425,4 @@ export async function bulkUpdateRowStatus(rowIds: string[], data: BulkRowUpdateD
     throw new Error('No se pudieron actualizar las filas del parte diario. Intente nuevamente.');
   }
 }
-
-export type BulkUpdateRowStatusResult = Awaited<ReturnType<typeof bulkUpdateRowStatus>>;
 

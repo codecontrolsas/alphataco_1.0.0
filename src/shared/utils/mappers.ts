@@ -191,19 +191,6 @@ export const formSourceLabels: Record<string, string> = {
   custom_form: 'Formulario personalizado',
 };
 
-// ============================================================================
-// MANTENIMIENTO / REPARACIONES ENUM LABELS
-// ============================================================================
-
-/**
- * Labels para criticidad de tipos de reparación (Baja, Media, Alta)
- */
-export const repairCriticityLabels: Record<string, string> = {
-  Baja: 'Baja',
-  Media: 'Media',
-  Alta: 'Alta',
-};
-
 /**
  * Labels para tipo de mantenimiento (Correctivo, Preventivo, Otro)
  */

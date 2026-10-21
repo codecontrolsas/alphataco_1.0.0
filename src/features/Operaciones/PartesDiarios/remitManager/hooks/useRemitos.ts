@@ -2,15 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import {
-  createRemito,
-  deleteRemito,
-  getAvailableRemitosForLinking,
-  getRemitosWithDocuments,
-  linkExistingRemito,
-  unlinkRemito,
-  updateRemitoNumber,
-} from '../actions/remitos.server';
+import { createRemito, deleteRemito, getAvailableRemitosForLinking, getRemitosWithDocuments, linkExistingRemito, unlinkRemito } from '../actions/remitos.server';
 
 export const remitoQueryKeys = {
   all: ['remitos'] as const,
@@ -39,24 +31,6 @@ export function useCreateRemito(dailyReportRowId: string) {
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Error al crear el remito');
-    },
-  });
-}
-
-export function useUpdateRemitoNumber(dailyReportRowId: string) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ remitId, newNumber }: { remitId: string; newNumber: string }) =>
-      updateRemitoNumber(remitId, newNumber),
-    onSuccess: (updatedRemito) => {
-      queryClient.invalidateQueries({
-        queryKey: remitoQueryKeys.byRowId(dailyReportRowId),
-      });
-      toast.success(`Remito actualizado a ${updatedRemito.remit_number}`);
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Error al actualizar el remito');
     },
   });
 }

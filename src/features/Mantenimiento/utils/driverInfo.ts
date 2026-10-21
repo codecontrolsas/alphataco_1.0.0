@@ -16,15 +16,6 @@ type DriverRequestInput = {
 };
 
 /**
- * Resolve driver display name from a maintenance request (compact format for tables/lists).
- * Returns name only (no legajo) for consistency — legacy records don't have driver_employee FK.
- * Priority: driver_employee (new FK) → answer_data.chofer (legacy) → employees (old FK) → fallback
- */
-export function resolveDriverName(request: DriverRequestInput): string {
-  return resolveDriverInfo(request).name;
-}
-
-/**
  * Resolve driver info as structured data from a maintenance request.
  * Use this in UIs with enough space to show legajo and name separately.
  * Priority: driver_employee (new FK) → answer_data.chofer (legacy) → employees (old FK) → fallback
@@ -113,18 +104,6 @@ export function getDriverComment(item: unknown): string | null {
   if (typeof deviationComment === 'string' && deviationComment) return deviationComment;
 
   return null;
-}
-
-/**
- * Formatea la información del chofer con el comentario
- * Retorna un objeto con el nombre del chofer y el comentario, o null si no hay comentario
- */
-export function getDriverCommentInfo(item: unknown): { driverName: string | null; comment: string } | null {
-  const comment = getDriverComment(item);
-  if (!comment) return null;
-
-  const driverName = getDriverName(item);
-  return { driverName, comment };
 }
 
 // =============================================================================

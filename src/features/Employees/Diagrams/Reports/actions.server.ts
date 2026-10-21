@@ -368,8 +368,6 @@ export async function getDiagramReportTotals(searchParams: DataTableSearchParams
   }
 }
 
-export type DiagramReportTotals = Awaited<ReturnType<typeof getDiagramReportTotals>>;
-
 // ============================================================================
 // EXPORT QUERY (all data, no pagination)
 // ============================================================================

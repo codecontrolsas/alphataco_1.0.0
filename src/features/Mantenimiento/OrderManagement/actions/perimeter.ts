@@ -25,20 +25,6 @@ export async function assertOrderInActiveCompany(orderId: string): Promise<strin
   return companyId;
 }
 
-/** Ídem para un ítem del pedido. */
-export async function assertOrderItemInActiveCompany(itemId: string): Promise<string> {
-  const companyId = await getActiveCompanyId();
-
-  const item = await prisma.maintenance_order_items.findFirst({
-    where: { id: itemId, company_id: companyId },
-    select: { id: true },
-  });
-
-  if (!item) throw new Error('El ítem del pedido no pertenece a la empresa activa');
-
-  return companyId;
-}
-
 /**
  * Filtra ids de tipos de reparación dejando sólo los de la empresa dada.
  *

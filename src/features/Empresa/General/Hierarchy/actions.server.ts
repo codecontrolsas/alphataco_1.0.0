@@ -312,8 +312,6 @@ export async function getHierarchyParentOptions(excludeId?: string, currentParen
   }
 }
 
-export type HierarchyParentOption = Awaited<ReturnType<typeof getHierarchyParentOptions>>[number];
-
 // ============================================================================
 // MUTACIONES — crear y actualizar con Prisma
 // ============================================================================

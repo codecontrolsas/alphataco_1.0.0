@@ -180,18 +180,6 @@ export async function lockCheckbook(tx: RawTx, companyId: string, checkbookId: s
   };
 }
 
-/** Próximo número libre de la chequera en su cuenta (los usados por cualquier cheque físico de la cuenta, aunque estén anulados). */
-export async function nextFreeNumber(tx: RawTx, checkbook: Pick<LockedCheckbook, 'accountId' | 'firstNumber' | 'lastNumber'>): Promise<string | null> {
-  const rows = await tx.$queryRaw<{ n: number }[]>`
-    SELECT n FROM generate_series(${checkbook.firstNumber}::int, ${checkbook.lastNumber}::int) n
-    WHERE NOT EXISTS (
-      SELECT 1 FROM own_checks o WHERE o.account_id = ${checkbook.accountId}::uuid AND o.kind = 'PHYSICAL' AND o.number = n::text
-    )
-    ORDER BY n LIMIT 1
-  `;
-  return rows[0] ? String(rows[0].n) : null;
-}
-
 /** El número es de la chequera, que sigue vigente, y está libre en la cuenta. Devuelve el número normalizado. */
 export async function assertFreeNumber(tx: RawTx, checkbook: LockedCheckbook, raw: string): Promise<string> {
   if (checkbook.retired) throw new TreasuryError('La chequera está dada de baja');
@@ -307,7 +295,6 @@ export async function voidCheckNumber(
   });
   return { id: created.id, number };
 }
-
 
 /**
  * Confirma el débito de UN cheque emitido (spec etapa 3b §3.3): la fecha no puede ser anterior a su

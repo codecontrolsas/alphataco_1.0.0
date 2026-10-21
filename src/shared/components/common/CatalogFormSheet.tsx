@@ -180,11 +180,6 @@ export function useCatalogSheetBusy(): (busy: boolean) => void {
   return useContext(CatalogSheetContext)?.setBusy ?? noop;
 }
 
-/** true mientras hay un guardado en curso dentro del Sheet. false fuera de un `CatalogFormSheet`. */
-export function useCatalogSheetIsBusy(): boolean {
-  return useContext(CatalogSheetContext)?.isBusy ?? false;
-}
-
 /** true si el componente se renderiza dentro del cuerpo de un `CatalogFormSheet` (para mostrar pasos en el mismo panel en vez de abrir un Dialog). */
 export function useIsInCatalogSheet(): boolean {
   return useContext(CatalogSheetContext) !== null;

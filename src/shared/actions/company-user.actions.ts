@@ -3,7 +3,7 @@
 import { logger } from '@/lib/logger';
 import { getSessionCompanyClaim, getSessionToken, getSessionUser } from '@/shared/lib/session';
 import { writeCompanyClaim } from '@/shared/lib/session-claims';
-import { canUseAsActiveCompany, clearActiveCompanyCookie, setActiveCompanyCookie } from '@/shared/lib/tenant';
+import { canUseAsActiveCompany, setActiveCompanyCookie } from '@/shared/lib/tenant';
 
 export type SwitchActiveCompanyResult = { ok: boolean; error?: string };
 
@@ -56,19 +56,4 @@ export const switchActiveCompany = async (companyId: string): Promise<SwitchActi
   await setActiveCompanyCookie(companyId, ACTIVE_COMPANY_MAX_AGE);
 
   return { ok: true };
-};
-
-/**
- * Borra la empresa activa del request (cierre de sesión desde el cliente).
- *
- * La cookie es `httpOnly`, así que el `cookie.remove()` del menú de usuario ya no la
- * alcanza: el borrado tiene que pasar por el servidor.
- */
-export const clearActiveCompany = async (): Promise<void> => {
-  await clearActiveCompanyCookie();
-};
-
-/** `{ id, email }` del usuario de sesión o null. */
-export const fetchCurrentUser = async () => {
-  return getSessionUser();
 };

@@ -103,7 +103,6 @@ export const createMaintenanceGroupAction = async (rawGroupData: MaintenanceGrou
     return { group: null, error: errorMessage(error) };
   }
 };
-export type createMaintenanceGroupActionType = Awaited<ReturnType<typeof createMaintenanceGroupAction>>;
 
 /**
  * Actualiza un grupo y sus relaciones.
@@ -163,7 +162,6 @@ export const updateMaintenanceGroupAction = async (
     return { updatedGroup: null, added: 0, removed: 0, error: errorMessage(error) };
   }
 };
-export type updateMaintenanceGroupActionType = Awaited<ReturnType<typeof updateMaintenanceGroupAction>>;
 /**
  * Grupos de la empresa activa, con los ids de sus tipos de reparación. Exige `view`.
  *
@@ -243,4 +241,3 @@ export const fetchMaintenanceGroupByIdAction = async (groupId: string) => {
     return { group: null, error: errorMessage(error), forbidden: error instanceof ConfigPermissionError };
   }
 };
-export type fetchMaintenanceGroupByIdActionType = Awaited<ReturnType<typeof fetchMaintenanceGroupByIdAction>>;

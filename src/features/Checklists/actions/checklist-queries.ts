@@ -2,7 +2,6 @@
 
 import { Logger } from '@/lib/logger';
 import { mapEquipmentToChecklistFormat } from '@/lib/utils';
-import { callFunction } from '@/shared/lib/sql';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
@@ -38,25 +37,6 @@ const employeeRowSchema = z.object({
   file: z.string().nullable(),
   company_id: z.string().nullable(),
 });
-
-/**
- * Busca un empleado de la empresa activa por nombre completo (en cualquier orden).
- * Envuelve la función SQL `find_employee_by_full_name_v2(p_full_name text, p_company_id uuid)`.
- */
-export const findEmployeeByFullName = async (fullName: string) => {
-  try {
-    const company_id = await getActiveCompanyId();
-    const employees = await callFunction(
-      'find_employee_by_full_name_v2',
-      [fullName, { uuid: company_id }],
-      z.array(employeeRowSchema.passthrough())
-    );
-    return employees[0] ?? null;
-  } catch (error) {
-    logger.error('Error al buscar empleado por nombre completo', { data: { error } });
-    return null;
-  }
-};
 
 const templateSectionSelect = {
   id: true,
@@ -161,8 +141,6 @@ export const fetchChecklistTemplateById = async (templateId: string, options?: {
     return null;
   }
 };
-
-export type ChecklistTemplateDetail = Awaited<ReturnType<typeof fetchChecklistTemplateById>>;
 
 const equipmentForChecklistSelect = {
   id: true,
@@ -287,8 +265,6 @@ export const fetchFilteredEquipmentForChecklistByEquipment = async (templateId: 
   }
 };
 
-export type EquipmentForChecklist = Awaited<ReturnType<typeof fetchFilteredEquipmentForChecklist>>[number];
-
 /**
  * Kilometraje y horómetro del equipo escaneado, para los valores por defecto del checklist.
  * Devuelve `null` si el equipo no existe o no tiene empresa: es la comprobación de
@@ -411,8 +387,6 @@ export const fetchChecklistAnswerById = async (answerId: string) => {
     return null;
   }
 };
-
-export type ChecklistAnswerDetail = Awaited<ReturnType<typeof fetchChecklistAnswerById>>;
 
 /**
  * Obtiene la información del tipo de un equipo para verificar si tiene enganche.

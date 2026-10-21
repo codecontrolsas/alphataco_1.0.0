@@ -8,7 +8,6 @@
 
 import type { z } from 'zod';
 import type { rowFormBaseSchema } from './hooks/useFormSchema';
-import type { CertificationRow } from '../actions/queries.server';
 
 /** Valores del formulario de línea (alta y edición). */
 export type DailyReportRowFormValues = z.infer<typeof rowFormBaseSchema> & {
@@ -20,6 +19,3 @@ export type DailyReportRowFormValues = z.infer<typeof rowFormBaseSchema> & {
   completed_day?: boolean;
   completed_night?: boolean;
 };
-
-/** Fila seleccionada que se está editando (la que arma `mapCertificationRow`). */
-export type DailyReportRowFormRow = CertificationRow;

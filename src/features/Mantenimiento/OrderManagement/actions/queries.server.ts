@@ -9,7 +9,6 @@ import { getSupervisorFilterInfo } from '../../utils/supervisorFilter';
 import { requireOrderManagementReadAccess } from './access';
 import { serializeOtherEquipment } from './serialize';
 
-
 const logger = new Logger('OrderManagement/queries');
 
 /**
@@ -479,8 +478,6 @@ export async function getOrderGenerationPreview(orderId: string) {
   }
 }
 
-export type OrderGenerationPreview = Awaited<ReturnType<typeof getOrderGenerationPreview>>;
-
 /**
  * Obtiene los sectores candidatos para cada repair type usando la tabla sector_repair_types.
  * Retorna un map de repairTypeId → sectorIds[]
@@ -512,8 +509,6 @@ export async function getSectorCandidatesForRepairTypes(repairTypeIds: string[])
     throw error;
   }
 }
-
-export type SectorCandidateData = Awaited<ReturnType<typeof getSectorCandidatesForRepairTypes>>;
 
 // =============================================================================
 // WIZARD: BATCH SETUP + GENERATE WORK ORDERS
@@ -565,4 +560,3 @@ export async function getMaintenanceTaskGroupsWithRepairTypes() {
 }
 
 export type MaintenanceTaskGroupsWithRepairTypes = Awaited<ReturnType<typeof getMaintenanceTaskGroupsWithRepairTypes>>;
-export type MaintenanceTaskGroupWithRepairTypes = MaintenanceTaskGroupsWithRepairTypes[number];

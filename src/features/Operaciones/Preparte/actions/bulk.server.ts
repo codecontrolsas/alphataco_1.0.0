@@ -355,5 +355,3 @@ export async function bulkReschedulePrepartes(ids: string[], newDate: Date, reas
     throw error instanceof Error ? error : new Error('Error al reprogramar los pedidos seleccionados.');
   }
 }
-
-export type BulkRescheduleResult = Awaited<ReturnType<typeof bulkReschedulePrepartes>>;

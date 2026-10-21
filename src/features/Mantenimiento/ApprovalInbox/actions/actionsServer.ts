@@ -341,7 +341,6 @@ export async function getOrdersPendingValidation() {
 }
 
 export type ValidationOrdersData = Awaited<ReturnType<typeof getOrdersPendingValidation>>;
-export type ValidationOrderItem = ValidationOrdersData[number];
 
 /**
  * Tipos de log que devuelven una orden al taller (D-1): el jefe de taller la devolvió entera o rechazó

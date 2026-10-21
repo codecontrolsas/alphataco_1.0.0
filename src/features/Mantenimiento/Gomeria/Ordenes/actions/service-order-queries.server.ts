@@ -503,12 +503,6 @@ export async function ensureVehicleTirePositions(vehicleId: string) {
   }
 }
 
-// ============================================================================
-// EXPORTED TYPES
-// ============================================================================
-
-export type VehicleTirePosition = Awaited<ReturnType<typeof getVehicleTirePositions>>[number];
-
 export type AvailableTire = Awaited<ReturnType<typeof getAvailableTiresForVehicle>>[number];
 
 export type VehicleSearchResult = Awaited<ReturnType<typeof searchVehicleByDomain>>[number];

@@ -76,13 +76,6 @@ export function summarizeStatusCountMap(counts: Iterable<readonly [string, numbe
   };
 }
 
-/** Igual que `summarizeStatusCountMap`, partiendo de la lista de estados de cada línea. */
-export function summarizeStatusCounts(statuses: Iterable<string>): StatusSummary {
-  const counts = new Map<string, number>();
-  for (const status of statuses) counts.set(status, (counts.get(status) ?? 0) + 1);
-  return summarizeStatusCountMap(counts);
-}
-
 /** Clases escritas completas: Tailwind no genera las que se arman en runtime. */
 const SEGMENT_CLASSES = {
   executed: 'bg-ok',

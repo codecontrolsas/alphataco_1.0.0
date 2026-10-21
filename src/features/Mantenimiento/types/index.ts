@@ -9,9 +9,6 @@
 // Estados de solicitud de mantenimiento
 export type MaintenanceRequestStatus = 'pending_approval' | 'approved' | 'rejected';
 
-// Estados de items de solicitud
-export type MaintenanceRequestItemStatus = 'pending' | 'approved' | 'rejected';
-
 // Estados de pedidos de mantenimiento
 export type MaintenanceOrderStatus = 'pending_scheduling' | 'scheduled' | 'in_workshop' | 'completed' | 'rejected';
 

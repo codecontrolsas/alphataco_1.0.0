@@ -167,8 +167,6 @@ export async function getAbsenteeismSummary(
   }
 }
 
-export type AbsenteeismSummaryData = Awaited<ReturnType<typeof getAbsenteeismSummary>>;
-
 /**
  * Obtiene la tendencia de ausentismo en el tiempo.
  * Llama al RPC `hr_get_absenteeism_trend`.
@@ -194,8 +192,6 @@ export async function getAbsenteeismTrend(fromDate?: string, toDate?: string): P
   }
 }
 
-export type AbsenteeismTrendData = Awaited<ReturnType<typeof getAbsenteeismTrend>>;
-
 /**
  * Obtiene los empleados ausentes en una fecha determinada.
  * Llama al RPC `hr_get_current_absent_employees`.
@@ -216,8 +212,6 @@ export async function getCurrentAbsentEmployees(date?: string): Promise<CurrentA
     throw error;
   }
 }
-
-export type CurrentAbsentEmployeesData = Awaited<ReturnType<typeof getCurrentAbsentEmployees>>;
 
 /**
  * Obtiene la serie temporal diaria de ausentismo.
@@ -245,8 +239,6 @@ export async function getDailyAbsenceTimeseries(
   }
 }
 
-export type DailyAbsenceTimeseriesData = Awaited<ReturnType<typeof getDailyAbsenceTimeseries>>;
-
 /**
  * Obtiene las razones de ausencia agrupadas por departamento para una fecha.
  * Llama al RPC `hr_get_department_absence_reasons`.
@@ -268,8 +260,6 @@ export async function getDepartmentAbsenceReasons(date?: string): Promise<Depart
   }
 }
 
-export type DepartmentAbsenceReasonsData = Awaited<ReturnType<typeof getDepartmentAbsenceReasons>>;
-
 /**
  * Obtiene el resumen de ausentismo agrupado por departamento para una fecha.
  * Llama al RPC `hr_get_department_absence_summary`.
@@ -290,8 +280,6 @@ export async function getDepartmentAbsenceSummary(date?: string): Promise<Depart
     throw error;
   }
 }
-
-export type DepartmentAbsenceSummaryData = Awaited<ReturnType<typeof getDepartmentAbsenceSummary>>;
 
 // ─── Funciones nativas de Prisma ──────────────────────────────────────────
 
@@ -334,7 +322,6 @@ export async function getEmployeesByGenderAndPosition() {
 }
 
 export type EmployeesByGenderAndPositionData = Awaited<ReturnType<typeof getEmployeesByGenderAndPosition>>;
-export type EmployeesByGenderAndPositionItem = EmployeesByGenderAndPositionData[number];
 
 /**
  * Obtiene la distribución de empleados activos por tipo de contrato, contada en la base.
@@ -372,4 +359,3 @@ export async function getEmployeesByContractType() {
 }
 
 export type EmployeesByContractTypeData = Awaited<ReturnType<typeof getEmployeesByContractType>>;
-export type EmployeesByContractTypeItem = EmployeesByContractTypeData[number];

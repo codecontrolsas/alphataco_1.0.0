@@ -17,14 +17,6 @@ export function displayValue(value: string | number | null | undefined, fallback
   return String(value);
 }
 
-/**
- * Formatea un valor booleano a Sí/No
- */
-export function formatBoolean(value: boolean | null | undefined): string {
-  if (value === null || value === undefined) return 'No especificado';
-  return value ? 'Sí' : 'No';
-}
-
 // ============================================
 // FORMATEO DE FECHAS
 // ============================================
@@ -45,14 +37,6 @@ export function formatDateTime(date: Date | string | null | undefined, fallback 
   return moment(date).format('DD/MM/YYYY HH:mm');
 }
 
-/**
- * Formatea una fecha de forma relativa (hace 2 días, etc.)
- */
-export function formatRelativeDate(date: Date | string | null | undefined): string {
-  if (!date) return '';
-  return moment(date).fromNow();
-}
-
 // ============================================
 // CÁLCULOS DE TIEMPO
 // ============================================
@@ -63,24 +47,6 @@ export function formatRelativeDate(date: Date | string | null | undefined): stri
 export function calculateAge(birthDate: Date | string | null | undefined): number | null {
   if (!birthDate) return null;
   return moment().diff(moment(birthDate), 'years');
-}
-
-/**
- * Formatea la edad para mostrar (ej: "32 años")
- */
-export function formatAge(birthDate: Date | string | null | undefined): string {
-  const age = calculateAge(birthDate);
-  if (age === null) return '';
-  return `${age} años`;
-}
-
-/**
- * Formatea la edad con paréntesis para mostrar junto a fecha
- */
-export function formatAgeParenthesis(birthDate: Date | string | null | undefined): string {
-  const age = calculateAge(birthDate);
-  if (age === null) return '';
-  return `(${age} años)`;
 }
 
 /**
@@ -111,30 +77,6 @@ export function formatSeniority(hireDate: Date | string | null | undefined): str
 }
 
 /**
- * Formatea la antigüedad con paréntesis para mostrar junto a fecha
- */
-export function formatSeniorityParenthesis(hireDate: Date | string | null | undefined): string {
-  const formatted = formatSeniority(hireDate);
-  if (!formatted) return '';
-  return `(${formatted})`;
-}
-
-// ============================================
-// FORMATEO DE NÚMEROS
-// ============================================
-
-/**
- * Formatea un número como moneda
- */
-export function formatCurrency(value: number | null | undefined, currency = 'ARS'): string {
-  if (value === null || value === undefined) return '-';
-  return new Intl.NumberFormat('es-AR', {
-    style: 'currency',
-    currency,
-  }).format(value);
-}
-
-/**
  * Formatea un número con separadores de miles
  */
 export function formatNumber(value: number | null | undefined): string {
@@ -151,37 +93,4 @@ export function formatNumber(value: number | null | undefined): string {
  */
 export function getInitials(firstName: string, lastName: string): string {
   return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
-}
-
-/**
- * Formatea un nombre completo (Apellido, Nombre)
- */
-export function formatFullName(firstName: string, lastName: string): string {
-  return `${lastName}, ${firstName}`;
-}
-
-/**
- * Trunca un texto a un máximo de caracteres
- */
-export function truncateText(text: string | null | undefined, maxLength: number): string {
-  if (!text) return '';
-  if (text.length <= maxLength) return text;
-  return `${text.substring(0, maxLength)}...`;
-}
-
-// ============================================
-// FORMATEO DE ARCHIVOS
-// ============================================
-
-/**
- * Formatea el tamaño de un archivo en bytes a una unidad legible
- */
-export function formatFileSize(bytes: number | null | undefined): string {
-  if (bytes === null || bytes === undefined || bytes === 0) return '0 B';
-
-  const units = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  const size = bytes / Math.pow(1024, i);
-
-  return `${size.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }

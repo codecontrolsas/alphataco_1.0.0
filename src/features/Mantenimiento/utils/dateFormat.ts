@@ -80,22 +80,3 @@ export function formatDateLong(date: string | Date | null | undefined): string {
 export function formatDateForDB(date: Date): string {
   return moment(date).format('YYYY-MM-DD');
 }
-
-/**
- * Formatea una fecha corta (solo día y mes).
- * Ejemplo: "28/01"
- *
- * @param date - Fecha en formato YYYY-MM-DD o Date
- * @returns Fecha formateada en formato corto
- */
-export function formatDateShort(date: string | Date | null | undefined): string {
-  if (!date) return '-';
-
-  const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
-
-  if (dateStr.length === 10) {
-    return moment.utc(dateStr).format('DD/MM');
-  }
-
-  return moment(date).format('DD/MM');
-}

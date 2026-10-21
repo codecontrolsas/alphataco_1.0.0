@@ -77,14 +77,6 @@ const ORDER_NUMBER_TABS = [
   'maintenance_orders',
 ] as const;
 
-export async function requireOrderNumberAccess(): Promise<void> {
-  const result = await checkMultiplePermissionsServer(
-    ORDER_NUMBER_TABS.map((tabSlug) => ({ moduleSlug: MODULE_SLUG, tabSlug, actionSlug: 'update' }))
-  );
-  const allowed = ORDER_NUMBER_TABS.some((tabSlug) => result.get(`${MODULE_SLUG}:${tabSlug}:update`) === true);
-  if (!allowed) throw new OrderManagementError('No tenés permiso para generar el número de la orden');
-}
-
 /**
  * Estado terminal: la máquina de `lib/order-status.ts` no admite ninguna salida
  * (`completed`, `rejected`). Un estado desconocido no se considera terminal.

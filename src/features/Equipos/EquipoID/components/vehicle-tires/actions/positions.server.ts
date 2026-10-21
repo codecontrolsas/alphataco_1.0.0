@@ -78,8 +78,6 @@ export async function getVehicleTirePositionsWithDetails(vehicleId: string) {
   }
 }
 
-export type VehicleTirePositionWithDetails = Awaited<ReturnType<typeof getVehicleTirePositionsWithDetails>>[number];
-
 export async function getVehicleTemplateInfo(vehicleId: string) {
   logger.debug('Getting vehicle template info', { data: { vehicleId } });
 
@@ -146,8 +144,6 @@ export async function getVehicleTemplateInfo(vehicleId: string) {
     throw error;
   }
 }
-
-export type VehicleTemplateInfo = Awaited<ReturnType<typeof getVehicleTemplateInfo>>;
 
 // ============================================================================
 // VEHICLE AXLE SIZE OVERRIDES

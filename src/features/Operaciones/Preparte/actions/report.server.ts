@@ -189,7 +189,3 @@ export async function getPreparteReportData(filters: PreparteReportFilters): Pro
     throw error;
   }
 }
-
-
-/** Documentación del reporte: se muestra agrupado por línea o por pedido según `groupBy`. */
-export type PreparteReportData = Awaited<ReturnType<typeof getPreparteReportData>>;

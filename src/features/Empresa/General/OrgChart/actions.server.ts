@@ -325,5 +325,3 @@ export async function deleteOrgChartCargo(id: string): Promise<OrgChartMutationR
 export type OrgChartData = Awaited<ReturnType<typeof getOrgChart>>;
 export type OrgChartSector = OrgChartData['sectors'][number];
 export type OrgChartCargo = OrgChartData['cargos'][number];
-export type OrgChartPositionOption = Awaited<ReturnType<typeof getOrgChartPositionOptions>>[number];
-export type OrgChartTitularOption = Awaited<ReturnType<typeof getOrgChartTitularOptions>>[number];

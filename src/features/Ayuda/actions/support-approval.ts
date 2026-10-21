@@ -39,25 +39,6 @@ function approvalError(error: unknown, fallback: string): Error {
   return new Error(fallback);
 }
 
-/**
- * Lista completa (sin paginar) de tickets visibles para el aprobador. Usada para
- * chequeos de pertenencia (acceso al detalle). Si el usuario no es aprobador,
- * el backend responde 403 y devolvemos lista vacía.
- */
-export async function getTicketsForApprover(): Promise<Ticket[]> {
-  if (!(await canSupportTickets())) return [];
-  const reporter = await getReporterEmail();
-  if (!reporter) return [];
-  try {
-    return (await taskAppClient.listTicketsForApprover(reporter.email)).tickets;
-  } catch (error) {
-    logger.warn('No se pudo listar tickets del aprobador', {
-      data: { user: reporter.email, error },
-    });
-    return [];
-  }
-}
-
 export interface ApproverTicketsPage {
   tickets: Ticket[];
   total: number;

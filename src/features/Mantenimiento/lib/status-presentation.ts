@@ -129,10 +129,6 @@ export function getStatusUi(entity: StatusEntity, status: string | null | undefi
 export const getStatusLabel = (entity: StatusEntity, status: string | null | undefined) =>
   getStatusUi(entity, status).label;
 
-/** Variante de `Badge` de un estado. */
-export const getStatusBadgeVariant = (entity: StatusEntity, status: string | null | undefined): BadgeVariant =>
-  TONE_TO_BADGE[getStatusUi(entity, status).tone];
-
 /** Estados que aparecen en logs históricos y ya no existen como valor vigente de ninguna entidad. */
 export const LEGACY_HISTORY_LABELS: Record<string, string> = {
   date_rejected: 'Fecha rechazada',

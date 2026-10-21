@@ -67,7 +67,7 @@ export function runWithTenantContext<T>(
  * Cubre `findMany` y compañía, los `include` anidados y `$queryRaw`.
  *
  * `$transaction` queda bloqueado a propósito: dentro de una interactiva del cliente extendido cada operación
- * correría en otra transacción y perdería el rollback. Para varias operaciones atómicas usar `withTenantTx`.
+ * correría en otra transacción y perdería el rollback. Para varias operaciones atómicas usar `withTenantContext`.
  */
 export function createTenantClient(base: PrismaClient, ctx: TenantContext) {
   assertContext(ctx);
@@ -75,7 +75,7 @@ export function createTenantClient(base: PrismaClient, ctx: TenantContext) {
     name: 'tenant-context',
     client: {
       $transaction() {
-        throw new Error('getDb() no admite $transaction: usar withTenantTx() para operaciones atómicas');
+        throw new Error('El cliente con contexto no admite $transaction: usar withTenantContext() para operaciones atómicas');
       },
     },
     query: {

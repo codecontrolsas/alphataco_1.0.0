@@ -71,7 +71,6 @@ export type IndividualLoadValues = z.infer<typeof individualLoadSchema>;
 
 /** Decisión sobre cada día en la revisión de la carga individual. */
 export const REVIEW_ACTIONS = ['create', 'skip', 'replace', 'keep'] as const;
-export type ReviewAction = (typeof REVIEW_ACTIONS)[number];
 
 export const individualReviewSchema = z.object({
   days: z.array(

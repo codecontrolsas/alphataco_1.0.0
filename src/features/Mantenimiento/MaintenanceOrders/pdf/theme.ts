@@ -27,15 +27,6 @@ export const PAGE = {
 } as const;
 
 /**
- * Ancho util unico del documento: 531.28 pt.
- *
- * TODAS las reglas horizontales, el header, el footer y los bordes de columna de
- * cualquier tabla (incluidas las anidadas) arrancan y terminan exactamente en
- * este ancho. Una linea que sobresale o queda corta delata el documento.
- */
-export const CONTENT_WIDTH = PAGE.width - PAGE.marginX * 2;
-
-/**
  * Medida maxima para prosa (~65 caracteres a 8 pt en Helvetica).
  *
  * El ancho util completo daria ~119 caracteres por linea: ilegible. Los bloques

@@ -114,8 +114,6 @@ export async function getMaintenanceOrderMaterials(orderId: string) {
   };
 }
 
-export type MaintenanceOrderMaterials = NonNullable<Awaited<ReturnType<typeof getMaintenanceOrderMaterials>>>;
-
 /** Pedido de materiales desde el detalle de la orden: `pedidos:create` y la orden en taller. */
 export async function createOrderMaterialRequestAction(
   orderId: string,

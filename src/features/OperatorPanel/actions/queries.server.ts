@@ -139,8 +139,6 @@ export async function getCompletedWorkOrdersForOperator(sectorId: string, page: 
   };
 }
 
-export type CompletedWorkOrdersResult = Awaited<ReturnType<typeof getCompletedWorkOrdersForOperator>>;
-
 /**
  * Detalle de una OT del sector, con sus ítems, tareas y el origen de cada ítem.
  *

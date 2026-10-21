@@ -78,5 +78,3 @@ export async function getMaintenanceEmployeeForEquipment(equipmentId: string) {
     return null;
   }
 }
-
-export type MaintenanceEmployeeForEquipment = Awaited<ReturnType<typeof getMaintenanceEmployeeForEquipment>>;

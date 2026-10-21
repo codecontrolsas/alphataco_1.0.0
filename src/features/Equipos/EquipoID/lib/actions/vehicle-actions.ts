@@ -145,8 +145,6 @@ export async function getVehicleById(id: string) {
   };
 }
 
-export type VehicleDetail = Awaited<ReturnType<typeof getVehicleById>>;
-
 /**
  * `true` si ya existe un vehículo con ese dominio. El índice único de `vehicles.domain` es GLOBAL
  * (todas las empresas), así que la búsqueda no se acota a la empresa activa; sólo se devuelve un

@@ -21,7 +21,6 @@ const DEPENDENCY_TARGETS = {
 } as const;
 
 export type DependencyTargetTable = keyof typeof DEPENDENCY_TARGETS;
-export type DependencyTargetColumn<T extends DependencyTargetTable> = (typeof DEPENDENCY_TARGETS)[T][number];
 
 /** Catálogos que ofrecen "reemplazar por" al desactivar; todos tienen `id`, `name`, `is_active`, `company_id`. */
 const REPLACEMENT_SOURCES = {

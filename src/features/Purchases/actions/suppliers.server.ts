@@ -168,25 +168,6 @@ export async function updateSupplier(
   }
 }
 
-/** Altas y bajas explicitas de rubros: lo que no viene no se toca. */
-export async function setSupplierCategories(supplierId: string, changes: IdChanges): Promise<ActionResult> {
-  if (!(await checkPermissionServer('compras', 'proveedores', 'update'))) return fail(NO_PERMISSION);
-  const parsed = idChangesSchema.safeParse(changes);
-  if (!parsed.success || !UUID_RE.test(supplierId)) return fail('Datos inválidos');
-  const companyId = await getActiveCompanyId();
-  try {
-    await prisma.$transaction(async (tx) => {
-      const supplier = await tx.suppliers.findFirst({ where: { id: supplierId, company_id: companyId }, select: { id: true } });
-      if (!supplier) throw new PurchaseError('El proveedor no existe');
-      await applyCategoryChanges(tx, companyId, supplierId, parsed.data);
-    });
-    revalidatePath(PURCHASES_PATH);
-    return ok(null);
-  } catch (error) {
-    return toPurchaseActionError(error, logger, 'actualizar los rubros');
-  }
-}
-
 export type RemovalMode = 'delete' | 'deactivate';
 
 /** Un proveedor sin uso (sin solicitudes ni documentos) se borra; con uso, se desactiva. */
@@ -426,5 +407,3 @@ export async function searchSupplierOptions(query: string) {
     total,
   };
 }
-
-export type SupplierOption = Awaited<ReturnType<typeof searchSupplierOptions>>['items'][number];

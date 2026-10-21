@@ -12,8 +12,6 @@ import { categoricalColorVar, statusColorVar } from '@/features/Dashboard/shared
  */
 export const ORDER_SERIES = ['confirmado', 'pendiente', 'rechazado', 'cancelado', 'otros'] as const;
 
-export type OrderSeriesKey = (typeof ORDER_SERIES)[number];
-
 export type OrderActiveView = 'total' | 'confirmado' | 'pendiente' | 'rechazado' | 'cancelado';
 
 export const ORDER_CHART_CONFIG = {

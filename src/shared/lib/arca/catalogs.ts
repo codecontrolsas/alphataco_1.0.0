@@ -137,8 +137,6 @@ export const DOC_TYPES = {
   99: 'Sin identificar',
 } as const;
 
-export type DocTypeId = keyof typeof DOC_TYPES;
-
 /** Moneda ISO (como la guardan contratos y certificaciones) → código de moneda ARCA. */
 export const ARCA_CURRENCY_BY_ISO = {
   ARS: 'PES',

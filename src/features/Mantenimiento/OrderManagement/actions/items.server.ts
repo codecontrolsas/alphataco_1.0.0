@@ -7,42 +7,13 @@ import { getMaintenanceOrderCompanyId } from '@/features/Mantenimiento/shared/re
 import { Logger } from '@/lib/logger';
 import { requireServerAuthProfile } from '@/shared/actions/auth.actions';
 import { INVALIDATION_MAP } from '@/shared/constants/cache-invalidation-map';
-import { prisma } from '@/shared/lib/prisma';
 import { invalidateCacheTags } from '@/shared/utils/cache-invalidation';
-import {
-  lockEditableOrder,
-  requireOrderManagementPermission,
-  requireOrderManagementPermissions,
-  requireOrderNumberAccess,
-  toFailure,
-} from './access';
-import {
-  applyChiefCommentUpdates,
-  applyDescriptionUpdates,
-  applyItemAdds,
-  applyItemDeletes,
-  applyRepairTypeDelta,
-  applyRepairTypeUpdates,
-  requiredActionsForChanges,
-} from './item-changes';
-import {
-  assignSectorInputSchema,
-  orderChangeSetSchema,
-  orderIdSchema,
-  repairTypeDeltaSchema,
-  type OrderChangeSet,
-  type RepairTypeDelta,
-} from '../schemas/order-changes';
+import { lockEditableOrder, requireOrderManagementPermission, requireOrderManagementPermissions, toFailure } from './access';
+import { applyChiefCommentUpdates, applyDescriptionUpdates, applyItemAdds, applyItemDeletes, applyRepairTypeUpdates, requiredActionsForChanges } from './item-changes';
+import { assignSectorInputSchema, orderChangeSetSchema, orderIdSchema, type OrderChangeSet } from '../schemas/order-changes';
 import { z } from 'zod';
-import {
-  assertOrderInActiveCompany,
-  assertOrderItemInActiveCompany,
-  assertSectorInCompany,
-  assertWorkshopInCompany,
-  filterRepairTypeIdsForCompany,
-} from './perimeter';
+import { assertOrderInActiveCompany, assertSectorInCompany, assertWorkshopInCompany, filterRepairTypeIdsForCompany } from './perimeter';
 import { withMaintenanceActor } from '@/features/Mantenimiento/shared/maintenance-actor';
-import { nextMaintenanceOrderNumber } from '@/features/Mantenimiento/shared/order-numbering';
 import { assertOrderTransition } from '@/features/Mantenimiento/shared/order-transition';
 
 const logger = new Logger('OrderManagement/items');
@@ -212,161 +183,6 @@ export async function addItemToOrder(
   } catch (error) {
     logger.error('Error agregando item', { data: { error } });
     throw new Error(`Error al agregar item: ${error instanceof Error ? error.message : String(error)}`);
-  }
-}
-
-/**
- * Aplica ALTAS y BAJAS de tipos de reparación a un ítem (no el conjunto final).
- * Devuelve cuántos se agregaron y cuántos se quitaron realmente.
- */
-export async function updateItemRepairTypes(maintenanceOrderItemId: string, delta: RepairTypeDelta) {
-  await requireOrderManagementPermission('update');
-  z.string().uuid().parse(maintenanceOrderItemId);
-  const parsedDelta = repairTypeDeltaSchema.parse(delta);
-  // Perímetro: el registro tiene que ser de la empresa activa.
-  await assertOrderItemInActiveCompany(maintenanceOrderItemId);
-
-  const profile = await requireServerAuthProfile();
-
-  try {
-    const item = await prisma.maintenance_order_items.findUnique({
-      where: { id: maintenanceOrderItemId },
-      select: { maintenance_order_id: true, company_id: true },
-    });
-    if (!item?.maintenance_order_id) {
-      throw new Error('Item no encontrado o sin orden asociada');
-    }
-    const orderId = item.maintenance_order_id;
-
-    const result = await withMaintenanceActor(profile.id, async (tx) => {
-      await lockEditableOrder(tx, orderId);
-      const applied = await applyRepairTypeDelta(tx, orderId, item.company_id, maintenanceOrderItemId, parsedDelta);
-      if (!applied) throw new Error('Item no encontrado en el pedido');
-
-      await logActivity(tx, {
-        maintenanceOrderId: orderId,
-        actionType: ACTIVITY_LOG.ORDER_ITEM_REPAIR_TYPES_UPDATED,
-        performedBy: profile.id,
-        metadata: { itemId: maintenanceOrderItemId, added: parsedDelta.add, removed: parsedDelta.remove },
-      });
-      return applied;
-    });
-
-    logger.info('Tipos de reparacion actualizados', { data: { maintenanceOrderItemId, ...result } });
-
-    await invalidateCacheTags(INVALIDATION_MAP.saveOrderChanges);
-    return result;
-  } catch (error) {
-    logger.error('Error actualizando tipos de reparacion', { data: { error } });
-    throw new Error(
-      `Error al actualizar tipo de reparacion: ${error instanceof Error ? error.message : String(error)}`
-    );
-  }
-}
-
-/**
- * Elimina un item que fue agregado manualmente (no tiene maintenance_request_item_id)
- */
-export async function removeManualItem(itemId: string) {
-  // Permiso: baja de ítem. Perímetro: el registro tiene que ser de la empresa activa.
-  await requireOrderManagementPermission('delete');
-  z.string().uuid().parse(itemId);
-  await assertOrderItemInActiveCompany(itemId);
-
-  const profile = await requireServerAuthProfile();
-
-  try {
-    // Verificar que el item no tiene origen de solicitud
-    const item = await prisma.maintenance_order_items.findUnique({
-      where: { id: itemId },
-      select: { id: true, maintenance_order_id: true, maintenance_request_item_id: true, is_diagnostico: true },
-    });
-
-    if (!item) {
-      throw new Error('Item no encontrado');
-    }
-
-    if (item.maintenance_request_item_id && !item.is_diagnostico) {
-      throw new Error('No se puede eliminar un item que proviene de una solicitud');
-    }
-
-    // Las relaciones tienen ON DELETE CASCADE, por lo que el delete borra el pivot automáticamente
-    await withMaintenanceActor(profile.id, async (tx) => {
-      if (item.maintenance_order_id) await lockEditableOrder(tx, item.maintenance_order_id);
-      await tx.maintenance_order_items.delete({ where: { id: itemId } });
-      if (item.maintenance_order_id) {
-        await logActivity(tx, {
-          maintenanceOrderId: item.maintenance_order_id,
-          actionType: ACTIVITY_LOG.ORDER_ITEM_REMOVED,
-          performedBy: profile.id,
-          metadata: { itemId },
-        });
-      }
-    });
-
-    logger.info('Item eliminado exitosamente', { data: { itemId } });
-
-    await invalidateCacheTags(INVALIDATION_MAP.saveOrderChanges);
-  } catch (error) {
-    logger.error('Error eliminando item', { data: { error } });
-    throw new Error(`Error al eliminar item: ${error instanceof Error ? error.message : String(error)}`);
-  }
-}
-
-export type AddItemResult = Awaited<ReturnType<typeof addItemToOrder>>;
-
-// =============================================================================
-// ORDER NUMBER GENERATION
-// =============================================================================
-
-/**
- * Generates and assigns an order number to a maintenance order.
- * Format: OM-{SEQUENCE} (e.g. OM-000001)
- * Called when the OM enters the workshop (status = 'in_workshop').
- */
-export async function generateMaintenanceOrderNumber(orderId: string) {
-  // Permiso: lo llama también la aprobación de entrada a taller (tabs de pedidos), por eso
-  // alcanza `update` en cualquiera de las tabs del circuito. Perímetro: empresa activa.
-  await requireOrderNumberAccess();
-  orderIdSchema.parse(orderId);
-  await assertOrderInActiveCompany(orderId);
-
-  const profile = await requireServerAuthProfile();
-
-  try {
-    // El número se calcula y se escribe DENTRO de la misma transacción: leerlo afuera dejaba
-    // que dos generaciones simultáneas se llevaran el mismo `OM-…`.
-    const orderNumber = await withMaintenanceActor(profile.id, async (tx) => {
-      const existing = await tx.maintenance_orders.findUnique({
-        where: { id: orderId },
-        select: { order_number: true, company_id: true },
-      });
-
-      if (!existing) throw new Error('Orden no encontrada');
-      if (existing.order_number) return existing.order_number;
-
-      const generated = await nextMaintenanceOrderNumber(tx, existing.company_id);
-
-      await tx.maintenance_orders.update({
-        where: { id: orderId },
-        data: { order_number: generated },
-      });
-      await logActivity(tx, {
-        maintenanceOrderId: orderId,
-        actionType: ACTIVITY_LOG.ORDER_NUMBER_GENERATED,
-        performedBy: profile.id,
-        metadata: { orderNumber: generated },
-      });
-
-      return generated;
-    });
-
-    logger.info('Numero de orden generado', { data: { orderId, orderNumber } });
-    await invalidateCacheTags(INVALIDATION_MAP.saveOrderChanges);
-    return orderNumber;
-  } catch (error) {
-    logger.error('Error generando numero de orden', { data: { error } });
-    throw error;
   }
 }
 

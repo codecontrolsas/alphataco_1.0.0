@@ -1,18 +1,4 @@
-import React from 'react';
-import { UseFormReturn } from 'react-hook-form';
 
-export type DocumentInsert = {
-  date: string;
-  allocated_to: string;
-  documentName: string;
-  state: string;
-  multiresource: string;
-  validity: string;
-  mandatory: string;
-  id: string;
-  resource: string;
-  document_number: string;
-};
 
 export type profileUser = {
   id?: string;
@@ -55,19 +41,9 @@ export type industry_type = {
   name: string;
 }[];
 
-export type singUp = {
-  email: string;
-  password: string;
-};
-
 export type login = {
   email: string;
   password: string;
-};
-
-export type MotionTransitionProps = {
-  children: React.ReactNode;
-  className?: string;
 };
 
 export type names =
@@ -127,18 +103,6 @@ export type Employee = {
   covenant?: string | null;
   category?: string | null;
   aptitudes?: string[] | null;
-};
-
-export type Documents = {
-  id: string;
-  id_storage: string | null;
-  id_document_types: string | null;
-  applies: string | null;
-  validity: Date | null;
-  state: string;
-  is_active: boolean;
-  user_id: string | undefined;
-  document_url: string | null;
 };
 
 export type SharedUser = {
@@ -234,33 +198,6 @@ type Document2 = {
   document_url: string;
 };
 
-export type AuditorDocument = {
-  date: string;
-  companyName: string;
-  allocated_to: string;
-  documentName: string;
-  multiresource: string;
-  validity: string;
-  id: string;
-  resource: string;
-  state: string;
-};
-
-export type VehiclesAPI = {
-  created_at: Date;
-  id_storage: null;
-  id_document_types: string;
-  applies: Applies;
-  validity: null | string;
-  state: string;
-  is_active: boolean;
-  id: string;
-  user_id: string;
-  document_url: string;
-  document_types: DocumentTypes;
-  period: string;
-};
-
 export type Applies = {
   id: string;
   type: Type;
@@ -322,21 +259,6 @@ export type DocumentTypes = {
   private: boolean;
   down_document: boolean;
 };
-export type DocumentsTable = {
-  created_at: Date;
-  id_storage: null;
-  id_document_types: string;
-  applies: string;
-  validity: string;
-  state: string;
-  is_active: boolean;
-  id: string;
-  user_id: string;
-  document_url: string;
-  vehicles: VehiclesTable;
-  document_types: DocumentTypes;
-  domain: string;
-};
 export interface Campo {
   tipo: types;
   placeholder?: string;
@@ -382,40 +304,12 @@ export interface Document {
   id_document_types?: string;
 }
 
-export type DocumentTypesTable = {
-  id: string;
-  name: string;
-};
-
 export type VehiclesTable = {
   id: string;
   domain: string;
   company_id: string;
   intern_number: string;
 };
-
-export type AllDocumentsValues = {
-  id_document_types: string;
-  validity: Date;
-  document: string;
-  applies: string;
-  document_url: string;
-  id_storage: null;
-  is_active: boolean;
-  user_id: string;
-};
-
-export interface FieldComponentProps {
-  campo: FormField;
-  form: UseFormReturn<any> | null;
-  index: number;
-  completObjet: FormField[] | null;
-}
-
-export interface FieldComponentPropsDecorative {
-  campo: FormField;
-  index: number;
-}
 
 export interface SectionCampo {
   id: string;
@@ -450,88 +344,6 @@ export interface FormData {
   name: string;
 }
 
-export type EmployeesTableOptions = {
-  nationality: string;
-  lastname: string;
-  firstname: string;
-  cuil: string;
-  document_type: string;
-  document_number: string;
-  birthplace: string;
-  gender: string;
-  marital_status: string;
-  level_of_education: string;
-  province: string;
-  file: string;
-  normal_hours: string;
-  date_of_admission: string;
-  affiliate_status: string;
-  company_position: string;
-  hierarchical_position: string;
-  workflow_diagram: string;
-  type_of_contract: string;
-  allocated_to: string;
-  status: string;
-  created_at: string;
-  is_active: string;
-};
-
-export type VehiclesTableOptions = {
-  created_at: string;
-  type_of_vehicle: string;
-  domain: string;
-  chassis: string;
-  engine: string;
-  serie: string;
-  intern_number: string;
-  year: string;
-  brand: string;
-  model: string;
-  is_active: string;
-  termination_date: string;
-  reason_for_termination: string;
-  type: string;
-  status: string;
-  allocated_to: string;
-};
-
-export type CompaniesTableOptions = {
-  company_name: string;
-  contact_email: string;
-  contact_phone: string;
-  address: string;
-  city: string;
-  country: string;
-  industry: string;
-  company_logo: string;
-  company_cuit: string;
-};
-
-export type DocumentsTableOptions = {
-  created_at: string;
-  name: string;
-  applies: string;
-  multiresource: string;
-  mandatory: string;
-  explired: string;
-  special: string;
-  description: string;
-  is_it_montlhy: string;
-  private: string;
-  down_document: string;
-};
-
-export type TypeOfRepair = {
-  id: string;
-  created_at: string;
-  name: string;
-  description: string;
-  criticity: 'Alta' | 'Media' | 'Baja';
-  is_active: boolean;
-  company_id: string;
-  type_of_maintenance: 'Preventivo' | 'Correctivo' | 'Otro';
-}[];
-
 // Tipo para las categorías dentro de un convenio
 export type Category = {
   id: string;
@@ -550,16 +362,6 @@ export type Covenant = {
   is_active: boolean;
   company_id: string;
   created_at: string;
-};
-
-// Tipo para el objeto de entrada que representa un sindicato
-export type Guild = {
-  id: string;
-  created_at: string;
-  name: string;
-  company_id: string;
-  is_active: boolean;
-  covenant: Covenant[];
 };
 
 // Tipo para una categoría formateada en el objeto de salida
@@ -596,27 +398,6 @@ export type WorkDiagram = {
   company_id: string;
   created_at: string;
 };
-export type WorkDiagramWithRelations = {
-  id: string;
-  created_at: string;
-  name: string;
-  is_active: boolean;
-  active_working_days: number;
-  inactive_working_days: number;
-  work_diagram_active_novelties: Array<{
-    id: string;
-    created_at: string;
-    diagram_type: {
-      id: string;
-      name: string;
-    };
-  }>;
-  active_novelty?: unknown;
-  inactive_novelty: {
-    id: string;
-    name: string;
-  };
-};
 export type Position = {
   id?: string;
   created_at?: string;
@@ -629,6 +410,3 @@ export type Position = {
   }[];
   aptitudes_tecnicas_id?: string[];
 };
-
-// Tipo para la función de salida completa
-export type FormattedOutput = FormattedGuild[] | undefined;

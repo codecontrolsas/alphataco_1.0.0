@@ -181,24 +181,6 @@ export async function unbanCompanyUser(shareCompanyUserId: string, reactivateEmp
   }
 }
 
-// ── Eliminar usuario de empresa (legacy) ─────────────────────────────────────
-export async function deleteCompanyUser(shareCompanyUserId: string) {
-  logger.debug('Eliminando usuario de empresa', { data: { shareCompanyUserId } });
-  try {
-    const companyId = await getActiveCompanyId();
-    await assertUsersPermission('delete');
-    const deleted = await prisma.share_company_users.deleteMany({
-      where: { id: shareCompanyUserId, company_id: companyId },
-    });
-    if (deleted.count === 0) throw new Error('Usuario no encontrado en la empresa activa');
-    await invalidateCacheTags(COMPANY_USERS_INVALIDATION);
-    logger.info('Usuario eliminado exitosamente', { data: { shareCompanyUserId } });
-  } catch (error) {
-    logger.error('Error eliminando usuario de empresa', { data: { error, shareCompanyUserId } });
-    throw error;
-  }
-}
-
 /** El perfil tiene que ser miembro (u owner) de la empresa activa para poder editarlo desde acá. */
 async function assertProfileInCompany(profileId: string, companyId: string): Promise<void> {
   const [membership, company] = await Promise.all([

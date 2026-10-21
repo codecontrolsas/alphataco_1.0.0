@@ -410,54 +410,6 @@ export async function getPendingDeviations(equipmentId: string, options?: Pendin
 }
 
 export type PendingDeviationsData = Awaited<ReturnType<typeof getPendingDeviations>>;
-export type PendingDeviation = PendingDeviationsData[number];
-
-/**
- * Unidades tractoras con desvíos pendientes, para el dashboard.
- *
- * Equivale a la vista `equipments_with_pending_deviations` acotada a los tipos marcados
- * como unidad tractora: un desvío cuenta mientras no esté dentro de ninguna solicitud.
- */
-export async function getTractorUnitsWithPendingDeviations() {
-  try {
-    const companyId = await getActiveCompanyId();
-
-    const vehicles = await prisma.vehicles.findMany({
-      where: withCompany(
-        {
-          type_vehicles_typeTotype: { is_tractor_unit: true },
-          checklist_deviations: { some: { maintenance_request_items: { none: {} } } },
-        },
-        companyId
-      ),
-      select: {
-        id: true,
-        domain: true,
-        serie: true,
-        intern_number: true,
-        types_of_vehicles: { select: { name: true } },
-        checklist_deviations: {
-          where: { maintenance_request_items: { none: {} } },
-          select: { id: true, created_at: true },
-        },
-      },
-    });
-
-    return vehicles
-      .map((vehicle) => ({
-        id: vehicle.id,
-        domain: vehicle.domain,
-        serie: vehicle.serie,
-        intern_number: vehicle.intern_number,
-        type_name: vehicle.types_of_vehicles?.name ?? null,
-        deviation_count: vehicle.checklist_deviations.length,
-      }))
-      .sort((a, b) => b.deviation_count - a.deviation_count);
-  } catch (error) {
-    deviationsLogger.error('Error al obtener las unidades tractoras con desvíos pendientes', { data: { error } });
-    return [];
-  }
-}
 
 /**
  * Cierra la sesión del operario en el flujo de mantenimiento.

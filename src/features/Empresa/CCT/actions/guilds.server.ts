@@ -89,5 +89,3 @@ export async function createGuild(input: { name: string }): Promise<CctMutationR
     return { ok: false, error: 'No se pudo crear el sindicato. Intente nuevamente.' };
   }
 }
-
-export type GuildWithCovenants = Awaited<ReturnType<typeof getGuildsWithCovenants>>[number];

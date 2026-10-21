@@ -38,8 +38,6 @@ export async function getContactById(contactId: string) {
   }
 }
 
-export type ContactDetail = NonNullable<Awaited<ReturnType<typeof getContactById>>>;
-
 /** Clientes activos de la empresa activa para el selector del formulario. */
 export async function getActiveCustomerOptions() {
   await requireCustomersView();

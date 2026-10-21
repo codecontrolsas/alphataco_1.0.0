@@ -75,8 +75,6 @@ export async function getActiveContractsByCustomer(customerId: string) {
   }
 }
 
-export type ActiveContract = Awaited<ReturnType<typeof getActiveContractsByCustomer>>[number];
-
 /** Verifica que el contrato pertenezca a la empresa activa; devuelve su cliente. */
 async function findOwnedService(serviceId: string, companyId: string) {
   return prisma.customer_services.findFirst({

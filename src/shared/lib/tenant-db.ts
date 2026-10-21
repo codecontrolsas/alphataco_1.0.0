@@ -4,7 +4,6 @@ import { prismaBase as prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
-  createTenantClient,
   runWithTenantContext,
   type TenantContext,
   type TenantTransactionOptions,
@@ -34,22 +33,7 @@ export async function getTenantContextOrNull(): Promise<TenantContext | null> {
   }
 }
 
-/**
- * Cliente de Prisma para leer y escribir una sola operación por vez con el contexto del request fijado.
- * Para varias operaciones atómicas usar `withTenantTx`. Dentro del callback de `withTenantTx` NO usar `getDb()`:
- * se saldría de la transacción.
- */
-export const getDb = cache(async () => createTenantClient(prisma, await getTenantContext()));
-
-/** Transacción interactiva con el contexto del request. Reemplaza a `withActor` / `withSessionActor`. */
-export async function withTenantTx<T>(
-  fn: (tx: TenantTx) => Promise<T>,
-  options?: TenantTransactionOptions
-): Promise<T> {
-  return runWithTenantContext(prisma, await getTenantContext(), fn, options);
-}
-
-/** Igual que `withTenantTx` con un contexto explícito (jobs por empresa, API externa, operarios). */
+/** Transacción interactiva con un contexto explícito (jobs por empresa, operarios, tests). */
 export function withTenantContext<T>(
   ctx: TenantContext,
   fn: (tx: TenantTx) => Promise<T>,

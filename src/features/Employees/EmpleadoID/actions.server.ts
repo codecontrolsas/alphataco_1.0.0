@@ -159,7 +159,6 @@ export async function getAllCountryOptions() {
     return [];
   }
 }
-export type CountryOption = Awaited<ReturnType<typeof getAllCountryOptions>>[number];
 
 export async function getAllCostCenterOptions() {
   logger.debug('Obteniendo opciones de centros de costo');
@@ -189,7 +188,6 @@ export async function getAllHierarchyOptions() {
     return [];
   }
 }
-export type HierarchyOption = Awaited<ReturnType<typeof getAllHierarchyOptions>>[number];
 
 export async function getAllCompanyPositionOptions() {
   logger.debug('Obteniendo opciones de puestos');
@@ -223,7 +221,6 @@ export async function getAllWorkDiagramOptions() {
     return [];
   }
 }
-export type WorkDiagramOption = Awaited<ReturnType<typeof getAllWorkDiagramOptions>>[number];
 
 export async function getAllGuildOptions() {
   logger.debug('Obteniendo opciones de sindicatos');
@@ -238,7 +235,6 @@ export async function getAllGuildOptions() {
     return [];
   }
 }
-export type GuildOption = Awaited<ReturnType<typeof getAllGuildOptions>>[number];
 
 export async function getAllCovenantOptions() {
   logger.debug('Obteniendo opciones de convenios');
@@ -253,7 +249,6 @@ export async function getAllCovenantOptions() {
     return [];
   }
 }
-export type CovenantOption = Awaited<ReturnType<typeof getAllCovenantOptions>>[number];
 
 export async function getAllCategoryOptions() {
   logger.debug('Obteniendo opciones de categorías');
@@ -269,7 +264,6 @@ export async function getAllCategoryOptions() {
     return [];
   }
 }
-export type CategoryOption = Awaited<ReturnType<typeof getAllCategoryOptions>>[number];
 
 export async function getAllContractorOptions() {
   logger.debug('Obteniendo opciones de contratistas');
@@ -284,7 +278,6 @@ export async function getAllContractorOptions() {
     return [];
   }
 }
-export type ContractorOption = Awaited<ReturnType<typeof getAllContractorOptions>>[number];
 
 export async function getAllProvinceOptions() {
   logger.debug('Obteniendo opciones de provincias');
@@ -314,7 +307,6 @@ export async function getCitiesByProvince(provinceId: bigint | null | undefined)
     return [];
   }
 }
-export type CityOption = Awaited<ReturnType<typeof getCitiesByProvince>>[number];
 
 export async function getAllContractTypeOptions() {
   logger.debug('Obteniendo opciones de tipos de contrato');
@@ -329,7 +321,6 @@ export async function getAllContractTypeOptions() {
     return [];
   }
 }
-export type ContractTypeOption = Awaited<ReturnType<typeof getAllContractTypeOptions>>[number];
 
 export async function getAllAptitudeOptions() {
   logger.debug('Obteniendo opciones de aptitudes técnicas');
@@ -351,7 +342,6 @@ export async function getAllAptitudeOptions() {
     return [];
   }
 }
-export type AptitudeOption = Awaited<ReturnType<typeof getAllAptitudeOptions>>[number];
 
 export async function getAllWorkshopSectorOptions() {
   logger.debug('Obteniendo opciones de sectores de taller');
@@ -373,7 +363,6 @@ export async function getAllWorkshopSectorOptions() {
     return [];
   }
 }
-export type WorkshopSectorOption = Awaited<ReturnType<typeof getAllWorkshopSectorOptions>>[number];
 
 /**
  * Obtiene todos los tipos de diagrama de la compañía del usuario actual.
@@ -404,7 +393,6 @@ export async function getEmployeeDiagramHistory(employeeId: string) {
   return readEmployeeDiagramHistory(employeeId);
 }
 export type EmployeeDiagramHistoryData = Awaited<ReturnType<typeof getEmployeeDiagramHistory>>;
-export type EmployeeDiagramHistoryEntry = EmployeeDiagramHistoryData[number];
 
 /** Diagramas asignados a un empleado, con el tipo incluido (requiere `empleados:employees:view`). */
 export async function getEmployeeDiagrams(employeeId: string) {
@@ -420,7 +408,6 @@ export type EmployeeDiagramEntry = EmployeeDiagramsData[number];
 export async function createEmployee(data: EmployeeFormData) {
   return createEmployeeMutation(data);
 }
-export type CreateEmployeeResult = Awaited<ReturnType<typeof createEmployee>>;
 
 /**
  * Actualiza un empleado (requiere `empleados:employees:update`). Las M:M se aplican con los
@@ -429,4 +416,3 @@ export type CreateEmployeeResult = Awaited<ReturnType<typeof createEmployee>>;
 export async function updateEmployee(employeeId: string, data: EmployeeUpdateData) {
   return updateEmployeeMutation(employeeId, data);
 }
-export type UpdateEmployeeResult = Awaited<ReturnType<typeof updateEmployee>>;

@@ -114,8 +114,6 @@ export async function getEquipmentIndicators(typeIds?: string[]): Promise<Equipm
   return loadEquipmentIndicators(key);
 }
 
-export type EquipmentIndicatorsData = Awaited<ReturnType<typeof getEquipmentIndicators>>;
-
 /**
  * Tipos de vehículo disponibles para el filtro: los de la empresa activa más los globales
  * (`company_id IS NULL`).
@@ -148,7 +146,6 @@ export async function getAllVehicleTypes() {
 }
 
 export type AllVehicleTypesData = Awaited<ReturnType<typeof getAllVehicleTypes>>;
-export type VehicleTypeItem = AllVehicleTypesData[number];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Diálogos — DataTable server-side (disponibles + en reparación)

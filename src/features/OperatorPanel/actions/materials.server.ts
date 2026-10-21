@@ -129,5 +129,3 @@ export async function getWorkOrderMaterialRequests(workOrderId: string) {
     })),
   }));
 }
-
-export type WorkOrderMaterialRequest = Awaited<ReturnType<typeof getWorkOrderMaterialRequests>>[number];
