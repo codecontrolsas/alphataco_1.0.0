@@ -1851,25 +1851,6 @@
     "orphan": true
   },
   {
-    "kind": "view",
-    "name": "equipments_with_pending_deviations",
-    "statement": "CREATE OR REPLACE VIEW public.equipments_with_pending_deviations AS\n SELECT DISTINCT v.id,\n    v.domain,\n    v.serie,\n    v.intern_number,\n    v.company_id,\n    tv.name AS type_name,\n    count(DISTINCT cd.id) AS deviation_count,\n    max(cd.created_at) AS last_deviation_date\n   FROM ((public.checklist_deviations cd\n     JOIN public.vehicles v ON ((cd.equipment_id = v.id)))\n     LEFT JOIN public.types_of_vehicles tv ON ((v.type_of_vehicle = tv.id)))\n  WHERE (NOT (EXISTS ( SELECT 1\n           FROM public.maintenance_request_items mri\n          WHERE (mri.checklist_deviation_id = cd.id))))\n  GROUP BY v.id, v.domain, v.serie, v.intern_number, v.company_id, tv.name\n HAVING (count(DISTINCT cd.id) > 0)\n  ORDER BY (max(cd.created_at)) DESC",
-    "source": "prisma/migrations/20260919130100_drop_repair_solicitudes/migration.sql",
-    "domain": "daily-report",
-    "callers": [
-      {
-        "kind": "src",
-        "ref": "src/features/Mantenimiento/actions/maintenance-actions.ts:582",
-        "via": "ref"
-      }
-    ],
-    "commentMentions": [
-      "src/features/Mantenimiento/EquiposConDesvios/actions.server.ts:88",
-      "src/features/Mantenimiento/actions/maintenance-actions.ts:434"
-    ],
-    "supabaseRefs": []
-  },
-  {
     "kind": "trigger",
     "name": "assign_owner_role_trigger",
     "table": "company",
