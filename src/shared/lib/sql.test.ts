@@ -36,11 +36,11 @@ describe('callFunction', () => {
 
   it('genera SELECT * FROM public.<fn>($1, $2) y bindea los args como values', async () => {
     const { client, calls } = fakeClient([{ col_value: 'a', col_count: BigInt(1) }]);
-    await callFunction('select_distinct_values', ['company', "company_name'; --"], z.array(z.unknown()), client);
+    await callFunction('get_demo_values', ['company', "company_name'; --"], z.array(z.unknown()), client);
 
     expect(calls).toHaveLength(1);
     const query = calls[0];
-    expect(query.text).toBe('SELECT * FROM public.select_distinct_values($1, $2)');
+    expect(query.text).toBe('SELECT * FROM public.get_demo_values($1, $2)');
     expect(query.values).toEqual(['company', "company_name'; --"]);
     // El texto nunca contiene los valores interpolados.
     expect(query.text).not.toContain('company_name');
@@ -96,7 +96,7 @@ describe('callFunction', () => {
   it('valida el resultado con el schema Zod (bigint → number con coerce)', async () => {
     const { client } = fakeClient([{ col_value: 'Demo', col_count: BigInt(3) }]);
     const rows = await callFunction(
-      'select_distinct_values',
+      'get_demo_values',
       ['company', 'company_name'],
       z.array(z.object({ col_value: z.string().nullable(), col_count: z.coerce.number() })),
       client
