@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { canAccessCompany, canUseCompanyAsTenant } from '@/shared/lib/company-membership';
-import { prismaBase as prisma } from '@/shared/lib/prisma';
+import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
 import { getSessionCompanyClaim, getSessionUserId } from '@/shared/lib/session';
 import { cookies } from 'next/headers';
 import { cache } from 'react';

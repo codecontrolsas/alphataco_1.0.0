@@ -2,7 +2,7 @@ import 'server-only';
 
 import type { Prisma } from '@/generated/prisma/client';
 import { auth } from '@/shared/lib/auth';
-import { prismaBase as prisma } from '@/shared/lib/prisma';
+import { prismaSystem as prisma } from '@/shared/lib/prisma-system';
 import { hashPassword } from 'better-auth/crypto';
 import { randomBytes, randomUUID } from 'node:crypto';
 

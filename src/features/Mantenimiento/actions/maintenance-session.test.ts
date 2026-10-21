@@ -15,6 +15,7 @@ const prismaMock = vi.hoisted(() => ({
   user: { update: vi.fn() },
 }));
 vi.mock('@/shared/lib/prisma', () => ({ prisma: prismaMock }));
+vi.mock('@/shared/lib/prisma-system', () => ({ prismaSystem: prismaMock }));
 
 vi.mock('@/shared/lib/session', () => ({
   getSessionUser: vi.fn(),

@@ -4,6 +4,7 @@ import { Logger } from '@/lib/logger';
 import { auth } from '@/shared/lib/auth';
 import { normalizeEmail, rejectLogin } from '@/shared/lib/auth-credentials';
 import { prisma } from '@/shared/lib/prisma';
+import { prismaSystem } from '@/shared/lib/prisma-system';
 import { getSessionToken } from '@/shared/lib/session';
 import { writeCompanyClaim } from '@/shared/lib/session-claims';
 import { clearActiveCompanyCookie, setActiveCompanyCookie } from '@/shared/lib/tenant';
@@ -43,7 +44,8 @@ export async function clothingLogin(email: string, password: string) {
     return { error: 'No se pudo autenticar' };
   }
 
-  const profile = await prisma.profile.findUnique({
+  // Login: todavia no hay empresa activa, asi que el perfil y el legajo se leen con el cliente de sistema.
+  const profile = await prismaSystem.profile.findUnique({
     where: { credential_id: userId },
     select: { employee_id: true },
   });
@@ -53,7 +55,7 @@ export async function clothingLogin(email: string, password: string) {
     return { error: 'Tu usuario no tiene un empleado vinculado. Contacta al administrador.' };
   }
 
-  const employee = await prisma.employees.findUnique({
+  const employee = await prismaSystem.employees.findUnique({
     where: { id: profile.employee_id },
     select: { id: true, company_id: true },
   });

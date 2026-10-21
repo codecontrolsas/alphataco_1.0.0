@@ -13,6 +13,7 @@ const prismaMock = vi.hoisted(() => ({
   employees: { findFirst: vi.fn() },
 }));
 vi.mock('@/shared/lib/prisma', () => ({ prisma: prismaMock, prismaBase: prismaMock }));
+vi.mock('@/shared/lib/prisma-system', () => ({ prismaSystem: prismaMock }));
 
 import { getSessionCompanyClaim, getSessionUserId } from '@/shared/lib/session';
 import { cookies } from 'next/headers';

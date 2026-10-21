@@ -216,3 +216,53 @@ BEGIN
   END IF;
 END
 $function$;
+
+
+-- function app_current_profile_id: `profile.id` del usuario de la transaccion (app.user_id = profile.credential_id).
+-- SECURITY DEFINER: se usa dentro de politicas de `profile` y de `share_company_users`, que no pueden consultarse a si
+-- mismas sin recursion.
+CREATE OR REPLACE FUNCTION public.app_current_profile_id()
+ RETURNS uuid
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path = public, pg_temp
+AS $function$
+  SELECT p.id FROM public.profile p WHERE p.credential_id = public.app_current_user_id() LIMIT 1
+$function$;
+
+-- function app_profile_in_current_company: el profile pertenece a la empresa activa (miembro activo, dueno o empleado
+-- vinculado). Misma regla que `canUseCompanyAsTenant()`. SECURITY DEFINER por la misma razon.
+CREATE OR REPLACE FUNCTION public.app_profile_in_current_company(p_profile uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path = public, pg_temp
+AS $function$
+  SELECT p_profile IS NOT NULL AND public.app_current_company_id() IS NOT NULL AND (
+    EXISTS (
+      SELECT 1 FROM public.share_company_users s
+      WHERE s.profile_id = p_profile AND s.company_id = public.app_current_company_id() AND s.is_active
+    )
+    OR EXISTS (SELECT 1 FROM public.company c WHERE c.owner_id = p_profile AND c.id = public.app_current_company_id())
+    OR EXISTS (
+      SELECT 1 FROM public.profile p JOIN public.employees e ON e.id = p.employee_id
+      WHERE p.id = p_profile AND e.company_id = public.app_current_company_id()
+    )
+  )
+$function$;
+
+
+-- function app_enable_user_isolation: tabla de datos PERSONALES (preferencias, vistas): cada usuario ve y escribe solo
+-- sus filas (`user_id = app_current_user_id()`), en cualquier empresa. `p_text` para columnas `text` en vez de `uuid`.
+CREATE OR REPLACE FUNCTION public.app_enable_user_isolation(p_table regclass, p_column text DEFAULT 'user_id', p_text boolean DEFAULT false)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  v_expr text := CASE WHEN p_text THEN 'public.app_current_user_id()::text' ELSE 'public.app_current_user_id()' END;
+BEGIN
+  EXECUTE format('ALTER TABLE %s ENABLE ROW LEVEL SECURITY', p_table);
+  EXECUTE format('DROP POLICY IF EXISTS user_isolation ON %s', p_table);
+  EXECUTE format('CREATE POLICY user_isolation ON %s USING (%I = %s) WITH CHECK (%I = %s)', p_table, p_column, v_expr, p_column, v_expr);
+END
+$function$;

@@ -2,6 +2,7 @@
 
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
+import { prismaSystem } from '@/shared/lib/prisma-system';
 import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 
@@ -59,16 +60,16 @@ export const fetchUserCompanies = async () => {
   }
 
   try {
-    const profile = await prisma.profile.findUnique({ where: { credential_id: credentialId }, select: { id: true } });
+    const profile = await prismaSystem.profile.findUnique({ where: { credential_id: credentialId }, select: { id: true } });
     if (!profile) return { sharedCompanies: [], allCompanies: [] };
     const userId = profile.id;
 
     const [shared, owned] = await Promise.all([
-      prisma.share_company_users.findMany({
+      prismaSystem.share_company_users.findMany({
         where: { profile_id: userId },
         select: { company: { select: companyRowSelect } },
       }),
-      prisma.company.findMany({ where: { owner_id: userId }, select: companyRowSelect }),
+      prismaSystem.company.findMany({ where: { owner_id: userId }, select: companyRowSelect }),
     ]);
 
     // Cada empresa una sola vez: un usuario puede ser dueño y además tenerla compartida

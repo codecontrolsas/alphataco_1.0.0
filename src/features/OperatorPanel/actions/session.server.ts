@@ -5,6 +5,7 @@ import { Logger } from '@/lib/logger';
 import { auth } from '@/shared/lib/auth';
 import { normalizeEmail, rejectLogin } from '@/shared/lib/auth-credentials';
 import { prisma } from '@/shared/lib/prisma';
+import { prismaSystem } from '@/shared/lib/prisma-system';
 import { APIError } from 'better-auth/api';
 import { revalidatePath } from 'next/cache';
 import { cookies, headers } from 'next/headers';
@@ -48,7 +49,8 @@ export async function operatorLogin(email: string, password: string) {
   }
 
   // `profile.credential_id` es el id de sesión: mismo criterio que `getServerAuthProfile()`.
-  const profile = await prisma.profile.findUnique({
+  // Login: todavia no hay empresa activa, asi que el perfil y el legajo se leen con el cliente de sistema.
+  const profile = await prismaSystem.profile.findUnique({
     where: { credential_id: userId },
     select: { employee_id: true },
   });
@@ -58,7 +60,7 @@ export async function operatorLogin(email: string, password: string) {
     return { error: 'Tu usuario no tiene un empleado vinculado. Contacta al administrador.' };
   }
 
-  const employee = await prisma.employees.findUnique({
+  const employee = await prismaSystem.employees.findUnique({
     where: { id: profile.employee_id },
     select: { id: true, company_id: true },
   });
