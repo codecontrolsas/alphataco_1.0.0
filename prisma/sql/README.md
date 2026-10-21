@@ -30,6 +30,7 @@ Las funciones que asumían mono-empresa ("solo GH tiene recursos") filtran por l
 | Archivo | Contenido |
 | --- | --- |
 | `permissions.sql`, `documents.sql`, `diagrams.sql`, `daily-report.sql`, `kpis.sql`, `maintenance.sql`, `misc.sql` | Objetos portables, aplicables tal cual con `psql -f` sobre una BD que ya tenga las tablas. Dentro de cada archivo: funciones, después vistas, después triggers. |
+| `tenant.sql` | Contexto de empresa para RLS: `app_current_company_id()`, `app_current_actor_kind()`, `app_rls_mode()` y `app_accessible_company_ids()` (misma regla que `canUseCompanyAsTenant()`). Aún no hay políticas que las usen. |
 | `INVENTARIO.md` | Tabla por objeto (nombre, tipo, dominio, tabla, llamadores, referencias Supabase), resumen con conteos, lista "Sin llamador — no se portan", "Descartados por tabla eliminada", "Con referencias Supabase" y sobrecargas detectadas. |
 | `objects.json` | Inventario completo en JSON: TODOS los objetos vigentes, incluidos los huérfanos (`orphan: true`) y los descartados (`discarded: '...'`), con sus llamadores y referencias. |
 
