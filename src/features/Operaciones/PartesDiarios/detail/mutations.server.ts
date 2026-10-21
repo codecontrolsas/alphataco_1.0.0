@@ -11,9 +11,24 @@ import {
   assertRowInCompany,
   assertRowResourcesInCompany,
   filterRowsInCompany,
-  type PrismaTransactionClient,
 } from './lib/row-query';
-import { buildResourceCheck, buildRowScalarData, resolveRowResources } from './lib/row-write-helpers';
+import {
+  assertRowDeletableUnderLock,
+  assertRowEditableUnderLock,
+  assertStatusSettable,
+  authorizeBulkRowUpdate,
+  authorizeRowCreate,
+  authorizeRowDelete,
+  authorizeRowUpdate,
+  RowRuleError,
+} from './lib/row-guards';
+import { createRowRelations, type EmployeeInput } from './lib/row-relations';
+import {
+  buildResourceCheck,
+  buildResourcesOnlyCheck,
+  buildRowScalarData,
+  resolveRowResources,
+} from './lib/row-write-helpers';
 
 const logger = new Logger('features/Operaciones/PartesDiarios/detail/mutations');
 
@@ -22,12 +37,6 @@ const logger = new Logger('features/Operaciones/PartesDiarios/detail/mutations')
 // ============================================================================
 
 // ── Input types ──────────────────────────────────────────────────────────────
-
-/** Un empleado con rol opcional (para jornadas 12/24 hrs) */
-export interface EmployeeInput {
-  id: string;
-  role?: 'chofer_dia' | 'chofer_noche' | 'ayudante_dia' | 'ayudante_noche';
-}
 
 /** Datos de una fila del parte diario para crear o actualizar */
 export interface DailyReportRowInput {
@@ -108,65 +117,6 @@ function resolveRowStatus(
   return hasResources ? 'pendiente' : 'sin_recursos_asignados';
 }
 
-/**
- * Crea todas las relaciones (empleados, equipos, equipos de clientes)
- * de una fila dentro de una transacción existente.
- */
-export async function createRowRelations(
-  tx: PrismaTransactionClient,
-  rowId: string,
-  employees: EmployeeInput[],
-  equipment: string[],
-  otherEquipment: string[],
-  customerEquipment: string[]
-): Promise<void> {
-  // Empleados
-  if (employees.length > 0) {
-    await tx.dailyreportemployeerelations.createMany({
-      data: employees.map((emp) => ({
-        id: crypto.randomUUID(),
-        daily_report_row_id: rowId,
-        employee_id: emp.id,
-        ...(emp.role ? { role: emp.role } : {}),
-      })),
-    });
-  }
-
-  // Vehículos + otros equipos (misma tabla, columnas distintas)
-  const equipmentData: Array<{
-    id: string;
-    daily_report_row_id: string;
-    equipment_id?: string;
-    other_equipment_id?: string;
-  }> = [
-    ...equipment.map((eid) => ({
-      id: crypto.randomUUID(),
-      daily_report_row_id: rowId,
-      equipment_id: eid,
-    })),
-    ...otherEquipment.map((oeid) => ({
-      id: crypto.randomUUID(),
-      daily_report_row_id: rowId,
-      other_equipment_id: oeid,
-    })),
-  ];
-
-  if (equipmentData.length > 0) {
-    await tx.dailyreportequipmentrelations.createMany({ data: equipmentData });
-  }
-
-  // Equipos de clientes
-  if (customerEquipment.length > 0) {
-    await tx.dailyreport_customer_equipment_relations.createMany({
-      data: customerEquipment.map((ceid) => ({
-        id: crypto.randomUUID(),
-        daily_report_row_id: rowId,
-        customer_equipment_id: ceid,
-      })),
-    });
-  }
-}
-
 // ============================================================================
 // 6. CREATE ROW
 // ============================================================================
@@ -186,6 +136,9 @@ export async function createDailyReportRowPrisma(data: DailyReportRowInput & { d
     // Perímetro: el parte y todos los recursos tienen que ser de la empresa activa.
     const companyId = await getActiveCompanyId();
     await assertDailyReportInCompany(data.daily_report_id, companyId);
+    // Permiso y reglas de estado: las mismas que aplica la interfaz (ver `lib/row-guards.ts`).
+    await authorizeRowCreate(data.daily_report_id, companyId);
+    assertStatusSettable(data.status);
     await assertRowResourcesInCompany(companyId, buildResourceCheck(data, resources));
 
     const row = await withSessionActor(async (tx) => {
@@ -208,6 +161,7 @@ export async function createDailyReportRowPrisma(data: DailyReportRowInput & { d
 
     return row;
   } catch (error) {
+    if (error instanceof RowRuleError) throw error;
     logger.error('Error al crear fila del parte diario', { data: { error } });
     throw new Error('No se pudo crear la fila del parte diario. Intente nuevamente.');
   }
@@ -234,20 +188,39 @@ export async function updateDailyReportRowPrisma(rowId: string, data: DailyRepor
     // Perímetro: la línea y los recursos nuevos tienen que ser de la empresa activa.
     const companyId = await getActiveCompanyId();
     await assertRowInCompany(rowId, companyId);
-    await assertRowResourcesInCompany(companyId, buildResourceCheck(data, resources));
+    // Permiso y reglas de estado: las mismas que aplica la interfaz (ver `lib/row-guards.ts`).
+    const authorization = await authorizeRowUpdate(rowId, companyId);
+    // Con solo `assign_resources` (formulario "Asignar recursos", que tiene el resto bloqueado) se aplican los
+    // recursos y se conservan los campos guardados: lo demás que llegue en el pedido se ignora por completo.
+    const fullEdit = authorization.scope === 'full';
+    if (fullEdit) assertStatusSettable(data.status);
+    // El preparte solo se valida contra la empresa si el pedido lo CAMBIA: una línea vieja con un preparte sin
+    // empresa cargada (`company_id` nulo) tiene que seguir pudiéndose editar.
+    const preparteChanged = (data.preparte_id ?? null) !== authorization.preparteId;
+    await assertRowResourcesInCompany(
+      companyId,
+      fullEdit
+        ? { ...buildResourceCheck(data, resources), preparteId: preparteChanged ? data.preparte_id : null }
+        : buildResourcesOnlyCheck(resources)
+    );
 
     const row = await withSessionActor(async (tx) => {
-      // 1. Actualizar la fila principal
-      const updatedRow = await tx.dailyreportrows.update({
-        where: { id: rowId },
-        data: {
-          ...buildRowScalarData(data),
-          status: resolvedStatus,
-          // No sobreescribir el tipo de servicio a null si el input no lo trae:
-          // así una edición parcial (ej. asignar recursos) nunca borra un tipo ya guardado.
-          ...(data.type_service != null ? { type_service: data.type_service } : {}),
-        },
-      });
+      // 0. Volver a validar con la fila bloqueada: otro flujo pudo pasarla a certificación en el medio.
+      await assertRowEditableUnderLock(tx, rowId, authorization);
+
+      // 1. Actualizar la fila principal (solo con permiso de edición completa)
+      const updatedRow = fullEdit
+        ? await tx.dailyreportrows.update({
+            where: { id: rowId },
+            data: {
+              ...buildRowScalarData(data),
+              status: resolvedStatus,
+              // No sobreescribir el tipo de servicio a null si el input no lo trae:
+              // así una edición parcial (ej. asignar recursos) nunca borra un tipo ya guardado.
+              ...(data.type_service != null ? { type_service: data.type_service } : {}),
+            },
+          })
+        : null;
 
       // 2. Borrar todas las relaciones existentes
       await Promise.all([
@@ -266,11 +239,12 @@ export async function updateDailyReportRowPrisma(rowId: string, data: DailyRepor
       await createRowRelations(tx, rowId, employees, equipment, otherEquipment, customerEquipment);
       await reconcileRowResourceStatus(tx, [rowId]);
 
-      return updatedRow;
+      return updatedRow ?? tx.dailyreportrows.findUniqueOrThrow({ where: { id: rowId } });
     });
 
     return row;
   } catch (error) {
+    if (error instanceof RowRuleError) throw error;
     logger.error('Error al actualizar fila del parte diario', { data: { error, rowId } });
     throw new Error('No se pudo actualizar la fila del parte diario. Intente nuevamente.');
   }
@@ -300,7 +274,7 @@ export async function deleteDailyReportRowPrisma(rowId: string) {
         id: true,
         preparte_id: true,
         preparte: {
-          select: { id: true, numero_pedido: true, status: true },
+          select: { id: true, numero_pedido: true, status: true, company_id: true },
         },
       },
     });
@@ -309,11 +283,21 @@ export async function deleteDailyReportRowPrisma(rowId: string) {
       throw new Error('La fila no existe');
     }
 
-    // 2. Eliminar la fila (cascade elimina relaciones en BD)
-    await withSessionActor(async (tx) => tx.dailyreportrows.delete({ where: { id: rowId } }));
+    // Permiso y reglas de estado: las mismas que aplica la interfaz (ver `lib/row-guards.ts`).
+    const { reportDate } = await authorizeRowDelete(rowId, companyId);
 
-    // 3. Si tenía preparte vinculado, revertir su estado a pendiente
-    if (row.preparte_id && row.preparte) {
+    // 2. Eliminar la fila (cascade elimina relaciones en BD). La regla se vuelve a evaluar con la fila bloqueada.
+    await withSessionActor(async (tx) => {
+      await assertRowDeletableUnderLock(tx, rowId, reportDate);
+      return tx.dailyreportrows.delete({ where: { id: rowId } });
+    });
+
+    // 3. Si tenía preparte vinculado, revertir su estado a pendiente. Se revierte el de esta empresa o uno viejo sin
+    //    empresa cargada; el de OTRA empresa no se toca.
+    if (row.preparte && row.preparte.company_id && row.preparte.company_id !== companyId) {
+      logger.warn('La línea tenía un preparte de otra empresa: no se revierte', { data: { rowId } });
+    }
+    if (row.preparte_id && row.preparte && (row.preparte.company_id === companyId || row.preparte.company_id === null)) {
       const { updatePreparte, logPreparteChange } = await import('@/features/Operaciones/Preparte/actions/mutations.server');
 
       await updatePreparte(row.preparte_id, { status: 'pendiente' });
@@ -334,6 +318,7 @@ export async function deleteDailyReportRowPrisma(rowId: string) {
 
     return { success: true, revertedPreparte: null };
   } catch (error) {
+    if (error instanceof RowRuleError) throw error;
     logger.error('Error al eliminar fila del parte diario', { data: { error, rowId } });
     throw new Error('No se pudo eliminar la fila del parte diario. Intente nuevamente.');
   }
@@ -359,6 +344,9 @@ export async function bulkUpdateRowStatus(rowIds: string[], data: BulkRowUpdateD
   }
 
   try {
+    // Permiso y pedido válido (lo que puede generar el modal de edición masiva): ver `lib/row-guards.ts`.
+    await authorizeBulkRowUpdate(data);
+
     // Perímetro: se opera sólo sobre las líneas de la empresa activa.
     const companyId = await getActiveCompanyId();
     const allowedIds = await filterRowsInCompany(rowIds, companyId);
@@ -436,6 +424,7 @@ export async function bulkUpdateRowStatus(rowIds: string[], data: BulkRowUpdateD
 
     return { count: result.count };
   } catch (error) {
+    if (error instanceof RowRuleError) throw error;
     logger.error('Error al actualizar múltiples filas del parte diario', {
       data: { error, rowIds },
     });

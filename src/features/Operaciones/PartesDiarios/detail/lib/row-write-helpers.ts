@@ -29,11 +29,24 @@ export function buildResourceCheck(
   resources: Pick<ReturnType<typeof resolveRowResources>, 'employees' | 'equipment' | 'otherEquipment' | 'customerEquipment'>
 ) {
   return {
+    preparteId: data.preparte_id,
     customerId: data.customer_id,
     serviceId: data.service_id,
     itemId: data.item_id,
     sectorServiceId: data.sector_service_id,
     areasServiceId: data.areas_service_id,
+    employeeIds: resources.employees.map((employee) => employee.id),
+    equipmentIds: resources.equipment,
+    otherEquipmentIds: resources.otherEquipment,
+    customerEquipmentIds: resources.customerEquipment,
+  };
+}
+
+/** Igual que `buildResourceCheck` pero solo con los recursos: la asignación de recursos no toca los demás campos. */
+export function buildResourcesOnlyCheck(
+  resources: Pick<ReturnType<typeof resolveRowResources>, 'employees' | 'equipment' | 'otherEquipment' | 'customerEquipment'>
+) {
+  return {
     employeeIds: resources.employees.map((employee) => employee.id),
     equipmentIds: resources.equipment,
     otherEquipmentIds: resources.otherEquipment,
