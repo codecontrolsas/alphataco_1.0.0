@@ -88,13 +88,13 @@ jobs:
           echo "exists=false" >> "$GITHUB_OUTPUT"
 
       # El runner de GitHub arranca con ~14 GB libres y el build de Next necesita
-      # margen. Blacksmith trae disco de sobra.
-      - name: Liberar espacio en el runner
+      # margen. Blacksmith trae disco de sobra. Borrar dotnet/ghc/android tarda ~100 s:
+      # se lanza en segundo plano y se espera recien antes de construir (checkout,
+      # setup del builder y restauracion de caches lo tapan).
+      - name: Liberar espacio en el runner (segundo plano)
         if: steps.exists.outputs.exists != 'true' && env.ON_BLACKSMITH != 'true'
         run: |
-          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android \
-            /opt/hostedtoolcache/CodeQL /usr/local/share/powershell || true
-          df -h / | tail -1
+          setsid nohup bash -c 'sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache/CodeQL /usr/local/share/powershell; echo done > "$RUNNER_TEMP/free-space.done"' >/dev/null 2>&1 &
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         if: steps.exists.outputs.exists != 'true'
@@ -134,6 +134,15 @@ jobs:
         if: steps.exists.outputs.exists != 'true' && env.ON_BLACKSMITH == 'true'
         with:
           cache-key: Dockerfile
+
+      - name: Esperar la limpieza de disco
+        if: steps.exists.outputs.exists != 'true' && env.ON_BLACKSMITH != 'true'
+        run: |
+          for i in $(seq 1 120); do
+            [ -f "$RUNNER_TEMP/free-space.done" ] && break
+            sleep 2
+          done
+          df -h / | tail -1
 
       - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         if: steps.exists.outputs.exists != 'true'
