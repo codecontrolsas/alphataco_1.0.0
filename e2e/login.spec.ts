@@ -10,7 +10,7 @@ test.describe('ingreso', () => {
   test('un usuario con credenciales válidas llega al dashboard', async ({ page }) => {
     await page.goto('/login');
     await page.getByLabel('Correo electrónico').fill(ADMIN.email);
-    await page.getByLabel('Contraseña').fill(ADMIN.password);
+    await page.getByTestId('login-password-input').fill(ADMIN.password);
     await page.getByRole('button', { name: 'Ingresar' }).click();
 
     await expect(page).toHaveURL(/\/dashboard/);
@@ -19,7 +19,7 @@ test.describe('ingreso', () => {
   test('con una contraseña incorrecta se queda en el ingreso', async ({ page }) => {
     await page.goto('/login');
     await page.getByLabel('Correo electrónico').fill(ADMIN.email);
-    await page.getByLabel('Contraseña').fill('contraseña-incorrecta');
+    await page.getByTestId('login-password-input').fill('contraseña-incorrecta');
     await page.getByRole('button', { name: 'Ingresar' }).click();
 
     await expect(page).toHaveURL(/\/login/);

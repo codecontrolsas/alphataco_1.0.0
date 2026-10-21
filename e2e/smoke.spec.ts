@@ -16,7 +16,7 @@ test.describe('instancia levantada', () => {
     await page.goto('/login');
 
     await expect(page.getByLabel('Correo electrónico')).toBeVisible();
-    await expect(page.getByLabel('Contraseña')).toBeVisible();
+    await expect(page.getByTestId('login-password-input')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Ingresar' })).toBeVisible();
   });
 });
