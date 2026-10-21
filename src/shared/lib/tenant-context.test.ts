@@ -97,7 +97,7 @@ describe('createTenantClient', () => {
     } as unknown as PrismaClient;
 
     createTenantClient(base, CTX);
-    expect(() => extension!.client.$transaction()).toThrow('withTenantTx');
+    expect(() => extension!.client.$transaction()).toThrow('withTenantContext');
 
     const query = vi.fn(async () => ['fila']);
     const result = await extension!.query.$allOperations({ args: { where: {} }, query });
