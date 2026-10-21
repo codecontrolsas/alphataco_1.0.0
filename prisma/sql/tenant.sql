@@ -250,3 +250,19 @@ AS $function$
     )
   )
 $function$;
+
+
+-- function app_enable_user_isolation: tabla de datos PERSONALES (preferencias, vistas): cada usuario ve y escribe solo
+-- sus filas (`user_id = app_current_user_id()`), en cualquier empresa. `p_text` para columnas `text` en vez de `uuid`.
+CREATE OR REPLACE FUNCTION public.app_enable_user_isolation(p_table regclass, p_column text DEFAULT 'user_id', p_text boolean DEFAULT false)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  v_expr text := CASE WHEN p_text THEN 'public.app_current_user_id()::text' ELSE 'public.app_current_user_id()' END;
+BEGIN
+  EXECUTE format('ALTER TABLE %s ENABLE ROW LEVEL SECURITY', p_table);
+  EXECUTE format('DROP POLICY IF EXISTS user_isolation ON %s', p_table);
+  EXECUTE format('CREATE POLICY user_isolation ON %s USING (%I = %s) WITH CHECK (%I = %s)', p_table, p_column, v_expr, p_column, v_expr);
+END
+$function$;

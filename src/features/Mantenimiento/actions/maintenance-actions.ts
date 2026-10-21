@@ -4,6 +4,7 @@ import { Logger } from '@/lib/logger';
 import { requireResourceAccess } from '@/features/Mantenimiento/shared/resource-access.server';
 import { auth } from '@/shared/lib/auth';
 import { prisma } from '@/shared/lib/prisma';
+import { prismaSystem } from '@/shared/lib/prisma-system';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getSessionToken, getSessionUser, isSessionAnonymous } from '@/shared/lib/session';
 import { canUserUseCompany, writeCompanyClaim, writeMaintenanceClaims } from '@/shared/lib/session-claims';
@@ -186,12 +187,12 @@ export async function completeMaintenanceEmployeeAnonymousSession(params: {
   const normalized = normalizeCuil(cuil);
 
   const employee =
-    (await prisma.employees.findFirst({
+    (await prismaSystem.employees.findFirst({
       where: { cuil: normalized },
       select: { id: true, firstname: true, lastname: true, email: true, phone: true, company_id: true, is_active: true },
     })) ??
     (normalized !== cuil
-      ? await prisma.employees.findFirst({
+      ? await prismaSystem.employees.findFirst({
           where: { cuil },
           select: {
             id: true,
@@ -249,7 +250,7 @@ export async function completeMaintenanceEmployeeAnonymousSession(params: {
   //    notaba porque en los datos viejos ese rol existía por arrastre.
   let emailForProfile: string | null = employeeEmail;
   if (emailForProfile) {
-    const existing = await prisma.profile.findFirst({
+    const existing = await prismaSystem.profile.findFirst({
       where: { email: emailForProfile },
       select: { id: true },
     });
@@ -259,7 +260,7 @@ export async function completeMaintenanceEmployeeAnonymousSession(params: {
   }
 
   try {
-    await prisma.profile.upsert({
+    await prismaSystem.profile.upsert({
       where: { id: user.id },
       update: { credential_id: user.id, email: emailForProfile, fullname: employeeName, role: 'User', employee_id: employeeId },
       create: {
@@ -290,7 +291,7 @@ export async function completeMaintenanceEmployeeAnonymousSession(params: {
   try {
     await writeMaintenanceClaims(sessionToken, { companyId, employeeId });
     // El nombre para mostrar del operario sale del legajo, no de lo que tipeó.
-    await prisma.user.update({ where: { id: user.id }, data: { name: employeeName || 'Operario' } });
+    await prismaSystem.user.update({ where: { id: user.id }, data: { name: employeeName || 'Operario' } });
   } catch (error) {
     deviationsLogger.error('No se pudieron escribir los claims de la sesión del operario', { data: { error } });
     return { ok: false, error: 'No se pudo completar la sesión del empleado.' };
