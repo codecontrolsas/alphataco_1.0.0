@@ -266,3 +266,37 @@ BEGIN
   EXECUTE format('CREATE POLICY user_isolation ON %s USING (%I = %s) WITH CHECK (%I = %s)', p_table, p_column, v_expr, p_column, v_expr);
 END
 $function$;
+
+
+-- function app_has_permission: el usuario de la transaccion tiene el permiso (modulo, tab, accion) en la empresa activa.
+-- Es la misma regla que usa la app (`user_has_permission`: permisos del rol asignado en la empresa + permisos propios),
+-- pero evaluada por la base. SECURITY DEFINER: las politicas la llaman sin recursion sobre las tablas de permisos.
+CREATE OR REPLACE FUNCTION public.app_has_permission(p_module text, p_tab text, p_action text)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path = public, pg_temp
+AS $function$
+  SELECT public.app_current_user_id() IS NOT NULL
+     AND public.app_current_company_id() IS NOT NULL
+     AND public.user_has_permission(public.app_current_user_id(), public.app_current_company_id(), p_module, p_tab, p_action)
+$function$;
+
+-- function app_require_permission_for_writes: agrega politicas RESTRICTIVAS (se suman con AND a las demas) para que insertar,
+-- modificar y borrar en la tabla exija un permiso. Las lecturas quedan como estaban. El sistema (BYPASSRLS) y el duenio
+-- no pasan por ellas.
+CREATE OR REPLACE FUNCTION public.app_require_permission_for_writes(p_table regclass, p_module text, p_tab text, p_action text)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  v_check text := format('public.app_has_permission(%L, %L, %L)', p_module, p_tab, p_action);
+BEGIN
+  EXECUTE format('DROP POLICY IF EXISTS perm_write_insert ON %s', p_table);
+  EXECUTE format('DROP POLICY IF EXISTS perm_write_update ON %s', p_table);
+  EXECUTE format('DROP POLICY IF EXISTS perm_write_delete ON %s', p_table);
+  EXECUTE format('CREATE POLICY perm_write_insert ON %s AS RESTRICTIVE FOR INSERT WITH CHECK (%s)', p_table, v_check);
+  EXECUTE format('CREATE POLICY perm_write_update ON %s AS RESTRICTIVE FOR UPDATE USING (%s) WITH CHECK (%s)', p_table, v_check, v_check);
+  EXECUTE format('CREATE POLICY perm_write_delete ON %s AS RESTRICTIVE FOR DELETE USING (%s)', p_table, v_check);
+END
+$function$;
