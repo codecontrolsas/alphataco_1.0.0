@@ -151,10 +151,14 @@ BEGIN
   v_fn := 'trg_' || left(v_name, 40) || '_company_from_parent';
 
   EXECUTE format('ALTER TABLE %s ADD COLUMN IF NOT EXISTS company_id uuid', p_child);
+  -- El rellenado no es una edicion de negocio: se desactivan los triggers de usuario de la tabla (inmutabilidad de
+  -- comprobantes autorizados, historial, `updated_at`...) solo durante el UPDATE. Los de FK son internos y siguen activos.
+  EXECUTE format('ALTER TABLE %s DISABLE TRIGGER USER', p_child);
   EXECUTE format(
     'UPDATE %s c SET company_id = p.company_id FROM %s p WHERE c.%I = p.%I AND c.company_id IS NULL',
     p_child, p_parent, p_fk, p_parent_key
   );
+  EXECUTE format('ALTER TABLE %s ENABLE TRIGGER USER', p_child);
   EXECUTE format('ALTER TABLE %s ALTER COLUMN company_id SET DEFAULT public.app_current_company_id()', p_child);
   EXECUTE format('SELECT count(*) FROM %s WHERE company_id IS NULL', p_child) INTO v_nulls;
   EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %s (company_id)', 'idx_' || left(v_name, 50) || '_company_id', p_child);
@@ -208,6 +212,8 @@ BEGIN
   v_fn := 'trg_' || left(v_name, 40) || '_company_from_parent';
 
   EXECUTE format('ALTER TABLE %s ADD COLUMN IF NOT EXISTS company_id uuid', p_child);
+  -- El rellenado no es una edicion de negocio: se desactivan los triggers de usuario de la tabla solo durante los UPDATE.
+  EXECUTE format('ALTER TABLE %s DISABLE TRIGGER USER', p_child);
 
   FOR v_i IN 1 .. array_length(p_fks, 1) LOOP
     EXECUTE format(
@@ -220,6 +226,7 @@ BEGIN
     );
   END LOOP;
 
+  EXECUTE format('ALTER TABLE %s ENABLE TRIGGER USER', p_child);
   EXECUTE format('ALTER TABLE %s ALTER COLUMN company_id SET DEFAULT public.app_current_company_id()', p_child);
   EXECUTE format('SELECT count(*) FROM %s WHERE company_id IS NULL', p_child) INTO v_nulls;
   EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %s (company_id)', 'idx_' || left(v_name, 50) || '_company_id', p_child);
