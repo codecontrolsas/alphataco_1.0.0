@@ -4,15 +4,92 @@ on:
     branches: [dev, main]
   push:
     branches: [dev, main]
-# Un push nuevo cancela el run anterior de la misma rama: el E2E tarda ~20 minutos y no tiene sentido terminarlo.
+# Un push nuevo cancela el run anterior de la misma rama/PR: no tiene sentido terminarlo. EXCEPTO en main: ahi cada
+# commit mergeado tiene que terminar su e2e (un merge seguido de otro cancelaria el del primero y ese commit quedaria
+# sin e2e). Los deploys tienen su propia cola en deploy.yml (tampoco cancelan).
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+permissions:
+  contents: read
+  # dorny/paths-filter lee los archivos del PR por API.
+  pull-requests: read
+
 jobs:
+  # Que corre y que no, segun los archivos que toca el cambio.
+  changes:
+    # Cuesta segundos: va al mismo runner que el resto para no gastar minutos de GitHub.
+    runs-on: ${{ vars.CI_RUNNER }}
+    outputs:
+      code: ${{ steps.code.outputs.code }}
+      rls: ${{ steps.rls.outputs.rls }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      # `every`: un archivo cuenta solo si cumple TODOS los patrones, asi las negaciones excluyen de verdad. Es el mismo
+      # filtro que decide el deploy en deploy.yml, salvo que aca los workflows de CI SI cuentan como codigo
+      # (cambiar ci.yml tiene que probarse a si mismo). Si el cambio es solo docs/markdown/config de editor,
+      # no hay build, ni e2e, ni db-tests: queda el chequeo minimo `docs-check`.
+      - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3.0.3
+        id: code
+        with:
+          predicate-quantifier: 'every'
+          filters: |
+            code:
+              - '**'
+              - '!docs/**'
+              - '!**/*.md'
+              - '!.claude/**'
+              - '!.agents/**'
+              - '!.planes/**'
+              - '!.zed/**'
+              - '!.husky/**'
+      # El e2e bajo RLS (informativo) solo se corre si el cambio puede afectarlo; en main siempre. Sobreincluir es seguro.
+      - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3.0.3
+        id: rls
+        with:
+          filters: |
+            rls:
+              - 'prisma/**'
+              - 'src/shared/lib/tenant*'
+              - 'src/shared/lib/prisma*'
+              - 'src/shared/lib/actor*'
+              - 'docker-compose*'
+              - 'docker/**'
+              - 'Dockerfile'
+              - '.github/**'
+              - 'e2e/**'
+              - 'playwright.config.ts'
+
+  # Chequeo minimo cuando el cambio es solo documentacion: no quedaron marcadores de conflicto en lo que se toco.
+  docs-check:
+    needs: changes
+    if: needs.changes.outputs.code != 'true'
+    runs-on: ${{ vars.CI_RUNNER }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 2
+      - name: Marcadores de conflicto en los archivos modificados
+        run: |
+          # En un PR el checkout es el merge commit (primer padre = base); en un push, el commit y su padre.
+          files=$(git diff --name-only --diff-filter=AM HEAD^1 HEAD)
+          echo "$files"
+          bad=0
+          for f in $files; do
+            if [ -f "$f" ] && grep -nE '^(<<<<<<< |>>>>>>> )' "$f"; then bad=1; fi
+          done
+          [ "$bad" = 0 ] || { echo "::error::quedaron marcadores de conflicto sin resolver"; exit 1; }
+
   types-and-lint:
+    needs: changes
+    # En main el job `verify` de deploy.yml ya corre exactamente esto (npm ci + check-types + vitest) sobre el mismo
+    # commit: no se repite. En PR y en dev si.
+    if: needs.changes.outputs.code == 'true' && !(github.event_name == 'push' && github.ref == 'refs/heads/main')
     # Variable de repo `CI_RUNNER`; vacia = runner de GitHub. Con un label `blacksmith-*` corre en Blacksmith
     # (requiere instalar su GitHub App en la organizacion: sin ella el job queda en cola para siempre).
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.CI_RUNNER }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,15 +99,34 @@ jobs:
       - run: npm ci
         env:
           DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+      # tsconfig tiene `incremental: true`: tsc reutiliza lo que no cambio (decide por hash del contenido de cada
+      # archivo, un cache viejo no puede dar un falso verde). Solo se GUARDA desde push (dev/main): los PR lo leen.
+      - name: Restaurar cache de tsc
+        id: tsc-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: tsconfig.tsbuildinfo
+          key: tsc-${{ runner.os }}-${{ hashFiles('package-lock.json', 'tsconfig.json') }}-${{ github.sha }}
+          restore-keys: |
+            tsc-${{ runner.os }}-${{ hashFiles('package-lock.json', 'tsconfig.json') }}-
       - run: npm run check-types
         env:
           # tsc del proyecto completo pasa los ~2 GB del heap por defecto de Node (OOM, exit 134).
           NODE_OPTIONS: --max-old-space-size=8192
       - run: npm test
+      - name: Guardar cache de tsc
+        if: github.event_name == 'push' && steps.tsc-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: tsconfig.tsbuildinfo
+          key: tsc-${{ runner.os }}-${{ hashFiles('package-lock.json', 'tsconfig.json') }}-${{ github.sha }}
 
   db-tests:
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
-    needs: types-and-lint
+    # Sin `needs: types-and-lint`: no dependen entre si y en serie sumaban sus tiempos.
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ${{ vars.CI_RUNNER }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -47,10 +143,22 @@ jobs:
           sed -i 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=devpass/' .env.docker
           sed -i 's/^S3_SECRET_KEY=.*/S3_SECRET_KEY=devpassdevpass/' .env.docker
           sed -i 's/^JOBS_TOKEN=.*/JOBS_TOKEN=devtoken/' .env.docker
-      - run: docker compose --env-file .env.docker build postgres
+      # La imagen de Postgres con pgTAP (apt) se construye mientras corre `npm ci`: no dependen una de la otra.
+      - name: Construir Postgres con pgTAP (segundo plano)
+        run: |
+          setsid nohup bash -c 'docker compose --env-file .env.docker build postgres; echo $? > "$RUNNER_TEMP/pg-build.status"' \
+            > "$RUNNER_TEMP/pg-build.log" 2>&1 &
       - run: npm ci
         env:
           DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+      - name: Esperar la imagen de Postgres
+        run: |
+          for i in $(seq 1 120); do
+            [ -f "$RUNNER_TEMP/pg-build.status" ] && break
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/pg-build.log"
+          [ "$(cat "$RUNNER_TEMP/pg-build.status" 2>/dev/null)" = "0" ] || { echo "::error::fallo el build de la imagen de Postgres"; exit 1; }
       - run: bash scripts/test-db.sh
       # Los tests de auth estan gateados por DATABASE_URL, asi que `npm test` no los corre:
       # sin esto, una regresion en `input: false` —la propiedad que sostiene todo el perimetro
@@ -64,17 +172,51 @@ jobs:
       - run: bash scripts/test-purchases.sh
       - run: bash scripts/test-treasury.sh
 
+  # La imagen de la app para los e2e se construye UNA vez por commit y la comparten `e2e` y `e2e-rls`
+  # (antes cada uno construia la suya: ~6 min de build por job). Ver `_e2e-image.yml`.
+  image:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    uses: ./.github/workflows/_e2e-image.yml
+    with:
+      runs_on: ${{ vars.CI_RUNNER }}
+
   # E2E de la instancia completa (imagen de produccion + RustFS real + Playwright). Ver `_e2e.yml`.
+  # Ya no espera a types-and-lint: es independiente, y en serie sumaba ~3 min al camino critico.
   e2e:
-    needs: types-and-lint
+    needs: [changes, image]
+    if: needs.changes.outputs.code == 'true'
     uses: ./.github/workflows/_e2e.yml
     with:
-      runs_on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+      runs_on: ${{ vars.CI_RUNNER }}
+      image_artifact: e2e-image
 
   # Mismo e2e con la app conectada como `alphataco_app` (sin BYPASSRLS) y TENANT_CONTEXT=on. Informativo por ahora.
+  # Corre en main (push y PR a main) o cuando el cambio toca lo que puede afectarlo (ver filtro `rls`).
   e2e-rls:
-    needs: types-and-lint
+    needs: [changes, image]
+    if: needs.changes.outputs.code == 'true' && (github.ref == 'refs/heads/main' || github.base_ref == 'main' || needs.changes.outputs.rls == 'true')
     uses: ./.github/workflows/_e2e.yml
     with:
-      runs_on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+      runs_on: ${{ vars.CI_RUNNER }}
       rls: true
+      image_artifact: e2e-image
+
+  # Un unico check que resume los obligatorios (los jobs salteados por filtros de rutas cuentan como ok).
+  # e2e-rls queda afuera: es informativo.
+  ci-gate:
+    name: CI gate
+    if: always()
+    needs: [changes, docs-check, types-and-lint, db-tests, image, e2e]
+    # Cuesta segundos: va al mismo runner que el resto para no gastar minutos de GitHub.
+    runs-on: ${{ vars.CI_RUNNER }}
+    timeout-minutes: 5
+    steps:
+      - name: Resultado
+        env:
+          RESULTADOS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "resultados: $RESULTADOS"
+          case " $RESULTADOS " in
+            *" failure "*|*" cancelled "*) echo "::error::hay jobs obligatorios en rojo o cancelados"; exit 1 ;;
+          esac

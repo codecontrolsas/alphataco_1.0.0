@@ -25,10 +25,28 @@ push a main ──► changes (filtro de paths: docs, *.md, .claude… no dispar
   Los `RUN --mount=type=cache` (npm y `.next/cache`) se persisten con `actions/cache`.
 - **Postgres y el almacenamiento S3 (RustFS) son servicios aparte en Dokploy**: no van en la imagen. El contenedor corre
   `prisma migrate deploy` en cada arranque (`docker/entrypoint.sh`) y después `node server.js`.
-- `ci.yml` (check-types, vitest, tests de base con pgTAP, auth, jobs) sigue corriendo igual en
-  push y PR. El deploy **no** espera a `db-tests`: repite solo `check-types` + `vitest` en su job
-  `verify`, porque un workflow no puede depender de otro sin `workflow_run`, y `db-tests` levanta
-  Postgres con compose (lento). Si `db-tests` falla después de un deploy, se ve en el run de CI.
+- `ci.yml` (check-types, vitest, tests de base con pgTAP, auth, jobs, e2e) corre en push y PR. El deploy
+  **no** espera a `db-tests` ni al e2e: repite solo `check-types` + `vitest` en su job `verify`, porque un
+  workflow no puede depender de otro sin `workflow_run`. Si `db-tests` o el e2e fallan después de un deploy,
+  se ve en el run de CI.
+- **Qué corre en CI** (job `changes`, filtro de rutas):
+  - Solo docs / `*.md` / config de editor: nada pesado; `docs-check` (marcadores de conflicto) y el resumen `CI gate`.
+  - Push a `main`: `types-and-lint` **no** corre (lo hace `verify` del deploy sobre el mismo commit); `db-tests`,
+    `e2e` y `e2e-rls` sí. La concurrencia de CI no cancela en `main` (cada commit mergeado termina su e2e).
+  - `e2e-rls` (informativo): en `main` (push o PR a `main`) o si el cambio toca `prisma/`, `src/shared/lib/tenant*`,
+    `prisma*`, `actor*`, `docker*`, `Dockerfile`, `.github/` o `e2e/`.
+  - `types-and-lint`, `db-tests` e `image` corren en paralelo; ya no hay `needs` entre ellos.
+- **La imagen de los e2e se construye una vez** (`_e2e-image.yml`) y `e2e` / `e2e-rls` la bajan como artifact
+  (`docker save | zstd`, 1 día) y la cargan con `docker-compose.ci.yml` (`pull_policy: never`, `migrate` usa la
+  misma imagen runner). **No es la imagen de producción**: las `NEXT_PUBLIC_*` se hornean y el e2e necesita las de
+  `.env.docker.example` (`localhost:3000`). Por eso NO se publica en el registry como `sha-<commit>`: `_build-image.yml`
+  (`skip_if_exists`) la encontraría y desplegaría una imagen con `localhost` adentro. Mismo Dockerfile, otros build-args.
+- Chromium de Playwright se cachea (`~/.cache/ms-playwright`, key = versión del lockfile) y se instala en segundo plano
+  mientras la instancia arranca; las dependencias de sistema (`apt`) solo si `ldd` dice que faltan
+  (`.github/scripts/playwright-chromium.sh`).
+- Runner: con la variable `CI_RUNNER` = `blacksmith-*` los jobs pesados (incluida `image`) usan el builder de Blacksmith
+  (`useblacksmith/setup-docker-builder` + `useblacksmith/build-push-action`); vacía = runners de GitHub con cache de capas
+  en el cache de Actions (`type=gha`, scope `e2e-image`, solo se escribe desde push).
 
 ### Archivos
 
@@ -63,7 +81,7 @@ Variables:
 | `NEXT_PUBLIC_POSTHOG_KEY`  | Project key de PostHog (pública por diseño). Vacía = sin analítica.                                                                                                                                 |
 | `NEXT_PUBLIC_POSTHOG_HOST` | `https://us.i.posthog.com`                                                                                                                                                                          |
 | `NEXT_PUBLIC_SHOW_LOGS`    | `false` en producción (default si no se carga).                                                                                                                                                     |
-| `CI_RUNNER`                | Opcional. Vacía = `ubuntu-latest`. Con un label `blacksmith-*` el build usa el builder persistente de Blacksmith (requiere la app instalada en la organización). El deploy siempre corre en GitHub. |
+| `CI_RUNNER`                | **Obligatoria.** Label del runner de Blacksmith (hoy `blacksmith-4vcpu-ubuntu-2404`; el de 2 vCPU no está disponible en esta organización). TODOS los jobs (CI, build, deploy y rollback) usan esta variable y no hay respaldo en GitHub: si está vacía, los jobs no arrancan y no se gastan minutos de GitHub Actions. Solo se cambia a mano, por decisión del dueño del repo. |
 | `REGISTRY_HOST`            | Opcional. Host del registro de imágenes. Vacía = el registro de esta instancia (`registry-31-97-42-82.sslip.io`). Un clon para otro cliente define el suyo. |
 | `IMAGE_NAME`               | Opcional. Nombre de la imagen dentro del registro. Vacía = `alphataco`. Que cada cliente tenga el suyo evita que dos instancias se pisen el tag `:main`. |
 | `STORAGE_IMAGE`            | Opcional (solo CI y compose). Imagen del almacenamiento S3. Vacía = `rustfs/rustfs:1.0.3`, la que fija `docker-compose.yml`. Definirla para usar un espejo propio u otra versión. |
