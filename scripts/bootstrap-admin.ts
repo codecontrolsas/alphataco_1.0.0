@@ -62,7 +62,7 @@ function setupUrl(token: string): string {
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
 
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = process.env.SYSTEM_DATABASE_URL ?? process.env.DATABASE_URL;
   if (!connectionString) throw new Error('DATABASE_URL no esta definida en las variables de entorno');
 
   const prisma = new PrismaClient({ adapter: new PrismaPg(prismaPgConfig(connectionString)) });
