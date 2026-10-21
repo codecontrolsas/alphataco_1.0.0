@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 /**
  * Proveedores de Compras (etapa 1) contra el Postgres del compose: `npm run test:purchases`.
  * Se simulan la sesion, la empresa activa, los permisos y el storage (el job de CI no levanta
- * MinIO).
+ * RustFS).
  */
 
 const COMPANY = 'd1000000-0000-4000-8000-000000000001';

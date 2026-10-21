@@ -57,7 +57,7 @@ jobs:
     # El dispatch se acepta solo sobre main: desde otra rama se desplegaria a
     # produccion un commit que nunca paso por main.
     if: always() && ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || needs.changes.outputs.code == 'true')
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -78,9 +78,11 @@ jobs:
     if: always() && ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || needs.changes.outputs.code == 'true')
     uses: ./.github/workflows/_build-image.yml
     with:
-      # `env` no llega a `with:` de un reusable: van literales.
-      image: registry-31-97-42-82.sslip.io/alphataco
-      registry: registry-31-97-42-82.sslip.io
+      # Variables de repo; vacias = los valores de esta instancia. Un clon para otro cliente define las suyas
+      # (`REGISTRY_HOST`, `IMAGE_NAME`) y no pisa las imagenes de los demas en el mismo registro.
+      # (`env` no llega a `with:` de un reusable, `vars` si.)
+      image: ${{ vars.REGISTRY_HOST || 'registry-31-97-42-82.sslip.io' }}/${{ vars.IMAGE_NAME || 'alphataco' }}
+      registry: ${{ vars.REGISTRY_HOST || 'registry-31-97-42-82.sslip.io' }}
       registry_username: ${{ vars.REGISTRY_USERNAME }}
       sha: ${{ github.sha }}
       # Las NEXT_PUBLIC_* se hornean en el bundle: cambiar una de estas
@@ -107,9 +109,9 @@ jobs:
     uses: ./.github/workflows/_deploy.yml
     with:
       source_tag: ${{ needs.build.outputs.sha_tag }}
-      target_tag: registry-31-97-42-82.sslip.io/alphataco:main
+      target_tag: ${{ vars.REGISTRY_HOST || 'registry-31-97-42-82.sslip.io' }}/${{ vars.IMAGE_NAME || 'alphataco' }}:main
       health_url: ${{ vars.DOKPLOY_HEALTH_URL }}
-      registry: registry-31-97-42-82.sslip.io
+      registry: ${{ vars.REGISTRY_HOST || 'registry-31-97-42-82.sslip.io' }}
       registry_username: ${{ vars.REGISTRY_USERNAME }}
       expected_sha: ${{ github.sha }}
       commit_message: ${{ github.event.head_commit.message }}

@@ -156,9 +156,9 @@ veces y que `daily_indicators` quede escrita.
 
 ## Levantar con Docker
 
-El compose de la raíz (`docker-compose.yml`) levanta la infraestructura local: `postgres` (16 + pgTAP), `minio` (S3 compatible) + `minio-init` (crea los buckets), `migrate` (aplica las migraciones de Prisma y termina), `app` (Next.js standalone), `cron` (jobs periódicos) y `caddy` (reverse proxy), más `mailpit` (SMTP de prueba, detrás del perfil `mail`: no arranca con `up`). Servicios, puertos, volúmenes y red están documentados en el propio `docker-compose.yml`.
+El compose de la raíz (`docker-compose.yml`) levanta la infraestructura local: `postgres` (16 + pgTAP), `storage` (RustFS, almacenamiento S3 compatible; los buckets los crea `scripts/ensure-buckets.ts`), `migrate` (aplica las migraciones de Prisma y termina), `app` (Next.js standalone), `cron` (jobs periódicos) y `caddy` (reverse proxy), más `mailpit` (SMTP de prueba, detrás del perfil `mail`: no arranca con `up`). Servicios, puertos, volúmenes y red están documentados en el propio `docker-compose.yml`.
 
-Orden de arranque (por `depends_on`): `postgres` y `minio` healthy → `migrate` corre `npx prisma migrate deploy` y sale con `Exited (0)` → `app` arranca y pasa a `healthy` cuando `GET /login` responde `< 500` → `cron` y `caddy`. Si `migrate` falla, `app` no se levanta (`service_completed_successfully`). `postgres`, `minio`, `app`, `cron` y `caddy` tienen `restart: unless-stopped`.
+Orden de arranque (por `depends_on`): `postgres` y `storage` healthy → `migrate` corre `npx prisma migrate deploy` y sale con `Exited (0)` → `app` arranca y pasa a `healthy` cuando `GET /login` responde `< 500` → `cron` y `caddy`. Si `migrate` falla, `app` no se levanta (`service_completed_successfully`). `postgres`, `storage`, `app`, `cron` y `caddy` tienen `restart: unless-stopped`.
 
 `migrate` se construye con la stage `build` del `Dockerfile` (node_modules completo + `prisma.config.ts`): el CLI de Prisma 7 no puede correr desde el output standalone de Next, que sólo trae el runtime (`@prisma/client`, `@prisma/adapter-pg`, `pg`). La imagen de `app` no lleva el CLI de Prisma ni corre migraciones al arrancar.
 
@@ -167,7 +167,7 @@ Orden de arranque (por `depends_on`): `postgres` y `minio` healthy → `migrate`
 ```bash
 cp .env.docker.example .env.docker
 # completar POSTGRES_PASSWORD, S3_SECRET_KEY, JOBS_TOKEN y demás variables marcadas "cambiar"
-bash scripts/dev-up.sh   # levanta postgres, minio y minio-init (crea los buckets)
+bash scripts/dev-up.sh   # levanta postgres y storage (RustFS) y crea los buckets
 ```
 
 `.env.docker` es local y está en `.gitignore` — nunca se versiona.
@@ -202,27 +202,33 @@ no la sube al nivel raíz por su cuenta. No se usa en `src/`, pero sacarla rompe
 Para probar los cinco flujos de auth contra el compose: `npm run test:auth` (integración), con los datos de
 `node scripts/seed-auth-fixtures.ts`.
 
-### Storage (MinIO): variables
+### Storage (RustFS): variables
 
-| Variable              | Para qué sirve                                                                                                                                                                    |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `S3_ACCESS_KEY`       | Usuario de MinIO. Es también el `MINIO_ROOT_USER` del servicio `minio` y lo usa `minio-init` para crear los buckets.                                                              |
-| `S3_SECRET_KEY`       | Contraseña de MinIO (`MINIO_ROOT_PASSWORD`). Mínimo 8 caracteres.                                                                                                                 |
-| `S3_REGION`           | Región que firma el SDK. MinIO la ignora, pero el SDK la exige. Default `us-east-1`.                                                                                              |
-| `S3_FORCE_PATH_STYLE` | `true` (default): el bucket va en el path. MinIO no resuelve buckets por subdominio.                                                                                              |
-| `S3_ENDPOINT`         | Dónde está MinIO. **Sólo lo usa el servidor.** El servicio `app` lo fija a `http://minio:9000`; para `npm run dev` fuera de Docker, apuntarlo al puerto publicado (`MINIO_PORT`). |
+El almacenamiento de objetos es **RustFS** (S3 compatible, escrito en Rust; el mismo que usan `control-documental-ai`, `credere` y `taskapp`). Reemplazó a MinIO, cuya imagen oficial ya no se puede bajar de Docker Hub. La imagen está fijada en `docker-compose.yml` por versión y digest (`rustfs/rustfs:1.0.3@sha256:9ca95595…`); `STORAGE_IMAGE` en `.env.docker` permite usar un espejo propio u otra versión.
 
-**MinIO no se publica en internet ni se proxea por caddy**: el navegador nunca le habla. Todos
+| Variable              | Para qué sirve                                                                                                                                                                               |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `S3_ACCESS_KEY`       | Usuario de RustFS. El servicio `storage` lo recibe como `RUSTFS_ACCESS_KEY`. No usar el valor por defecto de la imagen (`rustfsadmin`).                                                      |
+| `S3_SECRET_KEY`       | Contraseña de RustFS (`RUSTFS_SECRET_KEY`). Mínimo 8 caracteres.                                                                                                                              |
+| `S3_REGION`           | Región que firma el SDK. RustFS la ignora, pero el SDK la exige. Default `us-east-1`.                                                                                                         |
+| `S3_FORCE_PATH_STYLE` | `true` (default): el bucket va en el path. RustFS no resuelve buckets por subdominio.                                                                                                         |
+| `S3_ENDPOINT`         | Dónde está el almacenamiento. **Sólo lo usa el servidor.** El servicio `app` lo fija a `http://storage:9000`; para `npm run dev` fuera de Docker, apuntarlo al puerto publicado (`STORAGE_PORT`). |
+
+**El almacenamiento no se publica en internet ni se proxea por caddy**: el navegador nunca le habla. Todos
 los archivos —imágenes embebidas y descargas— salen por `GET /api/files/<bucket>/<key>` de la
 app, que resuelve a qué empresa (o perfil) pertenece el archivo, valida la sesión contra ese
-dueño y hace stream desde MinIO. No hay URLs firmadas, así que no hay endpoint público que
+dueño y hace stream desde RustFS. No hay URLs firmadas, así que no hay endpoint público que
 publicar ni variables de host que mantener sincronizadas.
+
+**Si venías del compose con MinIO**, `docker compose up` avisa de contenedores huérfanos (`minio`, `minio-init`): correr una vez `docker compose --env-file .env.docker up -d --remove-orphans postgres storage`, o bajar todo con `docker compose --env-file .env.docker down --remove-orphans` y volver a levantar con `bash scripts/dev-up.sh`.
+
+**Si tenías un volumen de MinIO local** (`<proyecto>_minio-data`): RustFS no lee su formato. En desarrollo alcanza con volver a subir los archivos; los datos de una instancia real se migran con la guía de `docs/deploy/runbook.md` ("Migrar el almacenamiento de MinIO a RustFS").
 
 ### Levantar la app completa
 
 ```bash
 docker compose --env-file .env.docker build migrate app   # ~4 min la primera vez
-docker compose --env-file .env.docker up -d app            # levanta postgres, minio, migrate y app
+docker compose --env-file .env.docker up -d app            # levanta postgres, storage, migrate y app
 docker compose --env-file .env.docker ps                   # migrate Exited (0), app healthy
 docker compose --env-file .env.docker logs migrate         # "No pending migrations" o las aplicadas
 curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:${APP_PORT:-3000}/login   # 200
@@ -237,7 +243,7 @@ set -a; source .env.docker; set +a   # POSTGRES_PASSWORD y POSTGRES_PORT (defaul
 export DATABASE_URL=postgresql://alphataco:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_PORT:-5432}/alphataco
 npm run db:deploy   # prisma migrate deploy — aplica 0_init + migraciones pendientes
 npm run db:seed     # seed idempotente de empresa/módulos/tabs/acciones/roles
-npm run db:reset    # borra y recrea SOLO el contenedor y el volumen de postgres (no toca minio)
+npm run db:reset    # borra y recrea SOLO el contenedor y el volumen de postgres (no toca el almacenamiento)
 ```
 
 Flujo completo para crear o modificar una migración (diff → carpeta → SQL → deploy → verificación): `.claude/rules/migrations.md`.
@@ -252,37 +258,35 @@ Ninguna. `docker compose build app` pasa las `NEXT_PUBLIC_*` como build args (Ne
 
 ### Puertos: resolver conflictos sin tocar el compose
 
-El compose mapea los puertos de host vía variables de entorno con default (`POSTGRES_PORT`, `MINIO_PORT`, `MINIO_CONSOLE_PORT`, `APP_PORT`, `CADDY_HTTP_PORT`, `CADDY_HTTPS_PORT`). Si alguno está ocupado en tu máquina por otro proyecto, cambiar el valor en `.env.docker` — nunca hardcodear un puerto distinto en `docker-compose.yml`.
+El compose mapea los puertos de host vía variables de entorno con default (`POSTGRES_PORT`, `STORAGE_PORT`, `STORAGE_CONSOLE_PORT`, `APP_PORT`, `CADDY_HTTP_PORT`, `CADDY_HTTPS_PORT`). Si alguno está ocupado en tu máquina por otro proyecto, cambiar el valor en `.env.docker` — nunca hardcodear un puerto distinto en `docker-compose.yml`.
 
-`.env.docker.example` trae los puertos default (`POSTGRES_PORT=5432`, `MINIO_PORT=9000`, `MINIO_CONSOLE_PORT=9001`, `APP_PORT=3000`, `CADDY_HTTP_PORT=80`, `CADDY_HTTPS_PORT=443`). Ejemplo de remapeo en un host donde 5432, 9000/9001 y 80 ya están tomados por otros proyectos:
+`.env.docker.example` trae los puertos default (`POSTGRES_PORT=5432`, `STORAGE_PORT=9000`, `STORAGE_CONSOLE_PORT=9001`, `APP_PORT=3000`, `CADDY_HTTP_PORT=80`, `CADDY_HTTPS_PORT=443`). Ejemplo de remapeo en un host donde 5432, 9000/9001 y 80 ya están tomados por otros proyectos:
 
 | Servicio        | Puerto por default | Ejemplo de remapeo en `.env.docker` |
 | --------------- | ------------------ | ----------------------------------- |
 | postgres        | 5432               | `POSTGRES_PORT=55432`               |
-| minio (API)     | 9000               | `MINIO_PORT=29000`                  |
-| minio (consola) | 9001               | `MINIO_CONSOLE_PORT=29001`          |
+| storage (API)   | 9000               | `STORAGE_PORT=29000`                |
+| storage (consola) | 9001             | `STORAGE_CONSOLE_PORT=29001`        |
 | caddy (HTTP)    | 80                 | `CADDY_HTTP_PORT=8080`              |
 
-Todo lo que se conecta desde el host (`npm run db:deploy`, `npm run test:db`, `psql`, la consola de MinIO) lee el puerto de `.env.docker`; nunca asumir 5432/9000 hardcodeado.
+Todo lo que se conecta desde el host (`npm run db:deploy`, `npm run test:db`, `psql`, la consola de RustFS) lee el puerto de `.env.docker`; nunca asumir 5432/9000 hardcodeado.
 
-### Servicios que corren solo con `postgres` + `minio`
+### Servicios que corren solo con `postgres` + `storage`
 
-Para desarrollar con `npm run dev` alcanza con `bash scripts/dev-up.sh` (postgres + minio + minio-init); `migrate`, `app`, `cron` y `caddy` sólo hacen falta para probar la imagen de producción. Para verificar que las imágenes de `cron` y `caddy` compilan sin levantar nada: `docker compose --env-file .env.docker build cron caddy`.
+Para desarrollar con `npm run dev` alcanza con `bash scripts/dev-up.sh` (postgres + storage, y crea los buckets con `scripts/ensure-buckets.ts`); `migrate`, `app`, `cron` y `caddy` sólo hacen falta para probar la imagen de producción.
 
-### Verificar los buckets de MinIO
+### Verificar los buckets
 
-`minio-init` recibe `S3_ACCESS_KEY`/`S3_SECRET_KEY` de `.env.docker` como variables de entorno, así que se pueden reutilizar dentro del contenedor:
+`scripts/ensure-buckets.ts` es idempotente: volver a correrlo lista cuántos buckets ya existían (los 13 de `STORAGE_BUCKETS`, en `src/shared/lib/storage-buckets.ts`) y crea los que falten.
 
 ```bash
-docker compose --env-file .env.docker run --rm --entrypoint sh minio-init -c \
-  'mc alias set local http://minio:9000 "$S3_ACCESS_KEY" "$S3_SECRET_KEY" >/dev/null && mc ls local/'
+set -a; source .env.docker; set +a
+S3_ENDPOINT=http://127.0.0.1:${STORAGE_PORT:-9000} node scripts/ensure-buckets.ts
+# Buckets OK - created: [] existing: 13
 ```
 
-Debe listar los 10 buckets de `STORAGE_BUCKETS` (`src/shared/lib/storage-buckets.ts`): `document-files`,
-`document-files-expired`, `contract-documents`, `daily-reports`, `logo`, `avatar`, `clothing-signatures`,
-`repair-images`, `tire-discards`, `preparte-img`. Todos privados (`mc anonymous set none`): se leen por la
-ruta `/api/files/...` de la app o por URL firmada.
+Todos son privados: se leen por la ruta `/api/files/...` de la app (el script no toca políticas ni ACL).
 
-### Ver los archivos de MinIO (consola web)
+### Ver los archivos (consola web de RustFS)
 
-`http://localhost:${MINIO_CONSOLE_PORT:-9001}` — login con `S3_ACCESS_KEY`/`S3_SECRET_KEY` de `.env.docker`. Desde ahí se navegan los buckets y objetos igual que en el dashboard de Storage de Supabase.
+`http://localhost:${STORAGE_CONSOLE_PORT:-9001}` — login con `S3_ACCESS_KEY`/`S3_SECRET_KEY` de `.env.docker`. Desde ahí se navegan los buckets y objetos.

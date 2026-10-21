@@ -13,7 +13,7 @@ import { s3Client } from '@/shared/lib/s3';
 import { buildStorageDownloadUrl, buildStorageFileUrl } from '@/shared/lib/storage-url';
 
 /**
- * Operaciones de storage (MinIO/S3) desde el servidor. Módulo server-only (NO es 'use server'):
+ * Operaciones de storage (RustFS/S3) desde el servidor. Módulo server-only (NO es 'use server'):
  * ninguna función es un endpoint. Las Server Actions que las usan verifican antes que el
  * archivo pertenezca a la empresa activa.
  *
@@ -106,7 +106,7 @@ export async function storageUpload(
 export async function storageRemove(bucket: string, paths: string[]): Promise<StorageResult<null>> {
   if (paths.length === 0) return { ok: true, data: null };
   // Uno por uno en vez de `DeleteObjects`: los lotes acá son de 1–3 archivos y el batch
-  // exige un checksum del cuerpo que no todas las versiones de MinIO aceptan.
+  // exige un checksum del cuerpo que no todos los almacenamientos S3 compatibles aceptan.
   const results = await Promise.allSettled(
     paths.map((path) => s3Client().send(new DeleteObjectCommand({ Bucket: bucket, Key: path })))
   );
@@ -270,8 +270,8 @@ export async function storageFileUrls(
 /**
  * URLs para DESCARGAR el archivo: la ruta responde con `Content-Disposition: attachment`.
  *
- * NO son URLs firmadas contra MinIO, y esa es una decisión deliberada: firmar exigía
- * publicar MinIO en internet bajo su propio dominio con DNS y TLS, más dos variables de
+ * NO son URLs firmadas contra RustFS, y esa es una decisión deliberada: firmar exigía
+ * publicar RustFS en internet bajo su propio dominio con DNS y TLS, más dos variables de
  * entorno que hay que mantener sincronizadas a mano y cuyo desfasaje falla en silencio con
  * `SignatureDoesNotMatch` en TODA descarga. Con la ruta sirviendo por stream, el ahorro de
  * sacar los bytes de la app no compensa esa superficie: este es un sistema de gestión
@@ -289,7 +289,7 @@ export async function storageDownloadUrls(
  * imágenes de reparación, firmas de ropa...).
  *
  * Apunta a la ruta proxy `/api/files/...` de la app, que valida el perímetro de empresa y
- * hace stream desde MinIO. NO es una URL firmada a propósito: estas URLs quedan PERSISTIDAS
+ * hace stream desde RustFS. NO es una URL firmada a propósito: estas URLs quedan PERSISTIDAS
  * (`company.company_logo`, `other_equipment_certifications.file_url`,
  * `maintenance_order_items.images`, `tires.discard_photo`, `clothing_deliveries.signature_url`,
  * `preparte.preparteImage`, `profile.avatar`), así que una firma con vencimiento dejaría el

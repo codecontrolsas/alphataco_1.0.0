@@ -15,7 +15,7 @@ export type ReactPdf = Pick<
 
 /**
  * PDF fiscal (Factura / NC / ND, A, B y C). Se genera en el servidor al autorizar y se guarda en
- * MinIO: es el documento que se entrega, no se regenera con otros datos.
+ * RustFS: es el documento que se entrega, no se regenera con otros datos.
  *
  * Monocromo y Helvetica (sin `Font.register`: el tracing del standalone no copiaría archivos).
  * Montos alineados a la derecha. El QR es vectorial (un único `Path`), nunca un PNG.

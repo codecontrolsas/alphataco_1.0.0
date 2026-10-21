@@ -158,7 +158,7 @@ entero) en diseño y revisión. Si no, aplicar este resumen:
 - `pgrep -f "next dev"`/`pkill -f` matan el propio shell (el patrón aparece en la línea de comando): matar por puerto (`lsof -ti tcp:3100`).
 - agent-browser en este contenedor: `export AGENT_BROWSER_EXECUTABLE_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome`
   en CADA llamada (cada Bash es un shell nuevo). El contenedor puede reiniciarse y bajar Docker/dev server: re-levantar con
-  `dockerd` + `docker compose up -d postgres minio` + script del dev server.
+  `dockerd` + `docker compose up -d postgres storage` + script del dev server.
 
 ## 9. Autonomía y criterio de producto (decisión del usuario)
 

@@ -5,10 +5,10 @@ Ver `CLAUDE.md` para convenciones y `docs/superpowers/plans/` para planes.
 
 ## Entorno local
 
-La base de datos corre en Docker (Postgres + MinIO), no en Supabase. Setup rápido:
+La base de datos corre en Docker (Postgres + RustFS, el almacenamiento S3), no en Supabase. Setup rápido:
 
 ```bash
-bash scripts/dev-up.sh   # levanta postgres + minio (Docker)
+bash scripts/dev-up.sh   # levanta postgres + almacenamiento S3 (Docker) y crea los buckets
 npm run db:deploy        # aplica las migraciones (prisma migrate deploy)
 npm run db:seed          # seed idempotente de empresa/módulos/tabs/roles
 npm run test:db          # tests pgTAP contra la base de test

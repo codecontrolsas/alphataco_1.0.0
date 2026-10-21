@@ -8,7 +8,7 @@
  *
  * 1. **Sin logo remoto.** Las edge functions embebían
  *    `https://vvrckjjyrwqzpbaatemz.supabase.co/storage/v1/object/public/logo/...`, que murió
- *    con Supabase. El logo de cada empresa hoy vive en MinIO, que no se publica en internet y
+ *    con Supabase. El logo de cada empresa hoy vive en RustFS, que no se publica en internet y
  *    sólo se sirve por `/api/files` contra una sesión — un cliente de correo no puede
  *    autenticarse ahí. Una imagen rota en todos los correos es peor que ninguna, así que el
  *    encabezado es tipográfico.

@@ -1,0 +1,381 @@
+<title>Mapa de la instancia</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Concepto: plano de planta de una instancia. Color por rol: base (azul), cliente (ámbar), móvil (rosa), infraestructura (verde). Borde punteado = opcional o a construir. */
+  :root {
+    --bg: #f3f5f4; --surface: #ffffff; --ink: #16211f; --muted: #55655f;
+    --line: #cfd8d4; --line-strong: #8a9a94;
+    --base: #1e4fb8; --base-soft: #dce7fb;
+    --client: #a8560a; --client-soft: #f9e8d0;
+    --mobile: #b0235f; --mobile-soft: #fadce9;
+    --infra: #0e6f66; --infra-soft: #d6efeb;
+    --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1614; --surface: #172220; --ink: #e6efec; --muted: #9db0a9;
+      --line: #2b3b37; --line-strong: #5f7770;
+      --base: #8fb2ff; --base-soft: #1a2a4d;
+      --client: #f0b469; --client-soft: #3a2810;
+      --mobile: #f58ab5; --mobile-soft: #431631;
+      --infra: #5fd3c6; --infra-soft: #0f3a35;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1614; --surface: #172220; --ink: #e6efec; --muted: #9db0a9;
+    --line: #2b3b37; --line-strong: #5f7770;
+    --base: #8fb2ff; --base-soft: #1a2a4d;
+    --client: #f0b469; --client-soft: #3a2810;
+    --mobile: #f58ab5; --mobile-soft: #431631;
+    --infra: #5fd3c6; --infra-soft: #0f3a35;
+    color-scheme: dark;
+  }
+  body {
+    background: var(--bg); color: var(--ink); font-family: var(--font-body);
+    font-size: 15px; line-height: 1.55; padding-block: 28px 56px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 44px; }
+  h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+  h1 { font-size: clamp(28px, 5vw, 40px); letter-spacing: -0.01em; }
+  h2 { font-size: clamp(21px, 3.2vw, 26px); }
+  h3 { font-size: 17px; }
+  p { margin: 0; max-width: 70ch; }
+  code, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+  code { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+  .intro { display: flex; flex-direction: column; gap: 14px; }
+  .intro p, .lead { color: var(--muted); }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .sw { width: 14px; height: 14px; border-radius: 3px; border: 2px solid; display: inline-block; }
+  .sw.base { background: var(--base-soft); border-color: var(--base); }
+  .sw.client { background: var(--client-soft); border-color: var(--client); }
+  .sw.mobile { background: var(--mobile-soft); border-color: var(--mobile); }
+  .sw.infra { background: var(--infra-soft); border-color: var(--infra); }
+  .sw.opt { background: transparent; border-color: var(--line-strong); border-style: dashed; }
+  section { display: flex; flex-direction: column; gap: 16px; }
+  .kicker { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+  .scroll { overflow-x: auto; }
+
+  svg { display: block; width: 100%; height: auto; min-width: 780px; }
+  svg text { font-family: var(--font-body); fill: var(--ink); font-size: 13px; }
+  svg .t-title { font-family: var(--font-display); font-weight: 700; font-size: 14px; }
+  svg .t-sub { fill: var(--muted); font-size: 11.5px; }
+  svg .t-mono { font-family: var(--font-mono); font-size: 11px; fill: var(--muted); }
+  svg .b-base { fill: var(--base-soft); stroke: var(--base); stroke-width: 2; }
+  svg .b-client { fill: var(--client-soft); stroke: var(--client); stroke-width: 2; }
+  svg .b-mobile { fill: var(--mobile-soft); stroke: var(--mobile); stroke-width: 2; }
+  svg .b-infra { fill: var(--infra-soft); stroke: var(--infra); stroke-width: 2; }
+  svg .b-vps { fill: var(--surface); stroke: var(--line-strong); stroke-width: 2; }
+  svg .b-group { fill: none; stroke: var(--line); stroke-width: 1.5; }
+  svg .b-ext { fill: var(--bg); stroke: var(--line-strong); stroke-width: 1.5; }
+  svg .opt { stroke-dasharray: 6 5; }
+  svg .ln { fill: none; stroke: var(--line-strong); stroke-width: 2; }
+  svg .ln-m { fill: none; stroke: var(--mobile); stroke-width: 2; stroke-dasharray: 2 6; stroke-linecap: round; }
+  svg .ln-o { fill: none; stroke: var(--line-strong); stroke-width: 2; stroke-dasharray: 5 5; }
+  svg .ah { fill: var(--line-strong); }
+  svg .ah-m { fill: var(--mobile); }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+  .card { background: var(--surface); border: 2px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .card.client { border-color: var(--client); }
+  .card.infra { border-color: var(--infra); }
+  .card.base { border-color: var(--base); }
+  .card h3 { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .card h3 small { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; color: var(--muted); }
+  .card ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; font-size: 14px; color: var(--muted); }
+  .card li b { color: var(--ink); font-weight: 600; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  td:first-child { font-weight: 600; white-space: nowrap; }
+  .tag { font-family: var(--font-mono); font-size: 11.5px; padding: 1px 8px; border-radius: 99px; border: 1px solid; white-space: nowrap; display: inline-block; }
+  .tag.ok { color: var(--infra); border-color: var(--infra); }
+  .tag.build { color: var(--muted); border-color: var(--line-strong); border-style: dashed; }
+  .tag.opt { color: var(--client); border-color: var(--client); }
+  .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .two .panel { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .two ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 14px; display: flex; flex-direction: column; gap: 5px; }
+  .two li b { color: var(--ink); font-weight: 600; }
+  .foot { font-size: 13px; color: var(--muted); }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+
+  <header class="intro">
+    <div class="kicker">Alphataco · mapa de una instancia</div>
+    <h1>Qué corre en cada cliente y qué se clona</h1>
+    <p>Una vista general de los elementos de una instancia, qué hace cada uno y qué se copia, qué se crea y qué se comparte al contratar el servicio. Borde sólido: existe en el repo. Borde punteado: opcional o a construir.</p>
+    <div class="legend" aria-label="Referencias">
+      <span><i class="sw base"></i>Aplicación</span>
+      <span><i class="sw infra"></i>Datos y plataforma</span>
+      <span><i class="sw mobile"></i>Móvil</span>
+      <span><i class="sw client"></i>Del cliente</span>
+      <span><i class="sw opt"></i>Opcional / a construir</span>
+    </div>
+  </header>
+
+  <!-- 1. CLONA / CREA / COMPARTE -->
+  <section aria-labelledby="s1">
+    <div class="kicker">1 · Al contratar el servicio</div>
+    <h2 id="s1">Qué se clona, qué se crea y qué se comparte</h2>
+    <div class="cards">
+      <div class="card client">
+        <h3>Se clona <small>repo del cliente</small></h3>
+        <ul>
+          <li><b>El código completo:</b> módulos de <span class="mono">src/features</span>, páginas y componentes.</li>
+          <li><b>Dockerfile, compose y Caddyfile.</b></li>
+          <li><b>Workflows</b> de CI y deploy (un archivo mínimo que llama a los del base).</li>
+          <li><b>Esquema Prisma, migraciones y seed.</b></li>
+          <li><b>Tests</b> (Vitest, pgTAP, integración) y la carpeta <span class="mono">e2e/</span>.</li>
+          <li><b>Historia de git</b> y el remoto <span class="mono">upstream</span> hacia el base.</li>
+          <li><b>La ficha <span class="mono">instance.yml</span></b> (se genera nueva).</li>
+        </ul>
+      </div>
+      <div class="card infra">
+        <h3>Se crea nuevo <small>por cada cliente</small></h3>
+        <ul>
+          <li><b>La VPS</b> y su proyecto en Dokploy.</li>
+          <li><b>PostgreSQL</b> con una base vacía (migraciones y seed).</li>
+          <li><b>El bucket de RustFS</b> y sus carpetas.</li>
+          <li><b>Secretos y variables</b> propios.</li>
+          <li><b>Dominio y certificado TLS.</b></li>
+          <li><b>Su imagen de contenedor</b> (se construye con los datos del cliente).</li>
+          <li><b>Primer administrador, jobs y backups.</b></li>
+          <li><b>El registro de la instancia</b> para la app móvil.</li>
+        </ul>
+      </div>
+      <div class="card base">
+        <h3>Se comparte <small>entre todos</small></h3>
+        <ul>
+          <li><b>El repo base</b> y sus tags de versión.</li>
+          <li><b>El repo móvil</b> y la app genérica de las tiendas.</li>
+          <li><b>El CI</b> (GitHub Actions) y los workflows reutilizables.</li>
+          <li><b>Monitoreo central</b> de todas las instancias (opcional).</li>
+          <li><b>Proyecto de Expo</b> para las notificaciones push (a decidir).</li>
+        </ul>
+      </div>
+    </div>
+    <p class="foot">Lo que se clona es solo código y configuración. Los datos de cada cliente nunca salen de su VPS.</p>
+  </section>
+
+  <!-- 2. DIAGRAMA -->
+  <section aria-labelledby="s2">
+    <div class="kicker">2 · La instancia</div>
+    <h2 id="s2">Elementos dentro de la VPS</h2>
+    <div class="panel scroll">
+      <svg viewBox="0 0 960 680" role="img" aria-label="Elementos de una instancia: Caddy recibe el tráfico y lo reparte a la app Next, la API móvil y el motor de sincronización. App, API y worker usan PostgreSQL y RustFS, y opcionalmente Redis. Debajo están el ciclo de vida (migraciones, buckets, backup, volúmenes). Fuera de la VPS están Dokploy, el CI, el registro de imágenes, el monitoreo y los servicios externos de push, correo y analítica.">
+        <defs>
+          <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah" d="M0 0 L10 5 L0 10 z"/></marker>
+          <marker id="am" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah-m" d="M0 0 L10 5 L0 10 z"/></marker>
+        </defs>
+
+        <!-- Actores -->
+        <rect class="b-ext" x="20" y="60" width="130" height="56" rx="8"/>
+        <text class="t-title" x="85" y="84" text-anchor="middle">Navegador</text>
+        <text class="t-sub" x="85" y="102" text-anchor="middle">web de gestión</text>
+        <rect class="b-mobile" x="20" y="180" width="130" height="56" rx="8"/>
+        <text class="t-title" x="85" y="204" text-anchor="middle">App móvil</text>
+        <text class="t-sub" x="85" y="222" text-anchor="middle">genérica</text>
+        <path class="ln" d="M150 88 H198" marker-end="url(#a)"/>
+        <path class="ln-m" d="M150 208 H198" marker-end="url(#am)"/>
+        <text class="t-mono" x="174" y="80" text-anchor="middle">HTTPS</text>
+
+        <!-- VPS -->
+        <rect class="b-vps" x="180" y="20" width="620" height="560" rx="10"/>
+        <text class="t-title" x="196" y="42">VPS del cliente · red Docker interna</text>
+
+        <!-- Caddy -->
+        <rect class="b-infra" x="200" y="60" width="116" height="350" rx="8"/>
+        <text class="t-title" x="258" y="84" text-anchor="middle">caddy</text>
+        <text class="t-sub" x="258" y="102" text-anchor="middle">entrada y TLS</text>
+        <text class="t-sub" x="258" y="120" text-anchor="middle">certificados solos</text>
+        <text class="t-mono" x="258" y="300" text-anchor="middle">/*</text>
+        <text class="t-mono" x="258" y="316" text-anchor="middle">/api/mobile/*</text>
+        <text class="t-mono" x="258" y="332" text-anchor="middle">/sync/*</text>
+        <text class="t-mono" x="258" y="348" text-anchor="middle">s3.dominio</text>
+
+        <!-- Aplicación -->
+        <rect class="b-group" x="340" y="50" width="240" height="270" rx="8"/>
+        <text class="t-mono" x="352" y="68">APLICACIÓN · una imagen, tres procesos</text>
+        <rect class="b-base" x="352" y="78" width="216" height="64" rx="8"/>
+        <text class="t-title" x="460" y="100" text-anchor="middle">app · Next</text>
+        <text class="t-sub" x="460" y="118" text-anchor="middle">web, server actions</text>
+        <text class="t-sub" x="460" y="133" text-anchor="middle">archivos y endpoints de jobs</text>
+        <rect class="b-mobile opt" x="352" y="152" width="216" height="64" rx="8"/>
+        <text class="t-title" x="460" y="174" text-anchor="middle">api · /api/mobile/v1</text>
+        <text class="t-sub" x="460" y="192" text-anchor="middle">la app móvil, otro proceso</text>
+        <text class="t-sub" x="460" y="207" text-anchor="middle">para no afectar a la web</text>
+        <rect class="b-base" x="352" y="226" width="216" height="64" rx="8"/>
+        <text class="t-title" x="460" y="248" text-anchor="middle">worker (hoy: cron)</text>
+        <text class="t-sub" x="460" y="266" text-anchor="middle">jobs programados</text>
+        <text class="t-sub" x="460" y="281" text-anchor="middle">outbox y envío de push</text>
+
+        <!-- Sync -->
+        <rect class="b-mobile opt" x="352" y="334" width="216" height="64" rx="8"/>
+        <text class="t-title" x="460" y="356" text-anchor="middle">sync · opcional</text>
+        <text class="t-sub" x="460" y="374" text-anchor="middle">datos offline de la app</text>
+        <text class="t-sub" x="460" y="389" text-anchor="middle">lee el WAL de PostgreSQL</text>
+
+        <!-- Caddy -> servicios -->
+        <path class="ln" d="M316 110 H348" marker-end="url(#a)"/>
+        <path class="ln-m" d="M316 184 H348" marker-end="url(#am)"/>
+        <path class="ln-m" d="M316 366 H348" marker-end="url(#am)"/>
+
+        <!-- Datos -->
+        <rect class="b-group" x="620" y="50" width="164" height="360" rx="8"/>
+        <text class="t-mono" x="632" y="68">DATOS</text>
+        <rect class="b-infra" x="632" y="78" width="140" height="124" rx="8"/>
+        <text class="t-title" x="702" y="100" text-anchor="middle">PostgreSQL</text>
+        <text class="t-sub" x="702" y="120" text-anchor="middle">datos del cliente</text>
+        <text class="t-sub" x="702" y="136" text-anchor="middle">historial y triggers</text>
+        <text class="t-sub" x="702" y="152" text-anchor="middle">outbox y comandos</text>
+        <text class="t-sub" x="702" y="168" text-anchor="middle">usuarios y sesiones</text>
+        <text class="t-mono" x="702" y="190" text-anchor="middle">volumen pgdata</text>
+        <rect class="b-infra" x="632" y="214" width="140" height="80" rx="8"/>
+        <text class="t-title" x="702" y="236" text-anchor="middle">RustFS</text>
+        <text class="t-sub" x="702" y="254" text-anchor="middle">archivos y fotos</text>
+        <text class="t-sub" x="702" y="270" text-anchor="middle">bucket privado</text>
+        <text class="t-mono" x="702" y="286" text-anchor="middle">storage-data</text>
+        <rect class="b-infra opt" x="632" y="306" width="140" height="92" rx="8"/>
+        <text class="t-title" x="702" y="328" text-anchor="middle">Redis · opcional</text>
+        <text class="t-sub" x="702" y="346" text-anchor="middle">límite de intentos</text>
+        <text class="t-sub" x="702" y="362" text-anchor="middle">compartido</text>
+        <text class="t-sub" x="702" y="378" text-anchor="middle">cola · avisos en vivo</text>
+
+        <!-- Aplicación -> datos -->
+        <path class="ln" d="M568 110 H590 M568 184 H590 M568 258 H590 M590 110 V258"/>
+        <path class="ln" d="M590 140 H628" marker-end="url(#a)"/>
+        <path class="ln" d="M590 240 H628" marker-end="url(#a)"/>
+        <path class="ln-o" d="M590 258 V352 H628" marker-end="url(#a)"/>
+        <path class="ln" d="M568 366 H604 V168 H628" marker-end="url(#a)"/>
+        <text class="t-mono" x="498" y="418">el sync lee el WAL de PostgreSQL</text>
+
+        <!-- Ciclo de vida -->
+        <rect class="b-group" x="200" y="438" width="584" height="126" rx="8"/>
+        <text class="t-mono" x="212" y="456">CICLO DE VIDA Y RESPALDO</text>
+        <rect class="b-infra" x="212" y="466" width="132" height="86" rx="8"/>
+        <text class="t-title" x="278" y="488" text-anchor="middle">migrate</text>
+        <text class="t-sub" x="278" y="506" text-anchor="middle">aplica migraciones</text>
+        <text class="t-sub" x="278" y="522" text-anchor="middle">en cada deploy,</text>
+        <text class="t-sub" x="278" y="538" text-anchor="middle">antes de arrancar</text>
+        <rect class="b-infra" x="356" y="466" width="132" height="86" rx="8"/>
+        <text class="t-title" x="422" y="488" text-anchor="middle">buckets y seed</text>
+        <text class="t-sub" x="422" y="506" text-anchor="middle">crean los buckets</text>
+        <text class="t-sub" x="422" y="522" text-anchor="middle">y la empresa inicial</text>
+        <text class="t-sub" x="422" y="538" text-anchor="middle">en el primer deploy</text>
+        <rect class="b-infra opt" x="500" y="466" width="132" height="86" rx="8"/>
+        <text class="t-title" x="566" y="488" text-anchor="middle">backup</text>
+        <text class="t-sub" x="566" y="506" text-anchor="middle">pg_dump diario y</text>
+        <text class="t-sub" x="566" y="522" text-anchor="middle">copia del bucket</text>
+        <text class="t-sub" x="566" y="538" text-anchor="middle">fuera de la VPS</text>
+        <rect class="b-infra" x="644" y="466" width="128" height="86" rx="8"/>
+        <text class="t-title" x="708" y="488" text-anchor="middle">health</text>
+        <text class="t-sub" x="708" y="506" text-anchor="middle">/api/health</text>
+        <text class="t-sub" x="708" y="522" text-anchor="middle">responde el sha</text>
+        <text class="t-sub" x="708" y="538" text-anchor="middle">del deploy</text>
+
+        <!-- Externos a la derecha -->
+        <rect class="b-ext" x="820" y="60" width="130" height="56" rx="8"/>
+        <text class="t-title" x="885" y="84" text-anchor="middle">Expo Push</text>
+        <text class="t-sub" x="885" y="102" text-anchor="middle">lo usa el worker</text>
+        <rect class="b-ext" x="820" y="136" width="130" height="56" rx="8"/>
+        <text class="t-title" x="885" y="160" text-anchor="middle">Correo SMTP</text>
+        <text class="t-sub" x="885" y="178" text-anchor="middle">app y worker</text>
+        <rect class="b-ext" x="820" y="212" width="130" height="56" rx="8"/>
+        <text class="t-title" x="885" y="236" text-anchor="middle">PostHog</text>
+        <text class="t-sub" x="885" y="254" text-anchor="middle">analítica y errores</text>
+        <path class="ln" d="M800 88 H816" marker-end="url(#a)"/>
+        <path class="ln" d="M800 164 H816" marker-end="url(#a)"/>
+        <path class="ln" d="M800 240 H816" marker-end="url(#a)"/>
+
+        <!-- Abajo: plataforma externa a la VPS -->
+        <rect class="b-ext" x="20" y="610" width="170" height="56" rx="8"/>
+        <text class="t-title" x="105" y="634" text-anchor="middle">Dokploy</text>
+        <text class="t-sub" x="105" y="652" text-anchor="middle">despliega y orquesta</text>
+        <rect class="b-ext" x="206" y="610" width="170" height="56" rx="8"/>
+        <text class="t-title" x="291" y="634" text-anchor="middle">GitHub Actions</text>
+        <text class="t-sub" x="291" y="652" text-anchor="middle">tests, build y deploy</text>
+        <rect class="b-ext" x="392" y="610" width="170" height="56" rx="8"/>
+        <text class="t-title" x="477" y="634" text-anchor="middle">Registro de imágenes</text>
+        <text class="t-sub" x="477" y="652" text-anchor="middle">una imagen por cliente</text>
+        <rect class="b-ext" x="578" y="610" width="170" height="56" rx="8"/>
+        <text class="t-title" x="663" y="634" text-anchor="middle">Monitoreo central</text>
+        <text class="t-sub" x="663" y="652" text-anchor="middle">salud y sha de cada una</text>
+        <rect class="b-ext" x="764" y="610" width="176" height="56" rx="8"/>
+        <text class="t-title" x="852" y="634" text-anchor="middle">Destino de backups</text>
+        <text class="t-sub" x="852" y="652" text-anchor="middle">almacenamiento externo</text>
+        <path class="ln" d="M105 610 V580 M291 610 V580 M477 610 V580 M663 610 V580 M852 610 V580"/>
+      </svg>
+    </div>
+    <p class="foot">Las flechas rosas punteadas son tráfico de la app móvil. La línea gris punteada hacia Redis indica un uso opcional.</p>
+  </section>
+
+  <!-- 3. CATALOGO -->
+  <section aria-labelledby="s3">
+    <div class="kicker">3 · Qué hace cada elemento</div>
+    <h2 id="s3">Catálogo de la instancia</h2>
+    <div class="panel scroll">
+      <table>
+        <thead><tr><th>Elemento</th><th>Qué hace</th><th>¿Va siempre?</th><th>Estado hoy</th></tr></thead>
+        <tbody>
+          <tr><td>caddy</td><td>Recibe el tráfico, maneja el certificado TLS y reparte las rutas a cada servicio</td><td>Sí</td><td><span class="tag ok">existe</span></td></tr>
+          <tr><td>app · Next</td><td>La web de gestión, las server actions, la descarga de archivos y los endpoints de los jobs</td><td>Sí</td><td><span class="tag ok">existe</span></td></tr>
+          <tr><td>api</td><td>Atiende a la app móvil. Es la misma imagen que la web, en otro proceso, para que un pico de la app no afecte a la web</td><td>Si la app está activa</td><td><span class="tag build">a construir</span></td></tr>
+          <tr><td>worker</td><td>Corre los jobs programados y, con la app, procesa el outbox y envía los push</td><td>Sí (los jobs)</td><td><span class="tag ok">existe como cron</span></td></tr>
+          <tr><td>sync</td><td>Mantiene la copia local de la app al día y recibe sus cambios cuando vuelve la señal</td><td>Si la app tiene offline</td><td><span class="tag build">a construir</span></td></tr>
+          <tr><td>PostgreSQL</td><td>Datos del cliente, historial por triggers, usuarios y sesiones, y las tablas de outbox y comandos</td><td>Sí</td><td><span class="tag ok">existe</span></td></tr>
+          <tr><td>RustFS</td><td>Archivos y fotos en un bucket privado; las fotos de la app se suben directo con URLs prefirmadas</td><td>Sí</td><td><span class="tag ok">existe</span></td></tr>
+          <tr><td>migrate</td><td>Aplica las migraciones antes de arrancar los procesos de la aplicación</td><td>Sí</td><td><span class="tag ok">existe</span> dentro del arranque de la app</td></tr>
+          <tr><td>buckets y seed</td><td>Crean los buckets y la empresa inicial en el primer deploy</td><td>Sí</td><td><span class="tag build">con fallas hoy</span></td></tr>
+          <tr><td>backup</td><td>Copia diaria de la base y del bucket a un lugar fuera de la VPS</td><td>Sí</td><td><span class="tag build">a construir</span></td></tr>
+          <tr><td>Redis</td><td>Contadores compartidos entre procesos, colas y avisos en vivo</td><td>No</td><td><span class="tag opt">no se usa hoy</span></td></tr>
+          <tr><td>Monitoreo central</td><td>Vigila la salud y la versión desplegada de todas las instancias</td><td>Uno para todas</td><td><span class="tag build">a construir</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 4. REDIS -->
+  <section aria-labelledby="s4">
+    <div class="kicker">4 · Redis y otros servicios</div>
+    <h2 id="s4">¿Hace falta Redis en cada instancia?</h2>
+    <p class="lead">Redis no aparece en el repo de alphataco: no hay dependencia ni código que lo use (las menciones de "redis" en los archivos son de la palabra "rediseño"). Mi recomendación es no incluirlo por defecto y sumarlo como servicio opcional cuando haya un uso concreto.</p>
+    <div class="two">
+      <div class="panel">
+        <h3>Dónde aportaría de verdad</h3>
+        <ul>
+          <li><b>Límite de intentos de login compartido.</b> Hoy los contadores viven en un <span class="mono">Map</span> en la memoria del proceso (<span class="mono">login-rate-limit.ts</span>). Con la web y la API en procesos distintos cada uno contaría por su lado, y todo se reinicia al desplegar.</li>
+          <li><b>Cola de trabajos con reintentos</b> para push y outbox, si el volumen crece.</li>
+          <li><b>Avisos en vivo</b> entre procesos (por ejemplo, de la API a la web).</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>Por qué no lo pondría siempre</h3>
+        <ul>
+          <li><b>Es un servicio más por cada VPS:</b> hay que desplegarlo, respaldarlo y monitorearlo en N instancias.</li>
+          <li><b>PostgreSQL resuelve lo mismo</b> con poco esfuerzo: una tabla de intentos para el límite, y el outbox con bloqueo de filas (<span class="mono">SKIP LOCKED</span>) como cola.</li>
+          <li><b>Redis central compartido</b> entre clientes no es buena idea: rompe el aislamiento y es un punto único de falla.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Otros servicios que se pueden sumar a la VPS</h3>
+      <ul style="margin:8px 0 0;padding-left:18px;color:var(--muted);font-size:14px;display:flex;flex-direction:column;gap:5px">
+        <li><b style="color:var(--ink)">Uptime Kuma</b> u otro monitor, en un solo lugar para todas las instancias (no uno por cliente).</li>
+        <li><b style="color:var(--ink)">Una herramienta de backups</b> (restic o rclone) que mande la base y el bucket a un almacenamiento externo.</li>
+        <li><b style="color:var(--ink)">Recolección de logs</b> (Loki y Grafana) si los logs de Dokploy dejan de alcanzar.</li>
+        <li><b style="color:var(--ink)">Mailpit</b> solo en desarrollo; en producción se usa un SMTP real.</li>
+      </ul>
+    </div>
+    <p class="foot">Redis queda como un perfil opcional del compose (por ejemplo <span class="mono">cache</span>), que se prende en las instancias que lo necesiten. El primer motivo realista es el límite de intentos compartido cuando la API pase a ser un proceso aparte.</p>
+  </section>
+
+</div>

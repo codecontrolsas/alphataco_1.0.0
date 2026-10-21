@@ -45,7 +45,7 @@ function revalidate() {
   revalidatePath(COMMERCIAL_PATH, 'layout');
 }
 
-/** Borra de MinIO los certificados de retenciones que ya no existen (después del commit). */
+/** Borra de RustFS los certificados de retenciones que ya no existen (después del commit). */
 async function removeFiles(paths: string[]) {
   if (paths.length === 0) return;
   const removed = await storageRemove(CUSTOMER_FILES_BUCKET, paths);

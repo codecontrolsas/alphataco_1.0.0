@@ -66,6 +66,19 @@ RUN --mount=type=cache,target=/root/.npm \
        "@aws-sdk/client-s3@$(V @aws-sdk/client-s3)" "better-auth@$(V better-auth)" \
   && rm -f package.json package-lock.json
 
+##### s3-tools #####
+# SDK de S3 para `scripts/ensure-buckets.ts`. Va a `scripts/node_modules` y no al de la app:
+# npm resolveria las transitivas (@smithy/*, @aws-sdk/core) por su cuenta y podrian pisar las
+# versiones que el standalone de Next trazo para el server (mismo criterio que `demo-tools`).
+FROM node:24-bookworm-slim AS s3-tools
+WORKDIR /s3-tools
+COPY package-lock.json .npmrc ./
+RUN --mount=type=cache,target=/root/.npm \
+  V() { node -p "require('./package-lock.json').packages['node_modules/$1'].version"; }; \
+  npm init -y >/dev/null \
+  && npm install --no-audit --no-fund --omit=dev "@aws-sdk/client-s3@$(V @aws-sdk/client-s3)" \
+  && rm -f package.json package-lock.json
+
 ##### build #####
 # Stage completa (node_modules + prisma.config.ts + .next). Ademas de producir el
 # standalone, la usa el servicio `migrate` del docker-compose local.
@@ -126,6 +139,13 @@ COPY --from=build --chown=nextjs:nodejs /app/scripts/seed/permission-rows.ts ./s
 COPY --from=build --chown=nextjs:nodejs /app/src/features/Permissions/permissions-map.ts ./src/features/Permissions/permissions-map.ts
 COPY --from=build --chown=nextjs:nodejs /app/src/features/Warehouses/lib/default-units.ts ./src/features/Warehouses/lib/default-units.ts
 COPY --from=build --chown=nextjs:nodejs /app/src/features/Notifications/notification-catalog.ts ./src/features/Notifications/notification-catalog.ts
+COPY --from=build --chown=nextjs:nodejs /app/src/features/Permissions/permission-catalog.ts ./src/features/Permissions/permission-catalog.ts
+COPY --from=build --chown=nextjs:nodejs /app/src/shared/lib/prisma-pg-config.ts ./src/shared/lib/prisma-pg-config.ts
+# Alta del primer admin de una instancia nueva (se corre a mano, ver docs/deploy/runbook.md).
+COPY --from=build --chown=nextjs:nodejs /app/scripts/bootstrap-admin.ts ./scripts/bootstrap-admin.ts
+# Creacion idempotente de los buckets de RustFS en cada arranque (ver docker/entrypoint.sh).
+COPY --from=build --chown=nextjs:nodejs /app/scripts/ensure-buckets.ts ./scripts/ensure-buckets.ts
+COPY --from=build --chown=nextjs:nodejs /app/src/shared/lib/storage-buckets.ts ./src/shared/lib/storage-buckets.ts
 # CLI de Prisma + deps del seed, encima del node_modules trazado del standalone.
 COPY --from=tools --chown=nextjs:nodejs /tools/node_modules ./node_modules
 # Motor de los PDF (ver stage `pdf`).
@@ -134,6 +154,8 @@ COPY --from=pdf --chown=nextjs:nodejs /pdf/node_modules ./node_modules
 # con sus dependencias aparte.
 COPY --from=build --chown=nextjs:nodejs /app/scripts/demo ./scripts/demo
 COPY --from=demo-tools --chown=nextjs:nodejs /demo-tools/node_modules ./scripts/demo/node_modules
+# SDK de S3 de los scripts de arranque (ver stage `s3-tools`). Prisma y pg los resuelve desde ./node_modules.
+COPY --from=s3-tools --chown=nextjs:nodejs /s3-tools/node_modules ./scripts/node_modules
 
 COPY --from=build --chown=nextjs:nodejs /app/docker/entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh

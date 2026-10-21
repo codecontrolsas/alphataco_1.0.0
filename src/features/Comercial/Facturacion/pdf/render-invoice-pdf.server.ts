@@ -27,7 +27,7 @@ export function invoicePdfPath(companyId: string, invoiceId: string): string {
 
 /**
  * Genera el PDF de un comprobante AUTORIZADO con los snapshots congelados al emitir y lo guarda
- * en MinIO. Idempotente: se puede volver a correr (por ejemplo si falló después del CAE).
+ * en RustFS. Idempotente: se puede volver a correr (por ejemplo si falló después del CAE).
  */
 export async function renderAndStoreInvoicePdf(invoiceId: string, companyId: string): Promise<{ path: string } | { error: string }> {
   const invoice = await loadInvoice(invoiceId, companyId);

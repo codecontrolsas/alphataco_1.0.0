@@ -1,13 +1,13 @@
 import { afterAll, describe, expect, it } from 'vitest';
 
 /**
- * Integración real contra el MinIO del compose. Corre sólo con `S3_ENDPOINT` definido:
+ * Integración real contra el RustFS del compose. Corre sólo con `S3_ENDPOINT` definido:
  *
- *   docker compose --env-file .env.docker up -d minio minio-init
+ *   bash scripts/dev-up.sh   # postgres + almacenamiento + buckets
  *   set -a; source .env.docker; set +a
- *   S3_ENDPOINT=http://127.0.0.1:${MINIO_PORT} npx vitest run src/shared/lib/storage.integration.test.ts
+ *   S3_ENDPOINT=http://127.0.0.1:${STORAGE_PORT} npx vitest run src/shared/lib/storage.integration.test.ts
  *
- * Los tests unitarios no alcanzan para esta capa: lo que puede fallar contra MinIO son
+ * Los tests unitarios no alcanzan para esta capa: lo que puede fallar contra RustFS son
  * justo las cosas que un mock da por buenas —la firma SigV4 con `forcePathStyle`, los
  * checksums que el SDK agrega en `PutObject`, el `CopySource` URL-encodeado del move y que
  * los buckets sean privados de verdad—.
@@ -17,7 +17,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 const BUCKET = 'document-files';
 const PREFIX = `__integration__/${Date.now()}`;
 
-describe.skipIf(!process.env.S3_ENDPOINT)('storage (integración contra MinIO)', () => {
+describe.skipIf(!process.env.S3_ENDPOINT)('storage (integración contra RustFS)', () => {
   const key = `${PREFIX}/informe (v1).pdf`;
   const movedKey = `${PREFIX}/movido/informe final.pdf`;
 
@@ -77,13 +77,13 @@ describe.skipIf(!process.env.S3_ENDPOINT)('storage (integración contra MinIO)',
     await (await import('./storage')).storageRemove(BUCKET, [`${PREFIX}/sub/anidado.txt`]);
   });
 
-  it('devuelve la URL de descarga de la app, no una firmada contra MinIO', async () => {
+  it('devuelve la URL de descarga de la app, no una firmada contra RustFS', async () => {
     const { storageDownloadUrls } = await import('./storage');
     const links = await storageDownloadUrls(BUCKET, [key]);
     expect(links.ok).toBe(true);
     if (!links.ok) return;
 
-    // Relativa a la app y con `?download=1`: el navegador nunca habla con MinIO, así que no
+    // Relativa a la app y con `?download=1`: el navegador nunca habla con RustFS, así que no
     // hay endpoint S3 público que publicar ni firma que pueda vencer.
     expect(links.data[0].path).toBe(key);
     expect(links.data[0].url.startsWith(`/api/files/${BUCKET}/`)).toBe(true);
@@ -91,7 +91,7 @@ describe.skipIf(!process.env.S3_ENDPOINT)('storage (integración contra MinIO)',
     expect(links.data[0].url).not.toContain('X-Amz-Signature');
   });
 
-  it('el bucket es privado: MinIO rechaza el objeto sin credenciales', async () => {
+  it('el bucket es privado: RustFS rechaza el objeto sin credenciales', async () => {
     const endpoint = (process.env.S3_ENDPOINT as string).replace(/\/$/, '');
     const response = await fetch(`${endpoint}/${BUCKET}/${encodeURI(key)}`);
     expect(response.status).toBeGreaterThanOrEqual(400);

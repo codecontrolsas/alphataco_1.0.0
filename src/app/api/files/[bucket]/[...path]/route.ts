@@ -12,7 +12,7 @@ import { NextResponse } from 'next/server';
 /**
  * Sirve un archivo del storage: `GET /api/files/<bucket>/<key>[?download=1]`.
  *
- * Es el ÚNICO camino de lectura de archivos: los buckets de MinIO son privados y no están
+ * Es el ÚNICO camino de lectura de archivos: los buckets de RustFS son privados y no están
  * publicados en internet. Por eso valida el perímetro en cada request:
  *
  * 1. El bucket tiene que estar en la lista conocida.
@@ -97,7 +97,7 @@ export async function GET(
       new GetObjectCommand({
         Bucket: bucket,
         Key: key,
-        // Revalidación condicional: si el navegador ya tiene la versión buena, MinIO
+        // Revalidación condicional: si el navegador ya tiene la versión buena, RustFS
         // responde 304 y no se transfiere el cuerpo.
         IfNoneMatch: request.headers.get('if-none-match') ?? undefined,
       })

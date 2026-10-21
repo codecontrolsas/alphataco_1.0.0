@@ -13,16 +13,18 @@ import {
 const COMPANY = '11111111-2222-3333-4444-555555555555';
 
 describe('STORAGE_BUCKETS', () => {
-  it('coincide exactamente con los buckets que crea `minio-init` en el compose', () => {
+  it('es la única lista: el compose no la duplica y los buckets los crea `scripts/ensure-buckets.ts`', () => {
     const compose = readFileSync('docker-compose.yml', 'utf8');
-    const match = compose.match(/for b in ([^;]+); do mc mb/);
-    expect(match).not.toBeNull();
-    const fromCompose = (match as RegExpMatchArray)[1].trim().split(/\s+/);
-    expect([...fromCompose].sort()).toEqual([...STORAGE_BUCKETS].sort());
+    expect(compose).not.toMatch(/\bmc mb\b/);
+    for (const bucket of STORAGE_BUCKETS) expect(compose).not.toContain(bucket);
+
+    expect(readFileSync('docker/entrypoint.sh', 'utf8')).toContain('scripts/ensure-buckets.ts');
+    expect(readFileSync('scripts/dev-up.sh', 'utf8')).toContain('scripts/ensure-buckets.ts');
   });
 
-  it('el compose los crea privados', () => {
-    expect(readFileSync('docker-compose.yml', 'utf8')).toContain('mc anonymous set none');
+  it('ensure-buckets no toca políticas ni ACL: los buckets quedan privados', () => {
+    const script = readFileSync('scripts/ensure-buckets.ts', 'utf8');
+    expect(script).not.toMatch(/PutBucketPolicy|PutBucketAcl|public-read/);
   });
 });
 

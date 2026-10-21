@@ -11,7 +11,7 @@ import { formatAddress, type IssuerSnapshot, type ReceiverSnapshot } from '../li
  * TODO como texto ya formateado, así el layout no calcula nada.
  */
 
-/** Bucket de MinIO de los PDF fiscales (`<companyId>/<invoiceId>.pdf`). */
+/** Bucket de RustFS de los PDF fiscales (`<companyId>/<invoiceId>.pdf`). */
 export const INVOICE_PDF_BUCKET = 'invoice-pdfs';
 
 const TITLES = { invoice: 'FACTURA', credit_note: 'NOTA DE CRÉDITO', debit_note: 'NOTA DE DÉBITO' } as const;
