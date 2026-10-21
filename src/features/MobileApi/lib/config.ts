@@ -9,4 +9,4 @@ export function isMobileApiEnabled(): boolean {
 }
 
 /** Módulos que la API móvil expone en esta versión (los informa `/capabilities`). */
-export const MOBILE_MODULES = ['operaciones.daily-report-rows'] as const;
+export const MOBILE_MODULES = ['operaciones.daily-report-rows', 'operaciones.daily-reports', 'operaciones.resources'] as const;
