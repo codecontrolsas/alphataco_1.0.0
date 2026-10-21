@@ -80,6 +80,9 @@ async function main(): Promise<void> {
         async (tx) => {
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('demo-reset'))`;
           await tx.$executeRaw`SELECT set_config('app.user_id', ${admin.id}, true)`;
+          // `company_id` es obligatorio y la base lo completa desde el contexto: sin la empresa de la demo, los insert de las tablas que no la
+          // envian explicitamente (diagramas, etc.) fallan con NOT NULL.
+          await tx.$executeRaw`SELECT set_config('app.company_id', ${DEMO_COMPANY_ID}, true)`;
           await assertDemoDatabase(tx, DEMO_COMPANY_ID, DEMO_COMPANY_NAMES);
           await wipeBusinessData(tx, log);
 
