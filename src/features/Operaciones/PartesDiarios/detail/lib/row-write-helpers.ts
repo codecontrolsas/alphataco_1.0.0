@@ -1,4 +1,4 @@
-import type { DailyReportRowInput } from '../mutations.server';
+import type { DailyReportRowInput } from '../use-cases/types';
 
 /**
  * Helpers de escritura de líneas compartidos por create/update (`mutations.server.ts`).

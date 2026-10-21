@@ -1049,3 +1049,21 @@ CREATE TRIGGER tr_dailyreportrows_history_before_update
   AFTER UPDATE ON public.dailyreportrows
   REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows
   FOR EACH STATEMENT EXECUTE FUNCTION public.log_dailyreportrows_update_history();
+
+-- function dailyreportrows_bump_version: version de la linea (baseVersion de los casos de uso). Sube con cualquier UPDATE
+-- que cambie algo; corre despues del trigger de historial (orden alfabetico) y `version` no es un campo auditado.
+CREATE OR REPLACE FUNCTION public.dailyreportrows_bump_version()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  NEW.version := OLD.version + 1;
+  RETURN NEW;
+END
+$function$;
+
+DROP TRIGGER IF EXISTS trg_dailyreportrows_version ON public.dailyreportrows;
+CREATE TRIGGER trg_dailyreportrows_version
+  BEFORE UPDATE ON public.dailyreportrows
+  FOR EACH ROW WHEN (OLD.* IS DISTINCT FROM NEW.*)
+  EXECUTE FUNCTION public.dailyreportrows_bump_version();

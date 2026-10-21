@@ -928,6 +928,7 @@ model dailyreport_customer_equipment_relations {
   dailyreportrows       dailyreportrows  @relation(fields: [daily_report_row_id], references: [id], onDelete: Cascade, map: "dailyreport_customer_equipment_relatio_daily_report_row_id_fkey")
 
   company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  @@unique([daily_report_row_id, customer_equipment_id], map: "uq_dr_customer_equipment_rel_row_equipment")
   @@schema("public")
   @@index([company_id], map: "idx_dailyreport_customer_equipment_relations_company_id")
 }
@@ -944,6 +945,7 @@ model dailyreportemployeerelations {
 
   company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([daily_report_row_id], map: "idx_dailyreportemployeerelations_row_id")
+  @@unique([daily_report_row_id, employee_id], map: "uq_dr_employee_rel_row_employee")
   @@schema("public")
   @@index([company_id], map: "idx_dailyreportemployeerelations_company_id")
 }
@@ -982,6 +984,7 @@ model dailyreportrows {
   description                              String?
   created_at                               DateTime?                                  @default(now()) @db.Timestamp(6)
   updated_at                               DateTime?                                  @default(now()) @db.Timestamp(6)
+  version                                  Int                                        @default(1)
   status                                   daily_report_status                        @default(pendiente)
   working_day                              String?
   shift_12h                                daily_report_shift?
@@ -6378,5 +6381,23 @@ enum bank_line_status {
   CREATED
   IGNORED
 
+  @@schema("public")
+}
+
+/// Comandos ya procesados (idempotencia por commandId); el resultado se guarda en la misma transaccion que el efecto.
+model processed_commands {
+  company_id    String   @default(dbgenerated("app_current_company_id()")) @db.Uuid
+  command_id    String   @db.Uuid
+  command_type  String
+  payload_hash  String
+  actor_user_id String?  @db.Uuid
+  entity_id     String?  @db.Uuid
+  result        Json?
+  captured_at   DateTime? @db.Timestamptz(6)
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([company_id, command_id])
+  @@index([company_id], map: "idx_processed_commands_company_id")
+  @@index([created_at], map: "idx_processed_commands_created_at")
   @@schema("public")
 }

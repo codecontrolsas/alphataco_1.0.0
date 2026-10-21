@@ -3,7 +3,6 @@
 import { withSessionActor } from '@/features/Operaciones/lib/with-session-actor';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
-import { resolveRowQuantity } from '../lib/row-quantity';
 import { reconcileRowResourceStatus } from '../lib/row-resource-status';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
@@ -22,13 +21,25 @@ import {
   authorizeRowUpdate,
   RowRuleError,
 } from './lib/row-guards';
-import { createRowRelations, type EmployeeInput } from './lib/row-relations';
 import {
   buildResourceCheck,
   buildResourcesOnlyCheck,
   buildRowScalarData,
   resolveRowResources,
 } from './lib/row-write-helpers';
+import { prismaBase } from '@/shared/lib/prisma';
+import { getTenantContext } from '@/shared/lib/tenant-db';
+import { changeRowResources } from './use-cases/change-row-resources';
+import { changeRowStatus } from './use-cases/change-row-status';
+import { createRow } from './use-cases/create-row';
+import { syncRowResources } from './use-cases/row-resources';
+import type {
+  ChangeRowResourcesCommand,
+  ChangeRowStatusCommand,
+  DailyReportRowInput,
+  RowWriteResult,
+  UseCaseResult,
+} from './use-cases/types';
 
 const logger = new Logger('features/Operaciones/PartesDiarios/detail/mutations');
 
@@ -38,42 +49,7 @@ const logger = new Logger('features/Operaciones/PartesDiarios/detail/mutations')
 
 // ── Input types ──────────────────────────────────────────────────────────────
 
-/** Datos de una fila del parte diario para crear o actualizar */
-export interface DailyReportRowInput {
-  /** Requerido solo en create */
-  daily_report_id?: string;
-  customer_id: string;
-  service_id: string;
-  item_id: string;
-  status: string;
-  /**
-   * Cantidad de la línea. Si no viene, vale 1 (`resolveRowQuantity`). Se acepta `string`
-   * porque el input del formulario entrega texto y convertirlo a `number` antes de tiempo
-   * pierde decimales: la conversión a `Decimal` la hace el helper.
-   */
-  quantity?: string | number | null;
-  working_day: string;
-  /** Turno seleccionado para jornada 12h (excluyente). Null para otras jornadas. */
-  shift_12h?: 'dia' | 'noche' | null;
-  type_service?: 'mensual' | 'adicional' | 'adicional_permanente' | null;
-  start_time?: string | null;
-  end_time?: string | null;
-  description?: string | null;
-  sector_service_id?: string | null;
-  areas_service_id?: string | null;
-  remit_number?: string | null;
-  cancel_reason?: string | null;
-  completed_day?: boolean | null;
-  completed_night?: boolean | null;
-  preparte_id?: string | null;
-  employees?: EmployeeInput[];
-  /** IDs de vehículos */
-  equipment?: string[];
-  /** IDs de otros equipos */
-  other_equipment?: string[];
-  /** IDs de equipos de clientes */
-  customer_equipment?: string[];
-}
+export type { DailyReportRowInput } from './use-cases/types';
 
 /** Datos para edición masiva de filas */
 export interface BulkRowUpdateData {
@@ -128,38 +104,16 @@ function resolveRowStatus(
 export async function createDailyReportRowPrisma(data: DailyReportRowInput & { daily_report_id: string }) {
   logger.debug('Creando fila del parte diario', { data: { daily_report_id: data.daily_report_id } });
 
-  const resources = resolveRowResources(data);
-  const { employees, equipment, otherEquipment, customerEquipment, hasResources } = resources;
-  const resolvedStatus = resolveRowStatus(data.status, hasResources);
-
   try {
-    // Perímetro: el parte y todos los recursos tienen que ser de la empresa activa.
-    const companyId = await getActiveCompanyId();
-    await assertDailyReportInCompany(data.daily_report_id, companyId);
-    // Permiso y reglas de estado: las mismas que aplica la interfaz (ver `lib/row-guards.ts`).
-    await authorizeRowCreate(data.daily_report_id, companyId);
-    assertStatusSettable(data.status);
-    await assertRowResourcesInCompany(companyId, buildResourceCheck(data, resources));
-
-    const row = await withSessionActor(async (tx) => {
-      const newRow = await tx.dailyreportrows.create({
-        data: {
-          id: crypto.randomUUID(),
-          daily_report_id: data.daily_report_id,
-          ...buildRowScalarData(data),
-          quantity: resolveRowQuantity(data.quantity),
-          status: resolvedStatus,
-          type_service: data.type_service ?? null,
-        },
-      });
-
-      await createRowRelations(tx, newRow.id, employees, equipment, otherEquipment, customerEquipment);
-      await reconcileRowResourceStatus(tx, [newRow.id]);
-
-      return newRow;
+    const ctx = await getTenantContext();
+    const result = await createRow({ db: prismaBase }, ctx, {
+      commandId: crypto.randomUUID(),
+      capturedAt: new Date().toISOString(),
+      dailyReportId: data.daily_report_id,
+      row: data,
     });
-
-    return row;
+    if (!result.ok) throw new RowRuleError(result.message, result.code);
+    return result.data;
   } catch (error) {
     if (error instanceof RowRuleError) throw error;
     logger.error('Error al crear fila del parte diario', { data: { error } });
@@ -168,12 +122,31 @@ export async function createDailyReportRowPrisma(data: DailyReportRowInput & { d
 }
 
 // ============================================================================
+// 6b. COMANDOS CON IDEMPOTENCIA Y VERSION (casos de uso)
+// ============================================================================
+
+/**
+ * Cambia los recursos de una línea con altas y bajas EXPLÍCITAS. Devuelve la unión del caso de uso: quien llama
+ * decide qué mostrar según `code` (y debe lanzar si `!ok` en su `mutationFn`, para no mostrar un "guardado" falso).
+ */
+export async function changeDailyReportRowResources(
+  command: ChangeRowResourcesCommand
+): Promise<UseCaseResult<RowWriteResult>> {
+  return changeRowResources({ db: prismaBase }, await getTenantContext(), command);
+}
+
+/** Cambia el estado de una línea (o completa un turno) con control de versión. */
+export async function changeDailyReportRowStatus(command: ChangeRowStatusCommand): Promise<UseCaseResult<RowWriteResult>> {
+  return changeRowStatus({ db: prismaBase }, await getTenantContext(), command);
+}
+
+// ============================================================================
 // 7. UPDATE ROW
 // ============================================================================
 
 /**
- * Actualiza una fila existente del parte diario y sincroniza todas sus relaciones
- * de forma atómica (delete + re-create).
+ * Actualiza una fila existente del parte diario y sincroniza sus relaciones de forma atómica
+ * (solo la diferencia: altas y bajas reales, sin borrar y recrear).
  */
 export async function updateDailyReportRowPrisma(rowId: string, data: DailyReportRowInput) {
   logger.debug('Actualizando fila del parte diario', { data: { rowId } });
@@ -220,21 +193,8 @@ export async function updateDailyReportRowPrisma(rowId: string, data: DailyRepor
           })
         : null;
 
-      // 2. Borrar todas las relaciones existentes
-      await Promise.all([
-        tx.dailyreportemployeerelations.deleteMany({
-          where: { daily_report_row_id: rowId },
-        }),
-        tx.dailyreportequipmentrelations.deleteMany({
-          where: { daily_report_row_id: rowId },
-        }),
-        tx.dailyreport_customer_equipment_relations.deleteMany({
-          where: { daily_report_row_id: rowId },
-        }),
-      ]);
-
-      // 3. Re-crear relaciones desde los nuevos datos
-      await createRowRelations(tx, rowId, employees, equipment, otherEquipment, customerEquipment);
+      // 2. Llevar los recursos al conjunto pedido aplicando solo la diferencia (altas y bajas reales)
+      await syncRowResources(tx, rowId, { employees, equipment, otherEquipment, customerEquipment });
       await reconcileRowResourceStatus(tx, [rowId]);
 
       return updatedRow ?? tx.dailyreportrows.findUniqueOrThrow({ where: { id: rowId } });
