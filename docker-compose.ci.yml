@@ -14,3 +14,7 @@ services:
     build: !reset null
     image: ${APP_IMAGE:-alphataco-e2e:ci}
     pull_policy: never
+  api:
+    build: !reset null
+    image: ${APP_IMAGE:-alphataco-e2e:ci}
+    pull_policy: never

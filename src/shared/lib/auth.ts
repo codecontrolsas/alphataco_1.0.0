@@ -18,6 +18,8 @@ import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { APIError, createAuthMiddleware, getIP } from 'better-auth/api';
 import { nextCookies } from 'better-auth/next-js';
 import { anonymous } from 'better-auth/plugins/anonymous';
+import { bearer } from 'better-auth/plugins/bearer';
+import { isMobileApiEnabled } from '@/features/MobileApi/lib/config';
 import { randomUUID } from 'node:crypto';
 
 /**
@@ -254,6 +256,8 @@ export const auth = betterAuth({
       // una credencial inexistente, así que no se borra.
       disableDeleteAnonymousUser: true,
     }),
+    // Token de portador SOLO en el contenedor `api` (`MOBILE_API_ENABLED`): en `app` la web no acepta `Authorization: Bearer`.
+    ...(isMobileApiEnabled() ? [bearer({ requireSignature: true })] : []),
     // Tiene que ser el último: es el que escribe las cookies en las Server Actions.
     nextCookies(),
   ],

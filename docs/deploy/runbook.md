@@ -338,6 +338,22 @@ Si quien migra no puede crear roles, la migración avisa con un `WARNING` y sigu
 3. No hace falta ninguna otra variable: el cliente de las features siempre lleva la empresa activa a la base (cuesta ~2 ms por consulta).
 4. Verificar `/api/health` y una pantalla con datos. **Rollback:** volver `DATABASE_URL` al usuario original y redeployar.
 
+## API móvil (apagada por defecto)
+
+La API móvil (`/api/mobile/v1`) es la MISMA imagen que la web corriendo como un segundo contenedor `api`. **Con el interruptor
+apagado nada cambia**: el contenedor `app` no acepta `Authorization: Bearer` (el plugin se registra solo si
+`MOBILE_API_ENABLED=true`) y responde 404 `MOBILE_API_DISABLED` a todo `/api/mobile/*`.
+
+- **Encender (compose):** `COMPOSE_PROFILES=mobile MOBILE_UPSTREAM=api:3000 docker compose --env-file .env.docker up -d`. Caddy manda
+  `/api/mobile/*` a `api`; sin el perfil cae en `app`, que responde 404. El servicio `api` no corre migraciones ni seed (arranca
+  `node server.js`) y exige las mismas `DATABASE_URL`/`SYSTEM_DATABASE_URL` que `app`: **sin `SYSTEM_DATABASE_URL` el login móvil falla bajo RLS**.
+- **Producción en Dokploy:** hoy es una *Application* con Traefik hacia `app`; la API móvil no existe ahí hasta que se pase a Compose
+  con el perfil `mobile` (decisión del usuario). Mientras tanto la imagen trae las rutas apagadas.
+- **Contrato v1 (congelado, solo cambios compatibles):** `GET /capabilities` (sin auth), `POST|DELETE /session` (login/logout, devuelve
+  el token de portador), `GET /me`, `GET /daily-report-rows/{rowId}`, `POST .../resources`, `POST .../status`. Errores con código estable
+  (`UNAUTHENTICATED`, `FORBIDDEN`, `NO_ACTIVE_COMPANY`, `INVALID_INPUT`, `NOT_FOUND`, `VERSION_CONFLICT`, `COMMAND_ID_REUSED`, etc.).
+- **Prueba con curl:** `curl $URL/api/mobile/v1/capabilities`; login con `POST /session {"email","password"}`; después `Authorization: Bearer <token>`.
+
 ## Instancia demo: reset diario
 
 La instancia demo (`alphataco.31.97.42.82.sslip.io`, proyecto **Demos** de Dokploy) se regenera

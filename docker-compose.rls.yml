@@ -10,3 +10,9 @@ services:
       DATABASE_URL: postgresql://alphataco_app:rlsapp@postgres:5432/alphataco
       MIGRATE_DATABASE_URL: postgresql://alphataco:${POSTGRES_PASSWORD}@postgres:5432/alphataco
       SYSTEM_DATABASE_URL: postgresql://alphataco_system:rlssystem@postgres:5432/alphataco
+  # La API móvil (perfil `mobile`) conecta igual que `app`: sin SYSTEM_DATABASE_URL el cliente de sistema cae en el de
+  # aplicación y el login fallaría bajo RLS.
+  api:
+    environment:
+      DATABASE_URL: postgresql://alphataco_app:rlsapp@postgres:5432/alphataco
+      SYSTEM_DATABASE_URL: postgresql://alphataco_system:rlssystem@postgres:5432/alphataco
