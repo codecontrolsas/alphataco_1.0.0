@@ -1853,8 +1853,10 @@ model measure_units {
   unit          String          @db.VarChar(50)
   simbol        String          @db.VarChar(10)
   tipo          String          @db.VarChar(20)
+  company_id    String          @default(dbgenerated("app_current_company_id()")) @db.Uuid
   service_items service_items[]
 
+  @@index([company_id], map: "idx_measure_units_company_id")
   @@schema("public")
 }
 
