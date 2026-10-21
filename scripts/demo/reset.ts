@@ -63,7 +63,7 @@ async function main(): Promise<void> {
   const elapsed = () => ((Date.now() - started) / 1000).toFixed(1);
   const log = (message: string) => console.log(`[demo ${elapsed()}s] ${message}`);
 
-  const prisma = new PrismaClient({ adapter: new PrismaPg(prismaPgConfig(process.env.DATABASE_URL)) });
+  const prisma = new PrismaClient({ adapter: new PrismaPg(prismaPgConfig(process.env.SYSTEM_DATABASE_URL ?? process.env.DATABASE_URL)) });
   try {
     const s3 = createS3();
     const cal = buildCalendar(argentinaToday());

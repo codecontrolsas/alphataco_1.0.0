@@ -2,7 +2,7 @@
 
 ## Principio Fundamental
 
-**TODAS las migraciones se gestionan con Prisma contra el Postgres del compose** (`docker compose --env-file .env.docker up -d postgres`, `postgresql://alphataco:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_PORT}/alphataco` — el puerto es `POSTGRES_PORT` de tu `.env.docker`, default 5432). Ya no hay Supabase: no existen `auth.`, `storage.`, `extensions.`, `net.`, `cron.` ni RLS. Los MCPs de Supabase son historia; para verificar se usa `psql` dentro del contenedor.
+**TODAS las migraciones se gestionan con Prisma contra el Postgres del compose** (`docker compose --env-file .env.docker up -d postgres`, `postgresql://alphataco:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_PORT}/alphataco` — el puerto es `POSTGRES_PORT` de tu `.env.docker`, default 5432). Ya no hay Supabase: no existen `auth.`, `storage.`, `extensions.`, `net.`, `cron.`. RLS se esta incorporando por lotes (ver `docs/arquitectura/LOOP-ESTADO.md`, P2-C). Los MCPs de Supabase son historia; para verificar se usa `psql` dentro del contenedor.
 
 ## Punto de partida: el baseline `0_init`
 
@@ -73,7 +73,7 @@ Reglas de contenido:
 - Actor de la transaccion: `public.app_current_user_id()` (lee `app.user_id`; la app lo setea con `SET LOCAL app.user_id = '<uuid>'` via `withActor`). NUNCA `auth.uid()`, `auth.jwt()` ni `request.jwt.claims`.
 - Empresa: toda funcion recibe/filtra `company_id`; nada de supuestos "solo GH". Los `document_types` globales tienen `company_id IS NULL`.
 - UUIDs: `gen_random_uuid()` (pgcrypto). NUNCA `uuid_generate_v4()`.
-- Prohibido: `auth.`, `storage.`, `extensions.`, `net.`, `cron.`, `pgsodium`, policies RLS. Los jobs (antes `cron.schedule` + `net.http_post`) se disparan desde el servicio `cron` del compose (P5) llamando a la app.
+- Prohibido: `auth.`, `storage.`, `extensions.`, `net.`, `cron.`, `pgsodium`. Las policies RLS solo van dentro del plan por lotes de P2-C (shadow antes de estricto), nunca sueltas en una migracion cualquiera. Los jobs (antes `cron.schedule` + `net.http_post`) se disparan desde el servicio `cron` del compose (P5) llamando a la app.
 
 ## Ejemplos
 

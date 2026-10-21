@@ -92,7 +92,7 @@ async function main(): Promise<void> {
   const companyId = idArg ?? uuidV5(name, SEED_NAMESPACE);
   const slug = slugify(name);
 
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = process.env.SYSTEM_DATABASE_URL ?? process.env.DATABASE_URL;
   if (!connectionString) {
     throw new Error('DATABASE_URL no esta definida en las variables de entorno');
   }

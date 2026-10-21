@@ -292,6 +292,23 @@ Una migración es de riesgo si borra o reescribe datos (`DROP`, `UPDATE`/`DELETE
 Los respaldos programados por instancia son parte de la fábrica de instancias (P2-D); hasta entonces este
 procedimiento es manual.
 
+## Roles de base de datos para RLS (preparados, apagados)
+
+La migración `app_and_system_roles` crea dos roles **sin acceso** (`NOLOGIN`, sin contraseña) y no cambia ningún dueño ni conexión:
+
+| Rol | Atributos | Lo usará |
+| --- | --- | --- |
+| `alphataco_app` | sin `BYPASSRLS` | la app (Server Actions, páginas, `/api/*`) |
+| `alphataco_system` | con `BYPASSRLS` | jobs, seed, bootstrap de admin, demo y Better Auth |
+
+Si quien migra no puede crear roles, la migración avisa con un `WARNING` y sigue (no queda fallida). En ese caso un administrador de Postgres corre una vez el contenido de `prisma/migrations/20261025130000_app_and_system_roles/migration.sql` como superusuario.
+
+**Activarlos es una acción manual del administrador, y hoy no hace falta** (todavía no hay políticas). Cuando haya lotes de RLS en modo estricto:
+
+1. Como superusuario: `ALTER ROLE alphataco_app LOGIN PASSWORD '<generada>'` y lo mismo con `alphataco_system`. Las contraseñas se guardan solo en los secretos de Dokploy, nunca en el repo.
+2. En Dokploy: `MIGRATE_DATABASE_URL` = la URL actual (usuario que migra), `SYSTEM_DATABASE_URL` = la URL de `alphataco_system`, y recién entonces `DATABASE_URL` = la URL de `alphataco_app`. Se redeploya.
+3. Verificar `/api/health` y una pantalla con datos. **Rollback:** volver `DATABASE_URL` al usuario original y redeployar.
+
 ## Instancia demo: reset diario
 
 La instancia demo (`alphataco.31.97.42.82.sslip.io`, proyecto **Demos** de Dokploy) se regenera
