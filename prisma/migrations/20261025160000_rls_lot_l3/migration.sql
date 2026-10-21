@@ -1,0 +1,37 @@
+-- Lote L3 de RLS: tesoreria, compras, almacenes, facturacion y ARCA (company_id NOT NULL).
+-- Inerte mientras la app conecte como el usuario duenio de las tablas; rige para alphataco_app.
+SELECT public.app_enable_tenant_isolation('public.arca_call_logs');
+SELECT public.app_enable_tenant_isolation('public.arca_credentials');
+SELECT public.app_enable_tenant_isolation('public.arca_tokens');
+SELECT public.app_enable_tenant_isolation('public.bank_statement_lines');
+SELECT public.app_enable_tenant_isolation('public.bank_statement_profiles');
+SELECT public.app_enable_tenant_isolation('public.bank_statements');
+SELECT public.app_enable_tenant_isolation('public.checkbooks');
+SELECT public.app_enable_tenant_isolation('public.company_fiscal_profiles');
+SELECT public.app_enable_tenant_isolation('public.customer_receipt_withholdings');
+SELECT public.app_enable_tenant_isolation('public.customer_receipts');
+SELECT public.app_enable_tenant_isolation('public.invoices');
+SELECT public.app_enable_tenant_isolation('public.material_batches');
+SELECT public.app_enable_tenant_isolation('public.material_requests');
+SELECT public.app_enable_tenant_isolation('public.material_unit_write_offs');
+SELECT public.app_enable_tenant_isolation('public.material_units');
+SELECT public.app_enable_tenant_isolation('public.materials');
+SELECT public.app_enable_tenant_isolation('public.own_checks');
+SELECT public.app_enable_tenant_isolation('public.payment_orders');
+SELECT public.app_enable_tenant_isolation('public.price_update_runs');
+SELECT public.app_enable_tenant_isolation('public.purchase_orders');
+SELECT public.app_enable_tenant_isolation('public.purchase_quotes');
+SELECT public.app_enable_tenant_isolation('public.purchase_receipts');
+SELECT public.app_enable_tenant_isolation('public.purchase_requests');
+SELECT public.app_enable_tenant_isolation('public.sales_points');
+SELECT public.app_enable_tenant_isolation('public.service_items');
+SELECT public.app_enable_tenant_isolation('public.stock_balances');
+SELECT public.app_enable_tenant_isolation('public.stock_movements');
+SELECT public.app_enable_tenant_isolation('public.supplier_invoices');
+SELECT public.app_enable_tenant_isolation('public.suppliers');
+SELECT public.app_enable_tenant_isolation('public.third_party_check_operations');
+SELECT public.app_enable_tenant_isolation('public.third_party_checks');
+SELECT public.app_enable_tenant_isolation('public.treasury_accounts');
+SELECT public.app_enable_tenant_isolation('public.treasury_movements');
+SELECT public.app_enable_tenant_isolation('public.treasury_transfers');
+SELECT public.app_enable_tenant_isolation('public.warehouses');
