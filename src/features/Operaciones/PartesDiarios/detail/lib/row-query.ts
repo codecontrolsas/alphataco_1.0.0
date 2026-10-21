@@ -318,6 +318,7 @@ export function buildRowSelect() {
     last_comercial_edit_at: true,
     created_at: true,
     updated_at: true,
+    version: true,
     // Relaciones directas
     customers: {
       select: { id: true, name: true },
