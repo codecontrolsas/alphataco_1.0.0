@@ -293,6 +293,16 @@ subir.
 - **Verificar un deploy**: `gh run list --workflow deploy.yml`, `gh run view <id>`, y
   `curl <health>` comparando `sha` con el head de `main`.
 
+## Migración fallida en producción (P3009 / P3018)
+
+Si `prisma migrate deploy` falla en el arranque del contenedor, Dokploy deja corriendo la versión anterior (no hay caída) y el deploy queda en rojo con «el contenedor no llegó a responder». Los logs del servicio dicen cuál migración falló (`Migration name: …`, `Database error: …`). Mientras la migración siga marcada como fallida en `_prisma_migrations`, ningún deploy nuevo puede aplicar migraciones (P3009).
+
+1. Corregir el SQL en el repo (la migración fallida se reintenta con su mismo nombre, así que se edita esa carpeta) y probarlo contra una base con datos parecidos a los de producción.
+2. **Acción del dueño de la base (escribe en producción):** marcar la migración como revertida, desde el contenedor de la app que sigue corriendo: `docker exec <contenedor-app> node ./node_modules/prisma/build/index.js migrate resolve --rolled-back <nombre-de-la-migración>`. Una migración en una sola transacción no deja cambios parciales; las migraciones anteriores ya aplicadas se mantienen.
+3. Redeployar: el arranque vuelve a aplicar la migración corregida.
+
+Caso real (2026-10-21): el rellenado de `company_id` en `invoice_lines` chocó con el trigger que impide modificar líneas de comprobantes autorizados; los helpers de `tenant.sql` desactivan ahora los triggers de usuario de la tabla solo durante el rellenado.
+
 ## Respaldo de la base antes de una migración de riesgo
 
 Una migración es de riesgo si borra o reescribe datos (`DROP`, `UPDATE`/`DELETE` masivos, cambio de tipo,
