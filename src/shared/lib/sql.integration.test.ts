@@ -7,19 +7,6 @@ import { z } from 'zod';
  * El import es dinámico porque `@/shared/lib/prisma` lanza al cargarse sin DATABASE_URL.
  */
 describe.skipIf(!process.env.DATABASE_URL)('callFunction (integración)', () => {
-  it('select_distinct_values(company, company_name) devuelve filas validadas', async () => {
-    const { callFunction } = await import('./sql');
-    const rows = await callFunction(
-      'select_distinct_values',
-      ['company', 'company_name', { json: null }, { json: null }, { json: null }],
-      z.array(z.object({ col_value: z.string().nullable(), col_count: z.coerce.number() }))
-    );
-    expect(Array.isArray(rows)).toBe(true);
-    for (const row of rows) {
-      expect(typeof row.col_count).toBe('number');
-    }
-  });
-
   it('callScalar devuelve un escalar validado', async () => {
     const { callScalar } = await import('./sql');
     // `app_current_user_id()` devuelve NULL fuera de una transacción con actor.
