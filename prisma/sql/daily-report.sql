@@ -1078,3 +1078,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_dr_equipment_rel_row_other_equipment
   ON public.dailyreportequipmentrelations (daily_report_row_id, other_equipment_id) WHERE other_equipment_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_dr_customer_equipment_rel_row_equipment
   ON public.dailyreport_customer_equipment_relations (daily_report_row_id, customer_equipment_id);
+
+-- function purge_processed_commands: purga de comandos procesados (retencion de 30 dias por defecto). SECURITY DEFINER porque
+-- la RLS impide a un job sin empresa borrar filas de todas; solo la ejecuta el rol de sistema.
+CREATE OR REPLACE FUNCTION public.purge_processed_commands(p_older_than interval DEFAULT interval '30 days')
+ RETURNS bigint
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path = public
+AS $function$
+DECLARE
+  v_deleted bigint;
+BEGIN
+  DELETE FROM public.processed_commands WHERE created_at < now() - p_older_than;
+  GET DIAGNOSTICS v_deleted = ROW_COUNT;
+  RETURN v_deleted;
+END
+$function$;

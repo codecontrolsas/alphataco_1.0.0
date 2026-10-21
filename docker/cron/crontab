@@ -10,3 +10,4 @@
 0 7 * * *   curl --fail-with-body -sS -H "Authorization: Bearer $JOBS_TOKEN" $APP_URL/api/jobs/daily-report-deviations
 30 0 * * *  curl --fail-with-body -sS -H "Authorization: Bearer $JOBS_TOKEN" $APP_URL/api/jobs/daily-indicators
 10 0 * * *  curl --fail-with-body -sS -H "Authorization: Bearer $JOBS_TOKEN" $APP_URL/api/jobs/documents-status
+15 3 * * *  curl --fail-with-body -sS -H "Authorization: Bearer $JOBS_TOKEN" $APP_URL/api/jobs/processed-commands-purge
