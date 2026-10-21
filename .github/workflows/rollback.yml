@@ -1,0 +1,50 @@
+name: rollback
+# Vuelve produccion a una imagen ya construida (`sha-<commit>`) sin rebuild: retag de `:main`
+# + webhook de Dokploy + readiness por commit. Ver docs/deploy/runbook.md.
+# Las migraciones NO se revierten: si el commit malo migro la base, evaluarlo antes.
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Commit completo (40 caracteres) cuya imagen sha-<commit> ya existe en el registry'
+        required: true
+        type: string
+
+# Misma cola que el deploy: un rollback no corre en paralelo con un deploy en vuelo.
+concurrency:
+  group: deploy-refs/heads/main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validar el commit
+        env:
+          SHA: ${{ inputs.sha }}
+        run: |
+          case "$SHA" in
+            *[!0-9a-f]*|'') echo "::error::sha debe ser hexadecimal en minusculas"; exit 1 ;;
+          esac
+          if [ "${#SHA}" -ne 40 ]; then
+            echo "::error::sha debe tener 40 caracteres (commit completo)"; exit 1
+          fi
+
+  rollback:
+    needs: validate
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      source_tag: ${{ vars.REGISTRY_HOST || 'registry-31-97-42-82.sslip.io' }}/${{ vars.IMAGE_NAME || 'alphataco' }}:sha-${{ inputs.sha }}
+      target_tag: ${{ vars.REGISTRY_HOST || 'registry-31-97-42-82.sslip.io' }}/${{ vars.IMAGE_NAME || 'alphataco' }}:main
+      health_url: ${{ vars.DOKPLOY_HEALTH_URL }}
+      registry: ${{ vars.REGISTRY_HOST || 'registry-31-97-42-82.sslip.io' }}
+      registry_username: ${{ vars.REGISTRY_USERNAME }}
+      expected_sha: ${{ inputs.sha }}
+      commit_message: 'Rollback a ${{ inputs.sha }}'
+    secrets:
+      registry_password: ${{ secrets.REGISTRY_PASSWORD }}
+      deploy_webhook: ${{ secrets.DOKPLOY_DEPLOY_WEBHOOK }}
