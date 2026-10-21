@@ -310,7 +310,6 @@ export async function createDiagramTypePrisma(data: {
         work_active: data.work_active,
         is_active: data.is_active,
         computes_absenteeism: data.computes_absenteeism,
-        company_id,
       },
       select: {
         id: true,

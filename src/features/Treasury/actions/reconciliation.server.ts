@@ -120,7 +120,6 @@ export async function importStatement(values: ImportStatementValues): Promise<Ac
         const range = statementRange(fresh)!;
         const statement = await tx.bank_statements.create({
           data: {
-            company_id: companyId,
             account_id: v.accountId,
             file_name: v.fileName,
             date_from: new Date(`${range.from}T00:00:00.000Z`),

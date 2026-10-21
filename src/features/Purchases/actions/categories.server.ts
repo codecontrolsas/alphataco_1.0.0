@@ -35,7 +35,7 @@ export async function createSupplierCategory(values: SupplierCategoryFormValues)
   const companyId = await getActiveCompanyId();
   try {
     const created = await prisma.supplier_categories.create({
-      data: { company_id: companyId, name: parsed.data.name },
+      data: { name: parsed.data.name },
       select: { id: true },
     });
     revalidatePath(PURCHASES_PATH);

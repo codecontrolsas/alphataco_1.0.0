@@ -136,7 +136,7 @@ export async function createdContact(formData: FormData): Promise<ContactMutatio
     });
     if (existing) return { status: 400, body: 'El contacto ya existe en esta empresa' };
 
-    await prisma.contacts.create({ data: { ...parsed.data, company_id: companyId } });
+    await prisma.contacts.create({ data: { ...parsed.data, } });
     revalidatePath(COMPANY_PATH);
     logger.info('Contacto creado', { data: { companyId, customerId: parsed.data.customer_id } });
     return { status: 201, body: 'Contacto creado satisfactoriamente.' };

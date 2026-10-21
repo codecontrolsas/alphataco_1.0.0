@@ -64,7 +64,7 @@ export async function createOpeningChecks(values: OpeningChecksValues): Promise<
         const customer = await tx.customers.findFirst({ where: { id: v.customerId, company_id: companyId }, select: { name: true } });
         if (!customer) throw new TreasuryError('El cliente no existe');
         const operation = await tx.third_party_check_operations.create({
-          data: { company_id: companyId, kind: 'OPENING', date: dateOnly(v.date), created_by: profile.id },
+          data: { kind: 'OPENING', date: dateOnly(v.date), created_by: profile.id },
           select: { id: true },
         });
         for (const c of v.checks) {
@@ -127,7 +127,6 @@ export async function depositChecks(values: DepositValues): Promise<ActionResult
         const number = await nextCheckOperationNumber(tx, companyId, 'DEPOSIT');
         const operation = await tx.third_party_check_operations.create({
           data: {
-            company_id: companyId,
             kind: 'DEPOSIT',
             number,
             date: dateOnly(v.date),
@@ -188,7 +187,6 @@ export async function discountChecks(values: DiscountValues): Promise<ActionResu
         const number = await nextCheckOperationNumber(tx, companyId, 'DISCOUNT');
         const operation = await tx.third_party_check_operations.create({
           data: {
-            company_id: companyId,
             kind: 'DISCOUNT',
             number,
             date: dateOnly(v.date),
@@ -286,7 +284,6 @@ export async function rejectCheck(values: RejectionValues): Promise<ActionResult
         const number = await nextCheckOperationNumber(tx, companyId, 'REJECTION');
         const operation = await tx.third_party_check_operations.create({
           data: {
-            company_id: companyId,
             kind: 'REJECTION',
             number,
             date: dateOnly(v.date),

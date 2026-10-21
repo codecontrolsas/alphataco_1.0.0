@@ -351,7 +351,6 @@ export async function createEquipmentModelPrisma(data: { name: string; brand: nu
         name: data.name,
         brand: data.brand,
         is_active: data.is_active,
-        company_id: await getActiveCompanyId(),
       },
       select: {
         id: true,

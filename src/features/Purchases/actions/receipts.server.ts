@@ -152,7 +152,6 @@ export async function createPurchaseReceipt(
         const number = await nextPurchaseDocumentNumber(tx, companyId, 'receipt');
         const receipt = await tx.purchase_receipts.create({
           data: {
-            company_id: companyId,
             number,
             order_id: order.id,
             supplier_id: orderRow.supplier_id,
@@ -179,7 +178,6 @@ export async function createPurchaseReceipt(
           const totals = computeOrderTotals(lineInputs);
           const complement = await tx.purchase_orders.create({
             data: {
-              company_id: companyId,
               number: complementNumber,
               supplier_id: orderRow.supplier_id,
               status: 'DRAFT',

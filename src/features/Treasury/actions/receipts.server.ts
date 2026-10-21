@@ -104,7 +104,6 @@ async function openDraft(tx: DraftTx, companyId: string, id: string | null, v: R
     await assertReceiptCustomer(tx, companyId, v.customerId, true);
     const created = await tx.customer_receipts.create({
       data: {
-        company_id: companyId,
         customer_id: v.customerId,
         status: 'DRAFT',
         date: new Date(`${v.date}T00:00:00.000Z`),

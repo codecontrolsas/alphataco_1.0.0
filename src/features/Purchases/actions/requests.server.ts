@@ -65,7 +65,6 @@ async function insertPurchaseRequest(
   const number = await nextPurchaseRequestNumber(tx, companyId);
   const request = await tx.purchase_requests.create({
     data: {
-      company_id: companyId,
       number,
       status: options.submit ? 'PENDING_APPROVAL' : 'DRAFT',
       requested_by: profileId,

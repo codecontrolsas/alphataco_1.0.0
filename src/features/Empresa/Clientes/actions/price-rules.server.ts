@@ -260,7 +260,6 @@ export async function runPriceUpdateRule(input: RunRuleInput): Promise<ActionRes
     const run = await prisma.$transaction(async (tx) => {
       const createdRun = await tx.price_update_runs.create({
         data: {
-          company_id: companyId,
           rule_id: rule.id,
           applied_by: appliedBy,
           items_affected: items.length,

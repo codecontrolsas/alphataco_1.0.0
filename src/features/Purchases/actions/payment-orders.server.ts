@@ -83,7 +83,6 @@ export async function createPaymentOrder(
         const number = await nextPurchaseDocumentNumber(tx, companyId, 'payment');
         return tx.payment_orders.create({
           data: {
-            company_id: companyId,
             number,
             supplier_id: supplier.id,
             status: 'DRAFT',

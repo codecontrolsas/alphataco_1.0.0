@@ -186,7 +186,6 @@ async function insertPurchaseOrder(
   const number = await nextPurchaseDocumentNumber(tx, companyId, 'order');
   const order = await tx.purchase_orders.create({
     data: {
-      company_id: companyId,
       number,
       supplier_id: validated.supplier.id,
       quote_id: options.quoteId !== undefined ? options.quoteId : await quoteIdOf(tx, validated.lines),

@@ -420,7 +420,6 @@ export async function createPositionPrisma(data: {
         name: data.name,
         is_active: data.is_active,
         hierarchical_position_id: data.hierarchical_position_id,
-        company_id: companyId,
         ...(data.aptitudes_tecnicas_id.length > 0
           ? {
               aptitudes_tecnicas_puestos: {

@@ -125,7 +125,7 @@ export async function createSupplier(
     const created = await prisma.$transaction(async (tx) => {
       const data = supplierData(parsed.data);
       await assertCuitFree(tx, companyId, data.cuit, null);
-      const supplier = await tx.suppliers.create({ data: { ...data, company_id: companyId }, select: { id: true } });
+      const supplier = await tx.suppliers.create({ data: { ...data, }, select: { id: true } });
       await applyContacts(tx, supplier.id, parsed.data.contacts, []);
       await applyCategoryChanges(tx, companyId, supplier.id, categories.data);
       return supplier;

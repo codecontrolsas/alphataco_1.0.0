@@ -73,7 +73,7 @@ export async function createCheckbook(values: CheckbookValues): Promise<ActionRe
           throw new TreasuryError(`El rango se superpone con la chequera del ${overlap.first_number} al ${overlap.last_number} de «${account.name}»`);
         }
         return tx.checkbooks.create({
-          data: { company_id: companyId, account_id: account.id, first_number: first, last_number: last, created_by: profile.id },
+          data: { account_id: account.id, first_number: first, last_number: last, created_by: profile.id },
           select: { id: true },
         });
       },

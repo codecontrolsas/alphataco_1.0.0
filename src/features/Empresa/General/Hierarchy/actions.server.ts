@@ -344,7 +344,6 @@ export async function createHierarchyPrisma(data: {
         name: input.name,
         is_active: input.is_active,
         parent_id: input.parent_id,
-        company_id: companyId,
       },
       select: { id: true },
     });

@@ -32,7 +32,7 @@ export async function createSalesPoint(values: SalesPointValues): Promise<Action
   const companyId = await getActiveCompanyId();
   try {
     const created = await prisma.sales_points.create({
-      data: { company_id: companyId, number: parsed.data.number, name: parsed.data.name },
+      data: { number: parsed.data.number, name: parsed.data.name },
       select: { id: true },
     });
     logger.info('Punto de venta creado', { data: { companyId, number: parsed.data.number } });
