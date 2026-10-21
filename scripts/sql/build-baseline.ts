@@ -28,7 +28,7 @@ const OUT_FILE = join(OUT_DIR, 'migration.sql');
 const LOCK_FILE = join(ROOT, 'prisma', 'migrations', 'migration_lock.toml');
 
 /** Orden de concatenación: `misc` primero (helpers como app_current_user_id, build_*_where_alias). */
-const DOMAIN_ORDER = ['misc', 'permissions', 'documents', 'diagrams', 'daily-report', 'kpis', 'maintenance', 'invoicing', 'timezone'] as const;
+const DOMAIN_ORDER = ['misc', 'permissions', 'documents', 'diagrams', 'daily-report', 'kpis', 'maintenance', 'invoicing', 'timezone', 'tenant'] as const;
 
 /** Extensión → patrón que delata su uso en los `.sql`. `pgcrypto` va siempre (gen_random_uuid en los defaults del schema). */
 const OPTIONAL_EXTENSIONS: ReadonlyArray<{ name: string; pattern: RegExp }> = [
