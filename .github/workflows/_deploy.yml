@@ -14,9 +14,14 @@ on:
       expected_sha: { required: true, type: string }
       # Titulo del deploy en Dokploy. Sin esto el panel muestra "NEW CHANGES".
       commit_message: { required: false, type: string, default: '' }
+      # URL de `/api/mobile/v1/capabilities` de la instancia. Si viene, el deploy tambien actualiza el contenedor `api`
+      # (misma imagen) y espera a que informe el commit desplegado. Vacia = instancia sin API movil.
+      mobile_capabilities_url: { required: false, type: string, default: '' }
     secrets:
       registry_password: { required: true }
       deploy_webhook: { required: true }
+      # Webhook de la Application `alphataco-api` de Dokploy (solo si hay API movil).
+      api_deploy_webhook: { required: false }
 
 jobs:
   deploy:
@@ -155,4 +160,34 @@ jobs:
             echo "login respondio '$codigo' ($i/6)"; sleep 10
           done
           echo "::error::la pantalla de ingreso no responde 200 tras el deploy; considerar rollback (workflow rollback)"
+          exit 1
+
+      # API movil: la misma imagen corre en un segundo contenedor (`alphataco-api`). `/api/health` va a la app, asi que su
+      # version se comprueba con `serverSha` de `/capabilities`. Corre DESPUES de la app: si falla, la web ya esta
+      # actualizada y el rollback (workflow `rollback`) vuelve a desplegar ambas.
+      - name: Desplegar API móvil
+        if: ${{ inputs.mobile_capabilities_url != '' }}
+        env:
+          WEBHOOK: ${{ secrets.api_deploy_webhook }}
+          CAPABILITIES_URL: ${{ inputs.mobile_capabilities_url }}
+          DEPLOY_SHA: ${{ inputs.expected_sha }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "::error::Hay MOBILE_CAPABILITIES_URL pero falta el secret DOKPLOY_API_DEPLOY_WEBHOOK"; exit 1
+          fi
+          payload="{\"head_commit\":{\"id\":\"$DEPLOY_SHA\",\"message\":\"Deploy API movil $DEPLOY_SHA\"}}"
+          for i in $(seq 1 4); do
+            curl -fsS -X POST "$WEBHOOK" -H 'Content-Type: application/json' -H 'x-github-event: push' -d "$payload" && break
+            [ "$i" = 4 ] && { echo "::error::webhook de la API movil fallo tras 4 intentos"; exit 1; }
+            echo "webhook intento $i fallo; reintento en 12s..."; sleep 12
+          done
+          ultimo=""
+          for i in $(seq 1 90); do
+            respuesta=$(curl -fsS --max-time 10 "$CAPABILITIES_URL" || true)
+            actual=$(printf '%s' "$respuesta" | sed -n 's/.*"serverSha"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+            if [ -n "$actual" ] && [ "$actual" = "$DEPLOY_SHA" ]; then echo "API movil en $DEPLOY_SHA (intento $i)"; exit 0; fi
+            ultimo=${actual:-sin-respuesta}
+            echo "API movil responde '$ultimo' todavia ($i/90)"; sleep 5
+          done
+          echo "::error::la API movil no llego a informar $DEPLOY_SHA en 7,5 minutos (ultimo visto: $ultimo)"
           exit 1

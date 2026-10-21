@@ -46,6 +46,8 @@ jobs:
       registry_username: ${{ vars.REGISTRY_USERNAME }}
       expected_sha: ${{ inputs.sha }}
       commit_message: 'Rollback a ${{ inputs.sha }}'
+      mobile_capabilities_url: ${{ vars.MOBILE_CAPABILITIES_URL }}
     secrets:
       registry_password: ${{ secrets.REGISTRY_PASSWORD }}
       deploy_webhook: ${{ secrets.DOKPLOY_DEPLOY_WEBHOOK }}
+      api_deploy_webhook: ${{ secrets.DOKPLOY_API_DEPLOY_WEBHOOK }}

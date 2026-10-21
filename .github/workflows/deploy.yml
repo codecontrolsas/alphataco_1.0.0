@@ -116,6 +116,8 @@ jobs:
       registry_username: ${{ vars.REGISTRY_USERNAME }}
       expected_sha: ${{ github.sha }}
       commit_message: ${{ github.event.head_commit.message }}
+      mobile_capabilities_url: ${{ vars.MOBILE_CAPABILITIES_URL }}
     secrets:
       registry_password: ${{ secrets.REGISTRY_PASSWORD }}
       deploy_webhook: ${{ secrets.DOKPLOY_DEPLOY_WEBHOOK }}
+      api_deploy_webhook: ${{ secrets.DOKPLOY_API_DEPLOY_WEBHOOK }}
