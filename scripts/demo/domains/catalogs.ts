@@ -97,7 +97,7 @@ export async function seedCatalogs(ctx: Ctx): Promise<void> {
 
   // ── Globales que se recrean ─────────────────────────────────────────────────
   await tx.countries.createMany({ data: COUNTRIES.map((name) => ({ id: demoId('country', name), name })) });
-  await tx.measure_units.createMany({ data: MEASURE_UNITS });
+  await tx.measure_units.createMany({ data: MEASURE_UNITS.map((u) => ({ ...u, company_id: company.id })) });
   await tx.types_of_vehicles.createMany({ data: VEHICLE_KINDS.map((k) => ({ id: BigInt(k.id), name: k.name })) });
   await tx.type_operative.createMany({
     data: TYPE_OPERATIVE.map((t) => ({ id: demoId('type_operative', t.key), name: t.name })),
