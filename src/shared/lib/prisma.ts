@@ -33,12 +33,14 @@ export const prismaBase = globalForPrisma.prisma ?? createPrismaClient();
  * le aplican y el contexto no aporta nada.
  */
 /**
- * El tipo es `PrismaClient & Prisma.TransactionClient` a proposito: muchos helpers piden `Prisma.TransactionClient` (o un
+ * El tipo es `Prisma.TransactionClient` mas los metodos de conexion a proposito: muchos helpers piden `Prisma.TransactionClient` (o un
  * `Pick` de el) y se llaman tanto con un `tx` como con este cliente. Con el tipo plano, TypeScript compara
  * estructuralmente los dos clientes completos y `next build` supera el limite de instanciacion de tipos (TS2589) cuando
- * crece el esquema; con la interseccion, el cliente YA contiene `TransactionClient` y la comparacion es inmediata.
+ * crece el esquema; con la interseccion, el cliente YA contiene `TransactionClient` y la comparacion es inmediata. Solo se suman los metodos de conexion
+ * (no `PrismaClient` entero) para no duplicar los tipos de todos los modelos: eso agota la memoria de `tsc`.
  */
-export type TenantPrismaClient = PrismaClient & Prisma.TransactionClient;
+export type TenantPrismaClient = Prisma.TransactionClient &
+  Pick<PrismaClient, '$transaction' | '$connect' | '$disconnect' | '$on' | '$extends'>;
 
 export const prisma: TenantPrismaClient =
   process.env.TENANT_CONTEXT === 'on'
