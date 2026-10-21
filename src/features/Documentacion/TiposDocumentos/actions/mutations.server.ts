@@ -101,7 +101,7 @@ export async function updateDocumentType(id: string, input: UpdateDocumentTypeIn
   logger.debug('Actualizando tipo de documento', { data: { id } });
 
   try {
-    // Perímetro de escritura: sólo tipos propios (un global lanza GLOBAL_DOCUMENT_TYPE_READ_ONLY).
+    // Perímetro de escritura: sólo tipos propios.
     const current = await findScopedDocumentType(prisma, id, companyId, { id: true, applies: true }, {}, 'write');
 
     // Build update payload explicitly so Prisma can type-check it
@@ -205,7 +205,7 @@ export async function deactivateDocumentType(docTypeId: string) {
 
   try {
     return await withActor(actor, async (tx) => {
-      // Perímetro de escritura: sólo tipos propios (un global lanza GLOBAL_DOCUMENT_TYPE_READ_ONLY).
+      // Perímetro de escritura: sólo tipos propios.
       const docType = await findScopedDocumentType(
         tx,
         docTypeId,
@@ -245,7 +245,7 @@ export async function hardDeleteDocumentType(docTypeId: string) {
 
   try {
     return await withActor(actor, async (tx) => {
-      // Perímetro de escritura: sólo tipos propios (un global lanza GLOBAL_DOCUMENT_TYPE_READ_ONLY).
+      // Perímetro de escritura: sólo tipos propios.
       const docType = await findScopedDocumentType(
         tx,
         docTypeId,
@@ -303,7 +303,7 @@ export async function reactivateDocumentType(docTypeId: string) {
 
   try {
     return await withActor(actor, async (tx) => {
-      // Perímetro de escritura: sólo tipos propios (un global lanza GLOBAL_DOCUMENT_TYPE_READ_ONLY).
+      // Perímetro de escritura: sólo tipos propios.
       const docType = await findScopedDocumentType(
         tx,
         docTypeId,

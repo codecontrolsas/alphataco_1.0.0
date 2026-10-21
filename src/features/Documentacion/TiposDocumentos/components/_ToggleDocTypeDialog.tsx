@@ -110,8 +110,7 @@ export function _ToggleDocTypeDialog({ open, onOpenChange, documentType, onSucce
     queryFn: () => analyzeDocumentTypeImpact(documentType.id),
     enabled: open,
     staleTime: 0,
-    // Un tipo global rechaza siempre (`GLOBAL_DOCUMENT_TYPE_READ_ONLY`): reintentar no cambia
-    // nada y sólo demora el mensaje.
+    // Si el análisis rechaza (tipo inexistente o de otra empresa), reintentar no cambia nada y sólo demora el mensaje.
     retry: false,
   });
 

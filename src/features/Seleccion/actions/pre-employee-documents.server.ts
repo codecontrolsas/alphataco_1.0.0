@@ -38,7 +38,7 @@ export async function getPreEmployeeDocumentChecklist(preEmployeeId: string) {
           available_for_pre_file: true,
           is_active: true,
           applies: 'Persona',
-          OR: [{ company_id: null }, { company_id: companyId }],
+          company_id: companyId,
         },
         select: { id: true, name: true, mandatory: true, explired: true, description: true },
         orderBy: [{ mandatory: 'desc' }, { name: 'asc' }],
@@ -128,7 +128,7 @@ export async function uploadPreEmployeeDocument(formData: FormData): Promise<Upl
       },
     }),
     prisma.document_types.findFirst({
-      where: { id: documentTypeId, OR: [{ company_id: null }, { company_id: companyId }] },
+      where: { id: documentTypeId, company_id: companyId },
       select: { id: true, name: true, available_for_pre_file: true },
     }),
   ]);

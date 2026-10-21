@@ -67,7 +67,7 @@ export async function getEquipmentTypesForVisibility() {
       where: {
         applies_to: OTHER_EQUIPMENT,
         is_active: true,
-        OR: [{ company_id: companyId }, { company_id: null }],
+        company_id: companyId,
       },
       select: { id: true, name: true },
     });

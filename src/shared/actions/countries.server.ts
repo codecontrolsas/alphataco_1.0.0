@@ -98,7 +98,7 @@ export async function getCompanyDocumentTypes(companyId?: string) {
   if (!resolved) return [];
   try {
     return await prisma.document_types.findMany({
-      where: { is_active: true, OR: [{ company_id: null }, { company_id: resolved }] },
+      where: { is_active: true, company_id: resolved },
       orderBy: { name: 'asc' },
     });
   } catch (error) {

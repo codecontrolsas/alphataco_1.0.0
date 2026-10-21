@@ -130,7 +130,7 @@ const loadAllVehicleTypes = cache(async () => {
       where: {
         is_active: true,
         applies_to: 'vehicle',
-        OR: [{ company_id: companyId }, { company_id: null }],
+        company_id: companyId,
       },
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
