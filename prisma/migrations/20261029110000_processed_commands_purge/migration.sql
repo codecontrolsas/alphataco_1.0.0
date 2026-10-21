@@ -5,6 +5,7 @@ CREATE OR REPLACE FUNCTION public.purge_processed_commands(p_older_than interval
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path = public
+ SET TimeZone = 'America/Argentina/Buenos_Aires'
 AS $function$
 DECLARE
   v_deleted bigint;
