@@ -27,11 +27,16 @@ async function onlyMissing(tx: TenantTx, rowId: string, add: ResourceSet): Promi
   const hasEquipment = new Set(equipment.map((relation) => relation.equipment_id));
   const hasOther = new Set(equipment.map((relation) => relation.other_equipment_id));
   const hasCustomerEquipment = new Set(customerEquipment.map((relation) => relation.customer_equipment_id));
+  // Sin repetidos dentro del mismo pedido: el trigger de historial escribiría un LINK por cada repetido.
+  const firstOf = <T>(items: T[], key: (item: T) => string) => {
+    const seen = new Set<string>();
+    return items.filter((item) => !seen.has(key(item)) && seen.add(key(item)));
+  };
   return {
-    employees: add.employees.filter((employee) => !hasEmployee.has(employee.id)),
-    equipment: add.equipment.filter((id) => !hasEquipment.has(id)),
-    otherEquipment: add.otherEquipment.filter((id) => !hasOther.has(id)),
-    customerEquipment: add.customerEquipment.filter((id) => !hasCustomerEquipment.has(id)),
+    employees: firstOf(add.employees, (employee) => employee.id).filter((employee) => !hasEmployee.has(employee.id)),
+    equipment: firstOf(add.equipment, (id) => id).filter((id) => !hasEquipment.has(id)),
+    otherEquipment: firstOf(add.otherEquipment, (id) => id).filter((id) => !hasOther.has(id)),
+    customerEquipment: firstOf(add.customerEquipment, (id) => id).filter((id) => !hasCustomerEquipment.has(id)),
   };
 }
 
