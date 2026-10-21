@@ -27,11 +27,11 @@ SELECT hasnt_function(
   'ya no existe run_daily_indicators_for_all_companies (la reemplazo el job de P5)'
 );
 
--- Vista de dominio
-SELECT has_view(
+-- Vista eliminada: una vista corre con los permisos de su dueno y se saltearia el RLS
+SELECT hasnt_view(
   'public',
   'equipments_with_pending_deviations',
-  'existe la vista equipments_with_pending_deviations'
+  'ya no existe la vista equipments_with_pending_deviations'
 );
 
 -- Columna company_id en maintenance_orders (multi-empresa)
