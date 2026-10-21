@@ -26,23 +26,20 @@ function createPrismaClient() {
 export const prismaBase = globalForPrisma.prisma ?? createPrismaClient();
 
 /**
- * Cliente que usan las features. Con `TENANT_CONTEXT=on` cada operacion corre con `app.company_id`, `app.user_id` y
- * `app.actor_kind` fijados (ver `tenant-context.ts`), que es lo que leen las politicas RLS; apagado (el valor por
- * defecto) es el mismo cliente base, sin costo. Se prende junto con el cambio de `DATABASE_URL` al rol
- * `alphataco_app` (docs/deploy/runbook.md): mientras la app conecte como duenio de las tablas, las politicas no
- * le aplican y el contexto no aporta nada.
+ * Cliente que usan las features. SIEMPRE lleva el contexto de la transaccion (`app.company_id`, `app.user_id`,
+ * `app.actor_kind`, ver `tenant-context.ts`): es lo que completa solo `company_id` en cada fila nueva
+ * (`DEFAULT app_current_company_id()`) y lo que leen las politicas RLS. Sin request (login, jobs, tests) la operacion
+ * corre directa, sin contexto: ahi `company_id` hay que pasarlo explicito.
  */
 export const prisma: PrismaClient =
-  process.env.TENANT_CONTEXT === 'on'
-    ? (globalForPrisma.prismaContextual ??
-      (createContextualClient(prismaBase, async () => {
-        // Import dinamico: tenant-db trae `next/headers` y la sesion, que solo existen dentro de un request.
-        const { getTenantContextOrNull } = await import('./tenant-db');
-        return getTenantContextOrNull();
-      }) as unknown as PrismaClient))
-    : prismaBase;
+  globalForPrisma.prismaContextual ??
+  (createContextualClient(prismaBase, async () => {
+    // Import dinamico: tenant-db trae `next/headers` y la sesion, que solo existen dentro de un request.
+    const { getTenantContextOrNull } = await import('./tenant-db');
+    return getTenantContextOrNull();
+  }) as unknown as PrismaClient);
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prismaBase;
-  globalForPrisma.prismaContextual = prisma === prismaBase ? undefined : prisma;
+  globalForPrisma.prismaContextual = prisma;
 }

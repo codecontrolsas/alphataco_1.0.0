@@ -8,7 +8,7 @@ on:
     inputs:
       # Runner. Vacio = el de GitHub. Con un label `blacksmith-*` corre en Blacksmith (requiere la GitHub App).
       runs_on: { required: false, type: string, default: 'ubuntu-latest' }
-      # true = la app conecta como `alphataco_app` (sin BYPASSRLS) con TENANT_CONTEXT=on (docker-compose.rls.yml):
+      # true = la app conecta como `alphataco_app` (sin BYPASSRLS) (docker-compose.rls.yml):
       # prueba la instancia bajo RLS. Los roles se habilitan despues de migrar y antes de levantar la app.
       rls: { required: false, type: boolean, default: false }
 
