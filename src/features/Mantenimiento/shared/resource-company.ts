@@ -4,6 +4,11 @@ import type { MaintenanceResourceKind } from './maintenance-resource';
 
 export type PrismaLike = Prisma.TransactionClient | typeof prisma;
 
+// Cada helper pide solo los delegados que usa: tipar con el cliente completo hace que `next build` pase el limite de
+// instanciacion de tipos (TS2589) al llamarlo con `prisma` y con un `tx`.
+type ResourceClient = Pick<Prisma.TransactionClient, 'other_equipment' | 'vehicles'>;
+type OrderClient = Pick<Prisma.TransactionClient, 'maintenance_orders'>;
+
 /**
  * Empresa dueña del recurso de mantenimiento (vehículo o equipamiento).
  *
@@ -12,7 +17,7 @@ export type PrismaLike = Prisma.TransactionClient | typeof prisma;
  * logueado y aun así tienen que quedar en la empresa correcta.
  */
 export async function getResourceCompanyId(
-  client: PrismaLike,
+  client: ResourceClient,
   kind: MaintenanceResourceKind | undefined,
   resourceId: string
 ): Promise<string> {
@@ -36,7 +41,7 @@ export async function getResourceCompanyId(
 /**
  * Empresa de un pedido de mantenimiento: los ítems que se le agregan heredan la misma.
  */
-export async function getMaintenanceOrderCompanyId(client: PrismaLike, orderId: string): Promise<string> {
+export async function getMaintenanceOrderCompanyId(client: OrderClient, orderId: string): Promise<string> {
   const order = await client.maintenance_orders.findUnique({
     where: { id: orderId },
     select: { company_id: true },
