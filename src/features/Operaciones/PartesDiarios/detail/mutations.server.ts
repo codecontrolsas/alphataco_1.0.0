@@ -207,7 +207,8 @@ export async function updateDailyReportRowPrisma(rowId: string, data: DailyRepor
       // versión para que los comandos con `baseVersion` vean el cambio.
       if (synced.added + synced.removed > 0) await touchRow(tx, rowId);
 
-      return updatedRow ?? tx.dailyreportrows.findUniqueOrThrow({ where: { id: rowId } });
+      // Solo el id: devolver la fila entera mandaba un `Decimal` (quantity), que React no puede serializar al cliente.
+      return { id: rowId, updated: updatedRow !== null };
     });
 
     return row;
