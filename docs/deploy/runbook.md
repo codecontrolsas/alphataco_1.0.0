@@ -332,8 +332,35 @@ Una migración es de riesgo si borra o reescribe datos (`DROP`, `UPDATE`/`DELETE
 - Probado con dos Postgres 16 en Docker: respaldo, retención (2 de 3), restauración con 500 filas y los tres casos de falla
   (base inexistente, base destino ya existente y respaldo ilegible).
 
-> Producción de esta instancia corre en Dokploy y sus **jobs** (incluido `processed-commands-purge`) no los dispara el
-> `docker/cron/crontab` del compose: hay que darlos de alta en Dokploy (acción del usuario).
+> Los **jobs** de la instancia en Dokploy no los dispara el `docker/cron/crontab` del compose sino los *schedules* de la Application
+> (ver «Mapa de la instancia en Dokploy»).
+
+## Mapa de la instancia en Dokploy (proyecto `alphataco`)
+
+La instancia que corre hoy es la **demo** (`SEED_COMPANY_NAME=Empresa Demo`, `DEMO_RESET_ENABLED=true` con reset diario a las 00:05 AR,
+`ARCA_MODE=mock`). Todo está en el proyecto **`alphataco`**, entorno **`demo`** (la landing queda en `production`):
+
+| Servicio | Tipo | Qué es |
+|---|---|---|
+| `alphataco-app` | Application (imagen `registry…/alphataco:main`) | Web + Server Actions. Dominio raíz. Tiene los **schedules** de jobs |
+| `alphataco-api` | Application (misma imagen, `node server.js`) | API móvil. `MOBILE_API_ENABLED=true`; dominio **el mismo** con path `/api/mobile` (Traefik elige la regla más larga). Sin schedules ni reset |
+| `alphataco-db` | Postgres 16 | Base. Respaldo diario 03:30 (ver abajo) |
+| `alphataco-storage` | Compose (RustFS 1.0.3 fijado por digest) | Almacenamiento S3 por `http://alphataco-storage:9000` (alias en `dokploy-network`, sin puertos publicados) |
+| `alphataco-storage-minio` | Compose (detenido) | MinIO anterior, **detenido y sin borrar** como respaldo (volumen intacto). Borrarlo es decisión del usuario |
+| `alphataco-landing` (entorno `production`) | Application (GitHub) | Landing pública |
+
+- **Deploy:** el workflow `deploy` retaguea `:main` y llama al webhook de `alphataco-app`; si existe la variable de repo `MOBILE_CAPABILITIES_URL`,
+  además llama al webhook de `alphataco-api` (secret `DOKPLOY_API_DEPLOY_WEBHOOK`, formato `http://<ip>:3000/api/deploy/<token>`) y espera a que
+  `/api/mobile/v1/capabilities` informe el commit (`serverSha`). `rollback` hace lo mismo con el sha elegido. Los webhooks exigen `autoDeploy` activo en la
+  Application.
+- **Schedules de la app (hora argentina):** documentos por vencer (lun 08:00), lotes por vencer de almacenes (lun 08:05), desvíos de partes diarios
+  (07:00), indicadores diarios (00:30), estado documental (00:10), purga de comandos procesados (03:15) y el reset de la demo (00:05). Los jobs llaman a
+  `http://localhost:3000/api/jobs/<job>` con `JOBS_TOKEN`. **Un job nuevo en `JOB_NAMES` hay que darlo de alta también en Dokploy**: hasta el 2026-10-21 faltaban
+  el estado documental y los lotes por vencer y nunca habían corrido en esta instancia.
+- **Respaldos:** destino `alphataco-backups (RustFS local)` (bucket `backups`) y respaldo de `alphataco-db` todos los días 03:30, conservando 14. **El
+  archivo es un volcado de formato personalizado aunque se llame `.sql.gz`: se restaura con `pg_restore`** (probado: restauración en un Postgres
+  descartable, 115 migraciones). Está en el mismo servidor: falta un destino **fuera de la VPS** (credenciales del usuario).
+- **No hacer cerca de las 00:05 AR:** cambios de storage o de roles; el reset de la demo reescribe datos.
 
 ## Roles de base de datos para RLS (preparados, apagados)
 
