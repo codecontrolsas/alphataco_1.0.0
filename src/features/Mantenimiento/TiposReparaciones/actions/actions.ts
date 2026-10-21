@@ -105,7 +105,6 @@ export async function createTypeOfRepair(rawBody: TypeOfRepairInput) {
         multi_equipment: body.multi_equipment ?? false,
         qr_close: body.qr_close ?? false,
         autorizable: body.autorizable ?? false,
-        company_id: companyId,
       },
     });
 
