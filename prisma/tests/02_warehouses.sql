@@ -196,8 +196,8 @@ SELECT throws_ok(
 );
 
 SELECT throws_ok(
-  $$INSERT INTO material_request_lines (request_id, material_id, quantity)
-    VALUES ('a1000000-0000-0000-0000-000000000099', 'a1000000-0000-0000-0000-000000000020', 0)$$,
+  $$INSERT INTO material_request_lines (company_id, request_id, material_id, quantity)
+    VALUES ('a1000000-0000-0000-0000-000000000001', 'a1000000-0000-0000-0000-000000000099', 'a1000000-0000-0000-0000-000000000020', 0)$$,
   '23514', NULL, 'una linea de pedido con cantidad 0 se rechaza'
 );
 

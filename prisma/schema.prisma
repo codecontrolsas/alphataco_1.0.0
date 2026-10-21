@@ -44,9 +44,11 @@ model aptitudes_tecnicas_puestos {
   aptitudes_tecnicas aptitudes_tecnicas @relation(fields: [aptitud_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   company_positions  company_positions  @relation(fields: [puesto_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@id([aptitud_id, puesto_id])
   @@index([puesto_id], map: "idx_aptitudes_tecnicas_puestos_puesto_id")
   @@schema("public")
+  @@index([company_id], map: "idx_aptitudes_tecnicas_puestos_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -57,7 +59,9 @@ model area_province {
   areas_cliente areas_cliente @relation(fields: [area_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   provinces     provinces     @relation(fields: [province_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@schema("public")
+  @@index([company_id], map: "idx_area_province_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -70,7 +74,9 @@ model areas_cliente {
   customers         customers       @relation(fields: [customer_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   service_areas     service_areas[]
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@schema("public")
+  @@index([company_id], map: "idx_areas_cliente_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -83,7 +89,9 @@ model assing_customer {
   employees    employees @relation(fields: [employee_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "public_assing_customer_employee_id_fkey")
   vehicles     vehicles  @relation(fields: [equipment_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "public_assing_customer_equipment_id_fkey")
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@schema("public")
+  @@index([company_id], map: "idx_assing_customer_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -262,10 +270,12 @@ model checklist_template_items {
   checklist_template_sections checklist_template_sections @relation(fields: [section_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   checklist_templates         checklist_templates         @relation(fields: [template_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([template_id, section_id, code])
   @@index([section_id], map: "idx_checklist_template_items_section")
   @@index([template_id], map: "idx_checklist_template_items_template")
   @@schema("public")
+  @@index([company_id], map: "idx_checklist_template_items_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -283,9 +293,11 @@ model checklist_template_sections {
   checklist_sections       checklist_sections?        @relation(fields: [section_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   checklist_templates      checklist_templates        @relation(fields: [template_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([template_id, code])
   @@index([template_id], map: "idx_checklist_template_sections_template")
   @@schema("public")
+  @@index([company_id], map: "idx_checklist_template_sections_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -297,10 +309,12 @@ model checklist_template_sub_types {
   sub_type            sub_type?           @relation(fields: [sub_type_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   checklist_templates checklist_templates @relation(fields: [template_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([template_id, sub_type_id])
   @@index([sub_type_id], map: "idx_checklist_template_sub_types_sub_type")
   @@index([template_id], map: "idx_checklist_template_sub_types_template")
   @@schema("public")
+  @@index([company_id], map: "idx_checklist_template_sub_types_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -422,8 +436,10 @@ model clothing_delivery_items {
   clothing_brands      clothing_brands?    @relation(fields: [clothing_brand_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   clothing_sizes       clothing_sizes?     @relation(fields: [clothing_size_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([clothing_delivery_id], map: "idx_clothing_delivery_items_delivery")
   @@schema("public")
+  @@index([company_id], map: "idx_clothing_delivery_items_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -437,8 +453,10 @@ model clothing_item_brand_sizes {
   clothing_brands   clothing_brands @relation(fields: [clothing_brand_id], references: [id], onDelete: Cascade)
   clothing_sizes    clothing_sizes  @relation(fields: [clothing_size_id], references: [id], onDelete: Cascade)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([clothing_item_id, clothing_brand_id, clothing_size_id], map: "clothing_item_brand_sizes_unique_key")
   @@schema("public")
+  @@index([company_id], map: "idx_clothing_item_brand_sizes_company_id")
 }
 
 /// Almacenes etapa 5: material de stock de cada combinacion articulo + marca + talle. NUNCA se
@@ -721,10 +739,12 @@ model contractor_other_equipment {
   customers       customers       @relation(fields: [contractor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   other_equipment other_equipment @relation(fields: [equipment_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([equipment_id, contractor_id])
   @@index([contractor_id], map: "idx_contractor_other_equipment_contractor")
   @@index([equipment_id], map: "idx_contractor_other_equipment_equipment")
   @@schema("public")
+  @@index([company_id], map: "idx_contractor_other_equipment_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -1051,7 +1071,9 @@ model diagrams_logs {
   employees    employees    @relation(fields: [employee_id], references: [id], onDelete: Cascade)
   profile      profile?     @relation(fields: [modified_by], references: [id], onUpdate: NoAction)
 
+  company_id String? @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@schema("public")
+  @@index([company_id], map: "idx_diagrams_logs_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -1206,8 +1228,10 @@ model empleado_aptitudes {
   aptitudes_tecnicas aptitudes_tecnicas @relation(fields: [aptitud_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   employees          employees          @relation(fields: [empleado_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([empleado_id, aptitud_id])
   @@schema("public")
+  @@index([company_id], map: "idx_empleado_aptitudes_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -1309,8 +1333,10 @@ model employees_diagram {
   employees                                                 employees    @relation(fields: [employee_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   diagram_type_employees_diagram_diagram_typeTodiagram_type diagram_type @relation("employees_diagram_diagram_typeTodiagram_type", fields: [diagram_type], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "public_employees_diagram_diagram_type_fkey")
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([employee_id, year, month, day], map: "unique_employee_year_month_day")
   @@schema("public")
+  @@index([company_id], map: "idx_employees_diagram_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -1321,9 +1347,11 @@ model equipment_owner_contract_types {
   created_at         DateTime?          @default(now()) @db.Timestamptz(6)
   equipment_owners   equipment_owners   @relation(fields: [equipment_owner_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([equipment_owner_id, contract_type], map: "equipment_owner_contract_type_equipment_owner_id_contract_t_key")
   @@index([equipment_owner_id], map: "idx_equipment_owner_contract_types_owner")
   @@schema("public")
+  @@index([company_id], map: "idx_equipment_owner_contract_types_company_id")
 }
 
 model equipment_owners {
@@ -1353,7 +1381,9 @@ model equipos_clientes {
   customers                                customers                                  @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   preparte                                 preparte[]
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@schema("public")
+  @@index([company_id], map: "idx_equipos_clientes_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -1364,7 +1394,9 @@ model form_answers {
   answer      Json        @db.Json
   custom_form custom_form @relation(fields: [form_id], references: [id], onDelete: Cascade)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@schema("public")
+  @@index([company_id], map: "idx_form_answers_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -1464,10 +1496,12 @@ model kpi_revisions {
   profile                profile   @relation("kpi_revisions_changed_byToprofile", fields: [changed_by], references: [credential_id], onDelete: NoAction, onUpdate: NoAction)
   kpis                   kpis      @relation(fields: [kpi_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([changed_by], map: "idx_kpi_revisions_changed_by")
   @@index([is_active], map: "idx_kpi_revisions_is_active")
   @@index([kpi_id], map: "idx_kpi_revisions_kpi_id")
   @@schema("public")
+  @@index([company_id], map: "idx_kpi_revisions_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -1567,10 +1601,12 @@ model maintenance_order_item_repair_types {
   maintenance_order_items   maintenance_order_items @relation(fields: [maintenance_order_item_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "maintenance_order_item_repair_ty_maintenance_order_item_id_fkey")
   types_of_repairs          types_of_repairs        @relation(fields: [repair_type_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([maintenance_order_item_id, repair_type_id], map: "maintenance_order_item_repair_maintenance_order_item_id_rep_key")
   @@index([maintenance_order_item_id], map: "idx_moi_repair_types_item")
   @@index([repair_type_id], map: "idx_moi_repair_types_type")
   @@schema("public")
+  @@index([company_id], map: "idx_maintenance_order_item_repair_types_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -2005,8 +2041,10 @@ model other_equipment_certifications {
   created_at      DateTime        @default(now()) @db.Timestamptz(6)
   other_equipment other_equipment @relation(fields: [equipment_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([equipment_id], map: "idx_other_equipment_certifications_equipment")
   @@schema("public")
+  @@index([company_id], map: "idx_other_equipment_certifications_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -2079,10 +2117,12 @@ model preparte_change_logs {
   profile     profile? @relation(fields: [changed_by], references: [credential_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_preparte_change_logs_profile")
   preparte    preparte @relation(fields: [preparte_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([changed_at(sort: Desc)], map: "idx_preparte_change_logs_changed_at")
   @@index([field_name], map: "idx_preparte_change_logs_field_name")
   @@index([preparte_id], map: "idx_preparte_change_logs_preparte_id")
   @@schema("public")
+  @@index([company_id], map: "idx_preparte_change_logs_company_id")
 }
 
 /// Pre legajo: postulante en proceso de ingreso. Espeja la nullability de `employees`
@@ -2425,10 +2465,12 @@ model sector_repair_types {
   types_of_repairs   types_of_repairs @relation(fields: [repair_type_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   workshop_sectors   workshop_sectors @relation(fields: [workshop_sector_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([workshop_sector_id, repair_type_id])
   @@index([repair_type_id], map: "idx_sector_repair_types_repair")
   @@index([workshop_sector_id], map: "idx_sector_repair_types_sector")
   @@schema("public")
+  @@index([company_id], map: "idx_sector_repair_types_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -2444,9 +2486,11 @@ model sectors {
   customers         customers         @relation(fields: [customer_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   service_sectors   service_sectors[]
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([customer_id, name])
   @@index([customer_id], map: "idx_sectors_customer_id")
   @@schema("public")
+  @@index([company_id], map: "idx_sectors_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -2459,8 +2503,10 @@ model service_areas {
   areas_cliente     areas_cliente     @relation(fields: [area_id], references: [id], onDelete: Cascade)
   customer_services customer_services @relation(fields: [service_id], references: [id], onDelete: Cascade)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@id([service_id, area_id, id])
   @@schema("public")
+  @@index([company_id], map: "idx_service_areas_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -2508,8 +2554,10 @@ model service_sectors {
   sectors           sectors           @relation(fields: [sector_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   customer_services customer_services @relation(fields: [service_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([service_id, sector_id], map: "service_sectors_unique")
   @@schema("public")
+  @@index([company_id], map: "idx_service_sectors_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -2558,10 +2606,12 @@ model sub_type_compatible_items {
   created_at         DateTime @default(now()) @db.Timestamptz(6)
   sub_type           sub_type @relation(fields: [sub_type_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([sub_type_id, compatible_item_id, item_type], map: "sub_type_compatible_items_unique")
   @@index([compatible_item_id], map: "idx_sub_type_compatible_items_compatible_item_id")
   @@index([sub_type_id], map: "idx_sub_type_compatible_items_sub_type_id")
   @@schema("public")
+  @@index([company_id], map: "idx_sub_type_compatible_items_company_id")
 }
 
 model support_ticket_views {
@@ -2941,8 +2991,10 @@ model tire_template_axles {
   template               tire_templates           @relation(fields: [template_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   vehicle_tire_positions vehicle_tire_positions[]
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([template_id, axle_number])
   @@schema("public")
+  @@index([company_id], map: "idx_tire_template_axles_company_id")
 }
 
 model vehicle_tire_positions {
@@ -2960,8 +3012,10 @@ model vehicle_tire_positions {
   template_axle tire_template_axles @relation(fields: [template_axle_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tire          tires?              @relation(fields: [tire_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([vehicle_id, position_number])
   @@schema("public")
+  @@index([company_id], map: "idx_vehicle_tire_positions_company_id")
 }
 
 model vehicle_axle_tire_sizes {
@@ -2974,9 +3028,11 @@ model vehicle_axle_tire_sizes {
 
   vehicle vehicles @relation(fields: [vehicle_id], references: [id], onDelete: Cascade)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([vehicle_id, axle_number])
   @@index([vehicle_id])
   @@schema("public")
+  @@index([company_id], map: "idx_vehicle_axle_tire_sizes_company_id")
 }
 
 model tire_service_orders {
@@ -3028,7 +3084,9 @@ model tire_service_items {
   tire          tires?              @relation("tire_at_position", fields: [tire_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   new_tire      tires?              @relation("replacement_tire", fields: [new_tire_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@schema("public")
+  @@index([company_id], map: "idx_tire_service_items_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -3118,11 +3176,13 @@ model work_order_items {
   maintenance_order_items   maintenance_order_items   @relation(fields: [maintenance_order_item_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   work_orders               work_orders               @relation(fields: [work_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([maintenance_order_item_id, work_order_id], map: "unique_maintenance_item_per_active_work_order")
   @@index([maintenance_order_item_id], map: "idx_work_order_items_maintenance_item")
   @@index([status], map: "idx_work_order_items_status")
   @@index([work_order_id], map: "idx_work_order_items_work_order")
   @@schema("public")
+  @@index([company_id], map: "idx_work_order_items_company_id")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -3190,10 +3250,12 @@ model employee_workshop_sectors {
   employees          employees        @relation(fields: [employee_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   workshop_sectors   workshop_sectors @relation(fields: [workshop_sector_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@id([employee_id, workshop_sector_id])
   @@index([employee_id], map: "idx_ews_employee_id")
   @@index([workshop_sector_id], map: "idx_ews_workshop_sector_id")
   @@schema("public")
+  @@index([company_id], map: "idx_employee_workshop_sectors_company_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -3927,9 +3989,11 @@ model service_item_price_revisions {
   service_items   service_items       @relation(fields: [service_item_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   run             price_update_runs?  @relation(fields: [run_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([service_item_id], map: "idx_price_revisions_service_item_id")
   @@index([run_id], map: "idx_price_revisions_run_id")
   @@schema("public")
+  @@index([company_id], map: "idx_service_item_price_revisions_company_id")
 }
 
 /// Regla de actualizacion de precios.
@@ -4045,11 +4109,13 @@ model certification_lines {
   service_items     service_items    @relation(fields: [service_item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   dailyreportrows   dailyreportrows? @relation(fields: [dailyreportrow_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([dailyreportrow_id], map: "uq_certification_lines_live_row", where: raw("(is_live AND dailyreportrow_id IS NOT NULL)"))
   @@index([certification_id], map: "idx_certification_lines_certification_id")
   @@index([dailyreportrow_id], map: "idx_certification_lines_dailyreportrow_id")
   @@index([service_item_id], map: "idx_certification_lines_service_item_id")
   @@schema("public")
+  @@index([company_id], map: "idx_certification_lines_company_id")
 }
 
 // ─── Facturación electrónica ARCA ───────────────────────────────────────────────
@@ -4334,8 +4400,10 @@ model invoice_lines {
   service_item     service_items?  @relation(fields: [service_item_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
   certification    certifications? @relation(fields: [certification_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([invoice_id, position])
   @@schema("public")
+  @@index([company_id], map: "idx_invoice_lines_company_id")
 }
 
 /// Subtotal por alícuota (array `Iva` de ARCA). El IVA se redondea UNA vez por alícuota, no por
@@ -4348,8 +4416,10 @@ model invoice_vat {
   vat_amount  Decimal  @db.Decimal(15, 2)
   invoice     invoices @relation(fields: [invoice_id], references: [id], onDelete: Cascade)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([invoice_id, vat_rate_id])
   @@schema("public")
+  @@index([company_id], map: "idx_invoice_vat_company_id")
 }
 
 /// Certificaciones que factura un comprobante. Un borrador ya las reserva. En PRODUCCIÓN una
@@ -4365,10 +4435,12 @@ model invoice_certifications {
   invoice          invoices         @relation(fields: [invoice_id], references: [id], onDelete: Cascade)
   certification    certifications   @relation(fields: [certification_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([invoice_id, certification_id])
   @@unique([certification_id], map: "uq_invoice_certifications_live_prod", where: raw("((environment = 'produccion'::arca_environment) AND (released_at IS NULL))"))
   @@index([certification_id], map: "idx_invoice_certifications_certification")
   @@schema("public")
+  @@index([company_id], map: "idx_invoice_certifications_company_id")
 }
 
 // ── Almacenes (etapa 1) ─────────────────────────────────────────────────────
@@ -4678,10 +4750,12 @@ model stock_movement_lines {
   batch       material_batches? @relation(fields: [batch_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   unit        material_units?   @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([movement_id], map: "idx_stock_movement_lines_movement_id")
   @@index([material_id], map: "idx_stock_movement_lines_material_id")
   @@index([request_line_id], map: "idx_stock_movement_lines_request_line")
   @@schema("public")
+  @@index([company_id], map: "idx_stock_movement_lines_company_id")
 }
 
 /// Baja de una unidad serializada que estaba prestada y no vuelve (extraviada o rota). No es un
@@ -4764,8 +4838,10 @@ model material_request_lines {
   material       materials              @relation(fields: [material_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   delivery_lines stock_movement_lines[]
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([request_id], map: "idx_material_request_lines_request_id")
   @@schema("public")
+  @@index([company_id], map: "idx_material_request_lines_company_id")
 }
 
 /// Configuracion de Almacenes por empresa (etapa 3).
@@ -4850,8 +4926,10 @@ model supplier_contacts {
   created_at  DateTime  @default(now()) @db.Timestamptz(6)
   supplier    suppliers @relation(fields: [supplier_id], references: [id], onDelete: Cascade)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([supplier_id], map: "idx_supplier_contacts_supplier_id")
   @@schema("public")
+  @@index([company_id], map: "idx_supplier_contacts_company_id")
 }
 
 /// Rubros de proveedor, catalogo por empresa.
@@ -4875,9 +4953,11 @@ model supplier_category_links {
   supplier    suppliers           @relation(fields: [supplier_id], references: [id], onDelete: Cascade)
   category    supplier_categories @relation(fields: [category_id], references: [id], onDelete: Cascade)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@id([supplier_id, category_id])
   @@index([category_id], map: "idx_supplier_category_links_category_id")
   @@schema("public")
+  @@index([company_id], map: "idx_supplier_category_links_company_id")
 }
 
 /// Documento del proveedor. Reemplazar crea uno nuevo; el anterior queda con `replaced_by_id`.
@@ -4896,8 +4976,10 @@ model supplier_documents {
   replaced_by    supplier_documents?  @relation("supplier_document_replacement", fields: [replaced_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   replaces       supplier_documents?  @relation("supplier_document_replacement")
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([supplier_id], map: "idx_supplier_documents_supplier_id")
   @@schema("public")
+  @@index([company_id], map: "idx_supplier_documents_company_id")
 }
 
 /// Solicitud de compra. Destino opcional (sin destino = para stock).
@@ -4969,9 +5051,11 @@ model purchase_request_lines {
   quote_lines           purchase_quote_lines[]
   order_lines           purchase_order_lines[]
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([request_id], map: "idx_purchase_request_lines_request_id")
   @@index([material_id], map: "idx_purchase_request_lines_material_id")
   @@schema("public")
+  @@index([company_id], map: "idx_purchase_request_lines_company_id")
 }
 
 // ── Compras etapa 2: pedidos de cotizacion y ordenes de compra ──────────────
@@ -5052,9 +5136,11 @@ model purchase_quote_lines {
   request_line    purchase_request_lines @relation(fields: [request_line_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   order_lines     purchase_order_lines[]
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([quote_id, request_line_id], map: "purchase_quote_lines_quote_id_request_line_id_key")
   @@index([request_line_id], map: "idx_purchase_quote_lines_request_line_id")
   @@schema("public")
+  @@index([company_id], map: "idx_purchase_quote_lines_company_id")
 }
 
 /// Orden de compra (OC-000001). Sus lineas cubren lineas de solicitudes aprobadas (N<->N).
@@ -5134,9 +5220,11 @@ model purchase_order_lines {
   receipt_lines   purchase_receipt_lines[]
   invoice_lines   supplier_invoice_lines[]
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([order_id], map: "idx_purchase_order_lines_order_id")
   @@index([request_line_id], map: "idx_purchase_order_lines_request_line_id")
   @@schema("public")
+  @@index([company_id], map: "idx_purchase_order_lines_company_id")
 }
 
 /// Cada rechazo de una OC (la cabecera guarda solo el ultimo): historial del detalle.
@@ -5149,8 +5237,10 @@ model purchase_order_rejections {
   order       purchase_orders @relation(fields: [order_id], references: [id], onDelete: Cascade)
   rejecter    profile         @relation(fields: [rejected_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([order_id], map: "idx_purchase_order_rejections_order_id")
   @@schema("public")
+  @@index([company_id], map: "idx_purchase_order_rejections_company_id")
 }
 
 /// Recepcion de lo comprado contra una OC (RC-000001). Las lineas de material entran a Almacenes
@@ -5205,9 +5295,11 @@ model purchase_receipt_lines {
   receipt          purchase_receipts    @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
   order_line       purchase_order_lines @relation(fields: [order_line_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([receipt_id], map: "idx_purchase_receipt_lines_receipt_id")
   @@index([order_line_id], map: "idx_purchase_receipt_lines_order_line_id")
   @@schema("public")
+  @@index([company_id], map: "idx_purchase_receipt_lines_company_id")
 }
 
 /// Comprobante recibido de un proveedor (factura, ND o NC). No se emite ni se numera: se carga
@@ -5295,9 +5387,11 @@ model supplier_invoice_lines {
   order_line          purchase_order_lines?        @relation(fields: [order_line_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   expense_category    purchase_expense_categories? @relation(fields: [expense_category_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([invoice_id], map: "idx_supplier_invoice_lines_invoice_id")
   @@index([order_line_id], map: "idx_supplier_invoice_lines_order_line_id")
   @@schema("public")
+  @@index([company_id], map: "idx_supplier_invoice_lines_company_id")
 }
 
 /// IVA por alicuota del comprobante (lo que va al Libro IVA).
@@ -5309,8 +5403,10 @@ model supplier_invoice_vat {
   amount      Decimal           @db.Decimal(15, 2)
   invoice     supplier_invoices @relation(fields: [invoice_id], references: [id], onDelete: Cascade)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([invoice_id, vat_rate_id], map: "supplier_invoice_vat_invoice_id_vat_rate_id_key")
   @@schema("public")
+  @@index([company_id], map: "idx_supplier_invoice_vat_company_id")
 }
 
 model supplier_invoice_taxes {
@@ -5325,8 +5421,10 @@ model supplier_invoice_taxes {
   invoice     supplier_invoices         @relation(fields: [invoice_id], references: [id], onDelete: Cascade)
   province    provinces?                @relation(fields: [province_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([invoice_id], map: "idx_supplier_invoice_taxes_invoice_id")
   @@schema("public")
+  @@index([company_id], map: "idx_supplier_invoice_taxes_company_id")
 }
 
 /// Conceptos para las lineas de gasto sin OC (luz, honorarios, fletes sueltos).
@@ -5468,8 +5566,10 @@ model payment_order_rejections {
   payment_order    payment_orders @relation(fields: [payment_order_id], references: [id], onDelete: Cascade)
   rejecter         profile        @relation("payment_order_rejection_author", fields: [rejected_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([payment_order_id], map: "idx_payment_order_rejections_order_id")
   @@schema("public")
+  @@index([company_id], map: "idx_payment_order_rejections_company_id")
 }
 
 /// Qué paga la orden: una factura/ND (INVOICE), una NC aplicada (CREDIT_NOTE), un anticipo nuevo
@@ -5496,12 +5596,14 @@ model payment_order_lines {
   source_line       payment_order_lines?  @relation("advance_applications", fields: [source_line_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   applications      payment_order_lines[] @relation("advance_applications")
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([payment_order_id], map: "idx_payment_order_lines_order_id")
   @@index([invoice_id], map: "idx_payment_order_lines_invoice_id")
   @@index([source_line_id], map: "idx_payment_order_lines_source_line_id")
   @@index([third_party_check_id], map: "idx_payment_order_lines_check_id")
   @@index([own_check_id], map: "idx_payment_order_lines_own_check_id")
   @@schema("public")
+  @@index([company_id], map: "idx_payment_order_lines_company_id")
 }
 
 /// Retención practicada en una orden de pago. El número de certificado se asigna al pagar.
@@ -5523,8 +5625,10 @@ model payment_order_withholdings {
   payment_order      payment_orders      @relation(fields: [payment_order_id], references: [id], onDelete: Cascade)
   regime             withholding_regimes @relation(fields: [regime_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([payment_order_id], map: "idx_payment_order_withholdings_order_id")
   @@schema("public")
+  @@index([company_id], map: "idx_payment_order_withholdings_company_id")
 }
 
 /// Medio con el que se pagó (uno o varios por orden), desde una cuenta o caja.
@@ -5547,10 +5651,12 @@ model payment_order_payments {
   /// Cheque propio emitido por este medio (CHECK / ECHECK).
   own_check           own_checks?
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([payment_order_id], map: "idx_payment_order_payments_order_id")
   @@index([treasury_account_id], map: "idx_payment_order_payments_account_id")
   @@index([third_party_check_id], map: "idx_payment_order_payments_check_id")
   @@schema("public")
+  @@index([company_id], map: "idx_payment_order_payments_company_id")
 }
 
 /// Régimen de retención (Ganancias, IVA, IIBB, SUSS) con sus alícuotas y mínimos.
@@ -5595,8 +5701,10 @@ model supplier_withholding_profiles {
   supplier              suppliers            @relation(fields: [supplier_id], references: [id], onDelete: Cascade)
   regime                withholding_regimes? @relation(fields: [regime_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([supplier_id, tax], map: "supplier_withholding_profiles_supplier_tax_key")
   @@schema("public")
+  @@index([company_id], map: "idx_supplier_withholding_profiles_company_id")
 }
 
 enum treasury_account_kind {
@@ -5854,11 +5962,13 @@ model customer_receipt_lines {
   source_line           customer_receipt_lines?    @relation("customer_receipt_line_source", fields: [source_line_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   applications          customer_receipt_lines[]   @relation("customer_receipt_line_source")
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([receipt_id], map: "idx_customer_receipt_lines_receipt_id")
   @@index([invoice_id], map: "idx_customer_receipt_lines_invoice_id")
   @@index([source_line_id], map: "idx_customer_receipt_lines_source_line_id")
   @@index([third_party_check_id], map: "idx_customer_receipt_lines_check_id")
   @@schema("public")
+  @@index([company_id], map: "idx_customer_receipt_lines_company_id")
 }
 
 /// Retención que practicó el cliente, con su certificado (PDF opcional en `customer-documents`).
@@ -5901,9 +6011,11 @@ model customer_receipt_payments {
   movement            treasury_movements?
   check               third_party_checks?
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([receipt_id], map: "idx_customer_receipt_payments_receipt_id")
   @@index([treasury_account_id], map: "idx_customer_receipt_payments_account_id")
   @@schema("public")
+  @@index([company_id], map: "idx_customer_receipt_payments_company_id")
 }
 
 // ── Tesorería etapa 3a: cheques de terceros (spec 2026-10-11-tesoreria-etapa-3a-design.md) ──
@@ -6034,9 +6146,11 @@ model third_party_check_operation_items {
   operation       third_party_check_operations @relation(fields: [operation_id], references: [id], onDelete: Cascade)
   check           third_party_checks           @relation(fields: [check_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@unique([operation_id, check_id], map: "third_party_check_operation_items_key")
   @@index([check_id], map: "idx_third_party_check_operation_items_check_id")
   @@schema("public")
+  @@index([company_id], map: "idx_third_party_check_operation_items_company_id")
 }
 
 /// Historial de un cheque: un evento por cambio de estado, con el documento que lo causó. No se borra.
@@ -6057,8 +6171,10 @@ model third_party_check_events {
   payment_order    payment_orders?               @relation(fields: [payment_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   user             profile                       @relation("third_party_check_event_user", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([check_id, created_at], map: "idx_third_party_check_events_check_created")
   @@schema("public")
+  @@index([company_id], map: "idx_third_party_check_events_company_id")
 }
 
 /// Chequera de una cuenta bancaria (spec Tesorería etapa 3b §2.1): rango de números de cheques
@@ -6139,8 +6255,10 @@ model own_check_events {
   payment_order    payment_orders?   @relation(fields: [payment_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   user             profile           @relation("own_check_event_user", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  company_id String @default(dbgenerated("app_current_company_id()")) @db.Uuid
   @@index([check_id, created_at], map: "idx_own_check_events_check_created")
   @@schema("public")
+  @@index([company_id], map: "idx_own_check_events_company_id")
 }
 
 enum own_check_kind {
