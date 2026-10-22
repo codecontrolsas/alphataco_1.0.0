@@ -2,19 +2,25 @@
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { buildDeliveryStatusFacetResult } from '@/features/Clothing/components/DeliveryStatusBadge';
-import { deliveryStatusLabels } from '@/features/Clothing/lib/delivery-stock-where';
-import { BulkDownloadBar } from '@/features/Clothing/pdf/BulkDownloadBar';
-import { clothingDeliveryTypeLabels } from '@/features/Clothing/utils/mappers';
-import { clothing_delivery_type } from '@/generated/prisma/enums';
+import { DeliveriesTable } from '@/features/Clothing/components/DeliveriesTable';
+import { deliveryStatusOptions } from '@/features/Clothing/components/DeliveryStatusBadge';
+import {
+  DELIVERY_EXPORT_FORMATTERS,
+  deliveryTypeOptions,
+  formatFileForExport,
+  signatureFilterFromRows,
+} from '@/features/Clothing/lib/delivery-table-config';
 import { Logger } from '@/lib/logger';
-import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
-import { useDebounce } from '@/shared/hooks/useDebounce';
+import { createFacetFilters, dateRangeFilter, textFilter } from '@/shared/components/common/DataTable/facet-filters';
+import {
+  type DataTableFacetedFilterConfig,
+  type DataTableSearchParams,
+} from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { useIsMobile } from '@/shared/hooks/use-mobile';
+import { useDebounce } from '@/shared/hooks/useDebounce';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, Loader2, Search, X } from 'lucide-react';
-import moment from 'moment';
 import { useCallback, useMemo, useState } from 'react';
 import {
   getAllDeliveriesForExport,
@@ -42,33 +48,6 @@ interface AllDeliveriesDataTableProps {
   tableId: string;
   initialColumnVisibility?: Record<string, boolean>;
   initialFilterVisibility?: Record<string, boolean>;
-}
-
-// ============================================================================
-// HELPERS — builders para reducir boilerplate en fetchFacet
-// ============================================================================
-
-function buildEnumFacetResult(
-  enumValues: string[],
-  labels: Record<string, string>,
-  counts: Map<string, number>
-): FacetResult {
-  const options = enumValues.map((v) => ({
-    value: v,
-    label: labels[v] ?? v,
-  }));
-  return { options, counts };
-}
-
-function buildFkFacetResult(
-  resolvedOptions: Array<{ id: string; name: string | null }> | undefined,
-  counts: Map<string, number>
-): FacetResult {
-  const options = (resolvedOptions ?? []).map((o) => ({
-    value: o.id,
-    label: o.name ?? o.id,
-  }));
-  return { options, counts };
 }
 
 // ============================================================================
@@ -244,6 +223,8 @@ export default function _AllDeliveriesDataTable({
 // DESKTOP TABLE (extracted to avoid hooks running conditionally)
 // ============================================================================
 
+const facets = createFacetFilters(getAllDeliveriesSingleFacet);
+
 function DesktopDeliveriesTable({
   data,
   totalRows,
@@ -252,49 +233,7 @@ function DesktopDeliveriesTable({
   initialColumnVisibility,
   initialFilterVisibility,
 }: AllDeliveriesDataTableProps) {
-  // ─── Client-side navigation ───────────────────────────────────────────────
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-
-  const handleStateChange = useCallback((params: DataTableSearchParams) => {
-    setCurrentParams(params);
-  }, []);
-
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getAllDeliveriesPaginated(params), []);
-
-  // ─── Bulk download — selección cross-page ─────────────────────────────────
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [clearTrigger, setClearTrigger] = useState(0);
-  const clearSelection = useCallback(() => {
-    setSelectedIds([]);
-    setClearTrigger((n) => n + 1);
-  }, []);
-
-  // ─── Lazy-load facets — factories ─────────────────────────────────────────
-
-  const makeEnumFetchFacet = useCallback(
-    (columnId: string, enumValues: string[], labels: Record<string, string>) =>
-      async (facetParams: DataTableSearchParams): Promise<FacetResult> => {
-        const result = await getAllDeliveriesSingleFacet(columnId, facetParams);
-        if (!result) return { options: [], counts: new Map() };
-        return buildEnumFacetResult(enumValues, labels, result.counts);
-      },
-    []
-  );
-
-  const makeFkFetchFacet = useCallback(
-    (columnId: string) =>
-      async (facetParams: DataTableSearchParams): Promise<FacetResult> => {
-        const result = await getAllDeliveriesSingleFacet(columnId, facetParams);
-        if (!result) return { options: [], counts: new Map() };
-        return buildFkFacetResult(result.resolvedOptions, result.counts);
-      },
-    []
-  );
-
-  const fetchStatusFacet = useCallback(async (facetParams: DataTableSearchParams): Promise<FacetResult> => {
-    const result = await getAllDeliveriesSingleFacet('status', facetParams);
-    return buildDeliveryStatusFacetResult(result?.counts ?? new Map());
-  }, []);
 
   // ─── Columns ──────────────────────────────────────────────────────────────
   const columns = useMemo(() => getColumns(), []);
@@ -302,88 +241,28 @@ function DesktopDeliveriesTable({
   // ─── Faceted filters ──────────────────────────────────────────────────────
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
     () => [
-      {
-        columnId: 'delivered_at',
-        title: 'Fecha de entrega',
-        type: 'dateRange' as const,
-      },
-      {
-        columnId: 'employee_file',
-        title: 'Legajo (destinatario)',
-        type: 'text' as const,
-        placeholder: 'Buscar por legajo...',
-      },
-      {
-        columnId: 'employee_id',
-        title: 'Destinatario',
-        fetchFacet: makeFkFetchFacet('employee_id'),
-      },
-      {
-        columnId: 'delivery_type',
-        title: 'Tipo de entrega',
-        fetchFacet: makeEnumFetchFacet(
-          'delivery_type',
-          Object.values(clothing_delivery_type),
-          clothingDeliveryTypeLabels
-        ),
-      },
-      {
-        columnId: 'delivered_by_file',
-        title: 'Legajo (entregó)',
-        type: 'text' as const,
-        placeholder: 'Buscar por legajo...',
-      },
-      {
-        columnId: 'delivered_by_id',
-        title: 'Entregado por',
-        fetchFacet: makeFkFetchFacet('delivered_by_id'),
-      },
-      {
-        columnId: 'has_signature',
-        title: 'Firma',
-        fetchFacet: async (): Promise<FacetResult> => {
-          const trueCount = data.filter((d) => d.signature_url != null).length;
-          const falseCount = data.filter((d) => d.signature_url == null).length;
-          const counts = new Map<string, number>();
-          if (trueCount > 0) counts.set('true', trueCount);
-          if (falseCount > 0) counts.set('false', falseCount);
-          return {
-            options: [
-              { value: 'true', label: 'Con firma' },
-              { value: 'false', label: 'Sin firma' },
-            ],
-            counts,
-          };
-        },
-      },
-      {
-        columnId: 'status',
-        title: 'Estado',
-        fetchFacet: fetchStatusFacet,
-      },
-      {
-        columnId: 'notes',
-        title: 'Notas',
-        type: 'text' as const,
-        placeholder: 'Buscar en notas...',
-      },
+      dateRangeFilter('delivered_at', 'Fecha de entrega'),
+      textFilter('employee_file', 'Legajo (destinatario)', 'Buscar por legajo...'),
+      facets.lookup('employee_id', 'Destinatario'),
+      facets.fixed('delivery_type', 'Tipo de entrega', deliveryTypeOptions),
+      textFilter('delivered_by_file', 'Legajo (entregó)', 'Buscar por legajo...'),
+      facets.lookup('delivered_by_id', 'Entregado por'),
+      signatureFilterFromRows(data),
+      facets.fixed('status', 'Estado', deliveryStatusOptions),
+      textFilter('notes', 'Notas', 'Buscar en notas...'),
     ],
-    [makeEnumFetchFacet, makeFkFetchFacet, fetchStatusFacet, data]
+    [data]
   );
 
-  // ─── Filter visibility (max 3 by default) ────────────────────────────────
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
-      return initialFilterVisibility;
-    }
-    return Object.fromEntries(facetedFilters.map((f) => [f.columnId, DEFAULT_VISIBLE_FILTERS.includes(f.columnId)]));
-  }, [initialFilterVisibility, facetedFilters]);
-
-  // ─── Column visibility ────────────────────────────────────────────────────
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((col) => [col, false]));
-    return { ...defaults, ...(initialColumnVisibility ?? {}) };
-  }, [initialColumnVisibility]);
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
 
   // ─── Export config ────────────────────────────────────────────────────────
   const exportConfig = useMemo(
@@ -395,44 +274,25 @@ function DesktopDeliveriesTable({
         title: 'Todas las Entregas de Indumentaria',
       },
       formatters: {
-        delivered_at: (val: unknown) => (val ? moment(val as Date).format('DD/MM/YYYY') : '-'),
-        delivery_type: (val: unknown) =>
-          val ? clothingDeliveryTypeLabels[val as keyof typeof clothingDeliveryTypeLabels] ?? String(val) : '-',
-        has_signature: (val: unknown) => (val === 'true' ? 'Sí' : 'No'),
-        status: (val: unknown) => deliveryStatusLabels[String(val)] ?? '-',
-        delivered_by_file: (val: unknown) => (val != null ? String(val) : '-'),
-        employee_file: (val: unknown) => (val != null ? String(val) : '-'),
+        ...DELIVERY_EXPORT_FORMATTERS,
+        delivered_by_file: formatFileForExport,
+        employee_file: formatFileForExport,
       },
     }),
     [currentParams]
   );
 
   return (
-    <>
-      <DataTable
-        columns={columns}
-        data={data}
-        totalRows={totalRows}
-        searchParams={searchParams}
-        paramNamespace={tableId}
-        tableId={tableId}
-        queryFn={tableQueryFn}
-        queryKey={['all-deliveries']}
-        onStateChange={handleStateChange}
-        facetedFilters={facetedFilters}
-        initialFilterVisibility={mergedFilterVisibility}
-        initialColumnVisibility={mergedColumnVisibility}
-        searchPlaceholder="Buscar por nombre del empleado o notas..."
-        showFilterToggle={true}
-        showSearch={true}
-        emptyMessage="No hay entregas registradas"
-        exportConfig={exportConfig}
-        enableRowSelection
-        showRowSelection
-        onRowSelectionIdsChange={setSelectedIds}
-        clearSelectionTrigger={clearTrigger}
-      />
-      <BulkDownloadBar selectedIds={selectedIds} onClear={clearSelection} />
-    </>
+    <DeliveriesTable
+      columns={columns}
+      data={data}
+      totalRows={totalRows}
+      {...tableProps}
+      queryFn={tableQueryFn}
+      queryKey={['all-deliveries']}
+      searchPlaceholder="Buscar por nombre del empleado o notas..."
+      emptyMessage="No hay entregas registradas"
+      exportConfig={exportConfig}
+    />
   );
 }

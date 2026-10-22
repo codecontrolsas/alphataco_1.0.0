@@ -7,7 +7,7 @@ import {
   DELIVERY_STATUS_CANCELLED,
   deliveryStatusLabels,
 } from '@/features/Clothing/lib/delivery-stock-where';
-import type { FacetResult } from '@/shared/components/common/DataTable/types';
+import type { DataTableFilterOption } from '@/shared/components/common/DataTable/types';
 import { Ban, CheckCircle2, type LucideIcon } from 'lucide-react';
 import moment from 'moment';
 
@@ -18,16 +18,13 @@ export const deliveryStatusIcons: Record<string, LucideIcon> = {
 };
 
 /** Opciones del filtro "Estado" con los mismos labels/iconos que muestra la celda. */
-export function buildDeliveryStatusFacetResult(counts: Map<string, number>): FacetResult {
-  return {
-    options: [DELIVERY_STATUS_ACTIVE, DELIVERY_STATUS_CANCELLED].map((value) => ({
-      value,
-      label: deliveryStatusLabels[value],
-      icon: deliveryStatusIcons[value],
-    })),
-    counts,
-  };
-}
+export const deliveryStatusOptions: DataTableFilterOption[] = [DELIVERY_STATUS_ACTIVE, DELIVERY_STATUS_CANCELLED].map(
+  (value) => ({
+    value,
+    label: deliveryStatusLabels[value],
+    icon: deliveryStatusIcons[value],
+  })
+);
 
 /** Badge "Vigente" / "Anulada"; la anulada muestra fecha y motivo en un tooltip y el motivo debajo. */
 export function DeliveryStatusBadge({

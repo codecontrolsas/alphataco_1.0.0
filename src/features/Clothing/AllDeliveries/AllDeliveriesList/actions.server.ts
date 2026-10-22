@@ -1,23 +1,31 @@
 'use server';
 
 import {
-  buildDeliveryStatusWhere,
-  DELIVERY_STATUS_ACTIVE,
-  DELIVERY_STATUS_CANCELLED,
-  DELIVERY_STATUS_SELECT,
-} from '@/features/Clothing/lib/delivery-stock-where';
+  buildNullableEmployeeIdWhere,
+  buildPersonFileWhere,
+  createCrossWhere,
+  DELIVERED_BY_RELATION,
+  DELIVERY_ITEMS_SELECT,
+  DELIVERY_PERSON_SELECT,
+  deliveryPersonFacet,
+  deliveryStatusFacet,
+  deliveryTypeFacet,
+  RECIPIENT_RELATION,
+} from '@/features/Clothing/lib/delivery-list-query';
+import { buildDeliveryStatusWhere, DELIVERY_STATUS_SELECT } from '@/features/Clothing/lib/delivery-stock-where';
+import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import {
   buildDateRangeFiltersWhere,
   buildFiltersWhere,
   buildTextFiltersWhere,
-  NULL_FILTER_VALUE,
   parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
+import { resolveSorts, type SingleFacetResult } from '@/shared/lib/table-list-query';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
 
 const logger = new Logger('Clothing/AllDeliveries/actions.server');
 
@@ -46,7 +54,7 @@ const MANUALLY_HANDLED_COLUMNS = [
 ];
 
 /** Mapeo de columnas FK para ordenamiento server-side */
-const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Record<string, unknown>> = {
+const FK_SORT_MAP: Record<string, (dir: 'asc' | 'desc') => Prisma.clothing_deliveriesOrderByWithRelationInput> = {
   delivered_by_id: (dir) => ({
     employees_clothing_deliveries_delivered_by_idToemployees: { lastname: dir },
   }),
@@ -70,37 +78,9 @@ const DELIVERY_SELECT = {
   notes: true,
   signature_url: true,
   ...DELIVERY_STATUS_SELECT,
-  employees_clothing_deliveries_employee_idToemployees: {
-    select: {
-      id: true,
-      firstname: true,
-      lastname: true,
-      file: true,
-    },
-  },
-  employees_clothing_deliveries_delivered_by_idToemployees: {
-    select: {
-      id: true,
-      firstname: true,
-      lastname: true,
-      file: true,
-    },
-  },
-  clothing_delivery_items: {
-    select: {
-      id: true,
-      quantity: true,
-      clothing_items: {
-        select: { id: true, name: true },
-      },
-      clothing_brands: {
-        select: { id: true, name: true },
-      },
-      clothing_sizes: {
-        select: { id: true, name: true },
-      },
-    },
-  },
+  [RECIPIENT_RELATION]: DELIVERY_PERSON_SELECT,
+  [DELIVERED_BY_RELATION]: DELIVERY_PERSON_SELECT,
+  clothing_delivery_items: DELIVERY_ITEMS_SELECT,
 } as const;
 
 /** Construye el WHERE clause compartido entre paginated, export y facets. */
@@ -126,73 +106,16 @@ function buildWhereClause(companyId: string, state: ReturnType<typeof parseSearc
 
   const dateFiltersWhere = buildDateRangeFiltersWhere(state.filters, DATE_RANGE_COLUMNS);
 
-  // FK filter for employee_id (recipient)
-  let employeeWhere: Record<string, unknown> = {};
-  const employeeFilter = state.filters['employee_id'];
-  if (employeeFilter && Array.isArray(employeeFilter) && employeeFilter.length > 0) {
-    const values = employeeFilter as string[];
-    if (values.includes(NULL_FILTER_VALUE)) {
-      const nonNullValues = values.filter((v) => v !== NULL_FILTER_VALUE);
-      employeeWhere = {
-        OR: [{ employee_id: null }, ...(nonNullValues.length > 0 ? [{ employee_id: { in: nonNullValues } }] : [])],
-      };
-    } else {
-      employeeWhere = { employee_id: { in: values } };
-    }
-  }
-
-  // Text filter: employee_file (legajo del destinatario)
-  const employeeFileValues = state.filters['employee_file'];
-  const employeeFileSearch = employeeFileValues?.[0]?.trim();
-  let employeeFileWhere: Record<string, unknown> = {};
-  if (employeeFileSearch) {
-    employeeFileWhere = {
-      employees_clothing_deliveries_employee_idToemployees: {
-        file: { contains: employeeFileSearch, mode: 'insensitive' },
-      },
-    };
-  }
-
-  // FK filter for delivered_by_id
-  let deliveredByWhere: Record<string, unknown> = {};
-  const deliveredByFilter = state.filters['delivered_by_id'];
-  if (deliveredByFilter && Array.isArray(deliveredByFilter) && deliveredByFilter.length > 0) {
-    const values = deliveredByFilter as string[];
-    if (values.includes(NULL_FILTER_VALUE)) {
-      const nonNullValues = values.filter((v) => v !== NULL_FILTER_VALUE);
-      deliveredByWhere = {
-        OR: [
-          { delivered_by_id: null },
-          ...(nonNullValues.length > 0 ? [{ delivered_by_id: { in: nonNullValues } }] : []),
-        ],
-      };
-    } else {
-      deliveredByWhere = { delivered_by_id: { in: values } };
-    }
-  }
-
-  // Text filter: delivered_by_file (legajo del que entrega)
-  const deliveredByFileValues = state.filters['delivered_by_file'];
-  const deliveredByFileSearch = deliveredByFileValues?.[0]?.trim();
-  let deliveredByFileWhere: Record<string, unknown> = {};
-  if (deliveredByFileSearch) {
-    deliveredByFileWhere = {
-      employees_clothing_deliveries_delivered_by_idToemployees: {
-        file: { contains: deliveredByFileSearch, mode: 'insensitive' },
-      },
-    };
-  }
-
   return {
     company_id: companyId,
     ...searchWhere,
     ...filtersWhere,
     ...textFiltersWhere,
     ...dateFiltersWhere,
-    ...employeeWhere,
-    ...employeeFileWhere,
-    ...deliveredByWhere,
-    ...deliveredByFileWhere,
+    ...buildNullableEmployeeIdWhere('employee_id', state.filters['employee_id']),
+    ...buildPersonFileWhere(RECIPIENT_RELATION, state.filters['employee_file']),
+    ...buildNullableEmployeeIdWhere('delivered_by_id', state.filters['delivered_by_id']),
+    ...buildPersonFileWhere(DELIVERED_BY_RELATION, state.filters['delivered_by_file']),
     ...buildDeliveryStatusWhere(state.filters),
   };
 }
@@ -210,17 +133,14 @@ export async function getAllDeliveriesPaginated(searchParams: DataTableSearchPar
     const where = buildWhereClause(companyId, state);
 
     // Safe orderBy: multi-sort, solo campos válidos
-    const resolvedSorts: Record<string, unknown>[] = [];
-    for (const s of state.sorting) {
-      const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-      const fkMapper = FK_SORT_MAP[s.id];
-      if (fkMapper) {
-        resolvedSorts.push(fkMapper(dir));
-      } else if (VALID_SORT_FIELDS.has(s.id)) {
-        resolvedSorts.push({ [s.id]: dir });
-      }
-    }
-    const safeOrderBy = [...resolvedSorts, { delivered_at: 'desc' as const }];
+    const safeOrderBy = [
+      ...resolveSorts<Prisma.clothing_deliveriesOrderByWithRelationInput>(
+        state.sorting,
+        VALID_SORT_FIELDS,
+        FK_SORT_MAP
+      ),
+      { delivered_at: 'desc' as const },
+    ];
 
     const [data, total] = await Promise.all([
       prisma.clothing_deliveries.findMany({
@@ -275,124 +195,18 @@ export async function getAllDeliveriesForExport(searchParams: DataTableSearchPar
 export async function getAllDeliveriesSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
-): Promise<{
-  counts: Map<string, number>;
-  resolvedOptions?: Array<{ id: string; name: string | null }>;
-} | null> {
+): Promise<SingleFacetResult> {
   const companyId = await getActiveCompanyId();
-
-  let parsedState: ReturnType<typeof parseSearchParams> | null = null;
-  if (searchParams && Object.keys(searchParams).length > 0) {
-    parsedState = parseSearchParams(searchParams);
-  }
-
-  const hasActiveFilters = parsedState && (Object.keys(parsedState.filters).length > 0 || parsedState.search);
-
-  function crossWhere(excludeColumn: string) {
-    if (!parsedState || !hasActiveFilters) {
-      return { company_id: companyId };
-    }
-    const modified = { ...parsedState, filters: { ...parsedState.filters } };
-    delete modified.filters[excludeColumn];
-    delete modified.filters[`${excludeColumn}_from`];
-    delete modified.filters[`${excludeColumn}_to`];
-    return buildWhereClause(companyId, modified);
-  }
-
-  function toFacetMap(rows: { key: string | null | undefined; count: number }[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const { key, count } of rows) {
-      if (key == null) {
-        map.set(NULL_FILTER_VALUE, (map.get(NULL_FILTER_VALUE) ?? 0) + count);
-      } else {
-        map.set(String(key), count);
-      }
-    }
-    return map;
-  }
+  const crossWhere = createCrossWhere(searchParams, { company_id: companyId }, (state) =>
+    buildWhereClause(companyId, state)
+  );
 
   try {
     const where = crossWhere(columnId);
 
-    // ── Enum: delivery_type ──
-    if (columnId === 'delivery_type') {
-      const rows = await prisma.clothing_deliveries.groupBy({
-        by: ['delivery_type'],
-        where,
-        _count: true,
-      });
-      return {
-        counts: toFacetMap(rows.map((r) => ({ key: r.delivery_type, count: r._count }))),
-      };
-    }
-
-    // ── Estado (virtual: cancelled_at) ──
-    if (columnId === 'status') {
-      const [active, cancelled] = await Promise.all([
-        prisma.clothing_deliveries.count({ where: { ...where, cancelled_at: null } }),
-        prisma.clothing_deliveries.count({ where: { ...where, cancelled_at: { not: null } } }),
-      ]);
-      const counts = new Map<string, number>();
-      if (active > 0) counts.set(DELIVERY_STATUS_ACTIVE, active);
-      if (cancelled > 0) counts.set(DELIVERY_STATUS_CANCELLED, cancelled);
-      return { counts };
-    }
-
-    // ── FK: employee_id (recipient) ──
-    if (columnId === 'employee_id') {
-      const rows = await prisma.clothing_deliveries.groupBy({
-        by: ['employee_id'],
-        where,
-        _count: true,
-      });
-
-      const counts = toFacetMap(rows.map((r) => ({ key: r.employee_id, count: r._count })));
-
-      // Resolve employee names for labels
-      const nonNullIds = rows.map((r) => r.employee_id).filter((id): id is string => id != null);
-
-      let resolvedOptions: Array<{ id: string; name: string | null }> = [];
-      if (nonNullIds.length > 0) {
-        const employees = await prisma.employees.findMany({
-          where: { id: { in: nonNullIds } },
-          select: { id: true, firstname: true, lastname: true, file: true },
-        });
-        resolvedOptions = employees.map((e) => ({
-          id: e.id,
-          name: `[${e.file ?? ''}] ${e.lastname ?? ''} ${e.firstname ?? ''}`.trim(),
-        }));
-      }
-
-      return { counts, resolvedOptions };
-    }
-
-    // ── FK: delivered_by_id ──
-    if (columnId === 'delivered_by_id') {
-      const rows = await prisma.clothing_deliveries.groupBy({
-        by: ['delivered_by_id'],
-        where,
-        _count: true,
-      });
-
-      const counts = toFacetMap(rows.map((r) => ({ key: r.delivered_by_id, count: r._count })));
-
-      // Resolve employee names for labels
-      const nonNullIds = rows.map((r) => r.delivered_by_id).filter((id): id is string => id != null);
-
-      let resolvedOptions: Array<{ id: string; name: string | null }> = [];
-      if (nonNullIds.length > 0) {
-        const employees = await prisma.employees.findMany({
-          where: { id: { in: nonNullIds } },
-          select: { id: true, firstname: true, lastname: true, file: true },
-        });
-        resolvedOptions = employees.map((e) => ({
-          id: e.id,
-          name: `[${e.file ?? ''}] ${e.lastname ?? ''} ${e.firstname ?? ''}`.trim(),
-        }));
-      }
-
-      return { counts, resolvedOptions };
-    }
+    if (columnId === 'delivery_type') return await deliveryTypeFacet(where);
+    if (columnId === 'status') return await deliveryStatusFacet(where);
+    if (columnId === 'employee_id' || columnId === 'delivered_by_id') return await deliveryPersonFacet(columnId, where);
 
     logger.warn('Facet column not recognized for all deliveries', { data: { columnId } });
     return null;

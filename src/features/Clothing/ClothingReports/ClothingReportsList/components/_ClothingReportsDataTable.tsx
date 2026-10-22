@@ -1,18 +1,23 @@
 'use client';
 
-import { buildDeliveryStatusFacetResult } from '@/features/Clothing/components/DeliveryStatusBadge';
-import { deliveryStatusLabels } from '@/features/Clothing/lib/delivery-stock-where';
+import { DeliveriesTable } from '@/features/Clothing/components/DeliveriesTable';
+import { deliveryStatusOptions } from '@/features/Clothing/components/DeliveryStatusBadge';
+import {
+  DELIVERY_EXPORT_FORMATTERS,
+  deliveryTypeOptions,
+  formatFileForExport,
+} from '@/features/Clothing/lib/delivery-table-config';
+import { usePermissionChecker } from '@/features/Permissions/hooks/usePermissionChecker';
 import { formatMoney } from '@/features/Warehouses/lib/format';
-import { BulkDownloadBar } from '@/features/Clothing/pdf/BulkDownloadBar';
-import { clothingDeliveryTypeLabels } from '@/features/Clothing/utils/mappers';
-import type { clothing_delivery_type } from '@/generated/prisma/enums';
-import { Logger } from '@/lib/logger';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
-import { Check, CircleOff, X } from 'lucide-react';
+import { createFacetFilters, dateRangeFilter, textFilter } from '@/shared/components/common/DataTable/facet-filters';
+import {
+  type DataTableFacetedFilterConfig,
+  type DataTableSearchParams,
+} from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
+import { Check, X } from 'lucide-react';
 import moment from 'moment';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   getAllClothingReportsForExport,
   getClothingReportsPaginated,
@@ -20,12 +25,6 @@ import {
   type ClothingReportListItem,
 } from '../actions.server';
 import { HIDDEN_COLUMNS_BY_DEFAULT, getColumns } from '../columns';
-
-// ============================================================================
-// LOGGER
-// ============================================================================
-
-const logger = new Logger('_ClothingReportsDataTable');
 
 // ============================================================================
 // TYPES
@@ -43,39 +42,12 @@ interface ClothingReportsDataTableProps {
 }
 
 // ============================================================================
-// HELPERS — builders for fetchFacet boilerplate reduction
-// ============================================================================
-
-/** Builds FacetResult for FK columns where resolvedOptions come from the server */
-function buildFkFacetResult(
-  resolvedOptions: Array<{ id: string; name: string | null }> | undefined,
-  counts: Map<string, number>
-): FacetResult {
-  const options = (resolvedOptions ?? []).map((opt) => ({
-    value: opt.id,
-    label: opt.name ?? opt.id,
-  }));
-  return { options, counts };
-}
-
-/** Builds FacetResult for enum columns */
-function buildEnumFacetResult(
-  enumValues: string[],
-  labels: Record<string, string>,
-  counts: Map<string, number>
-): FacetResult {
-  const options = enumValues.map((v) => ({
-    value: v,
-    label: labels[v] ?? v,
-  }));
-  return { options, counts };
-}
-
-// ============================================================================
 // DEFAULT VISIBLE FILTERS (max 3)
 // ============================================================================
 
 const DEFAULT_VISIBLE_FILTERS = ['delivery_type', 'employee', 'delivered_at'];
+
+const facets = createFacetFilters(getClothingReportsSingleFacet);
 
 // ============================================================================
 // COMPONENT
@@ -90,82 +62,12 @@ export default function _ClothingReportsDataTable({
   initialFilterVisibility,
   permissionsMap,
 }: ClothingReportsDataTableProps) {
-  const canViewPrices = permissionsMap['almacenes:movimientos:view_prices'] === true;
-  const canCancel = permissionsMap['empleados:indumentaria_empleado:delete'] === true;
+  const { hasPermission } = usePermissionChecker(permissionsMap);
+  const canViewPrices = hasPermission('almacenes', 'movimientos', 'view_prices');
+  const canCancel = hasPermission('empleados', 'indumentaria_empleado', 'delete');
   const queryKey = useMemo(() => ['clothing-reports'] as const, []);
 
-  // ─── Client-side navigation ───────────────────────────────────────────────
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-
-  const handleStateChange = useCallback((params: DataTableSearchParams) => {
-    setCurrentParams(params);
-  }, []);
-
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getClothingReportsPaginated(params), []);
-
-  // ─── Bulk download — selección cross-page ─────────────────────────────────
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [clearTrigger, setClearTrigger] = useState(0);
-  const clearSelection = useCallback(() => {
-    setSelectedIds([]);
-    setClearTrigger((n) => n + 1);
-  }, []);
-
-  // ─── Lazy-load facets — factories ─────────────────────────────────────────
-
-  const makeEnumFetchFacet = useCallback(
-    (columnId: string, enumValues: string[], labels: Record<string, string>) =>
-      async (facetParams: DataTableSearchParams): Promise<FacetResult> => {
-        logger.debug('Fetching enum facet', { data: { columnId } });
-        const result = await getClothingReportsSingleFacet(columnId, facetParams);
-        if (!result) return { options: [], counts: new Map() };
-        return buildEnumFacetResult(enumValues, labels, result.counts);
-      },
-    []
-  );
-
-  const makeFkFetchFacet = useCallback(
-    (columnId: string) =>
-      async (facetParams: DataTableSearchParams): Promise<FacetResult> => {
-        logger.debug('Fetching FK facet', { data: { columnId } });
-        const result = await getClothingReportsSingleFacet(columnId, facetParams);
-        if (!result) return { options: [], counts: new Map() };
-        return buildFkFacetResult(result.resolvedOptions, result.counts);
-      },
-    []
-  );
-
-  const makeBooleanFetchFacet = useCallback(
-    (columnId: string, trueLabel: string, falseLabel: string) =>
-      async (facetParams: DataTableSearchParams): Promise<FacetResult> => {
-        logger.debug('Fetching boolean facet', { data: { columnId } });
-        const result = await getClothingReportsSingleFacet(columnId, facetParams);
-        if (!result) return { options: [], counts: new Map() };
-        return {
-          options: [
-            { value: 'true', label: trueLabel, icon: Check },
-            { value: 'false', label: falseLabel, icon: X },
-          ],
-          counts: result.counts,
-        };
-      },
-    []
-  );
-
-  const fetchStatusFacet = useCallback(async (facetParams: DataTableSearchParams): Promise<FacetResult> => {
-    const result = await getClothingReportsSingleFacet('status', facetParams);
-    return buildDeliveryStatusFacetResult(result?.counts ?? new Map());
-  }, []);
-
-  const fetchWarehouseFacet = useCallback(async (facetParams: DataTableSearchParams): Promise<FacetResult> => {
-    const result = await getClothingReportsSingleFacet('warehouse', facetParams);
-    if (!result) return { options: [], counts: new Map() };
-    const base = buildFkFacetResult(result.resolvedOptions, result.counts);
-    const nullCount = result.counts.get(NULL_FILTER_VALUE);
-    return nullCount
-      ? { ...base, options: [...base.options, { value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }] }
-      : base;
-  }, []);
 
   // ─── Columns ──────────────────────────────────────────────────────────────
   const columns = useMemo(
@@ -174,118 +76,37 @@ export default function _ClothingReportsDataTable({
   );
 
   // ─── Faceted filters ──────────────────────────────────────────────────────
-  const deliveryTypeValues = useMemo(
-    () => ['PLANNED_CCT', 'PLANNED_EPP', 'REPLACEMENT'] satisfies clothing_delivery_type[],
-    []
-  );
-
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
     () => [
-      // delivered_at — date range
-      {
-        columnId: 'delivered_at',
-        title: 'Fecha de entrega',
-        type: 'dateRange' as const,
-      },
-      // employee_file — text filter (legajo receptor)
-      {
-        columnId: 'employee_file',
-        title: 'Legajo Receptor',
-        type: 'text' as const,
-        placeholder: 'Buscar por legajo...',
-      },
-      // employee — FK faceted
-      {
-        columnId: 'employee',
-        title: 'Empleado',
-        fetchFacet: makeFkFetchFacet('employee'),
-      },
-      // delivered_by_file — text filter (legajo del que entrega)
-      {
-        columnId: 'delivered_by_file',
-        title: 'Legajo Entregado por',
-        type: 'text' as const,
-        placeholder: 'Buscar por legajo...',
-      },
-      // delivered_by — FK faceted
-      {
-        columnId: 'delivered_by',
-        title: 'Entregado por',
-        fetchFacet: makeFkFetchFacet('delivered_by'),
-      },
-      // delivery_type — enum faceted
-      {
-        columnId: 'delivery_type',
-        title: 'Tipo de entrega',
-        fetchFacet: makeEnumFetchFacet('delivery_type', deliveryTypeValues, clothingDeliveryTypeLabels),
-      },
-      // has_signature — computed boolean faceted
-      {
-        columnId: 'has_signature',
-        title: 'Firma',
-        fetchFacet: makeBooleanFetchFacet('has_signature', 'Con firma', 'Sin firma'),
-      },
-      // status — virtual faceted (cancelled_at)
-      {
-        columnId: 'status',
-        title: 'Estado',
-        fetchFacet: fetchStatusFacet,
-      },
-      // warehouse — FK nullable faceted
-      {
-        columnId: 'warehouse',
-        title: 'Depósito',
-        fetchFacet: fetchWarehouseFacet,
-      },
-      // cost — text (importe exacto), solo con view_prices
-      ...(canViewPrices
-        ? [
-            {
-              columnId: 'cost',
-              title: 'Costo',
-              type: 'text' as const,
-              placeholder: 'Importe exacto, ej. 15000,50',
-            },
-          ]
-        : []),
-      // notes — text filter
-      {
-        columnId: 'notes',
-        title: 'Notas',
-        type: 'text' as const,
-        placeholder: 'Buscar por notas...',
-      },
-      // created_at — date range
-      {
-        columnId: 'created_at',
-        title: 'Fecha de registro',
-        type: 'dateRange' as const,
-      },
+      dateRangeFilter('delivered_at', 'Fecha de entrega'),
+      textFilter('employee_file', 'Legajo Receptor', 'Buscar por legajo...'),
+      facets.lookup('employee', 'Empleado'),
+      textFilter('delivered_by_file', 'Legajo Entregado por', 'Buscar por legajo...'),
+      facets.lookup('delivered_by', 'Entregado por'),
+      facets.fixed('delivery_type', 'Tipo de entrega', deliveryTypeOptions),
+      facets.fixed('has_signature', 'Firma', [
+        { value: 'true', label: 'Con firma', icon: Check },
+        { value: 'false', label: 'Sin firma', icon: X },
+      ]),
+      facets.fixed('status', 'Estado', deliveryStatusOptions),
+      facets.lookup('warehouse', 'Depósito', undefined, { label: 'Sin asignar' }),
+      // Costo: importe exacto, solo con view_prices
+      ...(canViewPrices ? [textFilter('cost', 'Costo', 'Importe exacto, ej. 15000,50')] : []),
+      textFilter('notes', 'Notas', 'Buscar por notas...'),
+      dateRangeFilter('created_at', 'Fecha de registro'),
     ],
-    [
-      makeEnumFetchFacet,
-      makeFkFetchFacet,
-      makeBooleanFetchFacet,
-      deliveryTypeValues,
-      fetchStatusFacet,
-      fetchWarehouseFacet,
-      canViewPrices,
-    ]
+    [canViewPrices]
   );
 
-  // ─── Filter visibility (max 3 by default) ────────────────────────────────
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
-      return initialFilterVisibility;
-    }
-    return Object.fromEntries(facetedFilters.map((f) => [f.columnId, DEFAULT_VISIBLE_FILTERS.includes(f.columnId)]));
-  }, [initialFilterVisibility, facetedFilters]);
-
-  // ─── Column visibility ────────────────────────────────────────────────────
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((col) => [col, false]));
-    return { ...defaults, ...(initialColumnVisibility ?? {}) };
-  }, [initialColumnVisibility]);
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
 
   // ─── Export config ────────────────────────────────────────────────────────
   const exportConfig = useMemo(
@@ -297,16 +118,12 @@ export default function _ClothingReportsDataTable({
         title: 'Reportes de Entregas de Indumentaria',
       },
       formatters: {
-        delivered_at: (val: unknown) => (val ? moment(val as Date).format('DD/MM/YYYY') : '-'),
+        ...DELIVERY_EXPORT_FORMATTERS,
         created_at: (val: unknown) => (val ? moment(val as Date).format('DD/MM/YYYY') : '-'),
-        delivery_type: (val: unknown) =>
-          val ? clothingDeliveryTypeLabels[val as clothing_delivery_type] ?? String(val) : '-',
-        has_signature: (val: unknown) => (val === 'true' ? 'Sí' : 'No'),
-        status: (val: unknown) => deliveryStatusLabels[String(val)] ?? '-',
         warehouse: (val: unknown) => (val ? String(val) : '-'),
         cost: (val: unknown) => (val != null ? formatMoney(String(val)) : 'Sin costo'),
-        employee_file: (val: unknown) => (val != null ? String(val) : '-'),
-        delivered_by_file: (val: unknown) => (val != null ? String(val) : '-'),
+        employee_file: formatFileForExport,
+        delivered_by_file: formatFileForExport,
         items_summary: (_val: unknown, row: ClothingReportListItem) => {
           const items = row.clothing_delivery_items;
           if (!items || items.length === 0) return 'Sin artículos';
@@ -326,31 +143,16 @@ export default function _ClothingReportsDataTable({
   );
 
   return (
-    <>
-      <DataTable
-        columns={columns}
-        data={data}
-        totalRows={totalRows}
-        searchParams={searchParams}
-        paramNamespace={tableId}
-        tableId={tableId}
-        queryFn={tableQueryFn}
-        queryKey={[...queryKey]}
-        onStateChange={handleStateChange}
-        facetedFilters={facetedFilters}
-        initialFilterVisibility={mergedFilterVisibility}
-        initialColumnVisibility={mergedColumnVisibility}
-        searchPlaceholder="Buscar por notas..."
-        showFilterToggle={true}
-        showSearch={true}
-        emptyMessage="No hay entregas registradas"
-        exportConfig={exportConfig}
-        enableRowSelection
-        showRowSelection
-        onRowSelectionIdsChange={setSelectedIds}
-        clearSelectionTrigger={clearTrigger}
-      />
-      <BulkDownloadBar selectedIds={selectedIds} onClear={clearSelection} />
-    </>
+    <DeliveriesTable
+      columns={columns}
+      data={data}
+      totalRows={totalRows}
+      {...tableProps}
+      queryFn={tableQueryFn}
+      queryKey={[...queryKey]}
+      searchPlaceholder="Buscar por notas..."
+      emptyMessage="No hay entregas registradas"
+      exportConfig={exportConfig}
+    />
   );
 }
