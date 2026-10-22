@@ -1,9 +1,9 @@
 import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
 import { SectionManagerServer } from '@/features/TabsManager/SectionManagerServer';
+import { sectionTab } from '@/features/TabsManager/section-tab';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { SectionErrorBoundary } from '@/shared/components/common/SectionErrorBoundary';
+import { SectionTableSkeleton } from '@/shared/components/skeletons/SectionTableSkeleton';
 import { ArrowLeftRight, ClipboardList, HandHelping, Layers, Package, Settings, Warehouse } from 'lucide-react';
-import { Suspense } from 'react';
 import DepotsTabContent from './Depots/DepotsTabContent';
 import LoansTabContent from './Loans/LoansTabContent';
 import MaterialsTabContent from './Materials/MaterialsTabContent';
@@ -12,7 +12,6 @@ import RequestsTabContent from './Requests/RequestsTabContent';
 import SettingsTabContent from './Settings/SettingsTabContent';
 import { SettingsSkeleton } from './Settings/fallback/SettingsSkeleton';
 import StockTabContent from './Stock/StockTabContent';
-import { WarehouseSectionSkeleton } from './fallback/WarehouseSectionSkeleton';
 
 /**
  * Modulo Almacenes (spec docs/superpowers/specs/2026-10-04-almacenes-etapa-1-design.md).
@@ -23,13 +22,6 @@ import { WarehouseSectionSkeleton } from './fallback/WarehouseSectionSkeleton';
 export default async function WarehousesComponent({ searchParams }: { searchParams: DataTableSearchParams }) {
   const permissions = await getUserPermissionsMapServer();
 
-  const label = (Icon: typeof Layers, text: string) => (
-    <span className="flex items-center gap-2">
-      <Icon className="h-4 w-4" />
-      {text}
-    </span>
-  );
-
   return (
     <SectionManagerServer
       paramName="tab"
@@ -37,97 +29,62 @@ export default async function WarehousesComponent({ searchParams }: { searchPara
       defaultTab="stock"
       permissions={permissions}
       tabs={[
-        {
-          value: 'stock',
-          label: label(Layers, 'Stock'),
+        sectionTab({
           moduleSlug: 'almacenes',
           tabSlug: 'stock',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Stock">
-              <Suspense fallback={<WarehouseSectionSkeleton />}>
-                <StockTabContent searchParams={searchParams} permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
-        {
-          value: 'movimientos',
-          label: label(ArrowLeftRight, 'Movimientos'),
+          icon: Layers,
+          text: 'Stock',
+          fallback: <SectionTableSkeleton />,
+          children: <StockTabContent searchParams={searchParams} permissions={permissions} />,
+        }),
+        sectionTab({
           moduleSlug: 'almacenes',
           tabSlug: 'movimientos',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Movimientos">
-              <Suspense fallback={<WarehouseSectionSkeleton />}>
-                <MovementsTabContent searchParams={searchParams} permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
-        {
-          value: 'prestamos',
-          label: label(HandHelping, 'Préstamos'),
+          icon: ArrowLeftRight,
+          text: 'Movimientos',
+          fallback: <SectionTableSkeleton />,
+          children: <MovementsTabContent searchParams={searchParams} permissions={permissions} />,
+        }),
+        sectionTab({
           moduleSlug: 'almacenes',
           tabSlug: 'prestamos',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Préstamos">
-              <Suspense fallback={<WarehouseSectionSkeleton />}>
-                <LoansTabContent searchParams={searchParams} permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
-        {
-          value: 'pedidos',
-          label: label(ClipboardList, 'Pedidos'),
+          icon: HandHelping,
+          text: 'Préstamos',
+          fallback: <SectionTableSkeleton />,
+          children: <LoansTabContent searchParams={searchParams} permissions={permissions} />,
+        }),
+        sectionTab({
           moduleSlug: 'almacenes',
           tabSlug: 'pedidos',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Pedidos">
-              <Suspense fallback={<WarehouseSectionSkeleton />}>
-                <RequestsTabContent searchParams={searchParams} permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
-        {
-          value: 'materiales',
-          label: label(Package, 'Materiales'),
+          icon: ClipboardList,
+          text: 'Pedidos',
+          fallback: <SectionTableSkeleton />,
+          children: <RequestsTabContent searchParams={searchParams} permissions={permissions} />,
+        }),
+        sectionTab({
           moduleSlug: 'almacenes',
           tabSlug: 'materiales',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Materiales">
-              <Suspense fallback={<WarehouseSectionSkeleton />}>
-                <MaterialsTabContent searchParams={searchParams} permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
-        {
-          value: 'depositos',
-          label: label(Warehouse, 'Depósitos'),
+          icon: Package,
+          text: 'Materiales',
+          fallback: <SectionTableSkeleton />,
+          children: <MaterialsTabContent searchParams={searchParams} permissions={permissions} />,
+        }),
+        sectionTab({
           moduleSlug: 'almacenes',
           tabSlug: 'depositos',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Depósitos">
-              <Suspense fallback={<WarehouseSectionSkeleton />}>
-                <DepotsTabContent searchParams={searchParams} permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
-        {
-          value: 'config-almacen',
-          label: label(Settings, 'Configuración'),
+          icon: Warehouse,
+          text: 'Depósitos',
+          fallback: <SectionTableSkeleton />,
+          children: <DepotsTabContent searchParams={searchParams} permissions={permissions} />,
+        }),
+        sectionTab({
           moduleSlug: 'almacenes',
           tabSlug: 'config-almacen',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Configuración">
-              <Suspense fallback={<SettingsSkeleton />}>
-                <SettingsTabContent permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
+          icon: Settings,
+          text: 'Configuración',
+          fallback: <SettingsSkeleton />,
+          children: <SettingsTabContent permissions={permissions} />,
+        }),
       ]}
     />
   );

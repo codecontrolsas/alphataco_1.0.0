@@ -1,5 +1,5 @@
-import { WarehouseSectionSkeleton } from '@/features/Warehouses/fallback/WarehouseSectionSkeleton';
+import { SectionTableSkeleton } from '@/shared/components/skeletons/SectionTableSkeleton';
 
 export default function Loading() {
-  return <WarehouseSectionSkeleton />;
+  return <SectionTableSkeleton />;
 }

@@ -1,7 +1,8 @@
 import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
 import { SectionManagerServer } from '@/features/TabsManager/SectionManagerServer';
+import { sectionTab } from '@/features/TabsManager/section-tab';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { SectionErrorBoundary } from '@/shared/components/common/SectionErrorBoundary';
+import { SectionTableSkeleton } from '@/shared/components/skeletons/SectionTableSkeleton';
 import {
   ArrowLeftRight,
   HandCoins,
@@ -13,7 +14,6 @@ import {
   Settings,
   WalletCards,
 } from 'lucide-react';
-import { Suspense } from 'react';
 import AccountsTabContent from './Accounts/AccountsTabContent';
 import { AccountCardsSkeleton } from './Accounts/fallback/AccountCardsSkeleton';
 import ChecksTabContent from './Checks/ChecksTabContent';
@@ -25,7 +25,6 @@ import SettingsTabContent from './Settings/SettingsTabContent';
 import { TreasurySettingsSkeleton } from './Settings/fallback/TreasurySettingsSkeleton';
 import TransfersTabContent from './Transfers/TransfersTabContent';
 import WithholdingsTabContent from './Withholdings/WithholdingsTabContent';
-import { TreasurySectionSkeleton } from './fallback/TreasurySectionSkeleton';
 
 /**
  * Módulo Tesorería (specs docs/superpowers/specs/2026-10-10-tesoreria-etapa-1-design.md,
@@ -38,13 +37,6 @@ import { TreasurySectionSkeleton } from './fallback/TreasurySectionSkeleton';
 export default async function TreasuryComponent({ searchParams }: { searchParams: DataTableSearchParams }) {
   const permissions = await getUserPermissionsMapServer();
 
-  const label = (Icon: typeof Landmark, text: string) => (
-    <span className="flex items-center gap-2">
-      <Icon className="h-4 w-4" />
-      {text}
-    </span>
-  );
-
   return (
     <SectionManagerServer
       paramName="tab"
@@ -52,123 +44,78 @@ export default async function TreasuryComponent({ searchParams }: { searchParams
       defaultTab="cuentas"
       permissions={permissions}
       tabs={[
-        {
-          value: 'cuentas',
-          label: label(Landmark, 'Cuentas'),
+        sectionTab({
           moduleSlug: 'tesoreria',
           tabSlug: 'cuentas',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Cuentas">
-              <Suspense fallback={<AccountCardsSkeleton />}>
-                <AccountsTabContent permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
-        {
-          value: 'movimientos',
-          label: label(ArrowLeftRight, 'Movimientos'),
+          icon: Landmark,
+          text: 'Cuentas',
+          fallback: <AccountCardsSkeleton />,
+          children: <AccountsTabContent permissions={permissions} />,
+        }),
+        sectionTab({
           moduleSlug: 'tesoreria',
           tabSlug: 'movimientos',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Movimientos">
-              <Suspense fallback={<TreasurySectionSkeleton />}>
-                <MovementsTabContent searchParams={searchParams} permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
-        {
-          value: 'transferencias',
-          label: label(Repeat, 'Transferencias'),
+          icon: ArrowLeftRight,
+          text: 'Movimientos',
+          fallback: <SectionTableSkeleton filterCount={2} />,
+          children: <MovementsTabContent searchParams={searchParams} permissions={permissions} />,
+        }),
+        sectionTab({
           moduleSlug: 'tesoreria',
           tabSlug: 'transferencias',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Transferencias">
-              <Suspense fallback={<TreasurySectionSkeleton />}>
-                <TransfersTabContent searchParams={searchParams} permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
-        {
-          value: 'cobranzas',
-          label: label(HandCoins, 'Cobranzas'),
+          icon: Repeat,
+          text: 'Transferencias',
+          fallback: <SectionTableSkeleton filterCount={2} />,
+          children: <TransfersTabContent searchParams={searchParams} permissions={permissions} />,
+        }),
+        sectionTab({
           moduleSlug: 'tesoreria',
           tabSlug: 'cobranzas',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Cobranzas">
-              <Suspense fallback={<TreasurySectionSkeleton />}>
-                <CollectionsTabContent searchParams={searchParams} permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
-        {
-          value: 'cheques',
-          label: label(WalletCards, 'Cheques'),
+          icon: HandCoins,
+          text: 'Cobranzas',
+          fallback: <SectionTableSkeleton filterCount={2} />,
+          children: <CollectionsTabContent searchParams={searchParams} permissions={permissions} />,
+        }),
+        sectionTab({
           moduleSlug: 'tesoreria',
           tabSlug: 'cheques',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Cheques">
-              <Suspense fallback={<TreasurySectionSkeleton />}>
-                <ChecksTabContent searchParams={searchParams} permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
-        {
-          value: 'cheques-propios',
-          label: label(ScrollText, 'Cheques propios'),
+          icon: WalletCards,
+          text: 'Cheques',
+          fallback: <SectionTableSkeleton filterCount={2} />,
+          children: <ChecksTabContent searchParams={searchParams} permissions={permissions} />,
+        }),
+        sectionTab({
           moduleSlug: 'tesoreria',
           tabSlug: 'cheques-propios',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Cheques propios">
-              <Suspense fallback={<TreasurySectionSkeleton />}>
-                <OwnChecksTabContent searchParams={searchParams} permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
-        {
-          value: 'conciliacion',
-          label: label(ListChecks, 'Conciliación'),
+          icon: ScrollText,
+          text: 'Cheques propios',
+          fallback: <SectionTableSkeleton filterCount={2} />,
+          children: <OwnChecksTabContent searchParams={searchParams} permissions={permissions} />,
+        }),
+        sectionTab({
           moduleSlug: 'tesoreria',
           tabSlug: 'conciliacion',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Conciliación">
-              <Suspense fallback={<TreasurySectionSkeleton />}>
-                <ReconciliationTabContent searchParams={searchParams} permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
-        {
-          value: 'retenciones-sufridas',
-          label: label(Percent, 'Retenciones sufridas'),
+          icon: ListChecks,
+          text: 'Conciliación',
+          fallback: <SectionTableSkeleton filterCount={2} />,
+          children: <ReconciliationTabContent searchParams={searchParams} permissions={permissions} />,
+        }),
+        sectionTab({
           moduleSlug: 'tesoreria',
           tabSlug: 'retenciones-sufridas',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Retenciones sufridas">
-              <Suspense fallback={<TreasurySectionSkeleton />}>
-                <WithholdingsTabContent searchParams={searchParams} permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
-        {
-          value: 'config-tesoreria',
-          label: label(Settings, 'Configuración'),
+          icon: Percent,
+          text: 'Retenciones sufridas',
+          fallback: <SectionTableSkeleton filterCount={2} />,
+          children: <WithholdingsTabContent searchParams={searchParams} permissions={permissions} />,
+        }),
+        sectionTab({
           moduleSlug: 'tesoreria',
           tabSlug: 'config-tesoreria',
-          content: (
-            <SectionErrorBoundary title="No se pudo mostrar Configuración">
-              <Suspense fallback={<TreasurySettingsSkeleton />}>
-                <SettingsTabContent permissions={permissions} />
-              </Suspense>
-            </SectionErrorBoundary>
-          ),
-        },
+          icon: Settings,
+          text: 'Configuración',
+          fallback: <TreasurySettingsSkeleton />,
+          children: <SettingsTabContent permissions={permissions} />,
+        }),
       ]}
     />
   );
