@@ -11,7 +11,7 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { toDateOnly } from '@/shared/lib/date-only';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { runFacet, withoutOwnFilter, type FacetConfig } from '@/shared/lib/table-facets';
@@ -302,10 +302,7 @@ export async function getInvoicesForExport(
     return { ok: true, data: rows.map((r) => mapInvoice(r, canViewPrices)) };
   } catch (error) {
     logger.error('Error al exportar comprobantes', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en producción.
-    const message =
-      error instanceof ExportTooLargeError ? error.message : 'No se pudo exportar el listado. Intente nuevamente.';
-    return { ok: false, message };
+    return exportFailure(error, 'No se pudo exportar el listado. Intente nuevamente.');
   }
 }
 
