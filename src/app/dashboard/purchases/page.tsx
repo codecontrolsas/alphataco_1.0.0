@@ -1,14 +1,12 @@
-import { getCompanyName } from '@/features/Empresa/General/actions/company.server';
+import { companyPageMetadata } from '@/app/_lib/company-metadata';
 import PurchasesComponent from '@/features/Purchases/PurchasesComponent';
-import { cookies } from 'next/headers';
 
 export async function generateMetadata() {
-  const cookiesStore = await cookies();
-  const companyName = cookiesStore.get('actualCompName')?.value ?? (await getCompanyName())?.company_name;
-  if (companyName) {
-    return { title: `Compras | ${companyName}`, description: `Proveedores y solicitudes de compra de ${companyName}` };
-  }
-  return { title: 'Compras' };
+  return (
+    (await companyPageMetadata('Compras', (name) => `Proveedores y solicitudes de compra de ${name}`)) ?? {
+      title: 'Compras',
+    }
+  );
 }
 
 export default async function PurchasesPage({

@@ -1,22 +1,15 @@
+import { companyPageMetadata } from '@/app/_lib/company-metadata';
 import EmployeesDiagram from '@/features/Employees/Diagrams/EmployeesDiagram';
 import { DiagramsSkeleton } from '@/features/Employees/Diagrams/fallback/DiagramsSkeleton';
 import EmployeeList from '@/features/Employees/Empleados/EmployeeList/EmployeeList';
 import { EmployeeTableSkeleton } from '@/features/Employees/Empleados/EmployeeList/fallback/EmployeeTableSkeleton';
-import { getCompanyName } from '@/features/Empresa/General/actions/company.server';
 import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
 import { SectionManagerServer } from '@/features/TabsManager/SectionManagerServer';
 import { ViewManagerServer } from '@/features/TabsManager/ViewManagerServer';
-import { cookies } from 'next/headers';
 import { Suspense } from 'react';
 
 export async function generateMetadata() {
-  const cookiesStore = await cookies();
-  const companyName = cookiesStore.get('actualCompName')?.value ?? (await getCompanyName())?.company_name;
-  if (!companyName) return undefined;
-  return {
-    title: `Empleados | ${companyName}`,
-    description: `Legajos, bajas y novedades del personal de ${companyName}`,
-  };
+  return companyPageMetadata('Empleados', (name) => `Legajos, bajas y novedades del personal de ${name}`);
 }
 
 /**
