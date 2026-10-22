@@ -1,11 +1,12 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import { NULL_FILTER_VALUE, stateToPrismaParams } from '@/shared/components/common/DataTable/helpers';
+import { stateToPrismaParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { toFacetMap } from '@/shared/lib/table-facets';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { CATALOG_EXPORT_MAX_ROWS, catalogExportFailure } from '../../lib/catalog-table.server';
 import { configPermissionError, requireConfigTabPermission } from '../../lib/config-access.server';
@@ -24,14 +25,6 @@ const logger = new Logger('AccesosExternos/list/actions.server');
  * REGLA DE SEGURIDAD DURA: `secret_hash` NUNCA debe aparecer en ningun `select`
  * de este archivo ni de `lib/clients-where.ts`. Solo `secret_prefix`.
  */
-
-function toFacetMap(rows: { key: string | null | undefined; count: number }[]): Map<string, number> {
-  const map = new Map<string, number>();
-  for (const { key, count } of rows) {
-    map.set(key == null ? NULL_FILTER_VALUE : String(key), count);
-  }
-  return map;
-}
 
 // ============================================================================
 // PAGINATED QUERY

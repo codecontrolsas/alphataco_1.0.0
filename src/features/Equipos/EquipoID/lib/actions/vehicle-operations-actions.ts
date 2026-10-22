@@ -16,13 +16,14 @@ import { prisma } from '@/shared/lib/prisma';
 import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
+import { isUuid } from '@/shared/lib/uuid';
 import {
   EQUIPMENT_HISTORY_TAB,
   EquipmentHistoryAccessError,
   requireEquipmentTabView,
 } from '../equipment-history-access';
 import { repairsKey, summarizeOrderItems } from '../equipment-order-summary';
-import { argentinaDateRange, isUuid, sanitizeUuidFilters } from '../table-filters';
+import { argentinaDateRange, sanitizeUuidFilters } from '../table-filters';
 
 const logger = new Logger('Equipos/vehicle-operations-actions');
 

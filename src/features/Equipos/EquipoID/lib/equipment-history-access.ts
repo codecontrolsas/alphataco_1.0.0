@@ -2,7 +2,7 @@ import 'server-only';
 
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { isUuid } from './table-filters';
+import { isUuid } from '@/shared/lib/uuid';
 
 /**
  * Perímetro de las consultas de la ficha del equipo (historial de mantenimiento, solicitudes rechazadas

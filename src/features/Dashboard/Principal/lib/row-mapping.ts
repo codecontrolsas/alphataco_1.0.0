@@ -1,4 +1,3 @@
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import type { EmployeeNotInReportResult, VehicleNotInReportResult } from '../actions/types';
 
 /**
@@ -88,22 +87,4 @@ export function mapEmployeesNotInReport(rows: readonly EmployeeDiagramRow[]): Em
   }
 
   return result;
-}
-
-/**
- * Filas de un `groupBy` → mapa de counts de una faceta.
- * Las claves nulas se acumulan bajo `NULL_FILTER_VALUE` ("Sin asignar").
- */
-export function toFacetMap(rows: readonly { key: string | null | undefined; count: number }[]): Map<string, number> {
-  const map = new Map<string, number>();
-
-  for (const { key, count } of rows) {
-    if (key == null) {
-      map.set(NULL_FILTER_VALUE, (map.get(NULL_FILTER_VALUE) ?? 0) + count);
-    } else {
-      map.set(String(key), count);
-    }
-  }
-
-  return map;
 }

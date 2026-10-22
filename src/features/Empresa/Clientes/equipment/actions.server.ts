@@ -18,7 +18,8 @@ import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { booleanFilterWhere, cleanFacetFilters, intFkFilterWhere, isUuid } from '../lib/table-where';
+import { isUuid } from '@/shared/lib/uuid';
+import { booleanFilterWhere, cleanFacetFilters, intFkFilterWhere } from '../lib/table-where';
 
 const logger = new Logger('features/Empresa/Clientes/equipment');
 

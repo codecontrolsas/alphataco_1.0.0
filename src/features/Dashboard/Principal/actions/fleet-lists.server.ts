@@ -16,9 +16,9 @@ import type { DataTableSearchParams } from '@/shared/components/common/DataTable
 import { ExportTooLargeError, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { toFacetMap } from '@/shared/lib/table-facets';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { isNotOperative, NOT_OPERATIVE_CONDITIONS } from '../lib/indicators';
-import { toFacetMap } from '../lib/row-mapping';
 import { buildTodayReportVehicleRelationsWhere } from '../lib/today-report-vehicles';
 
 const logger = new Logger('features/Dashboard/Principal/fleet');

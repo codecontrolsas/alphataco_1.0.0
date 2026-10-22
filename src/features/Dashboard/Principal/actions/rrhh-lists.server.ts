@@ -15,10 +15,10 @@ import type { DataTableSearchParams } from '@/shared/components/common/DataTable
 import { ExportTooLargeError, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { toFacetMap } from '@/shared/lib/table-facets';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { CANCELLED_ROW_STATUS, getOperationToday, getTodayParts } from '../lib/dashboard-dates';
 import { sanitizePositionIds } from '../lib/position-filter';
-import { toFacetMap } from '../lib/row-mapping';
 
 const logger = new Logger('features/Dashboard/Principal/rrhh');
 

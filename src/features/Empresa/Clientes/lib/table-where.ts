@@ -30,12 +30,6 @@ export function digitsOnly(value: string): string {
   return value.replace(/\D/g, '');
 }
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-export function isUuid(value: string): boolean {
-  return UUID_PATTERN.test(value);
-}
-
 /**
  * Deja en los filtros facetados solo valores válidos para su columna (UUID de una FK, valor de un enum):
  * un valor inventado en la URL llegaría a Prisma y rompería la consulta entera. `NULL_FILTER_VALUE` siempre
