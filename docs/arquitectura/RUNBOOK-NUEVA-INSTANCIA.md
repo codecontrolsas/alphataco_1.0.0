@@ -59,17 +59,18 @@ Objetivo: `scripts/instance/new.sh <slug>` **[a construir]**. Mientras tanto, es
 
 ## 4. Servicios de una instancia
 
-| Servicio           | Función                                                                           | Estado                    |
-| ------------------ | --------------------------------------------------------------------------------- | ------------------------- |
-| `caddy`            | Entrada, TLS y rutas                                                              | [hoy]                     |
-| `app` (Next)       | Web, server actions, archivos y endpoints de jobs                                 | [hoy]                     |
-| `api`              | `/api/mobile/v1` (misma imagen, otro proceso)                                     | [a construir]             |
-| `worker`           | Jobs programados; con la app, outbox y push                                       | [hoy como `cron`]         |
-| `sync`             | Datos offline de la app                                                           | [a construir, opcional]   |
-| `postgres`         | Datos, historial por triggers, sesiones, outbox                                   | [hoy]                     |
-| `storage` (RustFS) | Archivos y fotos (buckets privados; los crea `ensure-buckets` al arrancar la app) | [hoy; reemplaza a MinIO]  |
-| `redis`            | Límite de intentos compartido, colas, avisos en vivo                              | [opcional; no se usa hoy] |
-| backup             | `pg_dump` + copia del bucket fuera de la VPS                                      | [a construir]             |
+| Servicio            | Función                                                                                                                                            | Estado                                                                        |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `caddy`             | Entrada, TLS y rutas                                                                                                                               | [hoy]                                                                         |
+| `app` (Next)        | Web, server actions, archivos y endpoints de jobs                                                                                                  | [hoy]                                                                         |
+| `api`               | `/api/mobile/v1` (misma imagen, otro proceso)                                                                                                      | [a construir]                                                                 |
+| `worker`            | Jobs programados; con la app, outbox y push                                                                                                        | [hoy como `cron`]                                                             |
+| `sync`              | Datos offline de la app                                                                                                                            | [a construir, opcional]                                                       |
+| `postgres`          | Datos, historial por triggers, sesiones, outbox                                                                                                    | [hoy]                                                                         |
+| `storage` (RustFS)  | Archivos y fotos (buckets privados; los crea `ensure-buckets` al arrancar la app)                                                                  | [hoy; reemplaza a MinIO]                                                      |
+| `redis`             | Límite de intentos compartido, colas, avisos en vivo                                                                                               | [opcional; no se usa hoy]                                                     |
+| backup              | `pg_dump` + copia del bucket fuera de la VPS                                                                                                       | [a construir]                                                                 |
+| agente de monitoreo | `alphataco-agent`: reporta CPU, RAM, disco y contenedores a TaskApp. **Va por defecto en toda instancia nueva** (decisión del usuario, 2026-10-22) | [hoy a mano en la VPS de Dokploy; a automatizar en `new.sh` y el alta remota] |
 
 Diagrama: `diagramas/mapa-instancia.html` y `diagramas/arquitectura-instancias.html`.
 

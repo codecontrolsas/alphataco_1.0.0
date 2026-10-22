@@ -72,8 +72,8 @@ export async function runDailyIndicatorsJob(deps: DailyIndicatorsDeps = {}): Pro
         runKey: `mantenimiento:${date}`,
         label: 'Mantenimiento de estados (partes y prepartes)',
         work: async () => {
-          await callVoid('actualizar_estado_daily_reports', []);
-          await callVoid('marcar_prepartes_vencidos', []);
+          await callVoid('actualizar_estado_daily_reports', [], prisma);
+          await callVoid('marcar_prepartes_vencidos', [], prisma);
           return { reason: 'partes diarios cerrados y prepartes vencidos marcados' };
         },
       })
@@ -87,7 +87,9 @@ export async function runDailyIndicatorsJob(deps: DailyIndicatorsDeps = {}): Pro
         date,
         companies,
         work: async (company) => {
-          await callVoid('run_daily_indicators_for_company', [{ uuid: company.id }]);
+          // Cliente de sistema: el job corre sin sesión ni empresa activa, y con el rol de la app la RLS
+          // rechaza el INSERT de `daily_indicators` (`app_current_company_id()` queda en NULL).
+          await callVoid('run_daily_indicators_for_company', [{ uuid: company.id }], prisma);
 
           const saved = await prisma.daily_indicators.count({
             where: { company_id: company.id, snapshot_date: new Date(`${date}T00:00:00Z`) },
