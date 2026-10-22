@@ -11,7 +11,6 @@ export function revalidate() {
 }
 
 export const day = (value: string) => new Date(`${value}T00:00:00.000Z`);
-export const isoDay = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
 
 export async function canEditOrders() {
   const [create, update] = await Promise.all([

@@ -10,7 +10,7 @@ import { InputFormField } from '@/shared/components/common/form-fields';
 import { Package, PenLine, Trash2 } from 'lucide-react';
 import { useWatch, type UseFormReturn } from 'react-hook-form';
 import { searchPurchaseMaterialOptions } from '../../actions/request-queries.server';
-import { searchSupplierOptions } from '../../actions/suppliers.server';
+import { searchSupplierOptions } from '../../actions/supplier-queries.server';
 import { type PurchaseRequestFormValues } from '../../schemas/requests';
 
 import type { LineLabels, Units } from './PurchaseRequestForm';

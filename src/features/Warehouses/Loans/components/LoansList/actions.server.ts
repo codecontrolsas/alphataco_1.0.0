@@ -1,6 +1,5 @@
 'use server';
 
-import { argentinaDate } from '@/shared/lib/argentina-time';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import type { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
@@ -12,7 +11,8 @@ import {
   parseSearchParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { argentinaDate } from '@/shared/lib/argentina-time';
+import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
@@ -238,12 +238,7 @@ export async function getAllLoansForExport(
     return { ok: true, data: shape(rows) };
   } catch (error) {
     logger.error('Error al exportar prestamos', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
-    const message =
-      error instanceof ExportTooLargeError
-        ? error.message
-        : 'No se pudo exportar la lista de préstamos. Intente nuevamente.';
-    return { ok: false, message };
+    return exportFailure(error, 'No se pudo exportar la lista de préstamos. Intente nuevamente.');
   }
 }
 

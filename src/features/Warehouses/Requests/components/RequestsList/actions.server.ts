@@ -13,7 +13,7 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { profileFacetOptions } from '@/shared/lib/table-facet-lookups';
@@ -242,14 +242,7 @@ export async function getAllRequestsForExport(
     return { ok: true, data: await shape(rows) };
   } catch (error) {
     logger.error('Error al exportar pedidos', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
-    return {
-      ok: false,
-      message:
-        error instanceof ExportTooLargeError
-          ? error.message
-          : 'No se pudo exportar la lista de pedidos. Intente nuevamente.',
-    };
+    return exportFailure(error, 'No se pudo exportar la lista de pedidos. Intente nuevamente.');
   }
 }
 

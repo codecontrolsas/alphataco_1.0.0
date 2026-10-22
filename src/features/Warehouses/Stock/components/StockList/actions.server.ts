@@ -11,8 +11,8 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { argentinaDate } from '@/shared/lib/argentina-time';
+import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import { prisma } from '@/shared/lib/prisma';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
@@ -260,12 +260,7 @@ export async function getAllStockForExport(
     return { ok: true, data: shape(rows, new Set(belowMin.map((m) => m.id)), withPrices) };
   } catch (error) {
     logger.error('Error al exportar stock', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en producción.
-    return {
-      ok: false,
-      message:
-        error instanceof ExportTooLargeError ? error.message : 'No se pudo exportar el stock. Intente nuevamente.',
-    };
+    return exportFailure(error, 'No se pudo exportar el stock. Intente nuevamente.');
   }
 }
 
@@ -343,9 +338,7 @@ export async function getStockSingleFacet(
             select: { id: true, category_id: true, unit_id: true },
           })
         : [];
-      const keyOf = new Map(
-        materials.map((m) => [m.id, columnId === 'category' ? m.category_id : m.unit_id] as const)
-      );
+      const keyOf = new Map(materials.map((m) => [m.id, columnId === 'category' ? m.category_id : m.unit_id] as const));
       const counts = toFacetMap(byMaterial.map((r) => ({ key: keyOf.get(r.material_id) ?? null, count: r._count })));
       const ids = [...new Set([...keyOf.values()].filter((id): id is string => id != null))];
       const resolvedOptions = !ids.length

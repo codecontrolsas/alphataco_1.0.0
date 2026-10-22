@@ -107,7 +107,9 @@ describe.skipIf(!RUN)('proveedores de Compras (integracion)', () => {
         },
       });
     }
-    await prisma.profile.create({ data: { id: PROFILE, credential_id: PROFILE, email: 'compras-test@alphataco.local' } });
+    await prisma.profile.create({
+      data: { id: PROFILE, credential_id: PROFILE, email: 'compras-test@alphataco.local' },
+    });
     const { createSupplierCategory } = await import('./categories.server');
     categoryA = expectOk(await createSupplierCategory({ name: 'Repuestos' })).id;
     categoryB = expectOk(await createSupplierCategory({ name: 'Lubricantes' })).id;
@@ -133,7 +135,10 @@ describe.skipIf(!RUN)('proveedores de Compras (integracion)', () => {
 
   it('rechaza un CUIT invalido y uno repetido en la empresa; en otra empresa se permite', async () => {
     const { createSupplier } = await import('./suppliers.server');
-    expect(await createSupplier(baseValues({ cuit: '30-71234567-0' }), [])).toEqual({ ok: false, error: 'CUIT inválido' });
+    expect(await createSupplier(baseValues({ cuit: '30-71234567-0' }), [])).toEqual({
+      ok: false,
+      error: 'CUIT inválido',
+    });
     expect(await createSupplier(baseValues({ name: 'Otro' }), [])).toEqual({
       ok: false,
       error: `Ya existe el proveedor Repuestos del Sur SRL con el CUIT ${CUIT_A.slice(0, 2)}-${CUIT_A.slice(2, 10)}-${CUIT_A.slice(10)}`,
@@ -146,14 +151,17 @@ describe.skipIf(!RUN)('proveedores de Compras (integracion)', () => {
   it('dos contactos principales se rechazan con mensaje', async () => {
     const { createSupplier } = await import('./suppliers.server');
     const contact = { id: '', name: 'X', email: '', phone: '', role: '', isPrimary: true };
-    expect(await createSupplier(baseValues({ cuit: CUIT_B, contacts: [contact, { ...contact, name: 'Y' }] }), [])).toEqual({
+    expect(
+      await createSupplier(baseValues({ cuit: CUIT_B, contacts: [contact, { ...contact, name: 'Y' }] }), [])
+    ).toEqual({
       ok: false,
       error: 'Solo puede haber un contacto principal',
     });
   });
 
   it('editar: cambia el principal, agrega un contacto y borra solo los indicados', async () => {
-    const { updateSupplier, getSupplierDetail } = await import('./suppliers.server');
+    const { updateSupplier } = await import('./suppliers.server');
+    const { getSupplierDetail } = await import('./supplier-queries.server');
     const before = await getSupplierDetail(supplierId);
     const ana = before!.contacts[0]!;
     const result = await updateSupplier(
@@ -197,22 +205,30 @@ describe.skipIf(!RUN)('proveedores de Compras (integracion)', () => {
   });
 
   it('documentos: reemplazar conserva el anterior; con documentos el proveedor se desactiva', async () => {
-    const { uploadSupplierDocument, getSupplierDetail, removeSupplier } = await import('./suppliers.server');
+    const { uploadSupplierDocument, removeSupplier } = await import('./suppliers.server');
+    const { getSupplierDetail } = await import('./supplier-queries.server');
     const form = (fields: Record<string, string>) => {
       const fd = new FormData();
       fd.set('file', new File(['%PDF-1.4'], 'constancia arca.pdf', { type: 'application/pdf' }));
       for (const [k, v] of Object.entries(fields)) fd.set(k, v);
       return fd;
     };
-    const first = expectOk(await uploadSupplierDocument(supplierId, form({ name: 'Constancia ARCA', expiresAt: '2026-01-31' })));
+    const first = expectOk(
+      await uploadSupplierDocument(supplierId, form({ name: 'Constancia ARCA', expiresAt: '2026-01-31' }))
+    );
     const second = expectOk(
-      await uploadSupplierDocument(supplierId, form({ name: 'Constancia ARCA', expiresAt: '2027-01-31', replacesId: first.id }))
+      await uploadSupplierDocument(
+        supplierId,
+        form({ name: 'Constancia ARCA', expiresAt: '2027-01-31', replacesId: first.id })
+      )
     );
     const detail = await getSupplierDetail(supplierId);
     const old = detail!.documents.find((d) => d.id === first.id)!;
     expect(old.replaced_by_id).toBe(second.id);
     expect(detail!.documents).toHaveLength(2);
-    expect(storageUpload.mock.calls.at(-1)?.[1]).toMatch(new RegExp(`^${COMPANY}/${supplierId}/\\d+-constancia_arca\\.pdf$`));
+    expect(storageUpload.mock.calls.at(-1)?.[1]).toMatch(
+      new RegExp(`^${COMPANY}/${supplierId}/\\d+-constancia_arca\\.pdf$`)
+    );
 
     // Reemplazar uno ya reemplazado: rechazado, y el archivo subido se borra.
     const removedBefore = storageRemove.mock.calls.length;

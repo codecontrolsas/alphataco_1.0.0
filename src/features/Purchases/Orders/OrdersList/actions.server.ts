@@ -10,7 +10,7 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { profileFacetOptions } from '@/shared/lib/table-facet-lookups';
@@ -29,6 +29,7 @@ import {
 } from '@/shared/lib/table-list-query';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { isUuid } from '@/shared/lib/uuid';
+import { companyIdIfCanView } from '../../lib/list-access';
 import { supplierFacetOptions } from '../../lib/list-facet-lookups';
 import { PURCHASE_ORDER_STATUSES } from '../../lib/order-state-machine';
 import { maskAmount } from '../../lib/price-visibility';
@@ -97,11 +98,7 @@ const VALID_VALUES: Record<string, (value: string) => boolean> = {
 // ============================================================================
 
 /** Empresa si el usuario puede ver la tabla; `null` = sin acceso -> lista vacia. */
-async function resolveCompanyId(): Promise<string | null> {
-  const canView = await checkPermissionServer('compras', 'ordenes', 'view');
-  if (!canView) return null;
-  return getActiveCompanyId();
-}
+const resolveCompanyId = () => companyIdIfCanView('ordenes');
 
 /**
  * Estado de la tabla ya parseado, con solo los filtros permitidos y sus valores validos. Sin
@@ -246,14 +243,7 @@ export async function getAllPurchaseOrdersForExport(
     return { ok: true, data: shape(rows, canViewPrices) };
   } catch (error) {
     logger.error('Error al exportar ordenes de compra', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
-    return {
-      ok: false,
-      message:
-        error instanceof ExportTooLargeError
-          ? error.message
-          : 'No se pudo exportar la lista de órdenes de compra. Intente nuevamente.',
-    };
+    return exportFailure(error, 'No se pudo exportar la lista de órdenes de compra. Intente nuevamente.');
   }
 }
 

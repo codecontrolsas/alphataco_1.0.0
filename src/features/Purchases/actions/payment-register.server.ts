@@ -30,6 +30,7 @@ import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { withActor } from '@/shared/lib/actor';
+import { toDateOnly } from '@/shared/lib/date-only';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { isUuid } from '@/shared/lib/uuid';
@@ -41,7 +42,7 @@ import {
   firstIssue,
   toPurchaseActionError,
 } from '../lib/action-errors';
-import { NOT_FOUND, day, isoDay, revalidate } from '../lib/payment-action-helpers';
+import { NOT_FOUND, day, revalidate } from '../lib/payment-action-helpers';
 import { lockPaymentOrder, nextCertificateNumber } from '../lib/payment-locks';
 import { assertPaymentOrderStillValid, assertWithholdingsStillValid } from '../lib/payment-revalidation';
 import { cents, money } from '../lib/payment-totals';
@@ -140,7 +141,7 @@ export async function registerPayment(
       profile.credentialId,
       async (tx) => {
         const order = await lockPaymentOrder(tx, companyId, id, 'pay');
-        const planned = isoDay(order.plannedOn)!;
+        const planned = toDateOnly(order.plannedOn)!;
         if (planned.slice(0, 7) !== v.paidOn.slice(0, 7)) {
           const month = MONTHS[Number(planned.slice(5, 7)) - 1];
           throw new PurchaseError(

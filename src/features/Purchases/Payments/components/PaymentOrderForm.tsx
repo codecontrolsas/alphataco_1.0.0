@@ -20,7 +20,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 import { createPaymentOrder, previewPaymentOrder, updatePaymentOrder } from '../../actions/payment-orders.server';
 import { getPaymentOrderFormData } from '../../actions/payment-queries.server';
-import { searchSupplierOptions } from '../../actions/suppliers.server';
+import { searchSupplierOptions } from '../../actions/supplier-queries.server';
 import { invalidatePurchases } from '../../lib/invalidate';
 import type { PaymentOrderFormData } from '../../lib/payment-query-types';
 import { paymentOrderFormSchema, type PaymentOrderFormValues } from '../../schemas/payment-orders';

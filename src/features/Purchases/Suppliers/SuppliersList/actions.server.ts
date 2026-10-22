@@ -1,6 +1,5 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
@@ -10,7 +9,7 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { isReceiverVatConditionId, RECEIVER_VAT_CONDITIONS } from '@/shared/lib/arca/catalogs';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { withoutOwnFilter } from '@/shared/lib/table-facets';
@@ -22,7 +21,7 @@ import {
   parseValidatedListState,
   type SingleFacetResult,
 } from '@/shared/lib/table-list-query';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { companyIdIfCanView } from '../../lib/list-access';
 import { formatCuit } from '../../lib/supplier-ids';
 import { CUIT_LENGTH, SUPPLIERS_EXPORT_MAX_ROWS } from './constants';
 import {
@@ -81,10 +80,7 @@ function parseListState(searchParams: DataTableSearchParams) {
 }
 
 /** Empresa si el usuario puede ver proveedores; `null` = sin acceso -> lista vacia. */
-async function resolveCompanyId(): Promise<string | null> {
-  if (!(await checkPermissionServer('compras', 'proveedores', 'view'))) return null;
-  return getActiveCompanyId();
-}
+const resolveCompanyId = () => companyIdIfCanView('proveedores');
 
 /**
  * Digitos del texto buscado (acepta "30-71234567-8", "30 7123" o "30.71"). `null` si trae letras u
@@ -305,14 +301,7 @@ export async function getAllSuppliersForExport(
     return { ok: true, data: shape(rows) };
   } catch (error) {
     logger.error('Error al exportar proveedores', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
-    return {
-      ok: false,
-      message:
-        error instanceof ExportTooLargeError
-          ? error.message
-          : 'No se pudo exportar la lista de proveedores. Intente nuevamente.',
-    };
+    return exportFailure(error, 'No se pudo exportar la lista de proveedores. Intente nuevamente.');
   }
 }
 

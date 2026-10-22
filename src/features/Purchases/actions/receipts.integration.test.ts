@@ -89,7 +89,11 @@ type LinePlan = { material?: string; description?: string; quantity: number; pri
 /** Solicitud aprobada + OC enviada con esas lineas. Devuelve la OC y sus lineas en orden. */
 async function sentOrder(plans: LinePlan[]) {
   const prisma = await db();
-  const orders = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
+  const orders = {
+    ...(await import('./orders.server')),
+    ...(await import('./order-send.server')),
+    ...(await import('./order-queries.server')),
+  };
   counter += 1;
   const request = await prisma.purchase_requests.create({
     data: {
@@ -347,7 +351,11 @@ describe.skipIf(!RUN)('recepciones (integracion)', () => {
 
   it('excedente: OC complementaria en borrador; aprobada queda recibida; anulada marca excedente sin OC', async () => {
     const actions = await import('./receipts.server');
-    const orders = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
+    const orders = {
+      ...(await import('./orders.server')),
+      ...(await import('./order-send.server')),
+      ...(await import('./order-queries.server')),
+    };
     const order = await sentOrder([{ material: OIL, quantity: 10, price: '100' }]);
     const done = expectOk(
       await actions.createPurchaseReceipt(receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '12' }]))
@@ -407,7 +415,11 @@ describe.skipIf(!RUN)('recepciones (integracion)', () => {
 
   it('anular: vuelve el estado y el stock; falla si el stock salio o con cubiertas; arrastra la complementaria aprobada', async () => {
     const actions = await import('./receipts.server');
-    const orders = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
+    const orders = {
+      ...(await import('./orders.server')),
+      ...(await import('./order-send.server')),
+      ...(await import('./order-queries.server')),
+    };
     const prisma = await db();
 
     const order = await sentOrder([{ material: OIL, quantity: 5 }]);
@@ -507,7 +519,11 @@ describe.skipIf(!RUN)('recepciones (integracion)', () => {
 
   it('cerrar una OC recibida en parte devuelve lo no recibido; no se anula una OC con recepciones', async () => {
     const actions = await import('./receipts.server');
-    const orders = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
+    const orders = {
+      ...(await import('./orders.server')),
+      ...(await import('./order-send.server')),
+      ...(await import('./order-queries.server')),
+    };
     const order = await sentOrder([{ material: OIL, quantity: 10 }]);
     expectOk(
       await actions.createPurchaseReceipt(receiptForm(order.id, [{ orderLineId: order.lineIds[0]!, quantity: '4' }]))
@@ -566,7 +582,11 @@ describe.skipIf(!RUN)('recepciones (integracion)', () => {
 
   it('I-1: la complementaria rechazada se corrige (precio) y se reenvia; no se cambian cantidades', async () => {
     const actions = await import('./receipts.server');
-    const orders = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
+    const orders = {
+      ...(await import('./orders.server')),
+      ...(await import('./order-send.server')),
+      ...(await import('./order-queries.server')),
+    };
     const prisma = await db();
     const order = await sentOrder([{ material: OIL, quantity: 1, price: '100' }]);
     expectOk(
@@ -596,7 +616,11 @@ describe.skipIf(!RUN)('recepciones (integracion)', () => {
 
   it('I-2: anular la recepcion anula tambien la complementaria ya aprobada', async () => {
     const actions = await import('./receipts.server');
-    const orders = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
+    const orders = {
+      ...(await import('./orders.server')),
+      ...(await import('./order-send.server')),
+      ...(await import('./order-queries.server')),
+    };
     const prisma = await db();
     const order = await sentOrder([{ description: 'Horas de grúa', quantity: 1 }]);
     const r = expectOk(
@@ -617,7 +641,11 @@ describe.skipIf(!RUN)('recepciones (integracion)', () => {
 
   it('I-3: anular la recepcion y enviar su complementaria a la vez no se bloquean ni pisan estados', async () => {
     const actions = await import('./receipts.server');
-    const orders = { ...(await import('./orders.server')), ...(await import('./order-queries.server')) };
+    const orders = {
+      ...(await import('./orders.server')),
+      ...(await import('./order-send.server')),
+      ...(await import('./order-queries.server')),
+    };
     const prisma = await db();
     for (let round = 0; round < 15; round++) {
       const order = await sentOrder([{ material: OIL, quantity: 1 }]);

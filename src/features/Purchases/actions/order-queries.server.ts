@@ -11,6 +11,7 @@ import { expiredSupplierDocuments, receivedByOrderLine } from '../lib/orders';
 import { maskAmount } from '../lib/price-visibility';
 import { canViewPurchasePrices } from '../lib/price-visibility.server';
 import { supplierRecipients } from '../lib/supplier-send';
+import { userName } from '../lib/user-name';
 import { type PurchaseOrderFormValues } from '../schemas/orders';
 
 async function canPickRequestLines(): Promise<boolean> {
@@ -56,9 +57,6 @@ export async function getSupplierPurchaseContext(supplierId: string) {
     recipients,
   };
 }
-
-const userName = (p: { fullname: string | null; email: string | null } | null) =>
-  p ? p.fullname ?? p.email ?? 'Usuario' : null;
 
 /** Detalle de la OC: cabecera, lineas con su solicitud de origen, historial y que se puede hacer. */
 export async function getPurchaseOrderDetail(id: string) {

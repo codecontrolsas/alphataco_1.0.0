@@ -1,6 +1,5 @@
 'use server';
 
-import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
@@ -11,7 +10,7 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { profileFacetOptions } from '@/shared/lib/table-facet-lookups';
@@ -28,8 +27,8 @@ import {
   uniqueSortedByNumber,
   type SingleFacetResult,
 } from '@/shared/lib/table-list-query';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { isUuid } from '@/shared/lib/uuid';
+import { companyIdIfCanView } from '../../lib/list-access';
 import { supplierFacetOptions } from '../../lib/list-facet-lookups';
 import { computeOrderTotals } from '../../lib/order-totals';
 import { canViewPurchasePrices } from '../../lib/price-visibility.server';
@@ -92,11 +91,7 @@ const VALID_VALUES: Record<string, (value: string) => boolean> = {
 // ============================================================================
 
 /** Empresa si el usuario puede ver la tabla; `null` = sin acceso -> lista vacia. */
-async function resolveCompanyId(): Promise<string | null> {
-  const canView = await checkPermissionServer('compras', 'cotizaciones', 'view');
-  if (!canView) return null;
-  return getActiveCompanyId();
-}
+const resolveCompanyId = () => companyIdIfCanView('cotizaciones');
 
 /** Estado de la tabla ya parseado, con solo los filtros permitidos y sus valores validos. */
 function parseListState(searchParams: DataTableSearchParams) {
@@ -241,14 +236,7 @@ export async function getAllPurchaseQuotesForExport(
     return { ok: true, data: shape(rows, await canViewPurchasePrices('cotizaciones')) };
   } catch (error) {
     logger.error('Error al exportar pedidos de cotizacion', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
-    return {
-      ok: false,
-      message:
-        error instanceof ExportTooLargeError
-          ? error.message
-          : 'No se pudo exportar la lista de pedidos de cotización. Intente nuevamente.',
-    };
+    return exportFailure(error, 'No se pudo exportar la lista de pedidos de cotización. Intente nuevamente.');
   }
 }
 

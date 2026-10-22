@@ -13,7 +13,7 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
@@ -94,11 +94,7 @@ async function canViewPrices(): Promise<boolean> {
 // ============================================================================
 
 /** WHERE compartido entre paginated, export y facets. */
-function buildWhereClause(
-  companyId: string,
-  state: FilterState,
-  options: { canViewPrices: boolean }
-): MovementWhere {
+function buildWhereClause(companyId: string, state: FilterState, options: { canViewPrices: boolean }): MovementWhere {
   const f = state.filters;
   const and: MovementWhere[] = [{ company_id: companyId }];
 
@@ -169,11 +165,7 @@ function shape(
   withPrices: boolean
 ) {
   return rows.map((r) => {
-    const status: MovementReversalStatus = r.reversed_by
-      ? 'REVERSED'
-      : r.reverses_movement_id
-        ? 'REVERSAL'
-        : 'VALID';
+    const status: MovementReversalStatus = r.reversed_by ? 'REVERSED' : r.reverses_movement_id ? 'REVERSAL' : 'VALID';
     return {
       id: r.id,
       number: r.number,
@@ -211,7 +203,8 @@ export async function getMovementsPaginated(searchParams: DataTableSearchParams)
       const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
       const fkMapper = FK_SORT_MAP[s.id];
       if (fkMapper) resolvedSorts.push(fkMapper(dir));
-      else if (VALID_SORT_FIELDS.has(s.id) || (withPrices && s.id === 'total_cost')) resolvedSorts.push({ [s.id]: dir });
+      else if (VALID_SORT_FIELDS.has(s.id) || (withPrices && s.id === 'total_cost'))
+        resolvedSorts.push({ [s.id]: dir });
     }
     const orderBy: MovementOrderBy[] = [...resolvedSorts, { created_at: 'desc' }, { id: 'desc' }];
 
@@ -261,14 +254,7 @@ export async function getAllMovementsForExport(
     return { ok: true, data: shape(rows, withPrices) };
   } catch (error) {
     logger.error('Error al exportar movimientos', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en producción.
-    return {
-      ok: false,
-      message:
-        error instanceof ExportTooLargeError
-          ? error.message
-          : 'No se pudo exportar la lista de movimientos. Intente nuevamente.',
-    };
+    return exportFailure(error, 'No se pudo exportar la lista de movimientos. Intente nuevamente.');
   }
 }
 

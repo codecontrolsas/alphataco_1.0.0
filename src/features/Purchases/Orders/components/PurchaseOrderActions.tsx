@@ -4,14 +4,12 @@ import { Button } from '@/components/ui/button';
 import { DownloadPdfButton } from '@/shared/components/common/DownloadPdfButton';
 import { Ban, Check, CheckCheck, Lock, PackageCheck, Pencil, Send, X } from 'lucide-react';
 import Link from 'next/link';
+import { getPurchaseOrderPdf, markPurchaseOrderSent, sendPurchaseOrder } from '../../actions/order-send.server';
 import {
   approvePurchaseOrder,
   cancelPurchaseOrder,
   closePurchaseOrder,
-  getPurchaseOrderPdf,
-  markPurchaseOrderSent,
   rejectPurchaseOrder,
-  sendPurchaseOrder,
   submitPurchaseOrder,
 } from '../../actions/orders.server';
 import { ConfirmAction } from '../../components/ConfirmAction';

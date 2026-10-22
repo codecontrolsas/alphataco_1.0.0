@@ -26,7 +26,8 @@ import { useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { uploadSupplierDocument, type SupplierDetail } from '../../actions/suppliers.server';
+import { type SupplierDetail } from '../../actions/supplier-queries.server';
+import { uploadSupplierDocument } from '../../actions/suppliers.server';
 import { PURCHASES_QUERY_KEYS } from '../../lib/query-keys';
 import { SUPPLIER_DOCUMENT_MAX_BYTES, SUPPLIER_DOCUMENT_TYPES } from '../../schemas/suppliers';
 

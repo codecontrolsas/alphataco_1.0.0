@@ -1,8 +1,8 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { getMovementFormLookups } from '@/features/Warehouses/actions/options.server';
-import { PurchasesPageShell } from '../components/PurchasesPageShell';
-import { getMaterialRequestShortfall } from '../actions/requests.server';
+import { getMaterialRequestShortfall } from '../actions/request-from-material.server';
 import { getPurchaseRequestFormLookups } from '../actions/request-queries.server';
+import { PurchasesPageShell } from '../components/PurchasesPageShell';
 import type { PurchaseRequestDetail } from '../lib/request-query-types';
 import { emptyPurchaseRequestLine, type PurchaseRequestFormValues } from '../schemas/requests';
 import { PurchaseRequestForm, type LineLabels, type PurchaseRequestFormMode } from './components/PurchaseRequestForm';
@@ -24,10 +24,21 @@ export async function NewPurchaseRequestPage({ fromMaterialRequest }: { fromMate
   const [{ customers }, { units }] = await Promise.all([getMovementFormLookups(), getPurchaseRequestFormLookups()]);
 
   if (!fromMaterialRequest) {
-    const defaultValues: PurchaseRequestFormValues = { ...EMPTY_DESTINATION, neededBy: '', notes: '', lines: [emptyPurchaseRequestLine()] };
+    const defaultValues: PurchaseRequestFormValues = {
+      ...EMPTY_DESTINATION,
+      neededBy: '',
+      notes: '',
+      lines: [emptyPurchaseRequestLine()],
+    };
     return (
       <PurchasesPageShell title="Nueva solicitud de compra" back={BACK_TO_LIST}>
-        <PurchaseRequestForm mode={{ kind: 'create' }} defaultValues={defaultValues} initialLabels={{}} customers={customers} units={units} />
+        <PurchaseRequestForm
+          mode={{ kind: 'create' }}
+          defaultValues={defaultValues}
+          initialLabels={{}}
+          customers={customers}
+          units={units}
+        />
       </PurchasesPageShell>
     );
   }
@@ -60,7 +71,13 @@ export async function NewPurchaseRequestPage({ fromMaterialRequest }: { fromMate
   };
   return (
     <PurchasesPageShell title={`Solicitud de compra para el pedido ${data.number}`} back={back}>
-      <PurchaseRequestForm mode={mode} defaultValues={defaultValues} initialLabels={initialLabels} customers={customers} units={units} />
+      <PurchaseRequestForm
+        mode={mode}
+        defaultValues={defaultValues}
+        initialLabels={initialLabels}
+        customers={customers}
+        units={units}
+      />
     </PurchasesPageShell>
   );
 }
@@ -101,8 +118,17 @@ export async function EditPurchaseRequestPage({ request }: { request: PurchaseRe
       : null,
   };
   return (
-    <PurchasesPageShell title={`Editar ${request.number}`} back={{ href: `/dashboard/purchases/requests/${request.id}`, label: request.number }}>
-      <PurchaseRequestForm mode={mode} defaultValues={defaultValues} initialLabels={initialLabels} customers={customers} units={units} />
+    <PurchasesPageShell
+      title={`Editar ${request.number}`}
+      back={{ href: `/dashboard/purchases/requests/${request.id}`, label: request.number }}
+    >
+      <PurchaseRequestForm
+        mode={mode}
+        defaultValues={defaultValues}
+        initialLabels={initialLabels}
+        customers={customers}
+        units={units}
+      />
     </PurchasesPageShell>
   );
 }

@@ -11,7 +11,7 @@ import { InputFormField, TextareaFormField } from '@/shared/components/common/fo
 import { CBTE_TYPES, type VoucherLetter } from '@/shared/lib/arca/catalogs';
 import moment from 'moment';
 import { type UseFormReturn } from 'react-hook-form';
-import { searchSupplierOptions } from '../../actions/suppliers.server';
+import { searchSupplierOptions } from '../../actions/supplier-queries.server';
 import { expectedSupplierLetter } from '../../lib/invoice-letter';
 import type { SupplierInvoiceFormData } from '../../lib/invoice-query-types';
 import { SUPPLIER_INVOICE_CBTE_TYPES } from '../../schemas/invoices';

@@ -75,3 +75,14 @@ export async function fetchExportRowsInBatches<Row extends { id: string }>({
 
   return rows;
 }
+
+/**
+ * Respuesta de error de un export. Si se superó el tope se devuelve su mensaje (pide acotar con filtros);
+ * cualquier otro error se reemplaza por `fallbackMessage`, sin detalles internos.
+ *
+ * Next enmascara el mensaje de un error lanzado desde una server action en producción: por eso las
+ * acciones de export DEVUELVEN el error en vez de lanzarlo (ver `ExportResult`).
+ */
+export function exportFailure(error: unknown, fallbackMessage: string): { ok: false; message: string } {
+  return { ok: false, message: error instanceof ExportTooLargeError ? error.message : fallbackMessage };
+}

@@ -19,11 +19,8 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import {
-  createPurchaseRequest,
-  createPurchaseRequestFromMaterialRequest,
-  updatePurchaseRequestDraft,
-} from '../../actions/requests.server';
+import { createPurchaseRequestFromMaterialRequest } from '../../actions/request-from-material.server';
+import { createPurchaseRequest, updatePurchaseRequestDraft } from '../../actions/requests.server';
 import { PURCHASES_QUERY_KEYS } from '../../lib/query-keys';
 import {
   emptyPurchaseRequestLine,

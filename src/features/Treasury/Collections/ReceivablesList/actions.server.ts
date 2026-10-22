@@ -7,7 +7,7 @@ import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError } from '@/shared/lib/export-batches';
+import { ExportTooLargeError, exportFailure } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
@@ -241,14 +241,7 @@ export async function getAllReceivablesForExport(
     return { ok: true, data: shape(rows, today) };
   } catch (error) {
     logger.error('Error al exportar comprobantes a cobrar', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en producción.
-    return {
-      ok: false,
-      message:
-        error instanceof ExportTooLargeError
-          ? error.message
-          : 'No se pudo exportar la lista de comprobantes a cobrar. Intente nuevamente.',
-    };
+    return exportFailure(error, 'No se pudo exportar la lista de comprobantes a cobrar. Intente nuevamente.');
   }
 }
 

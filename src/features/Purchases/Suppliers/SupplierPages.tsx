@@ -1,25 +1,25 @@
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
 import { RecordHeader } from '@/shared/components/common/RecordHeader';
 import { argentinaDate } from '@/shared/lib/argentina-time';
-import { ExpiredSupplierDocumentsAlert } from '../components/ExpiredSupplierDocumentsAlert';
-import { PurchasesPageShell } from '../components/PurchasesPageShell';
+import { getSupplierAccount } from '../actions/supplier-account.server';
 import {
   getSupplierDocumentNameSuggestions,
   getSupplierFormLookups,
   type SupplierDetail,
-} from '../actions/suppliers.server';
+} from '../actions/supplier-queries.server';
+import { getSupplierWithholdingProfiles } from '../actions/withholding-profiles.server';
+import { getWithholdingRegimes } from '../actions/withholding-regimes.server';
+import { ExpiredSupplierDocumentsAlert } from '../components/ExpiredSupplierDocumentsAlert';
+import { PurchasesPageShell } from '../components/PurchasesPageShell';
 import { formatCuit } from '../lib/supplier-ids';
 import { emptySupplierContact, type SupplierFormValues } from '../schemas/suppliers';
+import { SupplierAccountView } from './components/SupplierAccountView';
 import { SupplierDocuments } from './components/SupplierDocuments';
 import { SupplierForm } from './components/SupplierForm';
 import { SupplierStatusActions } from './components/SupplierStatusActions';
 import { SupplierTaxProfile } from './components/SupplierTaxProfile';
-import { getSupplierWithholdingProfiles } from '../actions/withholding-profiles.server';
-import { getWithholdingRegimes } from '../actions/withholding-regimes.server';
-import { getSupplierAccount } from '../actions/supplier-account.server';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { SupplierAccountView } from './components/SupplierAccountView';
 
 const SUPPLIERS_BACK = { href: '/dashboard/purchases?tab=proveedores', label: 'Proveedores' };
 
@@ -129,21 +129,21 @@ export async function SupplierDetailPage({ supplier }: { supplier: SupplierDetai
           {account && <TabsTrigger value="cuenta">Cuenta corriente</TabsTrigger>}
         </TabsList>
         <TabsContent value="datos" className="space-y-4">
-      {/* `key`: tras guardar, el form se remonta con los datos frescos (ids de contactos nuevos). */}
-      <SupplierForm
-        key={supplier.updatedAt}
-        supplierId={supplier.id}
-        defaultValues={defaultValues}
-        categories={categoryOptions}
-        readOnly={!canUpdate}
-      />
-      <SupplierDocuments
-        supplierId={supplier.id}
-        documents={supplier.documents}
-        nameSuggestions={nameSuggestions}
-        canUpdate={canUpdate}
-      />
-      <SupplierTaxProfile supplierId={supplier.id} profiles={taxProfiles} regimes={regimes} canUpdate={canUpdate} />
+          {/* `key`: tras guardar, el form se remonta con los datos frescos (ids de contactos nuevos). */}
+          <SupplierForm
+            key={supplier.updatedAt}
+            supplierId={supplier.id}
+            defaultValues={defaultValues}
+            categories={categoryOptions}
+            readOnly={!canUpdate}
+          />
+          <SupplierDocuments
+            supplierId={supplier.id}
+            documents={supplier.documents}
+            nameSuggestions={nameSuggestions}
+            canUpdate={canUpdate}
+          />
+          <SupplierTaxProfile supplierId={supplier.id} profiles={taxProfiles} regimes={regimes} canUpdate={canUpdate} />
         </TabsContent>
         {account && (
           <TabsContent value="cuenta">

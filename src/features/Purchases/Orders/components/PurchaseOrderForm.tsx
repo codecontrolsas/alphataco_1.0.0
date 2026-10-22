@@ -22,7 +22,7 @@ import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 import { getSupplierPurchaseContext } from '../../actions/order-queries.server';
 import { createPurchaseOrder, updatePurchaseOrderDraft } from '../../actions/orders.server';
-import { searchSupplierOptions } from '../../actions/suppliers.server';
+import { searchSupplierOptions } from '../../actions/supplier-queries.server';
 import { ExpiredSupplierDocumentsAlert } from '../../components/ExpiredSupplierDocumentsAlert';
 import { invalidatePurchases } from '../../lib/invalidate';
 import type { OrderableRequestLineOption } from '../../lib/order-query-types';

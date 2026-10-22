@@ -11,6 +11,7 @@ import { canApplyPurchaseOrderAction, type PurchaseOrderStatus } from '../lib/or
 import { receivedByOrderLine } from '../lib/orders';
 import { ORDER_LINE_SELECT } from '../lib/receipt-order-lines';
 import { SUPPLIER_FILES_BUCKET } from '../lib/storage-files';
+import { userName } from '../lib/user-name';
 
 /** Datos para el formulario: la OC, sus lineas con algo por recibir y los depositos activos. */
 export async function getReceiptFormData(orderId: string) {
@@ -73,9 +74,6 @@ export async function getReceiptFormData(orderId: string) {
 }
 
 export type ReceiptFormData = NonNullable<Awaited<ReturnType<typeof getReceiptFormData>>>;
-
-const userName = (p: { fullname: string | null; email: string | null } | null) =>
-  p ? p.fullname ?? p.email ?? 'Usuario' : null;
 
 /** Detalle de la recepcion: OC, deposito, remito, lineas, movimientos, complementaria e historial. */
 export async function getPurchaseReceiptDetail(id: string) {

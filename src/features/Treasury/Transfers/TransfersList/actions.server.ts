@@ -5,10 +5,11 @@ import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { isoDay } from '../../lib/dates';
 import {
   buildTreasuryDateRangeWhere,
   facetWhere,
@@ -17,7 +18,6 @@ import {
   safePaging,
   textValue,
 } from '../../lib/filter-values';
-import { isoDay } from '../../lib/dates';
 
 const logger = new Logger('features/Treasury/Transfers/TransfersList');
 
@@ -146,7 +146,12 @@ function shape(rows: Prisma.treasury_transfersGetPayload<{ select: typeof TRANSF
       kind: r.from_account.kind,
       bankName: r.from_account.bank_name,
     },
-    to_account: { id: r.to_account.id, name: r.to_account.name, kind: r.to_account.kind, bankName: r.to_account.bank_name },
+    to_account: {
+      id: r.to_account.id,
+      name: r.to_account.name,
+      kind: r.to_account.kind,
+      bankName: r.to_account.bank_name,
+    },
   }));
 }
 
@@ -202,21 +207,17 @@ export async function getAllTreasuryTransfersForExport(
       maxRows: EXPORT_LIMIT,
       listIds: (take) => prisma.treasury_transfers.findMany({ where, orderBy, select: { id: true }, take }),
       fetchByIds: (ids) =>
-        prisma.treasury_transfers.findMany({ where: { id: { in: ids }, company_id: companyId }, select: TRANSFER_SELECT }),
+        prisma.treasury_transfers.findMany({
+          where: { id: { in: ids }, company_id: companyId },
+          select: TRANSFER_SELECT,
+        }),
       tooLargeMessage: (maxRows) =>
         `Hay más de ${maxRows.toLocaleString('es-AR')} transferencias con los filtros actuales. Acote la exportación con filtros.`,
     });
     return { ok: true, data: shape(rows) };
   } catch (error) {
     logger.error('Error al exportar transferencias de tesoreria', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
-    return {
-      ok: false,
-      message:
-        error instanceof ExportTooLargeError
-          ? error.message
-          : 'No se pudo exportar la lista de transferencias. Intente nuevamente.',
-    };
+    return exportFailure(error, 'No se pudo exportar la lista de transferencias. Intente nuevamente.');
   }
 }
 

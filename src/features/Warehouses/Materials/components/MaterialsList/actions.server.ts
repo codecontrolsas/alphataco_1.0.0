@@ -13,13 +13,13 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import { prisma } from '@/shared/lib/prisma';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { getBelowMinimumMaterials } from '../../../lib/stock-levels';
 import type { StockLevel } from '../../../lib/status-presentation';
+import { getBelowMinimumMaterials } from '../../../lib/stock-levels';
 
 const logger = new Logger('features/Warehouses/Materials/MaterialsList');
 
@@ -110,7 +110,9 @@ async function buildWhereClause(companyId: string, state: ListState): Promise<Pr
   const and: Prisma.materialsWhereInput[] = [{ company_id: companyId }];
 
   and.push(buildSearchWhere(state.search, ['code', 'name', 'description']) as Prisma.materialsWhereInput);
-  and.push(buildFiltersWhere(state.filters, COLUMN_MAP, { exclude: NON_FACETED_COLUMNS }) as Prisma.materialsWhereInput);
+  and.push(
+    buildFiltersWhere(state.filters, COLUMN_MAP, { exclude: NON_FACETED_COLUMNS }) as Prisma.materialsWhereInput
+  );
   and.push(buildTextFiltersWhere(state.filters, TEXT_FILTER_COLUMNS) as Prisma.materialsWhereInput);
   and.push(buildDateRangeFiltersWhere(state.filters, DATE_RANGE_COLUMNS) as Prisma.materialsWhereInput);
 
@@ -235,12 +237,7 @@ export async function getAllMaterialsForExport(
     return { ok: true, data: await shape(companyId, rows) };
   } catch (error) {
     logger.error('Error al exportar materiales', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en producción.
-    return {
-      ok: false,
-      message:
-        error instanceof ExportTooLargeError ? error.message : 'No se pudo exportar la lista de materiales',
-    };
+    return exportFailure(error, 'No se pudo exportar la lista de materiales');
   }
 }
 

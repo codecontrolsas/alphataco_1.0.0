@@ -9,13 +9,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { createPurchaseOrderFromQuote } from '../../actions/orders.server';
-import {
-  cancelPurchaseQuote,
-  declinePurchaseQuote,
-  getPurchaseQuotePdf,
-  markPurchaseQuoteSent,
-  sendPurchaseQuote,
-} from '../../actions/quotes.server';
+import { getPurchaseQuotePdf, markPurchaseQuoteSent, sendPurchaseQuote } from '../../actions/quote-send.server';
+import { cancelPurchaseQuote, declinePurchaseQuote } from '../../actions/quotes.server';
 import { ConfirmAction } from '../../components/ConfirmAction';
 import { SendToSupplierDialog } from '../../components/SendToSupplierDialog';
 import { invalidatePurchases } from '../../lib/invalidate';

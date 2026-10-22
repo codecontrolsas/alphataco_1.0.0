@@ -1,7 +1,7 @@
 import 'server-only';
+import { companyIdIfCanView } from './list-access';
 
 import { formatVoucherNumber } from '@/features/Comercial/Facturacion/lib/invoice-type';
-import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { treasuryToday } from '@/features/Treasury/lib/today';
 import { Prisma } from '@/generated/prisma/client';
 import type { payment_order_status } from '@/generated/prisma/enums';
@@ -14,7 +14,6 @@ import {
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { dateRangeKeys } from '@/shared/lib/table-filters';
 import { isOneOf, isUuidOrNull, parseValidatedListState } from '@/shared/lib/table-list-query';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { isUuid } from '@/shared/lib/uuid';
 import moment from 'moment';
 import { DAYS_VALUES, DUE_CBTE_TYPE_IDS } from '../Payments/DueInvoicesList/constants';
@@ -86,11 +85,7 @@ export function parseListState(searchParams: DataTableSearchParams): FilterState
 }
 
 /** Empresa si el usuario puede ver la tabla; `null` = sin acceso -> lista vacia. */
-export async function resolveCompanyId(): Promise<string | null> {
-  const canView = await checkPermissionServer('compras', 'pagos', 'view');
-  if (!canView) return null;
-  return getActiveCompanyId();
-}
+export const resolveCompanyId = () => companyIdIfCanView('pagos');
 
 /** "Hoy" como fecha (DATE, medianoche UTC) en horario de Argentina (UTC-3): el vencimiento es un dia, no un instante. */
 export function todayDate(): Date {

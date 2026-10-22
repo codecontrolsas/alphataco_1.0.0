@@ -16,6 +16,7 @@ import {
   canCopyPurchaseRequest,
   type PurchaseRequestStatus,
 } from '../lib/request-state-machine';
+import { userName } from '../lib/user-name';
 
 function isOrderableRequest(status: PurchaseRequestStatus): boolean {
   const orderable: readonly PurchaseRequestStatus[] = ORDERABLE_REQUEST_STATUSES;
@@ -144,8 +145,6 @@ export async function getPurchaseRequestDetail(id: string) {
       })
     : [];
 
-  const userName = (p: { fullname: string | null; email: string | null } | null) =>
-    p ? p.fullname ?? p.email ?? 'Usuario' : null;
   const status = request.status as PurchaseRequestStatus;
   const isRequester = request.requested_by === profile.id;
   const at = (d: Date | null) => d?.toISOString() ?? null;

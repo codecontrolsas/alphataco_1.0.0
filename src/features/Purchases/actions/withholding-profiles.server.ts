@@ -4,6 +4,7 @@ import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/act
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
+import { toDateOnly } from '@/shared/lib/date-only';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { isUuid } from '@/shared/lib/uuid';
@@ -21,7 +22,6 @@ import {
 
 const logger = new Logger('features/Purchases/withholding-profiles');
 
-const isoDay = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
 const pct = (d: Prisma.Decimal | null) => (d === null ? null : trimDecimals(d.toFixed(4)));
 
 export async function getSupplierWithholdingProfiles(supplierId: string) {
@@ -57,8 +57,8 @@ export async function getSupplierWithholdingProfiles(supplierId: string) {
       exclusion: r.exclusion_percentage
         ? {
             percentage: pct(r.exclusion_percentage)!,
-            from: isoDay(r.exclusion_from)!,
-            to: isoDay(r.exclusion_to)!,
+            from: toDateOnly(r.exclusion_from)!,
+            to: toDateOnly(r.exclusion_to)!,
             certificate: r.exclusion_certificate,
           }
         : null,

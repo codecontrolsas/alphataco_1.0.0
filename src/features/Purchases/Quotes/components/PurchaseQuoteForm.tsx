@@ -16,7 +16,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { createPurchaseQuote, updatePurchaseQuoteDraft } from '../../actions/quotes.server';
-import { searchSupplierOptions } from '../../actions/suppliers.server';
+import { searchSupplierOptions } from '../../actions/supplier-queries.server';
 import { invalidatePurchases } from '../../lib/invalidate';
 import type { OrderableRequestLineOption } from '../../lib/order-query-types';
 import { lineOptionLabel, searchLineOptions } from '../../lib/orderable-line-options';

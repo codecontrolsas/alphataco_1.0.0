@@ -12,7 +12,7 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { profileFacetOptions } from '@/shared/lib/table-facet-lookups';
@@ -25,8 +25,8 @@ import {
   resolveSorts,
   type SingleFacetResult,
 } from '@/shared/lib/table-list-query';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { isUuid } from '@/shared/lib/uuid';
+import { companyIdIfCanView } from '../../lib/list-access';
 import { supplierFacetOptions } from '../../lib/list-facet-lookups';
 import { parseAmountFilter } from '../../lib/list-filters';
 import { PAYMENT_ORDER_STATUS_LABELS } from '../../lib/payment-order-state-machine';
@@ -108,11 +108,7 @@ function parseListState(searchParams: DataTableSearchParams): FilterState {
 }
 
 /** Empresa si el usuario puede ver la tabla; `null` = sin acceso -> lista vacia. */
-async function resolveCompanyId(): Promise<string | null> {
-  const canView = await checkPermissionServer('compras', 'pagos', 'view');
-  if (!canView) return null;
-  return getActiveCompanyId();
-}
+const resolveCompanyId = () => companyIdIfCanView('pagos');
 
 /** WHERE compartido entre paginated, export y facets. */
 function buildWhereClause(companyId: string, state: FilterState): OrderWhere {
@@ -251,14 +247,7 @@ export async function getAllPaymentOrdersForExport(
     return { ok: true, data: shape(rows) };
   } catch (error) {
     logger.error('Error al exportar ordenes de pago', { data: { error } });
-    // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en produccion.
-    return {
-      ok: false,
-      message:
-        error instanceof ExportTooLargeError
-          ? error.message
-          : 'No se pudo exportar la lista de órdenes de pago. Intente nuevamente.',
-    };
+    return exportFailure(error, 'No se pudo exportar la lista de órdenes de pago. Intente nuevamente.');
   }
 }
 
