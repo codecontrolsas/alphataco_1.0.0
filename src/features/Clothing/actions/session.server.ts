@@ -3,7 +3,6 @@
 import { Logger } from '@/lib/logger';
 import { auth } from '@/shared/lib/auth';
 import { normalizeEmail, rejectLogin } from '@/shared/lib/auth-credentials';
-import { prisma } from '@/shared/lib/prisma';
 import { prismaSystem } from '@/shared/lib/prisma-system';
 import { getSessionToken } from '@/shared/lib/session';
 import { writeCompanyClaim } from '@/shared/lib/session-claims';
