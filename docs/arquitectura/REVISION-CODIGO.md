@@ -13,11 +13,11 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 
 | Módulo                              | Archivos | Líneas | Estado |
 | ----------------------------------- | -------: | -----: | ------ |
-| src/features/Mantenimiento          |      414 |  63539 | [ ]    |
+| src/features/Mantenimiento          |      414 |  63539 | [x]    |
 | src/features/Empresa                |      316 |  43383 | [ ]    |
 | src/features/Purchases              |      219 |  30336 | [x]    |
 | src/features/Operaciones            |      212 |  28069 | [ ]    |
-| src/features/Equipos                |      135 |  21875 | [ ]    |
+| src/features/Equipos                |      135 |  21875 | [x]    |
 | src/features/Treasury               |      183 |  21596 | [x]    |
 | src/features/Dashboard              |      173 |  21093 | [ ]    |
 | src/features/Documentacion          |      143 |  17428 | [ ]    |
@@ -103,11 +103,20 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
   - **Archivos partidos (todos los de Compras quedan bajo 425 líneas):** `lib/payments.ts` 642 → 332 (`payment-locks`, `payment-auto-withholdings`, `payment-revalidation`), `lib/due-invoices.ts` 517 → 230 (`-debts`, `-unified`), `actions/orders.server.ts` 744 → 404 (`order-writes`, `approval-notifications.server`, `order-send.server`), `requests.server.ts` 565 → 280 (`request-writes`, `request-from-material.server`), `receipts.server.ts` 626 → 423 (`receipt-queries.server`), `invoices.server.ts` 579 → 329 (`invoice-build`, `invoice-arca.server`), `invoice-queries.server.ts` 451 → ~220 (`invoice-detail.server`), `suppliers.server.ts` 424 → 282 (`supplier-queries.server`), `quotes.server.ts` 411 → 328 (`quote-send.server`), `PaymentOrderForm` 572 → 370, `RegisterPaymentDialog` 503 → 282, `PurchaseRequestForm` 447 → 237 y `PurchaseOrderForm` 431 → 281 (las filas de línea en archivos propios).
   - Verificación: `check-types` limpio, `npm test` (1494), las suites de integración de Compras, Tesorería y Almacenes contra un Postgres descartable (en serie: en paralelo se pisan entre sí) y `next build` compilando.
 - [x] **Almacenes y Tesorería (`src/features/Warehouses`, `src/features/Treasury`):** jscpd sobre ambos módulos (sin pruebas): de 140 clones y 1.905 líneas duplicadas (4,22 %) a 96 y 1.374 (3,01 %); 483.957 → 476.986 tokens. `knip` no encontró archivos ni exportaciones sin uso en estos módulos; solo se borraron un import (`moment`) y un helper (`contains`) sin lectura que reportó `tsc --noUnusedLocals`.
+
   - **Tablas `_XDataTable` (13):** pasan a `createFacetFilters` (`fixed`/`lookup`, incluida la opción "Sin asignar") y `useServerTableView` (estado de vista, visibilidad inicial y props comunes); las 13 listas de columnas usan `titled` y `matchesId` en lugar de repetir encabezado y filtro. Las listas de acciones usan `toFacetMap` de `shared/lib/table-facets` (5 copias locales borradas).
   - **Almacenes:** `components/CatalogRowActions.tsx` (acciones de fila de depósitos y materiales) y `Settings/components/MaterialCatalogSection.tsx` (categorías y unidades) reemplazan cuatro componentes casi idénticos. `lib/action-errors.ts` suma `WAREHOUSE_PATH`, `NO_PERMISSION`, `firstIssue`, `nullable` e `isForeignKeyError` (la constante de la ruta estaba copiada en 5 acciones).
   - **Tesorería:** `lib/use-treasury-mutation.ts` (`useTreasuryMutation`: ejecuta la acción, invalida las queries del módulo, refresca la ruta y avisa el error) en 12 diálogos; `lib/action-errors.ts` suma `treasurySession` y `assertNotFuture` (copiadas en cheques, cheques propios y conciliación).
   - **Archivos partidos:** `lib/stock-engine.ts` 1.200 → 782 (`stock-locks.ts`: lecturas con lock y escritura de saldos; `stock-loans.ts`: devolución y baja de préstamos; `stock-destination.ts`: validación del destino). Solo se movieron funciones: el orden de locks documentado en `stock-engine.ts` no cambió (se verificó que el conjunto de líneas es el mismo) y las pruebas de integración del motor pasan. `actions/catalog.server.ts` 610 → `depots.server.ts` (196), `materials.server.ts` (251) y `catalog-settings.server.ts` (212). `actions/reconciliation.server.ts` 561 → 398 + `reconciliation-reads.server.ts` (255).
   - Verificación: `check-types` limpio, `npm test` (1494), suites de integración de Almacenes, Tesorería, Compras y Ropa contra un Postgres descartable (en serie) y `next build` compilando.
+
+- [x] **Equipos (`src/features/Equipos`):** jscpd (sin pruebas, solo el módulo): de 104 clones y 2.307 líneas duplicadas (8,1 %) a 73 y 1.323 (5,04 %); 24.224 → 12.417 tokens duplicados. `knip` sin archivos ni exportaciones sin uso en el módulo; `tsc --noUnusedLocals --noUnusedParameters` encontró props y parámetros muertos (se borraron).
+  - **Columnas:** `titled` (ahora con `extraMeta` para `excludeFromExport`) y el nuevo `matchesNullableColumnValue` (enum nullable, en `DataTable/column-helpers.tsx`) reemplazan ~140 encabezados y ~25 `filterFn` copiados; `matchesNullableId` para las FK. `components/cells.tsx` (antes `VehicleList/components/cells.tsx`) suma `ConditionCell`, `LabelBadgeCell`, `NameCell`, `NameBadgeCell`, `EquipmentIdentity`, `ViewRecordMenu`, `matchesContractor` y un `ContractorsCell` parametrizable; lo usan las cuatro tablas (vehículos, otros equipos y sus dados de baja). `lib/condition-config.ts` es el único dueño de íconos y variantes de condición: se borraron el reexport de `VehicleList/columns.tsx` y `OtherEquipment/list/column-helpers.tsx`.
+  - **Tablas `_XDataTable` (4):** pasan a `createFacetFilters` + `useServerTableView`; `facet-filters.ts` suma `enumFilterOptions`, `textFilter` y `dateRangeFilter`. Las facetas de vehículos devuelven `resolvedOptions` como `{ id, name }` (el tipo común `SingleFacetResult`) y se borraron los `build*FacetResult` de `vehicle-list-client.ts`.
+  - **Código muerto:** props `permissions`/`permissionsMap` de `VehicleList`, `VehicleTabContent` e `InactiveVehicleList`, y el parámetro `checked` de los dos formularios de afectación.
+- [x] **Mantenimiento (`src/features/Mantenimiento`):** jscpd: de 126 clones y 2.390 líneas duplicadas (3,03 %) a 124 y 2.366 (3,04 %); 22.942 → 22.428 tokens (el módulo ya estaba cerca del piso por pasadas previas; lo grande quedó sin tocar, ver pendientes). Las ~85 columnas con `titled` y ~20 `filterFn` nullable pasaron a los compartidos.
+  - **Código muerto:** `Gomeria/shared/TireDiagramRenderer.tsx` (307 líneas: un renderer sin uso y un reexport de tipos; `TireDiagramHitch` pasó a `tire-diagram-utils.ts` y los 6 importadores apuntan ahí), `getCachedExistingMaintenanceOrder`, `getMaintenanceRequestActivityLogCached`, `getWorkOrderActivityLogCached`, `getGroupTypeIds`, `ORDER_NUMBER_TABS`, `FOCUS_RING`, `PrismaLike`, tipos sin uso de `MaintenanceOrders/table/columns.tsx` y de `critical-deviations-repair-modal.tsx`, `handleDescriptionChange` de `useWizardItems` y las props `onDescriptionChange` (paso 1) y `sectors` (paso 4) del asistente de órdenes, más ~25 imports sin uso.
+  - Verificación: `check-types` limpio, `npm test` (1494) y `next build` compilando. No se tocaron acciones con lógica de escritura, por eso no se corrieron las suites de integración.
 
 ## En curso / siguiente
 
@@ -124,6 +133,10 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 
 - **Almacenes, `companyId` sin uso:** `createMaterialCategory` y `createMeasurementUnit` (`actions/catalog-settings.server.ts`) llaman a `getActiveCompanyId()` y no usan el resultado. Se dejó la llamada (puede lanzar si no hay empresa activa); se puede borrar si se confirma que no hace falta.
 
+- **Equipos y Mantenimiento, presentación distinta por tabla (conservada):** el tooltip de afectaciones es negro (`bg-black`) en los otros equipos y con el estilo por defecto en los vehículos; el texto vacío es "Sin afectar" en Otros equipos activos y "-" en el resto; el "Año" es monoespaciado en vehículos activos y texto plano en las demás tablas; el badge de "Motivo de baja" es `secondary` en vehículos activos y texto plano en las bajas. `ContractorsCell` conserva esas diferencias con props (`emptyText`, `tooltipClassName`); se unifican si se decide un criterio.
+- **Mantenimiento, descripciones del asistente de órdenes:** `pendingChanges.descriptionUpdates` de `useWizardItems` se sigue enviando al guardar pero ya no hay quien lo llene (nadie llamaba a `handleDescriptionChange`). Se puede borrar el camino completo si se confirma que la descripción de la tarea ya no es editable.
+- **Mantenimiento, `getItemComments(item, source, …)`:** el parámetro `source` no se lee; lo pasan 3 llamadores y la prop `source` de `ItemComments` que consumen ~8 diálogos. Se puede quitar en cascada.
+
 ## Pendiente detectado en Compras (para las pasadas de Almacenes, Tesorería y otros)
 
 - Las tablas de Almacenes y Tesorería pueden adoptar `createFacetFilters` y `useServerTableView` (hoy solo cambiaron su `EMPTY_FACET`); Equipos, Formularios y Checklists también copian `EMPTY_FACET`.
@@ -136,3 +149,10 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 - `tire-stock.ts` (569 líneas), `ReconciliationView.tsx` (527) y las acciones de cheques (441 y 439) siguen por encima de ~430 líneas: se partirían con sus pruebas de integración.
 - `OwnChecksList/columns.tsx` y `ChecksList/columns.tsx` repiten celdas (número, banco, importe, fechas); `MovementDetailSheet` y `RequestDetailSheet` repiten la escalera cargando/error/vacío; `DepositChecksDialog` y `DiscountChecksDialog` repiten el campo de cuenta bancaria. Cada caso es chico (10 a 30 líneas); no se extrajo.
 - Acciones `*.server.ts` de Tesorería y Almacenes: la cabecera permiso + `safeParse` + sesión + try/catch sigue sin envoltorio común (no se aplicó para no cambiar ~60 acciones a la vez; ver la nota de Compras).
+
+## Pendiente detectado en Equipos y Mantenimiento
+
+- Las columnas comunes de las cuatro tablas de equipos (tipo, subtipo, marca, modelo, propietario, sector, centro de costo) siguen escritas en cada `columns.tsx` (~85 y ~70 líneas repetidas entre `OtherEquipment/list` y las bajas); una fábrica `relationColumn({ id, title, getName, getId, display })` las reduciría a una línea cada una.
+- Mantenimiento: `Gomeria/Marcas` y `Gomeria/Tipos` (`_MarcasDataTable`/`_TiposDataTable`, columnas y `*-list.server.ts`, ~100 + 70 líneas) son el mismo "catálogo con activar/desactivar"; y `Gomeria/shared/facet-helpers.ts` repite lo de `createFacetFilters`. `OrderManagement/actions/queries.server.ts` (85 y 55 líneas internas), `NuevoPedido/actions/orders.server.ts` vs `requests.server.ts` (~47 líneas repetidas) y `ApprovalInbox/actions/actionsServer.ts` (633 líneas) piden extraer helpers de consulta con sus pruebas de integración.
+- Archivos de Mantenimiento por encima de ~600 líneas que no se partieron: `MaintenanceOrderReportLayout.tsx` (1.169), `ManualRepairsInput.tsx` (860), `truck-geometry.ts` (758), `ServiceOrderWizard.tsx` (701), `WorkshopSectorTasksTable/actions.server.ts` (698).
+- `Empresa/Clientes/lib/status-config.ts` tiene su propio `conditionIcons`/`conditionVariants`, igual a `Equipos/lib/condition-config.ts`.
