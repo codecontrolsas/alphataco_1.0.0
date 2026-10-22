@@ -9,13 +9,7 @@
  */
 import type { Ctx } from '../lib/ctx.ts';
 import { demoId } from '../lib/ids.ts';
-
-const C = (value: number) => BigInt(Math.round(value * 100));
-const money = (cents: bigint) => {
-  const negative = cents < BigInt(0);
-  const abs = negative ? -cents : cents;
-  return `${negative ? '-' : ''}${abs / BigInt(100)}.${String(abs % BigInt(100)).padStart(2, '0')}`;
-};
+import { C, money } from '../lib/money.ts';
 
 type AccountKey = 'galicia' | 'nacion' | 'caja';
 
@@ -33,7 +27,12 @@ export async function seedTreasury(ctx: Ctx): Promise<void> {
     { key: 'ajuste', name: 'Ajuste', direction: 'BOTH' as const },
   ];
   await tx.treasury_concepts.createMany({
-    data: concepts.map((c) => ({ id: demoId('treasury_concept', c.key), company_id: company.id, name: c.name, direction: c.direction })),
+    data: concepts.map((c) => ({
+      id: demoId('treasury_concept', c.key),
+      company_id: company.id,
+      name: c.name,
+      direction: c.direction,
+    })),
   });
   const concept = (key: string) => demoId('treasury_concept', key);
 
@@ -51,12 +50,54 @@ export async function seedTreasury(ctx: Ctx): Promise<void> {
   ];
 
   // ── Manuales del mes ────────────────────────────────────────────────────────
-  const manuals: { key: string; account: AccountKey; offset: number; amount: bigint; concept: string; description: string }[] = [
-    { key: 'aporte', account: 'galicia', offset: -10, amount: C(5_000_000), concept: 'aporte-socios', description: 'Aporte de capital de los socios' },
-    { key: 'gastos-galicia', account: 'galicia', offset: -3, amount: -C(18_500), concept: 'gastos-bancarios', description: 'Mantenimiento de cuenta' },
-    { key: 'idc-galicia', account: 'galicia', offset: -3, amount: -C(12_340.55), concept: 'imp-debitos-creditos', description: 'Ley 25.413' },
-    { key: 'gastos-nacion', account: 'nacion', offset: -2, amount: -C(9_800), concept: 'gastos-bancarios', description: 'Comisión por transferencias' },
-    { key: 'retiro-caja', account: 'caja', offset: -1, amount: -C(45_000), concept: 'retiro-caja', description: 'Gastos menores de la oficina' },
+  const manuals: {
+    key: string;
+    account: AccountKey;
+    offset: number;
+    amount: bigint;
+    concept: string;
+    description: string;
+  }[] = [
+    {
+      key: 'aporte',
+      account: 'galicia',
+      offset: -10,
+      amount: C(5_000_000),
+      concept: 'aporte-socios',
+      description: 'Aporte de capital de los socios',
+    },
+    {
+      key: 'gastos-galicia',
+      account: 'galicia',
+      offset: -3,
+      amount: -C(18_500),
+      concept: 'gastos-bancarios',
+      description: 'Mantenimiento de cuenta',
+    },
+    {
+      key: 'idc-galicia',
+      account: 'galicia',
+      offset: -3,
+      amount: -C(12_340.55),
+      concept: 'imp-debitos-creditos',
+      description: 'Ley 25.413',
+    },
+    {
+      key: 'gastos-nacion',
+      account: 'nacion',
+      offset: -2,
+      amount: -C(9_800),
+      concept: 'gastos-bancarios',
+      description: 'Comisión por transferencias',
+    },
+    {
+      key: 'retiro-caja',
+      account: 'caja',
+      offset: -1,
+      amount: -C(45_000),
+      concept: 'retiro-caja',
+      description: 'Gastos menores de la oficina',
+    },
   ];
 
   await tx.treasury_movements.createMany({
@@ -126,7 +167,9 @@ export async function seedTreasury(ctx: Ctx): Promise<void> {
   expected.caja += transferAmount;
 
   await verify(ctx, expected);
-  ctx.log(`tesorería: ${concepts.length} conceptos, ${openings.length} saldos iniciales, ${manuals.length} movimientos manuales, 1 transferencia`);
+  ctx.log(
+    `tesorería: ${concepts.length} conceptos, ${openings.length} saldos iniciales, ${manuals.length} movimientos manuales, 1 transferencia`
+  );
 }
 
 /**
@@ -161,6 +204,7 @@ async function verify(ctx: Ctx, expected: Record<AccountKey, bigint>): Promise<v
     const toCents = (value: string) => C(Number(value));
     const want = expected[key] - toCents(rows[0]?.paid ?? '0');
     const got = toCents(rows[0]?.balance ?? '0');
-    if (got !== want) throw new Error(`demo tesorería: el saldo de ${key} da ${money(got)} y se esperaba ${money(want)}`);
+    if (got !== want)
+      throw new Error(`demo tesorería: el saldo de ${key} da ${money(got)} y se esperaba ${money(want)}`);
   }
 }

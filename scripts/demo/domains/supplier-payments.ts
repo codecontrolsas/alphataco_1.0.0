@@ -12,15 +12,10 @@
 import { Prisma } from '../../../src/generated/prisma/client.ts';
 import type { Ctx } from '../lib/ctx.ts';
 import { demoId } from '../lib/ids.ts';
+import { C, money } from '../lib/money.ts';
 
 type Tax = 'GANANCIAS' | 'IVA' | 'IIBB' | 'SUSS';
 
-const C = (value: number) => BigInt(Math.round(value * 100));
-const money = (cents: bigint) => {
-  const negative = cents < BigInt(0);
-  const abs = negative ? -cents : cents;
-  return `${negative ? '-' : ''}${abs / BigInt(100)}.${String(abs % BigInt(100)).padStart(2, '0')}`;
-};
 const divRound = (n: bigint, d: bigint) => (n + d / BigInt(2)) / d;
 /** centavos × porcentaje (con 2 decimales) → centavos. */
 const pct = (cents: bigint, rate: number) => divRound(cents * BigInt(Math.round(rate * 100)), BigInt(10000));
@@ -32,24 +27,95 @@ export async function seedSupplierPayments(ctx: Ctx): Promise<string> {
 
   // ── Cuentas y cajas (catalogo de Tesoreria) ──────────────────────────────────
   const accounts = [
-    { key: 'galicia', kind: 'BANK' as const, name: 'Banco Galicia CC $', bank_name: 'Banco Galicia', account_number: '4012-7 123-4' },
-    { key: 'nacion', kind: 'BANK' as const, name: 'Banco Nación CC $', bank_name: 'Banco de la Nación Argentina', account_number: '3410-02 554-1' },
+    {
+      key: 'galicia',
+      kind: 'BANK' as const,
+      name: 'Banco Galicia CC $',
+      bank_name: 'Banco Galicia',
+      account_number: '4012-7 123-4',
+    },
+    {
+      key: 'nacion',
+      kind: 'BANK' as const,
+      name: 'Banco Nación CC $',
+      bank_name: 'Banco de la Nación Argentina',
+      account_number: '3410-02 554-1',
+    },
     { key: 'caja', kind: 'CASH' as const, name: 'Caja administración', bank_name: null, account_number: null },
     // Tesorería etapa 3a: los cheques de terceros recibidos (recibos y carga inicial).
-    { key: 'cartera', kind: 'CHECK_PORTFOLIO' as const, name: 'Cartera de cheques', bank_name: null, account_number: null },
+    {
+      key: 'cartera',
+      kind: 'CHECK_PORTFOLIO' as const,
+      name: 'Cartera de cheques',
+      bank_name: null,
+      account_number: null,
+    },
   ];
   await tx.treasury_accounts.createMany({
-    data: accounts.map((a) => ({ id: demoId('treasury_account', a.key), company_id: company.id, kind: a.kind, name: a.name, bank_name: a.bank_name, account_number: a.account_number })),
+    data: accounts.map((a) => ({
+      id: demoId('treasury_account', a.key),
+      company_id: company.id,
+      kind: a.kind,
+      name: a.name,
+      bank_name: a.bank_name,
+      account_number: a.account_number,
+    })),
   });
   const account = (key: string) => demoId('treasury_account', key);
 
   // ── Regimenes (valores de referencia) ────────────────────────────────────────
   const regimes = [
-    { key: 'gan-078', tax: 'GANANCIAS' as Tax, code: '078', description: 'Enajenación de bienes muebles', rate: 2, unreg: 28, exempt: 224000, min: 240 },
-    { key: 'gan-094', tax: 'GANANCIAS' as Tax, code: '094', description: 'Locaciones de obra y servicios', rate: 2, unreg: 28, exempt: 67170, min: 240 },
-    { key: 'iva-499', tax: 'IVA' as Tax, code: '499', description: 'Retención general de IVA', rate: 0, unreg: null, exempt: 0, min: 0, vat: 50 },
-    { key: 'iibb-001', tax: 'IIBB' as Tax, code: '001', description: 'IIBB Neuquén · agente de retención', rate: 2.5, unreg: null, exempt: 0, min: 0 },
-    { key: 'suss-755', tax: 'SUSS' as Tax, code: '755', description: 'Servicios de limpieza y seguridad', rate: 6, unreg: null, exempt: 0, min: 0 },
+    {
+      key: 'gan-078',
+      tax: 'GANANCIAS' as Tax,
+      code: '078',
+      description: 'Enajenación de bienes muebles',
+      rate: 2,
+      unreg: 28,
+      exempt: 224000,
+      min: 240,
+    },
+    {
+      key: 'gan-094',
+      tax: 'GANANCIAS' as Tax,
+      code: '094',
+      description: 'Locaciones de obra y servicios',
+      rate: 2,
+      unreg: 28,
+      exempt: 67170,
+      min: 240,
+    },
+    {
+      key: 'iva-499',
+      tax: 'IVA' as Tax,
+      code: '499',
+      description: 'Retención general de IVA',
+      rate: 0,
+      unreg: null,
+      exempt: 0,
+      min: 0,
+      vat: 50,
+    },
+    {
+      key: 'iibb-001',
+      tax: 'IIBB' as Tax,
+      code: '001',
+      description: 'IIBB Neuquén · agente de retención',
+      rate: 2.5,
+      unreg: null,
+      exempt: 0,
+      min: 0,
+    },
+    {
+      key: 'suss-755',
+      tax: 'SUSS' as Tax,
+      code: '755',
+      description: 'Servicios de limpieza y seguridad',
+      rate: 6,
+      unreg: null,
+      exempt: 0,
+      min: 0,
+    },
   ];
   await tx.withholding_regimes.createMany({
     data: regimes.map((r) => ({
@@ -72,8 +138,19 @@ export async function seedSupplierPayments(ctx: Ctx): Promise<string> {
     data: [
       { supplier_id: supplierId('repuestos-sur'), tax: 'GANANCIAS', status: 'SUBJECT', regime_id: regime('gan-078') },
       { supplier_id: supplierId('repuestos-sur'), tax: 'IVA', status: 'SUBJECT', regime_id: regime('iva-499') },
-      { supplier_id: supplierId('repuestos-sur'), tax: 'IIBB', status: 'SUBJECT', regime_id: regime('iibb-001'), rate: 1.5 },
-      { supplier_id: supplierId('lubricantes-comahue'), tax: 'GANANCIAS', status: 'NOT_REGISTERED', regime_id: regime('gan-078') },
+      {
+        supplier_id: supplierId('repuestos-sur'),
+        tax: 'IIBB',
+        status: 'SUBJECT',
+        regime_id: regime('iibb-001'),
+        rate: 1.5,
+      },
+      {
+        supplier_id: supplierId('lubricantes-comahue'),
+        tax: 'GANANCIAS',
+        status: 'NOT_REGISTERED',
+        regime_id: regime('gan-078'),
+      },
       { supplier_id: supplierId('lubricantes-comahue'), tax: 'IIBB', status: 'SUBJECT', regime_id: regime('iibb-001') },
       {
         supplier_id: supplierId('hidraulica-vaca-muerta'),
@@ -85,8 +162,19 @@ export async function seedSupplierPayments(ctx: Ctx): Promise<string> {
         exclusion_to: new Date(`${cal.ymd(120)}T00:00:00.000Z`),
         exclusion_certificate: 'Certificado de exclusión 2026-0042',
       },
-      { supplier_id: supplierId('hidraulica-vaca-muerta'), tax: 'IVA', status: 'SUBJECT', regime_id: regime('iva-499') },
-      { supplier_id: supplierId('hidraulica-vaca-muerta'), tax: 'IIBB', status: 'SUBJECT', regime_id: regime('iibb-001'), rate: 1.75 },
+      {
+        supplier_id: supplierId('hidraulica-vaca-muerta'),
+        tax: 'IVA',
+        status: 'SUBJECT',
+        regime_id: regime('iva-499'),
+      },
+      {
+        supplier_id: supplierId('hidraulica-vaca-muerta'),
+        tax: 'IIBB',
+        status: 'SUBJECT',
+        regime_id: regime('iibb-001'),
+        rate: 1.75,
+      },
     ],
   });
 
@@ -96,7 +184,11 @@ export async function seedSupplierPayments(ctx: Ctx): Promise<string> {
       where: { id: invoiceId(key) },
       select: { total: true, net_taxed: true, net_untaxed: true, exempt: true, vat_total: true },
     });
-    return { total: C(Number(i.total)), net: C(Number(i.net_taxed) + Number(i.net_untaxed) + Number(i.exempt)), vat: C(Number(i.vat_total)) };
+    return {
+      total: C(Number(i.total)),
+      net: C(Number(i.net_taxed) + Number(i.net_untaxed) + Number(i.exempt)),
+      vat: C(Number(i.vat_total)),
+    };
   };
   const share = (amount: bigint, inv: { total: bigint; net: bigint; vat: bigint }) => ({
     net: divRound(amount * inv.net, inv.total),
@@ -107,7 +199,16 @@ export async function seedSupplierPayments(ctx: Ctx): Promise<string> {
   const PREFIX: Record<Tax, string> = { GANANCIAS: 'GAN', IVA: 'IVA', IIBB: 'IIBB', SUSS: 'SUSS' };
   let opCounter = 0;
 
-  type Withholding = { tax: Tax; regimeKey: string; base: bigint; rate: number; amount: bigint; detail: string; status?: 'SUBJECT' | 'NOT_REGISTERED'; exclusion?: number };
+  type Withholding = {
+    tax: Tax;
+    regimeKey: string;
+    base: bigint;
+    rate: number;
+    amount: bigint;
+    detail: string;
+    status?: 'SUBJECT' | 'NOT_REGISTERED';
+    exclusion?: number;
+  };
   type OrderLine =
     | { kind: 'INVOICE' | 'CREDIT_NOTE'; invoiceKey: string; amount: bigint }
     | { kind: 'ADVANCE'; amount: bigint; description: string }
@@ -121,11 +222,20 @@ export async function seedSupplierPayments(ctx: Ctx): Promise<string> {
     lines: OrderLine[];
     bases: { net: bigint; vat: bigint };
     withholdings: Withholding[];
-    payments?: { method: 'TRANSFER' | 'CHECK' | 'ECHECK' | 'CASH'; account: string; amount: bigint; reference?: string; checkNumber?: string; checkDueIn?: number }[];
+    payments?: {
+      method: 'TRANSFER' | 'CHECK' | 'ECHECK' | 'CASH';
+      account: string;
+      amount: bigint;
+      reference?: string;
+      checkNumber?: string;
+      checkDueIn?: number;
+    }[];
     notes?: string;
   }) => {
     const invoices = o.lines.filter((l) => l.kind === 'INVOICE').reduce((acc, l) => acc + l.amount, BigInt(0));
-    const credits = o.lines.filter((l) => l.kind === 'CREDIT_NOTE' || l.kind === 'ADVANCE_APPLIED').reduce((acc, l) => acc + l.amount, BigInt(0));
+    const credits = o.lines
+      .filter((l) => l.kind === 'CREDIT_NOTE' || l.kind === 'ADVANCE_APPLIED')
+      .reduce((acc, l) => acc + l.amount, BigInt(0));
     const advance = o.lines.filter((l) => l.kind === 'ADVANCE').reduce((acc, l) => acc + l.amount, BigInt(0));
     const withheld = o.withholdings.reduce((acc, w) => acc + w.amount, BigInt(0));
     const net = invoices + advance - credits - withheld;
@@ -176,7 +286,9 @@ export async function seedSupplierPayments(ctx: Ctx): Promise<string> {
             detail: w.detail,
             supplier_status: w.status ?? 'SUBJECT',
             exclusion_percentage: w.exclusion ?? null,
-            certificate_number: paid ? `${PREFIX[w.tax]}-${String(++certificateCounters[w.tax]).padStart(6, '0')}` : null,
+            certificate_number: paid
+              ? `${PREFIX[w.tax]}-${String(++certificateCounters[w.tax]).padStart(6, '0')}`
+              : null,
           })),
         },
         payments: paid
@@ -188,7 +300,8 @@ export async function seedSupplierPayments(ctx: Ctx): Promise<string> {
                 amount: money(p.amount),
                 reference: p.reference ?? null,
                 check_number: p.checkNumber ?? null,
-                check_due_on: p.checkDueIn !== undefined ? new Date(`${cal.ymd(o.day + p.checkDueIn)}T00:00:00.000Z`) : null,
+                check_due_on:
+                  p.checkDueIn !== undefined ? new Date(`${cal.ymd(o.day + p.checkDueIn)}T00:00:00.000Z`) : null,
               })),
             }
           : undefined,
@@ -198,7 +311,10 @@ export async function seedSupplierPayments(ctx: Ctx): Promise<string> {
     // regla que registerPayment. Un cheque o e-cheq propio queda EMITIDO, sin movimiento, hasta que
     // se confirma su debito (etapa 3b). No hay trigger.
     if (paid && o.payments?.length) {
-      const supplier = await tx.suppliers.findUniqueOrThrow({ where: { id: supplierId(o.supplier) }, select: { name: true } });
+      const supplier = await tx.suppliers.findUniqueOrThrow({
+        where: { id: supplierId(o.supplier) },
+        select: { name: true },
+      });
       const number = `OP-${String(opCounter).padStart(6, '0')}`;
       const isCheck = (p: { method: string }) => p.method === 'CHECK' || p.method === 'ECHECK';
       await tx.treasury_movements.createMany({
@@ -241,7 +357,15 @@ export async function seedSupplierPayments(ctx: Ctx): Promise<string> {
           },
         });
         await tx.own_check_events.create({
-          data: { check_id: checkId, from_status: null, to_status: 'ISSUED', date, payment_order_id: demoId('payment_order', o.key), user_id: actorId, created_at: cal.at(o.day, 11) },
+          data: {
+            check_id: checkId,
+            from_status: null,
+            to_status: 'ISSUED',
+            date,
+            payment_order_id: demoId('payment_order', o.key),
+            user_id: actorId,
+            created_at: cal.at(o.day, 11),
+          },
         });
       }
     }
@@ -266,8 +390,23 @@ export async function seedSupplierPayments(ctx: Ctx): Promise<string> {
     ],
     bases: lubBase,
     withholdings: [
-      { tax: 'GANANCIAS', regimeKey: 'gan-078', base: lubBase.net, rate: 28, amount: lubGan, detail: `No inscripto: $ ${money(lubBase.net)} × 28 %`, status: 'NOT_REGISTERED' },
-      { tax: 'IIBB', regimeKey: 'iibb-001', base: lubBase.net, rate: 2.5, amount: lubIibb, detail: `$ ${money(lubBase.net)} × 2,5 %` },
+      {
+        tax: 'GANANCIAS',
+        regimeKey: 'gan-078',
+        base: lubBase.net,
+        rate: 28,
+        amount: lubGan,
+        detail: `No inscripto: $ ${money(lubBase.net)} × 28 %`,
+        status: 'NOT_REGISTERED',
+      },
+      {
+        tax: 'IIBB',
+        regimeKey: 'iibb-001',
+        base: lubBase.net,
+        rate: 2.5,
+        amount: lubIibb,
+        detail: `$ ${money(lubBase.net)} × 2,5 %`,
+      },
     ],
     payments: [{ method: 'TRANSFER', account: 'galicia', amount: lubNet, reference: 'TRF 004512' }],
   });
@@ -299,8 +438,22 @@ export async function seedSupplierPayments(ctx: Ctx): Promise<string> {
         detail: `Acumulado del mes $ ${money(gruaBase.net)} − mínimo no sujeto $ 67170.00 × 2 % − exclusión 50 %`,
         exclusion: 50,
       },
-      { tax: 'IVA', regimeKey: 'iva-499', base: gruaBase.vat, rate: 50, amount: gruaIva, detail: `50 % del IVA pagado ($ ${money(gruaBase.vat)})` },
-      { tax: 'IIBB', regimeKey: 'iibb-001', base: gruaBase.net, rate: 1.75, amount: gruaIibb, detail: `$ ${money(gruaBase.net)} × 1,75 % (padrón)` },
+      {
+        tax: 'IVA',
+        regimeKey: 'iva-499',
+        base: gruaBase.vat,
+        rate: 50,
+        amount: gruaIva,
+        detail: `50 % del IVA pagado ($ ${money(gruaBase.vat)})`,
+      },
+      {
+        tax: 'IIBB',
+        regimeKey: 'iibb-001',
+        base: gruaBase.net,
+        rate: 1.75,
+        amount: gruaIibb,
+        detail: `$ ${money(gruaBase.net)} × 1,75 % (padrón)`,
+      },
     ],
     payments: [
       { method: 'ECHECK', account: 'nacion', amount: echeq, checkNumber: '00078812', checkDueIn: 30 },

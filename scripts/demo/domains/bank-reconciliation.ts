@@ -14,13 +14,7 @@
  */
 import type { Ctx } from '../lib/ctx.ts';
 import { demoId } from '../lib/ids.ts';
-
-const C = (value: number) => BigInt(Math.round(value * 100));
-const money = (cents: bigint) => {
-  const negative = cents < BigInt(0);
-  const abs = negative ? -cents : cents;
-  return `${negative ? '-' : ''}${abs / BigInt(100)}.${String(abs % BigInt(100)).padStart(2, '0')}`;
-};
+import { C, money } from '../lib/money.ts';
 
 export async function seedBankReconciliation(ctx: Ctx): Promise<void> {
   const { tx, cal, company, actorId } = ctx;
@@ -42,18 +36,30 @@ export async function seedBankReconciliation(ctx: Ctx): Promise<void> {
     },
   });
 
-  const book = await tx.$queryRaw<{ id: string; date: Date; amount: string; description: string | null; kind: string }[]>`
+  const book = await tx.$queryRaw<
+    { id: string; date: Date; amount: string; description: string | null; kind: string }[]
+  >`
     SELECT id, date, amount::text AS amount, description, kind::text AS kind FROM treasury_movements
     WHERE account_id = ${galicia}::uuid AND cancelled_at IS NULL
       AND date BETWEEN ${cal.day(-20)}::date AND ${cal.day(0)}::date AND kind <> 'OPENING'
     ORDER BY date, created_at
   `;
 
-  type Line = { key: string; day: Date; description: string; amount: string; status: 'PENDING' | 'MATCHED' | 'CREATED' | 'IGNORED'; movementId?: string; ignoreReason?: string };
+  type Line = {
+    key: string;
+    day: Date;
+    description: string;
+    amount: string;
+    status: 'PENDING' | 'MATCHED' | 'CREATED' | 'IGNORED';
+    movementId?: string;
+    ignoreReason?: string;
+  };
   const lines: Line[] = book.map((m, i) => ({
     key: `book-${i}`,
     day: m.date,
-    description: (m.kind === 'OWN_CHECK' ? 'DEBITO CHEQUE ' : m.amount.startsWith('-') ? 'DEBITO ' : 'CREDITO ') + (m.description ?? '').toUpperCase().slice(0, 60),
+    description:
+      (m.kind === 'OWN_CHECK' ? 'DEBITO CHEQUE ' : m.amount.startsWith('-') ? 'DEBITO ' : 'CREDITO ') +
+      (m.description ?? '').toUpperCase().slice(0, 60),
     amount: m.amount,
     status: 'MATCHED',
     movementId: m.id,
@@ -76,9 +82,29 @@ export async function seedBankReconciliation(ctx: Ctx): Promise<void> {
       created_at: cal.at(-1, 10),
     },
   });
-  lines.push({ key: 'comision', day: cal.day(-5), description: 'COMISION MANTENIMIENTO CUENTA', amount: money(-fee), status: 'CREATED', movementId: feeMovement });
-  lines.push({ key: 'impuesto', day: cal.day(-2), description: 'IMP. DEB/CRED LEY 25413', amount: money(-C(1873.42)), status: 'PENDING' });
-  lines.push({ key: 'interna', day: cal.day(-3), description: 'TRANSF ENTRE CUENTAS PROPIAS (REVERSADA)', amount: money(C(15000)), status: 'IGNORED', ignoreReason: 'Reversión del banco en el mismo día' });
+  lines.push({
+    key: 'comision',
+    day: cal.day(-5),
+    description: 'COMISION MANTENIMIENTO CUENTA',
+    amount: money(-fee),
+    status: 'CREATED',
+    movementId: feeMovement,
+  });
+  lines.push({
+    key: 'impuesto',
+    day: cal.day(-2),
+    description: 'IMP. DEB/CRED LEY 25413',
+    amount: money(-C(1873.42)),
+    status: 'PENDING',
+  });
+  lines.push({
+    key: 'interna',
+    day: cal.day(-3),
+    description: 'TRANSF ENTRE CUENTAS PROPIAS (REVERSADA)',
+    amount: money(C(15000)),
+    status: 'IGNORED',
+    ignoreReason: 'Reversión del banco en el mismo día',
+  });
 
   const dates = lines.map((l) => l.day.getTime());
   await tx.bank_statements.create({
@@ -124,7 +150,9 @@ export async function seedBankReconciliation(ctx: Ctx): Promise<void> {
   }
 
   await verify(ctx);
-  ctx.log(`conciliación: 1 extracto del Galicia con ${lines.length} líneas (${book.length + 1} conciliadas, 1 pendiente, 1 ignorada)`);
+  ctx.log(
+    `conciliación: 1 extracto del Galicia con ${lines.length} líneas (${book.length + 1} conciliadas, 1 pendiente, 1 ignorada)`
+  );
 }
 
 async function verify(ctx: Ctx): Promise<void> {
@@ -135,5 +163,6 @@ async function verify(ctx: Ctx): Promise<void> {
     WHERE l.company_id = ${company.id}::uuid AND l.status IN ('MATCHED', 'CREATED')
       AND (m.id IS NULL OR m.cancelled_at IS NOT NULL OR m.amount <> l.amount OR m.account_id <> l.account_id)
   `;
-  if (Number(wrong[0]?.n ?? 0) > 0) throw new Error('demo conciliación: hay líneas conciliadas con movimientos que no corresponden');
+  if (Number(wrong[0]?.n ?? 0) > 0)
+    throw new Error('demo conciliación: hay líneas conciliadas con movimientos que no corresponden');
 }

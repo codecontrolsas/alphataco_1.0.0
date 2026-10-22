@@ -21,14 +21,9 @@
 import { customerId } from '../data/customers.ts';
 import type { Ctx } from '../lib/ctx.ts';
 import { demoId } from '../lib/ids.ts';
+import { C, money } from '../lib/money.ts';
 
-const C = (value: number) => BigInt(Math.round(value * 100));
 const ZERO = BigInt(0);
-const money = (cents: bigint) => {
-  const negative = cents < ZERO;
-  const abs = negative ? -cents : cents;
-  return `${negative ? '-' : ''}${abs / BigInt(100)}.${String(abs % BigInt(100)).padStart(2, '0')}`;
-};
 
 type Status = 'IN_PORTFOLIO' | 'DEPOSITED' | 'ENDORSED' | 'DISCOUNTED' | 'REJECTED';
 
@@ -48,7 +43,17 @@ export async function seedThirdPartyChecks(ctx: Ctx): Promise<void> {
   const checkId = (key: string) => demoId('third_party_check', key);
   const operationId = (key: string) => demoId('third_party_check_operation', key);
   let movementSeq = 0;
-  const movement = async (input: { account: string; day: number; amount: bigint; kind: 'CHECK_OPERATION' | 'CUSTOMER_RECEIPT' | 'SUPPLIER_PAYMENT'; description: string; operation?: string; check?: string; receiptPayment?: string; orderPayment?: string }) => {
+  const movement = async (input: {
+    account: string;
+    day: number;
+    amount: bigint;
+    kind: 'CHECK_OPERATION' | 'CUSTOMER_RECEIPT' | 'SUPPLIER_PAYMENT';
+    description: string;
+    operation?: string;
+    check?: string;
+    receiptPayment?: string;
+    orderPayment?: string;
+  }) => {
     movementSeq += 1;
     await tx.treasury_movements.create({
       data: {
@@ -68,28 +73,67 @@ export async function seedThirdPartyChecks(ctx: Ctx): Promise<void> {
       },
     });
   };
-  const event = (check: string, from: Status | null, to: Status, day: number, origin: { operation_id: string } | { receipt_id: string } | { payment_order_id: string }) =>
+  const event = (
+    check: string,
+    from: Status | null,
+    to: Status,
+    day: number,
+    origin: { operation_id: string } | { receipt_id: string } | { payment_order_id: string }
+  ) =>
     tx.third_party_check_events.create({
-      data: { check_id: checkId(check), from_status: from, to_status: to, date: cal.day(day), user_id: actorId, created_at: cal.at(Math.min(day, 0), 12), ...origin },
+      data: {
+        check_id: checkId(check),
+        from_status: from,
+        to_status: to,
+        date: cal.day(day),
+        user_id: actorId,
+        created_at: cal.at(Math.min(day, 0), 12),
+        ...origin,
+      },
     });
 
   // ── RE-000007: la factura de Neuquén O&G que quedó sin cobrar, con seis cheques ─────────────
-  const nqn = await tx.customers.findUniqueOrThrow({ where: { id: customerId({ key: 'neuquen_og' }) }, select: { id: true, name: true, cuit: true } });
-  const invoice = await tx.invoices.findUniqueOrThrow({ where: { id: demoId('invoice', 'nqn-1') }, select: { id: true, total: true } });
+  const nqn = await tx.customers.findUniqueOrThrow({
+    where: { id: customerId({ key: 'neuquen_og' }) },
+    select: { id: true, name: true, cuit: true },
+  });
+  const invoice = await tx.invoices.findUniqueOrThrow({
+    where: { id: demoId('invoice', 'nqn-1') },
+    select: { id: true, total: true },
+  });
   const invoiceTotal = C(Number(invoice.total));
   const receiptDay = -40;
   const fixed: DemoCheck[] = [
     { key: 'por-vencer', number: '71000101', bank: 'BANCO PATAGONIA', amount: C(120_000), paymentDay: -27 },
     { key: 'vencido', number: '71000102', bank: 'BANCO PATAGONIA', amount: C(150_000), paymentDay: -35 },
-    { key: 'acreditado', number: '30554411', bank: 'BANCO DE LA PROVINCIA DEL NEUQUEN', amount: C(180_000), paymentDay: -6 },
-    { key: 'a-acreditar', number: '30554412', bank: 'BANCO DE LA PROVINCIA DEL NEUQUEN', amount: C(200_000), paymentDay: 2 },
+    {
+      key: 'acreditado',
+      number: '30554411',
+      bank: 'BANCO DE LA PROVINCIA DEL NEUQUEN',
+      amount: C(180_000),
+      paymentDay: -6,
+    },
+    {
+      key: 'a-acreditar',
+      number: '30554412',
+      bank: 'BANCO DE LA PROVINCIA DEL NEUQUEN',
+      amount: C(200_000),
+      paymentDay: 2,
+    },
     { key: 'descontado', number: '88120033', bank: 'BANCO SANTANDER', amount: C(150_000), paymentDay: 20 },
   ];
   const rest = invoiceTotal - fixed.reduce((acc, c) => acc + c.amount, ZERO);
-  const checks: DemoCheck[] = [...fixed, { key: 'rechazado', number: '55001207', bank: 'BANCO MACRO', amount: rest, paymentDay: -11 }];
+  const checks: DemoCheck[] = [
+    ...fixed,
+    { key: 'rechazado', number: '55001207', bank: 'BANCO MACRO', amount: rest, paymentDay: -11 },
+  ];
   if (rest <= ZERO) throw new Error('demo cheques: los cheques superan la factura de Neuquén O&G');
 
-  const last = await tx.customer_receipts.findFirst({ where: { company_id: company.id, number: { not: null } }, orderBy: { number: 'desc' }, select: { number: true } });
+  const last = await tx.customer_receipts.findFirst({
+    where: { company_id: company.id, number: { not: null } },
+    orderBy: { number: 'desc' },
+    select: { number: true },
+  });
   const receiptNumber = `RE-${String(Number(last?.number?.slice(3) ?? '0') + 1).padStart(6, '0')}`;
   const receiptId = demoId('customer_receipt', 're-nqn-cheques');
   await tx.customer_receipts.create({
@@ -107,7 +151,18 @@ export async function seedThirdPartyChecks(ctx: Ctx): Promise<void> {
       created_at: cal.at(receiptDay, 14),
       confirmed_by: actorId,
       confirmed_at: cal.at(receiptDay, 15),
-      lines: { create: [{ position: 0, kind: 'INVOICE', invoice_id: invoice.id, currency: 'ARS', applied_amount: money(invoiceTotal), amount_ars: money(invoiceTotal) }] },
+      lines: {
+        create: [
+          {
+            position: 0,
+            kind: 'INVOICE',
+            invoice_id: invoice.id,
+            currency: 'ARS',
+            applied_amount: money(invoiceTotal),
+            amount_ars: money(invoiceTotal),
+          },
+        ],
+      },
     },
   });
   for (const [i, c] of checks.entries()) {
@@ -127,7 +182,14 @@ export async function seedThirdPartyChecks(ctx: Ctx): Promise<void> {
         drawer_cuit: String(nqn.cuit),
       },
     });
-    await movement({ account: portfolio, day: receiptDay, amount: c.amount, kind: 'CUSTOMER_RECEIPT', description: `${receiptNumber} — ${nqn.name} — Cheque N° ${c.number}`, receiptPayment: paymentId });
+    await movement({
+      account: portfolio,
+      day: receiptDay,
+      amount: c.amount,
+      kind: 'CUSTOMER_RECEIPT',
+      description: `${receiptNumber} — ${nqn.name} — Cheque N° ${c.number}`,
+      receiptPayment: paymentId,
+    });
     await tx.third_party_checks.create({
       data: {
         id: checkId(c.key),
@@ -152,7 +214,14 @@ export async function seedThirdPartyChecks(ctx: Ctx): Promise<void> {
   const byKey = new Map(checks.map((c) => [c.key, c]));
 
   // ── Depósitos: CD-000001 (Galicia, acreditado), CD-000002 (Nación, a acreditar), CD-000003 (el que se rechaza) ──
-  const deposits: { key: string; number: string; check: string; bank: 'galicia' | 'nacion'; day: number; credited: number }[] = [
+  const deposits: {
+    key: string;
+    number: string;
+    check: string;
+    bank: 'galicia' | 'nacion';
+    day: number;
+    credited: number;
+  }[] = [
     { key: 'cd-1', number: 'CD-000001', check: 'acreditado', bank: 'galicia', day: -5, credited: -5 },
     { key: 'cd-2', number: 'CD-000002', check: 'a-acreditar', bank: 'nacion', day: 0, credited: 2 },
     { key: 'cd-3', number: 'CD-000003', check: 'rechazado', bank: 'galicia', day: -10, credited: -10 },
@@ -160,13 +229,48 @@ export async function seedThirdPartyChecks(ctx: Ctx): Promise<void> {
   for (const d of deposits) {
     const c = byKey.get(d.check)!;
     await tx.third_party_check_operations.create({
-      data: { id: operationId(d.key), company_id: company.id, kind: 'DEPOSIT', number: d.number, date: cal.day(d.day), bank_account_id: account(d.bank), created_by: actorId, created_at: cal.at(d.day, 11) },
+      data: {
+        id: operationId(d.key),
+        company_id: company.id,
+        kind: 'DEPOSIT',
+        number: d.number,
+        date: cal.day(d.day),
+        bank_account_id: account(d.bank),
+        created_by: actorId,
+        created_at: cal.at(d.day, 11),
+      },
     });
-    await tx.third_party_check_operation_items.create({ data: { operation_id: operationId(d.key), check_id: checkId(c.key), previous_status: 'IN_PORTFOLIO', credited_on: cal.day(d.credited) } });
+    await tx.third_party_check_operation_items.create({
+      data: {
+        operation_id: operationId(d.key),
+        check_id: checkId(c.key),
+        previous_status: 'IN_PORTFOLIO',
+        credited_on: cal.day(d.credited),
+      },
+    });
     const description = `${d.number} — Cheque N° ${c.number} (${c.bank})`;
-    await movement({ account: portfolio, day: d.day, amount: -c.amount, kind: 'CHECK_OPERATION', description, operation: operationId(d.key), check: checkId(c.key) });
-    await movement({ account: account(d.bank), day: d.credited, amount: c.amount, kind: 'CHECK_OPERATION', description, operation: operationId(d.key), check: checkId(c.key) });
-    await tx.third_party_checks.update({ where: { id: checkId(c.key) }, data: { status: 'DEPOSITED', credited_on: cal.day(d.credited), bank_account_id: account(d.bank) } });
+    await movement({
+      account: portfolio,
+      day: d.day,
+      amount: -c.amount,
+      kind: 'CHECK_OPERATION',
+      description,
+      operation: operationId(d.key),
+      check: checkId(c.key),
+    });
+    await movement({
+      account: account(d.bank),
+      day: d.credited,
+      amount: c.amount,
+      kind: 'CHECK_OPERATION',
+      description,
+      operation: operationId(d.key),
+      check: checkId(c.key),
+    });
+    await tx.third_party_checks.update({
+      where: { id: checkId(c.key) },
+      data: { status: 'DEPOSITED', credited_on: cal.day(d.credited), bank_account_id: account(d.bank) },
+    });
     await event(c.key, 'IN_PORTFOLIO', 'DEPOSITED', d.day, { operation_id: operationId(d.key) });
   }
 
@@ -176,27 +280,85 @@ export async function seedThirdPartyChecks(ctx: Ctx): Promise<void> {
   const fee = C(1_200);
   const net = discounted.amount - interest - fee;
   await tx.third_party_check_operations.create({
-    data: { id: operationId('cl-1'), company_id: company.id, kind: 'DISCOUNT', number: 'CL-000001', date: cal.day(-3), bank_account_id: account('galicia'), interest: money(interest), fee: money(fee), reference: 'Liquidación 2210', created_by: actorId, created_at: cal.at(-3, 11) },
+    data: {
+      id: operationId('cl-1'),
+      company_id: company.id,
+      kind: 'DISCOUNT',
+      number: 'CL-000001',
+      date: cal.day(-3),
+      bank_account_id: account('galicia'),
+      interest: money(interest),
+      fee: money(fee),
+      reference: 'Liquidación 2210',
+      created_by: actorId,
+      created_at: cal.at(-3, 11),
+    },
   });
-  await tx.third_party_check_operation_items.create({ data: { operation_id: operationId('cl-1'), check_id: checkId('descontado'), previous_status: 'IN_PORTFOLIO' } });
-  await movement({ account: portfolio, day: -3, amount: -discounted.amount, kind: 'CHECK_OPERATION', description: `CL-000001 — Cheque N° ${discounted.number} (${discounted.bank})`, operation: operationId('cl-1'), check: checkId('descontado') });
-  await movement({ account: account('galicia'), day: -3, amount: net, kind: 'CHECK_OPERATION', description: 'CL-000001 — Descuento de 1 cheque (neto)', operation: operationId('cl-1') });
-  await tx.third_party_checks.update({ where: { id: checkId('descontado') }, data: { status: 'DISCOUNTED', bank_account_id: account('galicia') } });
+  await tx.third_party_check_operation_items.create({
+    data: { operation_id: operationId('cl-1'), check_id: checkId('descontado'), previous_status: 'IN_PORTFOLIO' },
+  });
+  await movement({
+    account: portfolio,
+    day: -3,
+    amount: -discounted.amount,
+    kind: 'CHECK_OPERATION',
+    description: `CL-000001 — Cheque N° ${discounted.number} (${discounted.bank})`,
+    operation: operationId('cl-1'),
+    check: checkId('descontado'),
+  });
+  await movement({
+    account: account('galicia'),
+    day: -3,
+    amount: net,
+    kind: 'CHECK_OPERATION',
+    description: 'CL-000001 — Descuento de 1 cheque (neto)',
+    operation: operationId('cl-1'),
+  });
+  await tx.third_party_checks.update({
+    where: { id: checkId('descontado') },
+    data: { status: 'DISCOUNTED', bank_account_id: account('galicia') },
+  });
   await event('descontado', 'IN_PORTFOLIO', 'DISCOUNTED', -3, { operation_id: operationId('cl-1') });
 
   // ── Rechazo CR-000001 del depositado en CD-000003 (sin fondos) ─────────────────
   const rejected = byKey.get('rechazado')!;
   await tx.third_party_check_operations.create({
-    data: { id: operationId('cr-1'), company_id: company.id, kind: 'REJECTION', number: 'CR-000001', date: cal.day(-7), reason: 'Sin fondos suficientes', returned_by: 'BANK', created_by: actorId, created_at: cal.at(-7, 10) },
+    data: {
+      id: operationId('cr-1'),
+      company_id: company.id,
+      kind: 'REJECTION',
+      number: 'CR-000001',
+      date: cal.day(-7),
+      reason: 'Sin fondos suficientes',
+      returned_by: 'BANK',
+      created_by: actorId,
+      created_at: cal.at(-7, 10),
+    },
   });
-  await tx.third_party_check_operation_items.create({ data: { operation_id: operationId('cr-1'), check_id: checkId('rechazado'), previous_status: 'DEPOSITED' } });
+  await tx.third_party_check_operation_items.create({
+    data: { operation_id: operationId('cr-1'), check_id: checkId('rechazado'), previous_status: 'DEPOSITED' },
+  });
   // Salida del banco a max(rechazo, acreditación): acá la acreditación (-10) ya pasó.
-  await movement({ account: account('galicia'), day: -7, amount: -rejected.amount, kind: 'CHECK_OPERATION', description: `CR-000001 — Rechazo del cheque N° ${rejected.number} (${rejected.bank}): Sin fondos suficientes`, operation: operationId('cr-1'), check: checkId('rechazado') });
-  await tx.third_party_checks.update({ where: { id: checkId('rechazado') }, data: { status: 'REJECTED', rejected_from: 'DEPOSITED' } });
+  await movement({
+    account: account('galicia'),
+    day: -7,
+    amount: -rejected.amount,
+    kind: 'CHECK_OPERATION',
+    description: `CR-000001 — Rechazo del cheque N° ${rejected.number} (${rejected.bank}): Sin fondos suficientes`,
+    operation: operationId('cr-1'),
+    check: checkId('rechazado'),
+  });
+  await tx.third_party_checks.update({
+    where: { id: checkId('rechazado') },
+    data: { status: 'REJECTED', rejected_from: 'DEPOSITED' },
+  });
   await event('rechazado', 'DEPOSITED', 'REJECTED', -7, { operation_id: operationId('cr-1') });
 
   // ── Carga inicial: tres cheques de Andes en mano; el último se endosa ─────────
-  const andes = await tx.customers.findUniqueOrThrow({ where: { id: customerId({ key: 'andes' }) }, select: { id: true, name: true, cuit: true } });
+  const andes = await tx.customers.findUniqueOrThrow({
+    where: { id: customerId({ key: 'andes' }) },
+    select: { id: true, name: true, cuit: true },
+  });
   const open = await tx.$queryRaw<{ id: string; supplier_id: string; pending: string }[]>`
     SELECT si.id, si.supplier_id,
            (si.total - COALESCE((SELECT SUM(l.amount) FROM payment_order_lines l JOIN payment_orders po ON po.id = l.payment_order_id
@@ -214,7 +376,14 @@ export async function seedThirdPartyChecks(ctx: Ctx): Promise<void> {
     { key: 'endosado', number: '90010087', bank: 'BANCO BBVA', amount: endorsedAmount, paymentDay: 10 },
   ];
   await tx.third_party_check_operations.create({
-    data: { id: operationId('inicial'), company_id: company.id, kind: 'OPENING', date: cal.day(-1), created_by: actorId, created_at: cal.at(-1, 9) },
+    data: {
+      id: operationId('inicial'),
+      company_id: company.id,
+      kind: 'OPENING',
+      date: cal.day(-1),
+      created_by: actorId,
+      created_at: cal.at(-1, 9),
+    },
   });
   for (const c of opening) {
     await tx.third_party_checks.create({
@@ -237,13 +406,28 @@ export async function seedThirdPartyChecks(ctx: Ctx): Promise<void> {
       },
     });
     await event(c.key, null, 'IN_PORTFOLIO', -1, { operation_id: operationId('inicial') });
-    await movement({ account: portfolio, day: -1, amount: c.amount, kind: 'CHECK_OPERATION', description: `Carga inicial — Cheque N° ${c.number} — ${andes.name}`, operation: operationId('inicial'), check: checkId(c.key) });
+    await movement({
+      account: portfolio,
+      day: -1,
+      amount: c.amount,
+      kind: 'CHECK_OPERATION',
+      description: `Carga inicial — Cheque N° ${c.number} — ${andes.name}`,
+      operation: operationId('inicial'),
+      check: checkId(c.key),
+    });
   }
 
   // ── Endoso: orden de pago pagada hoy con el cheque, por el pendiente de la factura ───────────
   const endorsed = opening[2]!;
-  const supplier = await tx.suppliers.findUniqueOrThrow({ where: { id: target.supplier_id }, select: { id: true, name: true } });
-  const lastOrder = await tx.payment_orders.findFirst({ where: { company_id: company.id }, orderBy: { number: 'desc' }, select: { number: true } });
+  const supplier = await tx.suppliers.findUniqueOrThrow({
+    where: { id: target.supplier_id },
+    select: { id: true, name: true },
+  });
+  const lastOrder = await tx.payment_orders.findFirst({
+    where: { company_id: company.id },
+    orderBy: { number: 'desc' },
+    select: { number: true },
+  });
   const orderNumber = `OP-${String(Number(lastOrder?.number.slice(3) ?? '0') + 1).padStart(6, '0')}`;
   const orderId = demoId('payment_order', 'op-endoso');
   const orderPayment = demoId('payment_order_payment', 'op-endoso-0');
@@ -287,12 +471,25 @@ export async function seedThirdPartyChecks(ctx: Ctx): Promise<void> {
       },
     },
   });
-  await movement({ account: portfolio, day: 0, amount: -endorsedAmount, kind: 'SUPPLIER_PAYMENT', description: `${orderNumber} — ${supplier.name} — Endoso del cheque N° ${endorsed.number} (${endorsed.bank})`, orderPayment, check: checkId('endosado') });
-  await tx.third_party_checks.update({ where: { id: checkId('endosado') }, data: { status: 'ENDORSED', supplier_id: supplier.id } });
+  await movement({
+    account: portfolio,
+    day: 0,
+    amount: -endorsedAmount,
+    kind: 'SUPPLIER_PAYMENT',
+    description: `${orderNumber} — ${supplier.name} — Endoso del cheque N° ${endorsed.number} (${endorsed.bank})`,
+    orderPayment,
+    check: checkId('endosado'),
+  });
+  await tx.third_party_checks.update({
+    where: { id: checkId('endosado') },
+    data: { status: 'ENDORSED', supplier_id: supplier.id },
+  });
   await event('endosado', 'IN_PORTFOLIO', 'ENDORSED', 0, { payment_order_id: orderId });
 
   await verify(ctx, { rejectedDebt: rejected.amount });
-  ctx.log(`cheques: ${checks.length + opening.length} cheques (recibo ${receiptNumber}, carga inicial y endoso en ${orderNumber})`);
+  ctx.log(
+    `cheques: ${checks.length + opening.length} cheques (recibo ${receiptNumber}, carga inicial y endoso en ${orderNumber})`
+  );
 }
 
 /**
@@ -308,7 +505,9 @@ async function verify(ctx: Ctx, want: { rejectedDebt: bigint }): Promise<void> {
       (SELECT COALESCE(SUM(amount), 0)::text FROM third_party_checks WHERE portfolio_id = ${portfolio}::uuid AND status = 'IN_PORTFOLIO') AS in_portfolio
   `;
   if (C(Number(rows[0]?.balance ?? 'NaN')) !== C(Number(rows[0]?.in_portfolio ?? 'NaN'))) {
-    throw new Error(`demo cheques: la cartera suma ${rows[0]?.balance} y sus cheques en cartera ${rows[0]?.in_portfolio}`);
+    throw new Error(
+      `demo cheques: la cartera suma ${rows[0]?.balance} y sus cheques en cartera ${rows[0]?.in_portfolio}`
+    );
   }
 
   // Entrada (recibo o carga inicial) y, si salió de la cartera, una salida de la cartera.
@@ -324,12 +523,14 @@ async function verify(ctx: Ctx, want: { rejectedDebt: bigint }): Promise<void> {
           <> CASE WHEN c.status = 'IN_PORTFOLIO' THEN 0 ELSE 1 END
       )
   `;
-  if (wrong.length > 0) throw new Error(`demo cheques: movimientos inconsistentes en los cheques ${wrong.map((w) => w.number).join(', ')}`);
+  if (wrong.length > 0)
+    throw new Error(`demo cheques: movimientos inconsistentes en los cheques ${wrong.map((w) => w.number).join(', ')}`);
 
   const debt = await tx.$queryRaw<{ pending: string }[]>`
     SELECT (c.amount - COALESCE((SELECT SUM(l.applied_amount) FROM customer_receipt_lines l JOIN customer_receipts r ON r.id = l.receipt_id
                                   WHERE l.third_party_check_id = c.id AND l.kind = 'REJECTED_CHECK' AND r.status IN ('DRAFT', 'CONFIRMED')), 0))::text AS pending
     FROM third_party_checks c WHERE c.id = ${demoId('third_party_check', 'rechazado')}::uuid
   `;
-  if (C(Number(debt[0]?.pending ?? 'NaN')) !== want.rejectedDebt) throw new Error(`demo cheques: la deuda del rechazado da ${debt[0]?.pending}`);
+  if (C(Number(debt[0]?.pending ?? 'NaN')) !== want.rejectedDebt)
+    throw new Error(`demo cheques: la deuda del rechazado da ${debt[0]?.pending}`);
 }
