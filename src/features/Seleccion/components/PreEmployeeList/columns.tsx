@@ -5,13 +5,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { STATUS_LABELS, STATUS_VARIANTS, type PreEmployeeStatus } from '@/features/Seleccion/lib/state-machine';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { matchesColumnValue, matchesNullableId, titled } from '@/shared/components/common/DataTable/column-helpers';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { LucideIcon } from 'lucide-react';
 import { CheckCircle2, Clock, Eye, Send, XCircle } from 'lucide-react';
 import Link from 'next/link';
-import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { PreEmployeeListItem } from './actions.server';
 
 // ============================================================================
@@ -71,7 +70,6 @@ export function getColumns(requiredDocs: number): ColumnDef<PreEmployeeListItem>
     {
       id: 'pre_file_number',
       accessorKey: 'pre_file_number',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="N° Candidato" />,
       cell: ({ row }) => (
         // Sin color de link: en la tabla de empleados el legajo es texto plano.
         // Igual navega al detalle; el subrayado en hover lo delata como clickeable.
@@ -82,14 +80,13 @@ export function getColumns(requiredDocs: number): ColumnDef<PreEmployeeListItem>
           {row.original.pre_file_number}
         </Link>
       ),
-      meta: { title: 'N° Candidato' },
+      ...titled('N° Candidato'),
     },
 
     // --- Nombre completo ---
     {
       id: 'fullName',
       accessorFn: (row) => `${row.lastname ?? ''} ${row.firstname ?? ''}`.trim(),
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre completo" />,
       cell: ({ row }) => {
         const { id, lastname, firstname, email } = row.original;
         const initials = `${lastname?.[0] ?? ''}${firstname?.[0] ?? ''}`.toUpperCase();
@@ -111,42 +108,31 @@ export function getColumns(requiredDocs: number): ColumnDef<PreEmployeeListItem>
         );
       },
       enableSorting: false,
-      meta: { title: 'Nombre completo' },
+      ...titled('Nombre completo'),
     },
 
     // --- Sector propuesto ---
     {
       id: 'hierarchy',
       accessorFn: (row) => row.hierarchy?.name ?? '',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Sector propuesto" />,
       cell: ({ row }) => <span>{row.original.hierarchy?.name ?? '-'}</span>,
-      filterFn: (row, _id, value: string[]) => {
-        const id = row.original.hierarchy?.id;
-        if (id == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(id);
-      },
-      meta: { title: 'Sector propuesto' },
+      filterFn: matchesNullableId((row) => row.hierarchy?.id),
+      ...titled('Sector propuesto'),
     },
 
     // --- Puesto propuesto ---
     {
       id: 'company_positions',
       accessorFn: (row) => row.company_positions?.name ?? '',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Puesto propuesto" />,
       cell: ({ row }) => <span>{row.original.company_positions?.name ?? '-'}</span>,
-      filterFn: (row, _id, value: string[]) => {
-        const id = row.original.company_positions?.id;
-        if (id == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(id);
-      },
-      meta: { title: 'Puesto propuesto' },
+      filterFn: matchesNullableId((row) => row.company_positions?.id),
+      ...titled('Puesto propuesto'),
     },
 
     // --- Estado ---
     {
       id: 'status',
       accessorKey: 'status',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
       cell: ({ row }) => {
         const status = row.original.status;
         const Icon = statusIcons[status];
@@ -157,15 +143,14 @@ export function getColumns(requiredDocs: number): ColumnDef<PreEmployeeListItem>
           </Badge>
         );
       },
-      filterFn: (row, id, value: string[]) => value.includes(row.getValue(id) as string),
-      meta: { title: 'Estado' },
+      filterFn: matchesColumnValue,
+      ...titled('Estado'),
     },
 
     // --- Documentos obligatorios cargados (X/Y) ---
     {
       id: 'documents',
       accessorFn: (row) => `${row._count.documents_pre_employees}/${requiredDocs}`,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Documentos" />,
       cell: ({ row }) => {
         const loaded = row.original._count.documents_pre_employees;
         if (requiredDocs === 0) return <span className="text-muted-foreground">—</span>;
@@ -192,76 +177,67 @@ export function getColumns(requiredDocs: number): ColumnDef<PreEmployeeListItem>
         );
       },
       enableSorting: false,
-      meta: { title: 'Documentos' },
+      ...titled('Documentos'),
     },
 
     // --- DNI ---
     {
       id: 'document_number',
       accessorKey: 'document_number',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="DNI" />,
       cell: ({ row }) => <span className="font-mono tabular-nums">{row.original.document_number ?? '-'}</span>,
-      meta: { title: 'DNI' },
+      ...titled('DNI'),
     },
 
     // --- CUIL (oculta por defecto) ---
     {
       id: 'cuil',
       accessorKey: 'cuil',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="CUIL" />,
       cell: ({ row }) => <span className="font-mono tabular-nums">{row.original.cuil ?? '-'}</span>,
-      meta: { title: 'CUIL' },
+      ...titled('CUIL'),
     },
 
     // --- Telefono (oculta por defecto) ---
     {
       id: 'phone',
       accessorKey: 'phone',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Telefono" />,
       cell: ({ row }) => <span>{row.original.phone ?? '-'}</span>,
-      meta: { title: 'Telefono' },
+      ...titled('Telefono'),
     },
 
     // --- Email (oculta por defecto) ---
     {
       id: 'email',
       accessorKey: 'email',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Email" />,
       cell: ({ row }) => <span>{row.original.email ?? '-'}</span>,
-      meta: { title: 'Email' },
+      ...titled('Email'),
     },
 
     // --- Creado (oculta por defecto) ---
     {
       id: 'created_at',
       accessorKey: 'created_at',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Creado" />,
-      cell: ({ row }) => (
-        <span className="font-mono tabular-nums">{formatArgentinaDay(row.original.created_at)}</span>
-      ),
-      meta: { title: 'Creado' },
+      cell: ({ row }) => <span className="font-mono tabular-nums">{formatArgentinaDay(row.original.created_at)}</span>,
+      ...titled('Creado'),
     },
 
     // --- Revisado (oculta por defecto) ---
     {
       id: 'reviewed_at',
       accessorKey: 'reviewed_at',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Revisado" />,
       cell: ({ row }) => (
         <span className="font-mono tabular-nums">
           {row.original.reviewed_at ? formatArgentinaDay(row.original.reviewed_at) : '-'}
         </span>
       ),
-      meta: { title: 'Revisado' },
+      ...titled('Revisado'),
     },
 
     // --- Motivo de rechazo (oculta por defecto) ---
     {
       id: 'rejection_reason',
       accessorKey: 'rejection_reason',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Motivo de rechazo" />,
       cell: ({ row }) => <span>{row.original.rejection_reason ?? '-'}</span>,
-      meta: { title: 'Motivo de rechazo' },
+      ...titled('Motivo de rechazo'),
     },
 
     // --- Acciones ---
