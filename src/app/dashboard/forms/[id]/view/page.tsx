@@ -1,4 +1,5 @@
-import { fetchChecklistAnswerById, fetchChecklistTemplateById } from '@/features/Checklists/actions/checklist-queries';
+import { fetchChecklistAnswerById } from '@/features/Checklists/actions/checklist-answer-queries';
+import { fetchChecklistTemplateById } from '@/features/Checklists/actions/checklist-queries';
 import { NormalizedChecklistForm } from '@/features/Checklists/components/NormalizedChecklistForm';
 import {
   fetchAnswerById,

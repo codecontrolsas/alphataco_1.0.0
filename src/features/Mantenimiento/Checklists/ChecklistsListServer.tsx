@@ -1,4 +1,4 @@
-import { fetchChecklistTemplatesForEquipment } from '@/features/Checklists/actions/checklist-queries';
+import { fetchChecklistTemplatesForEquipment } from '@/features/Checklists/actions/checklist-equipment-templates';
 import ChecklistsListClient from '@/features/Mantenimiento/Checklists/components/checklists-list-client';
 import { getMaintenanceEmployeeForEquipment } from '@/features/Mantenimiento/shared/actions/employee-session.server';
 import { getSessionEmployeeIdClaim, getSessionUserId } from '@/shared/lib/session';
