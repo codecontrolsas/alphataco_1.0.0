@@ -10,7 +10,7 @@
  * (`LocationSection` y `PreparteManager`), que resuelven en memoria sobre el cliente ya
  * cargado.
  *
- * La tercera, `buildSectorMap`/`buildAreaMap` en `actions/mutations.server.ts`, NO se unifica
+ * La tercera, `buildSectorMap`/`buildAreaMap` en `lib/preparte-references.ts`, NO se unifica
  * a propósito: arma un mapa bulk con una sola consulta para muchos prepartes a la vez, y
  * forzarla a este molde la volvería N consultas. Implementa la MISMA regla y la misma
  * precedencia (primero el contrato elegido, después cualquiera). Si una cambia, la otra
