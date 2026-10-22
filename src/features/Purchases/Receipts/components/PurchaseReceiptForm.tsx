@@ -22,11 +22,8 @@ import { useRouter } from 'next/navigation';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import {
-  createPurchaseReceipt,
-  uploadPurchaseReceiptAttachment,
-  type ReceiptFormData,
-} from '../../actions/receipts.server';
+import { type ReceiptFormData } from '../../actions/receipt-queries.server';
+import { createPurchaseReceipt, uploadPurchaseReceiptAttachment } from '../../actions/receipts.server';
 import { invalidatePurchases } from '../../lib/invalidate';
 import { trimDecimals } from '../../lib/quantity-format';
 import { splitReceived } from '../../lib/receipt-math';

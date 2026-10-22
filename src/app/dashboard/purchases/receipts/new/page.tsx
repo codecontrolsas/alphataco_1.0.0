@@ -1,4 +1,4 @@
-import { getReceiptFormData } from '@/features/Purchases/actions/receipts.server';
+import { getReceiptFormData } from '@/features/Purchases/actions/receipt-queries.server';
 import { NewPurchaseReceiptPage } from '@/features/Purchases/Receipts/ReceiptPages';
 import { notFound } from 'next/navigation';
 

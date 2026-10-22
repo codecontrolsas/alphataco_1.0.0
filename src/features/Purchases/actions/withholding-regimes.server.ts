@@ -8,7 +8,7 @@ import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { isUuid } from '@/shared/lib/uuid';
 import { revalidatePath } from 'next/cache';
-import { NO_PERMISSION, firstIssue, toPurchaseActionError } from '../lib/action-errors';
+import { NO_PERMISSION, PURCHASES_PATH, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import { cents, money } from '../lib/payment-totals';
 import { trimDecimals } from '../lib/quantity-format';
 import {
@@ -22,7 +22,6 @@ import {
 
 const logger = new Logger('features/Purchases/withholding-regimes');
 
-const PURCHASES_PATH = '/dashboard/purchases';
 const NOT_FOUND = 'El régimen no existe';
 
 const decimal = (value: string) => new Prisma.Decimal(value.replace(',', '.'));

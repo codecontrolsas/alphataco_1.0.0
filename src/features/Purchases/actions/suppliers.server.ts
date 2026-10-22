@@ -11,7 +11,7 @@ import { buildStorageFileUrl } from '@/shared/lib/storage-url';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { isUuid } from '@/shared/lib/uuid';
 import { revalidatePath } from 'next/cache';
-import { NO_PERMISSION, firstIssue, toPurchaseActionError } from '../lib/action-errors';
+import { NO_PERMISSION, PURCHASES_PATH, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import { PurchaseError } from '../lib/purchase-errors';
 import { SUPPLIER_FILES_BUCKET, safeFileName } from '../lib/storage-files';
 import { formatCuit, normalizeCbu, normalizeSupplierCuit } from '../lib/supplier-ids';
@@ -27,7 +27,6 @@ import {
 
 const logger = new Logger('features/Purchases/suppliers');
 
-const PURCHASES_PATH = '/dashboard/purchases';
 const DOCUMENTS_BUCKET = SUPPLIER_FILES_BUCKET;
 
 type Tx = Prisma.TransactionClient;

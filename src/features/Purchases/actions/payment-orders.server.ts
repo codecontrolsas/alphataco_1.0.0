@@ -11,27 +11,20 @@ import type { PdfDownload } from '@/shared/lib/pdf/types';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { isUuid } from '@/shared/lib/uuid';
-import { NO_PERMISSION, firstIssue, toPurchaseActionError } from '../lib/action-errors';
-import { nextPurchaseDocumentNumber } from '../lib/document-number';
 import {
-  NOT_FOUND,
+  NO_PERMISSION,
   SESSION_EXPIRED,
   TRANSACTION_OPTIONS,
-  canEditOrders,
-  day,
-  revalidate,
-} from '../lib/payment-action-helpers';
+  firstIssue,
+  toPurchaseActionError,
+} from '../lib/action-errors';
+import { nextPurchaseDocumentNumber } from '../lib/document-number';
+import { NOT_FOUND, canEditOrders, day, revalidate } from '../lib/payment-action-helpers';
+import { lockPaymentOrder, lockSupplier } from '../lib/payment-locks';
 import { canApplyPaymentOrderAction } from '../lib/payment-order-state-machine';
+import { assertPaymentOrderStillValid, assertWithholdingsStillValid } from '../lib/payment-revalidation';
 import { type PaymentTotals } from '../lib/payment-totals';
-import {
-  assertPaymentOrderStillValid,
-  assertWithholdingsStillValid,
-  buildPaymentOrder,
-  lockPaymentOrder,
-  lockSupplier,
-  paymentOrderData,
-  type BuiltWithholding,
-} from '../lib/payments';
+import { buildPaymentOrder, paymentOrderData, type BuiltWithholding } from '../lib/payments';
 import { PurchaseError } from '../lib/purchase-errors';
 import { mailNotSentMessage } from '../lib/supplier-send';
 import { renderPaymentOrderPdf } from '../pdf/render-payment-pdf.server';

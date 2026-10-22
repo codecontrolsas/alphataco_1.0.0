@@ -663,7 +663,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     };
 
     it('aprobada: guarda el resultado y no cambia el estado', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-arca.server')),
+      };
       const order = await receivedOrder([{ quantity: 1, received: 1 }]);
       const invoice = expectOk(
         await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1')], { cae: '76543210987654' }))
@@ -681,7 +685,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('rechazada: pasa a observada (aunque estuviera aprobada) con la observacion de ARCA', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-arca.server')),
+      };
       const order = await receivedOrder([{ quantity: 1, received: 1 }]);
       const invoice = expectOk(
         await actions.createSupplierInvoice(
@@ -698,7 +706,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('sin respuesta: queda "no respondio" y el estado no cambia', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-arca.server')),
+      };
       const order = await receivedOrder([{ quantity: 1, received: 1 }]);
       const invoice = expectOk(
         await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1')], { cae: '76543210987654' }))
@@ -714,7 +726,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('I-3: editar sin cambios un comprobante rechazado por ARCA conserva la observacion; cambiar el total limpia la constatacion', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-arca.server')),
+      };
       const order = await receivedOrder([{ quantity: 2, received: 2 }]);
       const values = invoiceForm([orderLine(order.lineIds[0]!, '1')], { cae: '76543210987654' });
       const invoice = expectOk(await actions.createSupplierInvoice(values));
@@ -736,7 +752,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('I-4: un rechazado que ARCA rechaza sigue rechazado', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-arca.server')),
+      };
       const order = await receivedOrder([{ quantity: 1, received: 1 }]);
       const invoice = expectOk(
         await actions.createSupplierInvoice(
@@ -751,7 +771,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('etapa 5: en una orden de pago pagada, ARCA no lo saca de la deuda; observado en una orden no se rechaza', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-arca.server')),
+      };
       const prisma = await db();
       const order = await receivedOrder([{ quantity: 2, received: 2 }]);
       const invoice = expectOk(
@@ -795,7 +819,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('sin CAE no se constata', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-arca.server')),
+      };
       const order = await receivedOrder([{ quantity: 1, received: 1 }]);
       const invoice = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(order.lineIds[0]!, '1')])));
       expect(expectFail(await withScenario(undefined, () => actions.checkSupplierInvoiceInArca(invoice.id)))).toBe(
@@ -806,7 +834,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
 
   describe('Libro IVA Compras', () => {
     it('periodo: filas ordenadas, NC restando, alicuotas usadas y totales', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-arca.server')),
+      };
       const book = await import('./vat-book.server');
       const order = await receivedOrder([
         { quantity: 10, received: 10 },
@@ -886,7 +918,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
 
   describe('revision final: invariantes', () => {
     it('C-1: anular la factura base con una NC vigente sin vincular → error (facturado quedaria negativo)', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-arca.server')),
+      };
       const order = await receivedOrder([{ quantity: 10, received: 10 }]);
       const line = order.lineIds[0]!;
       const f1 = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(line, '10')])));
@@ -898,7 +934,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('C-1: rechazar una factura observada con NC vigente → error', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-arca.server')),
+      };
       const order = await receivedOrder([{ quantity: 10, received: 10 }]);
       const line = order.lineIds[0]!;
       const f1 = expectOk(await actions.createSupplierInvoice(invoiceForm([orderLine(line, '10', '1300')])));
@@ -913,7 +953,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('C-1: editar la factura base por debajo de lo acreditado → error', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-arca.server')),
+      };
       const order = await receivedOrder([{ quantity: 10, received: 10 }]);
       const line = order.lineIds[0]!;
       const values = invoiceForm([orderLine(line, '10')]);
@@ -926,7 +970,11 @@ describe.skipIf(!RUN)('facturas de proveedor (integracion)', () => {
     });
 
     it('I-6: fecha de emision futura → error', async () => {
-      const actions = { ...(await import('./invoices.server')), ...(await import('./invoice-queries.server')) };
+      const actions = {
+        ...(await import('./invoices.server')),
+        ...(await import('./invoice-queries.server')),
+        ...(await import('./invoice-arca.server')),
+      };
       const order = await receivedOrder([{ quantity: 1, received: 1 }]);
       expect(
         expectFail(

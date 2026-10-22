@@ -34,22 +34,17 @@ import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { isUuid } from '@/shared/lib/uuid';
 import { revalidatePath } from 'next/cache';
-import { NO_PERMISSION, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import {
-  NOT_FOUND,
+  NO_PERMISSION,
   SESSION_EXPIRED,
   TRANSACTION_OPTIONS,
-  day,
-  isoDay,
-  revalidate,
-} from '../lib/payment-action-helpers';
+  firstIssue,
+  toPurchaseActionError,
+} from '../lib/action-errors';
+import { NOT_FOUND, day, isoDay, revalidate } from '../lib/payment-action-helpers';
+import { lockPaymentOrder, nextCertificateNumber } from '../lib/payment-locks';
+import { assertPaymentOrderStillValid, assertWithholdingsStillValid } from '../lib/payment-revalidation';
 import { cents, money } from '../lib/payment-totals';
-import {
-  assertPaymentOrderStillValid,
-  assertWithholdingsStillValid,
-  lockPaymentOrder,
-  nextCertificateNumber,
-} from '../lib/payments';
 import { PurchaseError } from '../lib/purchase-errors';
 import { registerPaymentFormSchema, type RegisterPaymentFormValues } from '../schemas/payment-orders';
 import { requiredReasonSchema } from '../schemas/requests';

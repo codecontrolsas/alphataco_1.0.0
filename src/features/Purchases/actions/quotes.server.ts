@@ -14,7 +14,13 @@ import { storageRemove, storageUpload } from '@/shared/lib/storage';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { isUuid } from '@/shared/lib/uuid';
 import { revalidatePath } from 'next/cache';
-import { NO_PERMISSION, firstIssue, toPurchaseActionError } from '../lib/action-errors';
+import {
+  NO_PERMISSION,
+  PURCHASES_PATH,
+  SESSION_EXPIRED,
+  firstIssue,
+  toPurchaseActionError,
+} from '../lib/action-errors';
 import { nextPurchaseDocumentNumber } from '../lib/document-number';
 import { assertWithinRemaining, lockRequestsForLines, orderedByLine, remainingOf } from '../lib/order-progress';
 import { NO_PRICES_PERMISSION } from '../lib/price-visibility';
@@ -42,9 +48,6 @@ import { requiredReasonSchema } from '../schemas/requests';
 import { sendDocumentSchema, type SendDocumentValues } from '../schemas/send';
 
 const logger = new Logger('features/Purchases/quotes');
-
-const PURCHASES_PATH = '/dashboard/purchases';
-const SESSION_EXPIRED = 'Tu sesión expiró. Volvé a ingresar.';
 
 type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 

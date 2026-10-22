@@ -7,12 +7,11 @@ import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { isUuid } from '@/shared/lib/uuid';
 import { revalidatePath } from 'next/cache';
-import { NO_PERMISSION, firstIssue, toPurchaseActionError } from '../lib/action-errors';
+import { NO_PERMISSION, PURCHASES_PATH, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import { expenseCategoryFormSchema, type ExpenseCategoryFormValues } from '../schemas/expense-categories';
 
 const logger = new Logger('features/Purchases/expense-categories');
 
-const PURCHASES_PATH = '/dashboard/purchases';
 const NOT_FOUND = 'El concepto no existe';
 const duplicate = (name: string) => `Ya existe el concepto «${name}»`;
 

@@ -8,12 +8,8 @@ import { BadgeCheck, Ban, CircleX, Pencil, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import {
-  approveSupplierInvoice,
-  cancelSupplierInvoice,
-  checkSupplierInvoiceInArca,
-  rejectSupplierInvoice,
-} from '../../actions/invoices.server';
+import { checkSupplierInvoiceInArca } from '../../actions/invoice-arca.server';
+import { approveSupplierInvoice, cancelSupplierInvoice, rejectSupplierInvoice } from '../../actions/invoices.server';
 import { ConfirmAction } from '../../components/ConfirmAction';
 import { invalidatePurchases } from '../../lib/invalidate';
 import type { SupplierInvoiceDetail } from '../../lib/invoice-query-types';

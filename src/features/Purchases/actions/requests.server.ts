@@ -9,7 +9,13 @@ import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { isUuid } from '@/shared/lib/uuid';
 import { revalidatePath } from 'next/cache';
-import { NO_PERMISSION, firstIssue, toPurchaseActionError } from '../lib/action-errors';
+import {
+  NO_PERMISSION,
+  PURCHASES_PATH,
+  SESSION_EXPIRED,
+  firstIssue,
+  toPurchaseActionError,
+} from '../lib/action-errors';
 import { notifyRequestDecision, notifyRequestSubmitted } from '../lib/approval-notifications.server';
 import { materialRequestShortfall, type MaterialRequestShortfall } from '../lib/from-material-request';
 import { PurchaseError } from '../lib/purchase-errors';
@@ -32,9 +38,6 @@ import {
 } from '../schemas/requests';
 
 const logger = new Logger('features/Purchases/requests');
-
-const PURCHASES_PATH = '/dashboard/purchases';
-const SESSION_EXPIRED = 'Tu sesión expiró. Volvé a ingresar.';
 
 type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 

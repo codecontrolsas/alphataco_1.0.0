@@ -38,3 +38,11 @@ export function firstIssue(error: { issues: { message: string }[] }): string {
 export const NO_PERMISSION = 'No tenés permiso para realizar esta acción';
 
 /** Un id que no es uuid haria fallar la query de Prisma: se responde como "no existe". */
+
+/** Ruta del módulo: las acciones revalidan desde acá. */
+export const PURCHASES_PATH = '/dashboard/purchases';
+
+export const SESSION_EXPIRED = 'Tu sesión expiró. Volvé a ingresar.';
+
+/** Transacciones con varias escrituras (recepciones, facturas, pagos): el motor de stock puede tardar. */
+export const TRANSACTION_OPTIONS = { timeout: 20_000, maxWait: 5_000 };

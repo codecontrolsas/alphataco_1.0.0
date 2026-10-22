@@ -378,7 +378,8 @@ describe.skipIf(!RUN)('recepciones (integracion)', () => {
       select: { id: true },
     });
     expectOk(await orders.cancelPurchaseOrder(c2.id, 'No se compra'));
-    const detail = await actions.getPurchaseReceiptDetail(r.id);
+    const { getPurchaseReceiptDetail } = await import('./receipt-queries.server');
+    const detail = await getPurchaseReceiptDetail(r.id);
     expect(detail?.excessWithoutOrder).toBe(true);
   });
 

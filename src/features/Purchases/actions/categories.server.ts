@@ -7,12 +7,11 @@ import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { isUuid } from '@/shared/lib/uuid';
 import { revalidatePath } from 'next/cache';
-import { NO_PERMISSION, firstIssue, toPurchaseActionError } from '../lib/action-errors';
+import { NO_PERMISSION, PURCHASES_PATH, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import { supplierCategoryFormSchema, type SupplierCategoryFormValues } from '../schemas/suppliers';
 
 const logger = new Logger('features/Purchases/categories');
 
-const PURCHASES_PATH = '/dashboard/purchases';
 const DUPLICATE = 'Ya existe un rubro con ese nombre';
 
 /** Rubros de la empresa (activos e inactivos) con la cantidad de proveedores de cada uno. */
