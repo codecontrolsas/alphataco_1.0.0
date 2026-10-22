@@ -9,16 +9,8 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Separator } from '@/components/ui/separator';
 
+import { normalizeSearchText } from '@/shared/utils/search-text';
 import type { DataTableViewOptionsProps } from './types';
-
-/** Normaliza texto para buscar sin distinguir mayúsculas ni acentos */
-export function normalizeSearchText(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
-}
 
 /**
  * Filtro de `Command` por título visible (llega como `keywords`), no por el id interno.

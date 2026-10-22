@@ -3,16 +3,9 @@
  * descripción, sin distinguir mayúsculas ni tildes. Pura, sin React.
  */
 
+import { normalizeSearchText } from '@/shared/utils/search-text';
 import { permissionKey } from './permission-rules';
 import type { PermissionModule, PermissionTab } from './permission-types';
-
-export function normalizeSearchText(text: string | null | undefined): string {
-  return (text ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLocaleLowerCase('es')
-    .trim();
-}
 
 export interface ModuleSearchResult {
   /** Pestañas (de cualquier nivel) que se muestran */
@@ -28,7 +21,7 @@ export interface PermissionSearchResult {
 }
 
 const matches = (needle: string, ...texts: Array<string | null | undefined>) =>
-  texts.some((text) => normalizeSearchText(text).includes(needle));
+  texts.some((text) => normalizeSearchText(text ?? '').includes(needle));
 
 export function searchPermissions(modules: PermissionModule[], query: string): PermissionSearchResult | null {
   const needle = normalizeSearchText(query);
