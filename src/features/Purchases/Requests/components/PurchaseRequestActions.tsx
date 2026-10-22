@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ban, Check, Copy, FilePlus2, Lock, Pencil, Send, X } from 'lucide-react';
 import Link from 'next/link';
@@ -15,9 +15,9 @@ import {
   rejectPurchaseRequest,
   submitPurchaseRequest,
 } from '../../actions/requests.server';
-import type { PurchaseRequestDetail } from '../../lib/request-query-types';
 import { ConfirmAction } from '../../components/ConfirmAction';
 import { PURCHASES_QUERY_KEYS } from '../../lib/query-keys';
+import type { PurchaseRequestDetail } from '../../lib/request-query-types';
 import { RequestQuotesDialog } from './RequestQuotesDialog';
 
 /** Botones del detalle segun el estado de la solicitud y los permisos (vienen calculados del servidor). */

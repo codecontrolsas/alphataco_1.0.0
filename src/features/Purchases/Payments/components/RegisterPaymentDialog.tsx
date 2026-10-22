@@ -1,15 +1,24 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import type { TreasuryAccountRow } from '@/features/Treasury/actions/accounts.server';
+import { getCheckbooksForPayment } from '@/features/Treasury/actions/own-checks.server';
 import { formatMoney } from '@/features/Warehouses/lib/format';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
 import { formatDateAr } from '@/shared/lib/argentina-time';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Banknote, Plus, Trash2 } from 'lucide-react';
@@ -20,8 +29,6 @@ import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 import { getPortfolioChecksForPayment } from '../../actions/payment-queries.server';
 import { registerPayment } from '../../actions/payment-register.server';
-import { getCheckbooksForPayment } from '@/features/Treasury/actions/own-checks.server';
-import type { TreasuryAccountRow } from '@/features/Treasury/actions/accounts.server';
 import { invalidatePurchases } from '../../lib/invalidate';
 import { cents, money } from '../../lib/payment-totals';
 import {
@@ -86,13 +93,21 @@ export function RegisterPaymentDialog({
   });
   const payments = useFieldArray({ control: form.control, name: 'payments' });
   const watched = useWatch({ control: form.control, name: 'payments' });
-  const { data: portfolioChecks, isLoading: loadingChecks, isError: checksError } = useQuery({
+  const {
+    data: portfolioChecks,
+    isLoading: loadingChecks,
+    isError: checksError,
+  } = useQuery({
     queryKey: ['purchases-portfolio-checks', orderId],
     queryFn: () => getPortfolioChecksForPayment(),
     enabled: open,
     staleTime: 0,
   });
-  const { data: checkbooks, isLoading: loadingCheckbooks, isError: checkbooksError } = useQuery({
+  const {
+    data: checkbooks,
+    isLoading: loadingCheckbooks,
+    isError: checkbooksError,
+  } = useQuery({
     queryKey: ['purchases-checkbooks', orderId],
     queryFn: () => getCheckbooksForPayment(),
     enabled: open,
@@ -104,7 +119,9 @@ export function RegisterPaymentDialog({
   const proposedNumber = (i: number, checkbookId: string) => {
     const checkbook = checkbooks?.find((c) => c.id === checkbookId);
     const taken = new Set(
-      (form.getValues('payments') ?? []).filter((p, j) => j !== i && p.method === 'CHECK' && p.checkbookId === checkbookId).map((p) => p.checkNumber)
+      (form.getValues('payments') ?? [])
+        .filter((p, j) => j !== i && p.method === 'CHECK' && p.checkbookId === checkbookId)
+        .map((p) => p.checkNumber)
     );
     return checkbook?.freeNumbers.find((n) => !taken.has(n)) ?? '';
   };
@@ -114,7 +131,8 @@ export function RegisterPaymentDialog({
     form.setValue(`payments.${i}.accountId`, checkbooks?.find((c) => c.id === checkbookId)?.account.id ?? '');
     form.setValue(`payments.${i}.checkNumber`, proposedNumber(i, checkbookId));
   };
-  const amountOf = (p: Payment) => (p.method === 'THIRD_PARTY_CHECK' ? cents(checkOf(p.thirdPartyCheckId)?.amount ?? '0') : cents(p.amount));
+  const amountOf = (p: Payment) =>
+    p.method === 'THIRD_PARTY_CHECK' ? cents(checkOf(p.thirdPartyCheckId)?.amount ?? '0') : cents(p.amount);
   const sum = (watched ?? []).reduce((acc, p) => acc + amountOf(p), BigInt(0));
   const diff = cents(netTotal) - sum;
 
@@ -154,7 +172,10 @@ export function RegisterPaymentDialog({
     onSuccess: (result) => {
       const n = result.certificates.length;
       toast.success(`${result.number} pagada`, {
-        description: n > 0 ? `${n} ${n === 1 ? 'certificado de retención' : 'certificados de retención'}: ${result.certificates.join(', ')}` : undefined,
+        description:
+          n > 0
+            ? `${n} ${n === 1 ? 'certificado de retención' : 'certificados de retención'}: ${result.certificates.join(', ')}`
+            : undefined,
       });
       setOpen(false);
       invalidatePurchases(queryClient);
@@ -182,7 +203,9 @@ export function RegisterPaymentDialog({
           </DialogDescription>
         </DialogHeader>
         {active.length === 0 && !isZero ? (
-          <p className="text-sm text-muted-foreground">No hay cuentas ni cajas activas: cargalas en Configuración de Compras.</p>
+          <p className="text-sm text-muted-foreground">
+            No hay cuentas ni cajas activas: cargalas en Configuración de Compras.
+          </p>
         ) : (
           <Form {...form}>
             <form onSubmit={form.handleSubmit((v) => save.mutate(v))} className="space-y-4">
@@ -207,7 +230,12 @@ export function RegisterPaymentDialog({
                 const method = watched?.[i]?.method;
                 const isCheck = method === 'CHECK' || method === 'ECHECK';
                 const isThirdParty = method === 'THIRD_PARTY_CHECK';
-                const taken = new Set((watched ?? []).filter((_, j) => j !== i).map((p) => p.thirdPartyCheckId).filter(Boolean));
+                const taken = new Set(
+                  (watched ?? [])
+                    .filter((_, j) => j !== i)
+                    .map((p) => p.thirdPartyCheckId)
+                    .filter(Boolean)
+                );
                 return (
                   <div key={f.id} className="space-y-3 rounded-md border p-3">
                     <div className="grid gap-3 sm:grid-cols-[9rem_1fr_9rem_auto] sm:items-end">
@@ -217,7 +245,10 @@ export function RegisterPaymentDialog({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Medio</FormLabel>
-                            <Select value={field.value} onValueChange={(value) => changeMethod(i, value as Payment['method'])}>
+                            <Select
+                              value={field.value}
+                              onValueChange={(value) => changeMethod(i, value as Payment['method'])}
+                            >
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue />
@@ -245,19 +276,28 @@ export function RegisterPaymentDialog({
                               <Select value={field.value ?? ''} onValueChange={field.onChange} disabled={loadingChecks}>
                                 <FormControl>
                                   <SelectTrigger>
-                                    <SelectValue placeholder={loadingChecks ? 'Cargando cheques…' : 'Elegí el cheque'} />
+                                    <SelectValue
+                                      placeholder={loadingChecks ? 'Cargando cheques…' : 'Elegí el cheque'}
+                                    />
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  {checksError && <p className="px-2 py-1.5 text-sm text-danger-subtle-foreground">No se pudo cargar la cartera</p>}
+                                  {checksError && (
+                                    <p className="px-2 py-1.5 text-sm text-danger-subtle-foreground">
+                                      No se pudo cargar la cartera
+                                    </p>
+                                  )}
                                   {!checksError && (portfolioChecks ?? []).length === 0 && (
-                                    <p className="px-2 py-1.5 text-sm text-muted-foreground">No hay cheques en cartera</p>
+                                    <p className="px-2 py-1.5 text-sm text-muted-foreground">
+                                      No hay cheques en cartera
+                                    </p>
                                   )}
                                   {(portfolioChecks ?? [])
                                     .filter((c) => !taken.has(c.id))
                                     .map((c) => (
                                       <SelectItem key={c.id} value={c.id}>
-                                        Nº {c.number} · {c.bank} · {c.drawerName} · pago {dmy(c.paymentDate)} — {formatMoney(c.amount)}
+                                        Nº {c.number} · {c.bank} · {c.drawerName} · pago {dmy(c.paymentDate)} —{' '}
+                                        {formatMoney(c.amount)}
                                       </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -273,16 +313,29 @@ export function RegisterPaymentDialog({
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Chequera</FormLabel>
-                              <Select key={checkbooks?.length ?? 0} value={field.value ?? ''} onValueChange={(value) => chooseCheckbook(i, value)} disabled={loadingCheckbooks}>
+                              <Select
+                                key={checkbooks?.length ?? 0}
+                                value={field.value ?? ''}
+                                onValueChange={(value) => chooseCheckbook(i, value)}
+                                disabled={loadingCheckbooks}
+                              >
                                 <FormControl>
                                   <SelectTrigger>
-                                    <SelectValue placeholder={loadingCheckbooks ? 'Cargando chequeras…' : 'Elegí la chequera'} />
+                                    <SelectValue
+                                      placeholder={loadingCheckbooks ? 'Cargando chequeras…' : 'Elegí la chequera'}
+                                    />
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  {checkbooksError && <p className="px-2 py-1.5 text-sm text-danger-subtle-foreground">No se pudieron cargar las chequeras</p>}
+                                  {checkbooksError && (
+                                    <p className="px-2 py-1.5 text-sm text-danger-subtle-foreground">
+                                      No se pudieron cargar las chequeras
+                                    </p>
+                                  )}
                                   {!checkbooksError && (checkbooks ?? []).length === 0 && (
-                                    <p className="px-2 py-1.5 text-sm text-muted-foreground">No hay chequeras con números libres: cargala en Tesorería → Cheques propios</p>
+                                    <p className="px-2 py-1.5 text-sm text-muted-foreground">
+                                      No hay chequeras con números libres: cargala en Tesorería → Cheques propios
+                                    </p>
                                   )}
                                   {(checkbooks ?? []).map((c) => (
                                     <SelectItem key={c.id} value={c.id}>
@@ -296,45 +349,45 @@ export function RegisterPaymentDialog({
                           )}
                         />
                       ) : (
-                      <FormField
-                        control={form.control}
-                        name={`payments.${i}.accountId`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>{method === 'ECHECK' ? 'Cuenta bancaria' : 'Cuenta o caja'}</FormLabel>
-                            <Select key={method} value={field.value} onValueChange={field.onChange}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Desde dónde se paga" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {(method === 'ECHECK' ? banks : active).map((a) => (
-                                  <SelectItem key={a.id} value={a.id}>
-                                    {a.name} — saldo {formatMoney(a.balance)}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                        <FormField
+                          control={form.control}
+                          name={`payments.${i}.accountId`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{method === 'ECHECK' ? 'Cuenta bancaria' : 'Cuenta o caja'}</FormLabel>
+                              <Select key={method} value={field.value} onValueChange={field.onChange}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Desde dónde se paga" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {(method === 'ECHECK' ? banks : active).map((a) => (
+                                    <SelectItem key={a.id} value={a.id}>
+                                      {a.name} — saldo {formatMoney(a.balance)}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                       )}
                       {!isThirdParty && (
-                      <FormField
-                        control={form.control}
-                        name={`payments.${i}.amount`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Importe</FormLabel>
-                            <FormControl>
-                              <Input inputMode="decimal" className="text-right tabular-nums" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                        <FormField
+                          control={form.control}
+                          name={`payments.${i}.amount`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Importe</FormLabel>
+                              <FormControl>
+                                <Input inputMode="decimal" className="text-right tabular-nums" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                       )}
                       <Button
                         type="button"
@@ -350,7 +403,8 @@ export function RegisterPaymentDialog({
                     </div>
                     {isCheck && (
                       <p className="text-xs text-muted-foreground">
-                        El cheque queda emitido: sale de la cuenta cuando confirmás su débito en Tesorería → Cheques propios.
+                        El cheque queda emitido: sale de la cuenta cuando confirmás su débito en Tesorería → Cheques
+                        propios.
                       </p>
                     )}
                     {isThirdParty ? (
@@ -358,78 +412,79 @@ export function RegisterPaymentDialog({
                         Se endosa al proveedor por su importe completo y sale de la cartera en la fecha de pago.
                       </p>
                     ) : (
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <FormField
-                        control={form.control}
-                        name={`payments.${i}.reference`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Referencia (opcional)</FormLabel>
-                            <FormControl>
-                              <Input placeholder="N° de transferencia" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <FormField
+                          control={form.control}
+                          name={`payments.${i}.reference`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Referencia (opcional)</FormLabel>
+                              <FormControl>
+                                <Input placeholder="N° de transferencia" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        {isCheck && (
+                          <>
+                            <FormField
+                              control={form.control}
+                              name={`payments.${i}.checkNumber`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>N° de cheque</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name={`payments.${i}.checkDueOn`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Fecha de pago del cheque</FormLabel>
+                                  <FormControl>
+                                    <EnhancedDatePicker
+                                      date={field.value ? moment(field.value, 'YYYY-MM-DD').toDate() : undefined}
+                                      setDate={(d) => field.onChange(d ? moment(d).format('YYYY-MM-DD') : '')}
+                                      placeholder="DD/MM/AAAA"
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </>
                         )}
-                      />
-                      {isCheck && (
-                        <>
-                          <FormField
-                            control={form.control}
-                            name={`payments.${i}.checkNumber`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>N° de cheque</FormLabel>
-                                <FormControl>
-                                  <Input {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name={`payments.${i}.checkDueOn`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Fecha de pago del cheque</FormLabel>
-                                <FormControl>
-                                  <EnhancedDatePicker
-                                    date={field.value ? moment(field.value, 'YYYY-MM-DD').toDate() : undefined}
-                                    setDate={(d) => field.onChange(d ? moment(d).format('YYYY-MM-DD') : '')}
-                                    placeholder="DD/MM/AAAA"
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </>
-                      )}
-                    </div>
+                      </div>
                     )}
                   </div>
                 );
               })}
               {!isZero && (
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => payments.append(emptyPayment(diff > BigInt(0) ? money(diff) : '', defaultAccount))}
-                >
-                  <Plus className="mr-1 h-4 w-4" />
-                  Otro medio
-                </Button>
-                <p
-                  role="status"
-                  className={`text-sm tabular-nums ${diff === BigInt(0) ? 'text-ok-subtle-foreground' : 'text-warn-subtle-foreground'}`}
-                >
-                  Medios {formatMoney(money(sum))} de {formatMoney(netTotal)}
-                  {diff !== BigInt(0) && ` · ${diff > BigInt(0) ? 'faltan' : 'sobran'} ${formatMoney(money(diff > BigInt(0) ? diff : -diff))}`}
-                </p>
-              </div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => payments.append(emptyPayment(diff > BigInt(0) ? money(diff) : '', defaultAccount))}
+                  >
+                    <Plus className="mr-1 h-4 w-4" />
+                    Otro medio
+                  </Button>
+                  <p
+                    role="status"
+                    className={`text-sm tabular-nums ${diff === BigInt(0) ? 'text-ok-subtle-foreground' : 'text-warn-subtle-foreground'}`}
+                  >
+                    Medios {formatMoney(money(sum))} de {formatMoney(netTotal)}
+                    {diff !== BigInt(0) &&
+                      ` · ${diff > BigInt(0) ? 'faltan' : 'sobran'} ${formatMoney(money(diff > BigInt(0) ? diff : -diff))}`}
+                  </p>
+                </div>
               )}
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setOpen(false)}>

@@ -6,8 +6,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Textarea } from '@/components/ui/textarea';
 import { SearchCombobox } from '@/features/Warehouses/components/SearchCombobox';
 import { formatQuantity } from '@/features/Warehouses/lib/format';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Trash2 } from 'lucide-react';
@@ -16,10 +16,10 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { searchOrderableRequestLines } from '../../actions/order-queries.server';
-import type { OrderableRequestLineOption } from '../../lib/order-query-types';
 import { createPurchaseQuote, updatePurchaseQuoteDraft } from '../../actions/quotes.server';
 import { searchSupplierOptions } from '../../actions/suppliers.server';
 import { invalidatePurchases } from '../../lib/invalidate';
+import type { OrderableRequestLineOption } from '../../lib/order-query-types';
 import { purchaseQuoteFormSchema, type PurchaseQuoteFormValues } from '../../schemas/quotes';
 
 const logger = new Logger('Purchases/PurchaseQuoteForm');
@@ -30,7 +30,10 @@ const optionLabel = (o: OrderableRequestLineOption) => `${o.requestNumber} · l�
 
 async function searchLineOptions(query: string) {
   const result = await searchOrderableRequestLines(query);
-  return { items: result.items.map((item) => ({ ...item, id: item.requestLineId, label: optionLabel(item) })), total: result.total };
+  return {
+    items: result.items.map((item) => ({ ...item, id: item.requestLineId, label: optionLabel(item) })),
+    total: result.total,
+  };
 }
 
 interface PurchaseQuoteFormProps {
@@ -124,7 +127,9 @@ export function PurchaseQuoteForm({ mode, defaultValues, initialSupplierLabel, i
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Qué se cotiza</CardTitle>
-            <CardDescription>Líneas de solicitudes aprobadas con faltante. Se pide lo que falta de cada una.</CardDescription>
+            <CardDescription>
+              Líneas de solicitudes aprobadas con faltante. Se pide lo que falta de cada una.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <FormField
@@ -157,7 +162,9 @@ export function PurchaseQuoteForm({ mode, defaultValues, initialSupplierLabel, i
                     />
                   </FormControl>
                   <ul className="divide-y rounded-md border">
-                    {field.value.length === 0 && <li className="p-3 text-sm text-muted-foreground">Todavía no agregaste líneas.</li>}
+                    {field.value.length === 0 && (
+                      <li className="p-3 text-sm text-muted-foreground">Todavía no agregaste líneas.</li>
+                    )}
                     {field.value.map((id) => {
                       const line = known[id];
                       return (

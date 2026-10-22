@@ -10,9 +10,9 @@ import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { SearchCombobox } from '@/features/Warehouses/components/SearchCombobox';
 import { formatMoney, formatQuantity } from '@/features/Warehouses/lib/format';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
-import { VAT_RATE_LABELS, VAT_RATES } from '@/shared/lib/arca/catalogs';
+import { VAT_RATES, VAT_RATE_LABELS } from '@/shared/lib/arca/catalogs';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
@@ -21,15 +21,12 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useFieldArray, useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import { toast } from 'sonner';
-import {
-  createPurchaseOrder,
-  updatePurchaseOrderDraft,
-} from '../../actions/orders.server';
 import { getSupplierPurchaseContext, searchOrderableRequestLines } from '../../actions/order-queries.server';
-import type { OrderableRequestLineOption } from '../../lib/order-query-types';
+import { createPurchaseOrder, updatePurchaseOrderDraft } from '../../actions/orders.server';
 import { searchSupplierOptions } from '../../actions/suppliers.server';
 import { ExpiredSupplierDocumentsAlert } from '../../components/ExpiredSupplierDocumentsAlert';
 import { invalidatePurchases } from '../../lib/invalidate';
+import type { OrderableRequestLineOption } from '../../lib/order-query-types';
 import { computeOrderLine, computeOrderTotals } from '../../lib/order-totals';
 import { trimDecimals } from '../../lib/quantity-format';
 import { emptyPurchaseOrderLine, purchaseOrderFormSchema, type PurchaseOrderFormValues } from '../../schemas/orders';
@@ -50,7 +47,10 @@ function lineOptionLabel(option: OrderableRequestLineOption): string {
 /** Busqueda de lineas pendientes con el formato que pide el combobox (`id` + `label`). */
 async function searchLineOptions(query: string) {
   const result = await searchOrderableRequestLines(query);
-  return { items: result.items.map((item) => ({ ...item, id: item.requestLineId, label: lineOptionLabel(item) })), total: result.total };
+  return {
+    items: result.items.map((item) => ({ ...item, id: item.requestLineId, label: lineOptionLabel(item) })),
+    total: result.total,
+  };
 }
 
 interface PurchaseOrderFormProps {
@@ -67,7 +67,13 @@ interface PurchaseOrderFormProps {
  * pago precargado), lineas tomadas de solicitudes con faltante, condiciones y totales en vivo.
  * Los totales que valen son los del servidor; aca son vista previa con la misma funcion.
  */
-export function PurchaseOrderForm({ mode, defaultValues, initialSupplierLabel, initialLineOptions, complement = false }: PurchaseOrderFormProps) {
+export function PurchaseOrderForm({
+  mode,
+  defaultValues,
+  initialSupplierLabel,
+  initialLineOptions,
+  complement = false,
+}: PurchaseOrderFormProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [supplierLabel, setSupplierLabel] = useState<string | null>(initialSupplierLabel);
@@ -99,7 +105,11 @@ export function PurchaseOrderForm({ mode, defaultValues, initialSupplierLabel, i
     },
     onSuccess: ({ id, number, submit }) => {
       toast.success(
-        mode.kind === 'edit' ? `Orden ${number} guardada` : submit ? `Orden ${number} enviada a aprobación` : `Orden ${number} guardada como borrador`
+        mode.kind === 'edit'
+          ? `Orden ${number} guardada`
+          : submit
+            ? `Orden ${number} enviada a aprobación`
+            : `Orden ${number} guardada como borrador`
       );
       invalidatePurchases(queryClient);
       router.push(`/dashboard/purchases/orders/${id}`);
@@ -157,7 +167,9 @@ export function PurchaseOrderForm({ mode, defaultValues, initialSupplierLabel, i
                 </FormItem>
               )}
             />
-            {supplier.data && <ExpiredSupplierDocumentsAlert supplierId={supplier.data.id} documents={supplier.data.expiredDocuments} />}
+            {supplier.data && (
+              <ExpiredSupplierDocumentsAlert supplierId={supplier.data.id} documents={supplier.data.expiredDocuments} />
+            )}
 
             <div className="grid gap-4 md:grid-cols-3">
               <FormField
@@ -201,7 +213,9 @@ export function PurchaseOrderForm({ mode, defaultValues, initialSupplierLabel, i
                         inputMode="numeric"
                         className="tabular-nums"
                         placeholder={
-                          supplier.data?.paymentTermDays != null ? `${supplier.data.paymentTermDays} (del proveedor)` : 'Sin plazo'
+                          supplier.data?.paymentTermDays != null
+                            ? `${supplier.data.paymentTermDays} (del proveedor)`
+                            : 'Sin plazo'
                         }
                         {...field}
                       />
@@ -357,7 +371,14 @@ function OrderLineFields({ form, index, option, canRemove, onRemove, onOption, l
           )}
         />
         {canRemove && (
-          <Button type="button" size="icon" variant="ghost" className="mt-8 shrink-0" onClick={onRemove} aria-label={`Quitar la línea ${index + 1}`}>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="mt-8 shrink-0"
+            onClick={onRemove}
+            aria-label={`Quitar la línea ${index + 1}`}
+          >
             <Trash2 className="h-4 w-4" />
           </Button>
         )}

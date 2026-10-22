@@ -6,9 +6,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { SectionCard } from '@/shared/components/common/SectionCard';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
+import { SectionCard } from '@/shared/components/common/SectionCard';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import moment from 'moment';
@@ -16,7 +16,10 @@ import { useRouter } from 'next/navigation';
 import { Fragment } from 'react';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import { toast } from 'sonner';
-import { saveSupplierWithholdingProfiles, type SupplierWithholdingProfile } from '../../actions/withholding-profiles.server';
+import {
+  saveSupplierWithholdingProfiles,
+  type SupplierWithholdingProfile,
+} from '../../actions/withholding-profiles.server';
 import type { WithholdingRegimeRow } from '../../actions/withholding-regimes.server';
 import {
   WITHHOLDING_STATUS_LABELS,
@@ -67,7 +70,8 @@ export function SupplierTaxProfile({
   });
 
   const save = useMutation({
-    mutationFn: async (values: WithholdingProfilesFormValues) => unwrapAction(await saveSupplierWithholdingProfiles(supplierId, values)),
+    mutationFn: async (values: WithholdingProfilesFormValues) =>
+      unwrapAction(await saveSupplierWithholdingProfiles(supplierId, values)),
     onSuccess: () => {
       toast.success('Situación impositiva guardada');
       router.refresh();
@@ -83,23 +87,28 @@ export function SupplierTaxProfile({
       title="Situación impositiva"
       description="Qué se le retiene al pagarle. Sin régimen o con «No aplica», ese impuesto no se retiene. Los regímenes se cargan en Configuración de Compras."
     >
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit((values) => save.mutate(values))} className="space-y-4">
-            {WITHHOLDING_TAXES.map((tax, i) => (
-              <Fragment key={tax}>
-                {i > 0 && <Separator />}
-                <TaxRow form={form} tax={tax} regimes={regimes.filter((r) => r.tax === tax && r.is_active)} disabled={!canUpdate} />
-              </Fragment>
-            ))}
-            {canUpdate && (
-              <div className="flex justify-end">
-                <Button type="submit" disabled={save.isPending}>
-                  {save.isPending ? 'Guardando…' : 'Guardar situación impositiva'}
-                </Button>
-              </div>
-            )}
-          </form>
-        </Form>
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit((values) => save.mutate(values))} className="space-y-4">
+          {WITHHOLDING_TAXES.map((tax, i) => (
+            <Fragment key={tax}>
+              {i > 0 && <Separator />}
+              <TaxRow
+                form={form}
+                tax={tax}
+                regimes={regimes.filter((r) => r.tax === tax && r.is_active)}
+                disabled={!canUpdate}
+              />
+            </Fragment>
+          ))}
+          {canUpdate && (
+            <div className="flex justify-end">
+              <Button type="submit" disabled={save.isPending}>
+                {save.isPending ? 'Guardando…' : 'Guardar situación impositiva'}
+              </Button>
+            </div>
+          )}
+        </form>
+      </Form>
     </SectionCard>
   );
 }
@@ -156,7 +165,11 @@ function TaxRow({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Régimen</FormLabel>
-                <Select value={field.value || (tax === 'IIBB' ? 'none' : '')} onValueChange={(v) => field.onChange(v === 'none' ? '' : v)} disabled={disabled}>
+                <Select
+                  value={field.value || (tax === 'IIBB' ? 'none' : '')}
+                  onValueChange={(v) => field.onChange(v === 'none' ? '' : v)}
+                  disabled={disabled}
+                >
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder={regimes.length ? 'Elegí el régimen' : 'Sin regímenes cargados'} />

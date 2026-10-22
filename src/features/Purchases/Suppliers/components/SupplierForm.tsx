@@ -9,10 +9,14 @@ import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
 import { cn } from '@/lib/utils';
-import { RECEIVER_VAT_CONDITIONS, isReceiverVatConditionId, type ReceiverVatConditionId } from '@/shared/lib/arca/catalogs';
+import {
+  RECEIVER_VAT_CONDITIONS,
+  isReceiverVatConditionId,
+  type ReceiverVatConditionId,
+} from '@/shared/lib/arca/catalogs';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Star, Trash2 } from 'lucide-react';
@@ -187,7 +191,10 @@ export function SupplierForm({ supplierId, defaultValues, categories, readOnly =
               {contacts.fields.map((contact, index) => {
                 const isPrimary = watchedContacts?.[index]?.isPrimary === true;
                 return (
-                  <div key={contact.key} className="grid items-start gap-3 rounded-md border p-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,9rem)_minmax(0,9rem)_auto]">
+                  <div
+                    key={contact.key}
+                    className="grid items-start gap-3 rounded-md border p-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,9rem)_minmax(0,9rem)_auto]"
+                  >
                     {(['name', 'email', 'phone', 'role'] as const).map((key) => (
                       <FormField
                         key={key}
@@ -259,7 +266,9 @@ export function SupplierForm({ supplierId, defaultValues, categories, readOnly =
                     <FormControl>
                       <MultiSelectCombobox
                         options={categories.map((c) => ({ value: c.id, label: c.name }))}
-                        placeholder={categories.length ? 'Elegí los rubros' : 'No hay rubros: se crean en Configuración'}
+                        placeholder={
+                          categories.length ? 'Elegí los rubros' : 'No hay rubros: se crean en Configuración'
+                        }
                         emptyMessage="Sin resultados"
                         selectedValues={field.value}
                         onChange={field.onChange}

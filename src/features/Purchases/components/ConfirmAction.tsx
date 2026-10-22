@@ -14,8 +14,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import type { ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -80,14 +80,24 @@ export function ConfirmAction({ icon: Icon, variant = 'outline', motive, run, ch
         {motive && (
           <div className="space-y-2">
             <Label htmlFor={motiveId}>{motive.label}</Label>
-            <Textarea id={motiveId} rows={3} value={notes} placeholder={motive.placeholder} onChange={(e) => setNotes(e.target.value)} />
+            <Textarea
+              id={motiveId}
+              rows={3}
+              value={notes}
+              placeholder={motive.placeholder}
+              onChange={(e) => setNotes(e.target.value)}
+            />
           </div>
         )}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={mutation.isPending}>Volver</AlertDialogCancel>
           <AlertDialogAction
             disabled={mutation.isPending || missingMotive}
-            className={variant === 'destructive' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : undefined}
+            className={
+              variant === 'destructive'
+                ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                : undefined
+            }
             onClick={(e) => {
               // La accion se confirma al terminar: si falla, el dialogo queda abierto con el motivo.
               e.preventDefault();
@@ -101,4 +111,3 @@ export function ConfirmAction({ icon: Icon, variant = 'outline', motive, run, ch
     </AlertDialog>
   );
 }
-

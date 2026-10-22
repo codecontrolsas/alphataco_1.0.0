@@ -11,7 +11,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { RotateCcw, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -62,7 +62,13 @@ export function SupplierStatusActions({ supplierId, name, isActive, canDelete, c
 
   if (!isActive) {
     return canUpdate ? (
-      <Button type="button" size="sm" variant="outline" onClick={() => reactivate.mutate()} disabled={reactivate.isPending}>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        onClick={() => reactivate.mutate()}
+        disabled={reactivate.isPending}
+      >
         <RotateCcw className="mr-1 h-4 w-4" />
         Reactivar
       </Button>
@@ -72,7 +78,13 @@ export function SupplierStatusActions({ supplierId, name, isActive, canDelete, c
 
   return (
     <AlertDialog open={confirming} onOpenChange={setConfirming}>
-      <Button type="button" size="sm" variant="outline" className="text-destructive" onClick={() => setConfirming(true)}>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="text-destructive"
+        onClick={() => setConfirming(true)}
+      >
         <Trash2 className="mr-1 h-4 w-4" />
         Dar de baja
       </Button>

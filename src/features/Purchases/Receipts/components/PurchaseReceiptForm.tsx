@@ -9,10 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { formatQuantity } from '@/features/Warehouses/lib/format';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { parseSerialNumbers } from '@/features/Warehouses/schemas/stock-movement';
 import { Logger } from '@/lib/logger';
 import { argentinaDate } from '@/shared/lib/argentina-time';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { TriangleAlert } from 'lucide-react';
@@ -22,11 +22,19 @@ import { useRouter } from 'next/navigation';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { createPurchaseReceipt, uploadPurchaseReceiptAttachment, type ReceiptFormData } from '../../actions/receipts.server';
+import {
+  createPurchaseReceipt,
+  uploadPurchaseReceiptAttachment,
+  type ReceiptFormData,
+} from '../../actions/receipts.server';
 import { invalidatePurchases } from '../../lib/invalidate';
 import { trimDecimals } from '../../lib/quantity-format';
 import { splitReceived } from '../../lib/receipt-math';
-import { RECEIPT_ATTACHMENT_MAX_BYTES, RECEIPT_ATTACHMENT_TYPES, purchaseReceiptFormSchema } from '../../schemas/receipts';
+import {
+  RECEIPT_ATTACHMENT_MAX_BYTES,
+  RECEIPT_ATTACHMENT_TYPES,
+  purchaseReceiptFormSchema,
+} from '../../schemas/receipts';
 import { invalidateWarehouseAfterReceipt } from '../lib/invalidate-warehouse';
 
 const logger = new Logger('Purchases/PurchaseReceiptForm');
@@ -37,7 +45,10 @@ const formSchema = purchaseReceiptFormSchema.and(
     attachment: z
       .custom<File | null>((value) => value === null || value instanceof File)
       .refine((file) => !file || file.size <= RECEIPT_ATTACHMENT_MAX_BYTES, 'El archivo supera los 10 MB')
-      .refine((file) => !file || (RECEIPT_ATTACHMENT_TYPES as readonly string[]).includes(file.type), 'Tiene que ser PDF o imagen'),
+      .refine(
+        (file) => !file || (RECEIPT_ATTACHMENT_TYPES as readonly string[]).includes(file.type),
+        'Tiene que ser PDF o imagen'
+      ),
   })
 );
 
@@ -91,9 +102,14 @@ export function PurchaseReceiptForm({ data }: { data: ReceiptFormData }) {
       const lines = form.getValues('lines').filter((line) => Number(line.quantity.replace(',', '.')) > 0).length;
       const stock = created.movementNumber ? `, entrada ${created.movementNumber} en ${created.warehouseName}` : '';
       toast.success(`${created.number}: ${lines} ${lines === 1 ? 'línea' : 'líneas'}${stock}`, {
-        description: created.complementNumber ? `OC complementaria ${created.complementNumber} en borrador por el excedente.` : undefined,
+        description: created.complementNumber
+          ? `OC complementaria ${created.complementNumber} en borrador por el excedente.`
+          : undefined,
       });
-      if (created.attachError) toast.warning('La recepción quedó registrada, pero no se pudo subir el remito', { description: created.attachError });
+      if (created.attachError)
+        toast.warning('La recepción quedó registrada, pero no se pudo subir el remito', {
+          description: created.attachError,
+        });
       invalidatePurchases(queryClient);
       invalidateWarehouseAfterReceipt(queryClient);
       router.push(`/dashboard/purchases/receipts/${created.id}`);
@@ -183,7 +199,11 @@ export function PurchaseReceiptForm({ data }: { data: ReceiptFormData }) {
                 <FormItem>
                   <FormLabel>Remito escaneado (opcional)</FormLabel>
                   <FormControl>
-                    <Input type="file" accept="application/pdf,image/*" onChange={(e) => field.onChange(e.target.files?.[0] ?? null)} />
+                    <Input
+                      type="file"
+                      accept="application/pdf,image/*"
+                      onChange={(e) => field.onChange(e.target.files?.[0] ?? null)}
+                    />
                   </FormControl>
                   <FormDescription>PDF o imagen, hasta 10 MB.</FormDescription>
                   <FormMessage />
@@ -218,7 +238,9 @@ export function PurchaseReceiptForm({ data }: { data: ReceiptFormData }) {
             {data.lines.map((line, index) => (
               <ReceiptLineFields key={line.orderLineId} form={form} index={index} line={line} />
             ))}
-            {form.formState.errors.lines?.message && <p className="text-sm text-destructive">{form.formState.errors.lines.message}</p>}
+            {form.formState.errors.lines?.message && (
+              <p className="text-sm text-destructive">{form.formState.errors.lines.message}</p>
+            )}
             {form.formState.errors.lines?.root?.message && (
               <p className="text-sm text-destructive">{form.formState.errors.lines.root.message}</p>
             )}
@@ -334,7 +356,8 @@ function ReceiptLineFields({ form, index, line }: { form: UseFormReturn<FormValu
         <Alert className="border-warn/35 bg-warn-subtle text-warn-subtle-foreground">
           <TriangleAlert className="h-4 w-4" aria-hidden="true" />
           <AlertDescription>
-            Se reciben {formatQuantity(excess)} {line.unitAbbr} de más: se va a crear una OC complementaria en borrador por el excedente.
+            Se reciben {formatQuantity(excess)} {line.unitAbbr} de más: se va a crear una OC complementaria en borrador
+            por el excedente.
           </AlertDescription>
         </Alert>
       )}

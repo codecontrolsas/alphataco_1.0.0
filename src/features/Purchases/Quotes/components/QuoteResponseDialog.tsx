@@ -2,20 +2,27 @@
 
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { formatQuantity } from '@/features/Warehouses/lib/format';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
-import { DEFAULT_VAT_RATE_ID, VAT_RATE_LABELS, VAT_RATES } from '@/shared/lib/arca/catalogs';
+import { DEFAULT_VAT_RATE_ID, VAT_RATES, VAT_RATE_LABELS } from '@/shared/lib/arca/catalogs';
+import { argentinaDate } from '@/shared/lib/argentina-time';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ClipboardCheck } from 'lucide-react';
-import { argentinaDate } from '@/shared/lib/argentina-time';
 import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -23,9 +30,9 @@ import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { recordPurchaseQuoteResponse, uploadPurchaseQuoteAttachment } from '../../actions/quotes.server';
-import type { PurchaseQuoteDetail } from '../../lib/quote-query-types';
 import { invalidatePurchases } from '../../lib/invalidate';
 import { trimDecimals } from '../../lib/quantity-format';
+import type { PurchaseQuoteDetail } from '../../lib/quote-query-types';
 import { QUOTE_ATTACHMENT_MAX_BYTES, QUOTE_ATTACHMENT_TYPES, quoteResponseSchema } from '../../schemas/quotes';
 
 const logger = new Logger('Purchases/QuoteResponseDialog');
@@ -38,7 +45,10 @@ const dialogSchema = quoteResponseSchema.and(
     attachment: z
       .custom<File | null>((value) => value === null || value instanceof File)
       .refine((file) => !file || file.size <= QUOTE_ATTACHMENT_MAX_BYTES, 'El archivo supera los 10 MB')
-      .refine((file) => !file || (QUOTE_ATTACHMENT_TYPES as readonly string[]).includes(file.type), 'Tiene que ser PDF o imagen'),
+      .refine(
+        (file) => !file || (QUOTE_ATTACHMENT_TYPES as readonly string[]).includes(file.type),
+        'Tiene que ser PDF o imagen'
+      ),
   })
 );
 
@@ -131,7 +141,9 @@ export function QuoteResponseDialog({ quote }: { quote: PurchaseQuoteDetail }) {
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Respuesta de {quote.supplier.name}</DialogTitle>
-          <DialogDescription>Precio unitario neto y alícuota de IVA de cada ítem, o marcá los que no cotiza.</DialogDescription>
+          <DialogDescription>
+            Precio unitario neto y alícuota de IVA de cada ítem, o marcá los que no cotiza.
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit((values) => mutation.mutate(values))} className="space-y-4">
@@ -139,7 +151,10 @@ export function QuoteResponseDialog({ quote }: { quote: PurchaseQuoteDetail }) {
               {quote.lines.map((line, index) => {
                 const notQuoted = lines?.[index]?.notQuoted ?? false;
                 return (
-                  <div key={line.id} className="grid gap-2 rounded-md border p-3 sm:grid-cols-[minmax(0,1fr)_9rem_7rem_auto] sm:items-end">
+                  <div
+                    key={line.id}
+                    className="grid gap-2 rounded-md border p-3 sm:grid-cols-[minmax(0,1fr)_9rem_7rem_auto] sm:items-end"
+                  >
                     <div className="text-sm">
                       <div>{line.itemLabel}</div>
                       <div className="text-xs text-muted-foreground tabular-nums">
@@ -153,7 +168,13 @@ export function QuoteResponseDialog({ quote }: { quote: PurchaseQuoteDetail }) {
                         <FormItem>
                           <FormLabel className="text-xs">Unitario neto</FormLabel>
                           <FormControl>
-                            <Input inputMode="decimal" className="tabular-nums" placeholder="0,00" disabled={notQuoted} {...field} />
+                            <Input
+                              inputMode="decimal"
+                              className="tabular-nums"
+                              placeholder="0,00"
+                              disabled={notQuoted}
+                              {...field}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -165,7 +186,11 @@ export function QuoteResponseDialog({ quote }: { quote: PurchaseQuoteDetail }) {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-xs">IVA</FormLabel>
-                          <Select value={String(field.value ?? DEFAULT_VAT_RATE_ID)} onValueChange={(v) => field.onChange(Number(v))} disabled={notQuoted}>
+                          <Select
+                            value={String(field.value ?? DEFAULT_VAT_RATE_ID)}
+                            onValueChange={(v) => field.onChange(Number(v))}
+                            disabled={notQuoted}
+                          >
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue />
@@ -189,7 +214,10 @@ export function QuoteResponseDialog({ quote }: { quote: PurchaseQuoteDetail }) {
                       render={({ field }) => (
                         <FormItem className="flex items-center gap-2 space-y-0 pb-2">
                           <FormControl>
-                            <Checkbox checked={field.value} onCheckedChange={(checked) => field.onChange(checked === true)} />
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={(checked) => field.onChange(checked === true)}
+                            />
                           </FormControl>
                           <FormLabel className="text-sm font-normal">No cotiza</FormLabel>
                         </FormItem>
@@ -201,7 +229,9 @@ export function QuoteResponseDialog({ quote }: { quote: PurchaseQuoteDetail }) {
               {form.formState.errors.lines?.root?.message && (
                 <p className="text-sm text-destructive">{form.formState.errors.lines.root.message}</p>
               )}
-              {form.formState.errors.lines?.message && <p className="text-sm text-destructive">{form.formState.errors.lines.message}</p>}
+              {form.formState.errors.lines?.message && (
+                <p className="text-sm text-destructive">{form.formState.errors.lines.message}</p>
+              )}
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
               {dateField('receivedAt', 'Fecha de la respuesta')}
@@ -240,10 +270,16 @@ export function QuoteResponseDialog({ quote }: { quote: PurchaseQuoteDetail }) {
                 <FormItem>
                   <FormLabel>Presupuesto del proveedor (opcional)</FormLabel>
                   <FormControl>
-                    <Input type="file" accept="application/pdf,image/*" onChange={(e) => field.onChange(e.target.files?.[0] ?? null)} />
+                    <Input
+                      type="file"
+                      accept="application/pdf,image/*"
+                      onChange={(e) => field.onChange(e.target.files?.[0] ?? null)}
+                    />
                   </FormControl>
                   <FormDescription>
-                    {quote.attachment ? `Ya tiene uno (${quote.attachment.name}); si subís otro, lo reemplaza.` : 'PDF o imagen, hasta 10 MB.'}
+                    {quote.attachment
+                      ? `Ya tiene uno (${quote.attachment.name}); si subís otro, lo reemplaza.`
+                      : 'PDF o imagen, hasta 10 MB.'}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

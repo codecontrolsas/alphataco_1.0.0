@@ -12,8 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { SearchCombobox } from '@/features/Warehouses/components/SearchCombobox';
 import { formatMoney } from '@/features/Warehouses/lib/format';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Banknote, Loader2, Pencil, TriangleAlert, Undo2 } from 'lucide-react';
@@ -22,15 +22,11 @@ import { useRouter } from 'next/navigation';
 import { useDeferredValue, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
-import {
-  createPaymentOrder,
-  previewPaymentOrder,
-  updatePaymentOrder,
-} from '../../actions/payment-orders.server';
+import { createPaymentOrder, previewPaymentOrder, updatePaymentOrder } from '../../actions/payment-orders.server';
 import { getPaymentOrderFormData } from '../../actions/payment-queries.server';
-import type { PaymentOrderFormData } from '../../lib/payment-query-types';
 import { searchSupplierOptions } from '../../actions/suppliers.server';
 import { invalidatePurchases } from '../../lib/invalidate';
+import type { PaymentOrderFormData } from '../../lib/payment-query-types';
 import { paymentOrderFormSchema, type PaymentOrderFormValues } from '../../schemas/payment-orders';
 import { WITHHOLDING_TAX_LABELS, type WithholdingTax } from '../../schemas/payment-settings';
 
@@ -64,7 +60,10 @@ export function PaymentOrderForm({
   const [editingTax, setEditingTax] = useState<WithholdingTax | null>(null);
   const [manualDraft, setManualDraft] = useState({ amount: '', reason: '' });
 
-  const form = useForm<PaymentOrderFormValues>({ resolver: zodResolver(paymentOrderFormSchema), defaultValues: initialValues });
+  const form = useForm<PaymentOrderFormValues>({
+    resolver: zodResolver(paymentOrderFormSchema),
+    defaultValues: initialValues,
+  });
   const values = useWatch({ control: form.control }) as PaymentOrderFormValues;
   const supplierId = values.supplierId;
   const lines = values.lines ?? [];
@@ -83,14 +82,18 @@ export function PaymentOrderForm({
   const hasSomething = Boolean(supplierId) && (lines.length > 0 || Boolean(values.advance?.amount));
   const preview = useQuery({
     queryKey: ['payment-order-preview', deferred, excludeOrderId ?? null],
-    queryFn: async () => unwrapAction(await previewPaymentOrder(JSON.parse(deferred) as PaymentOrderFormValues, { orderId: excludeOrderId })),
+    queryFn: async () =>
+      unwrapAction(
+        await previewPaymentOrder(JSON.parse(deferred) as PaymentOrderFormValues, { orderId: excludeOrderId })
+      ),
     enabled: hasSomething && paymentOrderFormSchema.safeParse(JSON.parse(deferred)).success,
     retry: false,
     staleTime: 10 * 1000,
   });
 
   /** La clave de una línea: el anticipo de origen, el cheque rechazado o el comprobante. */
-  const keyOf = (l: Line) => (l.kind === 'ADVANCE_APPLIED' ? l.sourceLineId : l.kind === 'REJECTED_CHECK' ? (l.checkId ?? '') : l.invoiceId);
+  const keyOf = (l: Line) =>
+    l.kind === 'ADVANCE_APPLIED' ? l.sourceLineId : l.kind === 'REJECTED_CHECK' ? l.checkId ?? '' : l.invoiceId;
   const lineOf = (key: string, kind: Line['kind']) => lines.findIndex((l) => l.kind === kind && keyOf(l) === key);
 
   const toggle = (key: string, kind: Line['kind'], amount: string, checked: boolean) => {
@@ -205,7 +208,9 @@ export function PaymentOrderForm({
                       placeholder="DD/MM/AAAA"
                     />
                   </FormControl>
-                  <p className="text-xs text-muted-foreground">Las retenciones se calculan para este mes. El pago se registra en el mismo mes.</p>
+                  <p className="text-xs text-muted-foreground">
+                    Las retenciones se calculan para este mes. El pago se registra en el mismo mes.
+                  </p>
                   <FormMessage />
                 </FormItem>
               )}
@@ -240,7 +245,13 @@ export function PaymentOrderForm({
                 <ItemGroup
                   title="Cheques de terceros endosados y rechazados (sin retenciones)"
                   empty=""
-                  items={checkDebts.map((d) => ({ key: d.checkId, title: d.label, subtitle: `Rechazado el ${dmy(d.rejectedOn)}`, max: d.pending, maxLabel: 'se debe' }))}
+                  items={checkDebts.map((d) => ({
+                    key: d.checkId,
+                    title: d.label,
+                    subtitle: `Rechazado el ${dmy(d.rejectedOn)}`,
+                    max: d.pending,
+                    maxLabel: 'se debe',
+                  }))}
                   kind="REJECTED_CHECK"
                   lines={lines}
                   lineOf={lineOf}
@@ -252,7 +263,13 @@ export function PaymentOrderForm({
                 <ItemGroup
                   title="Notas de crédito para aplicar (restan)"
                   empty=""
-                  items={credits.map((i) => ({ key: i.id, title: i.label, subtitle: `Emitida ${dmy(i.issueDate)}`, max: i.pending, maxLabel: 'disponible' }))}
+                  items={credits.map((i) => ({
+                    key: i.id,
+                    title: i.label,
+                    subtitle: `Emitida ${dmy(i.issueDate)}`,
+                    max: i.pending,
+                    maxLabel: 'disponible',
+                  }))}
                   kind="CREDIT_NOTE"
                   lines={lines}
                   lineOf={lineOf}
@@ -280,7 +297,9 @@ export function PaymentOrderForm({
               )}
               <div className="space-y-2 rounded-md border p-3">
                 <Label className="text-sm font-medium">Anticipo (opcional)</Label>
-                <p className="text-xs text-muted-foreground">Un pago a cuenta sin factura. Queda disponible para aplicar a una factura más adelante.</p>
+                <p className="text-xs text-muted-foreground">
+                  Un pago a cuenta sin factura. Queda disponible para aplicar a una factura más adelante.
+                </p>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <FormField
                     control={form.control}
@@ -301,7 +320,10 @@ export function PaymentOrderForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Contra la OC (opcional)</FormLabel>
-                        <Select value={field.value || 'none'} onValueChange={(v) => field.onChange(v === 'none' ? '' : v)}>
+                        <Select
+                          value={field.value || 'none'}
+                          onValueChange={(v) => field.onChange(v === 'none' ? '' : v)}
+                        >
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue />
@@ -335,7 +357,9 @@ export function PaymentOrderForm({
                   />
                 </div>
               </div>
-              {form.formState.errors.lines?.message && <p className="text-sm text-destructive">{form.formState.errors.lines.message}</p>}
+              {form.formState.errors.lines?.message && (
+                <p className="text-sm text-destructive">{form.formState.errors.lines.message}</p>
+              )}
             </CardContent>
           </Card>
         )}
@@ -344,13 +368,17 @@ export function PaymentOrderForm({
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Retenciones y neto a pagar</CardTitle>
-              <CardDescription>Se calculan solas con la situación impositiva del proveedor. Podés corregir una indicando el motivo.</CardDescription>
+              <CardDescription>
+                Se calculan solas con la situación impositiva del proveedor. Podés corregir una indicando el motivo.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {preview.isError && (
                 <Alert variant="destructive">
                   <TriangleAlert className="h-4 w-4" />
-                  <AlertDescription>{preview.error instanceof Error ? preview.error.message : 'No se pudo calcular la orden'}</AlertDescription>
+                  <AlertDescription>
+                    {preview.error instanceof Error ? preview.error.message : 'No se pudo calcular la orden'}
+                  </AlertDescription>
                 </Alert>
               )}
               {preview.isFetching && !preview.data && (
@@ -359,15 +387,26 @@ export function PaymentOrderForm({
                   Calculando…
                 </p>
               )}
-              {preview.data && preview.data.withholdings.length === 0 && <p className="text-sm text-muted-foreground">No corresponde retener.</p>}
+              {preview.data && preview.data.withholdings.length === 0 && (
+                <p className="text-sm text-muted-foreground">No corresponde retener.</p>
+              )}
               {preview.data?.withholdings.map((w) => (
                 <div key={w.tax} className="rounded-md border p-3 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{WITHHOLDING_TAX_LABELS[w.tax as WithholdingTax]}</span>
-                    {w.manual && <span className="rounded bg-amber-100 px-1.5 text-xs text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">corregida</span>}
+                    {w.manual && (
+                      <span className="rounded bg-amber-100 px-1.5 text-xs text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                        corregida
+                      </span>
+                    )}
                     <span className="ml-auto tabular-nums font-medium">{formatMoney(w.amount)}</span>
                     {w.manual ? (
-                      <Button type="button" variant="ghost" size="sm" onClick={() => removeManual(w.tax as WithholdingTax)}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeManual(w.tax as WithholdingTax)}
+                      >
                         <Undo2 className="mr-1 h-4 w-4" />
                         Volver al cálculo
                       </Button>
@@ -389,9 +428,24 @@ export function PaymentOrderForm({
                   <p className="mt-1 text-xs text-muted-foreground">{w.detail}</p>
                   {editingTax === w.tax && (
                     <div className="mt-2 grid gap-2 sm:grid-cols-[8rem_1fr_auto]">
-                      <Input aria-label="Importe corregido" inputMode="decimal" value={manualDraft.amount} onChange={(e) => setManualDraft((d) => ({ ...d, amount: e.target.value }))} />
-                      <Input aria-label="Motivo" placeholder="Motivo (obligatorio)" value={manualDraft.reason} onChange={(e) => setManualDraft((d) => ({ ...d, reason: e.target.value }))} />
-                      <Button type="button" size="sm" disabled={!manualDraft.reason.trim()} onClick={() => saveManual(w.tax as WithholdingTax)}>
+                      <Input
+                        aria-label="Importe corregido"
+                        inputMode="decimal"
+                        value={manualDraft.amount}
+                        onChange={(e) => setManualDraft((d) => ({ ...d, amount: e.target.value }))}
+                      />
+                      <Input
+                        aria-label="Motivo"
+                        placeholder="Motivo (obligatorio)"
+                        value={manualDraft.reason}
+                        onChange={(e) => setManualDraft((d) => ({ ...d, reason: e.target.value }))}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={!manualDraft.reason.trim()}
+                        onClick={() => saveManual(w.tax as WithholdingTax)}
+                      >
                         Aplicar
                       </Button>
                     </div>
@@ -488,7 +542,11 @@ function ItemGroup({
             const id = `pay-${kind}-${item.key}`;
             return (
               <li key={item.key} className="flex flex-wrap items-center gap-3 px-3 py-2">
-                <Checkbox id={id} checked={selected} onCheckedChange={(c) => onToggle(item.key, kind, item.max, c === true)} />
+                <Checkbox
+                  id={id}
+                  checked={selected}
+                  onCheckedChange={(c) => onToggle(item.key, kind, item.max, c === true)}
+                />
                 <label htmlFor={id} className="min-w-0 flex-1 cursor-pointer text-sm">
                   <span className="block">{item.title}</span>
                   <span className="block text-xs text-muted-foreground tabular-nums">
@@ -500,7 +558,7 @@ function ItemGroup({
                   inputMode="decimal"
                   className="w-36 text-right tabular-nums"
                   disabled={!selected}
-                  value={selected ? (lines[index]?.amount ?? '') : ''}
+                  value={selected ? lines[index]?.amount ?? '' : ''}
                   placeholder={formatMoney(item.max)}
                   onChange={(e) => onAmount(item.key, kind, e.target.value)}
                 />

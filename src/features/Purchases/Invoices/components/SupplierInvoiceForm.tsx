@@ -4,9 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form } from '@/components/ui/form';
 import { Separator } from '@/components/ui/separator';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
 import { DEFAULT_VAT_RATE_ID } from '@/shared/lib/arca/catalogs';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ReceiptText } from 'lucide-react';
@@ -14,26 +14,33 @@ import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
+import { getSupplierInvoiceFormData } from '../../actions/invoice-queries.server';
 import {
   createSupplierInvoice,
   updateSupplierInvoice,
   uploadSupplierInvoiceAttachment,
 } from '../../actions/invoices.server';
-import { getSupplierInvoiceFormData } from '../../actions/invoice-queries.server';
-import type { SupplierInvoiceFormData } from '../../lib/invoice-query-types';
+import { invalidatePurchases } from '../../lib/invalidate';
 import { convertOrderLineForLetter, expectedOrderPrice } from '../../lib/invoice-form';
 import { expectedSupplierLetter } from '../../lib/invoice-letter';
+import type { SupplierInvoiceFormData } from '../../lib/invoice-query-types';
 import { SUPPLIER_INVOICE_OBSERVATION_LABELS } from '../../lib/invoice-status';
 import { computeInvoiceLine, computeSupplierInvoiceTotals, vatBreakdown } from '../../lib/invoice-totals';
-import { invalidatePurchases } from '../../lib/invalidate';
 import { trimDecimals } from '../../lib/quantity-format';
 import { type SupplierInvoiceFormValues } from '../../schemas/invoices';
-import { type FormValues, type OrderLineOption, emptyValues, formSchema, kindOf, letterOf } from './supplier-invoice-form-model';
 import { OrderLinesPicker } from './OrderLinesPicker';
 import { SupplierInvoiceFormHeader } from './SupplierInvoiceFormHeader';
 import { SupplierInvoiceFormLines } from './SupplierInvoiceFormLines';
 import { SupplierInvoiceTotals } from './SupplierInvoiceTotals';
 import { SupplierInvoiceVatTaxes } from './SupplierInvoiceVatTaxes';
+import {
+  emptyValues,
+  formSchema,
+  kindOf,
+  letterOf,
+  type FormValues,
+  type OrderLineOption,
+} from './supplier-invoice-form-model';
 
 export type SupplierInvoiceFormMode = { kind: 'create' } | { kind: 'edit'; invoiceId: string; label: string };
 
@@ -97,7 +104,8 @@ export function SupplierInvoiceForm({
   const orderLines = useMemo(() => {
     const map = new Map<string, OrderLineOption>();
     for (const order of data?.orders ?? []) {
-      for (const line of order.lines) map.set(line.orderLineId, { ...line, orderId: order.id, orderNumber: order.number });
+      for (const line of order.lines)
+        map.set(line.orderLineId, { ...line, orderId: order.id, orderNumber: order.number });
     }
     return map;
   }, [data]);
@@ -106,18 +114,35 @@ export function SupplierInvoiceForm({
   const amounts = (watchedLines ?? []).map((line) =>
     letter
       ? line.kind === 'order'
-        ? computeInvoiceLine({ letter, quantity: line.quantity, unitPrice: line.unitPrice, vatRateId: line.vatRateId ? Number(line.vatRateId) : null })
+        ? computeInvoiceLine({
+            letter,
+            quantity: line.quantity,
+            unitPrice: line.unitPrice,
+            vatRateId: line.vatRateId ? Number(line.vatRateId) : null,
+          })
         : computeInvoiceLine({ letter, net: line.net, vatRateId: line.vatRateId ? Number(line.vatRateId) : null })
       : null
   );
   const computedVat = letter
     ? vatBreakdown(
-        amounts.flatMap((a, i) => (a ? [{ netTotal: a.netTotal, vatRateId: watchedLines[i]?.vatRateId ? Number(watchedLines[i]!.vatRateId) : null }] : [])),
+        amounts.flatMap((a, i) =>
+          a
+            ? [
+                {
+                  netTotal: a.netTotal,
+                  vatRateId: watchedLines[i]?.vatRateId ? Number(watchedLines[i]!.vatRateId) : null,
+                },
+              ]
+            : []
+        ),
         letter
       )
     : [];
   // `vat` del form guarda solo lo que el usuario corrigio; el resto es el calculado.
-  const vatShown = computedVat.map((v) => ({ ...v, amount: watchedVat?.find((o) => o.vatRateId === v.vatRateId)?.amount ?? v.amount }));
+  const vatShown = computedVat.map((v) => ({
+    ...v,
+    amount: watchedVat?.find((o) => o.vatRateId === v.vatRateId)?.amount ?? v.amount,
+  }));
   const totals = computeSupplierInvoiceTotals({
     lines: amounts.flatMap((a) => (a ? [a] : [])),
     vat: vatShown,
@@ -205,7 +230,9 @@ export function SupplierInvoiceForm({
       const rates = new Set(computedVat.map((v) => v.vatRateId));
       const payload = { ...values, vat: letter === 'C' ? [] : values.vat.filter((v) => rates.has(v.vatRateId)) };
       const saved = unwrapAction(
-        mode.kind === 'edit' ? await updateSupplierInvoice(mode.invoiceId, payload) : await createSupplierInvoice(payload)
+        mode.kind === 'edit'
+          ? await updateSupplierInvoice(mode.invoiceId, payload)
+          : await createSupplierInvoice(payload)
       );
       let attachError: string | null = null;
       if (attachment) {
@@ -219,7 +246,9 @@ export function SupplierInvoiceForm({
     onSuccess: (saved) => {
       const verb = mode.kind === 'edit' ? 'guardada' : 'cargada';
       if (saved.status === 'OBSERVED') {
-        const kinds = [...new Set(saved.observations.map((o) => SUPPLIER_INVOICE_OBSERVATION_LABELS[o.code]))].join(', ');
+        const kinds = [...new Set(saved.observations.map((o) => SUPPLIER_INVOICE_OBSERVATION_LABELS[o.code]))].join(
+          ', '
+        );
         const n = saved.observations.length;
         toast.warning(`${saved.label} ${verb}: observada, ${n} ${n === 1 ? 'diferencia' : 'diferencias'} (${kinds})`, {
           description: 'Quien tenga permiso de aprobar la revisa en el detalle.',
@@ -227,7 +256,10 @@ export function SupplierInvoiceForm({
       } else {
         toast.success(`${saved.label} ${verb}: conforme`);
       }
-      if (saved.attachError) toast.warning('El comprobante quedó guardado, pero no se pudo subir el archivo', { description: saved.attachError });
+      if (saved.attachError)
+        toast.warning('El comprobante quedó guardado, pero no se pudo subir el archivo', {
+          description: saved.attachError,
+        });
       invalidatePurchases(queryClient);
       router.push(`/dashboard/purchases/invoices/${saved.id}`);
       router.refresh();
@@ -239,7 +271,6 @@ export function SupplierInvoiceForm({
   });
 
   const linesError = form.formState.errors.lines;
-
 
   return (
     <Form {...form}>
