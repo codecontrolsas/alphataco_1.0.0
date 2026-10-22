@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { formatQuantity } from '@/features/Warehouses/lib/format';
 import { parseSerialNumbers } from '@/features/Warehouses/schemas/stock-movement';
 import { Logger } from '@/lib/logger';
+import { InputFormField, TextareaFormField } from '@/shared/components/common/form-fields';
 import { argentinaDate } from '@/shared/lib/argentina-time';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -176,18 +177,11 @@ export function PurchaseReceiptForm({ data }: { data: ReceiptFormData }) {
                 </FormItem>
               )}
             />
-            <FormField
+            <InputFormField
               control={form.control}
               name="deliveryNote"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Número de remito (opcional)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="0001-00001234" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Número de remito (opcional)"
+              placeholder="0001-00001234"
             />
             <FormField
               control={form.control}
@@ -207,18 +201,13 @@ export function PurchaseReceiptForm({ data }: { data: ReceiptFormData }) {
                 </FormItem>
               )}
             />
-            <FormField
+            <TextareaFormField
               control={form.control}
               name="notes"
-              render={({ field }) => (
-                <FormItem className="md:col-span-2">
-                  <FormLabel>Observaciones (opcional)</FormLabel>
-                  <FormControl>
-                    <Textarea rows={2} placeholder="Estado de la mercadería, quién recibió…" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Observaciones (opcional)"
+              itemClassName="md:col-span-2"
+              rows={2}
+              placeholder="Estado de la mercadería, quién recibió…"
             />
           </CardContent>
         </Card>

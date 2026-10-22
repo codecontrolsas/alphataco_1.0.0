@@ -11,10 +11,10 @@ import {
 } from '@/components/ui/dialog';
 import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AMOUNT_SCALE, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { Logger } from '@/lib/logger';
+import { InputFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -168,33 +168,15 @@ export function TransferFormDialog({ open, onOpenChange, accounts, defaultFromAc
                     </FormItem>
                   )}
                 />
-                <FormField
+                <InputFormField
                   control={form.control}
                   name="amount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Importe</FormLabel>
-                      <FormControl>
-                        <Input inputMode="decimal" placeholder="0,00" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  label="Importe"
+                  inputMode="decimal"
+                  placeholder="0,00"
                 />
               </div>
-              <FormField
-                control={form.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Notas (opcional)</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <InputFormField control={form.control} name="notes" label="Notas (opcional)" />
               <div className="space-y-2">
                 {from && <BalancePreview accountName={from.name} date={date} preview={fromPreview} />}
                 {to && <BalancePreview accountName={to.name} date={date} preview={toPreview} />}

@@ -7,13 +7,14 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { formatMoney } from '@/features/Warehouses/lib/format';
+import { InputFormField } from '@/shared/components/common/form-fields';
 import { VAT_RATE_LABELS } from '@/shared/lib/arca/catalogs';
 import { Plus, Trash2 } from 'lucide-react';
+import type { UseFieldArrayReturn } from 'react-hook-form';
 import { useWatch, type UseFormReturn } from 'react-hook-form';
 import type { SupplierInvoiceFormData } from '../../lib/invoice-query-types';
 import { SUPPLIER_INVOICE_TAX_KINDS, SUPPLIER_INVOICE_TAX_LABELS } from '../../schemas/invoices';
 import { type FormValues } from './supplier-invoice-form-model';
-import type { UseFieldArrayReturn } from 'react-hook-form';
 
 export function SupplierInvoiceVatTaxes({
   form,
@@ -33,9 +34,16 @@ export function SupplierInvoiceVatTaxes({
       {vatShown.length > 0 && (
         <div className="space-y-2">
           {vatShown.map((v) => (
-            <div key={v.vatRateId} className="grid grid-cols-[1fr_auto] items-center gap-2 sm:grid-cols-[8rem_1fr_10rem]">
-              <span className="text-sm font-medium">IVA {VAT_RATE_LABELS[v.vatRateId as keyof typeof VAT_RATE_LABELS]}</span>
-              <span className="hidden text-sm text-muted-foreground tabular-nums sm:block">sobre {formatMoney(v.base)}</span>
+            <div
+              key={v.vatRateId}
+              className="grid grid-cols-[1fr_auto] items-center gap-2 sm:grid-cols-[8rem_1fr_10rem]"
+            >
+              <span className="text-sm font-medium">
+                IVA {VAT_RATE_LABELS[v.vatRateId as keyof typeof VAT_RATE_LABELS]}
+              </span>
+              <span className="hidden text-sm text-muted-foreground tabular-nums sm:block">
+                sobre {formatMoney(v.base)}
+              </span>
               <Input
                 aria-label={`IVA ${VAT_RATE_LABELS[v.vatRateId as keyof typeof VAT_RATE_LABELS]}`}
                 inputMode="decimal"
@@ -48,32 +56,14 @@ export function SupplierInvoiceVatTaxes({
         </div>
       )}
       <div className="grid gap-4 sm:grid-cols-2">
-        <FormField
+        <InputFormField
           control={form.control}
           name="untaxed"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>No gravado</FormLabel>
-              <FormControl>
-                <Input inputMode="decimal" placeholder="0,00" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+          label="No gravado"
+          inputMode="decimal"
+          placeholder="0,00"
         />
-        <FormField
-          control={form.control}
-          name="exempt"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Exento</FormLabel>
-              <FormControl>
-                <Input inputMode="decimal" placeholder="0,00" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <InputFormField control={form.control} name="exempt" label="Exento" inputMode="decimal" placeholder="0,00" />
       </div>
 
       <Separator />
@@ -193,7 +183,14 @@ function TaxFields({
           </FormItem>
         )}
       />
-      <Button type="button" variant="ghost" size="icon" className="h-9 w-9 justify-self-end" aria-label="Quitar el tributo" onClick={onRemove}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-9 w-9 justify-self-end"
+        aria-label="Quitar el tributo"
+        onClick={onRemove}
+      >
         <Trash2 className="h-4 w-4" />
       </Button>
     </div>

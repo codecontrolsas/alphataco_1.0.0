@@ -2,8 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
+import { InputFormField } from '@/shared/components/common/form-fields';
 import { NameFormDialog } from '@/shared/components/common/name-catalog/NameFormDialog';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -137,19 +136,7 @@ export function UnitsSection({ units, canCreate, canUpdate, canDelete }: UnitsSe
         onSubmit={(values) => save.mutate(values)}
         pending={save.isPending}
       >
-        <FormField
-          control={form.control}
-          name="abbreviation"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Abreviatura</FormLabel>
-              <FormControl>
-                <Input placeholder="l, kg, u" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <InputFormField control={form.control} name="abbreviation" label="Abreviatura" placeholder="l, kg, u" />
       </NameFormDialog>
 
       <ConfirmRemovalDialog

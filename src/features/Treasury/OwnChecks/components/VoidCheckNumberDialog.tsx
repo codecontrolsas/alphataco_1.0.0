@@ -9,10 +9,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { Form } from '@/components/ui/form';
 import { Logger } from '@/lib/logger';
+import { InputFormField, TextareaFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -66,31 +65,20 @@ export function VoidCheckNumberDialog({ open, onOpenChange, checkbook }: VoidChe
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit((values) => save.mutate(values))} className="space-y-4">
-            <FormField
+            <InputFormField
               control={form.control}
               name="number"
-              render={({ field }) => (
-                <FormItem className="max-w-[12rem]">
-                  <FormLabel>Número</FormLabel>
-                  <FormControl>
-                    <Input inputMode="numeric" className="tabular-nums" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Número"
+              itemClassName="max-w-[12rem]"
+              inputMode="numeric"
+              className="tabular-nums"
             />
-            <FormField
+            <TextareaFormField
               control={form.control}
               name="reason"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Motivo</FormLabel>
-                  <FormControl>
-                    <Textarea rows={3} placeholder="Se rompió, se perdió, se llenó mal…" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Motivo"
+              rows={3}
+              placeholder="Se rompió, se perdió, se llenó mal…"
             />
             <DialogFooter className="gap-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

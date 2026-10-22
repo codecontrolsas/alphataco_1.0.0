@@ -10,9 +10,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Logger } from '@/lib/logger';
+import { InputFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -110,31 +110,19 @@ export function NewCheckbookDialog() {
                 )}
               />
               <div className="grid grid-cols-2 gap-3">
-                <FormField
+                <InputFormField
                   control={form.control}
                   name="firstNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Desde el Nº</FormLabel>
-                      <FormControl>
-                        <Input inputMode="numeric" className="tabular-nums" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  label="Desde el Nº"
+                  inputMode="numeric"
+                  className="tabular-nums"
                 />
-                <FormField
+                <InputFormField
                   control={form.control}
                   name="lastNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Hasta el Nº</FormLabel>
-                      <FormControl>
-                        <Input inputMode="numeric" className="tabular-nums" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  label="Hasta el Nº"
+                  inputMode="numeric"
+                  className="tabular-nums"
                 />
               </div>
               <DialogFooter className="gap-2">

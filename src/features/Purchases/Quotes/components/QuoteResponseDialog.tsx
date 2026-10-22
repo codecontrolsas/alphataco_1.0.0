@@ -14,9 +14,9 @@ import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
 import { formatQuantity } from '@/features/Warehouses/lib/format';
 import { Logger } from '@/lib/logger';
+import { InputFormField, TextareaFormField } from '@/shared/components/common/form-fields';
 import { DEFAULT_VAT_RATE_ID, VAT_RATES, VAT_RATE_LABELS } from '@/shared/lib/arca/catalogs';
 import { argentinaDate } from '@/shared/lib/argentina-time';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
@@ -236,32 +236,21 @@ export function QuoteResponseDialog({ quote }: { quote: PurchaseQuoteDetail }) {
             <div className="grid gap-4 sm:grid-cols-3">
               {dateField('receivedAt', 'Fecha de la respuesta')}
               {dateField('validUntil', 'Válida hasta (opcional)')}
-              <FormField
+              <InputFormField
                 control={form.control}
                 name="deliveryDays"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Plazo de entrega (días)</FormLabel>
-                    <FormControl>
-                      <Input inputMode="numeric" className="tabular-nums" placeholder="Opcional" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                label="Plazo de entrega (días)"
+                inputMode="numeric"
+                className="tabular-nums"
+                placeholder="Opcional"
               />
             </div>
-            <FormField
+            <TextareaFormField
               control={form.control}
               name="supplierNotes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Notas del proveedor (opcional)</FormLabel>
-                  <FormControl>
-                    <Textarea rows={2} placeholder="Condiciones, marca ofrecida, forma de pago…" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Notas del proveedor (opcional)"
+              rows={2}
+              placeholder="Condiciones, marca ofrecida, forma de pago…"
             />
             <FormField
               control={form.control}

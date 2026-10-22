@@ -12,10 +12,10 @@ import {
 } from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import type { ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { Logger } from '@/lib/logger';
 import { DownloadPdfButton } from '@/shared/components/common/DownloadPdfButton';
+import { TextareaFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -175,18 +175,12 @@ export function SendToSupplierDialog({ documentLabel, recipients, send, loadPdf,
                 </FormItem>
               )}
             />
-            <FormField
+            <TextareaFormField
               control={form.control}
               name="message"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Mensaje (opcional)</FormLabel>
-                  <FormControl>
-                    <Textarea rows={3} placeholder="Va en el cuerpo del mail" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Mensaje (opcional)"
+              rows={3}
+              placeholder="Va en el cuerpo del mail"
             />
             <DialogFooter className="gap-2 sm:justify-between">
               <DownloadPdfButton load={loadPdf} label="Ver PDF" />

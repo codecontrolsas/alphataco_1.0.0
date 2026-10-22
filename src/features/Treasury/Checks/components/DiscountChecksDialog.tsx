@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AMOUNT_SCALE, formatScaled, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { Logger } from '@/lib/logger';
+import { InputFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -169,18 +170,11 @@ function DiscountForm({
           />
           {amountField('interest', 'Intereses')}
           {amountField('fee', 'Comisión')}
-          <FormField
+          <InputFormField
             control={form.control}
             name="reference"
-            render={({ field }) => (
-              <FormItem className="sm:col-span-2">
-                <FormLabel>Referencia de la liquidación (opcional)</FormLabel>
-                <FormControl>
-                  <Input {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+            label="Referencia de la liquidación (opcional)"
+            itemClassName="sm:col-span-2"
           />
         </div>
 

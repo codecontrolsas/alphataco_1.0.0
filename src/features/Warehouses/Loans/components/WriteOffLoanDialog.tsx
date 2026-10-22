@@ -13,8 +13,8 @@ import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Textarea } from '@/components/ui/textarea';
 import { Logger } from '@/lib/logger';
+import { TextareaFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -106,18 +106,12 @@ export function WriteOffLoanDialog({
                 </FormItem>
               )}
             />
-            <FormField
+            <TextareaFormField
               control={form.control}
               name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Qué pasó</FormLabel>
-                  <FormControl>
-                    <Textarea rows={3} placeholder="Ej.: se perdió en la locación del pozo 12" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Qué pasó"
+              rows={3}
+              placeholder="Ej.: se perdió en la locación del pozo 12"
             />
             <AlertDialogFooter>
               <AlertDialogCancel type="button" disabled={mutation.isPending}>

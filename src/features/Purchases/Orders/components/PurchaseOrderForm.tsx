@@ -7,10 +7,10 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Textarea } from '@/components/ui/textarea';
 import { SearchCombobox } from '@/features/Warehouses/components/SearchCombobox';
 import { formatMoney, formatQuantity } from '@/features/Warehouses/lib/format';
 import { Logger } from '@/lib/logger';
+import { InputFormField, TextareaFormField } from '@/shared/components/common/form-fields';
 import { VAT_RATES, VAT_RATE_LABELS } from '@/shared/lib/arca/catalogs';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -189,18 +189,11 @@ export function PurchaseOrderForm({
                   </FormItem>
                 )}
               />
-              <FormField
+              <InputFormField
                 control={form.control}
                 name="deliveryPlace"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Lugar de entrega (opcional)</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Base Neuquén, obrador Añelo…" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                label="Lugar de entrega (opcional)"
+                placeholder="Base Neuquén, obrador Añelo…"
               />
               <FormField
                 control={form.control}
@@ -226,18 +219,12 @@ export function PurchaseOrderForm({
                 )}
               />
             </div>
-            <FormField
+            <TextareaFormField
               control={form.control}
               name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Observaciones (opcional)</FormLabel>
-                  <FormControl>
-                    <Textarea rows={2} placeholder="Van en el PDF de la orden" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Observaciones (opcional)"
+              rows={2}
+              placeholder="Van en el PDF de la orden"
             />
           </CardContent>
         </Card>

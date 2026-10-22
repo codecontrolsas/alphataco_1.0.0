@@ -8,9 +8,9 @@ import { Input } from '@/components/ui/input';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Textarea } from '@/components/ui/textarea';
 import { Logger } from '@/lib/logger';
 import { cn } from '@/lib/utils';
+import { TextareaFormField } from '@/shared/components/common/form-fields';
 import {
   RECEIVER_VAT_CONDITIONS,
   isReceiverVatConditionId,
@@ -296,18 +296,12 @@ export function SupplierForm({ supplierId, defaultValues, categories, readOnly =
                 {text('bankCbu', 'CBU (opcional)', '22 dígitos')}
                 {text('bankAlias', 'Alias (opcional)')}
               </div>
-              <FormField
+              <TextareaFormField
                 control={form.control}
                 name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Observaciones (opcional)</FormLabel>
-                    <FormControl>
-                      <Textarea rows={2} readOnly={readOnly} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                label="Observaciones (opcional)"
+                rows={2}
+                readOnly={readOnly}
               />
             </CardContent>
           </Card>

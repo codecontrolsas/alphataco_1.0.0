@@ -2,27 +2,20 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
-import {
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
+import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
 import { SearchCombobox } from '@/features/Warehouses/components/SearchCombobox';
 import { formatMoney } from '@/features/Warehouses/lib/format';
+import { InputFormField, TextareaFormField } from '@/shared/components/common/form-fields';
 import { CBTE_TYPES, type VoucherLetter } from '@/shared/lib/arca/catalogs';
 import moment from 'moment';
 import { type UseFormReturn } from 'react-hook-form';
-import type { SupplierInvoiceFormData } from '../../lib/invoice-query-types';
 import { searchSupplierOptions } from '../../actions/suppliers.server';
 import { expectedSupplierLetter } from '../../lib/invoice-letter';
+import type { SupplierInvoiceFormData } from '../../lib/invoice-query-types';
 import { SUPPLIER_INVOICE_CBTE_TYPES } from '../../schemas/invoices';
-import { type FormValues, kindOf } from './supplier-invoice-form-model';
+import { kindOf, type FormValues } from './supplier-invoice-form-model';
 
 export function SupplierInvoiceFormHeader({
   form,
@@ -73,7 +66,11 @@ export function SupplierInvoiceFormHeader({
                 />
               </FormControl>
               {expected && (
-                <FormDescription className={expected.ok && letter && expected.letter !== letter ? 'text-amber-700 dark:text-amber-400' : ''}>
+                <FormDescription
+                  className={
+                    expected.ok && letter && expected.letter !== letter ? 'text-amber-700 dark:text-amber-400' : ''
+                  }
+                >
                   {expected.ok ? expected.reason : expected.error}
                   {expected.ok && letter && expected.letter !== letter && ' Si la cargás igual, queda observada.'}
                 </FormDescription>
@@ -107,31 +104,19 @@ export function SupplierInvoiceFormHeader({
           )}
         />
         <div className="grid grid-cols-[2fr_3fr] gap-2">
-          <FormField
+          <InputFormField
             control={form.control}
             name="salesPoint"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Punto de venta</FormLabel>
-                <FormControl>
-                  <Input inputMode="numeric" placeholder="0003" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+            label="Punto de venta"
+            inputMode="numeric"
+            placeholder="0003"
           />
-          <FormField
+          <InputFormField
             control={form.control}
             name="number"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Número</FormLabel>
-                <FormControl>
-                  <Input inputMode="numeric" placeholder="00012345" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+            label="Número"
+            inputMode="numeric"
+            placeholder="00012345"
           />
         </div>
         <FormField
@@ -177,24 +162,21 @@ export function SupplierInvoiceFormHeader({
               <FormControl>
                 <Input type="month" {...field} />
               </FormControl>
-              <FormDescription>El mes del Libro IVA. Si el comprobante llegó tarde, imputalo al mes en curso.</FormDescription>
+              <FormDescription>
+                El mes del Libro IVA. Si el comprobante llegó tarde, imputalo al mes en curso.
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
         />
         <div className="grid grid-cols-[3fr_2fr] gap-2">
-          <FormField
+          <InputFormField
             control={form.control}
             name="cae"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>CAE (opcional)</FormLabel>
-                <FormControl>
-                  <Input inputMode="numeric" maxLength={14} placeholder="14 dígitos" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+            label="CAE (opcional)"
+            inputMode="numeric"
+            maxLength={14}
+            placeholder="14 dígitos"
           />
           <FormField
             control={form.control}
@@ -221,7 +203,10 @@ export function SupplierInvoiceFormHeader({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Factura que corrige (opcional)</FormLabel>
-                <Select value={field.value || 'none'} onValueChange={(value) => field.onChange(value === 'none' ? '' : value)}>
+                <Select
+                  value={field.value || 'none'}
+                  onValueChange={(value) => field.onChange(value === 'none' ? '' : value)}
+                >
                   <FormControl>
                     <SelectTrigger disabled={!supplierId}>
                       <SelectValue placeholder="Sin vincular" />
@@ -233,7 +218,8 @@ export function SupplierInvoiceFormHeader({
                       .filter((invoice) => letter && invoice.label.includes(`Factura ${letter} `))
                       .map((invoice) => (
                         <SelectItem key={invoice.id} value={invoice.id}>
-                          {invoice.label} · {moment(invoice.issueDate, 'YYYY-MM-DD').format('DD/MM/YYYY')} · {formatMoney(invoice.total)}
+                          {invoice.label} · {moment(invoice.issueDate, 'YYYY-MM-DD').format('DD/MM/YYYY')} ·{' '}
+                          {formatMoney(invoice.total)}
                         </SelectItem>
                       ))}
                   </SelectContent>
@@ -250,25 +236,23 @@ export function SupplierInvoiceFormHeader({
             <FormItem>
               <FormLabel>Comprobante escaneado (opcional)</FormLabel>
               <FormControl>
-                <Input type="file" accept="application/pdf,image/*" onChange={(e) => field.onChange(e.target.files?.[0] ?? null)} />
+                <Input
+                  type="file"
+                  accept="application/pdf,image/*"
+                  onChange={(e) => field.onChange(e.target.files?.[0] ?? null)}
+                />
               </FormControl>
               <FormDescription>PDF o imagen, hasta 10 MB.</FormDescription>
               <FormMessage />
             </FormItem>
           )}
         />
-        <FormField
+        <TextareaFormField
           control={form.control}
           name="notes"
-          render={({ field }) => (
-            <FormItem className="md:col-span-2">
-              <FormLabel>Observaciones (opcional)</FormLabel>
-              <FormControl>
-                <Textarea rows={2} {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+          label="Observaciones (opcional)"
+          itemClassName="md:col-span-2"
+          rows={2}
         />
       </CardContent>
     </Card>

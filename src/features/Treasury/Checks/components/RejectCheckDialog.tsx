@@ -12,8 +12,8 @@ import {
 import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Textarea } from '@/components/ui/textarea';
 import { Logger } from '@/lib/logger';
+import { TextareaFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -117,18 +117,12 @@ export function RejectCheckDialog({ open, onOpenChange, check }: RejectCheckDial
                 </FormItem>
               )}
             />
-            <FormField
+            <TextareaFormField
               control={form.control}
               name="reason"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Motivo</FormLabel>
-                  <FormControl>
-                    <Textarea rows={3} placeholder="Sin fondos, firma no coincide…" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Motivo"
+              rows={3}
+              placeholder="Sin fondos, firma no coincide…"
             />
             <DialogFooter className="gap-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

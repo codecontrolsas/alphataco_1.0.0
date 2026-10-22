@@ -9,10 +9,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { Form } from '@/components/ui/form';
 import { Logger } from '@/lib/logger';
+import { InputFormField, TextareaFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -88,32 +87,13 @@ export function SendReceiptDialog({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit((values) => send.mutate(values))} className="space-y-4">
-            <FormField
+            <InputFormField
               control={form.control}
               name="to"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Para</FormLabel>
-                  <FormControl>
-                    <Input placeholder="pagos@cliente.com, tesoreria@cliente.com" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Para"
+              placeholder="pagos@cliente.com, tesoreria@cliente.com"
             />
-            <FormField
-              control={form.control}
-              name="message"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Mensaje (opcional)</FormLabel>
-                  <FormControl>
-                    <Textarea rows={3} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <TextareaFormField control={form.control} name="message" label="Mensaje (opcional)" rows={3} />
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={send.isPending}>
                 Cancelar

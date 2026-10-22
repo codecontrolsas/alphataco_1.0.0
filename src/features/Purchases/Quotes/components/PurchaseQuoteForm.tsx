@@ -3,10 +3,10 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Textarea } from '@/components/ui/textarea';
 import { SearchCombobox } from '@/features/Warehouses/components/SearchCombobox';
 import { formatQuantity } from '@/features/Warehouses/lib/format';
 import { Logger } from '@/lib/logger';
+import { TextareaFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -108,18 +108,12 @@ export function PurchaseQuoteForm({ mode, defaultValues, initialSupplierLabel, i
                 </FormItem>
               )}
             />
-            <FormField
+            <TextareaFormField
               control={form.control}
               name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Observaciones para el proveedor (opcional)</FormLabel>
-                  <FormControl>
-                    <Textarea rows={2} placeholder="Van en el PDF del pedido" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Observaciones para el proveedor (opcional)"
+              rows={2}
+              placeholder="Van en el PDF del pedido"
             />
           </CardContent>
         </Card>

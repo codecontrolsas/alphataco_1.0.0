@@ -12,9 +12,9 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
 import type { ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { Logger } from '@/lib/logger';
+import { TextareaFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
@@ -202,18 +202,12 @@ export function MaintenanceMaterialRequestDialog({
               )}
             </div>
 
-            <FormField
+            <TextareaFormField
               control={form.control}
               name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nota</FormLabel>
-                  <FormControl>
-                    <Textarea rows={2} placeholder="Para qué es, urgencia… (opcional)" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Nota"
+              rows={2}
+              placeholder="Para qué es, urgencia… (opcional)"
             />
 
             <DialogFooter>

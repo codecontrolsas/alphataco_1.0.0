@@ -9,10 +9,10 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
 import { SearchCombobox } from '@/features/Warehouses/components/SearchCombobox';
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { Logger } from '@/lib/logger';
+import { InputFormField, TextareaFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -301,18 +301,12 @@ export function PaymentOrderForm({
                   Un pago a cuenta sin factura. Queda disponible para aplicar a una factura más adelante.
                 </p>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <FormField
+                  <InputFormField
                     control={form.control}
                     name="advance.amount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Importe</FormLabel>
-                        <FormControl>
-                          <Input inputMode="decimal" placeholder="0,00" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                    label="Importe"
+                    inputMode="decimal"
+                    placeholder="0,00"
                   />
                   <FormField
                     control={form.control}
@@ -342,18 +336,11 @@ export function PaymentOrderForm({
                       </FormItem>
                     )}
                   />
-                  <FormField
+                  <InputFormField
                     control={form.control}
                     name="advance.description"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Descripción</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Anticipo 30 % de la obra" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                    label="Descripción"
+                    placeholder="Anticipo 30 % de la obra"
                   />
                 </div>
               </div>
@@ -480,19 +467,7 @@ export function PaymentOrderForm({
 
         <Card>
           <CardContent className="pt-6">
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Observaciones (opcional)</FormLabel>
-                  <FormControl>
-                    <Textarea rows={2} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <TextareaFormField control={form.control} name="notes" label="Observaciones (opcional)" rows={2} />
           </CardContent>
         </Card>
 

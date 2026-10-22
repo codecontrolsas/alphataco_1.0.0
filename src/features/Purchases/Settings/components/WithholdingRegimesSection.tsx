@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { Logger } from '@/lib/logger';
+import { InputFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
@@ -233,91 +234,55 @@ export function WithholdingRegimesSection({
                     </FormItem>
                   )}
                 />
-                <FormField
+                <InputFormField
                   control={form.control}
                   name="code"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Código</FormLabel>
-                      <FormControl>
-                        <Input inputMode="numeric" maxLength={3} placeholder="078" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  label="Código"
+                  inputMode="numeric"
+                  maxLength={3}
+                  placeholder="078"
                 />
               </div>
-              <FormField
+              <InputFormField
                 control={form.control}
                 name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Descripción</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Enajenación de bienes muebles" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                label="Descripción"
+                placeholder="Enajenación de bienes muebles"
               />
               {tax === 'IVA' ? (
-                <FormField
+                <InputFormField
                   control={form.control}
                   name="vatPercentage"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Porcentaje del IVA a retener</FormLabel>
-                      <FormControl>
-                        <Input inputMode="decimal" placeholder="50" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  label="Porcentaje del IVA a retener"
+                  inputMode="decimal"
+                  placeholder="50"
                 />
               ) : (
                 <div className="grid grid-cols-2 gap-3">
-                  <FormField
+                  <InputFormField
                     control={form.control}
                     name="rateRegistered"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Alícuota (%)</FormLabel>
-                        <FormControl>
-                          <Input inputMode="decimal" placeholder="2" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                    label="Alícuota (%)"
+                    inputMode="decimal"
+                    placeholder="2"
                   />
-                  <FormField
+                  <InputFormField
                     control={form.control}
                     name="rateUnregistered"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>No inscriptos (%)</FormLabel>
-                        <FormControl>
-                          <Input inputMode="decimal" placeholder="10" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                    label="No inscriptos (%)"
+                    inputMode="decimal"
+                    placeholder="10"
                   />
                 </div>
               )}
               <div className="grid grid-cols-2 gap-3">
                 {tax === 'GANANCIAS' && (
-                  <FormField
+                  <InputFormField
                     control={form.control}
                     name="monthlyExemptAmount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Mínimo no sujeto mensual</FormLabel>
-                        <FormControl>
-                          <Input inputMode="decimal" placeholder="0,00" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                    label="Mínimo no sujeto mensual"
+                    inputMode="decimal"
+                    placeholder="0,00"
                   />
                 )}
                 <FormField

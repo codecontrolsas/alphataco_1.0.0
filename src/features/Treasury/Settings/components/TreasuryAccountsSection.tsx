@@ -15,12 +15,12 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { Logger } from '@/lib/logger';
 import { SectionCard } from '@/shared/components/common/SectionCard';
+import { InputFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -299,69 +299,29 @@ export function TreasuryAccountsSection({
                   </FormItem>
                 )}
               />
-              <FormField
+              <InputFormField
                 control={form.control}
                 name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nombre</FormLabel>
-                    <FormControl>
-                      <Input
-                        autoFocus
-                        placeholder={
-                          kind === 'BANK'
-                            ? 'Banco Galicia CC $'
-                            : kind === 'CHECK_PORTFOLIO'
-                              ? 'Cartera de cheques'
-                              : 'Caja administración'
-                        }
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                label="Nombre"
+                autoFocus
+                placeholder={
+                  kind === 'BANK'
+                    ? 'Banco Galicia CC $'
+                    : kind === 'CHECK_PORTFOLIO'
+                      ? 'Cartera de cheques'
+                      : 'Caja administración'
+                }
               />
               {kind === 'BANK' && (
                 <>
-                  <FormField
-                    control={form.control}
-                    name="bankName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Banco (opcional)</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="accountNumber"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Número de cuenta (opcional)</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
+                  <InputFormField control={form.control} name="bankName" label="Banco (opcional)" />
+                  <InputFormField control={form.control} name="accountNumber" label="Número de cuenta (opcional)" />
+                  <InputFormField
                     control={form.control}
                     name="cbu"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>CBU (opcional)</FormLabel>
-                        <FormControl>
-                          <Input inputMode="numeric" maxLength={22} {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                    label="CBU (opcional)"
+                    inputMode="numeric"
+                    maxLength={22}
                   />
                 </>
               )}
@@ -393,18 +353,12 @@ export function TreasuryAccountsSection({
                         </FormItem>
                       )}
                     />
-                    <FormField
+                    <InputFormField
                       control={form.control}
                       name="openingAmount"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Importe</FormLabel>
-                          <FormControl>
-                            <Input inputMode="decimal" placeholder="0,00" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+                      label="Importe"
+                      inputMode="decimal"
+                      placeholder="0,00"
                     />
                   </div>
                   <FormDescription>

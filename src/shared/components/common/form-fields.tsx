@@ -1,0 +1,74 @@
+'use client';
+
+import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import type { ComponentProps, ReactNode } from 'react';
+import type { Control, FieldPath, FieldValues } from 'react-hook-form';
+
+type FieldBase<T extends FieldValues, N extends FieldPath<T>> = {
+  control: Control<T>;
+  name: N;
+  label: ReactNode;
+  /** Clases del contenedor del campo (por ejemplo, para ocupar dos columnas de la grilla). */
+  itemClassName?: string;
+};
+
+type InputControlProps = Omit<
+  ComponentProps<typeof Input>,
+  'name' | 'value' | 'defaultValue' | 'onChange' | 'onBlur' | 'ref'
+>;
+type TextareaControlProps = Omit<
+  ComponentProps<typeof Textarea>,
+  'name' | 'value' | 'defaultValue' | 'onChange' | 'onBlur' | 'ref'
+>;
+
+/** Campo de formulario de una línea: etiqueta, `Input` conectado a react-hook-form y mensaje de error. */
+export function InputFormField<T extends FieldValues, N extends FieldPath<T>>({
+  control,
+  name,
+  label,
+  itemClassName,
+  ...inputProps
+}: FieldBase<T, N> & InputControlProps) {
+  return (
+    <FormField
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <FormItem className={itemClassName}>
+          <FormLabel>{label}</FormLabel>
+          <FormControl>
+            <Input {...inputProps} {...field} />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+}
+
+/** Igual que `InputFormField`, con `Textarea`. */
+export function TextareaFormField<T extends FieldValues, N extends FieldPath<T>>({
+  control,
+  name,
+  label,
+  itemClassName,
+  ...textareaProps
+}: FieldBase<T, N> & TextareaControlProps) {
+  return (
+    <FormField
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <FormItem className={itemClassName}>
+          <FormLabel>{label}</FormLabel>
+          <FormControl>
+            <Textarea {...textareaProps} {...field} />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+}

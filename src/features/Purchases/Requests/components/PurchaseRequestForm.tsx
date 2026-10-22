@@ -7,12 +7,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Textarea } from '@/components/ui/textarea';
 import { DestinationFields } from '@/features/Warehouses/Movements/components/DestinationFields';
 import type { MovementFormLookups } from '@/features/Warehouses/actions/options.server';
 import { SearchCombobox } from '@/features/Warehouses/components/SearchCombobox';
 import { Logger } from '@/lib/logger';
 import { cn } from '@/lib/utils';
+import { TextareaFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -171,18 +171,12 @@ export function PurchaseRequestForm({
                   </FormItem>
                 )}
               />
-              <FormField
+              <TextareaFormField
                 control={form.control}
                 name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Para qué se necesita (opcional)</FormLabel>
-                    <FormControl>
-                      <Textarea rows={2} placeholder="Contexto para quien aprueba y para Compras" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                label="Para qué se necesita (opcional)"
+                rows={2}
+                placeholder="Contexto para quien aprueba y para Compras"
               />
             </div>
           </CardContent>

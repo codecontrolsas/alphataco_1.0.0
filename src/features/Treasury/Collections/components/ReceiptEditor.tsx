@@ -16,9 +16,9 @@ import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import { Textarea } from '@/components/ui/textarea';
 import { SearchCombobox } from '@/features/Warehouses/components/SearchCombobox';
 import { Logger } from '@/lib/logger';
+import { TextareaFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -347,19 +347,7 @@ export function ReceiptEditor({
 
         <Card>
           <CardContent className="pt-6">
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Observaciones (opcional)</FormLabel>
-                  <FormControl>
-                    <Textarea rows={2} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <TextareaFormField control={form.control} name="notes" label="Observaciones (opcional)" rows={2} />
           </CardContent>
         </Card>
 

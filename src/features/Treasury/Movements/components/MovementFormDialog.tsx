@@ -11,10 +11,10 @@ import {
 } from '@/components/ui/dialog';
 import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Logger } from '@/lib/logger';
+import { InputFormField } from '@/shared/components/common/form-fields';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -222,18 +222,12 @@ export function MovementFormDialog({
                     </FormItem>
                   )}
                 />
-                <FormField
+                <InputFormField
                   control={form.control}
                   name="amount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Importe</FormLabel>
-                      <FormControl>
-                        <Input inputMode="decimal" placeholder="0,00" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  label="Importe"
+                  inputMode="decimal"
+                  placeholder="0,00"
                 />
                 <FormField
                   control={form.control}
@@ -264,19 +258,7 @@ export function MovementFormDialog({
                   )}
                 />
               </div>
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Descripción (opcional)</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <InputFormField control={form.control} name="description" label="Descripción (opcional)" />
               {account && <BalancePreview accountName={account.name} date={date} preview={preview} />}
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
