@@ -1,5 +1,6 @@
 'use client';
 
+import { usePermissionChecker } from '@/features/Permissions/hooks/usePermissionChecker';
 import {
   CatalogCreateButton,
   CatalogFormSheet,
@@ -7,7 +8,11 @@ import {
   useCatalogSheet,
 } from '@/shared/components/common/CatalogFormSheet';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
+import {
+  type DataTableFacetedFilterConfig,
+  type DataTableSearchParams,
+  type FacetResult,
+} from '@/shared/components/common/DataTable/types';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Check, X } from 'lucide-react';
 import moment from 'moment';
@@ -48,13 +53,7 @@ export default function _KpisIndicadoresDataTable({
   initialFilterVisibility,
 }: KpisIndicadoresDataTableProps) {
   // ─── Permisos: construir helper desde el map serializable ─────────────────
-  const permissions = useMemo(
-    () => ({
-      hasPermission: (module: string, tab: string, action: string) =>
-        permissionsMap[`${module}:${tab}:${action}`] === true,
-    }),
-    [permissionsMap]
-  );
+  const permissions = usePermissionChecker(permissionsMap);
 
   // ─── KPI store (para integración con KpiForm) ─────────────────────────────
   const setEditingKpi = useKpiStore((state) => state.setKpi);

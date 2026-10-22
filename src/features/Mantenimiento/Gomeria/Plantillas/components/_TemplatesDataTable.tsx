@@ -11,6 +11,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { usePermissionChecker } from '@/features/Permissions/hooks/usePermissionChecker';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
 import { type DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
@@ -70,13 +71,7 @@ export default function _TemplatesDataTable({
   initialFilterVisibility,
 }: TemplatesDataTableProps) {
   // ─── Permissions ──────────────────────────────────────────────────────────
-  const permissions = useMemo(
-    () => ({
-      hasPermission: (module: string, tab: string, action: string) =>
-        permissionsMap[`${module}:${tab}:${action}`] === true,
-    }),
-    [permissionsMap]
-  );
+  const permissions = usePermissionChecker(permissionsMap);
 
   const queryClient = useQueryClient();
   const canCreate = permissions.hasPermission('mantenimiento', 'plantillas_cubiertas', 'create');

@@ -1,14 +1,15 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { usePermissionChecker } from '@/features/Permissions/hooks/usePermissionChecker';
 import {
   CatalogCreateButton,
   CatalogFormSheet,
   CatalogTableSurface,
   useCatalogSheet,
 } from '@/shared/components/common/CatalogFormSheet';
-import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable/types';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable/types';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Suspense, useCallback, useMemo, useState } from 'react';
@@ -65,13 +66,7 @@ export function _EquipmentOwnerDataTable({
   initialFilterVisibility,
 }: EquipmentOwnerDataTableProps) {
   // ── Permisos ──────────────────────────────────────────────────────────────
-  const permissions = useMemo(
-    () => ({
-      hasPermission: (module: string, tab: string, action: string) =>
-        permissionsMap[`${module}:${tab}:${action}`] === true,
-    }),
-    [permissionsMap]
-  );
+  const permissions = usePermissionChecker(permissionsMap);
 
   const canCreate = permissions.hasPermission('configuracion', 'titulares', 'create');
   const canUpdate = permissions.hasPermission('configuracion', 'titulares', 'update');

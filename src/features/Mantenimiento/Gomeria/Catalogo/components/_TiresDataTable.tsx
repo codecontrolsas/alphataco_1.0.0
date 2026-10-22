@@ -18,6 +18,7 @@ import {
   tireTreadTypeLabels,
 } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
 import { TIRE_STATUS_UI } from '@/features/Mantenimiento/Gomeria/shared/tire-status-presentation';
+import { usePermissionChecker } from '@/features/Permissions/hooks/usePermissionChecker';
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { TireRetreadLevel, TireStatus, TireTreadType } from '@/generated/prisma/enums';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
@@ -101,13 +102,7 @@ export default function _TiresDataTable({
   initialFilterVisibility,
 }: TiresDataTableProps) {
   // ─── Permissions ──────────────────────────────────────────────────────────
-  const permissions = useMemo(
-    () => ({
-      hasPermission: (module: string, tab: string, action: string) =>
-        permissionsMap[`${module}:${tab}:${action}`] === true,
-    }),
-    [permissionsMap]
-  );
+  const permissions = usePermissionChecker(permissionsMap);
 
   const canCreate = permissions.hasPermission('mantenimiento', 'catalogo_cubiertas', 'create');
   const canViewPrices = permissions.hasPermission('almacenes', 'movimientos', 'view_prices');
