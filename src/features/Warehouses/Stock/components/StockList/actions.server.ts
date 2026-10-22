@@ -14,6 +14,7 @@ import { argentinaDate } from '@/shared/lib/argentina-time';
 import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { toFacetMap } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { EXPIRING_WINDOW_DAYS } from '../../../lib/batch-expiry';
@@ -287,15 +288,6 @@ export async function getStockSingleFacet(
     delete filters[`${excludeColumn}_to`];
     // Los facets no usan costos: no hace falta el permiso para armar el WHERE.
     return buildWhereClause(companyId, { ...base, filters }, { canViewPrices: false });
-  }
-
-  function toFacetMap(rows: { key: string | null; count: number }[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const { key, count } of rows) {
-      const k = key == null ? NULL_FILTER_VALUE : key;
-      map.set(k, (map.get(k) ?? 0) + count);
-    }
-    return map;
   }
 
   try {

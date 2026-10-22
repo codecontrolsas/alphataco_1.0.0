@@ -9,7 +9,6 @@ import {
   buildFiltersWhere,
   buildSearchWhere,
   buildTextFiltersWhere,
-  NULL_FILTER_VALUE,
   parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
@@ -17,6 +16,7 @@ import type { DataTableSearchParams } from '@/shared/components/common/DataTable
 import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { toFacetMap } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { DESTINATION_SELECT, destinationLabel } from '../../../lib/labels';
@@ -270,15 +270,6 @@ export async function getMovementSingleFacet(
     const filters = { ...base.filters };
     delete filters[excludeColumn];
     return buildWhereClause(companyId, { ...base, filters }, { canViewPrices: false });
-  }
-
-  function toFacetMap(rows: { key: string | null; count: number }[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const { key, count } of rows) {
-      const k = key == null ? NULL_FILTER_VALUE : key;
-      map.set(k, (map.get(k) ?? 0) + count);
-    }
-    return map;
   }
 
   async function resolveWarehouses(ids: string[]) {

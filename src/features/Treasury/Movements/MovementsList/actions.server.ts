@@ -4,11 +4,12 @@ import { checkPermissionServer } from '@/features/Permissions/actions/permission
 import { Prisma } from '@/generated/prisma/client';
 import { treasury_movement_kind } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
-import { NULL_FILTER_VALUE, parseSearchParams } from '@/shared/components/common/DataTable/helpers';
+import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { toFacetMap } from '@/shared/lib/table-facets';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { isoDay } from '../../lib/dates';
 import {
@@ -294,15 +295,6 @@ export async function getTreasuryMovementSingleFacet(
     const filters = { ...base.filters };
     delete filters[excludeColumn];
     return buildWhereClause(companyId as string, { ...base, filters });
-  }
-
-  function toFacetMap(rows: { key: string | null; count: number }[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const { key, count } of rows) {
-      const k = key == null ? NULL_FILTER_VALUE : key;
-      map.set(k, (map.get(k) ?? 0) + count);
-    }
-    return map;
   }
 
   try {
