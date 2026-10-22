@@ -1,3 +1,4 @@
+import { TableSkeleton } from '@/shared/components/skeletons/TableSkeleton';
 import { Button } from '@/components/ui/button';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { HandHelping } from 'lucide-react';
@@ -6,7 +7,7 @@ import { Suspense } from 'react';
 import { StateBlock } from '@/shared/components/common/StateBlock';
 import { canWarehouse, type PermissionsMap } from '../lib/permissions';
 import { LoansList } from './components/LoansList/LoansList';
-import { LoansTableSkeleton } from './components/LoansList/fallback/LoansTableSkeleton';
+
 
 /** Herramientas prestadas: quien tiene cada una y desde cuando (spec etapa 2 §4.1). */
 export default async function LoansTabContent({
@@ -32,7 +33,7 @@ export default async function LoansTabContent({
           </Button>
         </div>
       )}
-      <Suspense fallback={<LoansTableSkeleton />}>
+      <Suspense fallback={<TableSkeleton inCard columnCount={8} rowCount={8} />}>
         <LoansList searchParams={searchParams} permissionsMap={permissions} />
       </Suspense>
     </div>

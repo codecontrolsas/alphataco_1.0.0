@@ -1,3 +1,4 @@
+import { TableSkeleton } from '@/shared/components/skeletons/TableSkeleton';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { Suspense } from 'react';
 import { getMaterialFormLookups } from '../actions/catalog.server';
@@ -5,7 +6,7 @@ import { StateBlock } from '@/shared/components/common/StateBlock';
 import { canWarehouse, type PermissionsMap } from '../lib/permissions';
 import { MaterialFormDialog } from './components/MaterialFormDialog';
 import { MaterialsList } from './components/MaterialsList/MaterialsList';
-import { MaterialsTableSkeleton } from './components/MaterialsList/fallback/MaterialsTableSkeleton';
+
 
 export default async function MaterialsTabContent({
   searchParams,
@@ -25,7 +26,7 @@ export default async function MaterialsTabContent({
           <MaterialFormDialog lookups={lookups} />
         </div>
       )}
-      <Suspense fallback={<MaterialsTableSkeleton />}>
+      <Suspense fallback={<TableSkeleton inCard columnCount={8} rowCount={8} />}>
         <MaterialsList searchParams={searchParams} permissionsMap={permissions} />
       </Suspense>
     </div>

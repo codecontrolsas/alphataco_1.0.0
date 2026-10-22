@@ -1,8 +1,9 @@
+import { TableSkeleton } from '@/shared/components/skeletons/TableSkeleton';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { Suspense } from 'react';
 import { StateBlock } from '@/shared/components/common/StateBlock';
 import { ReceiptsList } from './ReceiptsList/ReceiptsList';
-import { ReceiptsTableSkeleton } from './ReceiptsList/fallback/ReceiptsTableSkeleton';
+
 
 /**
  * Recepciones (spec Compras etapa 3 §4). No hay "Nueva recepcion": se registra desde el detalle
@@ -20,7 +21,7 @@ export default async function ReceiptsTabContent({
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">Para registrar una recepción, abrí la orden de compra y tocá «Registrar recepción».</p>
-      <Suspense fallback={<ReceiptsTableSkeleton />}>
+      <Suspense fallback={<TableSkeleton inCard columnCount={6} rowCount={6} />}>
         <ReceiptsList searchParams={searchParams} />
       </Suspense>
     </div>

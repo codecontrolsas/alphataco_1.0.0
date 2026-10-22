@@ -1,3 +1,4 @@
+import { TableSkeleton } from '@/shared/components/skeletons/TableSkeleton';
 import { Button } from '@/components/ui/button';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { Plus } from 'lucide-react';
@@ -6,7 +7,7 @@ import { Suspense } from 'react';
 import { StateBlock } from '@/shared/components/common/StateBlock';
 import { canWarehouse, type PermissionsMap } from '../lib/permissions';
 import { MovementsList } from './components/MovementsList/MovementsList';
-import { MovementsTableSkeleton } from './components/MovementsList/fallback/MovementsTableSkeleton';
+
 
 export default async function MovementsTabContent({
   searchParams,
@@ -32,7 +33,7 @@ export default async function MovementsTabContent({
           </Button>
         </div>
       )}
-      <Suspense fallback={<MovementsTableSkeleton />}>
+      <Suspense fallback={<TableSkeleton inCard columnCount={9} rowCount={8} />}>
         <MovementsList searchParams={searchParams} permissionsMap={permissions} />
       </Suspense>
     </div>

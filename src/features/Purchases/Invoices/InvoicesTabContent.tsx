@@ -1,3 +1,4 @@
+import { TableSkeleton } from '@/shared/components/skeletons/TableSkeleton';
 import { Button } from '@/components/ui/button';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { Plus } from 'lucide-react';
@@ -5,7 +6,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { StateBlock } from '@/shared/components/common/StateBlock';
 import { InvoicesList } from './InvoicesList/InvoicesList';
-import { InvoicesTableSkeleton } from './InvoicesList/fallback/InvoicesTableSkeleton';
+
 
 /** Facturas, notas de débito y de crédito de proveedores (spec Compras etapa 4 §4). */
 export default async function InvoicesTabContent({
@@ -29,7 +30,7 @@ export default async function InvoicesTabContent({
           </Button>
         </div>
       )}
-      <Suspense fallback={<InvoicesTableSkeleton />}>
+      <Suspense fallback={<TableSkeleton inCard columnCount={6} rowCount={6} />}>
         <InvoicesList searchParams={searchParams} />
       </Suspense>
     </div>

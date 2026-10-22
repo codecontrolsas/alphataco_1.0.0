@@ -1,3 +1,4 @@
+import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface TableSkeletonProps {
@@ -6,6 +7,8 @@ interface TableSkeletonProps {
   showCheckbox?: boolean;
   showAvatar?: boolean;
   filterCount?: number;
+  /** Envuelve la tabla en una `Card` (como las listas que van dentro de una pestaña). */
+  inCard?: boolean;
 }
 
 export function TableSkeleton({
@@ -14,8 +17,9 @@ export function TableSkeleton({
   showCheckbox = false,
   showAvatar = false,
   filterCount = 2,
+  inCard = false,
 }: TableSkeletonProps) {
-  return (
+  const content = (
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-2">
@@ -63,5 +67,12 @@ export function TableSkeleton({
         </div>
       </div>
     </div>
+  );
+
+  if (!inCard) return content;
+  return (
+    <Card>
+      <CardContent className="pt-6">{content}</CardContent>
+    </Card>
   );
 }

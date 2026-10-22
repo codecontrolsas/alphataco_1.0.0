@@ -1,3 +1,4 @@
+import { TableSkeleton } from '@/shared/components/skeletons/TableSkeleton';
 import { Button } from '@/components/ui/button';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { StateBlock } from '@/shared/components/common/StateBlock';
@@ -5,9 +6,9 @@ import { Plus } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { DueInvoicesList } from './DueInvoicesList/DueInvoicesList';
-import { DueInvoicesTableSkeleton } from './DueInvoicesList/fallback/DueInvoicesTableSkeleton';
+
 import { PaymentOrdersList } from './PaymentOrdersList/PaymentOrdersList';
-import { PaymentOrdersTableSkeleton } from './PaymentOrdersList/fallback/PaymentOrdersTableSkeleton';
+
 import { PaymentsViewNav, resolvePaymentsView } from './PaymentsViewNav';
 
 /**
@@ -39,11 +40,11 @@ export default async function PaymentsTabContent({
         )}
       </div>
       {view === 'vencimientos' ? (
-        <Suspense key="vencimientos" fallback={<DueInvoicesTableSkeleton />}>
+        <Suspense key="vencimientos" fallback={<TableSkeleton inCard columnCount={6} rowCount={6} />}>
           <DueInvoicesList searchParams={searchParams} canCreate={canCreate} />
         </Suspense>
       ) : (
-        <Suspense key="ordenes" fallback={<PaymentOrdersTableSkeleton />}>
+        <Suspense key="ordenes" fallback={<TableSkeleton inCard columnCount={6} rowCount={6} />}>
           <PaymentOrdersList searchParams={searchParams} />
         </Suspense>
       )}
