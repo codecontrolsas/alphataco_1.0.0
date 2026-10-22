@@ -16,7 +16,7 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 | src/features/Mantenimiento          |      414 |  63539 | [x]    |
 | src/features/Empresa                |      316 |  43383 | [x]    |
 | src/features/Purchases              |      219 |  30336 | [x]    |
-| src/features/Operaciones            |      212 |  28069 | [ ]    |
+| src/features/Operaciones            |      212 |  28069 | [x]    |
 | src/features/Equipos                |      135 |  21875 | [x]    |
 | src/features/Treasury               |      183 |  21596 | [x]    |
 | src/features/Dashboard              |      173 |  21093 | [x]    |
@@ -130,6 +130,12 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
   - **Dashboard, Principal:** `components/VehicleListDialog.tsx` (los diálogos de equipos disponibles y fuera de servicio), `shared/charts/DonutCenter.tsx` (total en el centro de las tres donas), `AvailableEmployeesDialog` con `createFacetFilters`.
   - **Archivos partidos:** `Boards/components/_DashboardBoard.tsx` 619 → 490 (`_SortableWidget.tsx`), `Principal/actions/fleet.server.ts` 547 → 103 (+ `fleet-lists.server.ts` con las tablas de los diálogos y `lib/today-report-vehicles.ts`) y `rrhh.server.ts` 575 → 153 (+ `rrhh-lists.server.ts`). No se cambió ningún cálculo, ventana ni consulta de los gráficos y KPIs.
   - Verificación: `check-types` limpio, `npm test` (1494), `next build` compilando y, contra un Postgres descartable, una prueba temporal (no se conserva) que ejecutó las listas, exportaciones y facetas de entregas y catálogo con filtros, búsqueda y orden.
+- [x] **Operaciones (`src/features/Operaciones`):** jscpd (sin pruebas, solo el módulo): de 36 clones y 494 líneas duplicadas (1,35 %) a 22 y 255 (0,71 %); 5.216 → 2.625 tokens duplicados. `knip` sin hallazgos en el módulo; `tsc --noUnusedLocals --noUnusedParameters` encontró imports, tipos, funciones y props muertos (se borraron: `RowToClone`, `invalidCommand`, `toPgTime`, props `isLoading` de `LocationSection`/`CustomerContractSection`, ~30 imports de las secciones del pedido). No se tocaron firmas, códigos de error ni idempotencia de `detail/use-cases/*`.
+  - **Facetas y filtros de las líneas del parte:** `lib/row-facets.ts` (`SHARED_ROW_FACETS`: estado, tipo de servicio, jornada, cliente, servicio, ítem y sector, copiados en el tablero de certificación y en el detalle), `lib/row-facet-options.ts` (`buildRowFacetResult`, `rowStatusIcons`: las opciones de los filtros y los iconos de estado, que estaban en `useCertificationFacets` y `useDetailFacets`), `lib/customer-services.ts` (`activeValidServices`, `activeServiceItems`: servicios y ítems vigentes del cliente, copiados en el formulario del detalle y en el de certificación).
+  - **Tablas:** las tres de PartesDiarios (lista, detalle) y Certificación pasan a `useServerTableView`, `createFacetFilters`/`enumFilterOptions`/`dateRangeFilter` (lista de partes) y `usePermissionChecker`; `titled` reemplaza 64 encabezados con `meta.title` y `matchesId`/`matchesNullableId`/`matchesAnyIdOrNone` 17 `filterFn` (se borraron `matchesNullable` y `matchesAny` locales de Certificación). La tabla de pedidos (Preparte) conserva su `handleStateChange` propio (limpia la selección al cambiar filtros) y sus facetas devuelven `{ value, label }`, por eso no usa `useServerTableView` ni `createFacetFilters`.
+  - **Detalle del parte:** `columns/employee-columns.tsx` pasa de 4 columnas copiadas a `driverColumn` y `helperColumn`; `completedColumn` (día y noche) en `status-columns.tsx`; `LoadingBadge`, `AssignedBadge` y `DeviationBadge` en `badge-cells.tsx`; `equipment/EquipmentChip.tsx` (`EquipmentChip`, `ChipBadge`, `toggleId`) en los campos de equipos propios y otros equipos; `RowColorLegend` acepta `showDeviations` y la usa Certificación; los horarios usan `InputFormField`.
+  - **Archivos partidos:** `Preparte/actions/mutations.server.ts` 573 → 321 (`lib/preparte-references.ts`: validación de perímetro y traducción de sector/área; `actions/move-preparte-file.server.ts`: la imagen del pedido, la prueba de integración apunta al archivo nuevo); `HistoryDialog.tsx` 567 → 116 (`history/history-helpers.tsx` y `history/HistoryEntry.tsx`). Ningún archivo del módulo supera las 520 líneas.
+  - Verificación: `check-types` limpio, `npm test` (1494) y `next build` compilando. No se tocó lógica de escritura de los casos de uso (solo se movieron funciones de Preparte), por eso no se corrieron las suites de integración (la única del módulo, `move-preparte-file`, necesita RustFS).
 
 ## En curso / siguiente
 
@@ -155,6 +161,10 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 - **Ropa, facetas si la consulta falla:** al unificar con `createFacetFilters`, una faceta de estado, tipo de entrega o firma que falla en el servidor muestra la lista vacía (antes mostraba las opciones sin conteos). Solo cambia el caso de error.
 - **Dashboard, Estadísticas:** "Histórico de servicios" abre las vistas semanal y mensual con 2 meses previos y "Gestión de pedidos" con 0 y 5; los rótulos de período usan guion "-" en uno y raya "–" en el otro. Se conservaron; se unifican si se decide un criterio.
 - **Ropa, el filtro de firma cuenta solo la página visible** en el historial del empleado y en todas las entregas (se calcula con las filas cargadas, no en el servidor, como en reportes).
+
+- **Operaciones, Certificación y detalle del parte, colores de fila:** la prioridad es distinta. En el detalle una línea editada por Comercial gana sobre la agregada después de la fecha del parte; en Certificación gana la agregada después. Se conservó (`getRowClassName` y `getCertificationRowClassName`); si se decide un criterio, se unifica en un solo helper.
+- **Operaciones, presentación distinta por tabla (conservada):** el tooltip de "asignado correctamente" tarda 100 ms en empleados y 300 ms en equipos del detalle; el área se rotula con `descripcion_corta` en el detalle y con `nombre` en Certificación; el filtro de equipo propio de Certificación solo cuenta vehículos y el del detalle suma otros equipos. Por eso `SHARED_ROW_FACETS` no incluye `area`, `equipment` ni `employees`.
+- **Operaciones, `Preparte/list`:** la acción `getPreparteSingleFacet` devuelve `resolvedOptions` como `{ value, label }` y no como el `SingleFacetResult` común (`{ id, name }`); unificarlo permitiría usar `createFacetFilters` en la tabla de pedidos.
 
 ## Pendiente detectado en Compras (para las pasadas de Almacenes, Tesorería y otros)
 
@@ -195,3 +205,9 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 - `Clothing/actions/session.server.ts` y `OperatorPanel/actions/session.server.ts` repiten el login por correo y empleado (~30 líneas) con reglas distintas (sector de taller vs. empleado).
 - `Dashboard/Estadisticas/KPIs/Indicadores/actions.server.ts` repite ~40 líneas de la consulta de listas con las de Ropa, Selección y Operaciones (`where` + orden + faceta); entra en el helper de listas de acciones pendiente de la sección de Compras.
 - Archivos de más de 500 líneas que quedan: `Dashboard/lib/widget-registry.ts` (537, tabla de configuración de widgets) y `Dashboard/Estadisticas/Mantenimiento/actions/actions.server.ts` (559).
+
+## Pendiente detectado en Operaciones
+
+- `PartesDiarios/list/actions.server.ts` y `Preparte/list/actions.server.ts` repiten la cabecera de lista (`sanitizeFilters`, rango de fechas, `toFacetMap`, conteo y export por tandas, ~12 líneas) y `comercial-rows.server.ts` vs `Preparte/actions/mutations.server.ts` repiten la verificación de perímetro de cliente/contrato/ítem/equipo (~11 líneas): entran en el helper de listas de acciones pendiente de Compras.
+- `EmployeeSection.tsx` (dos bloques de campo de rol de ~20 líneas), `report-workbook.ts` (dos tramos de ~10 líneas) y `CustomerContractSection`/`LocationSection` (campos de 8 a 18 líneas) quedan con repeticiones internas chicas.
+- Archivos más grandes del módulo: `Preparte/list/columns.tsx` (511), `Preparte/list/actions.server.ts` (448), `PartesDiarios/detail/clone.server.ts` y `queries.server.ts` (~440): sin costuras claras que justifiquen partirlos.
