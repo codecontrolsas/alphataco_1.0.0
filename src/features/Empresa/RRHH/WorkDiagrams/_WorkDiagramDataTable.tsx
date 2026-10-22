@@ -1,5 +1,6 @@
 'use client';
 
+import { usePermissionChecker } from '@/features/Permissions/hooks/usePermissionChecker';
 import {
   CatalogCreateButton,
   CatalogFormSheet,
@@ -8,12 +9,17 @@ import {
   type CatalogSheetMode,
 } from '@/shared/components/common/CatalogFormSheet';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import {
+  type DataTableFacetedFilterConfig,
+  type DataTableSearchParams,
+  type FacetResult,
+} from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { CircleOff } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { activeStatusLabel, buildActiveFacetResult } from '../../lib/active-status';
 import WorkDiagramForm from './WorkDiagramForm';
 import {
@@ -43,6 +49,9 @@ export interface WorkDiagramDataTableProps {
   initialFilterVisibility?: Record<string, boolean>;
 }
 
+/** Filtros visibles hasta que el usuario elija otros (las preferencias guardadas tienen prioridad). */
+const DEFAULT_VISIBLE_FILTERS = ['is_active', 'name', 'active_novelties'];
+
 // ============================================================================
 // COMPONENT
 // ============================================================================
@@ -57,14 +66,8 @@ export default function _WorkDiagramDataTable({
   initialColumnVisibility,
   initialFilterVisibility,
 }: WorkDiagramDataTableProps) {
-  // ── Permisos: construir helper desde el map serializable del servidor ────────
-  const permissions = useMemo(
-    () => ({
-      hasPermission: (module: string, tab: string, action: string) =>
-        permissionsMap[`${module}:${tab}:${action}`] === true,
-    }),
-    [permissionsMap]
-  );
+  // ── Permisos: helper armado desde el mapa serializable del servidor ───────────
+  const permissions = usePermissionChecker(permissionsMap);
 
   const canCreate = permissions.hasPermission('configuracion', 'listado', 'create');
   const canUpdate = permissions.hasPermission('configuracion', 'listado', 'update');
@@ -91,45 +94,10 @@ export default function _WorkDiagramDataTable({
     [closeSheet]
   );
 
-  // ── Client-side navigation mode ──────────────────────────────────────────
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-
-  const handleStateChange = useCallback((params: DataTableSearchParams) => {
-    setCurrentParams(params);
-  }, []);
-
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getWorkDiagramsPaginated(params), []);
 
   // ── Columns ───────────────────────────────────────────────────────────────
   const columns = useMemo(() => getColumns(permissions, handleEdit), [permissions, handleEdit]);
-
-  // ── Column visibility ─────────────────────────────────────────────────────
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults: Record<string, boolean> = {};
-    for (const col of HIDDEN_COLUMNS_BY_DEFAULT) {
-      defaults[col] = false;
-    }
-    return { ...defaults, ...(initialColumnVisibility ?? {}) };
-  }, [initialColumnVisibility]);
-
-  // ── Filter visibility — 3 visibles por defecto ────────────────────────────
-  const DEFAULT_VISIBLE_FILTERS = ['is_active', 'name', 'active_novelties'];
-  const allFilterIds = [
-    'name',
-    'is_active',
-    'active_novelties',
-    'inactive_novelty',
-    'active_working_days',
-    'inactive_working_days',
-    'created_at',
-  ];
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
-      return initialFilterVisibility;
-    }
-    return Object.fromEntries(allFilterIds.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialFilterVisibility]);
 
   // ── Lazy-load facet: is_active ─────────────────────────────────────────────
   const fetchIsActiveFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
@@ -223,23 +191,27 @@ export default function _WorkDiagramDataTable({
     [fetchIsActiveFacet, fetchInactiveNoveltyFacet, fetchActiveNoveltiesFacet]
   );
 
+  // ── Estado de vista: params vigentes (para exportar) y visibilidad inicial ─────
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
+
   // ── DataTable ─────────────────────────────────────────────────────────────
   const table = (
     <DataTable
+      {...tableProps}
       columns={columns}
       data={data}
       totalRows={totalRows}
-      searchParams={searchParams}
       queryFn={tableQueryFn}
       queryKey={['work-diagrams']}
-      onStateChange={handleStateChange}
       toolbarActions={<CatalogCreateButton sheet={sheet} label="Nuevo diagrama" />}
-      tableId={tableId}
-      paramNamespace={tableId}
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={mergedColumnVisibility}
-      initialFilterVisibility={mergedFilterVisibility}
-      showFilterToggle
       searchPlaceholder="Buscar por nombre..."
       emptyMessage="No se encontraron diagramas de trabajo"
       data-testid="work-diagrams-table"

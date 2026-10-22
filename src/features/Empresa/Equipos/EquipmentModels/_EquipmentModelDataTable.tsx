@@ -1,5 +1,6 @@
 'use client';
 
+import { usePermissionChecker } from '@/features/Permissions/hooks/usePermissionChecker';
 import {
   CatalogCreateButton,
   CatalogFormSheet,
@@ -7,8 +8,13 @@ import {
   useCatalogSheet,
 } from '@/shared/components/common/CatalogFormSheet';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import {
+  type DataTableFacetedFilterConfig,
+  type DataTableSearchParams,
+  type FacetResult,
+} from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { CircleOff } from 'lucide-react';
@@ -38,6 +44,9 @@ interface EquipmentModelDataTableProps {
   initialFilterVisibility?: Record<string, boolean>;
 }
 
+/** Filtros visibles hasta que el usuario elija otros (las preferencias guardadas tienen prioridad). */
+const DEFAULT_VISIBLE_FILTERS = ['is_active', 'brand', 'name'];
+
 // ============================================================================
 // COMPONENT
 // ============================================================================
@@ -51,14 +60,8 @@ export default function _EquipmentModelDataTable({
   initialColumnVisibility,
   initialFilterVisibility,
 }: EquipmentModelDataTableProps) {
-  // ── Permisos: construir helper desde el map serializable del servidor ────────
-  const permissions = useMemo(
-    () => ({
-      hasPermission: (module: string, tab: string, action: string) =>
-        permissionsMap[`${module}:${tab}:${action}`] === true,
-    }),
-    [permissionsMap]
-  );
+  // ── Permisos: helper armado desde el mapa serializable del servidor ───────────
+  const permissions = usePermissionChecker(permissionsMap);
 
   const canCreate = permissions.hasPermission('configuracion', 'modelos', 'create');
   const canUpdate = permissions.hasPermission('configuracion', 'modelos', 'update');
@@ -79,36 +82,10 @@ export default function _EquipmentModelDataTable({
   });
   const handleEdit = sheet.openEdit;
 
-  // ── Client-side navigation mode ──────────────────────────────────────────
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-
-  const handleStateChange = useCallback((params: DataTableSearchParams) => {
-    setCurrentParams(params);
-  }, []);
-
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getEquipmentModelsPaginated(params), []);
 
   // ── Columns ───────────────────────────────────────────────────────────────
   const columns = useMemo(() => getColumns(permissions, handleEdit), [permissions, handleEdit]);
-
-  // ── Column visibility ─────────────────────────────────────────────────────
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults: Record<string, boolean> = {};
-    for (const col of HIDDEN_COLUMNS_BY_DEFAULT) {
-      defaults[col] = false;
-    }
-    return { ...defaults, ...(initialColumnVisibility ?? {}) };
-  }, [initialColumnVisibility]);
-
-  // ── Filter visibility — 3 visibles por defecto ────────────────────────────
-  const DEFAULT_VISIBLE_FILTERS = ['is_active', 'brand', 'name'];
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
-      return initialFilterVisibility;
-    }
-    const allFilterIds = ['name', 'brand', 'is_active', 'created_at'];
-    return Object.fromEntries(allFilterIds.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
-  }, [initialFilterVisibility]);
 
   // ── Lazy-load facet: is_active ─────────────────────────────────────────────
   const fetchIsActiveFacet = useCallback(async (params: DataTableSearchParams): Promise<FacetResult> => {
@@ -164,23 +141,27 @@ export default function _EquipmentModelDataTable({
     [fetchBrandFacet, fetchIsActiveFacet]
   );
 
+  // ── Estado de vista: params vigentes (para exportar) y visibilidad inicial ─────
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
+
   // ── DataTable ─────────────────────────────────────────────────────────────
   const table = (
     <DataTable
+      {...tableProps}
       columns={columns}
       data={data}
       totalRows={totalRows}
-      searchParams={searchParams}
       queryFn={tableQueryFn}
       queryKey={['equipment-models']}
-      onStateChange={handleStateChange}
       toolbarActions={<CatalogCreateButton sheet={sheet} label="Nuevo modelo" />}
-      tableId={tableId}
-      paramNamespace={tableId}
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={mergedColumnVisibility}
-      initialFilterVisibility={mergedFilterVisibility}
-      showFilterToggle
       searchPlaceholder="Buscar modelos de equipos..."
       emptyMessage="No se encontraron modelos de equipos"
       exportConfig={{

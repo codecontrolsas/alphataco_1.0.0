@@ -1,5 +1,6 @@
 'use client';
 
+import { usePermissionChecker } from '@/features/Permissions/hooks/usePermissionChecker';
 import {
   CatalogCreateButton,
   CatalogFormSheet,
@@ -7,12 +8,17 @@ import {
   useCatalogSheet,
 } from '@/shared/components/common/CatalogFormSheet';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import {
+  type DataTableFacetedFilterConfig,
+  type DataTableSearchParams,
+  type FacetResult,
+} from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Check, CircleOff, X } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { activeStatusLabel, buildActiveFacetResult } from '../../lib/active-status';
 import {
   getAllDiagramTypesForExport,
@@ -39,6 +45,9 @@ interface DiagramTypeDataTableProps {
   initialFilterVisibility?: Record<string, boolean>;
 }
 
+/** Filtros visibles hasta que el usuario elija otros (las preferencias guardadas tienen prioridad). */
+const DEFAULT_VISIBLE_FILTERS = ['is_active', 'work_active', 'name'];
+
 // ============================================================================
 // COMPONENT
 // ============================================================================
@@ -52,14 +61,8 @@ export default function _DiagramTypeDataTable({
   initialColumnVisibility,
   initialFilterVisibility,
 }: DiagramTypeDataTableProps) {
-  // ── Permisos: construir helper desde el map serializable del servidor ────────
-  const permissions = useMemo(
-    () => ({
-      hasPermission: (module: string, tab: string, action: string) =>
-        permissionsMap[`${module}:${tab}:${action}`] === true,
-    }),
-    [permissionsMap]
-  );
+  // ── Permisos: helper armado desde el mapa serializable del servidor ───────────
+  const permissions = usePermissionChecker(permissionsMap);
 
   const canCreate = permissions.hasPermission('configuracion', 'diagrams', 'create');
   const canUpdate = permissions.hasPermission('configuracion', 'diagrams', 'update');
@@ -76,43 +79,10 @@ export default function _DiagramTypeDataTable({
   });
   const handleEdit = sheet.openEdit;
 
-  // ── Client-side navigation mode ──────────────────────────────────────────
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-
-  const handleStateChange = useCallback((params: DataTableSearchParams) => {
-    setCurrentParams(params);
-  }, []);
-
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getDiagramTypesPaginated(params), []);
 
   // ── Columns ───────────────────────────────────────────────────────────────
   const columns = useMemo(() => getColumns(permissions, handleEdit), [permissions, handleEdit]);
-
-  // ── Column visibility ─────────────────────────────────────────────────────
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults: Record<string, boolean> = {};
-    for (const col of HIDDEN_COLUMNS_BY_DEFAULT) {
-      defaults[col] = false;
-    }
-    return { ...defaults, ...(initialColumnVisibility ?? {}) };
-  }, [initialColumnVisibility]);
-
-  // ── Filter visibility — 3 visibles por defecto ────────────────────────────
-  const DEFAULT_VISIBLE_FILTERS = ['is_active', 'work_active', 'name'];
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
-      return initialFilterVisibility;
-    }
-    const allFilterIds = [
-      'name',
-      'short_description',
-      'work_active',
-      'is_active',
-      'computes_absenteeism',
-      'created_at',
-    ];
-    return Object.fromEntries(allFilterIds.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
-  }, [initialFilterVisibility]);
 
   // ── Lazy-load facets ──────────────────────────────────────────────────────
 
@@ -197,23 +167,27 @@ export default function _DiagramTypeDataTable({
     [fetchWorkActiveFacet, fetchIsActiveFacet, fetchComputesFacet]
   );
 
+  // ── Estado de vista: params vigentes (para exportar) y visibilidad inicial ─────
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
+
   // ── DataTable ─────────────────────────────────────────────────────────────
   const table = (
     <DataTable
+      {...tableProps}
       columns={columns}
       data={data}
       totalRows={totalRows}
-      searchParams={searchParams}
       queryFn={tableQueryFn}
       queryKey={['diagram-types']}
-      onStateChange={handleStateChange}
       toolbarActions={<CatalogCreateButton sheet={sheet} label="Nuevo tipo de novedad" />}
-      tableId={tableId}
-      paramNamespace={tableId}
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={mergedColumnVisibility}
-      initialFilterVisibility={mergedFilterVisibility}
-      showFilterToggle
       searchPlaceholder="Buscar tipos de novedades..."
       emptyMessage="No se encontraron tipos de novedades"
       exportConfig={{
