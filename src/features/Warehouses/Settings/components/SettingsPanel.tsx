@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { getWarehouseSettings, type WarehouseSettings } from '../../actions/catalog.server';
+import { getWarehouseSettings, type WarehouseSettings } from '../../actions/catalog-settings.server';
 import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
 import { CategoriesSection } from './CategoriesSection';
 import { UnitsSection } from './UnitsSection';

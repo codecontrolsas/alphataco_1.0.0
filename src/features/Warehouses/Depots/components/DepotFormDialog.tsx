@@ -25,7 +25,7 @@ import {
   searchDepotManagerOptions,
   updateWarehouse,
   type DepotForEdit,
-} from '../../actions/catalog.server';
+} from '../../actions/depots.server';
 import { SearchCombobox } from '../../components/SearchCombobox';
 import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
 import { warehouseFormSchema, type WarehouseFormValues } from '../../schemas/catalog';

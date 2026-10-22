@@ -8,7 +8,7 @@ import { withActor } from '@/shared/lib/actor';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
-import { toActionError } from '../lib/action-errors';
+import { WAREHOUSE_PATH, toActionError } from '../lib/action-errors';
 import { StockError } from '../lib/stock-errors';
 import { registerReturn, writeOffLoanedUnit } from '../lib/stock-loans';
 import { hasTireMaterials } from '../lib/tire-stock';
@@ -21,7 +21,6 @@ import {
 
 const logger = new Logger('features/Warehouses/loans');
 
-const WAREHOUSE_PATH = '/dashboard/warehouse';
 const TRANSACTION_OPTIONS = { timeout: 20_000, maxWait: 5_000 };
 
 type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];

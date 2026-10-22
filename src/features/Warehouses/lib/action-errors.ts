@@ -1,8 +1,8 @@
 import 'server-only';
 
+import { fail, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { Prisma } from '@/generated/prisma/client';
 import type { Logger } from '@/lib/logger';
-import { fail, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { StockError } from './stock-errors';
 
 /**
@@ -28,4 +28,21 @@ export function toActionError<T = null>(
   }
   logger.error(`Error al ${context}`, { data: { error } });
   return fail(`No se pudo ${context}. Intentá de nuevo; si persiste, avisá a soporte.`);
+}
+
+export const WAREHOUSE_PATH = '/dashboard/warehouse';
+
+export const NO_PERMISSION = 'No tenés permiso para realizar esta acción';
+
+/** Texto de un campo opcional del formulario: vacío -> `null`. */
+export const nullable = (value: string) => (value.trim() ? value.trim() : null);
+
+/** Primer mensaje de validacion de Zod, para el toast. */
+export function firstIssue(error: { issues: { message: string }[] }): string {
+  return error.issues[0]?.message ?? 'Datos inválidos';
+}
+
+/** Violacion de FK (P2003): otro registro todavia apunta al que se quiere borrar. */
+export function isForeignKeyError(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003';
 }

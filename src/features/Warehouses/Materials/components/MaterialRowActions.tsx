@@ -1,11 +1,7 @@
 'use client';
 
-import {
-  getMaterialForEdit,
-  getMaterialFormLookups,
-  reactivateMaterial,
-  removeMaterial,
-} from '../../actions/catalog.server';
+import { getMaterialFormLookups } from '../../actions/catalog-settings.server';
+import { getMaterialForEdit, reactivateMaterial, removeMaterial } from '../../actions/materials.server';
 import { CatalogRowActions } from '../../components/CatalogRowActions';
 import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
 import { MaterialFormDialog } from './MaterialFormDialog';

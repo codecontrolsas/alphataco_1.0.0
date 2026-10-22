@@ -1,20 +1,20 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
-import { Prisma } from '@/generated/prisma/client';
-import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { withActor } from '@/shared/lib/actor';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { toActionError } from '../lib/action-errors';
+import { revalidatePath } from 'next/cache';
+import { WAREHOUSE_PATH, toActionError } from '../lib/action-errors';
 import { dateColumnToYmd } from '../lib/batch-expiry';
+import { createMaterialRequest } from '../lib/create-request';
 import { DESTINATION_SELECT, destinationLabel } from '../lib/labels';
 import { canApplyRequestAction, type MaterialRequestStatus, type RequestAction } from '../lib/request-state-machine';
 import { deliveredByLine, lockRequest } from '../lib/requests';
-import { createMaterialRequest } from '../lib/create-request';
 import { registerRequestDelivery } from '../lib/stock-engine';
 import { StockError } from '../lib/stock-errors';
 import {
@@ -32,7 +32,6 @@ import { toDestinationInput } from '../schemas/stock-movement';
 
 const logger = new Logger('features/Warehouses/requests');
 
-const WAREHOUSE_PATH = '/dashboard/warehouse';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TRANSACTION_OPTIONS = { timeout: 20_000, maxWait: 5_000 };
 
@@ -116,7 +115,8 @@ async function decideRequest(
 }
 
 export async function approveRequestAction(requestId: string): Promise<ActionResult<{ number: string }>> {
-  if (!(await checkPermissionServer('almacenes', 'pedidos', 'approve'))) return fail('No tenés permiso para aprobar pedidos');
+  if (!(await checkPermissionServer('almacenes', 'pedidos', 'approve')))
+    return fail('No tenés permiso para aprobar pedidos');
   return decideRequest(requestId, 'approve', (profileId) => ({
     status: 'APPROVED',
     decider: { connect: { id: profileId } },
@@ -125,7 +125,8 @@ export async function approveRequestAction(requestId: string): Promise<ActionRes
 }
 
 export async function rejectRequestAction(values: RejectRequestFormValues): Promise<ActionResult<{ number: string }>> {
-  if (!(await checkPermissionServer('almacenes', 'pedidos', 'approve'))) return fail('No tenés permiso para rechazar pedidos');
+  if (!(await checkPermissionServer('almacenes', 'pedidos', 'approve')))
+    return fail('No tenés permiso para rechazar pedidos');
   const parsed = rejectRequestSchema.safeParse(values);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos');
   return decideRequest(parsed.data.requestId, 'reject', (profileId) => ({
@@ -148,7 +149,8 @@ export async function cancelRequestAction(requestId: string): Promise<ActionResu
 }
 
 export async function closeRequestAction(values: CloseRequestFormValues): Promise<ActionResult<{ number: string }>> {
-  if (!(await checkPermissionServer('almacenes', 'pedidos', 'update'))) return fail('No tenés permiso para cerrar pedidos');
+  if (!(await checkPermissionServer('almacenes', 'pedidos', 'update')))
+    return fail('No tenés permiso para cerrar pedidos');
   const parsed = closeRequestSchema.safeParse(values);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos');
   return decideRequest(parsed.data.requestId, 'close', (profileId) => ({
@@ -163,7 +165,8 @@ export async function closeRequestAction(values: CloseRequestFormValues): Promis
 export async function deliverRequestAction(
   values: DeliverRequestFormValues
 ): Promise<ActionResult<{ movementId: string; number: string; status: MaterialRequestStatus }>> {
-  if (!(await checkPermissionServer('almacenes', 'pedidos', 'update'))) return fail('No tenés permiso para entregar pedidos');
+  if (!(await checkPermissionServer('almacenes', 'pedidos', 'update')))
+    return fail('No tenés permiso para entregar pedidos');
   const parsed = deliverRequestSchema.safeParse(values);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos');
 
@@ -262,7 +265,8 @@ export async function getMaterialRequestDetail(id: string) {
   if (!request) return null;
 
   const delivered = await deliveredByLine(prisma, request.id);
-  const userName = (p: { fullname: string | null; email: string | null } | null) => (p ? (p.fullname ?? p.email ?? 'Usuario') : null);
+  const userName = (p: { fullname: string | null; email: string | null } | null) =>
+    p ? p.fullname ?? p.email ?? 'Usuario' : null;
   const isRequester = request.requested_by === profile.id;
   const status = request.status as MaterialRequestStatus;
   const estimated = request.lines.reduce(

@@ -7,7 +7,7 @@ import {
   removeMaterialCategory,
   updateMaterialCategory,
   type WarehouseSettings,
-} from '../../actions/catalog.server';
+} from '../../actions/catalog-settings.server';
 import { materialCategoryFormSchema, type MaterialCategoryFormValues } from '../../schemas/catalog';
 import { MaterialCatalogSection } from './MaterialCatalogSection';
 

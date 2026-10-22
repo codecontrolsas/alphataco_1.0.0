@@ -1,6 +1,6 @@
 'use client';
 
-import { getDepotForEdit, reactivateWarehouse, removeWarehouse } from '../../actions/catalog.server';
+import { getDepotForEdit, reactivateWarehouse, removeWarehouse } from '../../actions/depots.server';
 import { CatalogRowActions } from '../../components/CatalogRowActions';
 import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
 import { DepotFormDialog } from './DepotFormDialog';

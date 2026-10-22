@@ -1,12 +1,11 @@
-import { TableSkeleton } from '@/shared/components/skeletons/TableSkeleton';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { Suspense } from 'react';
-import { getMaterialFormLookups } from '../actions/catalog.server';
 import { StateBlock } from '@/shared/components/common/StateBlock';
+import { TableSkeleton } from '@/shared/components/skeletons/TableSkeleton';
+import { Suspense } from 'react';
+import { getMaterialFormLookups } from '../actions/catalog-settings.server';
 import { canWarehouse, type PermissionsMap } from '../lib/permissions';
 import { MaterialFormDialog } from './components/MaterialFormDialog';
 import { MaterialsList } from './components/MaterialsList/MaterialsList';
-
 
 export default async function MaterialsTabContent({
   searchParams,
@@ -15,7 +14,8 @@ export default async function MaterialsTabContent({
   searchParams: DataTableSearchParams;
   permissions: PermissionsMap;
 }) {
-  if (!canWarehouse(permissions, 'materiales', 'view')) return <StateBlock variant="noperm" title="No tenés permiso para ver esta información." />;
+  if (!canWarehouse(permissions, 'materiales', 'view'))
+    return <StateBlock variant="noperm" title="No tenés permiso para ver esta información." />;
   const canCreate = canWarehouse(permissions, 'materiales', 'create');
   const lookups = canCreate ? await getMaterialFormLookups() : null;
 

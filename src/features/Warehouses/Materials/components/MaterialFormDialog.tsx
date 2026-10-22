@@ -23,12 +23,8 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import {
-  createMaterial,
-  updateMaterial,
-  type MaterialForEdit,
-  type MaterialFormLookups,
-} from '../../actions/catalog.server';
+import { type MaterialFormLookups } from '../../actions/catalog-settings.server';
+import { createMaterial, updateMaterial, type MaterialForEdit } from '../../actions/materials.server';
 import { TRACKING_TYPE_LABELS } from '../../lib/labels';
 import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
 import { materialFormSchema, type MaterialFormValues } from '../../schemas/catalog';

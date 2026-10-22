@@ -8,7 +8,7 @@ import {
   removeMeasurementUnit,
   updateMeasurementUnit,
   type WarehouseSettings,
-} from '../../actions/catalog.server';
+} from '../../actions/catalog-settings.server';
 import { measurementUnitFormSchema, type MeasurementUnitFormValues } from '../../schemas/catalog';
 import { MaterialCatalogSection } from './MaterialCatalogSection';
 
