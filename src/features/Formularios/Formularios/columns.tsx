@@ -1,6 +1,7 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
+import type { PermissionChecker } from '@/features/Permissions/hooks/usePermissionChecker';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { StackedCell } from '@/shared/components/common/StackedCell';
@@ -33,18 +34,10 @@ const SOURCE_TONE_CLASS: Record<string, string> = {
 };
 
 // ============================================================================
-// TIPO DE PERMISOS
-// ============================================================================
-
-type Permissions = {
-  hasPermission: (module: string, tab: string, action: string) => boolean;
-};
-
-// ============================================================================
 // COLUMNAS
 // ============================================================================
 
-export function getColumns(permissions: Permissions): ColumnDef<FormListItem>[] {
+export function getColumns(permissions: PermissionChecker): ColumnDef<FormListItem>[] {
   const canView = permissions.hasPermission('formularios', 'formularios', 'view');
 
   return [

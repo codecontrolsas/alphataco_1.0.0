@@ -1,6 +1,7 @@
 'use client';
 
 import { Document, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
+import { PdfSignature } from './PdfSignature';
 
 interface VehicleInspectionLayoutProps {
   subtitle: string;
@@ -380,16 +381,7 @@ export const VehicleInspectionLayout = ({
     </View>
   );
 
-  const renderSignature = () => (
-    <View style={styles.signatureContainer}>
-      {singurl && !singurl.endsWith('_files/') ? (
-        <Image style={styles.signatureImage} src={singurl} />
-      ) : data.conductor ? (
-        <Text>Sin firma</Text>
-      ) : null}
-      <Text style={styles.signatureText}>FIRMA DEL CONDUCTOR</Text>
-    </View>
-  );
+  const renderSignature = () => <PdfSignature singurl={singurl} driverName={data.conductor} styles={styles} />;
 
   return (
     <Document>

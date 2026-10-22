@@ -1,6 +1,7 @@
 'use client';
 
 import { Document, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
+import { PdfSignature } from './PdfSignature';
 
 interface MaintenanceChecklistLayoutProps {
   title: string;
@@ -387,16 +388,7 @@ export const MaintenanceChecklistLayout = ({
     </View>
   );
 
-  const renderSignature = () => (
-    <View style={styles.signatureContainer}>
-      {singurl && !singurl.endsWith('_files/') ? (
-        <Image style={styles.signatureImage} src={singurl} />
-      ) : data.chofer ? (
-        <Text>Sin firma</Text>
-      ) : null}
-      <Text style={styles.signatureText}>FIRMA DEL CONDUCTOR</Text>
-    </View>
-  );
+  const renderSignature = () => <PdfSignature singurl={singurl} driverName={data.chofer} styles={styles} />;
 
   return (
     <Document>

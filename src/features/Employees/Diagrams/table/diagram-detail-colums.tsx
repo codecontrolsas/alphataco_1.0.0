@@ -1,9 +1,9 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { DataTableColumnHeader } from '@/features/Formularios/components/tables/data-table-column-header';
 import { ColumnDef } from '@tanstack/react-table';
 import moment from 'moment';
+import { DataTableColumnHeader } from './data-table-column-header';
 
 type Colum = {
   id: string;

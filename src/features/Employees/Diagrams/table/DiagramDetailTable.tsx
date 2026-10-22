@@ -7,7 +7,6 @@ import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { DataTablePagination } from '@/features/Formularios/components/tables/data-table-pagination';
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -27,6 +26,7 @@ import moment from 'moment';
 import { useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { DataTableToolbarDiagramDetail } from './DataTableToolbarDiagramDetail';
+import { DataTablePagination } from './data-table-pagination';
 /** Fila del historial (`diagrams_logs` ya formateado por `EmployeeDiagramsSection`). */
 export interface DiagramHistoryRow {
   /** DD/MM/YYYY */
