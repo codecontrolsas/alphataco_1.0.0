@@ -13,54 +13,40 @@ import { logger } from '@/lib/logger';
 import { pdf } from '@react-pdf/renderer';
 import { Download } from 'lucide-react';
 import dynamic from 'next/dynamic';
-import { useState } from 'react';
+import { useState, type ComponentProps, type ReactNode } from 'react';
 
 // Importación dinámica del PDFViewer
 const PDFViewer = dynamic(() => import('@react-pdf/renderer').then((mod) => mod.PDFViewer), {
   ssr: false,
 });
 
-interface ChecklistPDFPreviewDialogProps {
-  buttonText?: string;
-  templateName: string;
-  templateCode: string;
-  logoUrl?: string;
-  sections: Array<{
-    id: string;
-    code: string;
-    name: string;
-    order_index: number;
-    checklist_template_items: Array<{
-      id: string;
-      code: string;
-      label: string;
-      order_index: number;
-      is_critical?: boolean;
-      requires_side_validation?: boolean;
-      input_type?: string;
-    }>;
-  }>;
-  date?: string;
-  revision?: string;
+// El layout se carga con `import()` dinámico; el tipo viene de un `import type`, que TypeScript borra
+// en el build y no arrastra el PDF al bundle inicial.
+type NormalizedChecklistPDFLayoutComponent =
+  (typeof import('@/features/Checklists/pdf/layouts/NormalizedChecklistPDFLayout'))['NormalizedChecklistPDFLayout'];
+
+/** Datos de la plantilla (y, si hay respuestas, del llenado) que recibe el layout del PDF. */
+export type ChecklistPdfLayoutProps = ComponentProps<NormalizedChecklistPDFLayoutComponent>;
+
+/** Nombre de archivo de la descarga: plantilla saneada y las partes que identifican el llenado. */
+export function checklistPdfFileName(templateName: string, ...parts: string[]) {
+  const sanitizedName = templateName.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s-]/g, '').replace(/\s+/g, '_');
+  return `Checklist_${sanitizedName}_${parts.join('_')}.pdf`;
 }
 
-type NormalizedChecklistPDFLayoutComponent = typeof import(
-  '@/features/Checklists/pdf/layouts/NormalizedChecklistPDFLayout'
-)['NormalizedChecklistPDFLayout'];
+interface ChecklistPdfDialogProps {
+  /** Contenido del botón que abre la vista previa. */
+  trigger: ReactNode;
+  description: ReactNode;
+  layoutProps: ChecklistPdfLayoutProps;
+  /** Se evalúa al descargar (el nombre lleva la fecha de ese momento si el llenado no trae una). */
+  fileName: () => string;
+}
 
-export function ChecklistPDFPreviewDialog({
-  buttonText = 'Generar PDF',
-  templateName,
-  templateCode,
-  logoUrl,
-  sections,
-  date,
-  revision,
-}: ChecklistPDFPreviewDialogProps) {
+/** Vista previa del PDF de un checklist (vacío o con respuestas) y su descarga. */
+export function ChecklistPdfDialog({ trigger, description, layoutProps, fileName }: ChecklistPdfDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  // El layout se carga con `import()` dinámico; el tipo viene de un `import type`,
-  // que TypeScript borra en el build y no arrastra el PDF al bundle inicial.
   const [PDFComponent, setPDFComponent] = useState<NormalizedChecklistPDFLayoutComponent | null>(null);
 
   // Cargar el componente PDF cuando se abre el diálogo
@@ -82,29 +68,13 @@ export function ChecklistPDFPreviewDialog({
         '@/features/Checklists/pdf/layouts/NormalizedChecklistPDFLayout'
       );
 
-      // Crear el documento PDF
-      const doc = (
-        <NormalizedChecklistPDFLayout
-          templateName={templateName}
-          templateCode={templateCode}
-          logoUrl={logoUrl}
-          sections={sections}
-          date={date}
-          revision={revision}
-          isEmpty={true}
-        />
-      );
-
-      // Generar el blob del PDF
-      const blob = await pdf(doc).toBlob();
+      const blob = await pdf(<NormalizedChecklistPDFLayout {...layoutProps} />).toBlob();
       const url = URL.createObjectURL(blob);
 
       // Crear un enlace temporal y hacer clic para descargar
       const link = document.createElement('a');
       link.href = url;
-      // Sanitizar el nombre del template para el archivo (remover caracteres no permitidos)
-      const sanitizedName = templateName.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s-]/g, '').replace(/\s+/g, '_');
-      link.download = `Checklist_${sanitizedName}_${new Date().toISOString().split('T')[0]}.pdf`;
+      link.download = fileName();
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -122,40 +92,18 @@ export function ChecklistPDFPreviewDialog({
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button variant="outline" className="gap-2">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-            <polyline points="14 2 14 8 20 8" />
-          </svg>
-          {buttonText}
+          {trigger}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-5xl h-[90vh] flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b">
-          <DialogTitle className="text-2xl">{templateName}</DialogTitle>
-          <DialogDescription>Vista previa del PDF vacío</DialogDescription>
+          <DialogTitle className="text-2xl">{layoutProps.templateName}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <div className="flex-1 overflow-auto p-6">
           {PDFComponent && (
             <PDFViewer width="100%" height="100%">
-              <PDFComponent
-                templateName={templateName}
-                templateCode={templateCode}
-                logoUrl={logoUrl}
-                sections={sections}
-                date={date}
-                revision={revision}
-                isEmpty={true}
-              />
+              <PDFComponent {...layoutProps} />
             </PDFViewer>
           )}
         </div>
