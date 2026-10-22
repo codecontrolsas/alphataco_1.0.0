@@ -81,8 +81,5 @@ export function useCertificationFacets() {
     [makeFetchFacet]
   );
 
-  /** Ids de todos los filtros, derivados de la configuración (no una lista aparte que se desincronice). */
-  const allFilterIds = useMemo(() => facetedFilters.map((filter) => filter.columnId), [facetedFilters]);
-
-  return { facetedFilters, allFilterIds };
+  return { facetedFilters };
 }

@@ -6,7 +6,8 @@ import { DETAIL_QUERY_PREFIX } from '@/features/Operaciones/PartesDiarios/detail
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useDailyReportFormStore } from '@/shared/store/useDailyReportFormStore';
 import { useQueryClient } from '@tanstack/react-query';
@@ -63,21 +64,19 @@ export function _CertificationDataTable({
   const canEdit = canUpdate('comercial', 'daily_reports');
   const { openForCreate, openForEdit } = useDailyReportFormStore();
 
-  // ── Client-side navigation mode ──────────────────────────────────────────
-  // `currentParams` guarda los filtros activos para que el export respete lo que se ve.
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-  const handleStateChange = useCallback((params: DataTableSearchParams) => setCurrentParams(params), []);
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getCertificationRowsPaginated(params), []);
 
-  // ── Filtros facetados (lazy-load) ─────────────────────────────────────────
-  const { facetedFilters, allFilterIds } = useCertificationFacets();
-
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
-      return initialFilterVisibility;
-    }
-    return Object.fromEntries(allFilterIds.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
-  }, [initialFilterVisibility, allFilterIds]);
+  // ── Filtros facetados (lazy-load) y estado de vista; `currentParams` hace que el export respete lo que se ve ──
+  const { facetedFilters } = useCertificationFacets();
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: [],
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
 
   // ── Estado de modales y selección ─────────────────────────────────────────
   const [historyRowId, setHistoryRowId] = useState<string | null>(null);
@@ -150,19 +149,13 @@ export function _CertificationDataTable({
         <RowColorLegend showDeviations={false} />
 
         <DataTable
+          {...tableProps}
           columns={columns}
           data={data}
           totalRows={totalRows}
-          searchParams={searchParams}
           queryFn={tableQueryFn}
           queryKey={[...CERTIFICATION_QUERY_KEY]}
-          onStateChange={handleStateChange}
-          tableId={tableId}
           paramNamespace={CERTIFICATION_PARAM_NAMESPACE}
-          facetedFilters={facetedFilters}
-          initialColumnVisibility={initialColumnVisibility}
-          initialFilterVisibility={mergedFilterVisibility}
-          showFilterToggle={true}
           showSearch
           mobileCards
           searchPlaceholder="Buscar por cliente, servicio, ítem, descripción, remito, empleado (legajo o nombre) o equipo..."

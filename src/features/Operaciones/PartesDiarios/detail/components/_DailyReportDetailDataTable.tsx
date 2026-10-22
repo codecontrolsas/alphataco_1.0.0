@@ -3,22 +3,23 @@
 import { Button } from '@/components/ui/button';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { CalendarCheck } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useCallback, useMemo, useState } from 'react';
 import { useDailyReportDetailFormStore } from '../../store/dailyReportDetailFormStore';
-import { unwrapExportResult } from '@/shared/lib/export-result';
-import { getDailyReportDetailForExport } from '../export.server';
-import { getDailyReportDetailPaginated } from '../queries.server';
 import { HIDDEN_COLUMNS_BY_DEFAULT, getColumns, type RowActionHandlers } from '../columns';
 import { DETAIL_PARAM_NAMESPACE, DETAIL_PREFS_ID, DETAIL_QUERY_PREFIX } from '../constants';
-import { detailExportFormatters } from '../lib/export-formatters';
-import { canAssignRow } from '../lib/row-permissions';
+import { getDailyReportDetailForExport } from '../export.server';
 import { useDailyReportDetailInvalidation } from '../hooks/useDailyReportDetail';
 import { useDetailFacets } from '../hooks/useDetailFacets';
 import { useRowFormCatalogs } from '../hooks/useRowFormCatalogs';
 import { useValidationData } from '../hooks/useValidationData';
+import { detailExportFormatters } from '../lib/export-formatters';
+import { canAssignRow } from '../lib/row-permissions';
+import { getDailyReportDetailPaginated } from '../queries.server';
 import type { DailyReportDetailRow } from '../types';
 
 // Lightweight modals — regular imports
@@ -83,13 +84,6 @@ export function _DailyReportDetailDataTable({
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
-  // ── Client-side navigation mode ──────────────────────────────────────────
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-
-  const handleStateChange = useCallback((params: DataTableSearchParams) => {
-    setCurrentParams(params);
-  }, []);
-
   const tableQueryFn = useCallback(
     (params: DataTableSearchParams) => getDailyReportDetailPaginated(dailyReportId, params, reportDate),
     [dailyReportId, reportDate]
@@ -98,8 +92,17 @@ export function _DailyReportDetailDataTable({
   // ── Query invalidation ────────────────────────────────────────────────────
   const { invalidateDetail } = useDailyReportDetailInvalidation();
 
-  // ── Filtros facetados (lazy-load) ─────────────────────────────────────────
-  const { facetedFilters, allFilterIds } = useDetailFacets(dailyReportId);
+  // ── Filtros facetados (lazy-load) y estado de vista; `currentParams` hace que el export respete lo que se ve ──
+  const { facetedFilters } = useDetailFacets(dailyReportId);
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId: DETAIL_PREFS_ID,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
 
   // ── Datos de validaciones de desvíos (empleados y equipos) ───────────────
   const {
@@ -160,23 +163,6 @@ export function _DailyReportDetailDataTable({
     [getEmployeeDeviation, getEquipmentDeviation, getRowDeviationCount, loadingValidations]
   );
 
-  // ── Column visibility ─────────────────────────────────────────────────────
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults: Record<string, boolean> = {};
-    for (const col of HIDDEN_COLUMNS_BY_DEFAULT) {
-      defaults[col] = false;
-    }
-    return { ...defaults, ...initialColumnVisibility };
-  }, [initialColumnVisibility]);
-
-  // ── Filter visibility — 3 visible by default ──────────────────────────────
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
-      return initialFilterVisibility;
-    }
-    return Object.fromEntries(allFilterIds.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
-  }, [initialFilterVisibility, allFilterIds]);
-
   // ── Columns ────────────────────────────────────────────────────────────────
   const columns = useMemo(
     () => getColumns(permissions, handlers, reportDate, deviationGetters),
@@ -219,19 +205,13 @@ export function _DailyReportDetailDataTable({
       />
       <RowColorLegend />
       <DataTable
+        {...tableProps}
         columns={columns}
         data={data}
         totalRows={totalRows}
-        searchParams={searchParams}
         queryFn={tableQueryFn}
         queryKey={[DETAIL_QUERY_PREFIX, dailyReportId]}
-        onStateChange={handleStateChange}
-        tableId={DETAIL_PREFS_ID}
         paramNamespace={DETAIL_PARAM_NAMESPACE}
-        facetedFilters={facetedFilters}
-        initialColumnVisibility={mergedColumnVisibility}
-        initialFilterVisibility={mergedFilterVisibility}
-        showFilterToggle={true}
         showSearch
         mobileCards
         searchPlaceholder="Buscar por descripción, remito o jornada..."
@@ -244,7 +224,8 @@ export function _DailyReportDetailDataTable({
         rowClassName={rowClassName}
         data-testid="daily-report-detail-table"
         exportConfig={{
-          fetchAllData: async () => unwrapExportResult(await getDailyReportDetailForExport(dailyReportId, currentParams)),
+          fetchAllData: async () =>
+            unwrapExportResult(await getDailyReportDetailForExport(dailyReportId, currentParams)),
           options: {
             filename: 'detalle-parte-diario',
             sheetName: 'Detalle Parte Diario',
