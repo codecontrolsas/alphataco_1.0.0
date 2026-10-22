@@ -54,7 +54,6 @@ function addGroupSeparator(sheet: ExcelJS.Worksheet, rowIndex: number, colCount:
 
 function buildSummarySheet(workbook: ExcelJS.Workbook, summary: PreparteReportSummary) {
   const sheet = workbook.addWorksheet('Resumen');
-  const colCount = 11;
 
   // Título
   sheet.mergeCells(`A1:K1`);

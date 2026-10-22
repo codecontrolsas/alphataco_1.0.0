@@ -2,17 +2,17 @@
 
 import { preparte_status } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
+import { prisma } from '@/shared/lib/prisma';
+import { getSessionUserId } from '@/shared/lib/session';
 import { callScalar } from '@/shared/lib/sql';
 import { storageList, storageMove, storageRemove } from '@/shared/lib/storage';
 import { buildStorageFileUrl, isSafeStorageKey, parseStorageFileUrl } from '@/shared/lib/storage-url';
-import { prisma } from '@/shared/lib/prisma';
-import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { getStatusActorPayload } from '../lib/preparte-actor';
-import { preparteCompanyScope } from '../lib/preparte-scope';
-import { assertPreparteActionAllowed } from '../lib/preparte-permissions';
-import type { Preparte, PreparteChangeLog } from '../types';
 import { z } from 'zod';
+import { getStatusActorPayload } from '../lib/preparte-actor';
+import { assertPreparteActionAllowed } from '../lib/preparte-permissions';
+import { preparteCompanyScope } from '../lib/preparte-scope';
+import type { Preparte, PreparteChangeLog } from '../types';
 
 const logger = new Logger('features/Operaciones/Preparte/mutations');
 
@@ -26,14 +26,6 @@ function toUuidOrNull(value: string | null | undefined): string | null {
 function toDateOrNull(value: string | null | undefined): Date | null {
   if (!value) return null;
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-/** Convierte un `HH:mm[:ss]` a la columna `time` de Postgres (Prisma la modela como Date). */
-function toPgTime(value: string | null | undefined): Date | null {
-  if (!value) return null;
-  // `Z`: la columna `time` se lee con `moment.utc`, así que se escribe en UTC (sin corrimiento).
-  const parsed = new Date(`1970-01-01T${value.length === 5 ? `${value}:00` : value}Z`);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
@@ -63,7 +55,9 @@ async function assertPreparteReferences(
   }
 ): Promise<void> {
   const customerIds = [...new Set(refs.customerIds.filter(Boolean))];
-  const serviceIds = [...new Set([...refs.serviceIds, ...(refs.servicePairs ?? []).map((p) => p.serviceId)].filter(Boolean))];
+  const serviceIds = [
+    ...new Set([...refs.serviceIds, ...(refs.servicePairs ?? []).map((p) => p.serviceId)].filter(Boolean)),
+  ];
   const itemIds = [...new Set(refs.itemIds.filter(Boolean))];
   const customerEquipmentIds = [...new Set(refs.customerEquipmentIds.filter(Boolean))];
 
@@ -233,14 +227,8 @@ export async function createPreparte(
 
     const serviceIds = [...new Set(dataToInsert.map((item) => item.contrato_id).filter(Boolean))];
     const [sectorMap, areaMap] = await Promise.all([
-      buildSectorMap(
-        serviceIds,
-        dataToInsert.map((item) => item.sector_service_id ?? '').filter(Boolean)
-      ),
-      buildAreaMap(
-        serviceIds,
-        dataToInsert.map((item) => item.areas_service_id ?? '').filter(Boolean)
-      ),
+      buildSectorMap(serviceIds, dataToInsert.map((item) => item.sector_service_id ?? '').filter(Boolean)),
+      buildAreaMap(serviceIds, dataToInsert.map((item) => item.areas_service_id ?? '').filter(Boolean)),
     ]);
 
     const rows = dataToInsert.map((item) => {
@@ -552,7 +540,12 @@ export async function movePreparteFile(
   // El número de pedido también se normaliza: llega del formulario y entra en la key, que
   // ahora queda PERSISTIDA en `preparte.preparteImage`. Un carácter raro ahí es permanente.
   const pedidoDir = normalizeFolder(numeroPedido) || 'pedido';
-  const currentExt = fromPath.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  const currentExt =
+    fromPath
+      .split('.')
+      .pop()
+      ?.toLowerCase()
+      .replace(/[^a-z0-9]/g, '') || 'jpg';
   const targetPath = `${companyId}/${empresaDir}/${contratoDir}/${pedidoDir}/${pedidoDir}.${currentExt}`;
 
   if (fromPath !== targetPath) {

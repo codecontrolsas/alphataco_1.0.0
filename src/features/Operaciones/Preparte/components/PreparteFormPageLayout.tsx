@@ -10,11 +10,11 @@ import type { Control } from 'react-hook-form';
 import { useOrderChecklist } from '../hooks/useOrderChecklist';
 import type { PreparteFormController } from '../hooks/usePreparteFormController';
 import type { PreparteItem } from '../schemas/preparte-form';
+import type { Cliente } from '../types/entities';
 import { OrderSummaryAside } from './OrderSummaryAside';
 import { CustomerContractSection } from './preparte-form/CustomerContractSection';
 import { ItemsSection } from './preparte-form/ItemsSection';
 import { LocationSection } from './preparte-form/LocationSection';
-import type { Cliente } from '../types/entities';
 
 /** Barra inferior fija de la variante página: faltantes, cancelar y crear. */
 function PageSubmitBar({
@@ -64,7 +64,13 @@ interface PreparteFormPageLayoutProps {
 }
 
 /** Variante página del formulario de pedido: secciones en tarjetas, resumen lateral y barra de guardado. */
-export function PreparteFormPageLayout({ controller, clientes, isEditing, submitDisabled, onCancel }: PreparteFormPageLayoutProps) {
+export function PreparteFormPageLayout({
+  controller,
+  clientes,
+  isEditing,
+  submitDisabled,
+  onCancel,
+}: PreparteFormPageLayoutProps) {
   const {
     form,
     contratos,
@@ -111,7 +117,6 @@ export function PreparteFormPageLayout({ controller, clientes, isEditing, submit
                   form={form}
                   clientes={clientes}
                   isEditing={isEditing}
-                  isLoading={isLoading}
                   sectorList={sectorList}
                   areaList={areaList}
                   equipmentList={equipmentList}

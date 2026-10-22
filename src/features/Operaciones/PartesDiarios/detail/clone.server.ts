@@ -2,14 +2,13 @@
 
 import { withSessionActor } from '@/features/Operaciones/lib/with-session-actor';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
-import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import moment from 'moment';
 import { findCloneConflicts, formatUtcTime, type CloneConflictsByDate } from '../lib/clone-conflicts';
-import { resolveCloneRowIds } from './lib/clone-helpers';
 import { reconcileRowResourceStatus } from '../lib/row-resource-status';
+import { resolveCloneRowIds } from './lib/clone-helpers';
 import { createRowRelations, type EmployeeInput } from './lib/row-relations';
 
 const logger = new Logger('features/Operaciones/PartesDiarios/detail/clone');
@@ -17,39 +16,6 @@ const logger = new Logger('features/Operaciones/PartesDiarios/detail/clone');
 // ============================================================================
 // 10. CLONE ROWS
 // ============================================================================
-
-/**
- * Datos mínimos de una fila para clonar (los campos que se copian).
- * El resto (id, created_at, etc.) se regenera.
- */
-interface RowToClone {
-  id: string;
-  customer_id: string | null;
-  service_id: string | null;
-  item_id: string | null;
-  quantity: Prisma.Decimal;
-  working_day: string | null;
-  start_time: Date | null;
-  end_time: Date | null;
-  description: string | null;
-  areas_service_id: string | null;
-  sector_service_id: string | null;
-  type_service: 'mensual' | 'adicional' | 'adicional_permanente' | null;
-  /** Empleados a copiar (si trasladarPersonal = true) */
-  dailyreportemployeerelations?: Array<{
-    employee_id: string | null;
-    role: 'chofer_dia' | 'chofer_noche' | 'ayudante_dia' | 'ayudante_noche' | null;
-  }>;
-  /** Equipos (vehículos + otros) a copiar (si trasladarEquipos = true) */
-  dailyreportequipmentrelations?: Array<{
-    equipment_id: string | null;
-    other_equipment_id: string | null;
-  }>;
-  /** Equipos de clientes — siempre se copian */
-  dailyreport_customer_equipment_relations?: Array<{
-    customer_equipment_id: string;
-  }>;
-}
 
 export interface CloneRowsOptions {
   /** Si true, copia empleados activos de las filas originales */
@@ -453,4 +419,3 @@ export async function getDailyReportTypeServiceSummary(dailyReportId: string) {
     return {};
   }
 }
-
