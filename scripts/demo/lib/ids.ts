@@ -4,19 +4,10 @@
  * El reset diario borra y vuelve a crear todo con los MISMOS ids, asi los links que alguien
  * guardo de la demo (un empleado, un parte, una OT) siguen funcionando al dia siguiente.
  */
-import { createHash } from 'node:crypto';
+import { uuidV5 } from '../../lib/uuid-v5.ts';
 
 /** Namespace fijo de la demo. No cambiarlo: cambiaria todos los ids. */
 const DEMO_NAMESPACE = '5f0c2a9e-7d41-4b6e-9a3c-1e8d2f4b7c60';
-
-function uuidV5(name: string, namespace: string): string {
-  const ns = Buffer.from(namespace.replace(/-/g, ''), 'hex');
-  const hash = createHash('sha1').update(Buffer.concat([ns, Buffer.from(name, 'utf8')])).digest();
-  hash[6] = (hash[6] & 0x0f) | 0x50;
-  hash[8] = (hash[8] & 0x3f) | 0x80;
-  const hex = hash.subarray(0, 16).toString('hex');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
-}
 
 /** `demoId('employee', 17)` devuelve siempre el mismo uuid. */
 export function demoId(kind: string, key: string | number): string {

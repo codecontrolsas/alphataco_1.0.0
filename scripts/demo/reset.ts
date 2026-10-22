@@ -14,36 +14,37 @@
  * Ver docs/deploy/runbook.md, "Instancia demo: reset diario".
  */
 import { PrismaPg } from '@prisma/adapter-pg';
-import { prismaPgConfig } from '../../src/shared/lib/prisma-pg-config.ts';
 import { PrismaClient } from '../../src/generated/prisma/client.ts';
-import type { Ctx } from './lib/ctx.ts';
-import { argentinaToday, buildCalendar } from './lib/dates.ts';
-import { createFaker } from './lib/random.ts';
-import { assertDemoDatabase, wipeBusinessData } from './lib/wipe.ts';
-import { createS3, ensureBuckets, pruneObjects, uploadAll } from './lib/storage.ts';
+import { prismaPgConfig } from '../../src/shared/lib/prisma-pg-config.ts';
+import { createS3 } from '../lib/s3-client.ts';
 import { COMPANY_PROFILE } from './data/catalog.ts';
+import { seedBankReconciliation } from './domains/bank-reconciliation.ts';
 import { seedCatalogs } from './domains/catalogs.ts';
+import { seedCertifications } from './domains/commercial.ts';
+import { CUSTOMER_DOCUMENTS_BUCKET, seedCustomerReceipts } from './domains/customer-receipts.ts';
 import { linkPriceRules, seedCustomers, seedPriceRules } from './domains/customers.ts';
+import { buildDiagramGrid, seedDiagrams } from './domains/diagrams.ts';
+import { seedDocuments } from './domains/documents.ts';
 import { seedEmployees } from './domains/employees.ts';
 import { seedFiscalProfile } from './domains/fiscal.ts';
-import { seedVehicles } from './domains/vehicles.ts';
-import { seedDocuments } from './domains/documents.ts';
-import { DOCUMENT_BUCKET, REMIT_BUCKET, REMIT_PREFIX, companyFolder } from './lib/paths.ts';
-import { buildDiagramGrid, seedDiagrams } from './domains/diagrams.ts';
-import { seedOperations } from './domains/operations.ts';
-import { seedMaintenance } from './domains/maintenance.ts';
-import { seedCertifications } from './domains/commercial.ts';
 import { seedCandidates, seedClothing, seedKpis } from './domains/hr.ts';
-import { SUPPLIER_DOCUMENTS_BUCKET, seedPurchases } from './domains/purchases.ts';
-import { CUSTOMER_DOCUMENTS_BUCKET, seedCustomerReceipts } from './domains/customer-receipts.ts';
-import { seedThirdPartyChecks } from './domains/third-party-checks.ts';
+import { seedIndicators } from './domains/indicators.ts';
+import { seedMaintenance } from './domains/maintenance.ts';
+import { seedOperations } from './domains/operations.ts';
 import { seedOwnChecks } from './domains/own-checks.ts';
-import { seedBankReconciliation } from './domains/bank-reconciliation.ts';
+import { SUPPLIER_DOCUMENTS_BUCKET, seedPurchases } from './domains/purchases.ts';
+import { seedThirdPartyChecks } from './domains/third-party-checks.ts';
 import { seedTires } from './domains/tires.ts';
 import { seedTreasury } from './domains/treasury.ts';
-import { seedWarehouses } from './domains/warehouses.ts';
 import { seedUsers } from './domains/users.ts';
-import { seedIndicators } from './domains/indicators.ts';
+import { seedVehicles } from './domains/vehicles.ts';
+import { seedWarehouses } from './domains/warehouses.ts';
+import type { Ctx } from './lib/ctx.ts';
+import { argentinaToday, buildCalendar } from './lib/dates.ts';
+import { DOCUMENT_BUCKET, REMIT_BUCKET, REMIT_PREFIX, companyFolder } from './lib/paths.ts';
+import { createFaker } from './lib/random.ts';
+import { ensureBuckets, pruneObjects, uploadAll } from './lib/storage.ts';
+import { assertDemoDatabase, wipeBusinessData } from './lib/wipe.ts';
 
 /** Empresa de la demo (la creo seed-company con SEED_COMPANY_NAME="Empresa Demo"). */
 const DEMO_COMPANY_ID = process.env.DEMO_COMPANY_ID ?? '30af2d51-1b4e-50f1-8531-12387f5b8e32';
@@ -65,7 +66,16 @@ async function main(): Promise<void> {
 
   // Conexion del DUENIO (`MIGRATE_DATABASE_URL`): el reset desactiva triggers con `session_replication_role`, que exige superusuario;
   // `alphataco_system` (BYPASSRLS, sin superusuario) no puede. Solo es mantenimiento de la demo, no una ruta de la app.
-  const prisma = new PrismaClient({ adapter: new PrismaPg(prismaPgConfig(process.env.DEMO_RESET_DATABASE_URL ?? process.env.MIGRATE_DATABASE_URL ?? process.env.SYSTEM_DATABASE_URL ?? process.env.DATABASE_URL)) });
+  const prisma = new PrismaClient({
+    adapter: new PrismaPg(
+      prismaPgConfig(
+        process.env.DEMO_RESET_DATABASE_URL ??
+          process.env.MIGRATE_DATABASE_URL ??
+          process.env.SYSTEM_DATABASE_URL ??
+          process.env.DATABASE_URL
+      )
+    ),
+  });
   try {
     const s3 = createS3();
     const cal = buildCalendar(argentinaToday());
@@ -137,7 +147,13 @@ async function main(): Promise<void> {
           if (dry) throw new DryRunRollback();
 
           // invoice-pdfs: los PDF fiscales que se generan al facturar en vivo durante la demo.
-          await ensureBuckets(s3, [DOCUMENT_BUCKET, REMIT_BUCKET, 'invoice-pdfs', SUPPLIER_DOCUMENTS_BUCKET, CUSTOMER_DOCUMENTS_BUCKET]);
+          await ensureBuckets(s3, [
+            DOCUMENT_BUCKET,
+            REMIT_BUCKET,
+            'invoice-pdfs',
+            SUPPLIER_DOCUMENTS_BUCKET,
+            CUSTOMER_DOCUMENTS_BUCKET,
+          ]);
           await uploadAll(s3, files);
           log(`${files.length} archivos subidos`);
         },
