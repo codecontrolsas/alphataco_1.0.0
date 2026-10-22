@@ -7,7 +7,7 @@ import { conditionLabels } from '@/shared/utils/mappers';
 import type { ColumnDef } from '@tanstack/react-table';
 import { AlertCircle, CheckCircle2, Clock, Wrench, XCircle, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
-import type { AvailableVehicleItem } from '../actions/fleet.server';
+import type { AvailableVehicleItem } from '../actions/fleet-lists.server';
 
 /**
  * Piezas comunes de los diálogos de equipos (disponibles y fuera de servicio): comparten el mismo

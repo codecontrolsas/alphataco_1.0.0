@@ -19,7 +19,7 @@ import {
   getAvailableEmployeeSingleFacet,
   getAvailableEmployeesPaginated,
   type AvailableEmployeeListItem,
-} from '../actions/rrhh.server';
+} from '../actions/rrhh-lists.server';
 import { unwrapExportWithToast } from '../lib/export-client';
 
 // ─────────────────────────────────────────────────────────────────────────────

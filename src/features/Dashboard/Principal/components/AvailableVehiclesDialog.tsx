@@ -6,7 +6,7 @@ import {
   getAvailableVehicleSingleFacet,
   getAvailableVehiclesForExport,
   getAvailableVehiclesPaginated,
-} from '../actions/fleet.server';
+} from '../actions/fleet-lists.server';
 import VehicleListDialog from './VehicleListDialog';
 
 /** Condiciones que entran al listado de disponibles (las mismas que filtra la action). */
