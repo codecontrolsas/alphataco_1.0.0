@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { InputFormField } from '@/shared/components/common/form-fields';
 import moment from 'moment';
 import { UseFormReturn } from 'react-hook-form';
 import type { DailyReportRowFormValues } from './schema';
@@ -165,32 +166,8 @@ export function ScheduleSection({
         {/* Horario (condicional: por horario) */}
         {isPorHorario && (
           <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="start_time"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Hora de inicio</FormLabel>
-                  <FormControl>
-                    <Input type="time" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="end_time"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Hora de fin</FormLabel>
-                  <FormControl>
-                    <Input type="time" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <InputFormField control={form.control} name="start_time" label="Hora de inicio" type="time" />
+            <InputFormField control={form.control} name="end_time" label="Hora de fin" type="time" />
           </div>
         )}
 

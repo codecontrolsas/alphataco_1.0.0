@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { activeServiceItems, activeValidServices } from '../../../../../lib/customer-services';
 import type { CustomerForForm } from '../../../form-data.server';
 
 export interface NamedOption {
@@ -31,19 +32,13 @@ export function useCustomerServiceOptions(
   );
 
   // Servicios activos y vigentes del cliente elegido
-  const customerServices = useMemo(() => {
-    if (!selectedCustomer?.customer_services?.length) return [];
-    return selectedCustomer.customer_services.filter(
-      (service) => service.is_active && (!service.service_validity || new Date(service.service_validity) >= new Date())
-    );
-  }, [selectedCustomer]);
+  const customerServices = useMemo(() => activeValidServices(selectedCustomer?.customer_services), [selectedCustomer]);
 
   // Ítems activos del servicio elegido
-  const serviceItems = useMemo(() => {
-    if (!selectedServiceId || !selectedCustomer?.customer_services?.length) return [];
-    const service = selectedCustomer.customer_services.find((s) => s.id === selectedServiceId);
-    return service?.service_items?.filter((item) => item.is_active) ?? [];
-  }, [selectedCustomer, selectedServiceId]);
+  const serviceItems = useMemo(
+    () => activeServiceItems(selectedCustomer?.customer_services, selectedServiceId),
+    [selectedCustomer, selectedServiceId]
+  );
 
   const customerSectors = useMemo<NamedOption[]>(() => {
     if (!selectedServiceId || !selectedCustomer?.customer_services?.length) return [];
@@ -73,5 +68,13 @@ export function useCustomerServiceOptions(
 
   const customerEquipment = useMemo(() => selectedCustomer?.equipos_clientes ?? [], [selectedCustomer]);
 
-  return { activeCustomers, selectedCustomer, customerServices, serviceItems, customerSectors, customerAreas, customerEquipment };
+  return {
+    activeCustomers,
+    selectedCustomer,
+    customerServices,
+    serviceItems,
+    customerSectors,
+    customerAreas,
+    customerEquipment,
+  };
 }
