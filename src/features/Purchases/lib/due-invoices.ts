@@ -15,11 +15,11 @@ import type { DataTableSearchParams } from '@/shared/components/common/DataTable
 import { dateRangeKeys } from '@/shared/lib/table-filters';
 import { isOneOf, isUuidOrNull, parseValidatedListState } from '@/shared/lib/table-list-query';
 import { isUuid } from '@/shared/lib/uuid';
+import { formatCuitText } from '@/shared/utils/cuit-text';
 import moment from 'moment';
 import { DAYS_VALUES, DUE_CBTE_TYPE_IDS } from '../Payments/DueInvoicesList/constants';
 import { supplierInvoiceLabel } from './invoices';
 import { parseAmountFilter, voucherNumberWhere } from './list-filters';
-import { formatCuit } from './supplier-ids';
 
 export type InvoiceWhere = Prisma.supplier_invoicesWhereInput;
 export type InvoiceOrderBy = Prisma.supplier_invoicesOrderByWithRelationInput;
@@ -203,7 +203,7 @@ export function shape(
       days_to_due: (r.due_date ? moment.utc(r.due_date).diff(today, 'days') : null) as number | null,
       total: r.total.toString(),
       pending: pendingMap.get(r.id) ?? '0',
-      supplier: { id: r.supplier.id, name: r.supplier.name, cuit: formatCuit(r.supplier.cuit) },
+      supplier: { id: r.supplier.id, name: r.supplier.name, cuit: formatCuitText(r.supplier.cuit) },
       orders: [...orders.values()].sort((a, b) => a.number.localeCompare(b.number)),
     };
   });

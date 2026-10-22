@@ -1,6 +1,7 @@
-import { z } from 'zod';
 import { AMOUNT_SCALE, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
-import { isValidCuit } from '@/features/Empresa/General/lib/company-form';
+import { z } from 'zod';
+
+import { isValidCuit } from '@/shared/utils/cuit-text';
 import { DATE_RE, isCalendarDay, isPositiveAmount } from './shared';
 
 /**
@@ -32,7 +33,10 @@ export const checkDataSchema = z
     paymentDate: dateField,
     amount: z.string().trim().refine(isPositiveAmount, 'Importe inválido'),
   })
-  .refine((c) => c.paymentDate >= c.issueDate, { path: ['paymentDate'], message: 'La fecha de pago no puede ser anterior a la de emisión' });
+  .refine((c) => c.paymentDate >= c.issueDate, {
+    path: ['paymentDate'],
+    message: 'La fecha de pago no puede ser anterior a la de emisión',
+  });
 
 export type CheckDataValues = z.infer<typeof checkDataSchema>;
 
@@ -71,7 +75,10 @@ export const discountSchema = z.object({
 export type DiscountValues = z.infer<typeof discountSchema>;
 
 export const RETURNED_BY = ['BANK', 'SUPPLIER'] as const;
-export const RETURNED_BY_LABELS: Record<(typeof RETURNED_BY)[number], string> = { BANK: 'Banco', SUPPLIER: 'Proveedor' };
+export const RETURNED_BY_LABELS: Record<(typeof RETURNED_BY)[number], string> = {
+  BANK: 'Banco',
+  SUPPLIER: 'Proveedor',
+};
 
 export const rejectionSchema = z.object({
   checkId: z.string().uuid('Cheque inválido'),

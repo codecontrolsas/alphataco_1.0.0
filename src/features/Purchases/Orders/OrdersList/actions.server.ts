@@ -29,12 +29,12 @@ import {
 } from '@/shared/lib/table-list-query';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { isUuid } from '@/shared/lib/uuid';
+import { formatCuitText } from '@/shared/utils/cuit-text';
 import { companyIdIfCanView } from '../../lib/list-access';
 import { supplierFacetOptions } from '../../lib/list-facet-lookups';
 import { PURCHASE_ORDER_STATUSES } from '../../lib/order-state-machine';
 import { maskAmount } from '../../lib/price-visibility';
 import { canViewPurchasePrices } from '../../lib/price-visibility.server';
-import { formatCuit } from '../../lib/supplier-ids';
 
 const logger = new Logger('features/Purchases/Orders/OrdersList');
 
@@ -177,7 +177,7 @@ function shape(rows: Prisma.purchase_ordersGetPayload<{ select: typeof ORDER_SEL
       sent_at: r.sent_at,
       // Decimal -> string (no se serializa a client components). Sin `view_prices`, null.
       total: maskAmount(r.total.toFixed(2), canViewPrices),
-      supplier: { id: r.supplier.id, name: r.supplier.name, cuit: formatCuit(r.supplier.cuit) },
+      supplier: { id: r.supplier.id, name: r.supplier.name, cuit: formatCuitText(r.supplier.cuit) },
       creator: { id: r.creator.id, name: profileDisplayName(r.creator) },
       approver: r.approver ? { id: r.approver.id, name: profileDisplayName(r.approver) } : null,
       requests: uniqueSortedByNumber(r.lines.map((l) => l.request_line.request)),

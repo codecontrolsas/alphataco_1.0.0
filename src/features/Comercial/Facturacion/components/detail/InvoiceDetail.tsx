@@ -3,6 +3,7 @@ import { CertificationStatusBadge } from '@/features/Comercial/Certificaciones/c
 import { formatInCurrency } from '@/features/Treasury/lib/currency-format';
 import { CONCEPTS, VAT_RATE_LABELS, isVatRateId, type ConceptId } from '@/shared/lib/arca/catalogs';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import { formatCuitText } from '@/shared/utils/cuit-text';
 import { AlertTriangle, ArrowLeft, CheckCircle2, Clock, SearchCheck } from 'lucide-react';
 import moment from 'moment';
 import Link from 'next/link';
@@ -12,7 +13,7 @@ import { InvoiceOriginSkeleton } from '../../fallback/InvoiceOriginSkeleton';
 import { INVOICE_STATUS_LABELS } from '../../lib/invoice-state-machine';
 import { formatAddress } from '../../lib/snapshots';
 import { TAX_CONDITION_PRINT } from '../../pdf/invoice-pdf-data';
-import { INVOICING_TAB_HREF, formatCuitText, invoiceHref } from '../../utils/invoice-links';
+import { INVOICING_TAB_HREF, invoiceHref } from '../../utils/invoice-links';
 import { formatDecimalText } from '../../utils/number-text';
 import { ArcaMessagesList } from '../ArcaMessagesList';
 import { InvoiceEnvironmentNotice } from '../InvoiceEnvironmentNotice';

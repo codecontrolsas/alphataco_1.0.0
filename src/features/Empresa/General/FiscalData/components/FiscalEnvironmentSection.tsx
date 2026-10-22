@@ -16,8 +16,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel } from '@/components/
 import { Input } from '@/components/ui/input';
 import { LoadingSwap } from '@/components/ui/loading-swap';
 import { formatCuit } from '@/features/Documentacion/DetalleDocumento/lib/document-detail';
-import { normalizeCuit } from '@/features/Empresa/General/lib/company-form';
+
 import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
+import { normalizeCuit } from '@/shared/utils/cuit-text';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';

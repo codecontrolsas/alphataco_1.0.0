@@ -8,6 +8,7 @@ import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CertificationAmount } from '@/features/Comercial/Certificaciones/components/CertificationAmount';
 import { Logger } from '@/lib/logger';
+import { formatCuitText } from '@/shared/utils/cuit-text';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
@@ -21,13 +22,7 @@ import { z } from 'zod';
 import { createInvoiceDraftFromCertifications } from '../../actions/invoice-drafts-create.server';
 import { getInvoiceableCertifications } from '../../actions/invoices.server';
 import { sumAmounts } from '../../lib/invoice-math';
-import {
-  CERTIFICATIONS_TAB_HREF,
-  INVOICING_TAB_HREF,
-  countLabel,
-  formatCuitText,
-  invoiceHref,
-} from '../../utils/invoice-links';
+import { CERTIFICATIONS_TAB_HREF, INVOICING_TAB_HREF, countLabel, invoiceHref } from '../../utils/invoice-links';
 
 const logger = new Logger('features/Comercial/Facturacion/new-from-certifications');
 

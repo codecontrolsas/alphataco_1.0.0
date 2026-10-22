@@ -13,7 +13,8 @@ import { getSupplierWithholdingProfiles } from '../actions/withholding-profiles.
 import { getWithholdingRegimes } from '../actions/withholding-regimes.server';
 import { ExpiredSupplierDocumentsAlert } from '../components/ExpiredSupplierDocumentsAlert';
 import { PurchasesPageShell } from '../components/PurchasesPageShell';
-import { formatCuit } from '../lib/supplier-ids';
+
+import { formatCuitText } from '@/shared/utils/cuit-text';
 import { emptySupplierContact, type SupplierFormValues } from '../schemas/suppliers';
 import { SupplierAccountView } from './components/SupplierAccountView';
 import { SupplierDocuments } from './components/SupplierDocuments';
@@ -66,7 +67,7 @@ export async function SupplierDetailPage({ supplier }: { supplier: SupplierDetai
   const defaultValues: SupplierFormValues = {
     name: supplier.name,
     tradeName: nullable(supplier.trade_name),
-    cuit: formatCuit(supplier.cuit),
+    cuit: formatCuitText(supplier.cuit),
     vatConditionId: String(supplier.vat_condition_id),
     street: nullable(supplier.street),
     city: nullable(supplier.city),
@@ -105,7 +106,7 @@ export async function SupplierDetailPage({ supplier }: { supplier: SupplierDetai
             <div className="min-w-0">
               <h1 className="text-2xl font-semibold break-words">{supplier.name}</h1>
               <p className="text-sm text-muted-foreground tabular-nums">
-                CUIT {formatCuit(supplier.cuit)}
+                CUIT {formatCuitText(supplier.cuit)}
                 {supplier.trade_name ? ` · ${supplier.trade_name}` : ''}
               </p>
             </div>

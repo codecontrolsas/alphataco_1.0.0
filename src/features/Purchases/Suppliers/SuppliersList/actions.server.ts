@@ -22,7 +22,8 @@ import {
   type SingleFacetResult,
 } from '@/shared/lib/table-list-query';
 import { companyIdIfCanView } from '../../lib/list-access';
-import { formatCuit } from '../../lib/supplier-ids';
+
+import { formatCuitText } from '@/shared/utils/cuit-text';
 import { CUIT_LENGTH, SUPPLIERS_EXPORT_MAX_ROWS } from './constants';
 import {
   deriveSupplierDocumentState,
@@ -226,7 +227,7 @@ function shape(rows: Prisma.suppliersGetPayload<{ select: typeof SUPPLIER_SELECT
     name: r.name,
     trade_name: r.trade_name,
     // BigInt no se serializa hacia el cliente
-    cuit: formatCuit(r.cuit.toString()),
+    cuit: formatCuitText(r.cuit.toString()),
     vat_condition_id: r.vat_condition_id,
     vat_condition: isReceiverVatConditionId(r.vat_condition_id)
       ? RECEIVER_VAT_CONDITIONS[r.vat_condition_id].label

@@ -1,8 +1,9 @@
-import { z } from 'zod';
 import { parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { PAYMENT_METHODS } from '@/features/Purchases/schemas/payment-orders';
 import { WITHHOLDING_TAXES } from '@/features/Purchases/schemas/payment-settings';
-import { isValidCuit } from '@/features/Empresa/General/lib/company-form';
+import { z } from 'zod';
+
+import { isValidCuit } from '@/shared/utils/cuit-text';
 import { RATE_SCALE } from '../lib/receipt-math';
 import { DATE_RE, isCalendarDay, isPositiveAmount } from './shared';
 
@@ -38,7 +39,9 @@ export const receiptFormSchema = z
     rates: z.array(z.object({ currency: z.enum(FOREIGN_CURRENCIES), rate: z.string().trim() })),
     /** Importe en la moneda del comprobante. */
     invoices: z.array(z.object({ invoiceId: z.string().uuid('Comprobante inválido'), amount: z.string().trim() })),
-    advancesApplied: z.array(z.object({ sourceLineId: z.string().uuid('Anticipo inválido'), amount: z.string().trim() })),
+    advancesApplied: z.array(
+      z.object({ sourceLineId: z.string().uuid('Anticipo inválido'), amount: z.string().trim() })
+    ),
     /** `amount` vacío = sin cobro a cuenta. */
     advance: z.object({ amount: z.string().trim(), description: z.string().trim().max(200, 'Máximo 200 caracteres') }),
     withholdings: z.array(
@@ -69,7 +72,9 @@ export const receiptFormSchema = z
       })
     ),
     /** Deudas de cheques rechazados que se cobran (etapa 3a). */
-    rejectedChecks: z.array(z.object({ checkId: z.string().uuid('Cheque inválido'), amount: z.string().trim() })).optional(),
+    rejectedChecks: z
+      .array(z.object({ checkId: z.string().uuid('Cheque inválido'), amount: z.string().trim() }))
+      .optional(),
   })
   .superRefine((v, ctx) => {
     const issue = (path: (string | number)[], message: string) => ctx.addIssue({ code: 'custom', path, message });
@@ -100,7 +105,8 @@ export const receiptFormSchema = z
     v.withholdings.forEach((w, i) => {
       if (!isPositiveAmount(w.amount)) issue(['withholdings', i, 'amount'], 'Importe inválido');
       if (w.tax === 'IIBB' && !w.jurisdiction) issue(['withholdings', i, 'jurisdiction'], 'Indicá la jurisdicción');
-      if (w.tax !== 'IIBB' && w.jurisdiction) issue(['withholdings', i, 'jurisdiction'], 'Solo IIBB lleva jurisdicción');
+      if (w.tax !== 'IIBB' && w.jurisdiction)
+        issue(['withholdings', i, 'jurisdiction'], 'Solo IIBB lleva jurisdicción');
     });
 
     v.payments.forEach((p, i) => {
@@ -111,7 +117,8 @@ export const receiptFormSchema = z
         if (!p.checkBank) issue(['payments', i, 'checkBank'], 'Indicá el banco');
         if (!DATE_RE.test(p.checkDueOn)) issue(['payments', i, 'checkDueOn'], 'Indicá el vencimiento del cheque');
         else if (!isCalendarDay(p.checkDueOn)) issue(['payments', i, 'checkDueOn'], 'Fecha inválida');
-        if (!DATE_RE.test(p.checkIssueDate ?? '')) issue(['payments', i, 'checkIssueDate'], 'Indicá la fecha de emisión');
+        if (!DATE_RE.test(p.checkIssueDate ?? ''))
+          issue(['payments', i, 'checkIssueDate'], 'Indicá la fecha de emisión');
         else if (!isCalendarDay(p.checkIssueDate ?? '')) issue(['payments', i, 'checkIssueDate'], 'Fecha inválida');
         else if (DATE_RE.test(p.checkDueOn) && p.checkDueOn < (p.checkIssueDate ?? '')) {
           issue(['payments', i, 'checkDueOn'], 'La fecha de pago no puede ser anterior a la de emisión');

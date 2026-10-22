@@ -1,13 +1,14 @@
 import 'server-only';
 
 import { AMOUNT_SCALE, formatScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
-import { normalizeCuit } from '@/features/Empresa/General/lib/company-form';
+
 import { Prisma } from '@/generated/prisma/client';
+import { normalizeCuit } from '@/shared/utils/cuit-text';
+import { UUID_RE } from '../schemas/shared';
 import { normalizeBank } from './check-number-format';
 import { nextCheckStatus, transitionError, type CheckAction, type CheckStatus } from './check-transitions';
 import { dateOnly } from './movements';
 import { TreasuryError } from './treasury-errors';
-import { UUID_RE } from '../schemas/shared';
 
 /**
  * Cheques de terceros (spec Tesorería etapa 3a §3): ÚNICA escritura de `third_party_checks.status`
@@ -62,7 +63,11 @@ type LockedRow = {
 };
 
 /** Toma las filas de los cheques con `FOR UPDATE`, en orden de id. Si falta alguno: "El cheque no existe". */
-export async function lockChecks(tx: Pick<Prisma.TransactionClient, '$queryRaw'>, companyId: string, ids: readonly string[]): Promise<Map<string, LockedCheck>> {
+export async function lockChecks(
+  tx: Pick<Prisma.TransactionClient, '$queryRaw'>,
+  companyId: string,
+  ids: readonly string[]
+): Promise<Map<string, LockedCheck>> {
   const unique = [...new Set(ids)];
   const result = new Map<string, LockedCheck>();
   if (unique.length === 0) return result;
@@ -106,7 +111,9 @@ export async function lockChecks(tx: Pick<Prisma.TransactionClient, '$queryRaw'>
 export function assertNotBeforeEntry(check: LockedCheck, date: string): void {
   if (date < check.enteredOn) {
     const [y, m, d] = check.enteredOn.split('-');
-    throw new TreasuryError(`Cheque Nº ${check.number}: entró a la cartera el ${d}/${m}/${y}; la operación no puede ser anterior`);
+    throw new TreasuryError(
+      `Cheque Nº ${check.number}: entró a la cartera el ${d}/${m}/${y}; la operación no puede ser anterior`
+    );
   }
 }
 
@@ -140,7 +147,8 @@ export async function moveCheck(
   let data: Prisma.third_party_checksUncheckedUpdateInput;
   switch (action) {
     case 'DEPOSIT':
-      if (!input.set?.creditedOn || !input.set.bankAccountId) throw new Error('El depósito necesita acreditación y banco');
+      if (!input.set?.creditedOn || !input.set.bankAccountId)
+        throw new Error('El depósito necesita acreditación y banco');
       data = { status: next, credited_on: dateOnly(input.set.creditedOn), bank_account_id: input.set.bankAccountId };
       break;
     case 'DISCOUNT':
@@ -241,7 +249,8 @@ export async function createCheck(
       select: { id: true },
     });
   } catch (error) {
-    if (isAliveKeyViolation(error)) throw new TreasuryError(`El cheque Nº ${number} del banco ${bank} ya está en la cartera`);
+    if (isAliveKeyViolation(error))
+      throw new TreasuryError(`El cheque Nº ${number} del banco ${bank} ya está en la cartera`);
     throw error;
   }
   await tx.third_party_check_events.create({
@@ -251,7 +260,9 @@ export async function createCheck(
       to_status: 'IN_PORTFOLIO',
       date: dateOnly(input.date),
       user_id: input.userId,
-      ...('receiptId' in input.origin ? { receipt_id: input.origin.receiptId } : { operation_id: input.origin.openingOperationId }),
+      ...('receiptId' in input.origin
+        ? { receipt_id: input.origin.receiptId }
+        : { operation_id: input.origin.openingOperationId }),
     },
   });
   return created;
@@ -269,7 +280,11 @@ export async function findAliveDuplicates(
     where: {
       company_id: companyId,
       status: { not: 'CANCELLED' },
-      OR: valid.map((k) => ({ bank: normalizeBank(k.bank), number: k.number.trim(), drawer_cuit: normalizeCuit(k.drawerCuit) })),
+      OR: valid.map((k) => ({
+        bank: normalizeBank(k.bank),
+        number: k.number.trim(),
+        drawer_cuit: normalizeCuit(k.drawerCuit),
+      })),
     },
     select: { id: true, number: true, bank: true, status: true },
     orderBy: { number: 'asc' },

@@ -1,5 +1,6 @@
+import { formatCuitText } from '@/shared/utils/cuit-text';
 import { describe, expect, it } from 'vitest';
-import { formatCuit, isValidCbu, isValidSupplierCuit, normalizeSupplierCuit } from './supplier-ids';
+import { isValidCbu, isValidSupplierCuit, normalizeSupplierCuit } from './supplier-ids';
 
 describe('CUIT del proveedor', () => {
   it('normaliza guiones, espacios y puntos', () => {
@@ -17,8 +18,8 @@ describe('CUIT del proveedor', () => {
   });
 
   it('formatea con guiones', () => {
-    expect(formatCuit(BigInt('20123456786'))).toBe('20-12345678-6');
-    expect(formatCuit('123')).toBe('123');
+    expect(formatCuitText(BigInt('20123456786'))).toBe('20-12345678-6');
+    expect(formatCuitText('123')).toBe('123');
   });
 });
 

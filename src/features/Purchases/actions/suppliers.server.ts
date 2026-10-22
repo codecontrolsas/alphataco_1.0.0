@@ -9,11 +9,12 @@ import { prisma } from '@/shared/lib/prisma';
 import { storageRemove, storageUpload } from '@/shared/lib/storage';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { isUuid } from '@/shared/lib/uuid';
+import { formatCuitText } from '@/shared/utils/cuit-text';
 import { revalidatePath } from 'next/cache';
 import { NO_PERMISSION, PURCHASES_PATH, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import { PurchaseError } from '../lib/purchase-errors';
 import { SUPPLIER_FILES_BUCKET, safeFileName } from '../lib/storage-files';
-import { formatCuit, normalizeCbu, normalizeSupplierCuit } from '../lib/supplier-ids';
+import { normalizeCbu, normalizeSupplierCuit } from '../lib/supplier-ids';
 import {
   SUPPLIER_DOCUMENT_MAX_BYTES,
   SUPPLIER_DOCUMENT_TYPES,
@@ -55,7 +56,7 @@ async function assertCuitFree(tx: Tx, companyId: string, cuit: bigint, exceptId:
     where: { company_id: companyId, cuit, ...(exceptId ? { id: { not: exceptId } } : {}) },
     select: { name: true },
   });
-  if (existing) throw new PurchaseError(`Ya existe el proveedor ${existing.name} con el CUIT ${formatCuit(cuit)}`);
+  if (existing) throw new PurchaseError(`Ya existe el proveedor ${existing.name} con el CUIT ${formatCuitText(cuit)}`);
 }
 
 /** Los rubros tienen que ser de la empresa (y activos los que se agregan). */

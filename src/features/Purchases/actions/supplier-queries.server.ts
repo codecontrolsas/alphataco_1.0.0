@@ -5,8 +5,8 @@ import { prisma } from '@/shared/lib/prisma';
 import { buildStorageFileUrl } from '@/shared/lib/storage-url';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { isUuid } from '@/shared/lib/uuid';
+import { formatCuitText } from '@/shared/utils/cuit-text';
 import { SUPPLIER_FILES_BUCKET } from '../lib/storage-files';
-import { formatCuit } from '../lib/supplier-ids';
 
 const DOCUMENTS_BUCKET = SUPPLIER_FILES_BUCKET;
 
@@ -147,7 +147,7 @@ export async function searchSupplierOptions(query: string) {
     items: rows.map((r) => ({
       id: r.id,
       label: r.trade_name ? `${r.name} (${r.trade_name})` : r.name,
-      cuit: formatCuit(r.cuit),
+      cuit: formatCuitText(r.cuit),
     })),
     total,
   };

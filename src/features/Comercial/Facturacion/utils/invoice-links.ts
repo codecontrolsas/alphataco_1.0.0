@@ -22,8 +22,6 @@ export function customerHref(id: string): string {
   return `/dashboard/configuration/customers/action?action=view&id=${id}`;
 }
 
-export { formatCuitText } from '@/shared/utils/cuit-text';
-
 /** Plural armado entero: `countLabel(3, 'certificación', 'certificaciones')` → "3 certificaciones". */
 export function countLabel(count: number, singular: string, plural: string): string {
   return `${count} ${count === 1 ? singular : plural}`;

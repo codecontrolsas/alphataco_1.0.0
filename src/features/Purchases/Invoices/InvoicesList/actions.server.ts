@@ -32,7 +32,8 @@ import { companyIdIfCanView } from '../../lib/list-access';
 import { supplierFacetOptions } from '../../lib/list-facet-lookups';
 import { digitsOf, parseAmountFilter, voucherNumberWhere } from '../../lib/list-filters';
 import { getInvoicesSectionCount } from '../../lib/section-counts';
-import { formatCuit } from '../../lib/supplier-ids';
+
+import { formatCuitText } from '@/shared/utils/cuit-text';
 import { INVOICE_CBTE_TYPE_IDS } from './constants';
 
 const logger = new Logger('features/Purchases/Invoices/InvoicesList');
@@ -203,7 +204,7 @@ function shape(rows: Prisma.supplier_invoicesGetPayload<{ select: typeof INVOICE
       status: r.status,
       arca_check_result: r.arca_check_result,
       created_at: r.created_at,
-      supplier: { id: r.supplier.id, name: r.supplier.name, cuit: formatCuit(r.supplier.cuit) },
+      supplier: { id: r.supplier.id, name: r.supplier.name, cuit: formatCuitText(r.supplier.cuit) },
       creator: { id: r.creator.id, name: profileDisplayName(r.creator) },
       orders: [...orders.values()].sort((a, b) => a.number.localeCompare(b.number)),
     };

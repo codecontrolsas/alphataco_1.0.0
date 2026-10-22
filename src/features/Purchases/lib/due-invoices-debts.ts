@@ -13,9 +13,9 @@ import { treasuryToday } from '@/features/Treasury/lib/today';
 import { Prisma } from '@/generated/prisma/client';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { prisma } from '@/shared/lib/prisma';
+import { formatCuitText } from '@/shared/utils/cuit-text';
 import moment from 'moment';
 import type { FilterState } from './due-invoices';
-import { formatCuit } from './supplier-ids';
 
 // ============================================================================
 // DEUDAS POR CHEQUES RECHAZADOS (endosados): se suman como filas
@@ -142,7 +142,7 @@ export function shapeDebt(debt: OpenDebt) {
     days_to_due: due.diff(today, 'days') as number | null,
     total: debt.amount,
     pending: debt.pending,
-    supplier: { id: debt.supplier_id, name: debt.supplier_name, cuit: formatCuit(debt.supplier_cuit) },
+    supplier: { id: debt.supplier_id, name: debt.supplier_name, cuit: formatCuitText(debt.supplier_cuit) },
     orders: debt.orders,
   };
 }

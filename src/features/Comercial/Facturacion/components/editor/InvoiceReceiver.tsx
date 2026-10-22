@@ -2,12 +2,13 @@
 
 import { Button } from '@/components/ui/button';
 import { joinList } from '@/features/Empresa/General/FiscalData/utils/format';
+import { formatCuitText } from '@/shared/utils/cuit-text';
 import { ExternalLink, RefreshCw, XCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 import type { InvoiceView } from '../../actions/invoices.server';
-import { customerHref, formatCuitText } from '../../utils/invoice-links';
+import { customerHref } from '../../utils/invoice-links';
 
 /**
  * Receptor, de solo lectura: los datos fiscales se editan en la ficha del cliente (no se edita un
@@ -25,7 +26,12 @@ export function InvoiceReceiver({ customer }: { customer: InvoiceView['customer'
   const address = [customer.street, customer.city, customer.province, customer.postalCode].filter(Boolean).join(', ');
 
   return (
-    <section aria-labelledby="invoice-receiver-title" className="flex flex-col gap-2" data-field="customer" tabIndex={-1}>
+    <section
+      aria-labelledby="invoice-receiver-title"
+      className="flex flex-col gap-2"
+      data-field="customer"
+      tabIndex={-1}
+    >
       <h2 id="invoice-receiver-title" className="text-lg font-semibold">
         Receptor
       </h2>
@@ -44,8 +50,8 @@ export function InvoiceReceiver({ customer }: { customer: InvoiceView['customer'
           <XCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
           <div className="flex min-w-0 flex-1 flex-col gap-2">
             <p className="text-pretty">
-              A {customer.name} le falta {joinList(missing)}. Sin esos datos no se puede determinar el tipo de factura ni
-              emitirla.
+              A {customer.name} le falta {joinList(missing)}. Sin esos datos no se puede determinar el tipo de factura
+              ni emitirla.
             </p>
             <div className="flex flex-wrap items-center gap-3">
               <Link

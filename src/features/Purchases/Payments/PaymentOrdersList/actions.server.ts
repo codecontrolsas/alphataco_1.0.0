@@ -31,7 +31,8 @@ import { supplierFacetOptions } from '../../lib/list-facet-lookups';
 import { parseAmountFilter } from '../../lib/list-filters';
 import { PAYMENT_ORDER_STATUS_LABELS } from '../../lib/payment-order-state-machine';
 import { getPaymentOrdersToApproveCount, getPaymentOrdersToPayCount } from '../../lib/section-counts';
-import { formatCuit } from '../../lib/supplier-ids';
+
+import { formatCuitText } from '@/shared/utils/cuit-text';
 import { PAYMENT_METHOD_LABELS, PAYMENT_ORDERS_EXPORT_MAX_ROWS } from './constants';
 
 const logger = new Logger('features/Purchases/Payments/PaymentOrdersList');
@@ -185,7 +186,7 @@ function shape(rows: Prisma.payment_ordersGetPayload<{ select: typeof ORDER_SELE
     withholdings_total: r.withholdings_total.toString(),
     net_total: r.net_total.toString(),
     created_at: r.created_at,
-    supplier: { id: r.supplier.id, name: r.supplier.name, cuit: formatCuit(r.supplier.cuit) },
+    supplier: { id: r.supplier.id, name: r.supplier.name, cuit: formatCuitText(r.supplier.cuit) },
     creator: { id: r.creator.id, name: profileDisplayName(r.creator) },
     methods: [...new Set(r.payments.map((p) => p.method))],
   }));

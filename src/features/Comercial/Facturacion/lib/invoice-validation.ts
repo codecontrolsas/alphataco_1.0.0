@@ -1,6 +1,6 @@
-import { isValidCuit } from '@/features/Empresa/General/lib/company-form';
 import { isSupportedCurrency } from '@/shared/lib/arca/catalogs';
 import { formatAmountText } from '@/shared/utils/amount-text';
+import { isValidCuit } from '@/shared/utils/cuit-text';
 import { amountOf, compareAmounts, parseScaled, QUANTITY_SCALE } from './invoice-math';
 
 /**
@@ -68,7 +68,10 @@ export function validateInvoiceForIssue(invoice: InvoiceForValidation): IssuePro
 
   const window = issueDateWindowDays(invoice.concept);
   if (Math.abs(daysBetween(invoice.issueDate, invoice.todayAr)) > window) {
-    add('issueDate', `La fecha de emisión tiene que estar dentro de los ${window} días anteriores o posteriores a hoy.`);
+    add(
+      'issueDate',
+      `La fecha de emisión tiene que estar dentro de los ${window} días anteriores o posteriores a hoy.`
+    );
   }
 
   if (invoice.concept !== 1) {
@@ -88,15 +91,20 @@ export function validateInvoiceForIssue(invoice: InvoiceForValidation): IssuePro
     const n = index + 1;
     if (!line.description.trim()) add(`lines.${index}.description`, `Línea ${n}: escribí la descripción.`);
     const quantity = parseScaled(line.quantity, QUANTITY_SCALE);
-    if (quantity === null || quantity <= BigInt(0)) add(`lines.${index}.quantity`, `Línea ${n}: ingresá una cantidad mayor a 0.`);
-    if (amountOf(line.netAmount) <= BigInt(0)) add(`lines.${index}.unitPrice`, `Línea ${n}: el importe tiene que ser mayor a 0.`);
+    if (quantity === null || quantity <= BigInt(0))
+      add(`lines.${index}.quantity`, `Línea ${n}: ingresá una cantidad mayor a 0.`);
+    if (amountOf(line.netAmount) <= BigInt(0))
+      add(`lines.${index}.unitPrice`, `Línea ${n}: el importe tiene que ser mayor a 0.`);
   });
 
   if (amountOf(invoice.total) <= BigInt(0)) add('total', 'El total tiene que ser mayor a 0.');
 
   if (invoice.kind === 'credit_note' && invoice.creditableRemaining !== undefined) {
     if (compareAmounts(invoice.total, invoice.creditableRemaining) > 0) {
-      add('total', `La nota de crédito supera el saldo del comprobante original (saldo disponible: ${invoice.currency} ${formatAmountText(invoice.creditableRemaining)}).`);
+      add(
+        'total',
+        `La nota de crédito supera el saldo del comprobante original (saldo disponible: ${invoice.currency} ${formatAmountText(invoice.creditableRemaining)}).`
+      );
     }
   }
 

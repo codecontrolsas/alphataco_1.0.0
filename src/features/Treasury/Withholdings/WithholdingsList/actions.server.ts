@@ -1,7 +1,7 @@
 'use server';
 
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
-import { formatCuit } from '@/features/Purchases/lib/supplier-ids';
+
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';
@@ -12,6 +12,7 @@ import { prisma } from '@/shared/lib/prisma';
 import { storagePublicUrl } from '@/shared/lib/storage';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { isUuid } from '@/shared/lib/uuid';
+import { formatCuitText } from '@/shared/utils/cuit-text';
 import { isoDay } from '../../lib/dates';
 import { buildTreasuryDateRangeWhere, ownEntry, parseAmountText, safePaging, textValue } from '../../lib/filter-values';
 import { CUSTOMER_FILES_BUCKET } from '../../lib/storage-files';
@@ -157,7 +158,7 @@ async function shape(rows: Prisma.customer_receipt_withholdingsGetPayload<{ sele
       certificateUrl: r.file_path ? await storagePublicUrl(CUSTOMER_FILES_BUCKET, r.file_path) : null,
       certificateName: r.file_name,
       customer: { id: r.receipt.customer.id, name: r.receipt.customer.name },
-      cuit: formatCuit(r.receipt.customer.cuit),
+      cuit: formatCuitText(r.receipt.customer.cuit),
       receipt: { id: r.receipt.id, number: r.receipt.number },
     }))
   );
