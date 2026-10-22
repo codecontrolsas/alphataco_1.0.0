@@ -4,10 +4,10 @@ import type { BadgeProps } from '@/components/ui/badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { REPAIR_STATUS_UI, TONE_TO_BADGE } from '@/features/Mantenimiento/lib/status-presentation';
 import { RepairGroupBadge } from '@/features/Mantenimiento/shared/components/RepairGroupBadge';
 import { RepairItemPhotos } from '@/features/Mantenimiento/shared/components/RepairItemPhotos';
 import type { work_order_item_status } from '@/generated/prisma/client';
-import { REPAIR_STATUS_UI, TONE_TO_BADGE } from '@/features/Mantenimiento/lib/status-presentation';
 import { RotateCcw, UserPlus } from 'lucide-react';
 import { TaskNotes } from './TaskNotes';
 
@@ -20,7 +20,7 @@ const criticityVariants: Record<string, BadgeVariant> = {
   baja: 'secondary',
 };
 
-interface RepairData {
+export interface RepairData {
   id: string;
   status: string | null;
   technician_notes: string | null;
@@ -158,10 +158,7 @@ export function TaskCard({
                   </Badge>
                 )}
                 {repairType?.criticity && (
-                  <Badge
-                    variant={criticityVariants[repairType.criticity] || 'default'}
-                    className="text-xs px-1.5 py-0"
-                  >
+                  <Badge variant={criticityVariants[repairType.criticity] || 'default'} className="text-xs px-1.5 py-0">
                     {repairType.criticity}
                   </Badge>
                 )}
@@ -195,9 +192,7 @@ export function TaskCard({
             {images.length > 0 && (
               <div className="space-y-1">
                 {isBlocked && (
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Fotos del pedido
-                  </p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Fotos del pedido</p>
                 )}
                 <RepairItemPhotos images={images} label={title} size="md" />
               </div>
@@ -207,9 +202,7 @@ export function TaskCard({
               {/* Rejection reason (from validation) */}
               {isRejected && repair.rejection_reason && (
                 <div className="p-2.5 bg-destructive/10 rounded-md border border-destructive/20">
-                  <p className="text-xs font-semibold text-destructive uppercase tracking-wide">
-                    Motivo de rechazo
-                  </p>
+                  <p className="text-xs font-semibold text-destructive uppercase tracking-wide">Motivo de rechazo</p>
                   <p className="text-sm text-destructive/80 mt-0.5">{repair.rejection_reason}</p>
                 </div>
               )}
@@ -217,9 +210,7 @@ export function TaskCard({
               {/* Return reason */}
               {repair.return_reason && !isRejected && (
                 <div className="p-2.5 bg-destructive/10 rounded-md border border-destructive/20">
-                  <p className="text-xs font-semibold text-destructive uppercase tracking-wide">
-                    Motivo de devolucion
-                  </p>
+                  <p className="text-xs font-semibold text-destructive uppercase tracking-wide">Motivo de devolucion</p>
                   <p className="text-sm text-destructive/80 mt-0.5">{repair.return_reason}</p>
                 </div>
               )}
