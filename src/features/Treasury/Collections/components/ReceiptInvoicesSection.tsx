@@ -5,16 +5,15 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { AMOUNT_SCALE, formatScaled, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
-import moment from 'moment';
 import { useState } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
-import type { OpenCustomerInvoice } from '../../lib/receivables';
 import { formatInCurrency } from '../../lib/currency-format';
-import { arsToApplied, RATE_SCALE } from '../../lib/receipt-math';
-import type { ReceiptPreview } from '../../lib/receipt-preview';
-import type { ReceiptFormValues } from '../../schemas/receipts';
-import { treasuryToday } from '../../lib/today';
 import { formatDay } from '../../lib/dates';
+import { RATE_SCALE, arsToApplied } from '../../lib/receipt-math';
+import type { ReceiptPreview } from '../../lib/receipt-preview';
+import type { OpenCustomerInvoice } from '../../lib/receivables';
+import { treasuryToday } from '../../lib/today';
+import type { ReceiptFormValues } from '../../schemas/receipts';
 
 const dmy = (value: string | null) => formatDay(value) || null;
 
@@ -47,7 +46,9 @@ export function ReceiptInvoicesSection({
     form.setValue('invoices', lines, { shouldValidate: form.formState.isSubmitted });
     // Una cotización por cada moneda extranjera presente; se quita cuando no queda ninguna.
     const currencies = new Set(
-      lines.map((l) => invoices.find((i) => i.invoiceId === l.invoiceId)?.currency).filter((c): c is string => Boolean(c) && c !== 'ARS')
+      lines
+        .map((l) => invoices.find((i) => i.invoiceId === l.invoiceId)?.currency)
+        .filter((c): c is string => Boolean(c) && c !== 'ARS')
     );
     const rates = values.rates.filter((r) => currencies.has(r.currency));
     for (const currency of currencies) {
@@ -65,7 +66,8 @@ export function ReceiptInvoicesSection({
     setPesosDraft((d) => ({ ...d, [invoice.invoiceId]: pesos }));
     const ars = parseScaled(pesos, AMOUNT_SCALE);
     const rate = parseScaled(rateOf(invoice.currency), RATE_SCALE);
-    if (ars !== null && rate !== null && rate > BigInt(0)) setAmount(invoice.invoiceId, formatScaled(arsToApplied(ars, rate), AMOUNT_SCALE));
+    if (ars !== null && rate !== null && rate > BigInt(0))
+      setAmount(invoice.invoiceId, formatScaled(arsToApplied(ars, rate), AMOUNT_SCALE));
   };
 
   if (loading) return <p className="text-sm text-muted-foreground">Cargando los comprobantes del cliente…</p>;
@@ -74,7 +76,9 @@ export function ReceiptInvoicesSection({
     <div className="space-y-2">
       <p className="text-sm font-medium">Comprobantes pendientes</p>
       {invoices.length === 0 ? (
-        <p className="text-sm text-muted-foreground">El cliente no tiene comprobantes pendientes. Podés registrar un cobro a cuenta.</p>
+        <p className="text-sm text-muted-foreground">
+          El cliente no tiene comprobantes pendientes. Podés registrar un cobro a cuenta.
+        </p>
       ) : (
         <ul className="divide-y rounded-md border">
           {invoices.map((invoice) => {
@@ -89,22 +93,29 @@ export function ReceiptInvoicesSection({
               <li key={invoice.invoiceId} className="space-y-2 px-3 py-2">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                   <div className="flex min-w-0 flex-1 items-start gap-3">
-                  <Checkbox id={id} className="mt-0.5" checked={selected} onCheckedChange={(c) => toggle(invoice, c === true)} />
-                  <label htmlFor={id} className="min-w-0 flex-1 cursor-pointer text-sm">
-                    <span className="flex flex-wrap items-center gap-2">
-                      {invoice.label}
-                      {foreign && <Badge variant="outline">{invoice.currency}</Badge>}
-                      {overdue && <Badge variant="destructive">Vencido</Badge>}
-                      {!invoice.pending.startsWith('-') && invoice.pending !== '0.00' ? null : (
-                        <Badge variant="outline">Sin pendiente: destildala</Badge>
-                      )}
-                    </span>
-                    <span className="block text-xs text-muted-foreground tabular-nums">
-                      {due ? `Vence ${due}` : 'Sin vencimiento'} · total {formatInCurrency(invoice.total, invoice.currency)} · pendiente{' '}
-                      {formatInCurrency(invoice.pending, invoice.currency)}
-                      {invoice.reserved !== '0.00' && ` · ${formatInCurrency(invoice.reserved, invoice.currency)} en otro borrador`}
-                    </span>
-                  </label>
+                    <Checkbox
+                      id={id}
+                      className="mt-0.5"
+                      checked={selected}
+                      onCheckedChange={(c) => toggle(invoice, c === true)}
+                    />
+                    <label htmlFor={id} className="min-w-0 flex-1 cursor-pointer text-sm">
+                      <span className="flex flex-wrap items-center gap-2">
+                        {invoice.label}
+                        {foreign && <Badge variant="outline">{invoice.currency}</Badge>}
+                        {overdue && <Badge variant="destructive">Vencido</Badge>}
+                        {!invoice.pending.startsWith('-') && invoice.pending !== '0.00' ? null : (
+                          <Badge variant="outline">Sin pendiente: destildala</Badge>
+                        )}
+                      </span>
+                      <span className="block text-xs text-muted-foreground tabular-nums">
+                        {due ? `Vence ${due}` : 'Sin vencimiento'} · total{' '}
+                        {formatInCurrency(invoice.total, invoice.currency)} · pendiente{' '}
+                        {formatInCurrency(invoice.pending, invoice.currency)}
+                        {invoice.reserved !== '0.00' &&
+                          ` · ${formatInCurrency(invoice.reserved, invoice.currency)} en otro borrador`}
+                      </span>
+                    </label>
                   </div>
                   <div className="flex items-center gap-1 pl-7 sm:pl-0">
                     <Input
@@ -112,11 +123,17 @@ export function ReceiptInvoicesSection({
                       inputMode="decimal"
                       className="w-36 text-right tabular-nums"
                       disabled={!selected}
-                      value={selected ? (values.invoices[index]?.amount ?? '') : ''}
+                      value={selected ? values.invoices[index]?.amount ?? '' : ''}
                       placeholder={invoice.pending}
                       onChange={(e) => setAmount(invoice.invoiceId, e.target.value)}
                     />
-                    <Button type="button" variant="ghost" size="sm" disabled={!selected} onClick={() => setAmount(invoice.invoiceId, invoice.pending)}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={!selected}
+                      onClick={() => setAmount(invoice.invoiceId, invoice.pending)}
+                    >
                       Total
                     </Button>
                   </div>
@@ -146,7 +163,9 @@ export function ReceiptInvoicesSection({
           })}
         </ul>
       )}
-      {form.formState.errors.invoices?.message && <p className="text-sm text-destructive">{form.formState.errors.invoices.message}</p>}
+      {form.formState.errors.invoices?.message && (
+        <p className="text-sm text-destructive">{form.formState.errors.invoices.message}</p>
+      )}
     </div>
   );
 }

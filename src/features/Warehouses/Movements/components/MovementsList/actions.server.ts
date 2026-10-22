@@ -84,8 +84,6 @@ const COLUMN_MAP: Record<string, string> = {
   target_warehouse: 'target_warehouse_id',
 };
 
-const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
-
 async function canViewPrices(): Promise<boolean> {
   return checkPermissionServer('almacenes', 'movimientos', 'view_prices');
 }
