@@ -28,12 +28,12 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 | src/features/Clothing               |       69 |  10858 | [x]    |
 | src/features/Checklists             |       28 |   6175 | [x]    |
 | src/features/UserPermissionsManager |       39 |   5229 | [x]    |
-| src/features/OperatorPanel          |       25 |   4673 | [ ]    |
+| src/features/OperatorPanel          |       25 |   4673 | [x]    |
 | src/features/Formularios            |       21 |   3874 | [x]    |
-| src/features/Seleccion              |       32 |   3823 | [ ]    |
+| src/features/Seleccion              |       32 |   3823 | [x]    |
 | src/features/Permissions            |       12 |   3456 | [ ]    |
-| src/features/Auth                   |       18 |   2463 | [ ]    |
-| src/features/Jobs                   |       17 |   2229 | [ ]    |
+| src/features/Auth                   |       18 |   2463 | [x]    |
+| src/features/Jobs                   |       17 |   2229 | [x]    |
 | src/features/Layout                 |       22 |   1882 | [ ]    |
 | src/features/ExternalApi            |       10 |   1152 | [ ]    |
 | src/features/Notifications          |        9 |    777 | [ ]    |
@@ -151,6 +151,13 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
   - **Ayuda:** `hooks/useApprovalDecision.ts` unifica `useApproveTicket` y `useRejectTicket` (ya estaban modificados respecto de la instalación de `taskapp-cli`). `ConfirmDialog` y `TicketCloseProposalDialog` repiten ~45 líneas del `<dialog>` nativo (apertura, foco y bloqueo de scroll) pero NO se tocaron: coinciden con el hash de `.taskapp-cli-manifest.json` y editarlos haría que la próxima actualización del CLI deje un `.new`. El contenido del manual no se tocó.
   - **Permisos de usuario:** `hooks/usePermissionIndex.ts` (módulos con tabs e índice de permisos) lo comparten el editor de un usuario y el de roles.
   - Verificación: `check-types` limpio, `npm test` (1494) y `next build` compilando. No se tocó lógica de escritura; las lecturas de Checklists que se movieron (`fetchChecklistAnswerById`, `fetchChecklistTemplatesForEquipment`) no tienen pruebas de integración, por eso no se corrieron esas suites.
+- [x] **Panel del operario, Selección, Auth y Jobs (`src/features/OperatorPanel`, `Seleccion`, `Auth`, `Jobs`):** jscpd sobre los cuatro módulos (sin pruebas, mismo comando): de 7 clones y 86 líneas duplicadas (0,60 %) a 3 y 32 (0,23 %); 785 → 270 tokens duplicados. `knip` sin hallazgos y `tsc --noUnusedLocals --noUnusedParameters` marcó tres cosas muertas (los `import { prisma }` de `session.server.ts` y `work-orders.server.ts` y `hasSectorRepairTypes` de `AddTaskDialog`, borradas). Los comentarios JSX de los cuatro módulos están balanceados (`{/*` y `*/}` iguales en todos los archivos).
+  - **Código muerto:** `Auth/utils/emailTemplates.ts` (1.130 líneas: 755 de versiones viejas comentadas y las plantillas `renderHelpEmailTemplate` / `renderDocumentEmailTemplate`, que nadie llamaba: el único llamador de `sendEmail` es `sendErrorReport` y manda `html`). Se borró el archivo y las opciones `template`, `body`, `reason` y `userEmail` de `sendEmail` (`Auth/lib/email.ts`); `lib/utils/sendErrorReport.ts` ya no pasa el `userEmail` de relleno.
+  - **Login de empleado:** `Auth/lib/employee-login.ts` (`signInLinkedEmployee`: Better Auth, perfil y empleado vinculado, con `rejectLogin` si no sirve) lo usan `operatorLogin` (`OperatorPanel/actions/session.server.ts`, exige empresa) y `clothingLogin` (`Clothing/actions/session.server.ts`, no la exige y deja el aviso del log). Cada acceso conserva lo suyo: sectores y cookie de sector en el panel, claim y cookie de empresa en Ropa. Se resolvió así el pendiente del login de `/clothing` contra el de OperatorPanel. `Auth/components/LoginSubmitButton.tsx` lo comparten `LoginForm` y `CredentialsLoginForm`.
+  - **Jobs:** `lib/per-company.ts` suma `runJobForEachCompany` (bitácora + lista de empresas + `runForEachCompany`: lo usan `documents-expiry`, `documents-status`, `daily-report-deviations` y `warehouse-batch-expiry`), `listCompanies` (también `daily-indicators`) y `notifyOutcome` (motivo, destinatarios y `emailSent` de un `notify` con destinatarios: tres jobs). No cambiaron claves de ejecución, fechas ni el orden de la bitácora.
+  - **Selección:** la tabla de candidatos pasa a `createFacetFilters`, `enumFilterOptions`, `textFilter`, `dateRangeFilter` y `useServerTableView`; las columnas a `titled`, `matchesNullableId` y `matchesColumnValue`; la acción de la lista a `resolveSorts`, `createCrossWhere` e `isUuid`.
+  - **Panel del operario:** `TaskList` reutiliza el tipo `RepairData` exportado por `TaskCard`.
+  - Verificación: `check-types` limpio, `npm test` (1494), `next build` compilando y, contra un Postgres descartable, las suites de integración de Jobs y Auth en serie (86 pruebas).
 
 ## En curso / siguiente
 
@@ -230,7 +237,6 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 - `Dashboard/Estadisticas/Mantenimiento/actions/actions.server.ts` (559 líneas) agrupa cinco acciones independientes (resumen, categoría, por tipo, origen y clase): se partiría por tarjeta, con sus importadores.
 - `RecursosHumanos/components/AbsenteeismTrendChart.tsx` y `HeadcountTrendChart.tsx` (y sus `charts/*-trend-chart.tsx`) repiten el marco (tarjeta, rango, carga y error, ~20 líneas) pero el cálculo de tendencia difiere: no se tocó.
 - `Dashboard/Estadisticas/Operaciones/components/ClientRankingChart.tsx` y `SalaDeControl/components/OrderManagementBarChart.tsx` comparten ~26 líneas de gráfico de barras; los botones de métricas de los dos clientes (`OperacionesChartsClient`, `OrderManagementClient`) difieren en el diseño, por eso no se unificaron.
-- `Clothing/actions/session.server.ts` y `OperatorPanel/actions/session.server.ts` repiten el login por correo y empleado (~30 líneas) con reglas distintas (sector de taller vs. empleado).
 - `Dashboard/Estadisticas/KPIs/Indicadores/actions.server.ts` repite ~40 líneas de la consulta de listas con las de Ropa, Selección y Operaciones (`where` + orden + faceta); entra en el helper de listas de acciones pendiente de la sección de Compras.
 - Archivos de más de 500 líneas que quedan: `Dashboard/lib/widget-registry.ts` (537, tabla de configuración de widgets) y `Dashboard/Estadisticas/Mantenimiento/actions/actions.server.ts` (559).
 
@@ -239,3 +245,10 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 - `PartesDiarios/list/actions.server.ts` y `Preparte/list/actions.server.ts` repiten la cabecera de lista (`sanitizeFilters`, rango de fechas, `toFacetMap`, conteo y export por tandas, ~12 líneas) y `comercial-rows.server.ts` vs `Preparte/actions/mutations.server.ts` repiten la verificación de perímetro de cliente/contrato/ítem/equipo (~11 líneas): entran en el helper de listas de acciones pendiente de Compras.
 - `EmployeeSection.tsx` (dos bloques de campo de rol de ~20 líneas), `report-workbook.ts` (dos tramos de ~10 líneas) y `CustomerContractSection`/`LocationSection` (campos de 8 a 18 líneas) quedan con repeticiones internas chicas.
 - Archivos más grandes del módulo: `Preparte/list/columns.tsx` (511), `Preparte/list/actions.server.ts` (448), `PartesDiarios/detail/clone.server.ts` y `queries.server.ts` (~440): sin costuras claras que justifiquen partirlos.
+
+## Pendiente detectado en Panel del operario, Selección, Auth y Jobs
+
+- `LoginForm` y `CredentialsLoginForm` aún repiten el campo de correo y el de contraseña (~15 líneas): difieren en `data-testid` y en el enlace «¿La olvidaste?». `RecoveryPasswordForm` y `UpdateUserPasswordForm` repiten ~25 líneas de formulario. `Jobs/templates/documents-expiry.ts` repite el armado de filas entre empleados, equipos y empresa (HTML de correo, 8 líneas), y `AddTaskDialog` el campo de descripción de «propia» y «otro sector».
+- `OperatorPanel/components/AddTaskDialog.tsx` (498 líneas) mezcla dos formularios (tarea propia y pedido a otro sector) en un solo componente; se partiría en dos con su estado propio.
+- Las acciones de `Seleccion` (`pre-employee-actions`, `pre-employee-documents`) y `OperatorPanel` conservan la cabecera permiso + try/catch sin envoltorio común (ver la nota de Compras).
+- `Jobs/lib/runs.ts` exporta `lastRun`, que solo usan las pruebas de integración; no se borró.
