@@ -3,8 +3,9 @@
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
-import { type DataTableFilterOption } from '@/shared/components/common/DataTable/types';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { type DataTableFilterOption } from '@/shared/components/common/DataTable/types';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import { AlertTriangle, ClipboardList, Shield, Wrench, XCircle, type LucideIcon } from 'lucide-react';
@@ -95,8 +96,7 @@ export function getRejectedRequestsColumns(): ColumnDef<EquipmentRejectedRequest
     {
       id: 'rejectedAt',
       accessorFn: (row) => getRejectionDate(row),
-      meta: { title: 'Fecha de Rechazo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de Rechazo" />,
+      ...titled('Fecha de Rechazo'),
       cell: ({ row }) => {
         const value = getRejectionDate(row.original);
         return <span className="text-sm">{value ? formatArgentinaDay(value) : '—'}</span>;
@@ -107,8 +107,7 @@ export function getRejectedRequestsColumns(): ColumnDef<EquipmentRejectedRequest
     {
       id: 'rejectionType',
       accessorFn: (row) => getRejectionType(row),
-      meta: { title: 'Tipo de Rechazo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo de Rechazo" />,
+      ...titled('Tipo de Rechazo'),
       cell: ({ row }) => {
         const type = getRejectionType(row.original);
         const Icon = REJECTION_TYPE_ICONS[type];
@@ -189,8 +188,7 @@ export function getRejectedRequestsColumns(): ColumnDef<EquipmentRejectedRequest
     {
       id: 'source',
       accessorFn: (row) => row.source ?? '',
-      meta: { title: 'Origen' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Origen" />,
+      ...titled('Origen'),
       cell: ({ row }) => {
         const src = row.original.source;
         if (!src) return <span className="text-muted-foreground">—</span>;
@@ -214,8 +212,7 @@ export function getRejectedRequestsColumns(): ColumnDef<EquipmentRejectedRequest
     {
       id: 'rejectedBy',
       accessorFn: (row) => row.profile_maintenance_requests_rejected_byToprofile?.fullname ?? '',
-      meta: { title: 'Rechazado por' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Rechazado por" />,
+      ...titled('Rechazado por'),
       cell: ({ row }) => {
         const name = row.original.profile_maintenance_requests_rejected_byToprofile?.fullname;
         return name ? (
@@ -253,8 +250,7 @@ export function getRejectedRequestsColumns(): ColumnDef<EquipmentRejectedRequest
     {
       id: 'supervisor',
       accessorFn: (row) => row.profile_maintenance_requests_supervisor_idToprofile?.fullname ?? '',
-      meta: { title: 'Supervisor' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Supervisor" />,
+      ...titled('Supervisor'),
       cell: ({ row }) => {
         const name = row.original.profile_maintenance_requests_supervisor_idToprofile?.fullname;
         return name ? <span className="text-sm">{name}</span> : <span className="text-muted-foreground">—</span>;
@@ -265,8 +261,7 @@ export function getRejectedRequestsColumns(): ColumnDef<EquipmentRejectedRequest
     {
       id: 'preventiveType',
       accessorFn: (row) => row.preventive_type ?? '',
-      meta: { title: 'Tipo Preventivo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo Preventivo" />,
+      ...titled('Tipo Preventivo'),
       cell: ({ row }) => <span className="text-sm">{row.original.preventive_type || '—'}</span>,
     },
   ];

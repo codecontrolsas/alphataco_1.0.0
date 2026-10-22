@@ -3,8 +3,9 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
-import { type DataTableFilterOption } from '@/shared/components/common/DataTable/types';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { type DataTableFilterOption } from '@/shared/components/common/DataTable/types';
 import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import {
@@ -57,8 +58,7 @@ export function getChecklistColumns(): ColumnDef<EquipmentChecklistAnswer>[] {
     {
       accessorKey: 'created_at',
       id: 'created_at',
-      meta: { title: 'Fecha' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha" />,
+      ...titled('Fecha'),
       cell: ({ row }) => {
         const date = row.original.created_at;
         return (
@@ -72,8 +72,7 @@ export function getChecklistColumns(): ColumnDef<EquipmentChecklistAnswer>[] {
     {
       id: 'template',
       accessorFn: (row) => row.checklist_templates?.name ?? '',
-      meta: { title: 'Checklist' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Checklist" />,
+      ...titled('Checklist'),
       cell: ({ row }) => {
         const template = row.original.checklist_templates;
         return (
@@ -88,8 +87,7 @@ export function getChecklistColumns(): ColumnDef<EquipmentChecklistAnswer>[] {
     {
       accessorKey: 'result',
       id: 'result',
-      meta: { title: 'Resultado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Resultado" />,
+      ...titled('Resultado'),
       cell: ({ row }) => {
         const result = row.original.result;
         const Icon = result ? CHECKLIST_RESULT_ICONS[result] : undefined;
@@ -153,8 +151,7 @@ export function getChecklistColumns(): ColumnDef<EquipmentChecklistAnswer>[] {
     {
       id: 'performedBy',
       accessorFn: (row) => row.profile?.fullname ?? '',
-      meta: { title: 'Realizado por' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Realizado por" />,
+      ...titled('Realizado por'),
       cell: ({ row }) => {
         const name = row.original.profile?.fullname;
         if (!name) return <span className="text-sm text-muted-foreground">Usuario desconocido</span>;
@@ -174,8 +171,7 @@ export function getChecklistColumns(): ColumnDef<EquipmentChecklistAnswer>[] {
     {
       accessorKey: 'observations',
       id: 'observations',
-      meta: { title: 'Observaciones' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Observaciones" />,
+      ...titled('Observaciones'),
       cell: ({ row }) => {
         const observations = row.original.observations;
         if (!observations) return <span className="text-sm text-muted-foreground">-</span>;

@@ -2,7 +2,7 @@
 
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import type { FilterFn } from '@tanstack/react-table';
+import type { FilterFn, Row } from '@tanstack/react-table';
 
 /**
  * Título de columna: lo que lee el selector de columnas (`meta.title`) y el encabezado ordenable. Se
@@ -22,6 +22,12 @@ export function titled(title: string) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const matchesColumnValue: FilterFn<any> = (row, id, value: string[]) =>
   value.includes(row.getValue(id) as string);
+
+/** Igual que `matchesColumnValue`, pero un valor nulo coincide con el filtro "Sin asignar" (enum nullable). */
+export const matchesNullableColumnValue = <TData,>(row: Row<TData>, id: string, value: string[]) => {
+  const current = row.getValue(id);
+  return current == null ? value.includes(NULL_FILTER_VALUE) : value.includes(current as string);
+};
 
 /** Filtro por el id de una relación de la fila (proveedor, creador…). */
 export const matchesId =

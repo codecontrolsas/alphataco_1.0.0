@@ -8,6 +8,7 @@ import {
   tireServiceOrderStatusLabels,
 } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -21,8 +22,7 @@ export function getColumns(onViewDetail: (order: VehicleTireOrderItem) => void):
     {
       accessorKey: 'service_date',
       id: 'service_date',
-      meta: { title: 'Fecha' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha" />,
+      ...titled('Fecha'),
       cell: ({ row }) => (
         <div className="text-sm">{row.original.service_date ? formatArgentinaDay(row.original.service_date) : '-'}</div>
       ),
@@ -30,15 +30,13 @@ export function getColumns(onViewDetail: (order: VehicleTireOrderItem) => void):
     {
       accessorKey: 'kilometer',
       id: 'kilometer',
-      meta: { title: 'Kilómetros' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Kilómetros" />,
+      ...titled('Kilómetros'),
       cell: ({ row }) => <div className="text-sm font-mono">{row.original.kilometer ?? '-'}</div>,
     },
     {
       accessorKey: 'status',
       id: 'status',
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => {
         const status = row.original.status;
         const variant: BadgeVariant = (tireServiceOrderStatusBadges[status] ?? 'default') as BadgeVariant;
@@ -72,8 +70,7 @@ export function getColumns(onViewDetail: (order: VehicleTireOrderItem) => void):
     {
       accessorKey: 'closed_at',
       id: 'closed_at',
-      meta: { title: 'Cerrado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Cerrado" />,
+      ...titled('Cerrado'),
       cell: ({ row }) => (
         <div className="text-sm">{row.original.closed_at ? formatArgentinaDay(row.original.closed_at) : '-'}</div>
       ),

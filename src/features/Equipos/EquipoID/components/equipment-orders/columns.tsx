@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -34,15 +35,13 @@ export function getEquipmentOrderColumns({
     {
       accessorKey: 'order_number',
       id: 'order_number',
-      meta: { title: 'N° Orden' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="N° Orden" />,
+      ...titled('N° Orden'),
       cell: ({ row }) => <span className="font-mono text-sm font-medium">{row.original.order_number || '-'}</span>,
     },
     {
       accessorKey: 'status',
       id: 'status',
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => {
         const status = row.original.status;
         if (!isOrderStatus(status)) return <Badge variant="outline">{getOrderStatusLabel(status)}</Badge>;
@@ -60,8 +59,7 @@ export function getEquipmentOrderColumns({
     {
       accessorKey: 'workshop_entry_date',
       id: 'workshop_entry_date',
-      meta: { title: 'Ingreso' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Ingreso" />,
+      ...titled('Ingreso'),
       cell: ({ row }) => {
         const date = row.original.workshop_entry_date;
         return <span className="text-sm">{date ? formatArgentinaDay(date) : '-'}</span>;
@@ -70,8 +68,7 @@ export function getEquipmentOrderColumns({
     {
       accessorKey: 'created_at',
       id: 'created_at',
-      meta: { title: 'Creada' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Creada" />,
+      ...titled('Creada'),
       cell: ({ row }) => {
         const date = row.original.created_at;
         return <span className="text-sm">{date ? formatArgentinaDay(date) : '-'}</span>;
