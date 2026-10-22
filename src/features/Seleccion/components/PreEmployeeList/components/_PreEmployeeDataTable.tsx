@@ -3,12 +3,17 @@
 import { STATUS_LABELS, type PreEmployeeStatus } from '@/features/Seleccion/lib/state-machine';
 import { pre_employee_status_enum } from '@/generated/prisma/enums';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableExportConfig, type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { CircleOff } from 'lucide-react';
+import {
+  createFacetFilters,
+  dateRangeFilter,
+  enumFilterOptions,
+  textFilter,
+} from '@/shared/components/common/DataTable/facet-filters';
+import type { DataTableExportConfig, DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   getAllPreEmployeesForExport,
   getPreEmployeeSingleFacet,
@@ -32,23 +37,8 @@ interface PreEmployeeDataTableProps {
   initialFilterVisibility?: Record<string, boolean>;
 }
 
-// ============================================================================
-// HELPERS — builders para reducir boilerplate en fetchFacet
-// ============================================================================
-
-/** Construye FacetResult para FK/enum: opciones del servidor + counts */
-function buildFkFacetResult(
-  resolvedOptions: Array<{ id: string; name: string | null }> | undefined,
-  counts: Map<string, number>
-): FacetResult {
-  return {
-    options: [
-      ...(resolvedOptions?.map((o) => ({ value: o.id, label: o.name ?? '' })) ?? []),
-      ...(counts.has(NULL_FILTER_VALUE) ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }] : []),
-    ],
-    counts,
-  };
-}
+/** Filtros visibles por defecto: solo los 3 mas comunes. */
+const DEFAULT_VISIBLE_FILTERS = ['status', 'hierarchy', 'company_positions'];
 
 // ============================================================================
 // COMPONENT
@@ -63,103 +53,44 @@ export function _PreEmployeeDataTable({
   initialColumnVisibility,
   initialFilterVisibility,
 }: PreEmployeeDataTableProps) {
-  // ─── Client-side navigation: estado reactivo para queries dependientes ──────
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-
-  const handleStateChange = useCallback((params: DataTableSearchParams) => {
-    setCurrentParams(params);
-  }, []);
-
   // queryFn para fetch client-side de datos de tabla
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getPreEmployeesPaginated(params), []);
 
   // Columns
   const columns = useMemo(() => getColumns(requiredDocs), [requiredDocs]);
 
-  // Initial column visibility: merge defaults with saved preferences
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults: Record<string, boolean> = {};
-    for (const col of HIDDEN_COLUMNS_BY_DEFAULT) {
-      defaults[col] = false;
-    }
-    return { ...defaults, ...initialColumnVisibility };
-  }, [initialColumnVisibility]);
-
-  // ─── fetchFacet factories: cada filtro tiene su fetchFacet lazy ────────────
-
-  const makeFkFetchFacet = useCallback((columnId: string) => {
-    return async (params: DataTableSearchParams): Promise<FacetResult> => {
-      const result = await getPreEmployeeSingleFacet(columnId, params);
-      if (!result) return { options: [], counts: new Map() };
-      return buildFkFacetResult(result.resolvedOptions, result.counts);
-    };
+  // ─── Filtros facetados con lazy-load ───────────────────────────────────────
+  const facetedFilters = useMemo(() => {
+    const facet = createFacetFilters(getPreEmployeeSingleFacet);
+    return [
+      facet.fixed(
+        'status',
+        'Estado',
+        enumFilterOptions(Object.values(pre_employee_status_enum), STATUS_LABELS, statusIcons)
+      ),
+      facet.lookup('hierarchy', 'Sector propuesto', undefined, { label: 'Sin asignar' }),
+      facet.lookup('company_positions', 'Puesto propuesto', undefined, { label: 'Sin asignar' }),
+      textFilter('pre_file_number', 'N° Candidato', 'Buscar por N° de candidato...'),
+      textFilter('fullName', 'Nombre', 'Buscar por nombre...'),
+      textFilter('document_number', 'DNI', 'Buscar por DNI...'),
+      textFilter('cuil', 'CUIL', 'Buscar por CUIL...'),
+      textFilter('phone', 'Telefono', 'Buscar por telefono...'),
+      textFilter('email', 'Email', 'Buscar por email...'),
+      textFilter('rejection_reason', 'Motivo de rechazo', 'Buscar por motivo de rechazo...'),
+      dateRangeFilter('created_at', 'Creado'),
+      dateRangeFilter('reviewed_at', 'Revisado'),
+    ];
   }, []);
 
-  // ─── Filtros facetados con lazy-load ───────────────────────────────────────
-  const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
-    () => [
-      // ── Enum ──────────────────────────────────────────────────────────────
-      {
-        columnId: 'status',
-        title: 'Estado',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getPreEmployeeSingleFacet('status', params);
-          if (!result) return { options: [], counts: new Map() };
-          return {
-            options: Object.values(pre_employee_status_enum).map((value) => ({
-              value,
-              label: STATUS_LABELS[value],
-              icon: statusIcons[value],
-            })),
-            counts: result.counts,
-          };
-        },
-      },
-
-      // ── FK UUID nullable ─────────────────────────────────────────────────
-      { columnId: 'hierarchy', title: 'Sector propuesto', fetchFacet: makeFkFetchFacet('hierarchy') },
-      {
-        columnId: 'company_positions',
-        title: 'Puesto propuesto',
-        fetchFacet: makeFkFetchFacet('company_positions'),
-      },
-
-      // ── Filtros de texto libre ─────────────────────────────────────────────
-      {
-        columnId: 'pre_file_number',
-        title: 'N° Candidato',
-        type: 'text' as const,
-        placeholder: 'Buscar por N° de candidato...',
-      },
-      { columnId: 'fullName', title: 'Nombre', type: 'text' as const, placeholder: 'Buscar por nombre...' },
-      { columnId: 'document_number', title: 'DNI', type: 'text' as const, placeholder: 'Buscar por DNI...' },
-      { columnId: 'cuil', title: 'CUIL', type: 'text' as const, placeholder: 'Buscar por CUIL...' },
-      { columnId: 'phone', title: 'Telefono', type: 'text' as const, placeholder: 'Buscar por telefono...' },
-      { columnId: 'email', title: 'Email', type: 'text' as const, placeholder: 'Buscar por email...' },
-      {
-        columnId: 'rejection_reason',
-        title: 'Motivo de rechazo',
-        type: 'text' as const,
-        placeholder: 'Buscar por motivo de rechazo...',
-      },
-
-      // ── Filtros de rango de fechas ─────────────────────────────────────────
-      { columnId: 'created_at', title: 'Creado', type: 'dateRange' as const },
-      { columnId: 'reviewed_at', title: 'Revisado', type: 'dateRange' as const },
-    ],
-    [makeFkFetchFacet]
-  );
-
-  // Filtros visibles por defecto: solo los 3 mas comunes
-  const DEFAULT_VISIBLE_FILTERS = ['status', 'hierarchy', 'company_positions'];
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
-      return initialFilterVisibility;
-    }
-    return Object.fromEntries(
-      facetedFilters.map((filter) => [filter.columnId, DEFAULT_VISIBLE_FILTERS.includes(filter.columnId)])
-    );
-  }, [initialFilterVisibility, facetedFilters]);
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
 
   // ─── Exportacion a Excel ────────────────────────────────────────────────
   const exportConfig: DataTableExportConfig<PreEmployeeListItem> = useMemo(
@@ -185,19 +116,12 @@ export function _PreEmployeeDataTable({
       columns={columns}
       data={data}
       totalRows={totalRows}
-      searchParams={searchParams}
-      tableId={tableId}
-      paramNamespace={tableId}
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={mergedColumnVisibility}
-      initialFilterVisibility={mergedFilterVisibility}
-      showFilterToggle
+      {...tableProps}
       showSearch
       mobileCards
       // Client-side navigation: fetch instantaneo via React Query, sin router.push
       queryFn={tableQueryFn}
       queryKey={['pre-employees-paginated']}
-      onStateChange={handleStateChange}
       enableRowSelection
       showRowSelection
       searchPlaceholder="Buscar por nombre, CUIL o N° de candidato"
