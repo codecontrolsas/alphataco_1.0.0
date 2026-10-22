@@ -2,9 +2,10 @@
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { NameFormDialog } from '@/shared/components/common/name-catalog/NameFormDialog';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
@@ -20,7 +21,6 @@ import {
 } from '../../actions/catalog.server';
 import { ConfirmRemovalDialog } from '../../components/ConfirmRemovalDialog';
 import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
-import { unwrapAction } from '../../lib/unwrap-action';
 import { measurementUnitFormSchema, type MeasurementUnitFormValues } from '../../schemas/catalog';
 import { CatalogRow } from './CatalogRow';
 
@@ -45,7 +45,9 @@ export function UnitsSection({ units, canCreate, canUpdate, canDelete }: UnitsSe
   });
 
   const openForm = (target: Unit | 'new') => {
-    form.reset(target === 'new' ? { name: '', abbreviation: '' } : { name: target.name, abbreviation: target.abbreviation });
+    form.reset(
+      target === 'new' ? { name: '', abbreviation: '' } : { name: target.name, abbreviation: target.abbreviation }
+    );
     setEditing(target);
   };
 
@@ -127,51 +129,28 @@ export function UnitsSection({ units, canCreate, canUpdate, canDelete }: UnitsSe
         )}
       </CardContent>
 
-      <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{editing === 'new' ? 'Nueva unidad' : 'Editar unidad'}</DialogTitle>
-          </DialogHeader>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit((values) => save.mutate(values))} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nombre</FormLabel>
-                    <FormControl>
-                      <Input autoFocus {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="abbreviation"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Abreviatura</FormLabel>
-                    <FormControl>
-                      <Input placeholder="l, kg, u" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setEditing(null)}>
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={save.isPending}>
-                  {save.isPending ? 'Guardando…' : 'Guardar'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+      <NameFormDialog
+        open={editing !== null}
+        onOpenChange={(open) => !open && setEditing(null)}
+        title={editing === 'new' ? 'Nueva unidad' : 'Editar unidad'}
+        form={form}
+        onSubmit={(values) => save.mutate(values)}
+        pending={save.isPending}
+      >
+        <FormField
+          control={form.control}
+          name="abbreviation"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Abreviatura</FormLabel>
+              <FormControl>
+                <Input placeholder="l, kg, u" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </NameFormDialog>
 
       <ConfirmRemovalDialog
         open={removing !== null}

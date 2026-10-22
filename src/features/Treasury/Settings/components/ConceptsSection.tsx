@@ -12,13 +12,12 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
+import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { unwrapAction } from '@/features/Warehouses/lib/unwrap-action';
 import { Logger } from '@/lib/logger';
 import { SectionCard } from '@/shared/components/common/SectionCard';
+import { NameFormDialog } from '@/shared/components/common/name-catalog/NameFormDialog';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Plus, Power, RotateCcw, Trash2 } from 'lucide-react';
@@ -200,67 +199,43 @@ export function ConceptsSection({
         </ul>
       )}
 
-      <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{editing === 'new' ? 'Nuevo concepto' : 'Editar concepto'}</DialogTitle>
-          </DialogHeader>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit((values) => save.mutate(values))} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nombre</FormLabel>
-                    <FormControl>
-                      <Input autoFocus placeholder="Gastos bancarios" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="direction"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Sentido</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange} disabled={editingUsed}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {TREASURY_CONCEPT_DIRECTIONS.map((d) => (
-                          <SelectItem key={d} value={d}>
-                            {TREASURY_CONCEPT_DIRECTION_LABELS[d]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {editingUsed && (
-                      <p className="text-xs text-muted-foreground">
-                        Ya se usó en movimientos: el sentido no se cambia.
-                      </p>
-                    )}
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setEditing(null)}>
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={save.isPending}>
-                  {save.isPending ? 'Guardando…' : 'Guardar'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+      <NameFormDialog
+        open={editing !== null}
+        onOpenChange={(open) => !open && setEditing(null)}
+        title={editing === 'new' ? 'Nuevo concepto' : 'Editar concepto'}
+        form={form}
+        onSubmit={(values) => save.mutate(values)}
+        pending={save.isPending}
+        placeholder="Gastos bancarios"
+      >
+        <FormField
+          control={form.control}
+          name="direction"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Sentido</FormLabel>
+              <Select value={field.value} onValueChange={field.onChange} disabled={editingUsed}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {TREASURY_CONCEPT_DIRECTIONS.map((d) => (
+                    <SelectItem key={d} value={d}>
+                      {TREASURY_CONCEPT_DIRECTION_LABELS[d]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {editingUsed && (
+                <p className="text-xs text-muted-foreground">Ya se usó en movimientos: el sentido no se cambia.</p>
+              )}
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </NameFormDialog>
       <AlertDialog open={confirmDelete !== null} onOpenChange={(open) => !open && setConfirmDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

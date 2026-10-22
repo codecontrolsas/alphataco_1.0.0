@@ -2,9 +2,8 @@
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
+import { NameFormDialog } from '@/shared/components/common/name-catalog/NameFormDialog';
+import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
@@ -20,7 +19,6 @@ import {
 } from '../../actions/catalog.server';
 import { ConfirmRemovalDialog } from '../../components/ConfirmRemovalDialog';
 import { WAREHOUSE_QUERY_KEYS } from '../../lib/query-keys';
-import { unwrapAction } from '../../lib/unwrap-action';
 import { materialCategoryFormSchema, type MaterialCategoryFormValues } from '../../schemas/catalog';
 import { CatalogRow } from './CatalogRow';
 
@@ -127,38 +125,14 @@ export function CategoriesSection({ categories, canCreate, canUpdate, canDelete 
         )}
       </CardContent>
 
-      <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{editing === 'new' ? 'Nueva categoría' : 'Editar categoría'}</DialogTitle>
-          </DialogHeader>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit((values) => save.mutate(values))} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nombre</FormLabel>
-                    <FormControl>
-                      <Input autoFocus {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setEditing(null)}>
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={save.isPending}>
-                  {save.isPending ? 'Guardando…' : 'Guardar'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+      <NameFormDialog
+        open={editing !== null}
+        onOpenChange={(open) => !open && setEditing(null)}
+        title={editing === 'new' ? 'Nueva categoría' : 'Editar categoría'}
+        form={form}
+        onSubmit={(values) => save.mutate(values)}
+        pending={save.isPending}
+      />
 
       <ConfirmRemovalDialog
         open={removing !== null}
