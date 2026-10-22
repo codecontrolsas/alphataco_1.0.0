@@ -3,15 +3,13 @@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
-import { Separator } from '@/components/ui/separator';
 import { isNonPropagatingChecklistItem } from '@/features/Mantenimiento/constants/non-propagating-checklist-items';
 import { ManualItemsInput, type ManualItem } from '@/features/Mantenimiento/shared/components/ManualItemsInput';
 import { cn } from '@/lib/utils';
-import { AlertTriangle, Info } from 'lucide-react';
+import { Info } from 'lucide-react';
 import type { ChecklistTemplateForEquipment } from '../../actions/queries.server';
 import type { SelectedDeviation } from './types';
 
@@ -136,7 +134,9 @@ export function StepChecklistItems({
           </div>
         </ScrollArea>
       ) : (
-        <div role="status" className="rounded-lg bg-muted p-4 text-center text-sm">Este checklist no tiene items cargados.</div>
+        <div role="status" className="rounded-lg bg-muted p-4 text-center text-sm">
+          Este checklist no tiene items cargados.
+        </div>
       )}
 
       <ManualItemsInput items={manualItems} onChange={setManualItems} disabled={isSubmitting} />

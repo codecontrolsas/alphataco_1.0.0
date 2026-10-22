@@ -26,16 +26,15 @@ import {
 import Image from 'next/image';
 import { memo, useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { HighlightedText, matchesAllTokens, normalizeText, tokenizeQuery } from './manual-repairs/search-text';
 import {
   MAX_IMAGES_PER_REPAIR,
   type ManualRepair,
   type ManualRepairDraftState,
   type ManualRepairsInputHandle,
-  type PendingDraftCommit,
   type RepairGroupOption,
   type RepairTypeOption,
 } from './manual-repairs/types';
-import { HighlightedText, matchesAllTokens, normalizeText, tokenizeQuery } from './manual-repairs/search-text';
 
 export {
   MAX_IMAGES_PER_REPAIR,

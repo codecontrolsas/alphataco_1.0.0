@@ -2,7 +2,7 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -137,10 +137,19 @@ export function StepSupervisor({
               {isLoadingSupervisors ? (
                 <Skeleton className="h-12 w-full" />
               ) : hasSupervisorsError ? (
-                <div role="alert" className="rounded-lg border border-destructive/30 bg-danger-subtle p-3 text-sm text-danger-subtle-foreground">
+                <div
+                  role="alert"
+                  className="rounded-lg border border-destructive/30 bg-danger-subtle p-3 text-sm text-danger-subtle-foreground"
+                >
                   No se pudo cargar la lista de supervisores.
                   {refetchSupervisors && (
-                    <Button type="button" variant="link" size="sm" className="ml-1 h-auto p-0 text-sm" onClick={refetchSupervisors}>
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      className="ml-1 h-auto p-0 text-sm"
+                      onClick={refetchSupervisors}
+                    >
                       Reintentar
                     </Button>
                   )}

@@ -2,8 +2,8 @@
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { TireDiagramHitch } from '@/features/Mantenimiento/Gomeria/shared/TireDiagramRenderer';
 import { toDiagramPosition } from '@/features/Mantenimiento/Gomeria/shared/iso/diagram-position';
+import type { TireDiagramHitch } from '@/features/Mantenimiento/Gomeria/shared/tire-diagram-utils';
 import {
   describePositionNumber,
   type DiagramAxle,

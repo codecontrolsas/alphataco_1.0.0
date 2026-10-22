@@ -27,6 +27,13 @@ export interface DiagramPosition {
   retread_level?: 'FIRST' | 'SECOND' | 'THIRD' | null;
 }
 
+export interface TireDiagramHitch {
+  /** Texto del extremo del chasis, p. ej. "Enganche AB730HJ" o "Tractor AF023BN". */
+  label: string;
+  /** Extremo donde se conecta: la cabina está adelante, el enganche atrás. */
+  position: 'front' | 'rear';
+}
+
 export interface ComputedPosition {
   position_number: number;
   axle_number: number;

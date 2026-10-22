@@ -70,30 +70,6 @@ async function getMaintenanceOrderActivityLogCached(companyId: string, orderId: 
 }
 
 /**
- * Obtiene el historial de actividades de una solicitud de mantenimiento.
- */
-async function getMaintenanceRequestActivityLogCached(companyId: string, requestId: string) {
-  'use cache';
-  cacheTag(CACHE_TAGS.MAINTENANCE_REQUESTS);
-  cacheLife({ revalidate: CACHE_TTL.PAGINATED_LIST });
-
-  serverLogger.debug('Obteniendo historial de actividades de solicitud', { data: { requestId } });
-
-  try {
-    const data = await prisma.maintenance_activity_log.findMany({
-      where: { maintenance_request_id: requestId, company_id: companyId },
-      select: ACTIVITY_LOG_SELECT,
-      orderBy: { performed_at: 'asc' },
-    });
-
-    return data.map(mapActivityLogEntry);
-  } catch (error) {
-    serverLogger.error('Error al obtener historial de actividades de solicitud', { data: { error, requestId } });
-    throw error;
-  }
-}
-
-/**
  * Tipo del origen de una solicitud de mantenimiento
  */
 export type MaintenanceRequestOrigin = {
@@ -423,32 +399,6 @@ async function getMaintenanceOrderFullActivityLogCached(companyId: string, order
     return { origin, history: omHistory, workOrders, itemComments };
   } catch (error) {
     serverLogger.error('Error al obtener historial completo de pedido', { data: { error, orderId } });
-    throw error;
-  }
-}
-
-/**
- * Obtiene el historial de actividades de una orden de trabajo.
- */
-async function getWorkOrderActivityLogCached(companyId: string, workOrderId: string) {
-  'use cache';
-  cacheTag(CACHE_TAGS.WORK_ORDER_REPAIRS);
-  cacheLife({ revalidate: CACHE_TTL.PAGINATED_LIST });
-
-  serverLogger.debug('Obteniendo historial de actividades de orden de trabajo', { data: { workOrderId } });
-
-  try {
-    const data = await prisma.maintenance_activity_log.findMany({
-      where: { work_order_id: workOrderId, company_id: companyId },
-      select: ACTIVITY_LOG_SELECT,
-      orderBy: { performed_at: 'asc' },
-    });
-
-    return data.map(mapActivityLogEntry);
-  } catch (error) {
-    serverLogger.error('Error al obtener historial de actividades de orden de trabajo', {
-      data: { error, workOrderId },
-    });
     throw error;
   }
 }

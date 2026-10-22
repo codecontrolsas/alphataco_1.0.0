@@ -1,59 +1,17 @@
 'use server';
 
-import { Logger } from '@/lib/logger';
-import { getServerAuthProfile } from '@/shared/actions/auth.actions';
-import { CACHE_TAGS } from '@/shared/constants/cache';
-import { prisma } from '@/shared/lib/prisma';
-import { withCompany } from '@/shared/lib/prisma-tenant';
 import {
   NUEVO_PEDIDO_CREATE,
   NUEVO_PEDIDO_VIEW,
   requireResourceAccess,
 } from '@/features/Mantenimiento/shared/resource-access.server';
+import { Logger } from '@/lib/logger';
+import { getServerAuthProfile } from '@/shared/actions/auth.actions';
+import { CACHE_TAGS } from '@/shared/constants/cache';
+import { prisma } from '@/shared/lib/prisma';
 import { cacheLife, cacheTag } from 'next/cache';
 
 const serverLogger = new Logger('Mantenimiento/NuevoPedido/queries');
-
-/**
- * Verifica si ya existe un pedido pendiente para un equipo con el mismo tipo de reparación.
- *
- * `companyId` llega por parámetro (lo deriva el wrapper exportado del propio equipo) porque
- * una función `'use cache'` no puede leer la sesión, y además entra en la clave de caché.
- * Cache de 30s — dato de validación puntual.
- */
-async function getCachedExistingMaintenanceOrder(
-  equipmentId: string,
-  repairTypeId: string,
-  companyId: string
-): Promise<boolean> {
-  'use cache';
-  cacheTag(CACHE_TAGS.MAINTENANCE_ORDERS);
-  cacheLife({ expire: 30, revalidate: 30, stale: 10 });
-
-  serverLogger.debug('Verificando pedidos existentes', { data: { equipmentId, repairTypeId } });
-
-  try {
-    const count = await prisma.maintenance_order_items.count({
-      where: withCompany(
-        {
-          repair_type_id: repairTypeId,
-          maintenance_orders: {
-            equipment_id: equipmentId,
-            status: {
-              in: ['pending_scheduling', 'scheduled', 'date_confirmed', 'in_workshop'],
-            },
-          },
-        },
-        companyId
-      ),
-    });
-
-    return count > 0;
-  } catch (error) {
-    serverLogger.error('Error verificando pedidos existentes', { data: { error } });
-    return false;
-  }
-}
 
 /**
  * Templates de checklist disponibles para un equipo, según su type y/o subType.

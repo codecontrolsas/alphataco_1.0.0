@@ -46,15 +46,6 @@ type Deviation = {
   equipment_label?: string | null;
 };
 
-type Supervisor = {
-  id: string;
-  fullName: string;
-  email: string;
-  hasLinkedEmployee: boolean;
-  hasActiveDiagram: boolean;
-  isAvailable: boolean;
-};
-
 interface CriticalDeviationsRepairModalProps {
   isOpen: boolean;
   onClose: () => void;

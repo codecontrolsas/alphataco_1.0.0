@@ -1,6 +1,6 @@
 'use client';
 
-import { Badge, type BadgeProps } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -31,21 +31,6 @@ import { MaintenanceOrderReportButton } from '../pdf/MaintenanceOrderReportButto
 import { computeCurrentSector } from '../utils/currentSector';
 import type { MaintenanceOrderListItem } from './actions.server';
 import { daysSinceArgentinaDay } from './lib/workshop-days';
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-type BadgeVariant = NonNullable<BadgeProps['variant']>;
-
-type StatusType =
-  | 'scheduled'
-  | 'in_workshop'
-  | 'pending_workshop_validation'
-  | 'pending_operations_validation'
-  | 'operations_rejected'
-  | 'workshop_rejected'
-  | 'completed';
 
 // ============================================================================
 // STATUS CONFIG

@@ -4,8 +4,6 @@ import type { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 
-type PrismaLike = Prisma.TransactionClient | typeof prisma;
-
 /**
  * Perímetro de las mutaciones sobre una solicitud.
  *

@@ -2,15 +2,14 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { conditionLabels } from '@/shared/utils/mappers';
-import { Check, ChevronsUpDown, Loader2, Lock, Truck } from 'lucide-react';
+import { Check, ChevronsUpDown } from 'lucide-react';
 import type { ResourceOption } from './types';
 
 export interface StepEquipmentSelectorProps {
@@ -130,7 +129,12 @@ export function StepEquipmentSelector({
                 </CommandEmpty>
                 <CommandGroup>
                   {filteredEquipment.map((equip) => (
-                    <CommandItem className="min-h-12" key={equip.id} value={equip.label} onSelect={() => handleSelectEquipment(equip.id)}>
+                    <CommandItem
+                      className="min-h-12"
+                      key={equip.id}
+                      value={equip.label}
+                      onSelect={() => handleSelectEquipment(equip.id)}
+                    >
                       <Check
                         className={cn(
                           'mr-2 h-4 w-4 shrink-0',

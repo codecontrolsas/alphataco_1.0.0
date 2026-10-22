@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { IsoFigure } from '@/shared/components/iso/IsoFigure';
 import { useIsoSelect } from '@/shared/components/iso/use-iso-select';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type PointerEvent } from 'react';
-import type { TireDiagramHitch } from '../TireDiagramRenderer';
+import type { TireDiagramHitch } from '../tire-diagram-utils';
 import {
   calculatePositions,
   describePosition,

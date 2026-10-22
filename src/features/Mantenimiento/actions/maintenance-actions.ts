@@ -1,18 +1,14 @@
 'use server';
 
-import { Logger } from '@/lib/logger';
 import { requireResourceAccess } from '@/features/Mantenimiento/shared/resource-access.server';
+import { Logger } from '@/lib/logger';
 import { auth } from '@/shared/lib/auth';
 import { prisma } from '@/shared/lib/prisma';
 import { prismaSystem } from '@/shared/lib/prisma-system';
 import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getSessionToken, getSessionUser, isSessionAnonymous } from '@/shared/lib/session';
 import { canUserUseCompany, writeCompanyClaim, writeMaintenanceClaims } from '@/shared/lib/session-claims';
-import {
-  clearActiveCompanyCookie,
-  getActiveCompanyId,
-  setActiveCompanyCookie,
-} from '@/shared/lib/tenant';
+import { clearActiveCompanyCookie, setActiveCompanyCookie } from '@/shared/lib/tenant';
 import { headers } from 'next/headers';
 
 const deviationsLogger = new Logger('Mantenimiento/deviations');
@@ -189,7 +185,15 @@ export async function completeMaintenanceEmployeeAnonymousSession(params: {
   const employee =
     (await prismaSystem.employees.findFirst({
       where: { cuil: normalized },
-      select: { id: true, firstname: true, lastname: true, email: true, phone: true, company_id: true, is_active: true },
+      select: {
+        id: true,
+        firstname: true,
+        lastname: true,
+        email: true,
+        phone: true,
+        company_id: true,
+        is_active: true,
+      },
     })) ??
     (normalized !== cuil
       ? await prismaSystem.employees.findFirst({
@@ -262,7 +266,13 @@ export async function completeMaintenanceEmployeeAnonymousSession(params: {
   try {
     await prismaSystem.profile.upsert({
       where: { id: user.id },
-      update: { credential_id: user.id, email: emailForProfile, fullname: employeeName, role: 'User', employee_id: employeeId },
+      update: {
+        credential_id: user.id,
+        email: emailForProfile,
+        fullname: employeeName,
+        role: 'User',
+        employee_id: employeeId,
+      },
       create: {
         id: user.id,
         credential_id: user.id,

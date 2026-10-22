@@ -8,7 +8,6 @@ import { RepairGroupBadge } from '@/features/Mantenimiento/shared/components/Rep
 import { RepairItemPhotos } from '@/features/Mantenimiento/shared/components/RepairItemPhotos';
 import { SearchableSelect } from '@/features/Mantenimiento/shared/components/SearchableSelect';
 import { getRepairItemGroupName, getRepairItemImages } from '@/features/Mantenimiento/shared/repair-item-label';
-import { Logger } from '@/lib/logger';
 import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle2, HelpCircle } from 'lucide-react';
@@ -17,8 +16,6 @@ import { getSectorCandidatesForRepairTypes, type WorkshopSector } from '../../ac
 import type { LocalItem } from '../ManageOrderWizard';
 import { RejectedItemsList } from './RejectedItemsList';
 import { getItemLabel, getItemRepairTypeIds as getRepairTypeIds } from './helpers';
-
-const logger = new Logger('Step2SectorAssignment');
 
 interface Step2SectorAssignmentProps {
   localItems: LocalItem[];
@@ -261,9 +258,7 @@ export function Step2SectorAssignment({
                   key={info.item.id}
                   className={cn(
                     'p-3 border rounded-lg',
-                    info.assignedSectorId
-                      ? 'border-border bg-muted/20'
-                      : 'border-warn/30 bg-warn-subtle/30'
+                    info.assignedSectorId ? 'border-border bg-muted/20' : 'border-warn/30 bg-warn-subtle/30'
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
