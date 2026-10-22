@@ -1,8 +1,7 @@
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { ExportTooLargeError, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import moment from 'moment';
 import 'server-only';
 import { DUE_INVOICES_EXPORT_MAX_ROWS } from '../Payments/DueInvoicesList/constants';
-import { exportTooLargeMessage } from './due-invoices';
 
 import { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/shared/lib/prisma';
@@ -118,7 +117,7 @@ export async function listUnified(
 
   // Export (sin pagina): el conjunto completo tiene tope y las facturas se traen por tandas
   if (!page && light.length > DUE_INVOICES_EXPORT_MAX_ROWS)
-    throw new ExportTooLargeError(exportTooLargeMessage(DUE_INVOICES_EXPORT_MAX_ROWS));
+    throw new ExportTooLargeError(tooManyRowsMessage('comprobantes')(DUE_INVOICES_EXPORT_MAX_ROWS));
 
   const slice = page ? light.slice(page.skip, page.skip + page.take) : light;
   const invoiceIds = slice.filter((r) => r.kind === 'INVOICE').map((r) => r.id);
@@ -134,7 +133,7 @@ export async function listUnified(
               where: { id: { in: ids }, company_id: companyId },
               select: INVOICE_SELECT,
             }),
-          tooLargeMessage: exportTooLargeMessage,
+          tooLargeMessage: tooManyRowsMessage('comprobantes'),
         });
   const shapedInvoices = new Map(shape(rows, pendingMap).map((r) => [r.id, r]));
   const debtsById = new Map(debts.map((d) => [d.id, d]));

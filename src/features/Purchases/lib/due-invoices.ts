@@ -72,9 +72,6 @@ export const DEFAULT_ORDER_BY: InvoiceOrderBy[] = [
   { number: 'asc' },
 ];
 
-export const exportTooLargeMessage = (maxRows: number) =>
-  `Hay más de ${maxRows.toLocaleString('es-AR')} comprobantes con los filtros actuales. Acote la exportación con filtros.`;
-
 // ============================================================================
 // HELPERS INTERNOS
 // ============================================================================

@@ -11,6 +11,7 @@ import {
   parseSearchParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { exportRowLimitMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
@@ -259,7 +260,7 @@ export async function getAllChecklistAnswersForExport(
     if (data.length > EXPORT_MAX_ROWS) {
       return {
         ok: false,
-        message: `La exportación supera el máximo de ${EXPORT_MAX_ROWS.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`,
+        message: exportRowLimitMessage(EXPORT_MAX_ROWS),
       };
     }
     return { ok: true, data };

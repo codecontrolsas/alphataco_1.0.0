@@ -5,7 +5,7 @@ import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { NULL_FILTER_VALUE, parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
@@ -188,8 +188,7 @@ export async function getAllOwnChecksForExport(
       listIds: (take) => prisma.own_checks.findMany({ where, orderBy, select: { id: true }, take }),
       fetchByIds: (ids) =>
         prisma.own_checks.findMany({ where: { id: { in: ids }, company_id: companyId }, select: OWN_CHECK_SELECT }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} cheques propios con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('cheques propios'),
     });
     return { ok: true, data: shape(rows) };
   } catch (error) {

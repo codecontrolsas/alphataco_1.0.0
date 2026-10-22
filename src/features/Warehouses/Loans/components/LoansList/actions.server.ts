@@ -13,7 +13,7 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { argentinaDate } from '@/shared/lib/argentina-time';
-import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
@@ -222,8 +222,7 @@ export async function getAllLoansForExport(
           where: { AND: [openLoansWhere(companyId), { id: { in: ids } }] },
           select: LOAN_UNIT_SELECT,
         }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} préstamos con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('préstamos'),
       maxRows: EXPORT_MAX_LOANS,
     });
     return { ok: true, data: shape(rows) };

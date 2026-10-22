@@ -11,7 +11,7 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { argentinaDate } from '@/shared/lib/argentina-time';
-import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { toFacetMap } from '@/shared/lib/table-facets';
@@ -253,8 +253,7 @@ export async function getAllStockForExport(
             where: { id: { in: ids }, company_id: companyId },
             select: STOCK_SELECT(withPrices),
           }),
-        tooLargeMessage: (maxRows) =>
-          `Hay más de ${maxRows.toLocaleString('es-AR')} saldos con los filtros actuales. Acote la exportación con filtros.`,
+        tooLargeMessage: tooManyRowsMessage('saldos'),
       }),
       getBelowMinimumMaterials(companyId),
     ]);

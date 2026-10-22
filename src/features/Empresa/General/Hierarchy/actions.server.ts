@@ -1,7 +1,6 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable/types';
 import {
   NULL_FILTER_VALUE,
   buildDateRangeFiltersWhere,
@@ -11,7 +10,8 @@ import {
   parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
-import { fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable/types';
+import { fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
@@ -19,12 +19,7 @@ import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { z } from 'zod';
 import { nameActiveCreateSchema, nameActiveUpdateSchema } from '../../lib/catalog-input-schemas';
-import {
-  CATALOG_EXPORT_MAX_ROWS,
-  buildIsActiveWhere,
-  catalogExportFailure,
-  catalogTooLargeMessage,
-} from '../../lib/catalog-table.server';
+import { CATALOG_EXPORT_MAX_ROWS, buildIsActiveWhere, catalogExportFailure } from '../../lib/catalog-table.server';
 import { configPermissionError, requireConfigTabPermission } from '../../lib/config-access.server';
 import { descendantsOf, wouldCreateCycle } from '../OrgChart/lib/org-chart-rules';
 
@@ -154,7 +149,7 @@ export async function getAllHierarchiesForExport(
       listIds: (take) => prisma.hierarchy.findMany({ where, orderBy: safeOrderBy, select: { id: true }, take }),
       fetchByIds: (ids) =>
         prisma.hierarchy.findMany({ where: { id: { in: ids }, company_id: companyId }, select: LIST_SELECT }),
-      tooLargeMessage: catalogTooLargeMessage('sectores'),
+      tooLargeMessage: tooManyRowsMessage('sectores'),
     });
     return { ok: true, data: rows };
   } catch (error) {

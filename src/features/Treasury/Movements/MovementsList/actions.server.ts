@@ -6,7 +6,7 @@ import { treasury_movement_kind } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
 import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { toFacetMap } from '@/shared/lib/table-facets';
@@ -266,8 +266,7 @@ export async function getAllTreasuryMovementsForExport(
           where: { id: { in: ids }, company_id: companyId },
           select: MOVEMENT_SELECT,
         }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} movimientos con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('movimientos'),
     });
     return { ok: true, data: shape(rows) };
   } catch (error) {

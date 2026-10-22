@@ -30,11 +30,6 @@ export function digitsOnly(value: string): string {
   return value.replace(/\D/g, '');
 }
 
-/** Mensaje del error cuando un export supera el tope de filas. */
-export function exportTooLargeMessage(maxRows: number, noun: string): string {
-  return `Hay más de ${maxRows.toLocaleString('es-AR')} ${noun} con los filtros actuales. Acote la exportación con filtros.`;
-}
-
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isUuid(value: string): boolean {

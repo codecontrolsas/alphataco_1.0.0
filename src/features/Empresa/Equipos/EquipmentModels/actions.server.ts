@@ -1,7 +1,6 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable/types';
 import {
   NULL_FILTER_VALUE,
   buildDateRangeFiltersWhere,
@@ -10,7 +9,8 @@ import {
   parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
-import { ExportTooLargeError } from '@/shared/lib/export-batches';
+import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable/types';
+import { ExportTooLargeError, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { withCompany } from '@/shared/lib/prisma-tenant';
@@ -21,12 +21,7 @@ import {
   equipmentModelUpdateSchema,
   firstIssueMessage,
 } from '../../lib/catalog-input-schemas';
-import {
-  CATALOG_EXPORT_MAX_ROWS,
-  buildIsActiveWhere,
-  catalogExportFailure,
-  catalogTooLargeMessage,
-} from '../../lib/catalog-table.server';
+import { CATALOG_EXPORT_MAX_ROWS, buildIsActiveWhere, catalogExportFailure } from '../../lib/catalog-table.server';
 import { requireConfigTabPermission } from '../../lib/config-access.server';
 import { assertBrandReadable } from '../lib/catalog-guards';
 import { catalogReadScope } from '../lib/catalog-scope';
@@ -181,7 +176,7 @@ export async function getAllEquipmentModelsForExport(
       take: CATALOG_EXPORT_MAX_ROWS + 1,
     });
     if (rows.length > CATALOG_EXPORT_MAX_ROWS) {
-      throw new ExportTooLargeError(catalogTooLargeMessage('modelos')(CATALOG_EXPORT_MAX_ROWS));
+      throw new ExportTooLargeError(tooManyRowsMessage('modelos')(CATALOG_EXPORT_MAX_ROWS));
     }
     return { ok: true, data: rows };
   } catch (error) {

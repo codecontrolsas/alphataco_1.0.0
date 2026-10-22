@@ -7,7 +7,7 @@ import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError, exportFailure } from '@/shared/lib/export-batches';
+import { ExportTooLargeError, exportFailure, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
@@ -25,9 +25,6 @@ type FilterState = ReturnType<typeof parseSearchParams>;
 
 /** Tope de filas por export: más que esto se pide acotar con filtros. */
 const EXPORT_LIMIT = 10_000;
-
-const tooLargeMessage = (maxRows: number) =>
-  `Hay más de ${maxRows.toLocaleString('es-AR')} comprobantes a cobrar con los filtros actuales. Acote la exportación con filtros.`;
 
 const STATES: readonly ReceivableState[] = ['OVERDUE', 'DUE', 'IN_DRAFT'];
 
@@ -237,7 +234,8 @@ export async function getAllReceivablesForExport(
     const rows = await prisma.$queryRaw<ReceivableRow[]>`
       SELECT ${SELECT_COLUMNS} FROM (${receivablesBaseSql(companyId)}) r ${whereSql(buildConditions(state, today))} ${orderSql(state, today)}
       LIMIT ${EXPORT_LIMIT + 1}`;
-    if (rows.length > EXPORT_LIMIT) throw new ExportTooLargeError(tooLargeMessage(EXPORT_LIMIT));
+    if (rows.length > EXPORT_LIMIT)
+      throw new ExportTooLargeError(tooManyRowsMessage('comprobantes a cobrar')(EXPORT_LIMIT));
     return { ok: true, data: shape(rows, today) };
   } catch (error) {
     logger.error('Error al exportar comprobantes a cobrar', { data: { error } });

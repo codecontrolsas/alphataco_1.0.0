@@ -77,6 +77,23 @@ export async function fetchExportRowsInBatches<Row extends { id: string }>({
 }
 
 /**
+ * Mensaje de "demasiadas filas" para `fetchExportRowsInBatches` y `ExportTooLargeError`: `noun` es lo que se
+ * lista, en plural ("comprobantes", "cheques propios").
+ */
+export function tooManyRowsMessage(noun: string) {
+  return (maxRows: number) =>
+    `Hay más de ${maxRows.toLocaleString('es-AR')} ${noun} con los filtros actuales. Acote la exportación con filtros.`;
+}
+
+/**
+ * Mensaje cuando un export en memoria supera el tope de filas. `label` nombra lo que se exporta
+ * ("La exportación de cubiertas supera…"); sin él queda genérico.
+ */
+export function exportRowLimitMessage(maxRows: number, label?: string): string {
+  return `La exportación${label ? ` de ${label}` : ''} supera el máximo de ${maxRows.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`;
+}
+
+/**
  * Respuesta de error de un export. Si se superó el tope se devuelve su mensaje (pide acotar con filtros);
  * cualquier otro error se reemplaza por `fallbackMessage`, sin detalles internos.
  *

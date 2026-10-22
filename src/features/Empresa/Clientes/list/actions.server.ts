@@ -10,13 +10,14 @@ import {
   parseSearchParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { booleanFilterWhere, digitsOnly, exportTooLargeMessage } from '../lib/table-where';
+import { booleanFilterWhere, digitsOnly } from '../lib/table-where';
 
 const logger = new Logger('features/Empresa/Clientes/list');
 
@@ -218,7 +219,7 @@ export async function getAllCustomersForExport(
     });
 
     if (rows.length > CUSTOMER_EXPORT_MAX_ROWS) {
-      return { ok: false, message: exportTooLargeMessage(CUSTOMER_EXPORT_MAX_ROWS, 'clientes') };
+      return { ok: false, message: tooManyRowsMessage('clientes')(CUSTOMER_EXPORT_MAX_ROWS) };
     }
 
     return { ok: true, data: rows.map(serializeCustomerListItem) };

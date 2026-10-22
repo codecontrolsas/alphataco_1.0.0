@@ -12,7 +12,7 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { ExportTooLargeError, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
@@ -304,8 +304,7 @@ export async function getAllAvailableEmployeesForExport(
           where: { id: { in: ids }, company_id: companyId },
           select: buildAvailableEmployeeSelect(),
         }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} empleados con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('empleados'),
     });
 
     return { ok: true, data: rows };

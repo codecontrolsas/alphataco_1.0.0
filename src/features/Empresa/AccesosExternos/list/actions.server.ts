@@ -3,11 +3,11 @@
 import { Logger } from '@/lib/logger';
 import { NULL_FILTER_VALUE, stateToPrismaParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { CATALOG_EXPORT_MAX_ROWS, catalogExportFailure, catalogTooLargeMessage } from '../../lib/catalog-table.server';
+import { CATALOG_EXPORT_MAX_ROWS, catalogExportFailure } from '../../lib/catalog-table.server';
 import { configPermissionError, requireConfigTabPermission } from '../../lib/config-access.server';
 import {
   EXTERNAL_API_CLIENT_SELECT,
@@ -88,7 +88,7 @@ export async function getAllExternalApiClientsForExport(
           where: { AND: [where, { id: { in: ids } }] },
           select: EXTERNAL_API_CLIENT_SELECT,
         }),
-      tooLargeMessage: catalogTooLargeMessage('accesos externos'),
+      tooLargeMessage: tooManyRowsMessage('accesos externos'),
     });
     return { ok: true, data: rows };
   } catch (error) {

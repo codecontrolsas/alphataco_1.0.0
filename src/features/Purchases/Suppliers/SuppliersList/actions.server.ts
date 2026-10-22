@@ -9,7 +9,7 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { isReceiverVatConditionId, RECEIVER_VAT_CONDITIONS } from '@/shared/lib/arca/catalogs';
-import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { withoutOwnFilter } from '@/shared/lib/table-facets';
@@ -295,8 +295,7 @@ export async function getAllSuppliersForExport(
       listIds: (take) => prisma.suppliers.findMany({ where, orderBy, select: { id: true }, take }),
       fetchByIds: (ids) =>
         prisma.suppliers.findMany({ where: { id: { in: ids }, company_id: companyId }, select: SUPPLIER_SELECT }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} proveedores con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('proveedores'),
     });
     return { ok: true, data: shape(rows) };
   } catch (error) {

@@ -11,7 +11,7 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { toDateOnly } from '@/shared/lib/date-only';
-import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { runFacet, withoutOwnFilter, type FacetConfig } from '@/shared/lib/table-facets';
@@ -295,8 +295,7 @@ export async function getInvoicesForExport(
       listIds: (take) => prisma.invoices.findMany({ where, orderBy, select: { id: true }, take }),
       fetchByIds: (ids) =>
         prisma.invoices.findMany({ where: { id: { in: ids }, company_id: companyId }, select: INVOICE_SELECT }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} comprobantes con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('comprobantes'),
     });
 
     return { ok: true, data: rows.map((r) => mapInvoice(r, canViewPrices)) };

@@ -12,7 +12,7 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { toFacetMap } from '@/shared/lib/table-facets';
@@ -167,8 +167,7 @@ export async function getAllDepotsForExport(
       listIds: (take) => prisma.warehouses.findMany({ where, orderBy, select: { id: true }, take }),
       fetchByIds: (ids) =>
         prisma.warehouses.findMany({ where: { id: { in: ids }, company_id: companyId }, select: DEPOT_SELECT }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} depósitos con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('depósitos'),
     });
     return { ok: true, data: rows };
   } catch (error) {

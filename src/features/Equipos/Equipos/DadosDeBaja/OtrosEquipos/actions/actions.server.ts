@@ -14,6 +14,7 @@ import {
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { exportRowLimitMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
@@ -193,7 +194,7 @@ export async function getAllInactiveOtherEquipmentForExport(
     if (rows.length > MAX_EXPORT_ROWS) {
       return {
         ok: false,
-        message: `La exportación supera el máximo de ${MAX_EXPORT_ROWS.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`,
+        message: exportRowLimitMessage(MAX_EXPORT_ROWS),
       };
     }
 

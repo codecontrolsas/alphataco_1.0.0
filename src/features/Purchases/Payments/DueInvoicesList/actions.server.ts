@@ -4,7 +4,7 @@ import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { NULL_FILTER_VALUE, stateToPrismaParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
@@ -15,7 +15,6 @@ import {
   SORT_MAP,
   VALID_SORT_FIELDS,
   buildWhereClause,
-  exportTooLargeMessage,
   parseListState,
   resolveCompanyId,
   shape,
@@ -112,7 +111,7 @@ export async function getAllDueInvoicesForExport(
           where: { id: { in: ids }, company_id: companyId },
           select: INVOICE_SELECT,
         }),
-      tooLargeMessage: exportTooLargeMessage,
+      tooLargeMessage: tooManyRowsMessage('comprobantes'),
     });
     return { ok: true, data: shape(rows, pendingMap) };
   } catch (error) {

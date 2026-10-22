@@ -10,7 +10,7 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { profileFacetOptions } from '@/shared/lib/table-facet-lookups';
@@ -230,8 +230,7 @@ export async function getAllPurchaseQuotesForExport(
       listIds: (take) => prisma.purchase_quotes.findMany({ where, orderBy, select: { id: true }, take }),
       fetchByIds: (ids) =>
         prisma.purchase_quotes.findMany({ where: { id: { in: ids }, company_id: companyId }, select: QUOTE_SELECT }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} pedidos de cotización con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('pedidos de cotización'),
     });
     return { ok: true, data: shape(rows, await canViewPurchasePrices('cotizaciones')) };
   } catch (error) {

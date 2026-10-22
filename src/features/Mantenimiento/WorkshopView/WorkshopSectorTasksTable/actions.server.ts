@@ -9,12 +9,13 @@ import {
   parseSearchParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { exportRowLimitMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import { withCompany } from '@/shared/lib/prisma-tenant';
 import { withoutOwnFilter } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
-import { withCompany } from '@/shared/lib/prisma-tenant';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { visibleEquipmentTypeCondition } from '../../shared/maintenance-resource';
 import { getHiddenEquipmentTypeIds } from '../../utils/equipmentTypeVisibility';
@@ -153,8 +154,8 @@ function mapWorkOrderRow(row: Prisma.work_ordersGetPayload<{ select: typeof SECT
   }
   // Segunda línea de la celda "Equipo": subtipo del vehículo o del equipamiento (o su tipo si no tiene subtipo).
   const resourceSubtitle = row.other_equipment
-    ? (row.other_equipment.sub_type?.name ?? row.other_equipment.type?.name ?? null)
-    : (row.vehicles?.sub_type?.name ?? row.vehicles?.type_vehicles_typeTotype?.name ?? null);
+    ? row.other_equipment.sub_type?.name ?? row.other_equipment.type?.name ?? null
+    : row.vehicles?.sub_type?.name ?? row.vehicles?.type_vehicles_typeTotype?.name ?? null;
 
   return {
     id: row.id,
@@ -386,7 +387,7 @@ export async function getAllWorkshopSectorWorkOrdersForExport(
     if (rows.length > EXPORT_MAX_ROWS) {
       return {
         ok: false,
-        message: `La exportación supera el máximo de ${EXPORT_MAX_ROWS.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`,
+        message: exportRowLimitMessage(EXPORT_MAX_ROWS),
       };
     }
 

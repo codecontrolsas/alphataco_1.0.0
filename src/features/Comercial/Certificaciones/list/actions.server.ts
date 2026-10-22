@@ -12,7 +12,7 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { toDateOnly } from '@/shared/lib/date-only';
-import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
@@ -296,8 +296,7 @@ export async function getCertificationsForExport(
           where: { id: { in: ids }, company_id: companyId },
           select: CERTIFICATION_SELECT,
         }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} certificaciones con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('certificaciones'),
     });
 
     return { ok: true, data: rows.map((r) => mapCertification(r, canViewPrices)) };

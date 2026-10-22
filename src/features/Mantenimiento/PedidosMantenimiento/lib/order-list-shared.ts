@@ -2,10 +2,10 @@ import 'server-only';
 
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { prisma } from '@/shared/lib/prisma';
+import { ATTENTION_THRESHOLDS, argentinaTodayAsUtcDate, daysAgo } from '../../lib/attention-thresholds';
 import { resourceCompanyCondition, visibleEquipmentTypeCondition } from '../../shared/maintenance-resource';
 import { getHiddenEquipmentTypeIds } from '../../utils/equipmentTypeVisibility';
 import { getSupervisorFilterInfo } from '../../utils/supervisorFilter';
-import { ATTENTION_THRESHOLDS, argentinaTodayAsUtcDate, daysAgo } from '../../lib/attention-thresholds';
 import type { ConfirmedAttentionKey, PendingAttentionKey } from '../constants';
 
 /**
@@ -23,10 +23,6 @@ type WhereCondition = Record<string, unknown>;
 
 /** Tope de filas de un export: más que esto no se descarga entero (se pide acotar con filtros). */
 export const ORDER_LIST_EXPORT_MAX_ROWS = 10_000;
-
-export function orderListExportTooLargeMessage(label: string) {
-  return `La exportación de ${label} supera el máximo de ${ORDER_LIST_EXPORT_MAX_ROWS.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`;
-}
 
 // ============================================================================
 // PERÍMETRO
@@ -78,7 +74,11 @@ export function assembleOrdersWhere(parts: {
   simple?: WhereCondition[];
 }) {
   const { AND: filtersAnd, ...filtersRest } = (parts.filtersWhere ?? {}) as WhereCondition & { AND?: unknown };
-  const nestedAnd = Array.isArray(filtersAnd) ? (filtersAnd as WhereCondition[]) : filtersAnd ? [filtersAnd as WhereCondition] : [];
+  const nestedAnd = Array.isArray(filtersAnd)
+    ? (filtersAnd as WhereCondition[])
+    : filtersAnd
+      ? [filtersAnd as WhereCondition]
+      : [];
 
   const and: WhereCondition[] = [...parts.scope, ...parts.extra, ...nestedAnd];
   if (Object.keys(filtersRest).length > 0) and.push(filtersRest);
@@ -158,7 +158,10 @@ export function resourceConditionCondition(values: string[]): WhereCondition {
   const realValues = values.filter((v) => v !== NULL_FILTER_VALUE);
   const branches: WhereCondition[] = [];
   if (realValues.length > 0) {
-    branches.push({ vehicles: { condition: { in: realValues } } }, { other_equipment: { condition: { in: realValues } } });
+    branches.push(
+      { vehicles: { condition: { in: realValues } } },
+      { other_equipment: { condition: { in: realValues } } }
+    );
   }
   if (values.includes(NULL_FILTER_VALUE)) {
     branches.push({ vehicles: { condition: null } }, { other_equipment: { condition: null } });
@@ -201,7 +204,10 @@ export function effectiveSourceCondition(values: string[]): WhereCondition {
     );
   }
   if (values.includes(NULL_FILTER_VALUE)) {
-    branches.push({ source: null, OR: [{ maintenance_requests: { is: null } }, { maintenance_requests: { source: null } }] });
+    branches.push({
+      source: null,
+      OR: [{ maintenance_requests: { is: null } }, { maintenance_requests: { source: null } }],
+    });
   }
   return { OR: branches };
 }

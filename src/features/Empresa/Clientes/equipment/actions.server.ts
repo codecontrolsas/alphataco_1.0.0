@@ -11,19 +11,14 @@ import {
   parseSearchParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import {
-  booleanFilterWhere,
-  cleanFacetFilters,
-  exportTooLargeMessage,
-  intFkFilterWhere,
-  isUuid,
-} from '../lib/table-where';
+import { booleanFilterWhere, cleanFacetFilters, intFkFilterWhere, isUuid } from '../lib/table-where';
 
 const logger = new Logger('features/Empresa/Clientes/equipment');
 
@@ -225,7 +220,7 @@ export async function getAllCustomerEquipmentForExport(
     });
 
     if (rows.length > EQUIPMENT_EXPORT_MAX_ROWS) {
-      return { ok: false, message: exportTooLargeMessage(EQUIPMENT_EXPORT_MAX_ROWS, 'equipos') };
+      return { ok: false, message: tooManyRowsMessage('equipos')(EQUIPMENT_EXPORT_MAX_ROWS) };
     }
     return { ok: true, data: rows.map(serializeEquipment) };
   } catch (error) {

@@ -3,7 +3,7 @@
 import { Logger } from '@/lib/logger';
 import { NULL_FILTER_VALUE, parseSearchParams } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { ExportTooLargeError, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { employeeLabel, vehicleLabel } from '@/shared/lib/resource-labels';
@@ -81,8 +81,7 @@ export async function getCertificationRowsForExport(
       listIds: (take) => prisma.dailyreportrows.findMany({ where, orderBy, select: { id: true }, take }),
       fetchByIds: (ids) =>
         prisma.dailyreportrows.findMany({ where: { id: { in: ids } }, select: CERTIFICATION_ROW_SELECT }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} líneas con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('líneas'),
     });
     return { ok: true, data: rows.map(mapCertificationRow) };
   } catch (error) {

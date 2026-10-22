@@ -13,7 +13,7 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { ExportTooLargeError, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
@@ -288,10 +288,6 @@ export type AvailableVehicleItem = Awaited<ReturnType<typeof getAvailableVehicle
 /** Tope de filas de las exportaciones de los diálogos. */
 const EXPORT_LIMIT = 10_000;
 
-function vehiclesTooLargeMessage(maxRows: number) {
-  return `Hay más de ${maxRows.toLocaleString('es-AR')} equipos con los filtros actuales. Acote la exportación con filtros.`;
-}
-
 async function exportVehicles(companyId: string, where: VehicleWhere) {
   const orderBy = [{ domain: 'asc' as const }, { id: 'asc' as const }];
 
@@ -303,7 +299,7 @@ async function exportVehicles(companyId: string, where: VehicleWhere) {
         where: { id: { in: ids }, company_id: companyId },
         select: VEHICLE_DIALOG_SELECT,
       }),
-    tooLargeMessage: vehiclesTooLargeMessage,
+    tooLargeMessage: tooManyRowsMessage('equipos'),
   });
 }
 

@@ -30,9 +30,3 @@ export function catalogExportFailure(error: unknown, noun: string): Extract<Expo
     message: error instanceof ExportTooLargeError ? error.message : `No se pudo exportar ${noun}. Intente nuevamente.`,
   };
 }
-
-/** Mensaje de "demasiadas filas" para `fetchExportRowsInBatches`. */
-export function catalogTooLargeMessage(noun: string) {
-  return (maxRows: number) =>
-    `Hay más de ${maxRows.toLocaleString('es-AR')} ${noun} con los filtros actuales. Acote la exportación con filtros.`;
-}

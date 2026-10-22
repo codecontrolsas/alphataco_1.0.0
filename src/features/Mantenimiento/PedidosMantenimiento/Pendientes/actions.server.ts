@@ -2,8 +2,14 @@
 
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
-import { buildDateRangeFiltersWhere, buildFiltersWhere, buildTextFiltersWhere, parseSearchParams } from '@/shared/components/common/DataTable/helpers';
+import {
+  buildDateRangeFiltersWhere,
+  buildFiltersWhere,
+  buildTextFiltersWhere,
+  parseSearchParams,
+} from '@/shared/components/common/DataTable/helpers';
 import { type DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { exportRowLimitMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
@@ -17,7 +23,6 @@ import {
   assembleOrdersWhere,
   descriptionTextCondition,
   getResourceFacet,
-  orderListExportTooLargeMessage,
   pendingAttentionCondition,
   resolveOrderListScope,
   resourceIdsCondition,
@@ -227,7 +232,7 @@ export async function getAllPendingOrdersForExport(
     });
 
     if (data.length > ORDER_LIST_EXPORT_MAX_ROWS) {
-      return { ok: false, message: orderListExportTooLargeMessage('pedidos pendientes') };
+      return { ok: false, message: exportRowLimitMessage(ORDER_LIST_EXPORT_MAX_ROWS, 'pedidos pendientes') };
     }
 
     return { ok: true, data };

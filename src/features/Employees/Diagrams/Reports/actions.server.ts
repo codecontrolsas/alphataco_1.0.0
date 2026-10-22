@@ -11,6 +11,7 @@ import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import moment from 'moment';
 
+import { exportRowLimitMessage } from '@/shared/lib/export-batches';
 import { assertDiagramAccess } from '../lib/diagram-access';
 import { diagramDayKey } from '../lib/diagram-dates';
 import { uuidLike } from '../lib/diagram-ids';
@@ -145,7 +146,7 @@ export async function getDiagramReportsForExport(
     if (records.length > EXPORT_MAX_ROWS) {
       return {
         ok: false,
-        message: `La exportación supera el máximo de ${EXPORT_MAX_ROWS.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`,
+        message: exportRowLimitMessage(EXPORT_MAX_ROWS),
       };
     }
 

@@ -11,7 +11,7 @@ import {
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { exportFailure, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { exportFailure, fetchExportRowsInBatches, tooManyRowsMessage } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { profileFacetOptions } from '@/shared/lib/table-facet-lookups';
@@ -263,8 +263,7 @@ export async function getAllSupplierInvoicesForExport(
           where: { id: { in: ids }, company_id: companyId },
           select: INVOICE_SELECT,
         }),
-      tooLargeMessage: (maxRows) =>
-        `Hay más de ${maxRows.toLocaleString('es-AR')} comprobantes con los filtros actuales. Acote la exportación con filtros.`,
+      tooLargeMessage: tooManyRowsMessage('comprobantes'),
     });
     return { ok: true, data: shape(rows) };
   } catch (error) {

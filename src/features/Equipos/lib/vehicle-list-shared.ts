@@ -30,11 +30,6 @@ import type { SingleFacetResult } from '@/shared/lib/table-list-query';
 /** Tope de filas de un export: más que esto no se descarga entero (se pide acotar con filtros). */
 export const VEHICLE_EXPORT_MAX_ROWS = 10_000;
 
-/** Mensaje cuando un export supera el tope. */
-export function vehicleExportTooLargeMessage(label: string) {
-  return `La exportación de ${label} supera el máximo de ${VEHICLE_EXPORT_MAX_ROWS.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`;
-}
-
 /**
  * Mapping de columnId (URL) → campo real en Prisma.
  * Solo para columnas cuyo ID en la URL difiere del campo en la BD.

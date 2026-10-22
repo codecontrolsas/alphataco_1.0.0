@@ -6,10 +6,6 @@
 /** Tope de filas de un export: más que esto no se descarga entero (se pide acotar con filtros). */
 export const GOMERIA_EXPORT_MAX_ROWS = 10_000;
 
-export function gomeriaExportTooLargeMessage(label: string) {
-  return `La exportación de ${label} supera el máximo de ${GOMERIA_EXPORT_MAX_ROWS.toLocaleString('es-AR')} filas. Aplicá filtros para acotarla.`;
-}
-
 /**
  * Pone TODAS las condiciones (perímetro, búsqueda, filtros, texto, fechas, extras) dentro de un único `AND`.
  * Así ninguna condición pisa a otra con una clave repetida (`company_id`, `AND`, `OR`) y el perímetro
