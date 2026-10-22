@@ -2,15 +2,16 @@
 
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { matchesId, titled } from '@/shared/components/common/DataTable/column-helpers';
 import type { ColumnDef } from '@tanstack/react-table';
-import { formatArgentinaDateTime } from '../../lib/today';
 import { AccountCell } from '../../components/AccountCell';
 import { TreasuryStatusBadge } from '../../components/TreasuryStatusBadge';
+import { formatDay } from '../../lib/dates';
 import { TRANSFER_STATE_UI } from '../../lib/status-presentation';
+import { formatArgentinaDateTime } from '../../lib/today';
 import { TransferRowActions } from '../components/TransferRowActions';
 import type { TreasuryTransferListItem } from './actions.server';
 import { TRANSFER_STATE_LABELS } from './constants';
-import { formatDay } from '../../lib/dates';
 
 export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = ['cancel_reason', 'created_at'];
 
@@ -22,38 +23,33 @@ export function getColumns({ canUpdate }: { canUpdate: boolean }): ColumnDef<Tre
     {
       id: 'number',
       accessorKey: 'number',
-      meta: { title: 'Número' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Número" />,
+      ...titled('Número'),
       cell: ({ row }) => <span className="font-mono text-sm font-medium">{row.original.number}</span>,
     },
     {
       id: 'date',
       accessorKey: 'date',
-      meta: { title: 'Fecha' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha" />,
+      ...titled('Fecha'),
       cell: ({ row }) => <span className="tabular-nums">{formatValueDate(row.original.date)}</span>,
     },
     {
       id: 'from_account',
       accessorFn: (row) => row.from_account.name,
-      meta: { title: 'Origen' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Origen" />,
+      ...titled('Origen'),
       cell: ({ row }) => <AccountCell account={row.original.from_account} />,
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.from_account.id),
+      filterFn: matchesId((r) => r.from_account.id),
     },
     {
       id: 'to_account',
       accessorFn: (row) => row.to_account.name,
-      meta: { title: 'Destino' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Destino" />,
+      ...titled('Destino'),
       cell: ({ row }) => <AccountCell account={row.original.to_account} />,
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.to_account.id),
+      filterFn: matchesId((r) => r.to_account.id),
     },
     {
       id: 'amount',
       accessorKey: 'amount',
-      meta: { title: 'Importe' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Importe" />,
+      ...titled('Importe'),
       cell: ({ row }) => (
         <span className={row.original.cancelled ? 'tabular-nums text-muted-foreground line-through' : 'tabular-nums'}>
           {formatMoney(row.original.amount)}
@@ -63,15 +59,13 @@ export function getColumns({ canUpdate }: { canUpdate: boolean }): ColumnDef<Tre
     {
       id: 'notes',
       accessorKey: 'notes',
-      meta: { title: 'Notas' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Notas" />,
+      ...titled('Notas'),
       cell: ({ row }) => <span className="line-clamp-2 max-w-xs">{row.original.notes ?? '-'}</span>,
     },
     {
       id: 'state',
       accessorFn: (row) => (row.cancelled ? TRANSFER_STATE_LABELS.CANCELLED : TRANSFER_STATE_LABELS.ACTIVE),
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => {
         const key = row.original.cancelled ? 'CANCELLED' : 'ACTIVE';
         return (
@@ -83,7 +77,7 @@ export function getColumns({ canUpdate }: { canUpdate: boolean }): ColumnDef<Tre
           </div>
         );
       },
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.cancelled ? 'CANCELLED' : 'ACTIVE'),
+      filterFn: matchesId((r) => (r.cancelled ? 'CANCELLED' : 'ACTIVE')),
     },
     {
       id: 'cancel_reason',
@@ -97,8 +91,7 @@ export function getColumns({ canUpdate }: { canUpdate: boolean }): ColumnDef<Tre
     {
       id: 'created_at',
       accessorKey: 'created_at',
-      meta: { title: 'Fecha de alta' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de alta" />,
+      ...titled('Fecha de alta'),
       cell: ({ row }) => <span className="tabular-nums">{formatArgentinaDateTime(row.original.created_at)}</span>,
     },
   ];

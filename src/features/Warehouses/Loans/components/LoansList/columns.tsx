@@ -1,6 +1,7 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { formatDateAr } from '@/shared/lib/argentina-time';
@@ -24,15 +25,13 @@ export function getColumns({ canReturn, canWriteOff }: LoanColumnsOptions): Colu
     {
       id: 'material_code',
       accessorFn: (row) => row.material.code,
-      meta: { title: 'Código' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Código" />,
+      ...titled('Código'),
       cell: ({ row }) => <span className="font-mono text-sm">{row.original.material.code}</span>,
     },
     {
       id: 'material',
       accessorFn: (row) => row.material.name,
-      meta: { title: 'Material' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Material" />,
+      ...titled('Material'),
       cell: ({ row }) => (
         <Link
           href={`/dashboard/warehouse/materials/${row.original.material.id}`}
@@ -45,15 +44,13 @@ export function getColumns({ canReturn, canWriteOff }: LoanColumnsOptions): Colu
     {
       id: 'serial_number',
       accessorKey: 'serialNumber',
-      meta: { title: 'Número de serie' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Número de serie" />,
+      ...titled('Número de serie'),
       cell: ({ row }) => <span className="font-mono text-sm">{row.original.serialNumber}</span>,
     },
     {
       id: 'destination_type',
       accessorFn: (row) => row.destinationType ?? '',
-      meta: { title: 'Tipo de destino' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo de destino" />,
+      ...titled('Tipo de destino'),
       cell: ({ row }) => {
         const t = row.original.destinationType;
         if (!t) return <span>-</span>;
@@ -83,16 +80,14 @@ export function getColumns({ canReturn, canWriteOff }: LoanColumnsOptions): Colu
     {
       id: 'since',
       accessorFn: (row) => row.since ?? '',
-      meta: { title: 'Desde' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Desde" />,
+      ...titled('Desde'),
       // `since` es YYYY-MM-DD (fecha de la salida): se formatea como texto, sin pasar por Date
       cell: ({ row }) => <span>{row.original.since ? formatDateAr(row.original.since) : '-'}</span>,
     },
     {
       id: 'days',
       accessorFn: (row) => row.days,
-      meta: { title: 'Días en préstamo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Días en préstamo" />,
+      ...titled('Días en préstamo'),
       cell: ({ row }) =>
         isStaleLoan(row.original.days) ? (
           <Badge

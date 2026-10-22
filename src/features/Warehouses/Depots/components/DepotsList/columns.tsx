@@ -2,13 +2,13 @@
 
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
+import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { StackedCell } from '@/shared/components/common/StackedCell';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { employeeLabel } from '../../../lib/labels';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Check, X, type LucideIcon } from 'lucide-react';
+import { employeeLabel } from '../../../lib/labels';
 import { DepotRowActions } from '../DepotRowActions';
 import type { DepotListItem } from './actions.server';
 
@@ -29,8 +29,7 @@ export function getColumns({ canUpdate, canDelete }: DepotPermissions): ColumnDe
     {
       id: 'code',
       accessorKey: 'code',
-      meta: { title: 'Código' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Código" />,
+      ...titled('Código'),
       cell: ({ row }) => (
         <span className={cn('font-mono text-sm font-medium', dim(row.original))}>{row.original.code}</span>
       ),
@@ -38,23 +37,20 @@ export function getColumns({ canUpdate, canDelete }: DepotPermissions): ColumnDe
     {
       id: 'name',
       accessorKey: 'name',
-      meta: { title: 'Nombre' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
+      ...titled('Nombre'),
       cell: ({ row }) => <span className={cn('font-medium', dim(row.original))}>{row.original.name}</span>,
     },
     {
       id: 'address',
       accessorKey: 'address',
-      meta: { title: 'Dirección' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Dirección" />,
+      ...titled('Dirección'),
       cell: ({ row }) => <span className={cn(dim(row.original))}>{row.original.address ?? '-'}</span>,
     },
     // Legajo SIEMPRE como columna separada y antes del nombre (regla del repo).
     {
       id: 'fileNumber',
       accessorFn: (row) => row.manager?.file ?? '',
-      meta: { title: 'Legajo responsable' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Legajo responsable" />,
+      ...titled('Legajo responsable'),
       cell: ({ row }) => (
         <span className={cn('font-mono text-sm', dim(row.original))}>{row.original.manager?.file ?? '-'}</span>
       ),
@@ -62,8 +58,7 @@ export function getColumns({ canUpdate, canDelete }: DepotPermissions): ColumnDe
     {
       id: 'manager',
       accessorFn: (row) => (row.manager ? employeeLabel(row.manager) : ''),
-      meta: { title: 'Responsable' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Responsable" />,
+      ...titled('Responsable'),
       cell: ({ row }) => (
         <StackedCell
           className={cn(dim(row.original))}
@@ -79,8 +74,7 @@ export function getColumns({ canUpdate, canDelete }: DepotPermissions): ColumnDe
     {
       id: 'is_active',
       accessorKey: 'is_active',
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => {
         const key = String(row.original.is_active) as 'true' | 'false';
         const Icon = activeIcons[key];
@@ -96,9 +90,10 @@ export function getColumns({ canUpdate, canDelete }: DepotPermissions): ColumnDe
     {
       id: 'created_at',
       accessorKey: 'created_at',
-      meta: { title: 'Creado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Creado" />,
-      cell: ({ row }) => <span className="whitespace-nowrap tabular-nums">{formatArgentinaDay(row.original.created_at)}</span>,
+      ...titled('Creado'),
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap tabular-nums">{formatArgentinaDay(row.original.created_at)}</span>
+      ),
     },
     {
       id: 'actions',

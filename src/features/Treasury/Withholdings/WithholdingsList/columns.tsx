@@ -2,15 +2,24 @@
 
 import { Badge } from '@/components/ui/badge';
 import { formatMoney } from '@/features/Warehouses/lib/format';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { matchesId, titled } from '@/shared/components/common/DataTable/column-helpers';
 import type { ColumnDef } from '@tanstack/react-table';
-import { BadgeCheck, FileCheck2, FileX2, Landmark, Percent, ReceiptText, ShieldCheck, type LucideIcon } from 'lucide-react';
+import {
+  BadgeCheck,
+  FileCheck2,
+  FileX2,
+  Landmark,
+  Percent,
+  ReceiptText,
+  ShieldCheck,
+  type LucideIcon,
+} from 'lucide-react';
 import Link from 'next/link';
+import { formatDay } from '../../lib/dates';
 import { CUSTOMER_WITHHOLDING_TAX_LABELS } from '../../schemas/receipts';
 import type { WithholdingListItem } from './actions.server';
-import { NO_CERTIFICATE_LABEL, type CertificateFilterValue } from './constants';
 import { WithholdingRowActions } from './components/WithholdingRowActions';
-import { formatDay } from '../../lib/dates';
+import { NO_CERTIFICATE_LABEL, type CertificateFilterValue } from './constants';
 
 export const HIDDEN_COLUMNS_BY_DEFAULT: string[] = [];
 
@@ -40,15 +49,13 @@ export function getColumns({ canAttach }: ColumnsOptions): ColumnDef<Withholding
     {
       id: 'certificate_date',
       accessorFn: (row) => row.certificateDate,
-      meta: { title: 'Fecha del certificado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha del certificado" />,
+      ...titled('Fecha del certificado'),
       cell: ({ row }) => <span className="tabular-nums">{formatValueDate(row.original.certificateDate)}</span>,
     },
     {
       id: 'tax',
       accessorFn: (row) => CUSTOMER_WITHHOLDING_TAX_LABELS[row.tax],
-      meta: { title: 'Impuesto' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Impuesto" />,
+      ...titled('Impuesto'),
       cell: ({ row }) => {
         const Icon = withholdingTaxIcons[row.original.tax];
         return (
@@ -58,42 +65,37 @@ export function getColumns({ canAttach }: ColumnsOptions): ColumnDef<Withholding
           </Badge>
         );
       },
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.tax),
+      filterFn: matchesId((r) => r.tax),
     },
     {
       id: 'jurisdiction',
       accessorFn: (row) => row.jurisdiction ?? '',
-      meta: { title: 'Jurisdicción' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Jurisdicción" />,
+      ...titled('Jurisdicción'),
       cell: ({ row }) => <span>{row.original.jurisdiction ?? '-'}</span>,
     },
     {
       id: 'certificate_number',
       accessorFn: (row) => row.certificateNumber,
-      meta: { title: 'Número' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Número" />,
+      ...titled('Número'),
       cell: ({ row }) => <span className="font-mono text-sm">{row.original.certificateNumber}</span>,
     },
     {
       id: 'customer',
       accessorFn: (row) => row.customer.name,
-      meta: { title: 'Cliente' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Cliente" />,
+      ...titled('Cliente'),
       cell: ({ row }) => <span className="font-medium">{row.original.customer.name}</span>,
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.customer.id),
+      filterFn: matchesId((r) => r.customer.id),
     },
     {
       id: 'cuit',
       accessorFn: (row) => row.cuit,
-      meta: { title: 'CUIT' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="CUIT" />,
+      ...titled('CUIT'),
       cell: ({ row }) => <span className="whitespace-nowrap font-mono text-sm">{row.original.cuit}</span>,
     },
     {
       id: 'receipt',
       accessorFn: (row) => row.receipt.number ?? '',
-      meta: { title: 'Recibo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Recibo" />,
+      ...titled('Recibo'),
       cell: ({ row }) => (
         <Link
           href={`/dashboard/treasury/receipts/${row.original.receipt.id}`}
@@ -106,16 +108,14 @@ export function getColumns({ canAttach }: ColumnsOptions): ColumnDef<Withholding
     {
       id: 'amount',
       accessorFn: (row) => row.amount,
-      meta: { title: 'Importe' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Importe" />,
+      ...titled('Importe'),
       cell: ({ row }) => <span className="font-medium tabular-nums">{formatMoney(row.original.amount)}</span>,
     },
     {
       id: 'certificate',
       // Para el export: la URL (el formatter la vuelve absoluta); vacio si no hay certificado.
       accessorFn: (row) => row.certificateUrl ?? '',
-      meta: { title: 'Certificado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Certificado" />,
+      ...titled('Certificado'),
       cell: ({ row }) =>
         row.original.certificateUrl ? (
           <a
@@ -134,7 +134,7 @@ export function getColumns({ canAttach }: ColumnsOptions): ColumnDef<Withholding
             {NO_CERTIFICATE_LABEL}
           </Badge>
         ),
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.certificateUrl ? 'WITH' : 'WITHOUT'),
+      filterFn: matchesId((r) => (r.certificateUrl ? 'WITH' : 'WITHOUT')),
     },
   ];
 

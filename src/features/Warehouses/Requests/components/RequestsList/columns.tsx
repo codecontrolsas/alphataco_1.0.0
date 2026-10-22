@@ -2,9 +2,10 @@
 
 import { Badge } from '@/components/ui/badge';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { matchesId, titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import type { ColumnDef } from '@tanstack/react-table';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
+import type { ColumnDef } from '@tanstack/react-table';
 import Link from 'next/link';
 import type { MouseEvent } from 'react';
 import { destinationTypeIcons } from '../../../Movements/components/MovementsList/columns';
@@ -24,8 +25,7 @@ export function getColumns({ onOpenDetail }: ColumnsOptions): ColumnDef<RequestL
     {
       id: 'number',
       accessorKey: 'number',
-      meta: { title: 'Número' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Número" />,
+      ...titled('Número'),
       cell: ({ row }) => (
         <Link
           href={`/dashboard/warehouse/requests/${row.original.id}`}
@@ -44,24 +44,21 @@ export function getColumns({ onOpenDetail }: ColumnsOptions): ColumnDef<RequestL
     {
       id: 'status',
       accessorKey: 'status',
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => <RequestStatusBadge status={row.original.status} />,
       filterFn: (row, id, value: string[]) => value.includes(row.getValue(id) as string),
     },
     {
       id: 'requester',
       accessorFn: (row) => row.requester.name,
-      meta: { title: 'Solicitante' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Solicitante" />,
+      ...titled('Solicitante'),
       cell: ({ row }) => <span>{row.original.requester.name}</span>,
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.requester.id),
+      filterFn: matchesId((r) => r.requester.id),
     },
     {
       id: 'destination_type',
       accessorKey: 'destination_type',
-      meta: { title: 'Tipo de destino' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo de destino" />,
+      ...titled('Tipo de destino'),
       cell: ({ row }) => {
         const t = row.original.destination_type;
         if (!t) return <span>-</span>;
@@ -91,8 +88,7 @@ export function getColumns({ onOpenDetail }: ColumnsOptions): ColumnDef<RequestL
     {
       id: 'created_at',
       accessorKey: 'created_at',
-      meta: { title: 'Fecha' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha" />,
+      ...titled('Fecha'),
       cell: ({ row }) => <span>{formatArgentinaDay(row.original.created_at)}</span>,
     },
     {
@@ -111,8 +107,7 @@ export function getColumns({ onOpenDetail }: ColumnsOptions): ColumnDef<RequestL
     {
       id: 'decider',
       accessorFn: (row) => row.decider?.name ?? '',
-      meta: { title: 'Decidió' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Decidió" />,
+      ...titled('Decidió'),
       cell: ({ row }) => <span>{row.original.decider?.name ?? '-'}</span>,
       filterFn: (row, _id, value: string[]) => {
         const id = row.original.decider?.id;

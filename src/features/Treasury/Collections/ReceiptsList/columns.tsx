@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { matchesId, titled } from '@/shared/components/common/DataTable/column-helpers';
 import { StackedCell } from '@/shared/components/common/StackedCell';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Check, Eye, X, type LucideIcon } from 'lucide-react';
@@ -35,8 +36,7 @@ export function getColumns(): ColumnDef<ReceiptListItem>[] {
     {
       id: 'number',
       accessorFn: (row) => row.number ?? DRAFT_NUMBER_LABEL,
-      meta: { title: 'Número' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Número" />,
+      ...titled('Número'),
       cell: ({ row }) => (
         <Link href={`/dashboard/treasury/receipts/${row.original.id}`} className="text-brand-ink block hover:underline">
           <StackedCell
@@ -51,23 +51,20 @@ export function getColumns(): ColumnDef<ReceiptListItem>[] {
     {
       id: 'date',
       accessorFn: (row) => row.date,
-      meta: { title: 'Fecha' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha" />,
+      ...titled('Fecha'),
       cell: ({ row }) => <span className="tabular-nums">{formatValueDate(row.original.date)}</span>,
     },
     {
       id: 'customer',
       accessorFn: (row) => row.customer.name,
-      meta: { title: 'Cliente' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Cliente" />,
+      ...titled('Cliente'),
       cell: ({ row }) => <StackedCell primary={row.original.customer.name} secondary={row.original.customer.cuit} />,
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.customer.id),
+      filterFn: matchesId((r) => r.customer.id),
     },
     {
       id: 'status',
       accessorFn: (row) => RECEIPT_STATUS_UI[row.status].label,
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => {
         const ui = RECEIPT_STATUS_UI[row.original.status];
         const Icon = ui.icon;
@@ -78,7 +75,7 @@ export function getColumns(): ColumnDef<ReceiptListItem>[] {
           </Badge>
         );
       },
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.status),
+      filterFn: matchesId((r) => r.status),
     },
     {
       id: 'invoices_count',
@@ -92,22 +89,19 @@ export function getColumns(): ColumnDef<ReceiptListItem>[] {
     {
       id: 'withholdings_total',
       accessorFn: (row) => row.withholdingsTotal,
-      meta: { title: 'Retenciones' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Retenciones" />,
+      ...titled('Retenciones'),
       cell: ({ row }) => <span className="tabular-nums">{formatMoney(row.original.withholdingsTotal)}</span>,
     },
     {
       id: 'received_total',
       accessorFn: (row) => row.receivedTotal,
-      meta: { title: 'Total recibido' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Total recibido" />,
+      ...titled('Total recibido'),
       cell: ({ row }) => <span className="font-medium tabular-nums">{formatMoney(row.original.receivedTotal)}</span>,
     },
     {
       id: 'sent',
       accessorFn: (row) => (row.sent ? SENT_LABELS.YES : SENT_LABELS.NO),
-      meta: { title: 'Enviado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Enviado" />,
+      ...titled('Enviado'),
       cell: ({ row }) => {
         const key: SentValue = row.original.sent ? 'YES' : 'NO';
         const Icon = sentIcons[key];
@@ -118,7 +112,7 @@ export function getColumns(): ColumnDef<ReceiptListItem>[] {
           </Badge>
         );
       },
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.sent ? 'YES' : 'NO'),
+      filterFn: matchesId((r) => (r.sent ? 'YES' : 'NO')),
     },
     {
       id: 'actions',

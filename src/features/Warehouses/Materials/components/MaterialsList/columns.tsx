@@ -2,7 +2,7 @@
 
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { matchesId, titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -39,8 +39,7 @@ export function getColumns({ canUpdate, canDelete }: MaterialPermissions): Colum
     {
       id: 'code',
       accessorKey: 'code',
-      meta: { title: 'Código' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Código" />,
+      ...titled('Código'),
       cell: ({ row }) => (
         <span className={cn('font-mono text-sm font-medium', dim(row.original))}>{row.original.code}</span>
       ),
@@ -48,8 +47,7 @@ export function getColumns({ canUpdate, canDelete }: MaterialPermissions): Colum
     {
       id: 'name',
       accessorKey: 'name',
-      meta: { title: 'Nombre' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
+      ...titled('Nombre'),
       cell: ({ row }) => (
         <Link
           href={`/dashboard/warehouse/materials/${row.original.id}`}
@@ -62,15 +60,13 @@ export function getColumns({ canUpdate, canDelete }: MaterialPermissions): Colum
     {
       id: 'description',
       accessorKey: 'description',
-      meta: { title: 'Descripción' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción" />,
+      ...titled('Descripción'),
       cell: ({ row }) => <span className={cn(dim(row.original))}>{row.original.description ?? '-'}</span>,
     },
     {
       id: 'category',
       accessorFn: (row) => row.category?.name ?? '',
-      meta: { title: 'Categoría' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Categoría" />,
+      ...titled('Categoría'),
       cell: ({ row }) => <span className={cn(dim(row.original))}>{row.original.category?.name ?? '-'}</span>,
       filterFn: (row, _id, value: string[]) => {
         const id = row.original.category?.id;
@@ -81,16 +77,14 @@ export function getColumns({ canUpdate, canDelete }: MaterialPermissions): Colum
     {
       id: 'unit',
       accessorFn: (row) => row.unit.name,
-      meta: { title: 'Unidad' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Unidad" />,
+      ...titled('Unidad'),
       cell: ({ row }) => <span className={cn(dim(row.original))}>{row.original.unit.name}</span>,
-      filterFn: (row, _id, value: string[]) => value.includes(row.original.unit.id),
+      filterFn: matchesId((r) => r.unit.id),
     },
     {
       id: 'tracking_type',
       accessorKey: 'tracking_type',
-      meta: { title: 'Tipo de control' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo de control" />,
+      ...titled('Tipo de control'),
       cell: ({ row }) => {
         const Icon = trackingIcons[row.original.tracking_type];
         return (
@@ -105,8 +99,7 @@ export function getColumns({ canUpdate, canDelete }: MaterialPermissions): Colum
     {
       id: 'requires_approval',
       accessorKey: 'requires_approval',
-      meta: { title: 'Requiere aprobación' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Requiere aprobación" />,
+      ...titled('Requiere aprobación'),
       cell: ({ row }) => {
         const Icon = boolIcons[String(row.original.requires_approval) as 'true' | 'false'];
         return (
@@ -121,15 +114,13 @@ export function getColumns({ canUpdate, canDelete }: MaterialPermissions): Colum
     {
       id: 'min_stock',
       accessorKey: 'min_stock',
-      meta: { title: 'Stock mínimo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Stock mínimo" />,
+      ...titled('Stock mínimo'),
       cell: ({ row }) => <span className={cn('tabular-nums', dim(row.original))}>{row.original.min_stock ?? '-'}</span>,
     },
     {
       id: 'below_min',
       accessorFn: (row) => row.stock_level ?? '',
-      meta: { title: 'Nivel de stock' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nivel de stock" />,
+      ...titled('Nivel de stock'),
       enableSorting: false,
       cell: ({ row }) =>
         row.original.stock_level ? (
@@ -137,13 +128,12 @@ export function getColumns({ canUpdate, canDelete }: MaterialPermissions): Colum
         ) : (
           <span className="text-muted-foreground">-</span>
         ),
-      filterFn: (row, _id, value: string[]) => value.includes(String(row.original.below_min)),
+      filterFn: matchesId((r) => r.below_min),
     },
     {
       id: 'is_active',
       accessorKey: 'is_active',
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => {
         const Icon = boolIcons[String(row.original.is_active) as 'true' | 'false'];
         return (
@@ -158,8 +148,7 @@ export function getColumns({ canUpdate, canDelete }: MaterialPermissions): Colum
     {
       id: 'created_at',
       accessorKey: 'created_at',
-      meta: { title: 'Creado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Creado" />,
+      ...titled('Creado'),
       cell: ({ row }) => <span className="tabular-nums">{formatArgentinaDay(row.original.created_at)}</span>,
     },
     {
