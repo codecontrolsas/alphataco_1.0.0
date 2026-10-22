@@ -1,22 +1,36 @@
 import 'server-only';
 
-import moment from 'moment';
 import { Prisma } from '@/generated/prisma/client';
 import { argentinaDate } from '@/shared/lib/argentina-time';
+import moment from 'moment';
+import type { RequestDeliveryInput } from '../schemas/requests';
+import type { StockMovementInput, StockMovementTypeValue } from '../schemas/stock-movement';
 import { averageCostAfterEntry, averageCostAfterEntryReversal, lineTotal } from './average-cost';
 import { classifyBatch, dateColumnToYmd } from './batch-expiry';
 import { nextStockMovementNumber } from './movement-numbering';
 import { canApplyRequestAction } from './request-state-machine';
 import { deliveredByLine, lockRequest, recomputeRequestStatus } from './requests';
-import { CLOSED_MAINTENANCE_ORDER_STATUSES } from './stock-engine-constants';
+import { validateExitDestination } from './stock-destination';
 import { StockError } from './stock-errors';
-import type {
-  DestinationInput,
-  MaterialTrackingTypeValue,
-  StockMovementInput,
-  StockMovementTypeValue,
-} from '../schemas/stock-movement';
-import type { RequestDeliveryInput } from '../schemas/requests';
+import { loanExitOf } from './stock-loans';
+import {
+  balanceKey,
+  companyTotals,
+  dec,
+  loadWarehouses,
+  lockBalances,
+  lockMaterials,
+  lockUnits,
+  lockWarehouses,
+  toDateColumn,
+  writeAverages,
+  writeBalances,
+  type BalanceKey,
+  type Decimal,
+  type MaterialRow,
+  type RegisteredMovement,
+  type Tx,
+} from './stock-locks';
 
 /**
  * Motor de stock: el UNICO escritor de `stock_balances`, `material_units`, `material_batches`
@@ -40,143 +54,18 @@ import type { RequestDeliveryInput } from '../schemas/requests';
  * movimientos): un movimiento en curso no puede dejar stock en un deposito recien desactivado
  * o borrado. Registro, entrega, devolucion y anulacion lo toman en este mismo punto.
  *
+ * Las lecturas con lock y las escrituras de saldos están en `stock-locks.ts`; préstamos y devoluciones de
+ * serializados en `stock-loans.ts`; la validación del destino de una salida en `stock-destination.ts`.
+ *
  * Errores de negocio: `StockError` con el mensaje para el usuario. Las validaciones van ANTES
  * de escribir; los CHECK de la base son la red, no el mensaje.
  */
-
-type Tx = Prisma.TransactionClient;
-type Decimal = Prisma.Decimal;
-
-const dec = (value: Prisma.Decimal | string | number) => new Prisma.Decimal(value);
-
-export interface RegisteredMovement {
-  id: string;
-  number: string;
-  totalCost: Decimal;
-  lineCount: number;
-}
-
-// ── Lecturas con lock ───────────────────────────────────────────────────────
-
-interface MaterialRow {
-  id: string;
-  code: string;
-  name: string;
-  tracking_type: MaterialTrackingTypeValue;
-  is_active: boolean;
-  average_cost: Decimal;
-  unit: string;
-}
-
-async function lockMaterials(tx: Tx, companyId: string, ids: string[]): Promise<Map<string, MaterialRow>> {
-  const unique = [...new Set(ids)].sort();
-  const rows = await tx.$queryRaw<MaterialRow[]>`
-    SELECT m.id, m.code, m.name, m.tracking_type::text AS tracking_type, m.is_active, m.average_cost,
-           u.abbreviation AS unit
-    FROM materials m
-    JOIN measurement_units u ON u.id = m.unit_id
-    WHERE m.id = ANY(${unique}::uuid[]) AND m.company_id = ${companyId}::uuid
-    ORDER BY m.id
-    FOR UPDATE OF m
-  `;
-  const byId = new Map(rows.map((r) => [r.id, r]));
-  if (byId.size !== unique.length) throw new StockError('NOT_FOUND', 'Uno de los materiales no existe en la empresa');
-  return byId;
-}
-
-interface BalanceRow {
-  id: string;
-  material_id: string;
-  warehouse_id: string;
-  batch_id: string | null;
-  quantity: Decimal;
-}
-
-interface BalanceKey {
-  materialId: string;
-  warehouseId: string;
-  batchId: string | null;
-}
-
-const balanceKey = (k: BalanceKey) => `${k.materialId}|${k.warehouseId}|${k.batchId ?? ''}`;
-
-/**
- * Crea las filas de saldo que falten (en 0) y lockea todas las involucradas. Crear antes de
- * lockear evita la carrera "no existe → la creo yo" entre dos transacciones; el unico
- * NULLS NOT DISTINCT de la base hace que la segunda no duplique.
- */
-async function lockBalances(tx: Tx, companyId: string, keys: BalanceKey[]): Promise<Map<string, BalanceRow>> {
-  const materials = keys.map((k) => k.materialId);
-  const warehouses = keys.map((k) => k.warehouseId);
-  const batches = keys.map((k) => k.batchId);
-
-  await tx.$executeRaw`
-    INSERT INTO stock_balances (company_id, material_id, warehouse_id, batch_id)
-    SELECT ${companyId}::uuid, k.material_id, k.warehouse_id, k.batch_id
-    FROM unnest(${materials}::uuid[], ${warehouses}::uuid[], ${batches}::uuid[]) AS k(material_id, warehouse_id, batch_id)
-    ON CONFLICT DO NOTHING
-  `;
-
-  const rows = await tx.$queryRaw<BalanceRow[]>`
-    SELECT id, material_id, warehouse_id, batch_id, quantity
-    FROM stock_balances
-    WHERE company_id = ${companyId}::uuid
-      AND material_id = ANY(${[...new Set(materials)]}::uuid[])
-      AND warehouse_id = ANY(${[...new Set(warehouses)]}::uuid[])
-    ORDER BY id
-    FOR UPDATE
-  `;
-
-  return new Map(
-    rows.map((r) => [balanceKey({ materialId: r.material_id, warehouseId: r.warehouse_id, batchId: r.batch_id }), r])
-  );
-}
-
-/** Stock total de la empresa por material (todos los depositos y lotes). */
-async function companyTotals(tx: Tx, companyId: string, materialIds: string[]): Promise<Map<string, Decimal>> {
-  const rows = await tx.$queryRaw<{ material_id: string; total: Decimal }[]>`
-    SELECT material_id, COALESCE(SUM(quantity), 0) AS total
-    FROM stock_balances
-    WHERE company_id = ${companyId}::uuid AND material_id = ANY(${[...new Set(materialIds)]}::uuid[])
-    GROUP BY material_id
-  `;
-  return new Map(rows.map((r) => [r.material_id, dec(r.total)]));
-}
-
-interface UnitRow {
-  id: string;
-  material_id: string;
-  serial_number: string;
-  status: 'IN_STOCK' | 'OUT' | 'DISCARDED';
-  warehouse_id: string | null;
-  last_movement_id: string | null;
-}
-
-async function lockUnits(tx: Tx, companyId: string, ids: string[]): Promise<Map<string, UnitRow>> {
-  if (ids.length === 0) return new Map();
-  const unique = [...new Set(ids)].sort();
-  const rows = await tx.$queryRaw<UnitRow[]>`
-    SELECT id, material_id, serial_number, status::text AS status, warehouse_id, last_movement_id
-    FROM material_units
-    WHERE id = ANY(${unique}::uuid[]) AND company_id = ${companyId}::uuid
-    ORDER BY id
-    FOR UPDATE
-  `;
-  const byId = new Map(rows.map((r) => [r.id, r]));
-  if (byId.size !== unique.length) throw new StockError('NOT_FOUND', 'Una de las unidades no existe en la empresa');
-  return byId;
-}
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Cantidad legible para mensajes: sin ceros de mas y con coma decimal. */
 export function formatQuantity(value: Decimal): string {
   return value.toDecimalPlaces(4).toString().replace('.', ',');
-}
-
-/** Fecha sin hora → `Date` a medianoche UTC, que es como Prisma escribe una columna `@db.Date`. */
-function toDateColumn(value: Date): Date {
-  return new Date(`${moment(value).format('YYYY-MM-DD')}T00:00:00.000Z`);
 }
 
 function sameDate(a: Date | null, b: Date | null): boolean {
@@ -188,123 +77,6 @@ function directionFor(type: StockMovementTypeValue, adjustmentDirection: 'IN' | 
   if (type === 'ENTRY') return 1;
   if (type === 'ADJUSTMENT') return adjustmentDirection === 'IN' ? 1 : -1;
   return -1; // EXIT y TRANSFER restan del deposito origen
-}
-
-interface WarehouseRow {
-  id: string;
-  name: string;
-  is_active: boolean;
-}
-
-/**
- * Lee los depositos con FOR SHARE (paso 3 del orden de locks), en orden de id. El estado que se
- * valida es el que devuelve esta misma sentencia, despues de esperar una baja en curso. No falla
- * si falta alguno: cada caller decide el mensaje.
- */
-async function lockWarehouses(tx: Tx, companyId: string, ids: string[]): Promise<Map<string, WarehouseRow>> {
-  const unique = [...new Set(ids)].sort();
-  if (unique.length === 0) return new Map();
-  const rows = await tx.$queryRaw<WarehouseRow[]>`
-    SELECT id, name, is_active
-    FROM warehouses
-    WHERE id = ANY(${unique}::uuid[]) AND company_id = ${companyId}::uuid
-    ORDER BY id
-    FOR SHARE
-  `;
-  return new Map(rows.map((r) => [r.id, r]));
-}
-
-async function loadWarehouses(tx: Tx, companyId: string, input: StockMovementInput) {
-  const ids = [input.warehouseId, ...(input.targetWarehouseId ? [input.targetWarehouseId] : [])];
-  const byId = await lockWarehouses(tx, companyId, ids);
-
-  const origin = byId.get(input.warehouseId);
-  if (!origin) throw new StockError('NOT_FOUND', 'El depósito no existe en la empresa');
-  if (!origin.is_active) throw new StockError('INACTIVE_WAREHOUSE', `El depósito ${origin.name} está inactivo`);
-
-  if (input.type !== 'TRANSFER') return { origin, target: null };
-
-  if (!input.targetWarehouseId) throw new StockError('NOT_FOUND', 'Falta el depósito destino');
-  const target = byId.get(input.targetWarehouseId);
-  if (!target) throw new StockError('NOT_FOUND', 'El depósito destino no existe en la empresa');
-  if (target.id === origin.id) throw new StockError('INVALID_INPUT', 'El destino tiene que ser otro depósito');
-  if (!target.is_active) throw new StockError('INACTIVE_WAREHOUSE', `El depósito ${target.name} está inactivo`);
-  return { origin, target };
-}
-
-/**
- * El destino de una salida (o de un pedido) tiene que ser de la empresa y estar vigente:
- * empleados, equipos y clientes activos; ordenes de mantenimiento abiertas (no completadas ni
- * rechazadas). La usan el motor y el alta de pedidos.
- */
-export async function validateExitDestination(tx: Tx, companyId: string, input: DestinationInput): Promise<void> {
-  const invalid = (message: string) => new StockError('INVALID_DESTINATION', message);
-
-  switch (input.destinationType) {
-    case 'EMPLOYEE': {
-      const found = input.employeeId
-        ? await tx.employees.findFirst({
-            where: { id: input.employeeId, company_id: companyId, is_active: true },
-            select: { id: true },
-          })
-        : null;
-      if (!found) throw invalid('El empleado no existe o está dado de baja');
-      return;
-    }
-    case 'VEHICLE': {
-      const found = input.vehicleId
-        ? await tx.vehicles.findFirst({
-            where: { id: input.vehicleId, company_id: companyId, is_active: true },
-            select: { id: true },
-          })
-        : null;
-      if (!found) throw invalid('El vehículo no existe o está dado de baja');
-      return;
-    }
-    case 'OTHER_EQUIPMENT': {
-      const found = input.otherEquipmentId
-        ? await tx.other_equipment.findFirst({
-            where: { id: input.otherEquipmentId, company_id: companyId, is_active: true },
-            select: { id: true },
-          })
-        : null;
-      if (!found) throw invalid('El equipo no existe o está dado de baja');
-      return;
-    }
-    case 'MAINTENANCE_ORDER': {
-      const found = input.maintenanceOrderId
-        ? await tx.maintenance_orders.findFirst({
-            where: {
-              id: input.maintenanceOrderId,
-              company_id: companyId,
-              status: { notIn: [...CLOSED_MAINTENANCE_ORDER_STATUSES] },
-            },
-            select: { id: true },
-          })
-        : null;
-      if (!found) throw invalid('La orden de mantenimiento no existe o ya está cerrada');
-      return;
-    }
-    case 'CUSTOMER': {
-      const found = input.customerId
-        ? await tx.customers.findFirst({
-            where: { id: input.customerId, company_id: companyId, is_active: true },
-            select: { id: true },
-          })
-        : null;
-      if (!found) throw invalid('El cliente no existe o está inactivo');
-      if (input.customerServiceId) {
-        const contract = await tx.customer_services.findFirst({
-          where: { id: input.customerServiceId, customer_id: input.customerId },
-          select: { id: true },
-        });
-        if (!contract) throw invalid('El contrato no pertenece al cliente');
-      }
-      return;
-    }
-    default:
-      throw invalid('Elegí a quién se imputa la salida');
-  }
 }
 
 // ── Registro ────────────────────────────────────────────────────────────────
@@ -386,7 +158,10 @@ async function registerMovement(
     }
 
     const tracking = material.tracking_type;
-    if (tracking === 'QUANTITY' && (line.batchId || line.batchNumber || line.serialNumbers.length || line.unitIds.length)) {
+    if (
+      tracking === 'QUANTITY' &&
+      (line.batchId || line.batchNumber || line.serialNumbers.length || line.unitIds.length)
+    ) {
       throw new StockError('INVALID_TRACKING', `${label} se controla por cantidad: no lleva lote ni números de serie`);
     }
     if (tracking === 'BATCH') {
@@ -402,7 +177,10 @@ async function registerMovement(
         );
       }
       if (!quantity.equals(count)) {
-        throw new StockError('INVALID_TRACKING', `La cantidad de ${label} tiene que coincidir con las unidades indicadas`);
+        throw new StockError(
+          'INVALID_TRACKING',
+          `La cantidad de ${label} tiene que coincidir con las unidades indicadas`
+        );
       }
     }
 
@@ -465,7 +243,12 @@ async function registerMovement(
       p.batchId = existing.id;
     } else {
       const created = await tx.material_batches.create({
-        data: { company_id: companyId, material_id: p.material.id, batch_number: line.batchNumber, expires_at: expiresOn },
+        data: {
+          company_id: companyId,
+          material_id: p.material.id,
+          batch_number: line.batchNumber,
+          expires_at: expiresOn,
+        },
         select: { id: true },
       });
       p.batchId = created.id;
@@ -521,13 +304,17 @@ async function registerMovement(
   for (const p of planned) {
     for (const unitId of p.unitIds) {
       const unit = units.get(unitId)!;
-      if (usedUnits.has(unitId)) throw new StockError('UNIT_NOT_AVAILABLE', `La unidad ${unit.serial_number} está repetida`);
+      if (usedUnits.has(unitId))
+        throw new StockError('UNIT_NOT_AVAILABLE', `La unidad ${unit.serial_number} está repetida`);
       usedUnits.add(unitId);
       if (unit.material_id !== p.material.id) {
         throw new StockError('UNIT_NOT_AVAILABLE', `La unidad ${unit.serial_number} no es de ${p.material.name}`);
       }
       if (unit.status !== 'IN_STOCK' || unit.warehouse_id !== origin.id) {
-        throw new StockError('UNIT_NOT_AVAILABLE', `La unidad ${unit.serial_number} no está disponible en ${origin.name}`);
+        throw new StockError(
+          'UNIT_NOT_AVAILABLE',
+          `La unidad ${unit.serial_number} no está disponible en ${origin.name}`
+        );
       }
     }
   }
@@ -633,8 +420,15 @@ async function registerMovement(
       request_line_id: requestLink?.requestLineIds[i] ?? null,
     };
     if (p.material.tracking_type === 'SERIAL') {
-      const unitIds = p.unitIds.length ? p.unitIds : p.serialNumbers.map((s) => createdUnitId.get(`${p.material.id}|${s}`)!);
-      return unitIds.map((unitId) => ({ ...base, quantity: dec(1), total_cost: lineTotal(1, unitCost), unit_id: unitId }));
+      const unitIds = p.unitIds.length
+        ? p.unitIds
+        : p.serialNumbers.map((s) => createdUnitId.get(`${p.material.id}|${s}`)!);
+      return unitIds.map((unitId) => ({
+        ...base,
+        quantity: dec(1),
+        total_cost: lineTotal(1, unitCost),
+        unit_id: unitId,
+      }));
     }
     return [{ ...base, quantity: p.quantity, total_cost: lineTotal(p.quantity, unitCost), unit_id: null }];
   });
@@ -657,20 +451,6 @@ async function registerMovement(
   await writeAverages(tx, averages, changedAverages);
 
   return { id: movement.id, number: movement.number, totalCost, lineCount: lineRows.length };
-}
-
-async function writeBalances(tx: Tx, balances: Map<string, BalanceRow>, quantities: Map<string, Decimal>) {
-  for (const [key, row] of balances) {
-    const next = quantities.get(key)!;
-    if (next.equals(row.quantity)) continue;
-    await tx.stock_balances.update({ where: { id: row.id }, data: { quantity: next } });
-  }
-}
-
-async function writeAverages(tx: Tx, averages: Map<string, Decimal>, changed: Set<string>) {
-  for (const materialId of changed) {
-    await tx.materials.update({ where: { id: materialId }, data: { average_cost: averages.get(materialId)! } });
-  }
 }
 
 // ── Anulacion ───────────────────────────────────────────────────────────────
@@ -744,7 +524,9 @@ export async function reverseStockMovement(
 
   // Ultimo movimiento de cada unidad: una salida sigue anulable si la unidad esta afuera por ESE
   // prestamo, aunque en el medio se haya devuelto y anulado la devolucion (cubiertas, etapa 6).
-  const lastMovementIds = [...new Set([...units.values()].map((u) => u.last_movement_id).filter((id): id is string => !!id))];
+  const lastMovementIds = [
+    ...new Set([...units.values()].map((u) => u.last_movement_id).filter((id): id is string => !!id)),
+  ];
   const lastMovements = new Map(
     (
       await tx.stock_movements.findMany({
@@ -758,7 +540,13 @@ export async function reverseStockMovement(
   const averages = new Map([...materials].map(([id, m]) => [id, dec(m.average_cost)]));
   const changedAverages = new Set<string>();
 
-  const insufficient = (materialName: string, warehouseName: string, available: Decimal, needed: Decimal, unit: string) =>
+  const insufficient = (
+    materialName: string,
+    warehouseName: string,
+    available: Decimal,
+    needed: Decimal,
+    unit: string
+  ) =>
     new StockError(
       'INSUFFICIENT_STOCK',
       `No se puede anular ${original.number}: de ${materialName} en ${warehouseName} hay ${formatQuantity(available)} ${unit} y la anulación necesita ${formatQuantity(needed)} ${unit}`
@@ -887,222 +675,12 @@ export async function reverseStockMovement(
   // Lo entregado vuelve a estar pendiente; un pedido cerrado sigue cerrado (spec etapa 3 §3.1).
   if (request) await recomputeRequestStatus(tx, request);
 
-  return { id: reversal.id, number: reversal.number, totalCost: dec(original.total_cost), lineCount: original.lines.length };
-}
-
-// ── Prestamos de serializados (etapa 2) ─────────────────────────────────────
-
-export interface ReturnInput {
-  /** La salida cuyo prestamo se cierra. */
-  exitMovementId: string;
-  unitIds: string[];
-  /** Deposito al que vuelven (puede ser otro que el de la salida). */
-  warehouseId: string;
-  occurredOn: Date;
-  notes: string | null;
-}
-
-/**
- * Salida a la que pertenece el prestamo abierto de una unidad: su ultimo movimiento, o — si
- * el ultimo es la anulacion de una devolucion — la salida a la que apunta esa devolucion.
- */
-export function loanExitOf(lastMovement: {
-  id: string;
-  type: string;
-  reverses_movement_id: string | null;
-  returned_from_movement_id: string | null;
-}): string | null {
-  if (lastMovement.type === 'EXIT' && !lastMovement.reverses_movement_id) return lastMovement.id;
-  if (lastMovement.type === 'RETURN' && lastMovement.reverses_movement_id) return lastMovement.returned_from_movement_id;
-  return null;
-}
-
-/**
- * Devolucion de unidades prestadas (spec etapa 2 §3.1). Reingresa cada unidad al costo con que
- * salio, recalcula el promedio como una entrada y copia el destino de la salida, asi lo
- * imputado al tenedor queda compensado. La salida original sigue vigente: el prestamo existio.
- */
-export async function registerReturn(
-  tx: Tx,
-  companyId: string,
-  createdBy: string,
-  input: ReturnInput
-): Promise<RegisteredMovement> {
-  if (input.unitIds.length === 0) throw new StockError('INVALID_INPUT', 'Elegí al menos una unidad para devolver');
-
-  // 1. La salida, lockeada (primer lock del dominio, como el original en una anulacion).
-  const locked = await tx.$queryRaw<{ id: string }[]>`
-    SELECT id FROM stock_movements
-    WHERE id = ${input.exitMovementId}::uuid AND company_id = ${companyId}::uuid
-    FOR UPDATE
-  `;
-  if (locked.length === 0) throw new StockError('NOT_FOUND', 'La salida no existe');
-  const exit = await tx.stock_movements.findUniqueOrThrow({
-    where: { id: input.exitMovementId },
-    include: { lines: { select: { unit_id: true, material_id: true, unit_cost: true } } },
-  });
-  if (exit.type !== 'EXIT' || exit.reverses_movement_id) {
-    throw new StockError('NOT_ON_LOAN', `${exit.number} no es una salida: no hay préstamo que devolver`);
-  }
-
-  // Deposito (FOR SHARE, paso 3 del orden de locks).
-  const warehouse = (await lockWarehouses(tx, companyId, [input.warehouseId])).get(input.warehouseId);
-  if (!warehouse) throw new StockError('NOT_FOUND', 'El depósito no existe en la empresa');
-  if (!warehouse.is_active) throw new StockError('INACTIVE_WAREHOUSE', `El depósito ${warehouse.name} está inactivo`);
-
-  const unitIds = [...new Set(input.unitIds)];
-  const exitLineByUnit = new Map(exit.lines.filter((l) => l.unit_id).map((l) => [l.unit_id!, l]));
-  for (const unitId of unitIds) {
-    if (!exitLineByUnit.has(unitId)) {
-      throw new StockError('UNIT_NOT_AVAILABLE', `Una de las unidades no salió en ${exit.number}`);
-    }
-  }
-
-  // 4-6. Locks en el orden del dominio.
-  const materials = await lockMaterials(
-    tx,
-    companyId,
-    unitIds.map((u) => exitLineByUnit.get(u)!.material_id)
-  );
-  const balances = await lockBalances(
-    tx,
-    companyId,
-    unitIds.map((u) => ({ materialId: exitLineByUnit.get(u)!.material_id, warehouseId: warehouse.id, batchId: null }))
-  );
-  const totals = await companyTotals(tx, companyId, [...materials.keys()]);
-  const units = await lockUnits(tx, companyId, unitIds);
-
-  // Cada unidad tiene que seguir prestada por ESTA salida.
-  const lastIds = [...new Set([...units.values()].map((u) => u.last_movement_id).filter((id): id is string => !!id))];
-  const lastMovements = new Map(
-    (
-      await tx.stock_movements.findMany({
-        where: { id: { in: lastIds } },
-        select: { id: true, type: true, reverses_movement_id: true, returned_from_movement_id: true },
-      })
-    ).map((m) => [m.id, m])
-  );
-  for (const unit of units.values()) {
-    const last = unit.last_movement_id ? lastMovements.get(unit.last_movement_id) : undefined;
-    if (unit.status !== 'OUT' || !last || loanExitOf(last) !== exit.id) {
-      throw new StockError('NOT_ON_LOAN', `La unidad ${unit.serial_number} no está prestada por ${exit.number}`);
-    }
-  }
-
-  const quantities = new Map([...balances].map(([k, b]) => [k, dec(b.quantity)]));
-  const averages = new Map([...materials].map(([id, m]) => [id, dec(m.average_cost)]));
-  const changedAverages = new Set<string>();
-  let totalCost = dec(0);
-
-  for (const unitId of unitIds) {
-    const line = exitLineByUnit.get(unitId)!;
-    const total = totals.get(line.material_id) ?? dec(0);
-    averages.set(line.material_id, averageCostAfterEntry(total, averages.get(line.material_id)!, 1, line.unit_cost));
-    changedAverages.add(line.material_id);
-    totals.set(line.material_id, total.plus(1));
-    const key = balanceKey({ materialId: line.material_id, warehouseId: warehouse.id, batchId: null });
-    quantities.set(key, (quantities.get(key) ?? dec(0)).plus(1));
-    totalCost = totalCost.plus(lineTotal(1, line.unit_cost));
-  }
-
-  const number = await nextStockMovementNumber(tx, companyId);
-  const movement = await tx.stock_movements.create({
-    data: {
-      company_id: companyId,
-      number,
-      type: 'RETURN',
-      warehouse_id: warehouse.id,
-      occurred_on: toDateColumn(input.occurredOn),
-      notes: input.notes?.trim() || null,
-      destination_type: exit.destination_type,
-      employee_id: exit.employee_id,
-      vehicle_id: exit.vehicle_id,
-      other_equipment_id: exit.other_equipment_id,
-      maintenance_order_id: exit.maintenance_order_id,
-      customer_id: exit.customer_id,
-      customer_service_id: exit.customer_service_id,
-      returned_from_movement_id: exit.id,
-      total_cost: totalCost,
-      created_by: createdBy,
-    },
-    select: { id: true, number: true },
-  });
-
-  await tx.stock_movement_lines.createMany({
-    data: unitIds.map((unitId) => {
-      const line = exitLineByUnit.get(unitId)!;
-      return {
-        movement_id: movement.id,
-        material_id: line.material_id,
-        quantity: dec(1),
-        direction: 1,
-        unit_cost: line.unit_cost,
-        total_cost: lineTotal(1, line.unit_cost),
-        unit_id: unitId,
-      };
-    }),
-  });
-  await writeBalances(tx, balances, quantities);
-  await tx.material_units.updateMany({
-    where: { id: { in: unitIds } },
-    data: { status: 'IN_STOCK', warehouse_id: warehouse.id, last_movement_id: movement.id },
-  });
-  await writeAverages(tx, averages, changedAverages);
-
-  return { id: movement.id, number: movement.number, totalCost, lineCount: unitIds.length };
-}
-
-export interface WriteOffInput {
-  unitId: string;
-  reason: 'LOST' | 'BROKEN';
-  notes: string;
-}
-
-/**
- * Baja de una unidad prestada que no vuelve (spec etapa 2 §3.2). No es un movimiento de stock:
- * la unidad ya habia salido, no hay saldo que tocar, y su costo queda imputado a quien la tenia.
- */
-export async function writeOffLoanedUnit(
-  tx: Tx,
-  companyId: string,
-  createdBy: string,
-  input: WriteOffInput
-): Promise<{ unitId: string; serialNumber: string; loanMovementId: string }> {
-  const notes = input.notes.trim();
-  if (!notes) throw new StockError('INVALID_INPUT', 'Contá qué pasó con la herramienta');
-
-  // Orden de locks del dominio: primero el movimiento del prestamo, despues la unidad (como
-  // `registerReturn` y la anulacion). Si se lockeara la unidad primero, una devolucion
-  // simultanea de la misma herramienta se esperaria en cruz con esta baja (deadlock).
-  const peek = await tx.material_units.findFirst({
-    where: { id: input.unitId, company_id: companyId },
-    select: { last_movement_id: true },
-  });
-  if (!peek) throw new StockError('NOT_FOUND', 'La unidad no existe en la empresa');
-  if (peek.last_movement_id) {
-    await tx.$executeRaw`SELECT id FROM stock_movements WHERE id = ${peek.last_movement_id}::uuid FOR UPDATE`;
-  }
-
-  const unit = (await lockUnits(tx, companyId, [input.unitId])).get(input.unitId)!;
-  // Releida con lock: si otra transaccion la devolvio entre la lectura y el lock, el prestamo
-  // ya no es el mismo.
-  if (unit.status !== 'OUT' || !unit.last_movement_id || unit.last_movement_id !== peek.last_movement_id) {
-    throw new StockError('NOT_ON_LOAN', `La unidad ${unit.serial_number} no está prestada`);
-  }
-
-  await tx.material_unit_write_offs.create({
-    data: {
-      company_id: companyId,
-      unit_id: unit.id,
-      loan_movement_id: unit.last_movement_id,
-      reason: input.reason,
-      notes,
-      created_by: createdBy,
-    },
-  });
-  await tx.material_units.update({ where: { id: unit.id }, data: { status: 'DISCARDED', warehouse_id: null } });
-
-  return { unitId: unit.id, serialNumber: unit.serial_number, loanMovementId: unit.last_movement_id };
+  return {
+    id: reversal.id,
+    number: reversal.number,
+    totalCost: dec(original.total_cost),
+    lineCount: original.lines.length,
+  };
 }
 
 // ── Entregas de pedidos (etapa 3) ───────────────────────────────────────────
@@ -1135,7 +713,11 @@ export async function registerRequestDelivery(
   const request = await tx.material_requests.findUniqueOrThrow({
     where: { id: locked.id },
     include: {
-      lines: { include: { material: { select: { name: true, tracking_type: true, unit: { select: { abbreviation: true } } } } } },
+      lines: {
+        include: {
+          material: { select: { name: true, tracking_type: true, unit: { select: { abbreviation: true } } } },
+        },
+      },
     },
   });
   const linesById = new Map(request.lines.map((l) => [l.id, l]));

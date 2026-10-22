@@ -1,5 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Prisma } from '@/generated/prisma/client';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { RequestDeliveryLineInput } from '../schemas/requests';
 import type { StockMovementInput, StockMovementLineInput } from '../schemas/stock-movement';
 import type { StockErrorCode } from './stock-errors';
@@ -37,6 +37,10 @@ async function db() {
 
 async function engine() {
   return import('./stock-engine');
+}
+
+async function loans() {
+  return import('./stock-loans');
 }
 
 /** Corre `fn` en una transaccion que se descarta y devuelve lo que `fn` devolvio. */
@@ -127,7 +131,12 @@ async function approvedRequest(
   });
 }
 
-async function deliver(tx: Prisma.TransactionClient, requestId: string, lines: RequestDeliveryLineInput[], warehouseId = W1) {
+async function deliver(
+  tx: Prisma.TransactionClient,
+  requestId: string,
+  lines: RequestDeliveryLineInput[],
+  warehouseId = W1
+) {
   return (await engine()).registerRequestDelivery(tx, COMPANY, PROFILE, {
     requestId,
     warehouseId,
@@ -160,7 +169,12 @@ async function stockErrorOf(fn: () => Promise<unknown>): Promise<{ code: StockEr
   throw new Error('Se esperaba un StockError');
 }
 
-async function balance(tx: Prisma.TransactionClient, materialId: string, warehouseId: string, batchId: string | null = null) {
+async function balance(
+  tx: Prisma.TransactionClient,
+  materialId: string,
+  warehouseId: string,
+  batchId: string | null = null
+) {
   const row = await tx.stock_balances.findFirst({
     where: { material_id: materialId, warehouse_id: warehouseId, batch_id: batchId },
     select: { quantity: true },
@@ -201,7 +215,12 @@ async function kardexMatchesEngine(tx: Prisma.TransactionClient, materialId: str
   const { replayKardex } = await import('./kardex');
   const lines = await tx.stock_movement_lines.findMany({
     where: { material_id: materialId },
-    select: { quantity: true, direction: true, unit_cost: true, movement: { select: { type: true, reverses_movement_id: true } } },
+    select: {
+      quantity: true,
+      direction: true,
+      unit_cost: true,
+      movement: { select: { type: true, reverses_movement_id: true } },
+    },
     orderBy: [{ movement: { number: 'asc' } }, { id: 'asc' }],
   });
   const last = replayKardex(lines).at(-1)!;
@@ -254,7 +273,9 @@ describe.skipIf(!RUN)('motor de stock (integracion)', () => {
         },
       });
     }
-    await prisma.profile.create({ data: { id: PROFILE, credential_id: PROFILE, email: 'almacenes-test@alphataco.local' } });
+    await prisma.profile.create({
+      data: { id: PROFILE, credential_id: PROFILE, email: 'almacenes-test@alphataco.local' },
+    });
     await prisma.measurement_units.createMany({
       data: [
         { id: UNIT, company_id: COMPANY, name: 'Litro', abbreviation: 'l' },
@@ -341,11 +362,19 @@ describe.skipIf(!RUN)('motor de stock (integracion)', () => {
       );
       await register(
         tx,
-        movement({ type: 'ADJUSTMENT', notes: 'conteo', lines: [line(QTY, { quantity: '2', adjustmentDirection: 'OUT' })] })
+        movement({
+          type: 'ADJUSTMENT',
+          notes: 'conteo',
+          lines: [line(QTY, { quantity: '2', adjustmentDirection: 'OUT' })],
+        })
       );
       const plus = await register(
         tx,
-        movement({ type: 'ADJUSTMENT', notes: 'conteo', lines: [line(QTY, { quantity: '5', adjustmentDirection: 'IN' })] })
+        movement({
+          type: 'ADJUSTMENT',
+          notes: 'conteo',
+          lines: [line(QTY, { quantity: '5', adjustmentDirection: 'IN' })],
+        })
       );
       return {
         noReason: noReason.code,
@@ -360,10 +389,26 @@ describe.skipIf(!RUN)('motor de stock (integracion)', () => {
   it('lotes: se reutilizan por numero, rechazan otro vencimiento y salen por lote', async () => {
     const result = await inRollback(async (tx) => {
       const expires = new Date('2027-03-31T12:00:00');
-      await register(tx, entry([line(BATCH, { quantity: '5', unitCost: '10', batchNumber: 'L1', batchExpiresOn: expires })]));
-      await register(tx, entry([line(BATCH, { quantity: '2', unitCost: '10', batchNumber: 'L1', batchExpiresOn: expires })]));
+      await register(
+        tx,
+        entry([line(BATCH, { quantity: '5', unitCost: '10', batchNumber: 'L1', batchExpiresOn: expires })])
+      );
+      await register(
+        tx,
+        entry([line(BATCH, { quantity: '2', unitCost: '10', batchNumber: 'L1', batchExpiresOn: expires })])
+      );
       const mismatch = await stockErrorOf(() =>
-        register(tx, entry([line(BATCH, { quantity: '1', unitCost: '10', batchNumber: 'L1', batchExpiresOn: new Date('2028-01-01T12:00:00') })]))
+        register(
+          tx,
+          entry([
+            line(BATCH, {
+              quantity: '1',
+              unitCost: '10',
+              batchNumber: 'L1',
+              batchExpiresOn: new Date('2028-01-01T12:00:00'),
+            }),
+          ])
+        )
       );
       const batch = await tx.material_batches.findFirstOrThrow({ where: { material_id: BATCH, batch_number: 'L1' } });
       const missingBatch = await stockErrorOf(() => register(tx, exitToCustomer([line(BATCH, { quantity: '1' })])));
@@ -396,15 +441,27 @@ describe.skipIf(!RUN)('motor de stock (integracion)', () => {
       const duplicate = await stockErrorOf(() =>
         register(tx, entry([line(SERIAL, { quantity: '1', unitCost: '1000', serialNumbers: ['S-1'] })]))
       );
-      const units = await tx.material_units.findMany({ where: { material_id: SERIAL }, orderBy: { serial_number: 'asc' } });
+      const units = await tx.material_units.findMany({
+        where: { material_id: SERIAL },
+        orderBy: { serial_number: 'asc' },
+      });
       const [s1, s2] = units;
       await register(tx, exitToCustomer([line(SERIAL, { quantity: '1', unitIds: [s1!.id] })]));
-      const again = await stockErrorOf(() => register(tx, exitToCustomer([line(SERIAL, { quantity: '1', unitIds: [s1!.id] })])));
+      const again = await stockErrorOf(() =>
+        register(tx, exitToCustomer([line(SERIAL, { quantity: '1', unitIds: [s1!.id] })]))
+      );
       await register(
         tx,
-        movement({ type: 'ADJUSTMENT', notes: 'roto', lines: [line(SERIAL, { adjustmentDirection: 'OUT', unitIds: [s2!.id] })] })
+        movement({
+          type: 'ADJUSTMENT',
+          notes: 'roto',
+          lines: [line(SERIAL, { adjustmentDirection: 'OUT', unitIds: [s2!.id] })],
+        })
       );
-      const after = await tx.material_units.findMany({ where: { material_id: SERIAL }, orderBy: { serial_number: 'asc' } });
+      const after = await tx.material_units.findMany({
+        where: { material_id: SERIAL },
+        orderBy: { serial_number: 'asc' },
+      });
       return {
         inboundLines: inbound.lineCount,
         duplicate: duplicate.code,
@@ -490,14 +547,22 @@ describe.skipIf(!RUN)('motor de stock (integracion)', () => {
 
   it('serializados: anular una entrada libera las series para volver a cargarlas', async () => {
     const result = await inRollback(async (tx) => {
-      const wrong = await register(tx, entry([line(SERIAL, { quantity: '2', unitCost: '999', serialNumbers: ['R-1', 'R-2'] })]));
+      const wrong = await register(
+        tx,
+        entry([line(SERIAL, { quantity: '2', unitCost: '999', serialNumbers: ['R-1', 'R-2'] })])
+      );
       await reverse(tx, wrong.id, 'costo mal cargado');
-      const fixed = await register(tx, entry([line(SERIAL, { quantity: '2', unitCost: '500', serialNumbers: ['R-1', 'R-2'] })]));
+      const fixed = await register(
+        tx,
+        entry([line(SERIAL, { quantity: '2', unitCost: '500', serialNumbers: ['R-1', 'R-2'] })])
+      );
       const units = await tx.material_units.findMany({ where: { serial_number: { in: ['R-1', 'R-2'] } } });
       return {
         fixedLines: fixed.lineCount,
         units: units.length,
-        allInStock: units.every((u) => u.status === 'IN_STOCK' && u.warehouse_id === W1 && u.last_movement_id === fixed.id),
+        allInStock: units.every(
+          (u) => u.status === 'IN_STOCK' && u.warehouse_id === W1 && u.last_movement_id === fixed.id
+        ),
         balance: await balance(tx, SERIAL, W1),
         average: await averageCost(tx, SERIAL),
         consistent: await balancesMatchLedger(tx),
@@ -517,14 +582,23 @@ describe.skipIf(!RUN)('motor de stock (integracion)', () => {
 
   it('prestamos: devolver al costo de la salida, a otro deposito, compensando al tenedor', async () => {
     const result = await inRollback(async (tx) => {
-      const { registerReturn } = await engine();
+      const { registerReturn } = await loans();
       await register(tx, entry([line(SERIAL, { quantity: '2', unitCost: '1000', serialNumbers: ['P-A', 'P-B'] })]));
-      const [a, b] = await tx.material_units.findMany({ where: { material_id: SERIAL }, orderBy: { serial_number: 'asc' } });
+      const [a, b] = await tx.material_units.findMany({
+        where: { material_id: SERIAL },
+        orderBy: { serial_number: 'asc' },
+      });
       const out = await register(tx, exitToCustomer([line(SERIAL, { unitIds: [a!.id] })]));
       await register(tx, entry([line(SERIAL, { quantity: '1', unitCost: '3000', serialNumbers: ['P-C'] })])); // B y C: promedio 2000
 
       const notFromExit = await stockErrorOf(() =>
-        registerReturn(tx, COMPANY, PROFILE, { exitMovementId: out.id, unitIds: [b!.id], warehouseId: W2, occurredOn: new Date(), notes: null })
+        registerReturn(tx, COMPANY, PROFILE, {
+          exitMovementId: out.id,
+          unitIds: [b!.id],
+          warehouseId: W2,
+          occurredOn: new Date(),
+          notes: null,
+        })
       );
       const returned = await registerReturn(tx, COMPANY, PROFILE, {
         exitMovementId: out.id,
@@ -534,7 +608,13 @@ describe.skipIf(!RUN)('motor de stock (integracion)', () => {
         notes: 'vuelve del cliente',
       });
       const twice = await stockErrorOf(() =>
-        registerReturn(tx, COMPANY, PROFILE, { exitMovementId: out.id, unitIds: [a!.id], warehouseId: W1, occurredOn: new Date(), notes: null })
+        registerReturn(tx, COMPANY, PROFILE, {
+          exitMovementId: out.id,
+          unitIds: [a!.id],
+          warehouseId: W1,
+          occurredOn: new Date(),
+          notes: null,
+        })
       );
       const unit = await tx.material_units.findUniqueOrThrow({ where: { id: a!.id } });
       const movement = await tx.stock_movements.findUniqueOrThrow({ where: { id: returned.id } });
@@ -543,7 +623,10 @@ describe.skipIf(!RUN)('motor de stock (integracion)', () => {
         twice: twice.code,
         total: returned.totalCost.toFixed(4),
         unit: `${unit.status}:${unit.warehouse_id === W2}`,
-        compensates: movement.type === 'RETURN' && movement.customer_id === CUSTOMER && movement.returned_from_movement_id === out.id,
+        compensates:
+          movement.type === 'RETURN' &&
+          movement.customer_id === CUSTOMER &&
+          movement.returned_from_movement_id === out.id,
         // (2 x 2000 + 1 x 1000) / 3
         average: await averageCost(tx, SERIAL),
         w2: await balance(tx, SERIAL, W2),
@@ -566,17 +649,29 @@ describe.skipIf(!RUN)('motor de stock (integracion)', () => {
 
   it('prestamos: anular la devolucion reabre el prestamo; una salida devuelta no se anula', async () => {
     const result = await inRollback(async (tx) => {
-      const { registerReturn } = await engine();
+      const { registerReturn } = await loans();
       await register(tx, entry([line(SERIAL, { quantity: '1', unitCost: '800', serialNumbers: ['Q-1'] })]));
       const unit = await tx.material_units.findFirstOrThrow({ where: { serial_number: 'Q-1' } });
       const out = await register(tx, exitToCustomer([line(SERIAL, { unitIds: [unit.id] })]));
-      const ret = await registerReturn(tx, COMPANY, PROFILE, { exitMovementId: out.id, unitIds: [unit.id], warehouseId: W1, occurredOn: new Date(), notes: null });
+      const ret = await registerReturn(tx, COMPANY, PROFILE, {
+        exitMovementId: out.id,
+        unitIds: [unit.id],
+        warehouseId: W1,
+        occurredOn: new Date(),
+        notes: null,
+      });
       const exitAfterReturn = await stockErrorOf(() => reverse(tx, out.id));
       const reversal = await reverse(tx, ret.id);
       const reopened = await tx.material_units.findUniqueOrThrow({ where: { id: unit.id } });
       const reversalRow = await tx.stock_movements.findUniqueOrThrow({ where: { id: reversal.id } });
       // El prestamo reabierto se puede volver a devolver.
-      await registerReturn(tx, COMPANY, PROFILE, { exitMovementId: out.id, unitIds: [unit.id], warehouseId: W1, occurredOn: new Date(), notes: null });
+      await registerReturn(tx, COMPANY, PROFILE, {
+        exitMovementId: out.id,
+        unitIds: [unit.id],
+        warehouseId: W1,
+        occurredOn: new Date(),
+        notes: null,
+      });
       const final = await tx.material_units.findUniqueOrThrow({ where: { id: unit.id } });
       return {
         exitAfterReturn: exitAfterReturn.code,
@@ -599,14 +694,22 @@ describe.skipIf(!RUN)('motor de stock (integracion)', () => {
 
   it('prestamos: dar de baja una unidad prestada no toca el stock y no se repite', async () => {
     const result = await inRollback(async (tx) => {
-      const { writeOffLoanedUnit } = await engine();
+      const { writeOffLoanedUnit } = await loans();
       await register(tx, entry([line(SERIAL, { quantity: '1', unitCost: '500', serialNumbers: ['W-1'] })]));
       const unit = await tx.material_units.findFirstOrThrow({ where: { serial_number: 'W-1' } });
       const out = await register(tx, exitToCustomer([line(SERIAL, { unitIds: [unit.id] })]));
       const averageBefore = await averageCost(tx, SERIAL);
-      const noNotes = await stockErrorOf(() => writeOffLoanedUnit(tx, COMPANY, PROFILE, { unitId: unit.id, reason: 'LOST', notes: ' ' }));
-      const written = await writeOffLoanedUnit(tx, COMPANY, PROFILE, { unitId: unit.id, reason: 'LOST', notes: 'extraviada en locacion' });
-      const again = await stockErrorOf(() => writeOffLoanedUnit(tx, COMPANY, PROFILE, { unitId: unit.id, reason: 'BROKEN', notes: 'x' }));
+      const noNotes = await stockErrorOf(() =>
+        writeOffLoanedUnit(tx, COMPANY, PROFILE, { unitId: unit.id, reason: 'LOST', notes: ' ' })
+      );
+      const written = await writeOffLoanedUnit(tx, COMPANY, PROFILE, {
+        unitId: unit.id,
+        reason: 'LOST',
+        notes: 'extraviada en locacion',
+      });
+      const again = await stockErrorOf(() =>
+        writeOffLoanedUnit(tx, COMPANY, PROFILE, { unitId: unit.id, reason: 'BROKEN', notes: 'x' })
+      );
       const exitReversal = await stockErrorOf(() => reverse(tx, out.id));
       const after = await tx.material_units.findUniqueOrThrow({ where: { id: unit.id } });
       return {
@@ -635,15 +738,31 @@ describe.skipIf(!RUN)('motor de stock (integracion)', () => {
   it('lotes vencidos: no salen ni se transfieren; el ajuste negativo los da de baja', async () => {
     const result = await inRollback(async (tx) => {
       const yesterday = new Date(Date.now() - 2 * 86_400_000);
-      await register(tx, entry([line(BATCH, { quantity: '5', unitCost: '10', batchNumber: 'VENCIDO', batchExpiresOn: yesterday })]));
+      await register(
+        tx,
+        entry([line(BATCH, { quantity: '5', unitCost: '10', batchNumber: 'VENCIDO', batchExpiresOn: yesterday })])
+      );
       const batch = await tx.material_batches.findFirstOrThrow({ where: { batch_number: 'VENCIDO' } });
-      const exit = await stockErrorOf(() => register(tx, exitToCustomer([line(BATCH, { quantity: '1', batchId: batch.id })])));
+      const exit = await stockErrorOf(() =>
+        register(tx, exitToCustomer([line(BATCH, { quantity: '1', batchId: batch.id })]))
+      );
       const transfer = await stockErrorOf(() =>
-        register(tx, movement({ type: 'TRANSFER', targetWarehouseId: W2, lines: [line(BATCH, { quantity: '1', batchId: batch.id })] }))
+        register(
+          tx,
+          movement({
+            type: 'TRANSFER',
+            targetWarehouseId: W2,
+            lines: [line(BATCH, { quantity: '1', batchId: batch.id })],
+          })
+        )
       );
       await register(
         tx,
-        movement({ type: 'ADJUSTMENT', notes: 'descarte por vencimiento', lines: [line(BATCH, { quantity: '5', adjustmentDirection: 'OUT', batchId: batch.id })] })
+        movement({
+          type: 'ADJUSTMENT',
+          notes: 'descarte por vencimiento',
+          lines: [line(BATCH, { quantity: '5', adjustmentDirection: 'OUT', batchId: batch.id })],
+        })
       );
       return { exit: exit.code, transfer: transfer.code, balance: await balance(tx, BATCH, W1, batch.id) };
     });
@@ -653,11 +772,15 @@ describe.skipIf(!RUN)('motor de stock (integracion)', () => {
   it('valida empresa, depositos, destino y tipo de control', async () => {
     const result = await inRollback(async (tx) => ({
       foreignMaterial: (await stockErrorOf(() => register(tx, entry([line(FOREIGN, { unitCost: '1' })])))).code,
-      inactiveWarehouse: (await stockErrorOf(() => register(tx, entry([line(QTY, { unitCost: '1' })], W_INACTIVE)))).code,
+      inactiveWarehouse: (await stockErrorOf(() => register(tx, entry([line(QTY, { unitCost: '1' })], W_INACTIVE))))
+        .code,
       noCost: (await stockErrorOf(() => register(tx, entry([line(QTY)])))).code,
-      batchOnQuantity: (await stockErrorOf(() => register(tx, entry([line(QTY, { unitCost: '1', batchNumber: 'X' })])))).code,
+      batchOnQuantity: (await stockErrorOf(() => register(tx, entry([line(QTY, { unitCost: '1', batchNumber: 'X' })]))))
+        .code,
       serialCountMismatch: (
-        await stockErrorOf(() => register(tx, entry([line(SERIAL, { quantity: '2', unitCost: '1', serialNumbers: ['A'] })])))
+        await stockErrorOf(() =>
+          register(tx, entry([line(SERIAL, { quantity: '2', unitCost: '1', serialNumbers: ['A'] })]))
+        )
       ).code,
       foreignCustomer: (
         await stockErrorOf(() =>
@@ -671,7 +794,9 @@ describe.skipIf(!RUN)('motor de stock (integracion)', () => {
         )
       ).code,
       sameWarehouse: (
-        await stockErrorOf(() => register(tx, movement({ type: 'TRANSFER', targetWarehouseId: W1, lines: [line(QTY)] })))
+        await stockErrorOf(() =>
+          register(tx, movement({ type: 'TRANSFER', targetWarehouseId: W1, lines: [line(QTY)] }))
+        )
       ).code,
     }));
     expect(result).toEqual({
@@ -688,7 +813,13 @@ describe.skipIf(!RUN)('motor de stock (integracion)', () => {
 
   it('pedidos: entrega parcial y total, al costo promedio y al destino del pedido', async () => {
     const result = await inRollback(async (tx) => {
-      await register(tx, entry([line(QTY, { quantity: '10', unitCost: '100' }), line(BATCH, { quantity: '5', unitCost: '20', batchNumber: 'L-1' })]));
+      await register(
+        tx,
+        entry([
+          line(QTY, { quantity: '10', unitCost: '100' }),
+          line(BATCH, { quantity: '5', unitCost: '20', batchNumber: 'L-1' }),
+        ])
+      );
       const batch = await tx.material_batches.findFirstOrThrow({ where: { material_id: BATCH, batch_number: 'L-1' } });
       const request = await approvedRequest(tx, [
         { materialId: QTY, quantity: '8' },
@@ -769,7 +900,10 @@ describe.skipIf(!RUN)('motor de stock (integracion)', () => {
 
       const reversal = await reverse(tx, second.id);
       const afterReversal = await requestStatus(tx, request.id);
-      const reversalRow = await tx.stock_movements.findUniqueOrThrow({ where: { id: reversal.id }, include: { lines: true } });
+      const reversalRow = await tx.stock_movements.findUniqueOrThrow({
+        where: { id: reversal.id },
+        include: { lines: true },
+      });
       // Lo anulado vuelve a estar pendiente: se puede entregar de nuevo.
       await deliver(tx, request.id, [deliveryLine(requestLine.id, '6')]);
       const redelivered = await requestStatus(tx, request.id);
@@ -804,7 +938,10 @@ describe.skipIf(!RUN)('motor de stock (integracion)', () => {
   it('pedidos: entrega de serializados por unidad', async () => {
     const result = await inRollback(async (tx) => {
       await register(tx, entry([line(SERIAL, { quantity: '2', unitCost: '500', serialNumbers: ['T-1', 'T-2'] })]));
-      const units = await tx.material_units.findMany({ where: { material_id: SERIAL }, orderBy: { serial_number: 'asc' } });
+      const units = await tx.material_units.findMany({
+        where: { material_id: SERIAL },
+        orderBy: { serial_number: 'asc' },
+      });
       const request = await approvedRequest(tx, [{ materialId: SERIAL, quantity: '1' }]);
       const over = await stockErrorOf(() =>
         deliver(tx, request.id, [deliveryLine(request.lines[0]!.id, '2', { unitIds: units.map((u) => u.id) })])
@@ -827,9 +964,12 @@ describe.skipIf(!RUN)('motor de stock (integracion)', () => {
     );
 
     const attempt = () =>
-      prisma.$transaction((tx) => registerStockMovement(tx, COMPANY, PROFILE, exitToCustomer([line(QTY, { quantity: '1' })])), {
-        timeout: 20_000,
-      });
+      prisma.$transaction(
+        (tx) => registerStockMovement(tx, COMPANY, PROFILE, exitToCustomer([line(QTY, { quantity: '1' })])),
+        {
+          timeout: 20_000,
+        }
+      );
     const results = await Promise.allSettled([attempt(), attempt()]);
 
     const fulfilled = results.filter((r) => r.status === 'fulfilled');
@@ -870,7 +1010,10 @@ describe.skipIf(!RUN)('motor de stock (integracion)', () => {
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     expect(rejected).toHaveLength(1);
     // El lock del pedido serializa: la segunda lo encuentra ya entregado por completo.
-    expect(rejected[0]!.reason).toMatchObject({ code: 'INVALID_STATE', message: 'PED-000900 ya fue entregado por completo' });
+    expect(rejected[0]!.reason).toMatchObject({
+      code: 'INVALID_STATE',
+      message: 'PED-000900 ya fue entregado por completo',
+    });
     expect(await requestStatus(prisma, request.id)).toBe('DELIVERED');
     const deliveries = await prisma.stock_movements.count({ where: { material_request_id: request.id } });
     expect(deliveries).toBe(1);

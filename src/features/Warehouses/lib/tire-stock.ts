@@ -3,14 +3,10 @@ import 'server-only';
 import type { Prisma } from '@/generated/prisma/client';
 import type { TireStatus } from '@/generated/prisma/enums';
 import type { StockMovementInput, StockMovementLineInput } from '../schemas/stock-movement';
-import {
-  loanExitOf,
-  registerReturn,
-  registerStockMovement,
-  writeOffLoanedUnit,
-  type RegisteredMovement,
-} from './stock-engine';
+import { registerStockMovement } from './stock-engine';
 import { StockError } from './stock-errors';
+import { loanExitOf, registerReturn, writeOffLoanedUnit } from './stock-loans';
+import type { RegisteredMovement } from './stock-locks';
 import { tireMaterialFor } from './tire-materials';
 
 /**
@@ -178,7 +174,12 @@ export interface WriteOffTireInput {
  * Descartar la cubierta. Si esta afuera, baja de la unidad prestada (su costo queda imputado a
  * quien la tenia); si esta en un deposito, ajuste negativo con motivo.
  */
-export async function writeOffTire(tx: Tx, companyId: string, createdBy: string, input: WriteOffTireInput): Promise<void> {
+export async function writeOffTire(
+  tx: Tx,
+  companyId: string,
+  createdBy: string,
+  input: WriteOffTireInput
+): Promise<void> {
   const tire = await readTire(tx, companyId, input.tireId);
   const unit = tire.material_unit;
   if (!unit || unit.status === 'DISCARDED') return;
@@ -211,7 +212,11 @@ export async function applyTireStatusChange(
   input: { tireId: string; from: TireStatus; to: TireStatus; warehouseId: string | null; notes: string | null }
 ): Promise<void> {
   if (input.to === 'AVAILABLE') {
-    await returnTire(tx, companyId, createdBy, { tireId: input.tireId, warehouseId: input.warehouseId, notes: input.notes });
+    await returnTire(tx, companyId, createdBy, {
+      tireId: input.tireId,
+      warehouseId: input.warehouseId,
+      notes: input.notes,
+    });
   } else if (input.to === 'DISCARDED') {
     await writeOffTire(tx, companyId, createdBy, {
       tireId: input.tireId,
@@ -422,7 +427,8 @@ export async function getTiresWithoutStock(tx: Pick<Tx, 'tires'>, companyId: str
     groups.set(key, group);
   }
   return [...groups.values()].sort(
-    (a, b) => a.size.localeCompare(b.size) || a.treadType.localeCompare(b.treadType) || a.brandName.localeCompare(b.brandName)
+    (a, b) =>
+      a.size.localeCompare(b.size) || a.treadType.localeCompare(b.treadType) || a.brandName.localeCompare(b.brandName)
   );
 }
 
@@ -472,7 +478,11 @@ export async function registerInitialTireInventory(
     }
     let line = lines.get(key);
     if (!line) {
-      line = { materialId: await tireMaterialFor(tx, companyId, tire.tire_type_id, tire.brand_id), unitCost, serials: [] };
+      line = {
+        materialId: await tireMaterialFor(tx, companyId, tire.tire_type_id, tire.brand_id),
+        unitCost,
+        serials: [],
+      };
       lines.set(key, line);
     }
     line.serials.push(tire.serial_number);
@@ -501,7 +511,10 @@ export async function registerInitialTireInventory(
   });
   const unitBySerial = new Map(created.flatMap((l) => (l.unit ? [[l.unit.serial_number, l.unit.id] as const] : [])));
   for (const tire of tires) {
-    await tx.tires.update({ where: { id: tire.id }, data: { material_unit_id: unitBySerial.get(tire.serial_number)! } });
+    await tx.tires.update({
+      where: { id: tire.id },
+      data: { material_unit_id: unitBySerial.get(tire.serial_number)! },
+    });
   }
 
   // Donde esta cada cubierta que no esta disponible.
@@ -520,7 +533,8 @@ export async function registerInitialTireInventory(
   ]);
   const mountedOn = new Map(positions.map((p) => [p.tire_id!, p.vehicle_id]));
   const lastRemovedFrom = new Map<string, string>();
-  for (const item of items) if (!lastRemovedFrom.has(item.tire_id!)) lastRemovedFrom.set(item.tire_id!, item.vehicle_id);
+  for (const item of items)
+    if (!lastRemovedFrom.has(item.tire_id!)) lastRemovedFrom.set(item.tire_id!, item.vehicle_id);
 
   const vehicleOf = (tire: (typeof outside)[number]) =>
     tire.status === 'INSTALLED' ? mountedOn.get(tire.id) : lastRemovedFrom.get(tire.id);
