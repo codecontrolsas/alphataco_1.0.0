@@ -43,7 +43,7 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 | src/components                      |       48 |   4930 | [x]    |
 | src/lib                             |        6 |    580 | [x]    |
 | src/app                             |      161 |   5041 | [x]    |
-| scripts                             |       47 |  10759 | [ ]    |
+| scripts                             |       47 |  10759 | [x]    |
 
 ## Los 25 archivos más grandes (candidatos a SRP)
 
@@ -171,6 +171,7 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
   - **Código muerto:** `shared/actions/company-validation.server.ts` (`isCompanyCuitAvailable`, solo lo usaba un validador sin uso), `validateDuplicatedCuil` y los schemas de empresa de `schemas.ts` (~85 líneas «solo para inferencia de tipos» que nadie leía), `toLegacyEquipment`, `logger` de `shared-users`, `nameOf`/`idOf`/`capitalize` de `legacy-mappers`, `headerRows` de `excel-export`, `startRow`/`endRow` de `DataTablePagination`, el parámetro `get` de `editState`.
   - **Dentro de un archivo:** `DataTableDateRangeFilter` (`updateParams` común a `updateParam` y `clearFilter`) y `shared/lib/taskapp/client.ts` (`fetchOrThrow` y `readJson` para `request` y `requestPaged`).
   - Verificación: `check-types` limpio, `npm test` (1494) y `next build` compilando. No se tocó lógica de escritura ni consultas (solo mensajes y utilidades puras), por eso no se corrieron las suites de integración.
+- [x] **Scripts (`scripts/`) y lectura de `prisma/sql`:** `lib/integration-env.sh` reemplaza la preparación repetida (`.env.docker`, compose, `DATABASE_URL`) de los cinco `test-*.sh` (`test-db.sh` queda aparte: levanta con healthcheck propio y crea la base de test). `scripts/lib/uuid-v5.ts` (antes copiada en `seed-company.ts` y en la demo) y `scripts/lib/s3-client.ts` (antes copiado en `ensure-buckets.ts` y en la demo) se comparten; el `Dockerfile` copia ambos al runner y `runner-files.test.ts` pasa. La demo suma `lib/money.ts` (`C`, `money` y `centsText`, repetidos en 8 dominios) y `documents.ts` usa `insertMany` de `ctx.ts`. `domains/purchases.ts` (990 líneas) se parte en `purchases.ts` (462), `purchases-quotes-orders.ts` y `purchases-receipts.ts`. Se borró la constante `LABELS` sin uso de `supplier-invoices.ts` (`tsc --noUnusedLocals --noUnusedParameters` queda limpio en `scripts/`; `knip` no reporta nada de `scripts/`). Verificado ejecutando contra un Postgres descartable: `migrate deploy`, `seed-company.ts` (mismo id para el mismo nombre que antes), `bootstrap-admin.ts`, `seed-auth-fixtures.ts`, `ensure-buckets.ts` (error de variable faltante intacto) y `demo/reset.ts --dry` (misma salida antes y después de cada cambio); los `test-*.sh` se probaron con un `docker`/`npx` simulados.
 
 ## En curso / siguiente
 
@@ -267,6 +268,14 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 - `OperatorPanel/components/AddTaskDialog.tsx` (498 líneas) mezcla dos formularios (tarea propia y pedido a otro sector) en un solo componente; se partiría en dos con su estado propio.
 - Las acciones de `Seleccion` (`pre-employee-actions`, `pre-employee-documents`) y `OperatorPanel` conservan la cabecera permiso + try/catch sin envoltorio común (ver la nota de Compras).
 - `Jobs/lib/runs.ts` exporta `lastRun`, que solo usan las pruebas de integración; no se borró.
+
+## Pendiente detectado en scripts y prisma/sql
+
+- Quedan sin partir: `sql/extract-sql-objects.ts` (727), `demo/domains/maintenance.ts` (644), `customer-receipts.ts` (~640), `warehouses.ts` (605), `third-party-checks.ts` (~540) y `supplier-payments.ts` (~520). Son secuencias de etapas de la demo con estado compartido o, en el caso del extractor, una tubería de un solo uso; no hay costura sin riesgo y se dejaron.
+- `sql/extract-sql-objects.ts` es histórico: `prisma/sql/README.md` dice «NO volver a correr» (pisa las ediciones manuales) y lee `docs/legacy-migrations/supabase`. Ningún `package.json`, workflow ni Dockerfile lo llama, pero `INVENTARIO.md`, `objects.json` y el README lo citan como origen; no se borró (decisión de producto).
+- `seed-support-ticket-views.ts` no lo llama nada salvo un plan viejo en `docs/superpowers`; es un seed manual de una sola vez. Se dejó.
+- `own-checks.ts` tiene su propio `money` sin manejo de negativos (el resto usa `lib/money.ts`); unificarlo cambiaría la salida si algún importe fuera negativo.
+- `prisma/sql` (solo lectura, sin cambios): `README.md` e `INVENTARIO.md` siguen coherentes con los archivos; `tenant.sql` y `timezone.sql` figuran en el directorio pero el README solo enumera `tenant.sql` en la tabla (falta mencionar `timezone.sql` e `invoicing.sql`).
 
 ## Pendiente detectado en Permisos, Layout, API externa, Notificaciones, TabsManager y API móvil
 
