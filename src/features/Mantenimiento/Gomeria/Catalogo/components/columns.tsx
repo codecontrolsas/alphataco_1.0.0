@@ -10,6 +10,7 @@ import {
 } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { matchesNullableId } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -125,11 +126,7 @@ export function getColumns(
       accessorFn: (row) => row.brand?.name ?? '',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Marca" />,
       cell: ({ row }) => <div>{row.original.brand?.name ?? <span className="text-muted-foreground">-</span>}</div>,
-      filterFn: (row, _id, value: string[]) => {
-        const id = row.original.brand_id;
-        if (id == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(id);
-      },
+      filterFn: matchesNullableId((row) => row.brand_id),
       meta: { title: 'Marca' },
     },
 

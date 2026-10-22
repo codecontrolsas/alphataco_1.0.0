@@ -4,13 +4,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
-import { type DataTableFacetedFilterConfig } from '@/shared/components/common/DataTable/types';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import {
   inMemoryDateSortingFn,
   inMemoryFacetedFilterFn,
   inMemoryTextFilterFn,
 } from '@/shared/components/common/DataTable/in-memory';
+import { type DataTableFacetedFilterConfig } from '@/shared/components/common/DataTable/types';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Check, X } from 'lucide-react';
@@ -48,8 +48,7 @@ function getColumns(
     {
       id: 'name',
       accessorKey: 'name',
-      meta: { title: 'Nombre' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
+      ...titled('Nombre'),
       cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
       filterFn: inMemoryTextFilterFn,
     },
@@ -57,8 +56,7 @@ function getColumns(
       id: 'types',
       // Para el Excel y la búsqueda: nombres separados por coma.
       accessorFn: (row) => getTypeNames(row, types).join(', '),
-      meta: { title: 'Tipos de reparación' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipos de reparación" />,
+      ...titled('Tipos de reparación'),
       cell: ({ row }) => {
         const typeNames = getTypeNames(row.original, types);
         if (!typeNames.length) return <span>-</span>;
@@ -95,8 +93,7 @@ function getColumns(
     {
       id: 'description',
       accessorKey: 'description',
-      meta: { title: 'Descripción' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción" />,
+      ...titled('Descripción'),
       cell: ({ row }) => (
         <span className="whitespace-pre-line text-muted-foreground">{row.original.description || '-'}</span>
       ),
@@ -105,8 +102,7 @@ function getColumns(
     {
       id: 'is_active',
       accessorFn: (row) => (row.is_active ? 'Activo' : 'Inactivo'),
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => (
         <Badge variant={row.original.is_active ? 'success' : 'default'}>
           {row.original.is_active ? (
@@ -122,8 +118,7 @@ function getColumns(
     {
       id: 'created_at',
       accessorFn: (row) => (row.created_at ? formatArgentinaDay(row.created_at) : ''),
-      meta: { title: 'Creado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Creado" />,
+      ...titled('Creado'),
       cell: ({ row }) => (
         <span className="tabular-nums">
           {row.original.created_at ? formatArgentinaDay(row.original.created_at) : '-'}

@@ -4,9 +4,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PreventiveItemsBadge } from '@/features/Mantenimiento/components/PreventiveItemsBadge';
 import { ResourceCell, toResourceCellResource } from '@/features/Mantenimiento/shared/components/ResourceCell';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { cn } from '@/lib/utils';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
+import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { argentinaDate, formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import { conditionLabels } from '@/shared/utils/mappers';
 import type { ColumnDef } from '@tanstack/react-table';
 import {
@@ -23,7 +24,6 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import moment from 'moment';
-import { argentinaDate, formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import { getResourceCondition, getResourceLabel } from '../../shared/maintenance-resource';
 import { OrderActionsMenu, type OrderMenuItem } from '../components/OrderActionsMenu';
 import type { ConfirmedOrderListItem } from './actions.server';
@@ -148,8 +148,7 @@ export function getConfirmedOrderColumns({
       id: 'vehicle',
       // Ticket 596: la fila puede ser de un vehiculo o de un equipamiento
       accessorFn: (row) => getResourceLabel(row),
-      meta: { title: 'Equipo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Equipo" />,
+      ...titled('Equipo'),
       cell: ({ row }) => <ResourceCell resource={toResourceCellResource(row.original)} />,
       filterFn: (row, _id, value: string[]) => {
         const resourceId = row.original.vehicles?.id ?? row.original.other_equipment?.id;
@@ -193,8 +192,7 @@ export function getConfirmedOrderColumns({
     {
       accessorKey: 'scheduled_date',
       id: 'scheduled_date',
-      meta: { title: 'Fecha Planificada' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha Planificada" />,
+      ...titled('Fecha Planificada'),
       cell: ({ row }) => {
         const date = row.original.scheduled_date;
         if (!date) return <span className="text-muted-foreground">-</span>;
@@ -231,12 +229,11 @@ export function getConfirmedOrderColumns({
       id: 'condition',
       // Ticket 596: la condicion sale del vehiculo o del equipamiento
       accessorFn: (row) => getResourceCondition(row),
-      meta: { title: 'Condición Actual' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Condición Actual" />,
+      ...titled('Condición Actual'),
       cell: ({ row }) => {
         const condition = getResourceCondition(row.original);
-        const label = condition ? (conditionLabels[condition] ?? condition) : 'Desconocido';
-        const variant = condition ? (CONDITION_VARIANTS[condition] ?? 'secondary') : 'secondary';
+        const label = condition ? conditionLabels[condition] ?? condition : 'Desconocido';
+        const variant = condition ? CONDITION_VARIANTS[condition] ?? 'secondary' : 'secondary';
         const Icon = condition ? CONDITION_ICONS[condition] : undefined;
         return (
           <Badge variant={variant} className="whitespace-nowrap">
@@ -257,8 +254,7 @@ export function getConfirmedOrderColumns({
     {
       accessorKey: 'order_number',
       id: 'order_number',
-      meta: { title: 'N° Orden' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="N° Orden" />,
+      ...titled('N° Orden'),
       cell: ({ row }) => {
         const num = row.original.order_number;
         return num ? (
@@ -273,8 +269,7 @@ export function getConfirmedOrderColumns({
     {
       id: 'description',
       accessorFn: (row) => row.description ?? row.maintenance_requests?.description ?? '',
-      meta: { title: 'Descripción' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción" />,
+      ...titled('Descripción'),
       cell: ({ row }) => {
         const value = row.original.description ?? row.original.maintenance_requests?.description ?? '';
         if (!value) return <span className="text-muted-foreground">—</span>;
@@ -292,8 +287,7 @@ export function getConfirmedOrderColumns({
     {
       accessorKey: 'date_approved_at',
       id: 'date_approved_at',
-      meta: { title: 'Fecha Aprobación' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha Aprobación" />,
+      ...titled('Fecha Aprobación'),
       cell: ({ row }) => {
         const date = row.original.date_approved_at;
         if (!date) return <span className="text-muted-foreground">-</span>;
@@ -305,8 +299,7 @@ export function getConfirmedOrderColumns({
     {
       accessorKey: 'created_at',
       id: 'created_at',
-      meta: { title: 'Fecha Creación' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha Creación" />,
+      ...titled('Fecha Creación'),
       cell: ({ row }) => {
         const date = row.original.created_at;
         if (!date) return <span className="text-muted-foreground">-</span>;
@@ -318,8 +311,7 @@ export function getConfirmedOrderColumns({
     {
       id: 'source',
       accessorFn: (row) => row.source ?? row.maintenance_requests?.source ?? null,
-      meta: { title: 'Origen' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Origen" />,
+      ...titled('Origen'),
       cell: ({ row }) => {
         const src = row.original.source ?? row.original.maintenance_requests?.source;
         if (!src) return <span className="text-muted-foreground">—</span>;

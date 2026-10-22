@@ -7,7 +7,7 @@ import { RelativeAge } from '@/features/Mantenimiento/shared/components/Relative
 import { ResourceCell } from '@/features/Mantenimiento/shared/components/ResourceCell';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { matchesNullableId, titled } from '@/shared/components/common/DataTable/column-helpers';
 import type { ColumnDef } from '@tanstack/react-table';
 import { AlertTriangle, Wrench } from 'lucide-react';
 import Link from 'next/link';
@@ -67,8 +67,7 @@ export function getColumns(
     // ─── Cantidad de Desvíos (calculada) + críticos ──────────────────────────
     {
       accessorKey: 'deviation_count',
-      meta: { title: 'Cantidad de Desvíos' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Cantidad de Desvíos" />,
+      ...titled('Cantidad de Desvíos'),
       cell: ({ row }) => {
         const { deviation_count: count, critical_count: critical } = row.original;
         return (
@@ -90,8 +89,7 @@ export function getColumns(
     // ─── Último Desvío (calculada) ────────────────────────────────────────────
     {
       accessorKey: 'last_deviation_date',
-      meta: { title: 'Último Desvío' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Último Desvío" />,
+      ...titled('Último Desvío'),
       cell: ({ row }) => {
         const date = row.original.last_deviation_date;
         if (!date) return <span className="text-muted-foreground">-</span>;
@@ -102,8 +100,7 @@ export function getColumns(
     // ─── Desvío más antiguo (calculada): marca en rojo pasados los 30 días sin pedido ──
     {
       accessorKey: 'first_deviation_date',
-      meta: { title: 'Desvío más antiguo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Desvío más antiguo" />,
+      ...titled('Desvío más antiguo'),
       cell: ({ row }) => {
         const date = row.original.first_deviation_date;
         if (!date) return <span className="text-muted-foreground">-</span>;
@@ -115,8 +112,7 @@ export function getColumns(
     {
       id: 'type_of_vehicle',
       accessorFn: (row) => row.types_of_vehicles?.name ?? '',
-      meta: { title: 'Categoría' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Categoría" />,
+      ...titled('Categoría'),
       cell: ({ row }) =>
         row.original.types_of_vehicles?.name ? (
           <Badge variant="outline">{row.original.types_of_vehicles.name}</Badge>
@@ -130,82 +126,63 @@ export function getColumns(
     {
       id: 'type',
       accessorFn: (row) => row.type_vehicles_typeTotype?.name ?? '',
-      meta: { title: 'Tipo de Unidad' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo de Unidad" />,
+      ...titled('Tipo de Unidad'),
       cell: ({ row }) =>
         row.original.type_vehicles_typeTotype?.name ? (
           <Badge>{row.original.type_vehicles_typeTotype.name}</Badge>
         ) : (
           <span className="text-muted-foreground">-</span>
         ),
-      filterFn: (row, _id, value: string[]) => {
-        const id = row.original.type_vehicles_typeTotype?.id;
-        if (id == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(id);
-      },
+      filterFn: matchesNullableId((row) => row.type_vehicles_typeTotype?.id),
     },
 
     // ─── Subtipo de Unidad (FK UUID nullable → sub_type) ─────────────────────
     {
       id: 'sub_type',
       accessorFn: (row) => row.sub_type?.name ?? '',
-      meta: { title: 'Subtipo de Unidad' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Subtipo de Unidad" />,
+      ...titled('Subtipo de Unidad'),
       cell: ({ row }) =>
         row.original.sub_type?.name ? (
           <Badge variant="secondary">{row.original.sub_type.name}</Badge>
         ) : (
           <span className="text-muted-foreground">-</span>
         ),
-      filterFn: (row, _id, value: string[]) => {
-        const id = row.original.sub_type?.id;
-        if (id == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(id);
-      },
+      filterFn: matchesNullableId((row) => row.sub_type?.id),
     },
 
     // ─── Sector (FK UUID nullable → hierarchy) ───────────────────────────────
     {
       id: 'sector',
       accessorFn: (row) => row.hierarchy?.name ?? '',
-      meta: { title: 'Sector' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Sector" />,
+      ...titled('Sector'),
       cell: ({ row }) =>
         row.original.hierarchy?.name ? (
           <Badge variant="secondary">{row.original.hierarchy.name}</Badge>
         ) : (
           <span className="text-muted-foreground">-</span>
         ),
-      filterFn: (row, _id, value: string[]) => {
-        const id = row.original.hierarchy?.id;
-        if (id == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(id);
-      },
+      filterFn: matchesNullableId((row) => row.hierarchy?.id),
     },
 
     // ─── Atómicas ocultas por defecto (las muestra la columna compuesta "Equipo") ──
     {
       accessorKey: 'domain',
-      meta: { title: 'Dominio' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Dominio" />,
+      ...titled('Dominio'),
       cell: ({ row }) => <span>{row.original.domain ?? '-'}</span>,
     },
     {
       accessorKey: 'serie',
-      meta: { title: 'Serie' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Serie" />,
+      ...titled('Serie'),
       cell: ({ row }) => <span>{row.original.serie ?? '-'}</span>,
     },
     {
       accessorKey: 'intern_number',
-      meta: { title: 'N° Interno' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="N° Interno" />,
+      ...titled('N° Interno'),
       cell: ({ row }) => <span>{row.original.intern_number ?? '-'}</span>,
     },
     {
       accessorKey: 'critical_count',
-      meta: { title: 'Desvíos Críticos' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Desvíos Críticos" />,
+      ...titled('Desvíos Críticos'),
       cell: ({ row }) => <span className="tabular-nums">{row.original.critical_count}</span>,
     },
 

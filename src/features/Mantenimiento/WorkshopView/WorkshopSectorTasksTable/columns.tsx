@@ -5,6 +5,7 @@ import { MaintenanceStatusPill } from '@/features/Mantenimiento/shared/component
 import { ResourceCell, toResourceCellResource } from '@/features/Mantenimiento/shared/components/ResourceCell';
 import { cn } from '@/lib/utils';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { argentinaDate, formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { type ColumnDef } from '@tanstack/react-table';
@@ -61,8 +62,7 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
     {
       id: 'work_order',
       accessorFn: (row) => row.order_number,
-      meta: { title: 'N° OT' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="N° OT" />,
+      ...titled('N° OT'),
       cell: ({ row }) => (
         <WorkOrderTasksDialog
           workOrderId={row.original.id}
@@ -86,8 +86,7 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
     {
       id: 'vehicle',
       accessorFn: (row) => getResourceLabel(row),
-      meta: { title: 'Equipo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Equipo" />,
+      ...titled('Equipo'),
       cell: ({ row }) => (
         <ResourceCell resource={toResourceCellResource(row.original, row.original.resourceSubtitle)} />
       ),
@@ -104,8 +103,7 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
     {
       id: 'wo_status',
       accessorFn: (row) => row.status,
-      meta: { title: 'Estado OT' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado OT" />,
+      ...titled('Estado OT'),
       cell: ({ row }) => <MaintenanceStatusPill entity="workOrder" status={row.original.status} />,
       filterFn: (row, _id, value: string[]) => value.includes(row.original.status),
     },
@@ -116,8 +114,7 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
     {
       id: 'task_count',
       accessorFn: (row) => `${row.completedTaskCount}/${row.taskCount}`,
-      meta: { title: 'Tareas' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tareas" />,
+      ...titled('Tareas'),
       cell: ({ row }) => (
         <span className="font-mono tabular-nums">
           {row.original.completedTaskCount}/{row.original.taskCount}
@@ -129,8 +126,7 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
     // ── Fecha inicio planificada ────────────────────────────────────────────
     {
       accessorKey: 'planned_start_date',
-      meta: { title: 'Inicio Plan.' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Inicio Plan." />,
+      ...titled('Inicio Plan.'),
       cell: ({ row }) => (
         <span>
           {row.original.planned_start_date ? (
@@ -145,8 +141,7 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
     // ── Fecha fin planificada: en rojo y con texto cuando ya pasó (la OT sigue abierta) ──
     {
       accessorKey: 'planned_end_date',
-      meta: { title: 'Fin Plan.' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fin Plan." />,
+      ...titled('Fin Plan.'),
       cell: ({ row }) => {
         const plannedEnd = row.original.planned_end_date;
         if (!plannedEnd) return <span className="text-muted-foreground">—</span>;
@@ -229,8 +224,7 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
     // modelo pero el flujo nunca la escribe.
     {
       accessorKey: 'started_at',
-      meta: { title: 'Iniciada el' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Iniciada el" />,
+      ...titled('Iniciada el'),
       cell: ({ row }) => (
         <span>
           {row.original.started_at ? (
@@ -245,8 +239,7 @@ export function getWorkshopSectorWorkOrdersColumns(): ColumnDef<WorkshopSectorWo
     // ── Fecha de creación (oculta por defecto) ──────────────────────────────
     {
       accessorKey: 'created_at',
-      meta: { title: 'Creada el' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Creada el" />,
+      ...titled('Creada el'),
       cell: ({ row }) => (
         <span>
           {row.original.created_at ? (

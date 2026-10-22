@@ -12,7 +12,7 @@ import {
 import { MaintenanceStatusPill } from '@/features/Mantenimiento/shared/components/MaintenanceStatusPill';
 import { RelativeAge } from '@/features/Mantenimiento/shared/components/RelativeAge';
 import { ResourceCell, toResourceCellResource } from '@/features/Mantenimiento/shared/components/ResourceCell';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { type ColumnDef } from '@tanstack/react-table';
 import { Calendar, ClipboardList, Eye, History, Shield, Wrench, XCircle } from 'lucide-react';
 import moment from 'moment';
@@ -82,8 +82,7 @@ export function getPendingOrderColumns(
       id: 'vehicle',
       // Ticket 596: la fila puede ser de un vehiculo o de un equipamiento
       accessorFn: (row) => getResourceLabel(row),
-      meta: { title: 'Equipo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Equipo" />,
+      ...titled('Equipo'),
       cell: ({ row }) => <ResourceCell resource={toResourceCellResource(row.original)} />,
       filterFn: (row, _id, value: string[]) => {
         const resourceId = row.original.vehicles?.id ?? row.original.other_equipment?.id;
@@ -127,8 +126,7 @@ export function getPendingOrderColumns(
     {
       accessorKey: 'status',
       id: 'status',
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => {
         const { status, date_rejected_at, date_rejection_reason } = row.original;
         // "Fecha rechazada" acompaña al estado (no lo reemplaza: el filtro de Estado sigue diciendo
@@ -180,8 +178,7 @@ export function getPendingOrderColumns(
     {
       accessorKey: 'source',
       id: 'source',
-      meta: { title: 'Origen' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Origen" />,
+      ...titled('Origen'),
       cell: ({ row }) => {
         const src = row.original.source;
         if (!src) return <span className="text-muted-foreground">—</span>;
@@ -201,8 +198,7 @@ export function getPendingOrderColumns(
     {
       accessorKey: 'created_at',
       id: 'created_at',
-      meta: { title: 'Fecha Aprobación' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha Aprobación" />,
+      ...titled('Fecha Aprobación'),
       cell: ({ row }) => {
         const { created_at, status } = row.original;
         if (!created_at) return <span className="text-muted-foreground">—</span>;
@@ -220,8 +216,7 @@ export function getPendingOrderColumns(
     {
       accessorKey: 'order_number',
       id: 'order_number',
-      meta: { title: 'N° Orden' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="N° Orden" />,
+      ...titled('N° Orden'),
       cell: ({ row }) => {
         const num = row.original.order_number;
         return num ? (
@@ -236,8 +231,7 @@ export function getPendingOrderColumns(
     {
       id: 'description',
       accessorFn: (row) => row.description ?? row.maintenance_requests?.description ?? '',
-      meta: { title: 'Descripción' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción" />,
+      ...titled('Descripción'),
       cell: ({ row }) => {
         const value = row.original.description ?? row.original.maintenance_requests?.description ?? '';
         if (!value) return <span className="text-muted-foreground">—</span>;
@@ -255,8 +249,7 @@ export function getPendingOrderColumns(
     {
       accessorKey: 'scheduled_date',
       id: 'scheduled_date',
-      meta: { title: 'Fecha Planificada' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha Planificada" />,
+      ...titled('Fecha Planificada'),
       cell: ({ row }) => {
         const date = row.original.scheduled_date;
         if (!date) return <span className="text-muted-foreground">Sin planificar</span>;

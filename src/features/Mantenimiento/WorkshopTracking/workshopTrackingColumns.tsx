@@ -18,15 +18,16 @@ import {
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import { cn } from '@/lib/utils';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { argentinaDate, formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { conditionLabels } from '@/shared/utils/mappers';
 import { type ColumnDef } from '@tanstack/react-table';
 import type { LucideIcon } from 'lucide-react';
 import { Eye, History, MoreHorizontal } from 'lucide-react';
 import moment from 'moment';
-import { argentinaDate, formatArgentinaDay } from '@/shared/lib/argentina-time';
-import type { MaintenanceOrderStatus } from '../lib/order-status';
 import { ATTENTION_THRESHOLDS } from '../lib/attention-thresholds';
+import type { MaintenanceOrderStatus } from '../lib/order-status';
 import { buildSectorRoute } from '../lib/sector-route';
 import {
   ORDER_STATUS_FILTER_ORDER,
@@ -132,8 +133,7 @@ export function getWorkshopTrackingColumns({
     {
       accessorKey: 'order_number',
       id: 'order_number',
-      meta: { title: 'N° Orden' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="N° Orden" />,
+      ...titled('N° Orden'),
       cell: ({ row }) => {
         const order = row.original;
         const description = getOrderDescription(order);
@@ -174,7 +174,9 @@ export function getWorkshopTrackingColumns({
       meta: { title: 'Equipo' },
       accessorFn: (row) => getResourceLabel(row),
       header: ({ column }) => <DataTableColumnHeader column={column} title="Equipo" />,
-      cell: ({ row }) => <ResourceCell resource={toResourceCellResource(row.original, getResourceSubtitle(row.original))} />,
+      cell: ({ row }) => (
+        <ResourceCell resource={toResourceCellResource(row.original, getResourceSubtitle(row.original))} />
+      ),
       filterFn: (row, _id, value: string[]) => {
         const resourceId = row.original.vehicles?.id ?? row.original.other_equipment?.id;
         if (resourceId == null) return value.includes(NULL_FILTER_VALUE);
@@ -187,8 +189,7 @@ export function getWorkshopTrackingColumns({
     {
       accessorKey: 'status',
       id: 'status',
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => <MaintenanceStatusPill entity="order" status={row.original.status} />,
       filterFn: (row, id, value: string[]) => {
         const val = row.getValue(id) as string | null;
@@ -201,8 +202,7 @@ export function getWorkshopTrackingColumns({
     {
       id: 'scheduled_date',
       accessorKey: 'scheduled_date',
-      meta: { title: 'Fecha Planificada' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha Planificada" />,
+      ...titled('Fecha Planificada'),
       cell: ({ row }) => {
         const date = row.original.scheduled_date;
         if (!date) return <span className="text-muted-foreground">-</span>;
@@ -234,8 +234,7 @@ export function getWorkshopTrackingColumns({
     {
       accessorKey: 'workshop_entry_date',
       id: 'workshop_entry_date',
-      meta: { title: 'Ingreso' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Ingreso" />,
+      ...titled('Ingreso'),
       cell: ({ row }) => {
         const date = row.original.workshop_entry_date;
         return date ? (
@@ -249,8 +248,7 @@ export function getWorkshopTrackingColumns({
     // ── Días en Taller (virtual — calculado) ─────────────────────────────────
     {
       id: 'days_in_workshop',
-      meta: { title: 'Días en Taller' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Días en Taller" />,
+      ...titled('Días en Taller'),
       cell: ({ row }) => {
         const date = row.original.workshop_entry_date;
         if (!date) return <span className="text-muted-foreground">-</span>;
@@ -270,8 +268,7 @@ export function getWorkshopTrackingColumns({
     // ── Recorrido Sectores (virtual — calculado) ──────────────────────────────
     {
       id: 'sector_journey',
-      meta: { title: 'Recorrido Sectores' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Recorrido Sectores" />,
+      ...titled('Recorrido Sectores'),
       cell: ({ row }) => {
         const route = buildSectorRoute(row.original.maintenance_order_items);
         // Antes de ingresar no hay OTs que esperar: "Sin programar"/"Sin OTs generadas" cambian el tono según la etapa.
@@ -290,8 +287,7 @@ export function getWorkshopTrackingColumns({
     // ── Progreso (virtual — calculado) ───────────────────────────────────────
     {
       id: 'progress',
-      meta: { title: 'Progreso' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Progreso" />,
+      ...titled('Progreso'),
       cell: ({ row }) => {
         const { percent, completed, total } = calculateRepairProgress(row.original.maintenance_order_items);
         if (total === 0) return <span className="text-muted-foreground text-xs">Sin tareas</span>;
@@ -336,8 +332,7 @@ export function getWorkshopTrackingColumns({
     {
       id: 'condition',
       accessorFn: (row) => getResourceCondition(row),
-      meta: { title: 'Condición Actual' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Condición Actual" />,
+      ...titled('Condición Actual'),
       cell: ({ row }) => {
         const condition = getResourceCondition(row.original);
         const label = condition ? conditionLabels[condition] ?? condition : 'Sin datos';
@@ -356,8 +351,7 @@ export function getWorkshopTrackingColumns({
     {
       id: 'kilometer',
       accessorFn: (row) => row.vehicles?.kilometer ?? null,
-      meta: { title: 'Km Actual' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Km Actual" />,
+      ...titled('Km Actual'),
       cell: ({ row }) => {
         const km = row.original.vehicles?.kilometer;
         if (!km) return <span className="text-muted-foreground">-</span>;
@@ -370,8 +364,7 @@ export function getWorkshopTrackingColumns({
     {
       accessorKey: 'created_at',
       id: 'created_at',
-      meta: { title: 'Creado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Creado" />,
+      ...titled('Creado'),
       cell: ({ row }) => {
         const date = row.original.created_at;
         return <span className="tabular-nums">{date ? formatArgentinaDay(date) : '-'}</span>;
@@ -382,8 +375,7 @@ export function getWorkshopTrackingColumns({
     {
       id: 'description',
       accessorFn: (row) => getOrderDescription(row),
-      meta: { title: 'Descripción' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Descripción" />,
+      ...titled('Descripción'),
       cell: ({ row }) => {
         const value = getOrderDescription(row.original);
         if (!value) return <span className="text-muted-foreground">-</span>;

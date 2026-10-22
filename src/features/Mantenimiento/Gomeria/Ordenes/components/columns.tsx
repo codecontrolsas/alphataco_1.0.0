@@ -5,6 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { RowActionsMenu, type RowAction } from '@/features/Mantenimiento/Gomeria/shared/RowActionsMenu';
 import { TireServiceOrderStatusPill } from '@/features/Mantenimiento/Gomeria/shared/TireStatusPills';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { matchesNullableId } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -94,11 +95,7 @@ export function getColumns(
           </button>
         );
       },
-      filterFn: (row, _id, value: string[]) => {
-        const id = row.original.vehicle_id;
-        if (id == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(id);
-      },
+      filterFn: matchesNullableId((row) => row.vehicle_id),
       meta: { title: 'Vehículo' },
     },
 
@@ -151,11 +148,7 @@ export function getColumns(
           </div>
         );
       },
-      filterFn: (row, _id, value: string[]) => {
-        const id = row.original.trailer_vehicle_id;
-        if (id == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(id);
-      },
+      filterFn: matchesNullableId((row) => row.trailer_vehicle_id),
       meta: { title: 'Enganche' },
     },
 
@@ -194,11 +187,7 @@ export function getColumns(
         const name = row.original.creator?.fullname;
         return <div>{name ?? <span className="text-muted-foreground">-</span>}</div>;
       },
-      filterFn: (row, _id, value: string[]) => {
-        const id = row.original.created_by;
-        if (id == null) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(id);
-      },
+      filterFn: matchesNullableId((row) => row.created_by),
       meta: { title: 'Creado por' },
     },
 

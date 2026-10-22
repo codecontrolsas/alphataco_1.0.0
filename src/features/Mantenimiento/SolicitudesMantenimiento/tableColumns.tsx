@@ -19,7 +19,7 @@ import { RelativeAge } from '@/features/Mantenimiento/shared/components/Relative
 import { ResourceCell, toResourceCellResource } from '@/features/Mantenimiento/shared/components/ResourceCell';
 import { getResourceLabel } from '@/features/Mantenimiento/shared/maintenance-resource';
 import { resolveDriverInfo } from '@/features/Mantenimiento/utils/driverInfo';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import { ColumnDef } from '@tanstack/react-table';
@@ -122,8 +122,7 @@ export function getMaintenanceRequestColumns({
     {
       id: 'vehicle',
       accessorFn: (row) => getResourceLabel(row),
-      meta: { title: 'Equipo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Equipo" />,
+      ...titled('Equipo'),
       cell: ({ row }) => {
         const request = row.original;
         if (!request.vehicles && !request.other_equipment) return <span className="text-muted-foreground">-</span>;
@@ -152,8 +151,7 @@ export function getMaintenanceRequestColumns({
     {
       id: 'created_at',
       accessorKey: 'created_at',
-      meta: { title: 'Fecha Solicitud' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha Solicitud" />,
+      ...titled('Fecha Solicitud'),
       cell: ({ row }) => {
         const date = row.original.created_at;
         if (!date) return <span className="text-muted-foreground">-</span>;
@@ -170,15 +168,15 @@ export function getMaintenanceRequestColumns({
     {
       id: 'items_count',
       accessorFn: (row) => row.maintenance_request_items?.length ?? 0,
-      meta: { title: 'Desvíos' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Desvíos" />,
+      ...titled('Desvíos'),
       cell: ({ row }) => {
         const total = row.original.maintenance_request_items.length;
         const critical = criticalCount(row.original);
         return (
           <div className="flex min-w-0 flex-col leading-tight">
             <span className="font-mono text-sm font-medium tabular-nums">
-              {total} <span className="text-muted-foreground font-sans text-xs">{total === 1 ? 'desvío' : 'desvíos'}</span>
+              {total}{' '}
+              <span className="text-muted-foreground font-sans text-xs">{total === 1 ? 'desvío' : 'desvíos'}</span>
             </span>
             {critical > 0 ? (
               <span className="text-danger-subtle-foreground inline-flex items-center gap-1 text-xs font-semibold">
@@ -200,8 +198,7 @@ export function getMaintenanceRequestColumns({
     {
       id: 'fileNumber',
       accessorFn: (row) => resolveDriverInfo(row).fileNumber ?? '',
-      meta: { title: 'Legajo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Legajo" />,
+      ...titled('Legajo'),
       cell: ({ row }) => {
         const fileNumber = resolveDriverInfo(row.original).fileNumber;
         if (!fileNumber) return <span className="text-muted-foreground">-</span>;
@@ -214,8 +211,7 @@ export function getMaintenanceRequestColumns({
     {
       id: 'driver',
       accessorFn: (row) => resolveDriverInfo(row).name,
-      meta: { title: 'Chofer' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Chofer" />,
+      ...titled('Chofer'),
       cell: ({ row }) => {
         const name = driverDisplayName(row.original);
         if (!name || name === 'No especificado') return <span className="text-muted-foreground">-</span>;
@@ -232,14 +228,13 @@ export function getMaintenanceRequestColumns({
     {
       id: 'supervisor',
       accessorFn: (row) => row.profile_maintenance_requests_supervisor_idToprofile?.fullname || '',
-      meta: { title: 'Supervisor' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Supervisor" />,
+      ...titled('Supervisor'),
       cell: ({ row }) => {
         const supervisor = row.original.profile_maintenance_requests_supervisor_idToprofile;
         if (!supervisor) return <span className="text-muted-foreground">Sin asignar</span>;
         const label = supervisor.employees?.file
           ? `[${supervisor.employees.file}] ${supervisor.fullname ?? ''}`.trim()
-          : (supervisor.fullname ?? 'Sin nombre');
+          : supervisor.fullname ?? 'Sin nombre';
         return (
           <span className="block max-w-[200px] truncate text-sm" title={label}>
             {label}
@@ -258,8 +253,7 @@ export function getMaintenanceRequestColumns({
     {
       id: 'source',
       accessorKey: 'source',
-      meta: { title: 'Origen' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Origen" />,
+      ...titled('Origen'),
       cell: ({ row }) => {
         const source = row.original.source;
         if (!source) return <span className="text-muted-foreground">-</span>;
@@ -277,8 +271,7 @@ export function getMaintenanceRequestColumns({
     {
       id: 'kilometer',
       accessorKey: 'kilometer',
-      meta: { title: 'Kilometraje' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Kilometraje" />,
+      ...titled('Kilometraje'),
       cell: ({ row }) => {
         const km = row.original.kilometer;
         if (!km) return <span className="text-muted-foreground">-</span>;
@@ -291,8 +284,7 @@ export function getMaintenanceRequestColumns({
     {
       id: 'engine_hours',
       accessorKey: 'engine_hours',
-      meta: { title: 'Horas Motor' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Horas Motor" />,
+      ...titled('Horas Motor'),
       cell: ({ row }) => {
         const hours = row.original.engine_hours;
         if (!hours) return <span className="text-muted-foreground">-</span>;
@@ -305,8 +297,7 @@ export function getMaintenanceRequestColumns({
     {
       id: 'status',
       accessorKey: 'status',
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => {
         const status = row.original.status;
         const orderStatus = row.original.maintenance_orders?.[0]?.status;
@@ -336,18 +327,34 @@ export function getMaintenanceRequestColumns({
         return (
           <div className="flex items-center justify-end gap-1">
             {canResolve ? (
-              <Button type="button" size="sm" onClick={() => onApprove(request)} aria-label={`Validar la solicitud de ${label}`}>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => onApprove(request)}
+                aria-label={`Validar la solicitud de ${label}`}
+              >
                 Validar
               </Button>
             ) : (
-              <Button type="button" size="sm" variant="outline" onClick={() => onView(request)} aria-label={`Ver detalle de la solicitud de ${label}`}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => onView(request)}
+                aria-label={`Ver detalle de la solicitud de ${label}`}
+              >
                 <Eye aria-hidden="true" />
                 Ver
               </Button>
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button type="button" variant="ghost" size="icon" aria-label={`Más acciones para la solicitud de ${label}`}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Más acciones para la solicitud de ${label}`}
+                >
                   <MoreHorizontal className="size-4" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
