@@ -6,7 +6,7 @@ import type { DataTableSearchParams } from '@/shared/components/common/DataTable
 import { getDocTypeMetrics } from '../actions/metrics.server';
 import { getEmpresaDocTypesPaginated } from '../actions/queries.server';
 import { DocTypeMetricsSection } from '../components/DocTypeMetricsSection';
-import _EmpresaDataTable from './_EmpresaDataTable';
+import _DocTypesDataTable from '../components/_DocTypesDataTable';
 
 // ============================================================================
 // CONSTANTS
@@ -44,7 +44,8 @@ export async function EmpresaList({ searchParams }: EmpresaListProps) {
 
       <Card>
         <CardContent className="pt-6">
-          <_EmpresaDataTable
+          <_DocTypesDataTable
+            applies={document_applies.Empresa}
             data={data}
             totalRows={total}
             searchParams={tableParams}

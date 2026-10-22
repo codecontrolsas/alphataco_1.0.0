@@ -5,12 +5,13 @@ import {
   commonDocumentExportFormatters,
   equipmentDocumentLabel,
 } from '@/features/Documentacion/lists-shared/document-list-export';
-import {
-  useDocumentListFacets,
-  useDocumentListTable,
-} from '@/features/Documentacion/lists-shared/use-document-list-table';
+import { useDocumentListFacets } from '@/features/Documentacion/lists-shared/use-document-list-table';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableFacetedFilterConfig, type DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import {
+  type DataTableFacetedFilterConfig,
+  type DataTableSearchParams,
+} from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useCallback, useMemo } from 'react';
 import {
@@ -33,18 +34,6 @@ interface Props {
 
 const DEFAULT_VISIBLE_FILTER_IDS = ['state', 'vehicle', 'documentType', 'contractor'];
 
-const ALL_FILTER_IDS = [
-  'state',
-  'vehicle',
-  'documentType',
-  'mandatory',
-  'multiresource',
-  'contractor',
-  'period',
-  'deny_reason',
-  'created_at',
-];
-
 export function _MonthlyEquipmentDocumentsDataTable({
   data,
   totalRows,
@@ -54,15 +43,6 @@ export function _MonthlyEquipmentDocumentsDataTable({
   initialFilterVisibility,
   equipmentId,
 }: Props) {
-  // Parámetros vigentes (para exportar con los filtros activos) y visibilidad de columnas/filtros.
-  const { currentParams, handleStateChange, columnVisibility, filterVisibility } = useDocumentListTable({
-    searchParams,
-    initialColumnVisibility,
-    initialFilterVisibility,
-    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
-    allFilterIds: ALL_FILTER_IDS,
-    defaultVisibleFilterIds: DEFAULT_VISIBLE_FILTER_IDS,
-  });
   const { makeStateFetchFacet, makeFkFetchFacet, makeBooleanFetchFacet } = useDocumentListFacets(
     getMonthlyEquipmentDocumentsSingleFacet,
     equipmentId
@@ -71,12 +51,6 @@ export function _MonthlyEquipmentDocumentsDataTable({
   const tableQueryFn = useCallback(
     (params: DataTableSearchParams) => getMonthlyEquipmentDocumentsPaginated(params, equipmentId),
     [equipmentId]
-  );
-
-  // Export sin paginar: la action devuelve el mensaje si se pasa del tope de filas.
-  const fetchAllRows = useCallback(
-    async () => unwrapExportResult(await getAllMonthlyEquipmentDocumentsForExport(currentParams, equipmentId)),
-    [currentParams, equipmentId]
   );
 
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
@@ -123,21 +97,32 @@ export function _MonthlyEquipmentDocumentsDataTable({
     [makeStateFetchFacet, makeFkFetchFacet, makeBooleanFetchFacet]
   );
 
+  // Parámetros vigentes (para exportar con los filtros activos) y props comunes de la tabla.
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTER_IDS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
+
+  // Export sin paginar: la action devuelve el mensaje si se pasa del tope de filas.
+  const fetchAllRows = useCallback(
+    async () => unwrapExportResult(await getAllMonthlyEquipmentDocumentsForExport(currentParams, equipmentId)),
+    [currentParams, equipmentId]
+  );
+
   return (
     <DataTable
+      {...tableProps}
       columns={columns}
       data={data}
       totalRows={totalRows}
-      searchParams={searchParams}
       searchPlaceholder="Dominio o documento"
       showSearch
       mobileCards
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={columnVisibility}
-      initialFilterVisibility={filterVisibility}
-      tableId={tableId}
-      paramNamespace={tableId}
-      showFilterToggle={true}
       emptyMessage="No hay documentos mensuales de equipos registrados"
       data-testid="monthly-equipment-documents-table"
       toolbarActions={
@@ -153,7 +138,6 @@ export function _MonthlyEquipmentDocumentsDataTable({
       queryFn={tableQueryFn}
       queryKey={['monthly-equipment-documents', equipmentId ?? '']}
       queryStaleTimeMs={5_000}
-      onStateChange={handleStateChange}
       exportConfig={{
         fetchAllData: fetchAllRows,
         options: {

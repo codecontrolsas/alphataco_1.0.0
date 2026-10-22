@@ -2,12 +2,13 @@
 
 import { DocumentsDownloadDialog } from '@/features/Documentacion/lists-shared/DocumentsDownloadDialog';
 import { commonDocumentExportFormatters } from '@/features/Documentacion/lists-shared/document-list-export';
-import {
-  useDocumentListFacets,
-  useDocumentListTable,
-} from '@/features/Documentacion/lists-shared/use-document-list-table';
+import { useDocumentListFacets } from '@/features/Documentacion/lists-shared/use-document-list-table';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableFacetedFilterConfig, type DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import {
+  type DataTableFacetedFilterConfig,
+  type DataTableSearchParams,
+} from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useCallback, useMemo } from 'react';
 import {
@@ -30,19 +31,6 @@ interface Props {
 
 const DEFAULT_VISIBLE_FILTER_IDS = ['state', 'employee', 'fileNumber', 'documentType'];
 
-const ALL_FILTER_IDS = [
-  'state',
-  'employee',
-  'fileNumber',
-  'documentType',
-  'mandatory',
-  'multiresource',
-  'contractor',
-  'created_at',
-  'period',
-  'deny_reason',
-];
-
 export function _MonthlyEmployeeDocumentsDataTable({
   data,
   totalRows,
@@ -52,15 +40,6 @@ export function _MonthlyEmployeeDocumentsDataTable({
   initialFilterVisibility,
   employeeId,
 }: Props) {
-  // Parámetros vigentes (para exportar con los filtros activos) y visibilidad de columnas/filtros.
-  const { currentParams, handleStateChange, columnVisibility, filterVisibility } = useDocumentListTable({
-    searchParams,
-    initialColumnVisibility,
-    initialFilterVisibility,
-    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
-    allFilterIds: ALL_FILTER_IDS,
-    defaultVisibleFilterIds: DEFAULT_VISIBLE_FILTER_IDS,
-  });
   const { makeStateFetchFacet, makeFkFetchFacet, makeBooleanFetchFacet } = useDocumentListFacets(
     getMonthlyEmployeeDocumentsSingleFacet,
     employeeId
@@ -69,12 +48,6 @@ export function _MonthlyEmployeeDocumentsDataTable({
   const tableQueryFn = useCallback(
     (params: DataTableSearchParams) => getMonthlyEmployeeDocumentsPaginated(params, employeeId),
     [employeeId]
-  );
-
-  // Export sin paginar: la action devuelve el mensaje si se pasa del tope de filas.
-  const fetchAllRows = useCallback(
-    async () => unwrapExportResult(await getAllMonthlyEmployeeDocumentsForExport(currentParams, employeeId)),
-    [currentParams, employeeId]
   );
 
   const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
@@ -127,26 +100,36 @@ export function _MonthlyEmployeeDocumentsDataTable({
     [makeStateFetchFacet, makeFkFetchFacet, makeBooleanFetchFacet]
   );
 
+  // Parámetros vigentes (para exportar con los filtros activos) y props comunes de la tabla.
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTER_IDS,
+    facetedFilters,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
+
+  // Export sin paginar: la action devuelve el mensaje si se pasa del tope de filas.
+  const fetchAllRows = useCallback(
+    async () => unwrapExportResult(await getAllMonthlyEmployeeDocumentsForExport(currentParams, employeeId)),
+    [currentParams, employeeId]
+  );
+
   return (
     <DataTable
+      {...tableProps}
       columns={columns}
       data={data}
       totalRows={totalRows}
-      searchParams={searchParams}
       // Client-side navigation: fetch instantáneo via React Query, sin router.push
       queryFn={tableQueryFn}
       queryKey={['monthly-employee-documents', employeeId ?? '']}
       queryStaleTimeMs={5_000}
-      onStateChange={handleStateChange}
       searchPlaceholder="Legajo, empleado o documento"
       showSearch
       mobileCards
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={columnVisibility}
-      initialFilterVisibility={filterVisibility}
-      tableId={tableId}
-      paramNamespace={tableId}
-      showFilterToggle={true}
       emptyMessage="No hay documentos mensuales de empleados registrados"
       data-testid="monthly-employee-documents-table"
       toolbarActions={

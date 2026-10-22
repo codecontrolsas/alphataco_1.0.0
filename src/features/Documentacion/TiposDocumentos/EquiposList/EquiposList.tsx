@@ -6,7 +6,7 @@ import type { DataTableSearchParams } from '@/shared/components/common/DataTable
 import { getDocTypeMetrics } from '../actions/metrics.server';
 import { getEquiposDocTypesPaginated } from '../actions/queries.server';
 import { DocTypeMetricsSection } from '../components/DocTypeMetricsSection';
-import _EquiposDataTable from './_EquiposDataTable';
+import _DocTypesDataTable from '../components/_DocTypesDataTable';
 
 // ============================================================================
 // CONSTANTS
@@ -45,7 +45,8 @@ export async function EquiposList({ searchParams, permissionsMap }: EquiposListP
 
       <Card>
         <CardContent className="pt-6">
-          <_EquiposDataTable
+          <_DocTypesDataTable
+            applies={document_applies.Equipos}
             data={data}
             totalRows={total}
             searchParams={tableParams}
