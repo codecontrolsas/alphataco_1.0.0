@@ -9,22 +9,8 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-if [ ! -f .env.docker ]; then
-  echo "Falta .env.docker (copiar de .env.docker.example y completar valores)." >&2
-  exit 1
-fi
-
-set -a
-source .env.docker
-set +a
-
-COMPOSE=(docker compose --env-file .env.docker)
-
-echo "==> Levantando postgres..."
-"${COMPOSE[@]}" up -d --wait postgres
-
-export DATABASE_URL="postgresql://alphataco:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_PORT:-5432}/alphataco"
-export DIRECT_URL="${DATABASE_URL}"
+# shellcheck source=lib/integration-env.sh
+source scripts/lib/integration-env.sh
 
 echo "==> Aplicando migraciones pendientes..."
 npx prisma migrate deploy
