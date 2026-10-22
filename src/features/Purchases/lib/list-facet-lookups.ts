@@ -1,3 +1,5 @@
+import 'server-only';
+
 import { prisma } from '@/shared/lib/prisma';
 
 /** Proveedores como opciones de faceta `{ id, name }`, ordenados por nombre. `[]` sin consultar si no hay ids. */

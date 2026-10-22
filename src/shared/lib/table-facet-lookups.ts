@@ -1,3 +1,5 @@
+import 'server-only';
+
 import { prisma } from '@/shared/lib/prisma';
 import { profileDisplayName } from '@/shared/lib/table-list-query';
 

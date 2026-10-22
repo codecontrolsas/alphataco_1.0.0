@@ -1,6 +1,5 @@
 'use client';
 
-import { NameCatalogSection } from '@/shared/components/common/name-catalog/NameCatalogSection';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   createExpenseCategory,
@@ -9,6 +8,7 @@ import {
   type ExpenseCategoryRow,
 } from '../../actions/expense-categories.server';
 import { expenseCategoryFormSchema, type ExpenseCategoryFormValues } from '../../schemas/expense-categories';
+import { NameCatalogSection } from './NameCatalogSection';
 
 const resolver = zodResolver(expenseCategoryFormSchema);
 

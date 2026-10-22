@@ -1,6 +1,5 @@
 'use client';
 
-import { NameCatalogSection } from '@/shared/components/common/name-catalog/NameCatalogSection';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   createSupplierCategory,
@@ -9,6 +8,7 @@ import {
   type SupplierCategoryRow,
 } from '../../actions/categories.server';
 import { supplierCategoryFormSchema, type SupplierCategoryFormValues } from '../../schemas/suppliers';
+import { NameCatalogSection } from './NameCatalogSection';
 
 const resolver = zodResolver(supplierCategoryFormSchema);
 
