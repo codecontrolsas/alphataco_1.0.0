@@ -11,69 +11,69 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 
 ## Inventario (archivos y líneas, sin tests)
 
-| Módulo | Archivos | Líneas | Estado |
-|---|---:|---:|---|
-| src/features/Mantenimiento | 414 | 63539 | [ ] |
-| src/features/Empresa | 316 | 43383 | [ ] |
-| src/features/Purchases | 219 | 30336 | [ ] |
-| src/features/Operaciones | 212 | 28069 | [ ] |
-| src/features/Equipos | 135 | 21875 | [ ] |
-| src/features/Treasury | 183 | 21596 | [ ] |
-| src/features/Dashboard | 173 | 21093 | [ ] |
-| src/features/Documentacion | 143 | 17428 | [ ] |
-| src/features/Warehouses | 121 | 16050 | [ ] |
-| src/features/Employees | 107 | 15103 | [ ] |
-| src/features/Comercial | 95 | 12176 | [ ] |
-| src/features/Ayuda | 137 | 10967 | [ ] |
-| src/features/Clothing | 69 | 10858 | [ ] |
-| src/features/Checklists | 28 | 6175 | [ ] |
-| src/features/UserPermissionsManager | 39 | 5229 | [ ] |
-| src/features/OperatorPanel | 25 | 4673 | [ ] |
-| src/features/Formularios | 21 | 3874 | [ ] |
-| src/features/Seleccion | 32 | 3823 | [ ] |
-| src/features/Permissions | 12 | 3456 | [ ] |
-| src/features/Auth | 18 | 2463 | [ ] |
-| src/features/Jobs | 17 | 2229 | [ ] |
-| src/features/Layout | 22 | 1882 | [ ] |
-| src/features/ExternalApi | 10 | 1152 | [ ] |
-| src/features/Notifications | 9 | 777 | [ ] |
-| src/features/TabsManager | 7 | 745 | [ ] |
-| src/features/MobileApi | 6 | 212 | [ ] |
-| src/shared | 152 | 16124 | [ ] |
-| src/components | 48 | 4930 | [ ] |
-| src/lib | 6 | 580 | [ ] |
-| src/app | 161 | 5041 | [ ] |
-| scripts | 47 | 10759 | [ ] |
+| Módulo                              | Archivos | Líneas | Estado |
+| ----------------------------------- | -------: | -----: | ------ |
+| src/features/Mantenimiento          |      414 |  63539 | [ ]    |
+| src/features/Empresa                |      316 |  43383 | [ ]    |
+| src/features/Purchases              |      219 |  30336 | [x]    |
+| src/features/Operaciones            |      212 |  28069 | [ ]    |
+| src/features/Equipos                |      135 |  21875 | [ ]    |
+| src/features/Treasury               |      183 |  21596 | [ ]    |
+| src/features/Dashboard              |      173 |  21093 | [ ]    |
+| src/features/Documentacion          |      143 |  17428 | [ ]    |
+| src/features/Warehouses             |      121 |  16050 | [ ]    |
+| src/features/Employees              |      107 |  15103 | [ ]    |
+| src/features/Comercial              |       95 |  12176 | [ ]    |
+| src/features/Ayuda                  |      137 |  10967 | [ ]    |
+| src/features/Clothing               |       69 |  10858 | [ ]    |
+| src/features/Checklists             |       28 |   6175 | [ ]    |
+| src/features/UserPermissionsManager |       39 |   5229 | [ ]    |
+| src/features/OperatorPanel          |       25 |   4673 | [ ]    |
+| src/features/Formularios            |       21 |   3874 | [ ]    |
+| src/features/Seleccion              |       32 |   3823 | [ ]    |
+| src/features/Permissions            |       12 |   3456 | [ ]    |
+| src/features/Auth                   |       18 |   2463 | [ ]    |
+| src/features/Jobs                   |       17 |   2229 | [ ]    |
+| src/features/Layout                 |       22 |   1882 | [ ]    |
+| src/features/ExternalApi            |       10 |   1152 | [ ]    |
+| src/features/Notifications          |        9 |    777 | [ ]    |
+| src/features/TabsManager            |        7 |    745 | [ ]    |
+| src/features/MobileApi              |        6 |    212 | [ ]    |
+| src/shared                          |      152 |  16124 | [ ]    |
+| src/components                      |       48 |   4930 | [ ]    |
+| src/lib                             |        6 |    580 | [ ]    |
+| src/app                             |      161 |   5041 | [ ]    |
+| scripts                             |       47 |  10759 | [ ]    |
 
 ## Los 25 archivos más grandes (candidatos a SRP)
 
-| Líneas | Archivo |
-|---:|---|
-| 1626 | src/features/Permissions/permissions-map.ts |
-| 1200 | src/features/Warehouses/lib/stock-engine.ts |
-| 1169 | src/features/Mantenimiento/MaintenanceOrders/pdf/MaintenanceOrderReportLayout.tsx |
-| 1130 | src/features/Auth/utils/emailTemplates.ts |
-| 860 | src/features/Mantenimiento/shared/components/ManualRepairsInput.tsx |
-| 842 | src/features/Permissions/actions/roles.server.ts |
-| 801 | src/features/Equipos/OtherEquipment/actions/actionsServer.ts |
-| 758 | src/features/Mantenimiento/Gomeria/shared/iso/truck-geometry.ts |
-| 744 | src/features/Purchases/actions/orders.server.ts |
-| 720 | src/features/Checklists/pdf/layouts/NormalizedChecklistPDFLayout.tsx |
-| 701 | src/features/Mantenimiento/Gomeria/Ordenes/components/ServiceOrderWizard.tsx |
-| 698 | src/features/Mantenimiento/WorkshopView/WorkshopSectorTasksTable/actions.server.ts |
-| 677 | src/components/ui/sidebar.tsx |
-| 633 | src/features/Mantenimiento/ApprovalInbox/actions/actionsServer.ts |
-| 627 | src/features/Documentacion/TiposDocumentos/components/_DocumentTypeFormModal.tsx |
-| 626 | src/features/Purchases/actions/receipts.server.ts |
-| 619 | src/features/Dashboard/Boards/components/_DashboardBoard.tsx |
-| 617 | src/shared/components/common/DataTable/DataTable.tsx |
-| 610 | src/features/Warehouses/actions/catalog.server.ts |
-| 610 | src/features/Mantenimiento/Operaciones/actions/activity-log.server.ts |
-| 609 | src/features/Mantenimiento/shared/components/critical-deviations-repair-modal.tsx |
-| 604 | src/features/Mantenimiento/MaintenanceOrders/pdf/report-data.ts |
-| 599 | src/features/Equipos/EquipoID/forms/vehicle-basic-data-form.tsx |
-| 599 | src/features/Documentacion/TiposDocumentos/config/documentConditions.ts |
-| 597 | src/features/Employees/Diagrams/Reports/actions.server.ts |
+| Líneas | Archivo                                                                            |
+| -----: | ---------------------------------------------------------------------------------- |
+|   1626 | src/features/Permissions/permissions-map.ts                                        |
+|   1200 | src/features/Warehouses/lib/stock-engine.ts                                        |
+|   1169 | src/features/Mantenimiento/MaintenanceOrders/pdf/MaintenanceOrderReportLayout.tsx  |
+|   1130 | src/features/Auth/utils/emailTemplates.ts                                          |
+|    860 | src/features/Mantenimiento/shared/components/ManualRepairsInput.tsx                |
+|    842 | src/features/Permissions/actions/roles.server.ts                                   |
+|    801 | src/features/Equipos/OtherEquipment/actions/actionsServer.ts                       |
+|    758 | src/features/Mantenimiento/Gomeria/shared/iso/truck-geometry.ts                    |
+|    744 | src/features/Purchases/actions/orders.server.ts                                    |
+|    720 | src/features/Checklists/pdf/layouts/NormalizedChecklistPDFLayout.tsx               |
+|    701 | src/features/Mantenimiento/Gomeria/Ordenes/components/ServiceOrderWizard.tsx       |
+|    698 | src/features/Mantenimiento/WorkshopView/WorkshopSectorTasksTable/actions.server.ts |
+|    677 | src/components/ui/sidebar.tsx                                                      |
+|    633 | src/features/Mantenimiento/ApprovalInbox/actions/actionsServer.ts                  |
+|    627 | src/features/Documentacion/TiposDocumentos/components/\_DocumentTypeFormModal.tsx  |
+|    626 | src/features/Purchases/actions/receipts.server.ts                                  |
+|    619 | src/features/Dashboard/Boards/components/\_DashboardBoard.tsx                      |
+|    617 | src/shared/components/common/DataTable/DataTable.tsx                               |
+|    610 | src/features/Warehouses/actions/catalog.server.ts                                  |
+|    610 | src/features/Mantenimiento/Operaciones/actions/activity-log.server.ts              |
+|    609 | src/features/Mantenimiento/shared/components/critical-deviations-repair-modal.tsx  |
+|    604 | src/features/Mantenimiento/MaintenanceOrders/pdf/report-data.ts                    |
+|    599 | src/features/Equipos/EquipoID/forms/vehicle-basic-data-form.tsx                    |
+|    599 | src/features/Documentacion/TiposDocumentos/config/documentConditions.ts            |
+|    597 | src/features/Employees/Diagrams/Reports/actions.server.ts                          |
 
 ## Duplicación detectada (jscpd, solo lectura)
 
@@ -93,6 +93,15 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 - [x] **Barriles eliminados (35):** `Permissions` (index y `actionsServer`), `DataTable/index`, `Checklists`, `TabsManager`, `Mantenimiento/*`, `Operaciones/*`, `shared/lib/mail`, `compliance`, `Jobs/lib/dates`, etc. 674 imports reescritos con un codemod (compilador de TypeScript) al archivo de origen.
 - [x] **Skeletons de tabla:** 17 archivos idénticos reemplazados por `<TableSkeleton inCard columnCount rowCount />` (compartido).
 - [x] **Reset de la demo** (rama heredada): conexión del dueño y empresa fijada en la transacción.
+- [x] **Compras (`src/features/Purchases`):** duplicación medida con jscpd sobre Compras, Almacenes, Tesorería y `shared` (sin pruebas): de 364 clones y 5.520 líneas duplicadas (5,22 %) a 237 y 3.088 (2,94 %); 1.112.286 → 1.076.707 tokens (−3,2 %). Las líneas brutas casi no bajan (105.828 → 105.128) porque el formateo de los commits ensancha las líneas largas de los archivos sin formatear: la medida confiable son los tokens y los clones. Lo unificado, con los usos de Almacenes y Tesorería actualizados:
+  - **Listas con DataTable (7 de Compras + pedidos de Almacenes):** `shared/lib/table-list-query.ts` (validación de filtros de la URL, orden `resolveSorts`, conteo de relaciones M:M, `SingleFacetResult`), `table-facet-lookups.ts` (opciones de perfiles), `Purchases/lib/list-facet-lookups.ts`, `list-filters.ts` (importe y número de comprobante, que estaban copiados 3 veces), `list-access.ts` (`companyIdIfCanView`) y `exportFailure` en `export-batches.ts` (20 acciones de export de los tres módulos). `isUuid` vive en `shared/lib/uuid.ts` (se borró `UUID_RE` de `action-errors`, de Tesorería y de Compras).
+  - **Clientes `_XDataTable` y columnas:** `DataTable/facet-filters.ts` (`createFacetFilters`: fábrica de filtros `fixed`/`lookup` y `EMPTY_FACET`, que 12 tablas de Almacenes y Tesorería declaraban por su cuenta), `DataTable/useServerTableView.ts` (estado de vista, visibilidad inicial y props comunes), `DataTable/column-helpers.tsx` (`titled`, `matchesId`, `matchesAnyId`, `matchesNullableId`…), `Purchases/components/DocumentLinks.tsx` y `formatDateOnlyAr` en `argentina-time.ts` (13 copias).
+  - **Formularios y diálogos:** `shared/components/common/form-fields.tsx` (`InputFormField`, `TextareaFormField`, `DateFormField`: ~70 campos de Compras, Almacenes y Tesorería), `name-catalog/NameFormDialog.tsx` (rubros, conceptos de gasto, categorías, unidades y conceptos de Tesorería), `Purchases/Settings/components/NameCatalogSection.tsx`, `ConfirmReasonDialog.tsx` (las tres confirmaciones con motivo de Compras, Almacenes y Tesorería), `DateRangeFields.tsx` (cuenta corriente de proveedores y clientes), `Purchases/components/period-report.tsx` (Libro IVA y Retenciones).
+  - **Secciones y skeletons:** `TabsManager/section-tab.tsx` (`sectionTab`) reemplaza los arreglos de 10, 7 y 9 pestañas de Compras, Almacenes y Tesorería; `skeletons/SectionTableSkeleton.tsx` borra tres skeletons de sección y `PeriodReportSkeleton` dos más.
+  - **PDF:** `pdf-layout.tsx` suma `PartyBox`, `WithholdingsTable`, `PaymentMethodsList` y `TotalLine`, y `pdf-text.ts` suma `pdfPaymentDetail`: el recibo de Tesorería ya no copia los estilos ni el encabezado de la orden de pago.
+  - **Otros:** `unwrapAction` pasó a `shared/lib/unwrap-action.ts` (69 importadores; Compras ya no depende de Almacenes), `Permissions/lib/view-scope.server.ts` (alcance de solicitudes y pedidos), `Warehouses/lib/destination-search.ts` (búsqueda de destino en 4 listas) y `PURCHASES_PATH`, `SESSION_EXPIRED` y `TRANSACTION_OPTIONS` en `action-errors.ts`.
+  - **Archivos partidos (todos los de Compras quedan bajo 425 líneas):** `lib/payments.ts` 642 → 332 (`payment-locks`, `payment-auto-withholdings`, `payment-revalidation`), `lib/due-invoices.ts` 517 → 230 (`-debts`, `-unified`), `actions/orders.server.ts` 744 → 404 (`order-writes`, `approval-notifications.server`, `order-send.server`), `requests.server.ts` 565 → 280 (`request-writes`, `request-from-material.server`), `receipts.server.ts` 626 → 423 (`receipt-queries.server`), `invoices.server.ts` 579 → 329 (`invoice-build`, `invoice-arca.server`), `invoice-queries.server.ts` 451 → ~220 (`invoice-detail.server`), `suppliers.server.ts` 424 → 282 (`supplier-queries.server`), `quotes.server.ts` 411 → 328 (`quote-send.server`), `PaymentOrderForm` 572 → 370, `RegisterPaymentDialog` 503 → 282, `PurchaseRequestForm` 447 → 237 y `PurchaseOrderForm` 431 → 281 (las filas de línea en archivos propios).
+  - Verificación: `check-types` limpio, `npm test` (1494), las suites de integración de Compras, Tesorería y Almacenes contra un Postgres descartable (en serie: en paralelo se pisan entre sí) y `next build` compilando.
 
 ## En curso / siguiente
 
@@ -104,4 +113,12 @@ Fuente de verdad del avance de la revisión de TODO el repo: duplicados, código
 
 ## Decisiones de producto pendientes
 
-(ninguna por ahora)
+- **Compras, filtros visibles guardados:** las tablas de Recepciones, Solicitudes, Proveedores, Órdenes de pago y Vencimientos ignoran la preferencia guardada de filtros visibles (`initialFilterVisibility` llega y no se usa); Órdenes, Cotizaciones y Facturas sí la aplican. Es un defecto previo que se conservó para no cambiar el comportamiento: se corrige pasando `savedFilterVisibility` a `useServerTableView` en esas cinco tablas.
+- **Compras, búsqueda de comprobante en Vencimientos:** al unificar `voucherNumberWhere`, un punto de venta o número fuera de rango en Vencimientos ahora devuelve una lista vacía (como ya hacía Facturas) en vez de un error.
+
+## Pendiente detectado en Compras (para las pasadas de Almacenes, Tesorería y otros)
+
+- Las tablas de Almacenes y Tesorería pueden adoptar `createFacetFilters` y `useServerTableView` (hoy solo cambiaron su `EMPTY_FACET`); Equipos, Formularios y Checklists también copian `EMPTY_FACET`.
+- Acciones `*.server.ts` con la misma cabecera (permiso, `isUuid`, `safeParse`, empresa, try/catch con `toPurchaseActionError`): quedan sin envoltorio común porque cambiarían ~60 acciones a la vez; conviene hacerlo junto con el caso de uso por módulo de la arquitectura de instancias.
+- `createPurchaseReceipt` (~220 líneas) y `registerPayment` (~180) siguen siendo funciones largas: se parten en pasos junto con sus pruebas de integración.
+- `sendPurchaseOrder`, `sendPurchaseQuote` y `sendPaymentOrder` repiten "mail y después marcar enviada"; un `sendThenMark` común exige decidir si el estado de la orden de pago también se marca.
