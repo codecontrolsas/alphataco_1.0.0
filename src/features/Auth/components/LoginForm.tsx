@@ -1,18 +1,18 @@
 'use client';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { login } from '@/features/Auth/actions/login-actions';
 import { loginSchema, type LoginValues } from '@/shared/schemas/schemas';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CircleAlert, CircleCheck, Loader2, TriangleAlert } from 'lucide-react';
+import { CircleAlert, CircleCheck, TriangleAlert } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 import GoogleButton from './GoogleButton';
+import { LoginSubmitButton } from './LoginSubmitButton';
 import { PasswordInput } from './PasswordInput';
 
 interface LoginFormProps {
@@ -145,23 +145,7 @@ export function LoginForm({ next, oauthFailed = false, showGoogle = false, passw
             )}
           />
 
-          <Button
-            type="submit"
-            size="lg"
-            className="w-full"
-            disabled={isPending}
-            aria-busy={isPending}
-            data-testid="login-submit-button"
-          >
-            {isPending ? (
-              <>
-                <Loader2 className="animate-spin motion-reduce:animate-none" />
-                Ingresando…
-              </>
-            ) : (
-              'Ingresar'
-            )}
-          </Button>
+          <LoginSubmitButton isPending={isPending} testId="login-submit-button" />
         </form>
       </Form>
 
