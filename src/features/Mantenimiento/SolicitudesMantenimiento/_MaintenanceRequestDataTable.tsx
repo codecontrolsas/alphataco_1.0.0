@@ -3,25 +3,28 @@
 import { Button } from '@/components/ui/button';
 import { ActivityHistoryModal } from '@/features/Mantenimiento/components/ActivityHistoryModal';
 import { invalidateAllMaintenanceQueries } from '@/features/Mantenimiento/utils/queryInvalidation';
-import type { DataTableFacetedFilterConfig, DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable/types';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { buildEnumFacetResult, buildFkFacetResult } from '@/shared/components/common/DataTable/facet-results';
+import type {
+  DataTableFacetedFilterConfig,
+  DataTableSearchParams,
+  FacetResult,
+} from '@/shared/components/common/DataTable/types';
+import { argentinaDate, formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
-import { formatArgentinaDateTime, argentinaDate } from '@/shared/lib/argentina-time';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { LucideIcon } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import type { LucideIcon } from 'lucide-react';
-import { CircleOff } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
-import { REQUESTS_PARAM_NAMESPACE } from './constants';
-import { getMaintenanceRequestById } from './actions/queries.server';
 import {
   getAllMaintenanceRequestsForExport,
   getMaintenanceRequestSingleFacet,
   getMaintenanceRequestsPaginated,
   type MaintenanceRequestListItem,
 } from './actions/actionsTableServer';
+import { getMaintenanceRequestById } from './actions/queries.server';
+import { REQUESTS_PARAM_NAMESPACE } from './constants';
 import {
   HIDDEN_COLUMNS_BY_DEFAULT,
   ORDER_STATUS_LABELS,
@@ -62,41 +65,6 @@ interface MaintenanceRequestDataTableProps {
 // ============================================================================
 // HELPERS — builders para reducir boilerplate en fetchFacet
 // ============================================================================
-
-/** Construye FacetResult para enums: opciones estáticas + counts del servidor */
-function buildEnumFacetResult(
-  enumValues: string[],
-  labels: Record<string, string>,
-  icons: Record<string, LucideIcon | undefined>,
-  counts: Map<string, number>
-): FacetResult {
-  return {
-    options: [
-      ...enumValues.map((value) => ({
-        value,
-        label: labels[value] ?? value,
-        icon: icons[value],
-      })),
-      ...(counts.has(NULL_FILTER_VALUE) ? [{ value: NULL_FILTER_VALUE, label: 'Sin asignar', icon: CircleOff }] : []),
-    ],
-    counts,
-  };
-}
-
-/** Construye FacetResult para FK: opciones resueltas del servidor + counts */
-function buildFkFacetResult(
-  resolvedOptions: Array<{ id: string; name: string | null }> | undefined,
-  counts: Map<string, number>,
-  nullLabel = 'Sin asignar'
-): FacetResult {
-  return {
-    options: [
-      ...(resolvedOptions?.map((o) => ({ value: o.id, label: o.name ?? '' })) ?? []),
-      ...(counts.has(NULL_FILTER_VALUE) ? [{ value: NULL_FILTER_VALUE, label: nullLabel, icon: CircleOff }] : []),
-    ],
-    counts,
-  };
-}
 
 export function MaintenanceRequestDataTable({
   data,
@@ -361,7 +329,9 @@ export function MaintenanceRequestDataTable({
           role="alert"
           className="border-danger/30 bg-danger-subtle text-danger-subtle-foreground mt-4 flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 text-sm"
         >
-          <span className="min-w-0 flex-1">No se pudo cargar la solicitud. Puede haber sido resuelta por otra persona.</span>
+          <span className="min-w-0 flex-1">
+            No se pudo cargar la solicitud. Puede haber sido resuelta por otra persona.
+          </span>
           <Button type="button" variant="outline" size="sm" onClick={handleCloseDialog}>
             Cerrar y actualizar
           </Button>

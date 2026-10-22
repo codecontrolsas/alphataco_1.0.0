@@ -11,9 +11,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { buildEnumFacetResult } from '@/features/Mantenimiento/Gomeria/shared/facet-helpers';
 import { usePermissionChecker } from '@/features/Permissions/hooks/usePermissionChecker';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { buildEnumFacetResult } from '@/shared/components/common/DataTable/facet-results';
 import {
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,

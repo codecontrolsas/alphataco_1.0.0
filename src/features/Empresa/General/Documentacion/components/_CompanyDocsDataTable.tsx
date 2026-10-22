@@ -1,18 +1,20 @@
 'use client';
 
-import {
-  buildBooleanFacetResult,
-  buildEnumFacetResult,
-  buildFkFacetResult,
-} from '@/features/Documentacion/DocumentosEmpresa/lib/facet-results';
+import { buildBooleanFacetResult } from '@/features/Documentacion/DocumentosEmpresa/lib/facet-results';
 import {
   documentListStateLabels,
   formatDocumentPeriod,
 } from '@/features/Documentacion/shared/components/DocumentCells';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
+import { buildEnumFacetResult, buildFkFacetResult } from '@/shared/components/common/DataTable/facet-results';
+import {
+  type DataTableFacetedFilterConfig,
+  type DataTableSearchParams,
+  type FacetResult,
+} from '@/shared/components/common/DataTable/types';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
+import type { LucideIcon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import {
   getAllCompanyDocsForExport,
@@ -92,10 +94,10 @@ export default function _CompanyDocsDataTable({
   );
 
   const makeFkFetchFacet = useCallback(
-    (columnId: string, options?: Parameters<typeof buildFkFacetResult>[2]) =>
+    (columnId: string, options?: { nullLabel?: string; icon?: LucideIcon }) =>
       async (params: DataTableSearchParams): Promise<FacetResult> => {
         const result = await getCompanyDocsSingleFacet(columnId, params);
-        return buildFkFacetResult(result.resolvedOptions, result.counts, options);
+        return buildFkFacetResult(result.resolvedOptions, result.counts, options?.nullLabel, options?.icon);
       },
     []
   );

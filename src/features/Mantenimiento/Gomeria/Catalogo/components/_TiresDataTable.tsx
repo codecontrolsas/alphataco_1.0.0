@@ -11,7 +11,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { buildEnumFacetResult, buildFkFacetResult } from '@/features/Mantenimiento/Gomeria/shared/facet-helpers';
 import {
   tireRetreadLabels,
   tireStatusLabels,
@@ -22,6 +21,7 @@ import { usePermissionChecker } from '@/features/Permissions/hooks/usePermission
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { TireRetreadLevel, TireStatus, TireTreadType } from '@/generated/prisma/enums';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { buildEnumFacetResult, buildFkFacetResult } from '@/shared/components/common/DataTable/facet-results';
 import {
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,

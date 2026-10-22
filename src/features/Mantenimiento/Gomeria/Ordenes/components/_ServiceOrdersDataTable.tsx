@@ -12,12 +12,12 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { buildEnumFacetResult, buildFkFacetResult } from '@/features/Mantenimiento/Gomeria/shared/facet-helpers';
 import { tireServiceOrderStatusLabels } from '@/features/Mantenimiento/Gomeria/shared/tire-mappers';
 import { TIRE_SERVICE_ORDER_STATUS_UI } from '@/features/Mantenimiento/Gomeria/shared/tire-status-presentation';
 import { usePermissionChecker } from '@/features/Permissions/hooks/usePermissionChecker';
 import { TireServiceOrderStatus } from '@/generated/prisma/enums';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
+import { buildEnumFacetResult, buildFkFacetResult } from '@/shared/components/common/DataTable/facet-results';
 import {
   type DataTableFacetedFilterConfig,
   type DataTableSearchParams,

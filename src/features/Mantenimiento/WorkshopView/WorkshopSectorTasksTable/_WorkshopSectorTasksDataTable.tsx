@@ -1,7 +1,7 @@
 'use client';
 
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { buildFkFacetResult } from '@/shared/components/common/DataTable/facet-results';
 import type {
   DataTableFacetedFilterConfig,
   DataTableFilterOption,
@@ -9,7 +9,7 @@ import type {
   FacetResult,
 } from '@/shared/components/common/DataTable/types';
 import { unwrapExportResult } from '@/shared/lib/export-result';
-import { AlertTriangle, Check, CheckCircle2, CircleOff, Stethoscope, X, XCircle } from 'lucide-react';
+import { AlertTriangle, Check, CheckCircle2, Stethoscope, X, XCircle } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { OPEN_WORK_ORDER_STATUSES } from '../workshop-view-filters';
 import {
@@ -62,21 +62,6 @@ interface Props {
 /** Construye FacetResult para enums: opciones estáticas + counts del servidor */
 function buildEnumFacetResult(options: DataTableFilterOption[], counts: Map<string, number>): FacetResult {
   return { options, counts };
-}
-
-/** Construye FacetResult para FK/relaciones: opciones resueltas del servidor + counts */
-function buildFkFacetResult(
-  resolvedOptions: Array<{ id: string; name: string | null }> | undefined,
-  counts: Map<string, number>,
-  nullLabel = 'Sin asignar'
-): FacetResult {
-  return {
-    options: [
-      ...(resolvedOptions?.map((option) => ({ value: option.id, label: option.name ?? '' })) ?? []),
-      ...(counts.has(NULL_FILTER_VALUE) ? [{ value: NULL_FILTER_VALUE, label: nullLabel, icon: CircleOff }] : []),
-    ],
-    counts,
-  };
 }
 
 // ============================================================================
@@ -298,7 +283,8 @@ export function _WorkshopSectorTasksDataTable({
         filename: `ot-sector-${sectorId.slice(0, 8)}`,
         sheetName: 'Órdenes de trabajo',
       },
-      fetchAllData: async () => unwrapExportResult(await getAllWorkshopSectorWorkOrdersForExport(sectorId, currentParams)),
+      fetchAllData: async () =>
+        unwrapExportResult(await getAllWorkshopSectorWorkOrdersForExport(sectorId, currentParams)),
       formatters: exportFormatters,
     }),
     [sectorId, currentParams, exportFormatters]
