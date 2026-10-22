@@ -1,5 +1,5 @@
 import { RECEIVER_VAT_CONDITIONS, isReceiverVatConditionId } from '@/shared/lib/arca/catalogs';
-import { joinAddress, pdfDateText } from '@/shared/lib/pdf/pdf-text';
+import { joinAddress, pdfDateText, pdfPaymentDetail } from '@/shared/lib/pdf/pdf-text';
 import { formatAmountText } from '@/shared/utils/amount-text';
 import { formatCuitText } from '@/shared/utils/cuit-text';
 import type { PaymentOrderStatus } from '../lib/payment-order-state-machine';
@@ -112,16 +112,7 @@ export function buildPaymentPdfData(src: PaymentPdfSource) {
     })),
     payments: src.payments.map((p) => ({
       method: PAYMENT_METHOD_LABELS[p.method],
-      detail: [
-        p.account,
-        p.reference,
-        p.checkNumber ? `N° ${p.checkNumber}` : null,
-        p.checkBank,
-        p.drawerName ? `librador ${p.drawerName}` : null,
-        p.checkDueOn ? `pago ${pdfDateText(p.checkDueOn)}` : null,
-      ]
-        .filter(Boolean)
-        .join(' · '),
+      detail: pdfPaymentDetail(p),
       amount: money(p.amount),
     })),
     totals: {

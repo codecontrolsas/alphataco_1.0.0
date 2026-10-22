@@ -1,8 +1,8 @@
 import { PAYMENT_METHOD_LABELS } from '@/features/Purchases/schemas/payment-orders';
 import { RECEIVER_VAT_CONDITIONS, isReceiverVatConditionId } from '@/shared/lib/arca/catalogs';
+import { pdfDateText, pdfPaymentDetail } from '@/shared/lib/pdf/pdf-text';
 import { formatAmountText } from '@/shared/utils/amount-text';
 import { formatCuitText } from '@/shared/utils/cuit-text';
-import moment from 'moment';
 import { CUSTOMER_WITHHOLDING_TAX_LABELS } from '../schemas/receipts';
 
 /**
@@ -27,7 +27,13 @@ export type ReceiptPdfSource = {
     ars: string;
     fxDifference: string;
   }[];
-  withholdings: { tax: keyof typeof CUSTOMER_WITHHOLDING_TAX_LABELS; jurisdiction: string | null; certificateNumber: string; certificateDate: string; amount: string }[];
+  withholdings: {
+    tax: keyof typeof CUSTOMER_WITHHOLDING_TAX_LABELS;
+    jurisdiction: string | null;
+    certificateNumber: string;
+    certificateDate: string;
+    amount: string;
+  }[];
   payments: {
     method: keyof typeof PAYMENT_METHOD_LABELS;
     account: string;
@@ -39,13 +45,24 @@ export type ReceiptPdfSource = {
     /** Librador del cheque (etapa 3a). */
     drawerName?: string | null;
   }[];
-  totals: { invoices: string; advance: string; advancesApplied: string; withholdings: string; received: string; fxDifference: string };
+  totals: {
+    invoices: string;
+    advance: string;
+    advancesApplied: string;
+    withholdings: string;
+    received: string;
+    fxDifference: string;
+  };
   notes: string | null;
 };
 
-const money = (value: string) => (value.startsWith('-') ? `-$ ${formatAmountText(value.slice(1))}` : `$ ${formatAmountText(value)}`);
-const dateText = (value: string) => moment(value, 'YYYY-MM-DD').format('DD/MM/YYYY');
-const join = (parts: (string | null)[], separator = ', ') => parts.map((p) => p?.trim()).filter(Boolean).join(separator) || null;
+const money = (value: string) =>
+  value.startsWith('-') ? `-$ ${formatAmountText(value.slice(1))}` : `$ ${formatAmountText(value)}`;
+const join = (parts: (string | null)[], separator = ', ') =>
+  parts
+    .map((p) => p?.trim())
+    .filter(Boolean)
+    .join(separator) || null;
 /** Cotización sin ceros de más ("1250.000000" → "1.250,00"; "1432.123456" → "1.432,123456"). */
 const rateText = (value: string) => {
   const [int = '0', dec = ''] = value.split('.');
@@ -59,7 +76,7 @@ export function buildReceiptPdfData(src: ReceiptPdfSource) {
   return {
     title: 'RECIBO',
     number: src.number ?? 'Borrador',
-    date: dateText(src.date),
+    date: pdfDateText(src.date),
     watermark: src.status === 'CONFIRMED' ? null : src.status === 'CANCELLED' ? 'ANULADO' : 'BORRADOR — NO VÁLIDO',
     company: {
       name: src.company.name,
@@ -69,33 +86,30 @@ export function buildReceiptPdfData(src: ReceiptPdfSource) {
     customer: {
       name: src.customer.name,
       cuit: formatCuitText(src.customer.cuit),
-      vatCondition: src.customer.vatConditionId !== null && isReceiverVatConditionId(src.customer.vatConditionId)
-        ? RECEIVER_VAT_CONDITIONS[src.customer.vatConditionId].label
-        : '',
+      vatCondition:
+        src.customer.vatConditionId !== null && isReceiverVatConditionId(src.customer.vatConditionId)
+          ? RECEIVER_VAT_CONDITIONS[src.customer.vatConditionId].label
+          : '',
       address: join([src.customer.street, src.customer.city]),
     },
     lines: src.lines.map((l) => ({
-      concept: l.kind === 'ADVANCE' ? join(['Cobro a cuenta', l.label], ' · ') : l.kind === 'ADVANCE_APPLIED' ? `Anticipo aplicado · ${l.label}` : l.label,
+      concept:
+        l.kind === 'ADVANCE'
+          ? join(['Cobro a cuenta', l.label], ' · ')
+          : l.kind === 'ADVANCE_APPLIED'
+            ? `Anticipo aplicado · ${l.label}`
+            : l.label,
       detail: l.currency === 'ARS' ? null : `${l.currency} ${formatAmountText(l.applied)} a $ ${rateText(l.rate)}`,
       amount: money(l.ars),
     })),
     withholdings: src.withholdings.map((w) => ({
       tax: join([CUSTOMER_WITHHOLDING_TAX_LABELS[w.tax], w.jurisdiction], ' ') ?? '',
-      certificate: `${w.certificateNumber} · ${dateText(w.certificateDate)}`,
+      certificate: `${w.certificateNumber} · ${pdfDateText(w.certificateDate)}`,
       amount: money(w.amount),
     })),
     payments: src.payments.map((p) => ({
       method: PAYMENT_METHOD_LABELS[p.method],
-      detail: [
-        p.account,
-        p.reference,
-        p.checkNumber ? `N° ${p.checkNumber}` : null,
-        p.checkBank,
-        p.drawerName ? `librador ${p.drawerName}` : null,
-        p.checkDueOn ? `pago ${dateText(p.checkDueOn)}` : null,
-      ]
-        .filter(Boolean)
-        .join(' · '),
+      detail: pdfPaymentDetail(p),
       amount: money(p.amount),
     })),
     totals: {
