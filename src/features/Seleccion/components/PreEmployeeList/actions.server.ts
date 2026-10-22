@@ -15,10 +15,12 @@ import {
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
-import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
-import { clampedPageParams } from '@/shared/lib/table-pagination';
+import { createCrossWhere, toFacetMap } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
+import { resolveSorts } from '@/shared/lib/table-list-query';
+import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { isUuid } from '@/shared/lib/uuid';
 
 const logger = new Logger('Employees/PreLegajos/PreEmployeeList/actions.server');
 
@@ -79,7 +81,6 @@ const ALLOWED_FILTER_KEYS = new Set<string>([
   ...dateRangeKeys(DATE_RANGE_COLUMNS),
 ]);
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const VALID_STATUSES = new Set<string>(Object.values(pre_employee_status_enum));
 
 /** Tope de filas de un export: más que esto no se descarga entero (se pide acotar con filtros). */
@@ -124,7 +125,7 @@ function sanitizeState(state: ReturnType<typeof parseSearchParams>) {
   const sanitized = sanitizeFilters(state, ALLOWED_FILTER_KEYS);
   const isValid = (key: string, value: string) => {
     if (key === 'status') return VALID_STATUSES.has(value);
-    if (key === 'hierarchy' || key === 'company_positions') return value === NULL_FILTER_VALUE || UUID_PATTERN.test(value);
+    if (key === 'hierarchy' || key === 'company_positions') return value === NULL_FILTER_VALUE || isUuid(value);
     return true;
   };
 
@@ -212,14 +213,7 @@ export async function getPreEmployeesPaginated(searchParams: DataTableSearchPara
     const where = buildWhereClause(companyId, state);
 
     // Safe orderBy: multi-sort, solo campos validos, con FK_SORT_MAP
-    const resolvedSorts: Record<string, unknown>[] = [];
-    for (const s of state.sorting) {
-      if (VALID_SORT_FIELDS.has(s.id)) {
-        const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-        const fkMapper = FK_SORT_MAP[s.id];
-        resolvedSorts.push(fkMapper ? fkMapper(dir) : { [s.id]: dir });
-      }
-    }
+    const resolvedSorts = resolveSorts<Record<string, unknown>>(state.sorting, VALID_SORT_FIELDS, FK_SORT_MAP);
     const safeOrderBy = [...resolvedSorts, { created_at: 'desc' as const }, { id: 'asc' as const }];
 
     const [data, total] = await Promise.all([
@@ -323,17 +317,9 @@ export async function getPreEmployeeSingleFacet(
   const companyId = await getActiveCompanyId();
   const baseWhere = { company_id: companyId };
 
-  let parsedState: ReturnType<typeof parseSearchParams> | null = null;
-  if (searchParams && Object.keys(searchParams).length > 0) {
-    parsedState = parseSearchParams(searchParams);
-  }
-
-  const hasActiveFilters = parsedState && (Object.keys(parsedState.filters).length > 0 || parsedState.search);
-
-  function crossWhere(excludeColumn: string) {
-    if (!parsedState || !hasActiveFilters) return baseWhere;
-    return buildWhereClause(companyId, withoutOwnFilter(parsedState, excludeColumn));
-  }
+  const crossWhere = createCrossWhere<Prisma.pre_employeesWhereInput>(searchParams, baseWhere, (state) =>
+    buildWhereClause(companyId, state)
+  );
 
   try {
     const where = crossWhere(columnId);
@@ -357,7 +343,10 @@ export async function getPreEmployeeSingleFacet(
       hierarchy: {
         prismaField: 'proposed_hierarchical_position',
         resolver: (ids) =>
-          prisma.hierarchy.findMany({ where: { id: { in: ids }, company_id: companyId }, select: { id: true, name: true } }),
+          prisma.hierarchy.findMany({
+            where: { id: { in: ids }, company_id: companyId },
+            select: { id: true, name: true },
+          }),
       },
       company_positions: {
         prismaField: 'proposed_company_position',
