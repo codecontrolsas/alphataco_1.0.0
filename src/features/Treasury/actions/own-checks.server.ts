@@ -2,19 +2,14 @@
 
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { NO_PERMISSION, firstIssue } from '@/features/Purchases/lib/action-errors';
+import { UUID_RE } from '@/features/Treasury/schemas/shared';
 import { Logger } from '@/lib/logger';
 import { withActor } from '@/shared/lib/actor';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { lockTreasuryAccount } from '../lib/account-lock';
-import {
-  NO_PERMISSION,
-  UUID_RE,
-  assertNotFuture,
-  firstIssue,
-  toTreasuryActionError,
-  treasurySession,
-} from '../lib/action-errors';
+import { assertNotFuture, toTreasuryActionError, treasurySession } from '../lib/action-errors';
 import { formatDay as dmy, isoDay } from '../lib/dates';
 import { assertBankAccount, cancelMovements } from '../lib/movements';
 import { checkbookStatus, normalizeCheckNumber, ownCheckAlert } from '../lib/own-check-transitions';

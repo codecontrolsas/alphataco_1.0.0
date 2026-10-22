@@ -4,10 +4,10 @@ import {
   HIDDEN_COLUMNS_BY_DEFAULT,
   stateLabels,
 } from '@/features/Dashboard/Documentacion/components/expiring-doc-columns';
-import { formatArgentinaDay } from '@/features/Treasury/lib/today';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
 import type { DataTableFacetedFilterConfig, DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult, type ExportResult } from '@/shared/lib/export-result';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useCallback, useMemo } from 'react';

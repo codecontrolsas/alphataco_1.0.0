@@ -3,11 +3,13 @@
 import { AMOUNT_SCALE, amountOf, formatScaled, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { NO_PERMISSION, firstIssue } from '@/features/Purchases/lib/action-errors';
+import { UUID_RE } from '@/features/Treasury/schemas/shared';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { withActor } from '@/shared/lib/actor';
 import { prisma } from '@/shared/lib/prisma';
-import { NO_PERMISSION, UUID_RE, firstIssue, toTreasuryActionError, treasurySession } from '../lib/action-errors';
+import { toTreasuryActionError, treasurySession } from '../lib/action-errors';
 import { conceptAllows } from '../lib/movement-rules';
 import { assertBankAccount, cancelMovements, createMovement } from '../lib/movements';
 import { debitOwnCheck, lockOwnChecks } from '../lib/own-checks';

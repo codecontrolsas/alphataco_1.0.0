@@ -3,18 +3,13 @@
 import { AMOUNT_SCALE, formatScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { NO_PERMISSION, firstIssue } from '@/features/Purchases/lib/action-errors';
+import { UUID_RE } from '@/features/Treasury/schemas/shared';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { withActor } from '@/shared/lib/actor';
 import { prisma } from '@/shared/lib/prisma';
-import {
-  NO_PERMISSION,
-  UUID_RE,
-  assertNotFuture,
-  firstIssue,
-  toTreasuryActionError,
-  treasurySession,
-} from '../lib/action-errors';
+import { assertNotFuture, toTreasuryActionError, treasurySession } from '../lib/action-errors';
 import { discountError, discountNet } from '../lib/check-discount';
 import { cents } from '../lib/check-helpers';
 import { CHECK_STATUS_LABELS, type CheckStatus } from '../lib/check-transitions';

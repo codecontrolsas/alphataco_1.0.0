@@ -8,6 +8,7 @@ import { DownloadPdfButton } from '@/shared/components/common/DownloadPdfButton'
 import { Field, FieldGrid } from '@/shared/components/common/FieldGrid';
 import { RecordHeader } from '@/shared/components/common/RecordHeader';
 import { SectionCard } from '@/shared/components/common/SectionCard';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import { unwrapAction } from '@/shared/lib/unwrap-action';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ban, FileText } from 'lucide-react';
@@ -24,7 +25,6 @@ import { formatDay } from '../../lib/dates';
 import { invalidateTreasury } from '../../lib/invalidate';
 import type { ReceiptDetail } from '../../lib/receipt-types';
 import { RECEIPT_STATUS_UI } from '../../lib/status-presentation';
-import { formatArgentinaDateTime } from '../../lib/today';
 import { CERTIFICATE_MAX_BYTES, CUSTOMER_WITHHOLDING_TAX_LABELS } from '../../schemas/receipts';
 import { SendReceiptDialog } from './SendReceiptDialog';
 

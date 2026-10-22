@@ -3,12 +3,12 @@
 import { formatMoney } from '@/features/Warehouses/lib/format';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { matchesId, titled } from '@/shared/components/common/DataTable/column-helpers';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import { AccountCell } from '../../components/AccountCell';
 import { TreasuryStatusBadge } from '../../components/TreasuryStatusBadge';
 import { formatDay } from '../../lib/dates';
 import { TRANSFER_STATE_UI } from '../../lib/status-presentation';
-import { formatArgentinaDateTime } from '../../lib/today';
 import { TransferRowActions } from '../components/TransferRowActions';
 import type { TreasuryTransferListItem } from './actions.server';
 import { TRANSFER_STATE_LABELS } from './constants';

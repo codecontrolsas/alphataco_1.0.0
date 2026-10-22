@@ -9,12 +9,12 @@ import {
   type DataTableSearchParams,
 } from '@/shared/components/common/DataTable/types';
 import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Landmark } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { TREASURY_QUERY_KEYS } from '../../../lib/query-keys';
 import { TRANSFER_STATE_UI } from '../../../lib/status-presentation';
-import { formatArgentinaDateTime } from '../../../lib/today';
 import {
   getAllTreasuryTransfersForExport,
   getTreasuryTransferSingleFacet,

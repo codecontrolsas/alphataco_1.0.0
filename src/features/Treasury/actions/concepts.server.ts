@@ -2,10 +2,12 @@
 
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { NO_PERMISSION, firstIssue } from '@/features/Purchases/lib/action-errors';
+import { UUID_RE } from '@/features/Treasury/schemas/shared';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { NO_PERMISSION, UUID_RE, firstIssue, toTreasuryActionError } from '../lib/action-errors';
+import { toTreasuryActionError } from '../lib/action-errors';
 import { treasuryConceptFormSchema, type TreasuryConceptFormValues } from '../schemas/concepts';
 import { revalidateTreasury } from './shared';
 

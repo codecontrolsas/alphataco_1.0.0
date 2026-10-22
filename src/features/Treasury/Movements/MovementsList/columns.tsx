@@ -6,6 +6,7 @@ import { DataTableColumnHeader } from '@/shared/components/common/DataTable/Data
 import { matchesId, titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { StackedCell } from '@/shared/components/common/StackedCell';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
 import {
   ArrowLeftRight,
@@ -24,7 +25,6 @@ import { AccountCell } from '../../components/AccountCell';
 import { TreasuryStatusBadge } from '../../components/TreasuryStatusBadge';
 import { formatDay } from '../../lib/dates';
 import { MOVEMENT_STATE_UI } from '../../lib/status-presentation';
-import { formatArgentinaDateTime } from '../../lib/today';
 import { TREASURY_MOVEMENT_KIND_LABELS } from '../../schemas/movements';
 import { MovementRowActions } from '../components/MovementRowActions';
 import type { TreasuryMovementListItem } from './actions.server';

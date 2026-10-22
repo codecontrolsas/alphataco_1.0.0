@@ -1,7 +1,5 @@
 import { argentinaDate } from '@/shared/lib/argentina-time';
 
-export { EXPIRING_SOON_DAYS } from '../lib/document-expiry';
-
 const DAY_MS = 86_400_000;
 
 /** `YYYY-MM-DD` de hoy en hora argentina. */

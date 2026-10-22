@@ -9,6 +9,3 @@ import { argentinaDate } from '@/shared/lib/argentina-time';
 export function treasuryToday(at: Date = new Date()): string {
   return argentinaDate(at);
 }
-
-// Los formateadores de día y de fecha-hora argentinos viven en `@/shared/lib/argentina-time`.
-export { formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';

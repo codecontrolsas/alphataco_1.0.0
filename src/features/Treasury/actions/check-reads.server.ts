@@ -2,14 +2,14 @@
 
 import { AMOUNT_SCALE, formatScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { UUID_RE } from '@/features/Treasury/schemas/shared';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { UUID_RE } from '../lib/action-errors';
 import { cents } from '../lib/check-helpers';
 import { depositDeadline, depositWarning, depositWarningCutoffs } from '../lib/checks-dates';
+import { isoDay } from '../lib/dates';
 import { customerCheckDebts, supplierCheckDebts } from '../lib/rejected-checks';
 import { localToday } from './shared';
-import { isoDay } from '../lib/dates';
 
 /** Lecturas de la cartera de cheques de terceros (detalle, encabezado, datos de los formularios de operación). Sin efectos. */
 
@@ -57,7 +57,20 @@ export async function getCheckDetail(checkId: string) {
         where: { operation: { cancelled_at: null, kind: { not: 'OPENING' } } },
         orderBy: { operation: { created_at: 'desc' } },
         take: 1,
-        select: { operation: { select: { id: true, kind: true, number: true, date: true, reason: true, returned_by: true, interest: true, fee: true } } },
+        select: {
+          operation: {
+            select: {
+              id: true,
+              kind: true,
+              number: true,
+              date: true,
+              reason: true,
+              returned_by: true,
+              interest: true,
+              fee: true,
+            },
+          },
+        },
       },
       payment_payments: {
         where: { payment_order: { status: 'PAID' } },
@@ -73,9 +86,13 @@ export async function getCheckDetail(checkId: string) {
     row.status === 'REJECTED'
       ? await Promise.all([customerCheckDebts(prisma, [row.id]), supplierCheckDebts(prisma, [row.id])])
       : [new Map(), new Map()];
-  const opLabel = (op: { kind: string; number: string | null }) => (op.kind === 'OPENING' ? 'Carga inicial' : (op.number ?? ''));
+  const opLabel = (op: { kind: string; number: string | null }) =>
+    op.kind === 'OPENING' ? 'Carga inicial' : op.number ?? '';
   const last = row.operation_items[0]?.operation ?? null;
-  const endorsement = row.status === 'ENDORSED' || row.rejected_from === 'ENDORSED' ? (row.payment_payments[0]?.payment_order ?? null) : null;
+  const endorsement =
+    row.status === 'ENDORSED' || row.rejected_from === 'ENDORSED'
+      ? row.payment_payments[0]?.payment_order ?? null
+      : null;
   return {
     id: row.id,
     kind: row.kind,
@@ -127,7 +144,13 @@ export async function getCheckDetail(checkId: string) {
           fee: last.fee.toFixed(2),
         }
       : null,
-    endorsement: endorsement ? { id: endorsement.id, number: endorsement.number, paidOn: endorsement.paid_on ? isoDay(endorsement.paid_on) : null } : null,
+    endorsement: endorsement
+      ? {
+          id: endorsement.id,
+          number: endorsement.number,
+          paidOn: endorsement.paid_on ? isoDay(endorsement.paid_on) : null,
+        }
+      : null,
   };
 }
 
@@ -144,11 +167,25 @@ export async function getChecksHeader() {
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     }),
-    prisma.third_party_checks.groupBy({ by: ['portfolio_id'], where: inPortfolio, _sum: { amount: true }, _count: { _all: true } }),
-    prisma.third_party_checks.count({ where: { ...inPortfolio, payment_date: { lt: new Date(`${expiredBefore}T00:00:00.000Z`) } } }),
-    prisma.third_party_checks.count({ where: { ...inPortfolio, payment_date: { lte: new Date(`${warnUntil}T00:00:00.000Z`) } } }),
+    prisma.third_party_checks.groupBy({
+      by: ['portfolio_id'],
+      where: inPortfolio,
+      _sum: { amount: true },
+      _count: { _all: true },
+    }),
+    prisma.third_party_checks.count({
+      where: { ...inPortfolio, payment_date: { lt: new Date(`${expiredBefore}T00:00:00.000Z`) } },
+    }),
+    prisma.third_party_checks.count({
+      where: { ...inPortfolio, payment_date: { lte: new Date(`${warnUntil}T00:00:00.000Z`) } },
+    }),
   ]);
-  const byPortfolio = new Map(totals.map((t) => [t.portfolio_id, { total: cents(t._sum.amount ? t._sum.amount.toFixed(2) : '0'), count: t._count._all }]));
+  const byPortfolio = new Map(
+    totals.map((t) => [
+      t.portfolio_id,
+      { total: cents(t._sum.amount ? t._sum.amount.toFixed(2) : '0'), count: t._count._all },
+    ])
+  );
   return {
     portfolios: portfolios.map((p) => ({
       id: p.id,
@@ -175,12 +212,27 @@ export async function getCheckOperationFormData(checkIds: string[]) {
           orderBy: { payment_date: 'asc' },
         })
       : Promise.resolve([]),
-    prisma.treasury_accounts.findMany({ where: { company_id: companyId, kind: 'BANK', is_active: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
-    prisma.treasury_accounts.findMany({ where: { company_id: companyId, kind: 'CHECK_PORTFOLIO', is_active: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+    prisma.treasury_accounts.findMany({
+      where: { company_id: companyId, kind: 'BANK', is_active: true },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.treasury_accounts.findMany({
+      where: { company_id: companyId, kind: 'CHECK_PORTFOLIO', is_active: true },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
   ]);
   return {
     today: localToday(),
-    checks: checks.map((c) => ({ id: c.id, number: c.number, bank: c.bank, drawerName: c.drawer_name, amount: c.amount.toFixed(2), paymentDate: isoDay(c.payment_date) })),
+    checks: checks.map((c) => ({
+      id: c.id,
+      number: c.number,
+      bank: c.bank,
+      drawerName: c.drawer_name,
+      amount: c.amount.toFixed(2),
+      paymentDate: isoDay(c.payment_date),
+    })),
     banks,
     portfolios,
   };

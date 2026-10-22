@@ -1,9 +1,9 @@
 'use server';
 
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { UUID_RE } from '@/features/Treasury/schemas/shared';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { UUID_RE } from '../lib/action-errors';
 import { isoDay } from '../lib/dates';
 import type { StatementProfileValues } from '../schemas/reconciliation';
 import { localToday } from './shared';

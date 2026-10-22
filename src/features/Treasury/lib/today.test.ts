@@ -1,5 +1,6 @@
+import { formatArgentinaDateTime, formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { describe, expect, it } from 'vitest';
-import { formatArgentinaDateTime, formatArgentinaDay, treasuryToday } from './today';
+import { treasuryToday } from './today';
 
 describe('treasuryToday', () => {
   it('a las 22:30 de Argentina (01:30 UTC del día siguiente) sigue siendo hoy en Argentina', () => {

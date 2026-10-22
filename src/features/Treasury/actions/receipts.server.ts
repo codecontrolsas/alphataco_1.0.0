@@ -2,8 +2,10 @@
 
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { NO_PERMISSION, firstIssue } from '@/features/Purchases/lib/action-errors';
 import { mailNotSentMessage } from '@/features/Purchases/lib/supplier-send';
 import { sendDocumentSchema, type SendDocumentValues } from '@/features/Purchases/schemas/send';
+import { UUID_RE } from '@/features/Treasury/schemas/shared';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { withActor } from '@/shared/lib/actor';
@@ -14,7 +16,7 @@ import { prisma } from '@/shared/lib/prisma';
 import { storageRemove } from '@/shared/lib/storage';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { revalidatePath } from 'next/cache';
-import { NO_PERMISSION, UUID_RE, firstIssue, toTreasuryActionError } from '../lib/action-errors';
+import { toTreasuryActionError } from '../lib/action-errors';
 import { CHECK_STATUS_LABELS } from '../lib/check-transitions';
 import { createCheck, lockChecks, moveCheck } from '../lib/checks';
 import { nextReceiptNumber } from '../lib/document-number';

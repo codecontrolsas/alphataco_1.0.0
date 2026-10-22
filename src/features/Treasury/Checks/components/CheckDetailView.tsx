@@ -6,6 +6,7 @@ import { Field, FieldGrid } from '@/shared/components/common/FieldGrid';
 import { RecordHeader } from '@/shared/components/common/RecordHeader';
 import { SectionCard } from '@/shared/components/common/SectionCard';
 import { Timeline, type TimelineItem } from '@/shared/components/common/Timeline';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import { formatCuitText } from '@/shared/utils/cuit-text';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -17,7 +18,6 @@ import type { CheckDetail } from '../../lib/check-types';
 import { formatInCurrency } from '../../lib/currency-format';
 import { formatDay } from '../../lib/dates';
 import { CHECK_STATUS_UI, DEPOSIT_WARNING_UI } from '../../lib/status-presentation';
-import { formatArgentinaDateTime } from '../../lib/today';
 import { RETURNED_BY_LABELS } from '../../schemas/checks';
 import { RejectCheckDialog } from './RejectCheckDialog';
 

@@ -4,9 +4,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatArgentinaDateTime } from '@/features/Treasury/lib/today';
-import { Timeline, type TimelineItem, type TimelineTone } from '@/shared/components/common/Timeline';
 import { StateBlock } from '@/shared/components/common/StateBlock';
+import { Timeline, type TimelineItem, type TimelineTone } from '@/shared/components/common/Timeline';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import { formatCalendarDate } from '@/shared/utils/calendar-date';
 import { preparteStatusBadges, preparteStatusLabels } from '@/shared/utils/mappers';
 import { User, X } from 'lucide-react';
@@ -64,9 +64,7 @@ function buildTimelineItems(logs: PreparteChangeLogEntry[]): TimelineItem[] {
         <>
           <span className="tabular-nums">{when}</span>
           {log.changed_by_name ? ` · por ${log.changed_by_name}` : ''}
-          {log.reason ? (
-            <span className="block break-words [overflow-wrap:anywhere]">Motivo: {log.reason}</span>
-          ) : null}
+          {log.reason ? <span className="block break-words [overflow-wrap:anywhere]">Motivo: {log.reason}</span> : null}
         </>
       ),
     };
@@ -195,7 +193,13 @@ export function OrderDetailSheet({
             <SheetDescription className="sr-only">Detalle del pedido y su historial</SheetDescription>
             <Badge variant={preparteStatusBadges[status]}>{preparteStatusLabels[status] ?? status}</Badge>
           </div>
-          <Button type="button" variant="ghost" size="icon" aria-label="Cerrar detalle" onClick={() => onOpenChange(false)}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Cerrar detalle"
+            onClick={() => onOpenChange(false)}
+          >
             <X aria-hidden="true" />
           </Button>
         </header>
@@ -207,7 +211,9 @@ export function OrderDetailSheet({
               <Field label="Cantidad">{quantity || EMPTY_VALUE}</Field>
               <Field label="Contrato">{item.customer_services?.service_name ?? EMPTY_VALUE}</Field>
               <Field label="Solicitante">{item.solicitante || EMPTY_VALUE}</Field>
-              {item.equipos_clientes?.name ? <Field label="Equipo del cliente">{item.equipos_clientes.name}</Field> : null}
+              {item.equipos_clientes?.name ? (
+                <Field label="Equipo del cliente">{item.equipos_clientes.name}</Field>
+              ) : null}
               {item.observaciones ? <Field label="Observaciones">{item.observaciones}</Field> : null}
             </dl>
           </Section>
@@ -235,7 +241,11 @@ export function OrderDetailSheet({
                 <iframe src={image} title="Documento adjunto del pedido" className="h-72 w-full rounded-md border" />
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={image} alt="Imagen adjunta al pedido" className="max-h-72 w-full rounded-md border object-contain" />
+                <img
+                  src={image}
+                  alt="Imagen adjunta al pedido"
+                  className="max-h-72 w-full rounded-md border object-contain"
+                />
               )}
             </Section>
           ) : null}

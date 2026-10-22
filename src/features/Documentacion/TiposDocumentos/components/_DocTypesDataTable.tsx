@@ -1,6 +1,5 @@
 'use client';
 
-import { formatArgentinaDay } from '@/features/Treasury/lib/today';
 import { document_applies } from '@/generated/prisma/enums';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
 import {
@@ -9,6 +8,7 @@ import {
   type FacetResult,
 } from '@/shared/components/common/DataTable/types';
 import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
+import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Check, X } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';

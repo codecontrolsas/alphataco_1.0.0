@@ -1,13 +1,14 @@
+import { EXPIRING_SOON_DAYS } from '@/features/Documentacion/shared/lib/document-expiry';
 import { typeAppliesTo } from './applicability';
-import { daysUntil, EXPIRING_SOON_DAYS, normalizePeriod } from './dates';
+import { daysUntil, normalizePeriod } from './dates';
 import { aggregateStatus } from './status';
 import type {
   ComplianceDoc,
   ComplianceResource,
   ComplianceType,
   DocumentState,
-  EvaluatedRequirement,
   EvaluateOptions,
+  EvaluatedRequirement,
   ResourceEvaluation,
 } from './types';
 

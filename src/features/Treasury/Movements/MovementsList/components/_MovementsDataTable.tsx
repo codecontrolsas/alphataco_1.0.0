@@ -9,6 +9,7 @@ import {
   type DataTableSearchParams,
 } from '@/shared/components/common/DataTable/types';
 import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
+import { formatArgentinaDateTime } from '@/shared/lib/argentina-time';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import { Landmark, Tag } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
@@ -16,7 +17,6 @@ import type { TreasuryAccountRow } from '../../../actions/accounts.server';
 import type { TreasuryConceptRow } from '../../../actions/concepts.server';
 import { TREASURY_QUERY_KEYS } from '../../../lib/query-keys';
 import { MOVEMENT_STATE_UI } from '../../../lib/status-presentation';
-import { formatArgentinaDateTime } from '../../../lib/today';
 import { TREASURY_MOVEMENT_KIND_LABELS } from '../../../schemas/movements';
 import {
   getAllTreasuryMovementsForExport,

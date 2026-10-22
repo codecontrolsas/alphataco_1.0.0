@@ -1,10 +1,16 @@
 'use server';
 
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { UUID_RE } from '@/features/Treasury/schemas/shared';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { UUID_RE } from '../lib/action-errors';
-import { ZERO_INDICATORS, getAccountIndicators, getAccountStatement, getBalanceOn, getIssuedOwnChecks } from '../lib/balances';
+import {
+  ZERO_INDICATORS,
+  getAccountIndicators,
+  getAccountStatement,
+  getBalanceOn,
+  getIssuedOwnChecks,
+} from '../lib/balances';
 import { accountStatementRangeError } from '../lib/statement-range';
 import { isCalendarDay } from '../schemas/shared';
 import { localToday } from './shared';
@@ -31,7 +37,15 @@ export async function getAccountStatementData(accountId: string, from: string, t
     // Cheques propios emitidos sin débito confirmado: forman parte de "A debitar" (etapa 3b).
     account.kind === 'BANK' ? getIssuedOwnChecks(prisma, companyId, accountId) : Promise.resolve([]),
   ]);
-  return { account, indicators: indicators.get(accountId) ?? ZERO_INDICATORS, from, to, issuedChecks, today, ...statement };
+  return {
+    account,
+    indicators: indicators.get(accountId) ?? ZERO_INDICATORS,
+    from,
+    to,
+    issuedChecks,
+    today,
+    ...statement,
+  };
 }
 
 export type AccountStatementData = NonNullable<Awaited<ReturnType<typeof getAccountStatementData>>>;
@@ -47,7 +61,8 @@ export async function getAccountBalanceOn(accountId: string, date: string, exclu
     checkPermissionServer('tesoreria', 'transferencias', 'view'),
   ]);
   if (!allowed.some(Boolean)) return null;
-  if (!UUID_RE.test(accountId) || !isCalendarDay(date) || (excludeMovementId && !UUID_RE.test(excludeMovementId))) return null;
+  if (!UUID_RE.test(accountId) || !isCalendarDay(date) || (excludeMovementId && !UUID_RE.test(excludeMovementId)))
+    return null;
   const companyId = await getActiveCompanyId();
   const exists = await prisma.treasury_accounts.count({ where: { id: accountId, company_id: companyId } });
   if (!exists) return null;

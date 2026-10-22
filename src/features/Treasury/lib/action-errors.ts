@@ -8,9 +8,6 @@ import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 import { TreasuryError } from './treasury-errors';
 
-export { NO_PERMISSION, firstIssue } from '@/features/Purchases/lib/action-errors';
-export { UUID_RE } from '../schemas/shared';
-
 /**
  * Error de una action de Tesorería -> `ActionResult` (mismo criterio que Compras: se DEVUELVE,
  * porque en producción Next.js reemplaza el mensaje de un error lanzado).

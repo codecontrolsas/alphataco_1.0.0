@@ -2,14 +2,16 @@
 
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { NO_PERMISSION } from '@/features/Purchases/lib/action-errors';
 import { safeFileName } from '@/features/Purchases/lib/storage-files';
+import { UUID_RE } from '@/features/Treasury/schemas/shared';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { withActor } from '@/shared/lib/actor';
 import { prisma } from '@/shared/lib/prisma';
 import { storagePublicUrl, storageRemove, storageUpload } from '@/shared/lib/storage';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { NO_PERMISSION, UUID_RE, toTreasuryActionError } from '../lib/action-errors';
+import { toTreasuryActionError } from '../lib/action-errors';
 import { lockReceipt } from '../lib/receipt-locks';
 import { CUSTOMER_FILES_BUCKET } from '../lib/storage-files';
 import { TreasuryError } from '../lib/treasury-errors';
@@ -26,7 +28,10 @@ const logger = new Logger('features/Treasury/withholdings');
 const NOT_FOUND = 'La retención no existe';
 
 /** FormData `{ file }`: solo PDF hasta 10 MB. Borra el anterior después de guardar; si falla, el nuevo. */
-export async function attachWithholdingCertificate(withholdingId: string, formData: FormData): Promise<ActionResult<{ name: string; url: string }>> {
+export async function attachWithholdingCertificate(
+  withholdingId: string,
+  formData: FormData
+): Promise<ActionResult<{ name: string; url: string }>> {
   const allowed = await Promise.all([
     checkPermissionServer('tesoreria', 'retenciones-sufridas', 'update'),
     checkPermissionServer('tesoreria', 'cobranzas', 'update'),
@@ -57,9 +62,15 @@ export async function attachWithholdingCertificate(withholdingId: string, formDa
       async (tx) => {
         const receipt = await lockReceipt(tx, companyId, withholding.receipt_id);
         if (receipt.status === 'CANCELLED') throw new TreasuryError('El recibo está anulado');
-        const current = await tx.customer_receipt_withholdings.findUnique({ where: { id: withholdingId }, select: { file_path: true } });
+        const current = await tx.customer_receipt_withholdings.findUnique({
+          where: { id: withholdingId },
+          select: { file_path: true },
+        });
         if (!current) throw new TreasuryError(NOT_FOUND);
-        await tx.customer_receipt_withholdings.update({ where: { id: withholdingId }, data: { file_path: path, file_name: file.name } });
+        await tx.customer_receipt_withholdings.update({
+          where: { id: withholdingId },
+          data: { file_path: path, file_name: file.name },
+        });
         return current.file_path;
       },
       prisma,
