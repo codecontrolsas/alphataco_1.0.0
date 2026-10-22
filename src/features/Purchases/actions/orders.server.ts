@@ -17,8 +17,9 @@ import type { PdfDownload } from '@/shared/lib/pdf/types';
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { isUuid } from '@/shared/lib/uuid';
 import { revalidatePath } from 'next/cache';
-import { NO_PERMISSION, UUID_RE, firstIssue, toPurchaseActionError } from '../lib/action-errors';
+import { NO_PERMISSION, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import { nextPurchaseDocumentNumber } from '../lib/document-number';
 import { lockRequestsForLines, orderedByLine, recomputeRequestProgress, remainingOf } from '../lib/order-progress';
 import { canApplyPurchaseOrderAction, purchaseOrderStatusAfter } from '../lib/order-state-machine';
@@ -244,7 +245,7 @@ export async function createPurchaseOrderFromQuote(
   quoteId: string
 ): Promise<ActionResult<{ id: string; number: string; skipped: number }>> {
   if (!(await checkPermissionServer('compras', 'ordenes', 'create'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(quoteId)) return fail('La cotización no existe');
+  if (!isUuid(quoteId)) return fail('La cotización no existe');
   const profile = await getServerAuthProfile();
   if (!profile) return fail(SESSION_EXPIRED);
   const companyId = await getActiveCompanyId();
@@ -316,7 +317,7 @@ export async function updatePurchaseOrderDraft(id: string, values: PurchaseOrder
   if (!(await checkPermissionServer('compras', 'ordenes', 'update'))) return fail(NO_PERMISSION);
   // El formulario de edición carga los precios del borrador: editar exige verlos.
   if (!(await canViewPurchasePrices('ordenes'))) return fail(NO_PRICES_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('La orden de compra no existe');
+  if (!isUuid(id)) return fail('La orden de compra no existe');
   const parsed = purchaseOrderFormSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
   const companyId = await getActiveCompanyId();
@@ -372,7 +373,7 @@ export async function updatePurchaseOrderDraft(id: string, values: PurchaseOrder
 /** Envia el borrador a aprobacion, revalidando todo (proveedor, faltantes, estado de las solicitudes). */
 export async function submitPurchaseOrder(id: string): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'ordenes', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('La orden de compra no existe');
+  if (!isUuid(id)) return fail('La orden de compra no existe');
   const companyId = await getActiveCompanyId();
   const submittedAt = new Date();
   try {
@@ -471,7 +472,7 @@ async function notifyOrderDecision(
 
 export async function approvePurchaseOrder(id: string): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'ordenes', 'approve'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('La orden de compra no existe');
+  if (!isUuid(id)) return fail('La orden de compra no existe');
   const profile = await getServerAuthProfile();
   if (!profile) return fail(SESSION_EXPIRED);
   const companyId = await getActiveCompanyId();
@@ -502,7 +503,7 @@ export async function approvePurchaseOrder(id: string): Promise<ActionResult> {
 /** Rechazar devuelve la OC a borrador con el motivo; cada rechazo queda en el historial. */
 export async function rejectPurchaseOrder(id: string, reason: string): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'ordenes', 'approve'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('La orden de compra no existe');
+  if (!isUuid(id)) return fail('La orden de compra no existe');
   const motive = requiredReasonSchema.safeParse(reason);
   if (!motive.success) return fail(firstIssue(motive.error));
   const profile = await getServerAuthProfile();
@@ -536,7 +537,7 @@ export async function rejectPurchaseOrder(id: string, reason: string): Promise<A
 /** Anula la OC (con motivo) y libera lo que pedia: las solicitudes vuelven a tener faltante. */
 export async function cancelPurchaseOrder(id: string, reason: string): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'ordenes', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('La orden de compra no existe');
+  if (!isUuid(id)) return fail('La orden de compra no existe');
   const motive = requiredReasonSchema.safeParse(reason);
   if (!motive.success) return fail(firstIssue(motive.error));
   const profile = await getServerAuthProfile();
@@ -596,7 +597,7 @@ export async function cancelPurchaseOrder(id: string, reason: string): Promise<A
  */
 export async function closePurchaseOrder(id: string, reason: string): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'ordenes', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('La orden de compra no existe');
+  if (!isUuid(id)) return fail('La orden de compra no existe');
   const motive = requiredReasonSchema.safeParse(reason);
   if (!motive.success) return fail(firstIssue(motive.error));
   const profile = await getServerAuthProfile();
@@ -641,7 +642,7 @@ export async function sendPurchaseOrder(id: string, values: SendDocumentValues):
   if (!(await checkPermissionServer('compras', 'ordenes', 'send'))) return fail(NO_PERMISSION);
   // Se manda el PDF con los importes: quien lo envía tiene que poder verlos.
   if (!(await canViewPurchasePrices('ordenes'))) return fail(NO_PRICES_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('La orden de compra no existe');
+  if (!isUuid(id)) return fail('La orden de compra no existe');
   const parsed = sendDocumentSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
   const profile = await getServerAuthProfile();
@@ -710,7 +711,7 @@ export async function sendPurchaseOrder(id: string, values: SendDocumentValues):
 /** Registra que la OC se le hizo llegar al proveedor por otro medio (sin mail). */
 export async function markPurchaseOrderSent(id: string): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'ordenes', 'send'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('La orden de compra no existe');
+  if (!isUuid(id)) return fail('La orden de compra no existe');
   const profile = await getServerAuthProfile();
   if (!profile) return fail(SESSION_EXPIRED);
   const companyId = await getActiveCompanyId();
@@ -733,7 +734,7 @@ export async function markPurchaseOrderSent(id: string): Promise<ActionResult> {
 export async function getPurchaseOrderPdf(id: string): Promise<ActionResult<PdfDownload>> {
   if (!(await checkPermissionServer('compras', 'ordenes', 'view'))) return fail(NO_PERMISSION);
   if (!(await canViewPurchasePrices('ordenes'))) return fail(NO_PRICES_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('La orden de compra no existe');
+  if (!isUuid(id)) return fail('La orden de compra no existe');
   const companyId = await getActiveCompanyId();
   try {
     const pdf = await renderPurchaseOrderPdf(id, companyId);

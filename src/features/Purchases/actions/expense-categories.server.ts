@@ -1,12 +1,13 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { NO_PERMISSION, UUID_RE, firstIssue, toPurchaseActionError } from '../lib/action-errors';
+import { isUuid } from '@/shared/lib/uuid';
+import { revalidatePath } from 'next/cache';
+import { NO_PERMISSION, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import { expenseCategoryFormSchema, type ExpenseCategoryFormValues } from '../schemas/expense-categories';
 
 const logger = new Logger('features/Purchases/expense-categories');
@@ -71,7 +72,7 @@ export async function renameExpenseCategory(id: string, values: ExpenseCategoryF
   if (!(await checkPermissionServer('compras', 'config-compras', 'update'))) return fail(NO_PERMISSION);
   const parsed = expenseCategoryFormSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
-  if (!UUID_RE.test(id)) return fail(NOT_FOUND);
+  if (!isUuid(id)) return fail(NOT_FOUND);
   const companyId = await getActiveCompanyId();
   try {
     const existing = await findDuplicate(companyId, parsed.data.name, id);
@@ -91,7 +92,7 @@ export async function renameExpenseCategory(id: string, values: ExpenseCategoryF
 /** Desactivar no lo quita de los comprobantes ya cargados: solo deja de ofrecerse. */
 export async function setExpenseCategoryActive(id: string, isActive: boolean): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'config-compras', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail(NOT_FOUND);
+  if (!isUuid(id)) return fail(NOT_FOUND);
   const companyId = await getActiveCompanyId();
   try {
     const { count } = await prisma.purchase_expense_categories.updateMany({

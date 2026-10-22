@@ -6,7 +6,7 @@ import type { StockDestinationTypeValue } from '@/features/Warehouses/schemas/st
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { UUID_RE } from '../lib/action-errors';
+import { isUuid } from '@/shared/lib/uuid';
 import { orderedByLine, remainingOf } from '../lib/order-progress';
 import { maskAmount } from '../lib/price-visibility';
 import { canViewPurchasePrices } from '../lib/price-visibility.server';
@@ -24,7 +24,7 @@ function isOrderableRequest(status: PurchaseRequestStatus): boolean {
 
 /** Solicitudes de compra de un pedido de Almacenes, para su detalle. */
 export async function getPurchaseRequestsForMaterialRequest(materialRequestId: string) {
-  if (!UUID_RE.test(materialRequestId)) return [];
+  if (!isUuid(materialRequestId)) return [];
   const [canView, canViewAll, profile] = await Promise.all([
     checkPermissionServer('compras', 'solicitudes', 'view'),
     checkPermissionServer('compras', 'solicitudes', 'view_all_requests'),
@@ -49,7 +49,7 @@ export async function getPurchaseRequestsForMaterialRequest(materialRequestId: s
 
 /** Detalle de una solicitud. Con solo `view`, nada mas las propias. */
 export async function getPurchaseRequestDetail(id: string) {
-  if (!UUID_RE.test(id)) return null;
+  if (!isUuid(id)) return null;
   const [
     canView,
     canViewAll,

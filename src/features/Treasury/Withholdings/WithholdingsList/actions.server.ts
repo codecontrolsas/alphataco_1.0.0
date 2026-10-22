@@ -11,15 +11,9 @@ import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { storagePublicUrl } from '@/shared/lib/storage';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import {
-  buildTreasuryDateRangeWhere,
-  isUuid,
-  ownEntry,
-  parseAmountText,
-  safePaging,
-  textValue,
-} from '../../lib/filter-values';
+import { isUuid } from '@/shared/lib/uuid';
 import { isoDay } from '../../lib/dates';
+import { buildTreasuryDateRangeWhere, ownEntry, parseAmountText, safePaging, textValue } from '../../lib/filter-values';
 import { CUSTOMER_FILES_BUCKET } from '../../lib/storage-files';
 import { CUSTOMER_WITHHOLDING_TAX_LABELS } from '../../schemas/receipts';
 
@@ -189,7 +183,11 @@ export async function getWithholdingsPaginated(searchParams: DataTableSearchPara
       if (mapper) resolvedSorts.push(...mapper(dir));
       else if (VALID_SORT_FIELDS.has(s.id)) resolvedSorts.push({ [s.id]: dir });
     }
-    const orderBy: WithholdingOrderBy[] = [...resolvedSorts, { certificate_date: 'desc' }, { certificate_number: 'asc' }];
+    const orderBy: WithholdingOrderBy[] = [
+      ...resolvedSorts,
+      { certificate_date: 'desc' },
+      { certificate_number: 'asc' },
+    ];
 
     const [rows, total] = await Promise.all([
       prisma.customer_receipt_withholdings.findMany({ where, orderBy, skip, take, select: WITHHOLDING_SELECT }),

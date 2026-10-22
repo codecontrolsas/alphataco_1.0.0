@@ -12,8 +12,9 @@ import type { PdfDownload } from '@/shared/lib/pdf/types';
 import { prisma } from '@/shared/lib/prisma';
 import { storageRemove, storageUpload } from '@/shared/lib/storage';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { isUuid } from '@/shared/lib/uuid';
 import { revalidatePath } from 'next/cache';
-import { NO_PERMISSION, UUID_RE, firstIssue, toPurchaseActionError } from '../lib/action-errors';
+import { NO_PERMISSION, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import { nextPurchaseDocumentNumber } from '../lib/document-number';
 import { assertWithinRemaining, lockRequestsForLines, orderedByLine, remainingOf } from '../lib/order-progress';
 import { NO_PRICES_PERMISSION } from '../lib/price-visibility';
@@ -170,7 +171,7 @@ export async function createPurchaseQuote(
 /** Edita un borrador: proveedor, lineas (con lo que falta hoy) y notas. */
 export async function updatePurchaseQuoteDraft(id: string, values: PurchaseQuoteFormValues): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'cotizaciones', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('La cotización no existe');
+  if (!isUuid(id)) return fail('La cotización no existe');
   const parsed = purchaseQuoteFormSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
   const companyId = await getActiveCompanyId();
@@ -204,7 +205,7 @@ export async function updatePurchaseQuoteDraft(id: string, values: PurchaseQuote
 export async function sendPurchaseQuote(id: string, values: SendDocumentValues): Promise<ActionResult> {
   // El pedido de cotización no lleva importes: enviarlo exige `send`, no `view_prices`.
   if (!(await checkPermissionServer('compras', 'cotizaciones', 'send'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('La cotización no existe');
+  if (!isUuid(id)) return fail('La cotización no existe');
   const parsed = sendDocumentSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
   const companyId = await getActiveCompanyId();
@@ -260,7 +261,7 @@ export async function sendPurchaseQuote(id: string, values: SendDocumentValues):
 export async function markPurchaseQuoteSent(id: string): Promise<ActionResult> {
   // El pedido de cotización no lleva importes: enviarlo exige `send`, no `view_prices`.
   if (!(await checkPermissionServer('compras', 'cotizaciones', 'send'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('La cotización no existe');
+  if (!isUuid(id)) return fail('La cotización no existe');
   const companyId = await getActiveCompanyId();
   try {
     await prisma.$transaction(async (tx) => {
@@ -279,7 +280,7 @@ export async function recordPurchaseQuoteResponse(id: string, values: QuoteRespo
   if (!(await checkPermissionServer('compras', 'cotizaciones', 'update'))) return fail(NO_PERMISSION);
   // Cargar o corregir la respuesta muestra los precios cotizados: exige verlos.
   if (!(await canViewPurchasePrices('cotizaciones'))) return fail(NO_PRICES_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('La cotización no existe');
+  if (!isUuid(id)) return fail('La cotización no existe');
   const parsed = quoteResponseSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
   const companyId = await getActiveCompanyId();
@@ -329,7 +330,7 @@ export async function recordPurchaseQuoteResponse(id: string, values: QuoteRespo
 /** Adjunta el presupuesto del proveedor. El archivo anterior no se borra (queda en el storage). */
 export async function uploadPurchaseQuoteAttachment(id: string, formData: FormData): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'cotizaciones', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('La cotización no existe');
+  if (!isUuid(id)) return fail('La cotización no existe');
   const file = formData.get('file');
   if (!(file instanceof File) || file.size === 0) return fail('Elegí el archivo');
   if (file.size > QUOTE_ATTACHMENT_MAX_BYTES) return fail('El archivo supera los 10 MB');
@@ -358,7 +359,7 @@ export async function uploadPurchaseQuoteAttachment(id: string, formData: FormDa
 
 export async function declinePurchaseQuote(id: string): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'cotizaciones', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('La cotización no existe');
+  if (!isUuid(id)) return fail('La cotización no existe');
   const companyId = await getActiveCompanyId();
   try {
     await prisma.$transaction(async (tx) => {
@@ -377,7 +378,7 @@ export async function declinePurchaseQuote(id: string): Promise<ActionResult> {
 
 export async function cancelPurchaseQuote(id: string, reason: string): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'cotizaciones', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('La cotización no existe');
+  if (!isUuid(id)) return fail('La cotización no existe');
   const motive = requiredReasonSchema.safeParse(reason);
   if (!motive.success) return fail(firstIssue(motive.error));
   const profile = await getServerAuthProfile();
@@ -400,7 +401,7 @@ export async function cancelPurchaseQuote(id: string, reason: string): Promise<A
 
 export async function getPurchaseQuotePdf(id: string): Promise<ActionResult<PdfDownload>> {
   if (!(await checkPermissionServer('compras', 'cotizaciones', 'view'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('La cotización no existe');
+  if (!isUuid(id)) return fail('La cotización no existe');
   const companyId = await getActiveCompanyId();
   try {
     const pdf = await renderPurchaseQuotePdf(id, companyId);

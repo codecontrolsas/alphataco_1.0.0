@@ -3,7 +3,7 @@
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { UUID_RE } from '../lib/action-errors';
+import { isUuid } from '@/shared/lib/uuid';
 import { getOrderInvoicesSummary } from '../lib/invoices';
 import { findOrderableRequestLines, orderedByLine, remainingOf, requestLineLabel } from '../lib/order-progress';
 import { canApplyPurchaseOrderAction, type PurchaseOrderStatus } from '../lib/order-state-machine';
@@ -24,14 +24,14 @@ async function canPickRequestLines(): Promise<boolean> {
 /** Lineas de solicitud con faltante, para los selectores de la OC y del pedido de cotizacion. */
 export async function searchOrderableRequestLines(query: string, options: { requestId?: string } = {}) {
   if (!(await canPickRequestLines())) return { items: [], total: 0 };
-  if (options.requestId && !UUID_RE.test(options.requestId)) return { items: [], total: 0 };
+  if (options.requestId && !isUuid(options.requestId)) return { items: [], total: 0 };
   const companyId = await getActiveCompanyId();
   return findOrderableRequestLines(prisma, companyId, { term: query, requestId: options.requestId });
 }
 
 /** Proveedor (contactos, plazo, documentos vencidos) para el formulario y los dialogos. */
 export async function getSupplierPurchaseContext(supplierId: string) {
-  if (!UUID_RE.test(supplierId)) return null;
+  if (!isUuid(supplierId)) return null;
   const allowed = await Promise.all([
     checkPermissionServer('compras', 'ordenes', 'view'),
     checkPermissionServer('compras', 'cotizaciones', 'view'),
@@ -62,7 +62,7 @@ const userName = (p: { fullname: string | null; email: string | null } | null) =
 
 /** Detalle de la OC: cabecera, lineas con su solicitud de origen, historial y que se puede hacer. */
 export async function getPurchaseOrderDetail(id: string) {
-  if (!UUID_RE.test(id)) return null;
+  if (!isUuid(id)) return null;
   const [canView, canUpdate, canApprove, canSend, canViewPrices, canReceive] = await Promise.all([
     checkPermissionServer('compras', 'ordenes', 'view'),
     checkPermissionServer('compras', 'ordenes', 'update'),

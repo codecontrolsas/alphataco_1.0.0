@@ -1,5 +1,8 @@
+import { isUuid } from '@/shared/lib/uuid';
 import 'server-only';
 
+import { supplierCheckDebts, type CheckDebtSource } from '@/features/Treasury/lib/rejected-checks';
+import { formatMoney } from '@/features/Warehouses/lib/format';
 import { Prisma } from '@/generated/prisma/client';
 import type { withholding_status, withholding_tax } from '@/generated/prisma/enums';
 import { CBTE_TYPES, isCbteTypeId } from '@/shared/lib/arca/catalogs';
@@ -7,17 +10,22 @@ import type { PaymentOrderFormValues } from '../schemas/payment-orders';
 import { WITHHOLDING_TAXES, WITHHOLDING_TAX_LABELS } from '../schemas/payment-settings';
 import { supplierInvoiceLabel } from './invoices';
 import { advanceAvailable, invoicePending } from './payment-balances';
-import { supplierCheckDebts, type CheckDebtSource } from '@/features/Treasury/lib/rejected-checks';
 import {
   PAYMENT_ORDER_STATUS_PAST,
   canApplyPaymentOrderAction,
   type PaymentOrderAction,
   type PaymentOrderStatus,
 } from './payment-order-state-machine';
-import { cents, computePaymentTotals, invoiceShares, money, withholdingBases, type PaymentTotals } from './payment-totals';
+import {
+  cents,
+  computePaymentTotals,
+  invoiceShares,
+  money,
+  withholdingBases,
+  type PaymentTotals,
+} from './payment-totals';
 import { PurchaseError } from './purchase-errors';
 import { formatWithholdingCertificateNumber } from './withholding-certificate-number';
-import { formatMoney } from '@/features/Warehouses/lib/format';
 import { computeWithholding, type WithholdingRegime, type WithholdingResult } from './withholdings';
 
 /**
@@ -26,8 +34,6 @@ import { computeWithholding, type WithholdingRegime, type WithholdingResult } fr
  */
 
 type Tx = Prisma.TransactionClient;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export interface LockedSupplier {
   id: string;
   name: string;
@@ -37,8 +43,14 @@ export interface LockedSupplier {
 }
 
 /** Lockea al proveedor (`FOR UPDATE`): las ordenes de pago del mismo proveedor quedan en fila. */
-export async function lockSupplier(tx: Pick<Tx, '$queryRaw'>, companyId: string, supplierId: string): Promise<LockedSupplier> {
-  const rows = await tx.$queryRaw<{ id: string; name: string; is_active: boolean; vat_condition_id: number; cuit: bigint }[]>`
+export async function lockSupplier(
+  tx: Pick<Tx, '$queryRaw'>,
+  companyId: string,
+  supplierId: string
+): Promise<LockedSupplier> {
+  const rows = await tx.$queryRaw<
+    { id: string; name: string; is_active: boolean; vat_condition_id: number; cuit: bigint }[]
+  >`
     SELECT id, name, is_active, vat_condition_id, cuit FROM suppliers
     WHERE id = ${supplierId}::uuid AND company_id = ${companyId}::uuid
     FOR UPDATE
@@ -72,7 +84,14 @@ export async function lockPaymentOrder(
   if (!head[0]) throw new PurchaseError('La orden de pago no existe');
   const supplier = await lockSupplier(tx, companyId, head[0].supplier_id);
   const rows = await tx.$queryRaw<
-    { id: string; number: string; status: PaymentOrderStatus; supplier_id: string; planned_on: Date; net_total: string }[]
+    {
+      id: string;
+      number: string;
+      status: PaymentOrderStatus;
+      supplier_id: string;
+      planned_on: Date;
+      net_total: string;
+    }[]
   >`
     SELECT id, number, status::text AS status, supplier_id, planned_on, net_total::text AS net_total
     FROM payment_orders WHERE id = ${orderId}::uuid FOR UPDATE
@@ -81,7 +100,15 @@ export async function lockPaymentOrder(
   if (!canApplyPaymentOrderAction(row.status, action)) {
     throw new PurchaseError(`La orden ${row.number} ya fue ${PAYMENT_ORDER_STATUS_PAST[row.status]}`);
   }
-  return { id: row.id, number: row.number, status: row.status, supplierId: row.supplier_id, plannedOn: row.planned_on, netTotal: row.net_total, supplier };
+  return {
+    id: row.id,
+    number: row.number,
+    status: row.status,
+    supplierId: row.supplier_id,
+    plannedOn: row.planned_on,
+    netTotal: row.net_total,
+    supplier,
+  };
 }
 
 /** Etapa 4: un comprobante con lineas en una orden de pago no anulada no se edita ni se anula. */
@@ -91,7 +118,11 @@ export async function assertNotInPaymentOrder(tx: Pick<Tx, '$queryRaw'>, invoice
 }
 
 /** Numero de la primera orden de pago no anulada (o solo pagada) que incluye al comprobante, o `null`. */
-export async function paymentOrderOfInvoice(tx: Pick<Tx, '$queryRaw'>, invoiceId: string, options: { paidOnly?: boolean } = {}): Promise<string | null> {
+export async function paymentOrderOfInvoice(
+  tx: Pick<Tx, '$queryRaw'>,
+  invoiceId: string,
+  options: { paidOnly?: boolean } = {}
+): Promise<string | null> {
   const paidOnly = options.paidOnly ?? false;
   const rows = await tx.$queryRaw<{ number: string }[]>`
     SELECT po.number FROM payment_order_lines l JOIN payment_orders po ON po.id = l.payment_order_id
@@ -102,7 +133,11 @@ export async function paymentOrderOfInvoice(tx: Pick<Tx, '$queryRaw'>, invoiceId
 }
 
 /** Siguiente numero de certificado del impuesto en la empresa (advisory lock + MAX()+1). */
-export async function nextCertificateNumber(tx: Pick<Tx, '$queryRaw' | '$executeRaw'>, companyId: string, tax: withholding_tax): Promise<string> {
+export async function nextCertificateNumber(
+  tx: Pick<Tx, '$queryRaw' | '$executeRaw'>,
+  companyId: string,
+  tax: withholding_tax
+): Promise<string> {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`withholding_certificate:${tax}:${companyId}`}, 0))`;
   const rows = await tx.$queryRaw<{ next: bigint }[]>`
     SELECT COALESCE(MAX(NULLIF(regexp_replace(w.certificate_number, '\\D', '', 'g'), '')::bigint), 0) + 1 AS next
@@ -115,7 +150,12 @@ export async function nextCertificateNumber(tx: Pick<Tx, '$queryRaw' | '$execute
 const decimalToText = (d: Prisma.Decimal | null) => (d === null ? null : d.toString());
 
 /** Ganancias: bases y retenciones de las ordenes pagadas del proveedor en el mes de `date`. */
-async function gananciasMonth(tx: Pick<Tx, '$queryRaw'>, supplierId: string, date: string, excludeOrderId: string | null) {
+async function gananciasMonth(
+  tx: Pick<Tx, '$queryRaw'>,
+  supplierId: string,
+  date: string,
+  excludeOrderId: string | null
+) {
   const rows = await tx.$queryRaw<{ base: string | null; withheld: string | null }[]>`
     SELECT (SELECT SUM(o.withholding_net_base) FROM payment_orders o
              WHERE o.supplier_id = ${supplierId}::uuid AND o.status = 'PAID'
@@ -129,7 +169,11 @@ async function gananciasMonth(tx: Pick<Tx, '$queryRaw'>, supplierId: string, dat
   return { previousBase: rows[0]?.base ?? '0', previousWithheld: rows[0]?.withheld ?? '0' };
 }
 
-type AutomaticWithholding = { regime: WithholdingRegime | null; computed: WithholdingResult | null; supplierStatus: withholding_status | null };
+type AutomaticWithholding = {
+  regime: WithholdingRegime | null;
+  computed: WithholdingResult | null;
+  supplierStatus: withholding_status | null;
+};
 
 /**
  * Retenciones que calcula el motor (sin correcciones manuales) para un proveedor, una fecha y unas
@@ -172,7 +216,9 @@ async function computeAutomaticWithholdings(
     const p = profiles.find((x) => x.tax === tax);
     // IIBB sin regimen: alicuota de padron con un regimen "virtual" no se admite: hace falta un
     // regimen para el codigo del archivo. Se usa el primero activo de IIBB.
-    const regime = regimeOf(p?.regime_id ?? (tax === 'IIBB' ? (regimes.find((r) => r.tax === 'IIBB' && r.is_active)?.id ?? null) : null));
+    const regime = regimeOf(
+      p?.regime_id ?? (tax === 'IIBB' ? regimes.find((r) => r.tax === 'IIBB' && r.is_active)?.id ?? null : null)
+    );
     const computed = computeWithholding({
       tax,
       date: plannedOn,
@@ -242,10 +288,11 @@ export async function buildPaymentOrder(
   const appliedLines = input.lines.filter((l) => l.kind === 'ADVANCE_APPLIED');
   const rejectedLines = input.lines.filter((l) => l.kind === 'REJECTED_CHECK');
   const advanceAmount = input.advance.amount ? money(cents(input.advance.amount)) : '';
-  if (input.lines.length === 0 && !advanceAmount) throw new PurchaseError('Agregá qué se paga: comprobantes o un anticipo');
+  if (input.lines.length === 0 && !advanceAmount)
+    throw new PurchaseError('Agregá qué se paga: comprobantes o un anticipo');
 
   const invoiceIds = invoiceLines.map((l) => l.invoiceId);
-  if (invoiceIds.some((id) => !UUID_RE.test(id))) throw new PurchaseError('El comprobante no existe');
+  if (invoiceIds.some((id) => !isUuid(id))) throw new PurchaseError('El comprobante no existe');
   // Con el proveedor ya lockeado: los comprobantes se lockean FOR SHARE, en orden de id, ANTES de
   // leerlos. Asi una anulacion, un rechazo o una edicion en curso (FOR UPDATE sobre el comprobante)
   // termina primero y se lee el estado ya confirmado. Esos circuitos lockean OC -> comprobante y
@@ -283,9 +330,11 @@ export async function buildPaymentOrder(
   const creditShares: { net: string; vat: string }[] = [];
   for (const line of invoiceLines) {
     const invoice = byId.get(line.invoiceId);
-    if (!invoice || invoice.supplier_id !== supplier.id) throw new PurchaseError('El comprobante no existe o es de otro proveedor');
+    if (!invoice || invoice.supplier_id !== supplier.id)
+      throw new PurchaseError('El comprobante no existe o es de otro proveedor');
     const label = supplierInvoiceLabel(invoice);
-    if (invoice.status !== 'CONFORMING' && invoice.status !== 'APPROVED') throw new PurchaseError(`La ${label} no está a pagar (conforme o aprobada)`);
+    if (invoice.status !== 'CONFORMING' && invoice.status !== 'APPROVED')
+      throw new PurchaseError(`La ${label} no está a pagar (conforme o aprobada)`);
     const isCredit = isCbteTypeId(invoice.cbte_type) && CBTE_TYPES[invoice.cbte_type].kind === 'credit_note';
     if (isCredit !== (line.kind === 'CREDIT_NOTE')) throw new PurchaseError(`La ${label} no se aplica así`);
     const amount = cents(line.amount);
@@ -304,32 +353,42 @@ export async function buildPaymentOrder(
   }
 
   const sourceIds = appliedLines.map((l) => l.sourceLineId);
-  if (sourceIds.some((id) => !UUID_RE.test(id))) throw new PurchaseError('El anticipo no existe');
+  if (sourceIds.some((id) => !isUuid(id))) throw new PurchaseError('El anticipo no existe');
   const advances = await advanceAvailable(tx, sourceIds, { excludeOrderId: options.orderId });
   for (const line of appliedLines) {
     const advance = advances.get(line.sourceLineId);
-    if (!advance || advance.companyId !== companyId || advance.supplierId !== supplier.id || advance.orderStatus !== 'PAID') {
+    if (
+      !advance ||
+      advance.companyId !== companyId ||
+      advance.supplierId !== supplier.id ||
+      advance.orderStatus !== 'PAID'
+    ) {
       throw new PurchaseError('El anticipo no existe o no está pagado');
     }
     if (cents(line.amount) > cents(advance.available)) {
-      throw new PurchaseError(`Anticipo de la ${advance.orderNumber}: ${money(cents(line.amount))} supera lo disponible (${advance.available})`);
+      throw new PurchaseError(
+        `Anticipo de la ${advance.orderNumber}: ${money(cents(line.amount))} supera lo disponible (${advance.available})`
+      );
     }
   }
 
   // Deudas por cheques de terceros endosados a este proveedor y rechazados: no llevan retenciones
   // (ya se retuvo al pagar el comprobante original), solo suman a lo que se paga.
   const checkIds = rejectedLines.map((l) => l.checkId ?? '');
-  if (checkIds.some((id) => !UUID_RE.test(id))) throw new PurchaseError('El cheque no existe o no es una deuda de este proveedor');
+  if (checkIds.some((id) => !isUuid(id)))
+    throw new PurchaseError('El cheque no existe o no es una deuda de este proveedor');
   const debts = await supplierCheckDebts(tx, checkIds, { excludeOrderId: options.orderId });
   for (const line of rejectedLines) {
     const debt = debts.get(line.checkId ?? '');
-    if (!debt || debt.companyId !== companyId || debt.supplierId !== supplier.id) throw new PurchaseError('El cheque no existe o no es una deuda de este proveedor');
-    if (cents(line.amount) > cents(debt.pending)) throw new PurchaseError(`${debt.label}: ${money(cents(line.amount))} supera la deuda (${debt.pending})`);
+    if (!debt || debt.companyId !== companyId || debt.supplierId !== supplier.id)
+      throw new PurchaseError('El cheque no existe o no es una deuda de este proveedor');
+    if (cents(line.amount) > cents(debt.pending))
+      throw new PurchaseError(`${debt.label}: ${money(cents(line.amount))} supera la deuda (${debt.pending})`);
   }
 
   let purchaseOrderId: string | null = null;
   if (advanceAmount && input.advance.purchaseOrderId) {
-    const po = UUID_RE.test(input.advance.purchaseOrderId)
+    const po = isUuid(input.advance.purchaseOrderId)
       ? await tx.purchase_orders.findFirst({
           where: { id: input.advance.purchaseOrderId, company_id: companyId, supplier_id: supplier.id },
           select: { id: true },
@@ -346,7 +405,15 @@ export async function buildPaymentOrder(
     advance: advanceAmount || '0',
   });
 
-  const automatic = await computeAutomaticWithholdings(tx, companyId, supplier.id, supplier.vatConditionId, input.plannedOn, bases, excludeOrderId);
+  const automatic = await computeAutomaticWithholdings(
+    tx,
+    companyId,
+    supplier.id,
+    supplier.vatConditionId,
+    input.plannedOn,
+    bases,
+    excludeOrderId
+  );
   const withholdings: BuiltWithholding[] = [];
   for (const tax of WITHHOLDING_TAXES) {
     const { regime, computed, supplierStatus } = automatic.get(tax)!;
@@ -354,7 +421,10 @@ export async function buildPaymentOrder(
     if (manual) {
       const amount = cents(manual.amount);
       if (amount === BigInt(0)) continue;
-      if (!regime) throw new PurchaseError(`${WITHHOLDING_TAX_LABELS[tax]}: el proveedor no tiene régimen para corregir la retención`);
+      if (!regime)
+        throw new PurchaseError(
+          `${WITHHOLDING_TAX_LABELS[tax]}: el proveedor no tiene régimen para corregir la retención`
+        );
       const base = computed?.base ?? (tax === 'IVA' ? bases.vat : bases.net);
       withholdings.push({
         tax,
@@ -380,7 +450,9 @@ export async function buildPaymentOrder(
     withholdings: withholdings.map((w) => w.amount),
   });
   if (totals.netTotal.startsWith('-')) {
-    throw new PurchaseError(`El neto a pagar da negativo (${totals.netTotal}): las NC, anticipos y retenciones superan lo que se paga`);
+    throw new PurchaseError(
+      `El neto a pagar da negativo (${totals.netTotal}): las NC, anticipos y retenciones superan lo que se paga`
+    );
   }
 
   const lines: BuiltLine[] = [
@@ -413,7 +485,17 @@ export async function buildPaymentOrder(
       checkSource: debts.get(l.checkId ?? '')?.source,
     })),
     ...(advanceAmount
-      ? [{ kind: 'ADVANCE' as const, amount: advanceAmount, invoiceId: null, purchaseOrderId, description: input.advance.description || null, sourceLineId: null, checkId: null }]
+      ? [
+          {
+            kind: 'ADVANCE' as const,
+            amount: advanceAmount,
+            invoiceId: null,
+            purchaseOrderId,
+            description: input.advance.description || null,
+            sourceLineId: null,
+            checkId: null,
+          },
+        ]
       : []),
   ].map((l, i) => ({ ...l, position: i + 1 }));
 
@@ -482,7 +564,9 @@ export async function assertPaymentOrderStillValid(tx: Tx, companyId: string, or
     if (line.kind !== 'REJECTED_CHECK' || !checkId) continue;
     const debt = debts.get(checkId);
     if (!debt || cents(line.amount.toString()) > cents(debt.pending)) {
-      throw new PurchaseError('La deuda de un cheque rechazado ya no alcanza para esta orden: volvé la orden a borrador');
+      throw new PurchaseError(
+        'La deuda de un cheque rechazado ya no alcanza para esta orden: volvé la orden a borrador'
+      );
     }
   }
   const invoiceIds = lines.flatMap((l) => (l.invoice_id ? [l.invoice_id] : []));
@@ -503,7 +587,12 @@ export async function assertPaymentOrderStillValid(tx: Tx, companyId: string, or
   for (const line of lines) {
     if (!line.source_line_id) continue;
     const advance = advances.get(line.source_line_id);
-    if (!advance || advance.orderStatus !== 'PAID' || advance.companyId !== companyId || cents(line.amount.toString()) > cents(advance.available)) {
+    if (
+      !advance ||
+      advance.orderStatus !== 'PAID' ||
+      advance.companyId !== companyId ||
+      cents(line.amount.toString()) > cents(advance.available)
+    ) {
       throw new PurchaseError('Un anticipo aplicado ya no está disponible: volvé la orden a borrador');
     }
   }
@@ -514,7 +603,12 @@ export async function assertPaymentOrderStillValid(tx: Tx, companyId: string, or
  * mismo. Cambian si en el mes se pago otra orden del proveedor (acumulado de Ganancias), se anulo una
  * pagada, o cambiaron su situacion impositiva o el regimen: hay que volver la orden a borrador.
  */
-export async function assertWithholdingsStillValid(tx: Tx, companyId: string, supplier: LockedSupplier, orderId: string): Promise<void> {
+export async function assertWithholdingsStillValid(
+  tx: Tx,
+  companyId: string,
+  supplier: LockedSupplier,
+  orderId: string
+): Promise<void> {
   const order = await tx.payment_orders.findUniqueOrThrow({
     where: { id: orderId },
     select: {

@@ -3,11 +3,10 @@
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import { VAT_RATE_LABELS, isVatRateId } from '@/shared/lib/arca/catalogs';
-import type { arca_check_result } from '@/generated/prisma/enums';
 import { prisma } from '@/shared/lib/prisma';
 import { buildStorageFileUrl } from '@/shared/lib/storage-url';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { UUID_RE } from '../lib/action-errors';
+import { isUuid } from '@/shared/lib/uuid';
 import { parseObservations } from '../lib/invoice-observations';
 import type { SupplierInvoiceStatus } from '../lib/invoice-status';
 import { invoicedByOrderLine, supplierInvoiceLabel, voucherInfo } from '../lib/invoices';
@@ -32,7 +31,7 @@ export async function getSupplierInvoiceFormData(supplierId?: string, options: {
   ]);
   if (!canCreate && !canUpdate) return null;
   const companyId = await getActiveCompanyId();
-  const validSupplier = supplierId && UUID_RE.test(supplierId) ? supplierId : null;
+  const validSupplier = supplierId && isUuid(supplierId) ? supplierId : null;
   const [supplier, categories, provinces, fiscal] = await Promise.all([
     validSupplier
       ? prisma.suppliers.findFirst({
@@ -76,7 +75,11 @@ export async function getSupplierInvoiceFormData(supplierId?: string, options: {
             unit_price: true,
             vat_rate_id: true,
             request_line: {
-              select: { description: true, material: { select: { code: true, name: true } }, unit: { select: { abbreviation: true } } },
+              select: {
+                description: true,
+                material: { select: { code: true, name: true } },
+                unit: { select: { abbreviation: true } },
+              },
             },
           },
           orderBy: { position: 'asc' },
@@ -107,7 +110,12 @@ export async function getSupplierInvoiceFormData(supplierId?: string, options: {
       })),
     }));
     const related = await prisma.supplier_invoices.findMany({
-      where: { company_id: companyId, supplier_id: supplier.id, status: { not: 'CANCELLED' }, cbte_type: { in: [1, 6, 11] } },
+      where: {
+        company_id: companyId,
+        supplier_id: supplier.id,
+        status: { not: 'CANCELLED' },
+        cbte_type: { in: [1, 6, 11] },
+      },
       select: { id: true, cbte_type: true, sales_point: true, number: true, issue_date: true, total: true },
       orderBy: { issue_date: 'desc' },
       take: 200,
@@ -130,12 +138,13 @@ export async function getSupplierInvoiceFormData(supplierId?: string, options: {
   };
 }
 
-const userName = (p: { fullname: string | null; email: string | null } | null) => (p ? (p.fullname ?? p.email ?? 'Usuario') : null);
+const userName = (p: { fullname: string | null; email: string | null } | null) =>
+  p ? p.fullname ?? p.email ?? 'Usuario' : null;
 const isoDay = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
 
 /** Detalle del comprobante: datos, lineas con su OC, IVA, tributos, observaciones e historial. */
 export async function getSupplierInvoiceDetail(id: string) {
-  if (!UUID_RE.test(id)) return null;
+  if (!isUuid(id)) return null;
   const [canView, canUpdate, canApprove] = await Promise.all([
     checkPermissionServer('compras', 'facturas', 'view'),
     checkPermissionServer('compras', 'facturas', 'update'),
@@ -202,7 +211,11 @@ export async function getSupplierInvoiceDetail(id: string) {
               vat_rate_id: true,
               order: { select: { id: true, number: true } },
               request_line: {
-                select: { description: true, material: { select: { code: true, name: true } }, unit: { select: { abbreviation: true } } },
+                select: {
+                  description: true,
+                  material: { select: { code: true, name: true } },
+                  unit: { select: { abbreviation: true } },
+                },
               },
             },
           },
@@ -210,7 +223,9 @@ export async function getSupplierInvoiceDetail(id: string) {
         orderBy: { position: 'asc' },
       },
       vat: { select: { vat_rate_id: true, base: true, amount: true }, orderBy: { vat_rate_id: 'asc' } },
-      taxes: { select: { id: true, kind: true, description: true, amount: true, province: { select: { name: true } } } },
+      taxes: {
+        select: { id: true, kind: true, description: true, amount: true, province: { select: { name: true } } },
+      },
     },
   });
   if (!invoice) return null;
@@ -267,7 +282,10 @@ export async function getSupplierInvoiceDetail(id: string) {
     relatedInvoice: invoice.related_invoice ? voucher(invoice.related_invoice) : null,
     relatedNotes: invoice.related_notes.map(voucher),
     attachment: invoice.attachment_path
-      ? { name: invoice.attachment_name ?? 'comprobante', url: buildStorageFileUrl(SUPPLIER_FILES_BUCKET, invoice.attachment_path) }
+      ? {
+          name: invoice.attachment_name ?? 'comprobante',
+          url: buildStorageFileUrl(SUPPLIER_FILES_BUCKET, invoice.attachment_path),
+        }
       : null,
     notes: invoice.notes,
     lines: invoice.lines.map((line) => {
@@ -283,13 +301,14 @@ export async function getSupplierInvoiceDetail(id: string) {
               name: orderLine.request_line.material?.name ?? null,
               description: orderLine.request_line.description,
             })
-          : (line.description ?? ''),
+          : line.description ?? '',
         expenseCategory: line.expense_category,
         unitAbbr: orderLine?.request_line.unit.abbreviation ?? null,
         quantity: line.quantity?.toString() ?? null,
         unitPrice: line.unit_price?.toString() ?? null,
         orderUnitPrice: orderLine?.unit_price.toString() ?? null,
-        vatRateLabel: line.vat_rate_id !== null && isVatRateId(line.vat_rate_id) ? VAT_RATE_LABELS[line.vat_rate_id] : null,
+        vatRateLabel:
+          line.vat_rate_id !== null && isVatRateId(line.vat_rate_id) ? VAT_RATE_LABELS[line.vat_rate_id] : null,
         netTotal: line.net_total.toString(),
         vatAmount: line.vat_amount.toString(),
         observationCodes: lineObservations.map((o) => o.code),
@@ -325,7 +344,9 @@ export async function getSupplierInvoiceDetail(id: string) {
     },
     history: [
       { event: 'Cargada', at: at(invoice.created_at), by: userName(invoice.creator), notes: null },
-      ...(invoice.updater ? [{ event: 'Editada', at: at(invoice.updated_at), by: userName(invoice.updater), notes: null }] : []),
+      ...(invoice.updater
+        ? [{ event: 'Editada', at: at(invoice.updated_at), by: userName(invoice.updater), notes: null }]
+        : []),
       ...(invoice.resolved_at
         ? [
             {
@@ -337,7 +358,14 @@ export async function getSupplierInvoiceDetail(id: string) {
           ]
         : []),
       ...(invoice.cancelled_at
-        ? [{ event: 'Anulada', at: at(invoice.cancelled_at), by: userName(invoice.canceller), notes: invoice.cancel_reason }]
+        ? [
+            {
+              event: 'Anulada',
+              at: at(invoice.cancelled_at),
+              by: userName(invoice.canceller),
+              notes: invoice.cancel_reason,
+            },
+          ]
         : []),
     ],
     can: {
@@ -351,7 +379,7 @@ export async function getSupplierInvoiceDetail(id: string) {
 
 /** Valores del formulario para editar un comprobante vigente. */
 export async function getSupplierInvoiceEditValues(id: string): Promise<SupplierInvoiceFormValues | null> {
-  if (!UUID_RE.test(id)) return null;
+  if (!isUuid(id)) return null;
   if (!(await checkPermissionServer('compras', 'facturas', 'update'))) return null;
   const companyId = await getActiveCompanyId();
   const invoice = await prisma.supplier_invoices.findFirst({

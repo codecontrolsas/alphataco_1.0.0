@@ -8,15 +8,29 @@ import {
   buildFiltersWhere,
   buildTextFiltersWhere,
   NULL_FILTER_VALUE,
-  parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
-import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
+import { profileFacetOptions } from '@/shared/lib/table-facet-lookups';
+import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
+import { dateRangeKeys } from '@/shared/lib/table-filters';
+import {
+  containsInsensitive as contains,
+  countDistinctRelations,
+  isOneOf,
+  isUuidOrNull,
+  parseValidatedListState,
+  profileDisplayName,
+  resolveSorts,
+  uniqueSortedByNumber,
+  type SingleFacetResult,
+} from '@/shared/lib/table-list-query';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { isUuid } from '@/shared/lib/uuid';
+import { supplierFacetOptions } from '../../lib/list-facet-lookups';
 import { computeOrderTotals } from '../../lib/order-totals';
 import { canViewPurchasePrices } from '../../lib/price-visibility.server';
 import { PURCHASE_QUOTE_STATUSES } from '../../lib/quote-state-machine';
@@ -65,17 +79,13 @@ const ALLOWED_FILTER_KEYS: ReadonlySet<string> = new Set([
 /** Tope de filas del export. */
 const EXPORT_MAX_ROWS = 10_000;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /** Valores validos por columna con lista cerrada (un valor ajeno haria fallar a Prisma). */
 const VALID_VALUES: Record<string, (value: string) => boolean> = {
-  status: (v) => (PURCHASE_QUOTE_STATUSES as readonly string[]).includes(v),
-  supplier: (v) => UUID_RE.test(v),
-  creator: (v) => UUID_RE.test(v),
-  [REQUESTS_FILTER]: (v) => v === NULL_FILTER_VALUE || UUID_RE.test(v),
+  status: isOneOf(PURCHASE_QUOTE_STATUSES),
+  supplier: isUuid,
+  creator: isUuid,
+  [REQUESTS_FILTER]: isUuidOrNull,
 };
-
-const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
 
 // ============================================================================
 // HELPERS INTERNOS
@@ -90,15 +100,7 @@ async function resolveCompanyId(): Promise<string | null> {
 
 /** Estado de la tabla ya parseado, con solo los filtros permitidos y sus valores validos. */
 function parseListState(searchParams: DataTableSearchParams) {
-  const state = sanitizeFilters(parseSearchParams(searchParams), ALLOWED_FILTER_KEYS);
-  for (const [column, isValid] of Object.entries(VALID_VALUES)) {
-    const values = state.filters[column];
-    if (!values) continue;
-    const valid = values.filter(isValid);
-    if (valid.length > 0) state.filters[column] = valid;
-    else delete state.filters[column];
-  }
-  return state;
+  return parseValidatedListState(searchParams, ALLOWED_FILTER_KEYS, VALID_VALUES);
 }
 
 /** WHERE compartido entre paginated, export y facets. */
@@ -150,8 +152,6 @@ const QUOTE_SELECT = {
   },
 } as const;
 
-const profileName = (p: { fullname: string | null; email: string | null }) => p.fullname ?? p.email ?? '-';
-
 function shape(rows: Prisma.purchase_quotesGetPayload<{ select: typeof QUOTE_SELECT }>[], canViewPrices: boolean) {
   return rows.map((r) => {
     // Total cotizado: solo lineas con precio y alicuota (las "no cotizadas" quedan afuera)
@@ -168,9 +168,6 @@ function shape(rows: Prisma.purchase_quotesGetPayload<{ select: typeof QUOTE_SEL
           ).total
         : null;
 
-    const requests = new Map<string, { id: string; number: string }>();
-    for (const l of r.lines) requests.set(l.request_line.request.id, l.request_line.request);
-
     return {
       id: r.id,
       number: r.number,
@@ -180,9 +177,9 @@ function shape(rows: Prisma.purchase_quotesGetPayload<{ select: typeof QUOTE_SEL
       received_at: r.received_at,
       valid_until: r.valid_until,
       supplier: r.supplier,
-      creator: { id: r.creator.id, name: profileName(r.creator) },
+      creator: { id: r.creator.id, name: profileDisplayName(r.creator) },
       total_quoted,
-      requests: [...requests.values()].sort((a, b) => a.number.localeCompare(b.number)),
+      requests: uniqueSortedByNumber(r.lines.map((l) => l.request_line.request)),
     };
   });
 }
@@ -200,14 +197,11 @@ export async function getPurchaseQuotesPaginated(searchParams: DataTableSearchPa
     const { skip, take } = stateToPrismaParams(state);
     const where = buildWhereClause(companyId, state);
 
-    const resolvedSorts: QuoteOrderBy[] = [];
-    for (const s of state.sorting) {
-      const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-      const fkMapper = FK_SORT_MAP[s.id];
-      if (fkMapper) resolvedSorts.push(fkMapper(dir));
-      else if (VALID_SORT_FIELDS.has(s.id)) resolvedSorts.push({ [s.id]: dir });
-    }
-    const orderBy: QuoteOrderBy[] = [...resolvedSorts, { created_at: 'desc' }, { number: 'desc' }];
+    const orderBy: QuoteOrderBy[] = [
+      ...resolveSorts<QuoteOrderBy>(state.sorting, VALID_SORT_FIELDS, FK_SORT_MAP),
+      { created_at: 'desc' },
+      { number: 'desc' },
+    ];
 
     const [rows, total] = await Promise.all([
       prisma.purchase_quotes.findMany({ where, orderBy, skip, take, select: QUOTE_SELECT }),
@@ -265,7 +259,7 @@ export async function getAllPurchaseQuotesForExport(
 export async function getPurchaseQuoteSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
-): Promise<{ counts: Map<string, number>; resolvedOptions?: Array<{ id: string; name: string | null }> } | null> {
+): Promise<SingleFacetResult> {
   const companyId = await resolveCompanyId();
   if (!companyId) return null;
 
@@ -273,19 +267,7 @@ export async function getPurchaseQuoteSingleFacet(
 
   /** WHERE con todos los filtros activos MENOS el de la columna que se esta abriendo. */
   function crossWhere(excludeColumn: string): QuoteWhere {
-    const base: FilterState = parsed ?? parseListState({});
-    const filters = { ...base.filters };
-    delete filters[excludeColumn];
-    return buildWhereClause(companyId as string, { ...base, filters });
-  }
-
-  function toFacetMap(rows: { key: string | null; count: number }[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const { key, count } of rows) {
-      const k = key == null ? NULL_FILTER_VALUE : key;
-      map.set(k, (map.get(k) ?? 0) + count);
-    }
-    return map;
+    return buildWhereClause(companyId as string, withoutOwnFilter(parsed ?? parseListState({}), excludeColumn));
   }
 
   try {
@@ -298,33 +280,17 @@ export async function getPurchaseQuoteSingleFacet(
 
     if (columnId === 'supplier') {
       const rows = await prisma.purchase_quotes.groupBy({ by: ['supplier_id'], where, _count: true });
-      const ids = rows.map((r) => r.supplier_id);
-      const suppliers = ids.length
-        ? await prisma.suppliers.findMany({
-            where: { id: { in: ids } },
-            select: { id: true, name: true },
-            orderBy: { name: 'asc' },
-          })
-        : [];
       return {
         counts: toFacetMap(rows.map((r) => ({ key: r.supplier_id, count: r._count }))),
-        resolvedOptions: suppliers,
+        resolvedOptions: await supplierFacetOptions(rows.map((r) => r.supplier_id)),
       };
     }
 
     if (columnId === 'creator') {
       const rows = await prisma.purchase_quotes.groupBy({ by: ['created_by'], where, _count: true });
-      const ids = rows.map((r) => r.created_by);
-      const profiles = ids.length
-        ? await prisma.profile.findMany({
-            where: { id: { in: ids } },
-            select: { id: true, fullname: true, email: true },
-            orderBy: { fullname: 'asc' },
-          })
-        : [];
       return {
         counts: toFacetMap(rows.map((r) => ({ key: r.created_by, count: r._count }))),
-        resolvedOptions: profiles.map((p) => ({ id: p.id, name: profileName(p) })),
+        resolvedOptions: await profileFacetOptions(rows.map((r) => r.created_by)),
       };
     }
 
@@ -336,23 +302,7 @@ export async function getPurchaseQuoteSingleFacet(
           lines: { select: { request_line: { select: { request: { select: { id: true, number: true } } } } } },
         },
       });
-      const counts = new Map<string, number>();
-      const names = new Map<string, string>();
-      for (const q of quotes) {
-        const seen = new Set<string>();
-        for (const l of q.lines) {
-          const req = l.request_line.request;
-          names.set(req.id, req.number);
-          if (!seen.has(req.id)) {
-            seen.add(req.id);
-            counts.set(req.id, (counts.get(req.id) ?? 0) + 1);
-          }
-        }
-      }
-      const resolvedOptions = [...names.entries()]
-        .map(([id, name]) => ({ id, name }))
-        .sort((a, b) => a.name.localeCompare(b.name));
-      return { counts, resolvedOptions };
+      return countDistinctRelations(quotes.map((q) => q.lines.map((l) => l.request_line.request)));
     }
 
     logger.warn('Facet no reconocido', { data: { columnId } });

@@ -23,7 +23,8 @@ export function toPurchaseActionError<T = null>(
   context: string,
   duplicateMessage = 'Ya existe un registro con esos datos'
 ): ActionResult<T> {
-  if (error instanceof PurchaseError || error instanceof StockError || error instanceof TreasuryError) return fail(error.message);
+  if (error instanceof PurchaseError || error instanceof StockError || error instanceof TreasuryError)
+    return fail(error.message);
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return fail(duplicateMessage);
   logger.error(`Error al ${context}`, { data: { error } });
   return fail(`No se pudo ${context}. Intentá de nuevo; si persiste, avisá a soporte.`);
@@ -37,4 +38,3 @@ export function firstIssue(error: { issues: { message: string }[] }): string {
 export const NO_PERMISSION = 'No tenés permiso para realizar esta acción';
 
 /** Un id que no es uuid haria fallar la query de Prisma: se responde como "no existe". */
-export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

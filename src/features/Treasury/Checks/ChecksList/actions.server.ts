@@ -9,19 +9,19 @@ import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/expo
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { isUuid } from '@/shared/lib/uuid';
 import moment from 'moment';
-import { depositWarning, DEPOSIT_WINDOW_DAYS, depositDeadline, type DepositWarning } from '../../lib/checks-dates';
+import { DEPOSIT_WINDOW_DAYS, depositDeadline, depositWarning, type DepositWarning } from '../../lib/checks-dates';
+import { isoDay } from '../../lib/dates';
 import {
   buildTreasuryDateRangeWhere,
   facetWhere,
-  isUuid,
   ownEntry,
   parseAmountText,
   parseDay,
   safePaging,
   textValue,
 } from '../../lib/filter-values';
-import { isoDay } from '../../lib/dates';
 import { treasuryToday } from '../../lib/today';
 import { CHECK_KIND_VALUES, CHECK_STATUS_VALUES } from './constants';
 
@@ -35,7 +35,16 @@ type FilterState = ReturnType<typeof parseSearchParams>;
 // CONSTANTS
 // ============================================================================
 
-const VALID_SORT_FIELDS = new Set(['number', 'bank', 'kind', 'drawer_name', 'drawer_cuit', 'amount', 'issue_date', 'payment_date']);
+const VALID_SORT_FIELDS = new Set([
+  'number',
+  'bank',
+  'kind',
+  'drawer_name',
+  'drawer_cuit',
+  'amount',
+  'issue_date',
+  'payment_date',
+]);
 
 const SORT_MAP: Record<string, (dir: 'asc' | 'desc') => CheckOrderBy[]> = {
   customer: (dir) => [{ customer: { name: dir } }],
@@ -216,7 +225,9 @@ export async function getChecksPaginated(searchParams: DataTableSearchParams) {
 // EXPORT (sin paginacion)
 // ============================================================================
 
-export async function getAllChecksForExport(searchParams: DataTableSearchParams): Promise<ExportResult<CheckListItem[]>> {
+export async function getAllChecksForExport(
+  searchParams: DataTableSearchParams
+): Promise<ExportResult<CheckListItem[]>> {
   const companyId = await resolveCompanyId();
   if (!companyId) return { ok: false, message: 'No tiene permiso para exportar los cheques.' };
 
@@ -228,7 +239,8 @@ export async function getAllChecksForExport(searchParams: DataTableSearchParams)
     const rows = await fetchExportRowsInBatches({
       maxRows: EXPORT_LIMIT,
       listIds: (take) => prisma.third_party_checks.findMany({ where, orderBy, select: { id: true }, take }),
-      fetchByIds: (ids) => prisma.third_party_checks.findMany({ where: { id: { in: ids }, company_id: companyId }, select: CHECK_SELECT }),
+      fetchByIds: (ids) =>
+        prisma.third_party_checks.findMany({ where: { id: { in: ids }, company_id: companyId }, select: CHECK_SELECT }),
       tooLargeMessage: (maxRows) =>
         `Hay más de ${maxRows.toLocaleString('es-AR')} cheques con los filtros actuales. Acote la exportación con filtros.`,
     });
@@ -238,7 +250,10 @@ export async function getAllChecksForExport(searchParams: DataTableSearchParams)
     // Resultado discriminado: Next enmascara el mensaje de un error lanzado desde una server action en producción.
     return {
       ok: false,
-      message: error instanceof ExportTooLargeError ? error.message : 'No se pudo exportar la lista de cheques. Intente nuevamente.',
+      message:
+        error instanceof ExportTooLargeError
+          ? error.message
+          : 'No se pudo exportar la lista de cheques. Intente nuevamente.',
     };
   }
 }
@@ -283,16 +298,32 @@ export async function getCheckSingleFacet(
       const ids = [...counts.keys()];
       const resolved = ids.length
         ? columnId === 'customer'
-          ? await prisma.customers.findMany({ where: { id: { in: ids } }, select: { id: true, name: true }, orderBy: { name: 'asc' } })
-          : await prisma.treasury_accounts.findMany({ where: { id: { in: ids } }, select: { id: true, name: true }, orderBy: { name: 'asc' } })
+          ? await prisma.customers.findMany({
+              where: { id: { in: ids } },
+              select: { id: true, name: true },
+              orderBy: { name: 'asc' },
+            })
+          : await prisma.treasury_accounts.findMany({
+              where: { id: { in: ids } },
+              select: { id: true, name: true },
+              orderBy: { name: 'asc' },
+            })
         : [];
       return { counts, resolvedOptions: resolved };
     }
 
     if (columnId === 'destination') {
       const [banks, suppliers, none] = await Promise.all([
-        prisma.third_party_checks.groupBy({ by: ['bank_account_id'], where: { AND: [where, { bank_account_id: { not: null } }] }, _count: true }),
-        prisma.third_party_checks.groupBy({ by: ['supplier_id'], where: { AND: [where, { supplier_id: { not: null } }] }, _count: true }),
+        prisma.third_party_checks.groupBy({
+          by: ['bank_account_id'],
+          where: { AND: [where, { bank_account_id: { not: null } }] },
+          _count: true,
+        }),
+        prisma.third_party_checks.groupBy({
+          by: ['supplier_id'],
+          where: { AND: [where, { supplier_id: { not: null } }] },
+          _count: true,
+        }),
         prisma.third_party_checks.count({ where: { AND: [where, { bank_account_id: null, supplier_id: null }] } }),
       ]);
       const counts = new Map<string, number>();
@@ -302,8 +333,12 @@ export async function getCheckSingleFacet(
       const bankIds = banks.flatMap((r) => (r.bank_account_id ? [r.bank_account_id] : []));
       const supplierIds = suppliers.flatMap((r) => (r.supplier_id ? [r.supplier_id] : []));
       const [accountRows, supplierRows] = await Promise.all([
-        bankIds.length ? prisma.treasury_accounts.findMany({ where: { id: { in: bankIds } }, select: { id: true, name: true } }) : [],
-        supplierIds.length ? prisma.suppliers.findMany({ where: { id: { in: supplierIds } }, select: { id: true, name: true } }) : [],
+        bankIds.length
+          ? prisma.treasury_accounts.findMany({ where: { id: { in: bankIds } }, select: { id: true, name: true } })
+          : [],
+        supplierIds.length
+          ? prisma.suppliers.findMany({ where: { id: { in: supplierIds } }, select: { id: true, name: true } })
+          : [],
       ]);
       const resolvedOptions = [...accountRows, ...supplierRows].sort((a, b) => a.name.localeCompare(b.name));
       return { counts, resolvedOptions };

@@ -1,30 +1,26 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
-import { argentinaDate } from '@/shared/lib/argentina-time';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
+import type { arca_check_result } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
 import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { withActor } from '@/shared/lib/actor';
 import { ArcaAuthError, ArcaError, ArcaServiceError, ArcaTransportError } from '@/shared/lib/arca/errors';
 import { checkVoucherWithArca } from '@/shared/lib/arca/server/gateway';
-import type { arca_check_result } from '@/generated/prisma/enums';
+import { argentinaDate } from '@/shared/lib/argentina-time';
 import { prisma } from '@/shared/lib/prisma';
 import { storageRemove, storageUpload } from '@/shared/lib/storage';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { NO_PERMISSION, UUID_RE, firstIssue, toPurchaseActionError } from '../lib/action-errors';
+import { isUuid } from '@/shared/lib/uuid';
+import { revalidatePath } from 'next/cache';
+import { NO_PERMISSION, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import { controlSupplierInvoice, type InvoiceObservation } from '../lib/invoice-control';
-import { parseObservations } from '../lib/invoice-observations';
 import { expectedSupplierLetter } from '../lib/invoice-letter';
+import { parseObservations } from '../lib/invoice-observations';
 import type { SupplierInvoiceStatus } from '../lib/invoice-status';
-import {
-  computeInvoiceLine,
-  computeSupplierInvoiceTotals,
-  vatBreakdown,
-  vatDifferences,
-} from '../lib/invoice-totals';
+import { computeInvoiceLine, computeSupplierInvoiceTotals, vatBreakdown, vatDifferences } from '../lib/invoice-totals';
 import {
   assertInvoiceLinesLocked,
   assertNoNegativeInvoiced,
@@ -87,11 +83,16 @@ async function buildInvoice(
     select: { id: true, name: true, is_active: true, vat_condition_id: true },
   });
   if (!supplier) throw new PurchaseError('El proveedor no existe');
-  if (!supplier.is_active && options.supplierChanged) throw new PurchaseError(`El proveedor ${supplier.name} está inactivo`);
+  if (!supplier.is_active && options.supplierChanged)
+    throw new PurchaseError(`El proveedor ${supplier.name} está inactivo`);
 
   if (input.issueDate > argentinaDate()) throw new PurchaseError('La fecha de emisión no puede ser futura');
   const { letter, kind } = voucherInfo(input.cbteType);
-  const label = supplierInvoiceLabel({ cbte_type: input.cbteType, sales_point: input.salesPoint, number: input.number });
+  const label = supplierInvoiceLabel({
+    cbte_type: input.cbteType,
+    sales_point: input.salesPoint,
+    number: input.number,
+  });
 
   const duplicate = await tx.supplier_invoices.findFirst({
     where: {
@@ -108,9 +109,14 @@ async function buildInvoice(
   if (duplicate) throw new PurchaseError(`Ya está cargada la ${label} de ${supplier.name}`);
 
   if (input.relatedInvoiceId) {
-    if (!UUID_RE.test(input.relatedInvoiceId)) throw new PurchaseError(RELATED_INVALID);
+    if (!isUuid(input.relatedInvoiceId)) throw new PurchaseError(RELATED_INVALID);
     const related = await tx.supplier_invoices.findFirst({
-      where: { id: input.relatedInvoiceId, company_id: companyId, supplier_id: supplier.id, status: { not: 'CANCELLED' } },
+      where: {
+        id: input.relatedInvoiceId,
+        company_id: companyId,
+        supplier_id: supplier.id,
+        status: { not: 'CANCELLED' },
+      },
       select: { cbte_type: true },
     });
     const info = related ? voucherInfo(related.cbte_type) : null;
@@ -120,9 +126,11 @@ async function buildInvoice(
   }
 
   const categoryIds = [...new Set(input.lines.flatMap((l) => (l.kind === 'expense' ? [l.expenseCategoryId] : [])))];
-  if (categoryIds.some((id) => !UUID_RE.test(id))) throw new PurchaseError('El concepto de gasto no existe');
+  if (categoryIds.some((id) => !isUuid(id))) throw new PurchaseError('El concepto de gasto no existe');
   if (categoryIds.length > 0) {
-    const found = await tx.purchase_expense_categories.count({ where: { id: { in: categoryIds }, company_id: companyId } });
+    const found = await tx.purchase_expense_categories.count({
+      where: { id: { in: categoryIds }, company_id: companyId },
+    });
     if (found !== categoryIds.length) throw new PurchaseError('El concepto de gasto no existe');
   }
   const provinceIds = [...new Set(input.taxes.flatMap((t) => (t.provinceId ? [t.provinceId] : [])))];
@@ -147,8 +155,13 @@ async function buildInvoice(
     return { ...computed, amount: informed?.amount ?? computed.amount };
   });
 
-  const fiscal = await tx.company_fiscal_profiles.findUnique({ where: { company_id: companyId }, select: { tax_condition: true } });
-  const controlLines = await loadOrderLinesForControl(tx, companyId, supplier.id, input, { excludeInvoiceId: options.invoiceId });
+  const fiscal = await tx.company_fiscal_profiles.findUnique({
+    where: { company_id: companyId },
+    select: { tax_condition: true },
+  });
+  const controlLines = await loadOrderLinesForControl(tx, companyId, supplier.id, input, {
+    excludeInvoiceId: options.invoiceId,
+  });
   const control = controlSupplierInvoice({
     kind,
     letter,
@@ -223,17 +236,20 @@ function parseForm(values: SupplierInvoiceFormValues): SupplierInvoiceInput | st
   return toSupplierInvoiceInput(parsed.data);
 }
 
-const orderLineIdsOf = (input: SupplierInvoiceInput) => input.lines.flatMap((l) => (l.kind === 'order' ? [l.orderLineId] : []));
+const orderLineIdsOf = (input: SupplierInvoiceInput) =>
+  input.lines.flatMap((l) => (l.kind === 'order' ? [l.orderLineId] : []));
 
 /**
  * Carga un comprobante (spec Compras etapa 4 §3). En UNA transaccion: lock de las OC de sus
  * lineas -> validaciones -> control -> alta. Queda CONFORMING u OBSERVED segun el control.
  */
-export async function createSupplierInvoice(values: SupplierInvoiceFormValues): Promise<ActionResult<SupplierInvoiceSaveResult>> {
+export async function createSupplierInvoice(
+  values: SupplierInvoiceFormValues
+): Promise<ActionResult<SupplierInvoiceSaveResult>> {
   if (!(await checkPermissionServer('compras', 'facturas', 'create'))) return fail(NO_PERMISSION);
   const input = parseForm(values);
   if (typeof input === 'string') return fail(input);
-  if (orderLineIdsOf(input).some((id) => !UUID_RE.test(id))) return fail('La línea de OC no existe');
+  if (orderLineIdsOf(input).some((id) => !isUuid(id))) return fail('La línea de OC no existe');
   const profile = await getServerAuthProfile();
   if (!profile) return fail(SESSION_EXPIRED);
   const companyId = await getActiveCompanyId();
@@ -278,10 +294,10 @@ export async function updateSupplierInvoice(
   values: SupplierInvoiceFormValues
 ): Promise<ActionResult<SupplierInvoiceSaveResult>> {
   if (!(await checkPermissionServer('compras', 'facturas', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail(NOT_FOUND);
+  if (!isUuid(id)) return fail(NOT_FOUND);
   const input = parseForm(values);
   if (typeof input === 'string') return fail(input);
-  if (orderLineIdsOf(input).some((lineId) => !UUID_RE.test(lineId))) return fail('La línea de OC no existe');
+  if (orderLineIdsOf(input).some((lineId) => !isUuid(lineId))) return fail('La línea de OC no existe');
   const profile = await getServerAuthProfile();
   if (!profile) return fail(SESSION_EXPIRED);
   const companyId = await getActiveCompanyId();
@@ -370,11 +386,12 @@ export async function uploadSupplierInvoiceAttachment(id: string, formData: Form
     checkPermissionServer('compras', 'facturas', 'update'),
   ]);
   if (!canCreate && !canUpdate) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail(NOT_FOUND);
+  if (!isUuid(id)) return fail(NOT_FOUND);
   const file = formData.get('file');
   if (!(file instanceof File) || file.size === 0) return fail('Elegí el archivo');
   if (file.size > INVOICE_ATTACHMENT_MAX_BYTES) return fail('El archivo supera los 10 MB');
-  if (!(INVOICE_ATTACHMENT_TYPES as readonly string[]).includes(file.type)) return fail('El archivo tiene que ser PDF o imagen');
+  if (!(INVOICE_ATTACHMENT_TYPES as readonly string[]).includes(file.type))
+    return fail('El archivo tiene que ser PDF o imagen');
   const companyId = await getActiveCompanyId();
   const invoice = await prisma.supplier_invoices.findFirst({
     where: { id, company_id: companyId, status: { not: 'CANCELLED' } },
@@ -386,7 +403,10 @@ export async function uploadSupplierInvoiceAttachment(id: string, formData: Form
   const uploaded = await storageUpload(SUPPLIER_FILES_BUCKET, path, file);
   if (!uploaded.ok) return fail('No se pudo subir el archivo. Intentá de nuevo.');
   try {
-    await prisma.supplier_invoices.update({ where: { id }, data: { attachment_path: path, attachment_name: file.name } });
+    await prisma.supplier_invoices.update({
+      where: { id },
+      data: { attachment_path: path, attachment_name: file.name },
+    });
     revalidate();
     return ok(null);
   } catch (error) {
@@ -397,7 +417,7 @@ export async function uploadSupplierInvoiceAttachment(id: string, formData: Form
 
 async function resolveInvoice(id: string, comment: string, decision: 'APPROVED' | 'REJECTED'): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'facturas', 'approve'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail(NOT_FOUND);
+  if (!isUuid(id)) return fail(NOT_FOUND);
   const motive = requiredReasonSchema.safeParse(comment);
   if (!motive.success) return fail(firstIssue(motive.error));
   const profile = await getServerAuthProfile();
@@ -422,7 +442,11 @@ async function resolveInvoice(id: string, comment: string, decision: 'APPROVED' 
     revalidate();
     return ok(null);
   } catch (error) {
-    return toPurchaseActionError(error, logger, decision === 'APPROVED' ? 'aprobar el comprobante' : 'rechazar el comprobante');
+    return toPurchaseActionError(
+      error,
+      logger,
+      decision === 'APPROVED' ? 'aprobar el comprobante' : 'rechazar el comprobante'
+    );
   }
 }
 
@@ -439,7 +463,7 @@ export async function rejectSupplierInvoice(id: string, reason: string): Promise
 /** Anula un comprobante (con motivo). Libera lo facturado. No si tiene NC o ND vigentes vinculadas. */
 export async function cancelSupplierInvoice(id: string, reason: string): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'facturas', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail(NOT_FOUND);
+  if (!isUuid(id)) return fail(NOT_FOUND);
   const motive = requiredReasonSchema.safeParse(reason);
   if (!motive.success) return fail(firstIssue(motive.error));
   const profile = await getServerAuthProfile();
@@ -482,9 +506,11 @@ const WSCDC_NOT_AUTHORIZED =
  * - rechazado: observacion ARCA y el comprobante pasa a OBSERVED (se borra la resolucion);
  * - sin respuesta: UNAVAILABLE y el estado no cambia.
  */
-export async function checkSupplierInvoiceInArca(id: string): Promise<ActionResult<{ result: arca_check_result; message: string }>> {
+export async function checkSupplierInvoiceInArca(
+  id: string
+): Promise<ActionResult<{ result: arca_check_result; message: string }>> {
   if (!(await checkPermissionServer('compras', 'facturas', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail(NOT_FOUND);
+  if (!isUuid(id)) return fail(NOT_FOUND);
   const profile = await getServerAuthProfile();
   if (!profile) return fail(SESSION_EXPIRED);
   const companyId = await getActiveCompanyId();
@@ -545,8 +571,13 @@ export async function checkSupplierInvoiceInArca(id: string): Promise<ActionResu
       // Un rechazado sigue rechazado, y uno ya pagado en una orden no deja de estar a pagar (sacarlo
       // de la deuda descuadraria la cuenta corriente): la constatacion solo suma su observacion. En una
       // orden sin pagar si pasa a observado, y eso frena aprobarla y pagarla.
-      const keepStatus = locked.status === 'REJECTED' || (await paymentOrderOfInvoice(tx, id, { paidOnly: true })) !== null;
-      const checkData = { arca_check_result: outcome.result, arca_checked_at: new Date(), arca_check_detail: outcome.detail };
+      const keepStatus =
+        locked.status === 'REJECTED' || (await paymentOrderOfInvoice(tx, id, { paidOnly: true })) !== null;
+      const checkData = {
+        arca_check_result: outcome.result,
+        arca_checked_at: new Date(),
+        arca_check_detail: outcome.detail,
+      };
       if (outcome.observation) {
         const observations = [
           ...parseObservations(current.observations).filter((o) => o.code !== 'ARCA'),
@@ -557,7 +588,9 @@ export async function checkSupplierInvoiceInArca(id: string): Promise<ActionResu
           data: {
             ...checkData,
             observations: observations as Prisma.InputJsonValue,
-            ...(keepStatus ? {} : { status: 'OBSERVED' as const, resolved_by: null, resolved_at: null, resolution_comment: null }),
+            ...(keepStatus
+              ? {}
+              : { status: 'OBSERVED' as const, resolved_by: null, resolved_at: null, resolution_comment: null }),
           },
         });
       } else {

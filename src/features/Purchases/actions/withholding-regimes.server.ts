@@ -1,13 +1,14 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { NO_PERMISSION, UUID_RE, firstIssue, toPurchaseActionError } from '../lib/action-errors';
+import { isUuid } from '@/shared/lib/uuid';
+import { revalidatePath } from 'next/cache';
+import { NO_PERMISSION, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import { cents, money } from '../lib/payment-totals';
 import { trimDecimals } from '../lib/quantity-format';
 import {
@@ -33,7 +34,12 @@ type ScaleRow = { from: string; to: string | null; fixed: string; rate: string }
 function toScale(rows: WithholdingRegimeFormValues['scale']): ScaleRow[] | null {
   if (rows.length === 0) return null;
   return rows
-    .map((row) => ({ from: money(cents(row.from)), to: row.to ? money(cents(row.to)) : null, fixed: money(cents(row.fixed)), rate: row.rate.replace(',', '.') }))
+    .map((row) => ({
+      from: money(cents(row.from)),
+      to: row.to ? money(cents(row.to)) : null,
+      fixed: money(cents(row.fixed)),
+      rate: row.rate.replace(',', '.'),
+    }))
     .sort((a, b) => Number(cents(a.from) - cents(b.from)));
 }
 
@@ -95,9 +101,12 @@ function toData(v: WithholdingRegimeFormValues) {
   };
 }
 
-const duplicate = (v: WithholdingRegimeFormValues) => `Ya existe el régimen ${v.code} de ${WITHHOLDING_TAX_LABELS[v.tax]}`;
+const duplicate = (v: WithholdingRegimeFormValues) =>
+  `Ya existe el régimen ${v.code} de ${WITHHOLDING_TAX_LABELS[v.tax]}`;
 
-export async function createWithholdingRegime(values: WithholdingRegimeFormValues): Promise<ActionResult<{ id: string }>> {
+export async function createWithholdingRegime(
+  values: WithholdingRegimeFormValues
+): Promise<ActionResult<{ id: string }>> {
   if (!(await checkPermissionServer('compras', 'config-compras', 'update'))) return fail(NO_PERMISSION);
   const parsed = withholdingRegimeFormSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
@@ -115,10 +124,13 @@ export async function updateWithholdingRegime(id: string, values: WithholdingReg
   if (!(await checkPermissionServer('compras', 'config-compras', 'update'))) return fail(NO_PERMISSION);
   const parsed = withholdingRegimeFormSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
-  if (!UUID_RE.test(id)) return fail(NOT_FOUND);
+  if (!isUuid(id)) return fail(NOT_FOUND);
   const companyId = await getActiveCompanyId();
   try {
-    const { count } = await prisma.withholding_regimes.updateMany({ where: { id, company_id: companyId }, data: toData(parsed.data) });
+    const { count } = await prisma.withholding_regimes.updateMany({
+      where: { id, company_id: companyId },
+      data: toData(parsed.data),
+    });
     if (count === 0) return fail(NOT_FOUND);
     revalidatePath(PURCHASES_PATH);
     return ok(null);
@@ -130,10 +142,13 @@ export async function updateWithholdingRegime(id: string, values: WithholdingReg
 /** Un regimen inactivo deja de retener (las ordenes ya pagadas no cambian). */
 export async function setWithholdingRegimeActive(id: string, isActive: boolean): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'config-compras', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail(NOT_FOUND);
+  if (!isUuid(id)) return fail(NOT_FOUND);
   const companyId = await getActiveCompanyId();
   try {
-    const { count } = await prisma.withholding_regimes.updateMany({ where: { id, company_id: companyId }, data: { is_active: isActive } });
+    const { count } = await prisma.withholding_regimes.updateMany({
+      where: { id, company_id: companyId },
+      data: { is_active: isActive },
+    });
     if (count === 0) return fail(NOT_FOUND);
     revalidatePath(PURCHASES_PATH);
     return ok(null);

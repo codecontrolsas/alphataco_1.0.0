@@ -13,8 +13,9 @@ import {
 import { prisma } from '@/shared/lib/prisma';
 import { getSessionUserId } from '@/shared/lib/session';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { isUuid } from '@/shared/lib/uuid';
 import { revalidatePath } from 'next/cache';
-import { NO_PERMISSION, UUID_RE, firstIssue, toPurchaseActionError } from '../lib/action-errors';
+import { NO_PERMISSION, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import { materialRequestShortfall, type MaterialRequestShortfall } from '../lib/from-material-request';
 import { PurchaseError } from '../lib/purchase-errors';
 import { nextPurchaseRequestNumber } from '../lib/request-numbering';
@@ -111,7 +112,7 @@ export async function createPurchaseRequest(
 
 /** Edita un borrador: el solicitante, o quien tenga `update`. Las lineas se reescriben. */
 export async function updatePurchaseRequestDraft(id: string, values: PurchaseRequestFormValues): Promise<ActionResult> {
-  if (!UUID_RE.test(id)) return fail('La solicitud no existe');
+  if (!isUuid(id)) return fail('La solicitud no existe');
   const parsed = purchaseRequestFormSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
   const profile = await getServerAuthProfile();
@@ -241,7 +242,7 @@ async function inputFromStored(tx: Tx, requestId: string): Promise<PurchaseReque
 /** Envia el borrador a aprobacion. Revalida todo: el borrador pudo quedar invalido mientras esperaba. */
 export async function submitPurchaseRequest(id: string): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'solicitudes', 'create'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('La solicitud no existe');
+  if (!isUuid(id)) return fail('La solicitud no existe');
   const profile = await getServerAuthProfile();
   if (!profile) return fail(SESSION_EXPIRED);
   const companyId = await getActiveCompanyId();
@@ -333,7 +334,7 @@ async function notifyDecision(
 
 async function decide(id: string, approved: boolean, rawNotes: string): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'solicitudes', 'approve'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('La solicitud no existe');
+  if (!isUuid(id)) return fail('La solicitud no existe');
   const notes = (approved ? decisionNotesSchema : requiredReasonSchema).safeParse(rawNotes);
   if (!notes.success) return fail(firstIssue(notes.error));
   const profile = await getServerAuthProfile();
@@ -372,7 +373,7 @@ export async function rejectPurchaseRequest(id: string, reason: string): Promise
 
 /** Anula un borrador o una pendiente: el solicitante, o quien tenga `update`. */
 export async function cancelPurchaseRequest(id: string, reason: string): Promise<ActionResult> {
-  if (!UUID_RE.test(id)) return fail('La solicitud no existe');
+  if (!isUuid(id)) return fail('La solicitud no existe');
   const motive = requiredReasonSchema.safeParse(reason);
   if (!motive.success) return fail(firstIssue(motive.error));
   const profile = await getServerAuthProfile();
@@ -410,7 +411,7 @@ export async function cancelPurchaseRequest(id: string, reason: string): Promise
  */
 export async function closePurchaseRequest(id: string, reason: string): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'solicitudes', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('La solicitud no existe');
+  if (!isUuid(id)) return fail('La solicitud no existe');
   const motive = requiredReasonSchema.safeParse(reason);
   if (!motive.success) return fail(firstIssue(motive.error));
   const profile = await getServerAuthProfile();
@@ -439,7 +440,7 @@ export async function closePurchaseRequest(id: string, reason: string): Promise<
 /** Copia una rechazada o anulada como un borrador nuevo del usuario actual. */
 export async function copyPurchaseRequest(id: string): Promise<ActionResult<{ id: string; number: string }>> {
   if (!(await checkPermissionServer('compras', 'solicitudes', 'create'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('La solicitud no existe');
+  if (!isUuid(id)) return fail('La solicitud no existe');
   const profile = await getServerAuthProfile();
   if (!profile) return fail(SESSION_EXPIRED);
   const [companyId, canViewAll] = await Promise.all([
@@ -496,7 +497,7 @@ export async function getMaterialRequestShortfall(
   materialRequestId: string
 ): Promise<ActionResult<MaterialRequestShortfall>> {
   if (!(await checkPermissionServer('compras', 'solicitudes', 'create'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(materialRequestId)) return fail('El pedido de materiales no existe');
+  if (!isUuid(materialRequestId)) return fail('El pedido de materiales no existe');
   const profile = await getServerAuthProfile();
   if (!profile) return fail(SESSION_EXPIRED);
   const companyId = await getActiveCompanyId();
@@ -519,7 +520,7 @@ export async function createPurchaseRequestFromMaterialRequest(
   options: { submit: boolean }
 ): Promise<ActionResult<{ id: string; number: string }>> {
   if (!(await checkPermissionServer('compras', 'solicitudes', 'create'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(materialRequestId)) return fail('El pedido de materiales no existe');
+  if (!isUuid(materialRequestId)) return fail('El pedido de materiales no existe');
   const parsed = purchaseRequestFormSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
   const profile = await getServerAuthProfile();

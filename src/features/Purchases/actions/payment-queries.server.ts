@@ -9,7 +9,7 @@ import {
 import { treasuryToday } from '@/features/Treasury/lib/today';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { UUID_RE } from '../lib/action-errors';
+import { isUuid } from '@/shared/lib/uuid';
 import { isCreditNoteCbte, supplierInvoiceLabel } from '../lib/invoices';
 import { canEditOrders, isoDay } from '../lib/payment-action-helpers';
 import { openAdvancesOfSupplier, openInvoicesOfSupplier } from '../lib/payment-balances';
@@ -26,13 +26,13 @@ export async function getPaymentOrderFormData(supplierId?: string, options: { ex
   if (!(await canEditOrders())) return null;
   const companyId = await getActiveCompanyId();
   const empty = { supplier: null, openItems: { invoices: [], advances: [], checkDebts: [] }, purchaseOrders: [] };
-  if (!supplierId || !UUID_RE.test(supplierId)) return empty;
+  if (!supplierId || !isUuid(supplierId)) return empty;
   const supplier = await prisma.suppliers.findFirst({
     where: { id: supplierId, company_id: companyId },
     select: { id: true, name: true, cuit: true, vat_condition_id: true, is_active: true },
   });
   if (!supplier) return empty;
-  const exclude = options.excludeOrderId && UUID_RE.test(options.excludeOrderId) ? options.excludeOrderId : undefined;
+  const exclude = options.excludeOrderId && isUuid(options.excludeOrderId) ? options.excludeOrderId : undefined;
   const included = exclude
     ? (
         await prisma.payment_order_lines.findMany({
@@ -125,7 +125,7 @@ const userName = (p: { fullname: string | null; email: string | null } | null) =
 
 /** Detalle de la orden: lineas, retenciones con certificado, medios, historial y acciones. */
 export async function getPaymentOrderDetail(id: string) {
-  if (!UUID_RE.test(id)) return null;
+  if (!isUuid(id)) return null;
   const [canView, canUpdate, canApprove, canSend] = await Promise.all([
     checkPermissionServer('compras', 'pagos', 'view'),
     checkPermissionServer('compras', 'pagos', 'update'),
@@ -325,7 +325,7 @@ export async function getPaymentOrderDetail(id: string) {
 
 /** Valores del formulario para editar un borrador. */
 export async function getPaymentOrderEditValues(id: string): Promise<PaymentOrderFormValues | null> {
-  if (!UUID_RE.test(id)) return null;
+  if (!isUuid(id)) return null;
   if (!(await checkPermissionServer('compras', 'pagos', 'update'))) return null;
   const companyId = await getActiveCompanyId();
   const order = await prisma.payment_orders.findFirst({

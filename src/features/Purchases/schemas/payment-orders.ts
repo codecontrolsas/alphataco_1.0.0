@@ -1,5 +1,6 @@
-import { z } from 'zod';
 import { AMOUNT_SCALE, parseScaled } from '@/features/Comercial/Facturacion/lib/invoice-math';
+import { isUuid } from '@/shared/lib/uuid';
+import { z } from 'zod';
 import { WITHHOLDING_TAXES } from './payment-settings';
 
 /**
@@ -8,7 +9,6 @@ import { WITHHOLDING_TAXES } from './payment-settings';
  */
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const positive = (value: string) => {
   const scaled = parseScaled(value, AMOUNT_SCALE);
   return scaled !== null && scaled > BigInt(0);
@@ -54,7 +54,12 @@ export const paymentOrderFormSchema = z
     const seen = new Set<string>();
     v.lines.forEach((line, i) => {
       if (!positive(line.amount)) issue(['lines', i, 'amount'], 'Importe inválido');
-      const key = line.kind === 'ADVANCE_APPLIED' ? line.sourceLineId : line.kind === 'REJECTED_CHECK' ? (line.checkId ?? '') : line.invoiceId;
+      const key =
+        line.kind === 'ADVANCE_APPLIED'
+          ? line.sourceLineId
+          : line.kind === 'REJECTED_CHECK'
+            ? line.checkId ?? ''
+            : line.invoiceId;
       if (!key) issue(['lines', i], 'Falta el comprobante o el anticipo');
       else if (seen.has(key)) issue(['lines', i], 'El mismo comprobante o anticipo está dos veces');
       seen.add(key);
@@ -87,42 +92,44 @@ export const PAYMENT_METHOD_LABELS: Record<(typeof SUPPLIER_PAYMENT_METHODS)[num
 export const registerPaymentFormSchema = z
   .object({
     paidOn: z.string().trim().regex(DATE_RE, 'Fecha inválida'),
-    payments: z
-      .array(
-        z.object({
-          method: z.enum(SUPPLIER_PAYMENT_METHODS),
-          accountId: z.string(),
-          amount: z.string().trim(),
-          reference: z.string().trim().max(60, 'Máximo 60 caracteres'),
-          checkNumber: z.string().trim().max(30, 'Máximo 30 caracteres'),
-          checkBank: z.string().trim().max(60, 'Máximo 60 caracteres'),
-          checkDueOn: z.string().trim(),
-          /** Cheque de la cartera que se endosa (solo THIRD_PARTY_CHECK): su importe y su cartera los pone el servidor. */
-          thirdPartyCheckId: z.string().optional(),
-          /** Chequera del cheque propio físico (solo CHECK, Tesorería etapa 3b): la cuenta sale de la chequera. */
-          checkbookId: z.string().optional(),
-        })
-      ),
+    payments: z.array(
+      z.object({
+        method: z.enum(SUPPLIER_PAYMENT_METHODS),
+        accountId: z.string(),
+        amount: z.string().trim(),
+        reference: z.string().trim().max(60, 'Máximo 60 caracteres'),
+        checkNumber: z.string().trim().max(30, 'Máximo 30 caracteres'),
+        checkBank: z.string().trim().max(60, 'Máximo 60 caracteres'),
+        checkDueOn: z.string().trim(),
+        /** Cheque de la cartera que se endosa (solo THIRD_PARTY_CHECK): su importe y su cartera los pone el servidor. */
+        thirdPartyCheckId: z.string().optional(),
+        /** Chequera del cheque propio físico (solo CHECK, Tesorería etapa 3b): la cuenta sale de la chequera. */
+        checkbookId: z.string().optional(),
+      })
+    ),
   })
   .superRefine((v, ctx) => {
     const checks = new Set<string>();
     v.payments.forEach((p, i) => {
-      const issue = (field: string, message: string) => ctx.addIssue({ code: 'custom', path: ['payments', i, field], message });
+      const issue = (field: string, message: string) =>
+        ctx.addIssue({ code: 'custom', path: ['payments', i, field], message });
       if (p.method === 'THIRD_PARTY_CHECK') {
         const id = p.thirdPartyCheckId ?? '';
-        if (!UUID_RE.test(id)) issue('thirdPartyCheckId', 'Elegí el cheque');
+        if (!isUuid(id)) issue('thirdPartyCheckId', 'Elegí el cheque');
         else if (checks.has(id)) issue('thirdPartyCheckId', 'El cheque está dos veces');
         checks.add(id);
         return;
       }
       if (p.method === 'CHECK') {
-        if (!UUID_RE.test(p.checkbookId ?? '')) issue('checkbookId', 'Elegí la chequera');
-      } else if (!p.accountId) issue('accountId', p.method === 'ECHECK' ? 'Elegí la cuenta bancaria' : 'Elegí la cuenta o caja');
+        if (!isUuid(p.checkbookId ?? '')) issue('checkbookId', 'Elegí la chequera');
+      } else if (!p.accountId)
+        issue('accountId', p.method === 'ECHECK' ? 'Elegí la cuenta bancaria' : 'Elegí la cuenta o caja');
       if (!positive(p.amount)) issue('amount', 'Importe inválido');
       if (p.method === 'CHECK' || p.method === 'ECHECK') {
         if (!p.checkNumber) issue('checkNumber', 'Indicá el número del cheque');
         if (!DATE_RE.test(p.checkDueOn)) issue('checkDueOn', 'Indicá la fecha de pago del cheque');
-        else if (DATE_RE.test(v.paidOn) && p.checkDueOn < v.paidOn) issue('checkDueOn', 'La fecha de pago del cheque no puede ser anterior a la del pago');
+        else if (DATE_RE.test(v.paidOn) && p.checkDueOn < v.paidOn)
+          issue('checkDueOn', 'La fecha de pago del cheque no puede ser anterior a la del pago');
       }
     });
   });

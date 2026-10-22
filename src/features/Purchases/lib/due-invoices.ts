@@ -1,24 +1,8 @@
 import 'server-only';
 
-import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
-import { Prisma } from '@/generated/prisma/client';
-import type { payment_order_status } from '@/generated/prisma/enums';
-import {
-  buildDateRangeFiltersWhere,
-  buildFiltersWhere,
-  NULL_FILTER_VALUE,
-  parseSearchParams,
-} from '@/shared/components/common/DataTable/helpers';
-import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
-import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
-import { prisma } from '@/shared/lib/prisma';
-import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
-import { getActiveCompanyId } from '@/shared/lib/tenant';
-import moment from 'moment';
 import { formatVoucherNumber } from '@/features/Comercial/Facturacion/lib/invoice-type';
-import { formatCuit } from './supplier-ids';
-import { supplierInvoiceLabel } from './invoices';
-import { isUuid, parseAmountText, parseDay, textValue } from '@/features/Treasury/lib/filter-values';
+import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { parseAmountText, parseDay, textValue } from '@/features/Treasury/lib/filter-values';
 import {
   rejectedCheckLabel,
   rejectedOwnCheckLabel,
@@ -26,7 +10,25 @@ import {
   type CheckDebtSource,
 } from '@/features/Treasury/lib/rejected-checks';
 import { treasuryToday } from '@/features/Treasury/lib/today';
+import { Prisma } from '@/generated/prisma/client';
+import type { payment_order_status } from '@/generated/prisma/enums';
+import {
+  NULL_FILTER_VALUE,
+  buildDateRangeFiltersWhere,
+  buildFiltersWhere,
+  parseSearchParams,
+} from '@/shared/components/common/DataTable/helpers';
+import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
+import { prisma } from '@/shared/lib/prisma';
+import { dateRangeKeys } from '@/shared/lib/table-filters';
+import { isOneOf, isUuidOrNull, parseValidatedListState } from '@/shared/lib/table-list-query';
+import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { isUuid } from '@/shared/lib/uuid';
+import moment from 'moment';
 import { DAYS_VALUES, DUE_CBTE_TYPE_IDS, DUE_INVOICES_EXPORT_MAX_ROWS } from '../Payments/DueInvoicesList/constants';
+import { supplierInvoiceLabel } from './invoices';
+import { formatCuit } from './supplier-ids';
 
 export type InvoiceWhere = Prisma.supplier_invoicesWhereInput;
 export type InvoiceOrderBy = Prisma.supplier_invoicesOrderByWithRelationInput;
@@ -59,14 +61,12 @@ const ALLOWED_FILTER_KEYS: ReadonlySet<string> = new Set([
   ...dateRangeKeys(DATE_RANGE_COLUMNS),
 ]);
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /** Valores validos por columna con lista cerrada (un valor ajeno haria fallar a Prisma y tumbaria la lista). */
 const VALID_VALUES: Record<string, (value: string) => boolean> = {
-  supplier: (v) => UUID_RE.test(v),
+  supplier: isUuid,
   cbte_type: (v) => (DUE_CBTE_TYPE_IDS as readonly number[]).includes(Number(v)),
-  days: (v) => (DAYS_VALUES as readonly string[]).includes(v),
-  orders: (v) => v === NULL_FILTER_VALUE || UUID_RE.test(v),
+  days: isOneOf(DAYS_VALUES),
+  orders: isUuidOrNull,
 };
 
 /** columnId (URL) -> campo Prisma. */
@@ -92,15 +92,7 @@ const digitsOf = (value: string) => value.replace(/\D/g, '');
 
 /** Estado de la tabla ya parseado, con solo los filtros permitidos y sus valores validos. */
 export function parseListState(searchParams: DataTableSearchParams): FilterState {
-  const state = sanitizeFilters(parseSearchParams(searchParams), ALLOWED_FILTER_KEYS);
-  for (const [column, isValid] of Object.entries(VALID_VALUES)) {
-    const values = state.filters[column];
-    if (!values) continue;
-    const valid = values.filter(isValid);
-    if (valid.length > 0) state.filters[column] = valid;
-    else delete state.filters[column];
-  }
-  return state;
+  return parseValidatedListState(searchParams, ALLOWED_FILTER_KEYS, VALID_VALUES);
 }
 
 /** Empresa si el usuario puede ver la tabla; `null` = sin acceso -> lista vacia. */
@@ -125,7 +117,10 @@ function voucherNumberWhere(text: string): InvoiceWhere | null {
 
 /** Importe tipeado ("1234,56" o "1234.56") -> Decimal exacto; `null` si no es un numero. */
 function parseAmount(text: string): Prisma.Decimal | null {
-  const normalized = text.trim().replace(/\./g, (m, _offset, s: string) => (s.includes(',') ? '' : m)).replace(',', '.');
+  const normalized = text
+    .trim()
+    .replace(/\./g, (m, _offset, s: string) => (s.includes(',') ? '' : m))
+    .replace(',', '.');
   if (!/^\d+(\.\d+)?$/.test(normalized)) return null;
   return new Prisma.Decimal(normalized);
 }
@@ -148,7 +143,16 @@ export function buildWhereClause(companyId: string, state: FilterState, pendingM
 
   const search = state.search?.trim();
   if (search) {
-    const or: InvoiceWhere[] = [{ supplier: { OR: [{ name: { contains: search, mode: 'insensitive' } }, { trade_name: { contains: search, mode: 'insensitive' } }] } }];
+    const or: InvoiceWhere[] = [
+      {
+        supplier: {
+          OR: [
+            { name: { contains: search, mode: 'insensitive' } },
+            { trade_name: { contains: search, mode: 'insensitive' } },
+          ],
+        },
+      },
+    ];
     const byNumber = /^[\d-]+$/.test(search) ? voucherNumberWhere(search) : null;
     if (byNumber) or.push(byNumber);
     and.push({ OR: or });
@@ -214,7 +218,10 @@ export const INVOICE_SELECT = {
   },
 } satisfies Prisma.supplier_invoicesSelect;
 
-export function shape(rows: Prisma.supplier_invoicesGetPayload<{ select: typeof INVOICE_SELECT }>[], pendingMap: Map<string, string>) {
+export function shape(
+  rows: Prisma.supplier_invoicesGetPayload<{ select: typeof INVOICE_SELECT }>[],
+  pendingMap: Map<string, string>
+) {
   const today = moment.utc(todayDate());
   return rows.map((r) => {
     const orders = new Map<string, { id: string; number: string }>();
@@ -238,7 +245,6 @@ export function shape(rows: Prisma.supplier_invoicesGetPayload<{ select: typeof 
   });
 }
 
-
 // ============================================================================
 // DEUDAS POR CHEQUES RECHAZADOS (endosados): se suman como filas
 // ============================================================================
@@ -258,7 +264,8 @@ type DebtRow = {
 };
 
 /** Etiqueta de la deuda según el cheque: de tercero endosado o propio (Tesorería etapa 3b). */
-const debtLabel = (debt: DebtRow) => (debt.source === 'OWN' ? rejectedOwnCheckLabel(debt.number, debt.bank) : rejectedCheckLabel(debt.number, debt.bank));
+const debtLabel = (debt: DebtRow) =>
+  debt.source === 'OWN' ? rejectedOwnCheckLabel(debt.number, debt.bank) : rejectedCheckLabel(debt.number, debt.bank);
 
 export type OpenDebt = DebtRow & { orders: { id: string; number: string }[] };
 
@@ -280,7 +287,8 @@ export async function loadOpenCheckDebts(companyId: string): Promise<OpenDebt[]>
   });
   return rows.map((r) => {
     const orders = new Map<string, { id: string; number: string }>();
-    for (const l of lines) if ((l.third_party_check_id ?? l.own_check_id) === r.id) orders.set(l.payment_order.id, l.payment_order);
+    for (const l of lines)
+      if ((l.third_party_check_id ?? l.own_check_id) === r.id) orders.set(l.payment_order.id, l.payment_order);
     return { ...r, orders: [...orders.values()].sort((a, b) => a.number.localeCompare(b.number)) };
   });
 }
@@ -386,7 +394,8 @@ const nullsLast = (a: number | null, b: number | null, dir: number) =>
 /** Comparador por columna (en memoria), para ordenar facturas y deudas de cheques en una sola lista. */
 const LIGHT_COMPARATORS: Record<string, (a: LightRow, b: LightRow, dir: number) => number> = {
   supplier: (a, b, dir) => dir * a.supplier.localeCompare(b.supplier),
-  number: (a, b, dir) => dir * (a.salesPoint - b.salesPoint || (a.number < b.number ? -1 : a.number > b.number ? 1 : 0)),
+  number: (a, b, dir) =>
+    dir * (a.salesPoint - b.salesPoint || (a.number < b.number ? -1 : a.number > b.number ? 1 : 0)),
   cbte_type: (a, b, dir) => nullsLast(a.cbteType, b.cbteType, dir),
   issue_date: (a, b, dir) => dir * (a.issue - b.issue),
   due_date: (a, b, dir) => nullsLast(a.due, b.due, dir),
@@ -406,7 +415,12 @@ function compareLight(state: FilterState) {
       if (r !== 0) return r;
     }
     // Orden por defecto: vencimiento, emision y numero
-    return nullsLast(a.due, b.due, 1) || a.issue - b.issue || (a.number < b.number ? -1 : a.number > b.number ? 1 : 0) || a.id.localeCompare(b.id);
+    return (
+      nullsLast(a.due, b.due, 1) ||
+      a.issue - b.issue ||
+      (a.number < b.number ? -1 : a.number > b.number ? 1 : 0) ||
+      a.id.localeCompare(b.id)
+    );
   };
 }
 
@@ -425,21 +439,32 @@ export async function listUnified(
 ) {
   const invoices = await prisma.supplier_invoices.findMany({
     where,
-    select: { id: true, cbte_type: true, sales_point: true, number: true, issue_date: true, due_date: true, total: true, supplier: { select: { name: true } } },
+    select: {
+      id: true,
+      cbte_type: true,
+      sales_point: true,
+      number: true,
+      issue_date: true,
+      due_date: true,
+      total: true,
+      supplier: { select: { name: true } },
+    },
   });
   const light: LightRow[] = [
-    ...invoices.map((i): LightRow => ({
-      kind: 'INVOICE',
-      id: i.id,
-      supplier: i.supplier.name,
-      salesPoint: i.sales_point,
-      number: i.number,
-      cbteType: i.cbte_type,
-      issue: i.issue_date.getTime(),
-      due: i.due_date ? i.due_date.getTime() : null,
-      total: new Prisma.Decimal(i.total),
-      pending: new Prisma.Decimal(pendingMap.get(i.id) ?? 0),
-    })),
+    ...invoices.map(
+      (i): LightRow => ({
+        kind: 'INVOICE',
+        id: i.id,
+        supplier: i.supplier.name,
+        salesPoint: i.sales_point,
+        number: i.number,
+        cbteType: i.cbte_type,
+        issue: i.issue_date.getTime(),
+        due: i.due_date ? i.due_date.getTime() : null,
+        total: new Prisma.Decimal(i.total),
+        pending: new Prisma.Decimal(pendingMap.get(i.id) ?? 0),
+      })
+    ),
     ...debts.map((d): LightRow => {
       const due = moment.utc(d.rejected_on, 'YYYY-MM-DD', true).valueOf();
       return {
@@ -458,7 +483,8 @@ export async function listUnified(
   ].sort(compareLight(state));
 
   // Export (sin pagina): el conjunto completo tiene tope y las facturas se traen por tandas
-  if (!page && light.length > DUE_INVOICES_EXPORT_MAX_ROWS) throw new ExportTooLargeError(exportTooLargeMessage(DUE_INVOICES_EXPORT_MAX_ROWS));
+  if (!page && light.length > DUE_INVOICES_EXPORT_MAX_ROWS)
+    throw new ExportTooLargeError(exportTooLargeMessage(DUE_INVOICES_EXPORT_MAX_ROWS));
 
   const slice = page ? light.slice(page.skip, page.skip + page.take) : light;
   const invoiceIds = slice.filter((r) => r.kind === 'INVOICE').map((r) => r.id);
@@ -469,7 +495,11 @@ export async function listUnified(
       : await fetchExportRowsInBatches({
           maxRows: DUE_INVOICES_EXPORT_MAX_ROWS,
           listIds: async (take) => invoiceIds.slice(0, take).map((id) => ({ id })),
-          fetchByIds: (ids) => prisma.supplier_invoices.findMany({ where: { id: { in: ids }, company_id: companyId }, select: INVOICE_SELECT }),
+          fetchByIds: (ids) =>
+            prisma.supplier_invoices.findMany({
+              where: { id: { in: ids }, company_id: companyId },
+              select: INVOICE_SELECT,
+            }),
           tooLargeMessage: exportTooLargeMessage,
         });
   const shapedInvoices = new Map(shape(rows, pendingMap).map((r) => [r.id, r]));

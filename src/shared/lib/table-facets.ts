@@ -4,7 +4,7 @@ import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers'
  * Arma el mapa de conteos de una faceta (`valor → cantidad`). Una clave `null` o `undefined` se cuenta
  * bajo `NULL_FILTER_VALUE` ("Sin asignar"). Antes estaba copiada en 5 archivos de facets de Operaciones.
  */
-export function toFacetMap(rows: ReadonlyArray<{ key: string | boolean | null | undefined; count: number }>) {
+export function toFacetMap(rows: ReadonlyArray<{ key: string | number | boolean | null | undefined; count: number }>) {
   const map = new Map<string, number>();
   for (const { key, count } of rows) {
     if (key == null) {
@@ -83,7 +83,7 @@ export async function runFacet<Where>(config: FacetConfig<Where>, where: Where):
   // La clave de los counts es el valor de la opción (sector/área real), no el id del pivote.
   const counts = toFacetMap(
     rows.map((r) => ({
-      key: typeof r.key === 'string' ? (resolved.get(r.key)?.value ?? r.key) : r.key,
+      key: typeof r.key === 'string' ? resolved.get(r.key)?.value ?? r.key : r.key,
       count: r.count,
     }))
   );

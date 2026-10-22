@@ -1,6 +1,5 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { fail, ok, type ActionResult } from '@/features/Empresa/Clientes/lib/action-result';
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
 import type { Prisma } from '@/generated/prisma/client';
@@ -9,10 +8,12 @@ import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { prisma } from '@/shared/lib/prisma';
 import { storageRemove, storageUpload } from '@/shared/lib/storage';
 import { buildStorageFileUrl } from '@/shared/lib/storage-url';
-import { SUPPLIER_FILES_BUCKET, safeFileName } from '../lib/storage-files';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { NO_PERMISSION, UUID_RE, firstIssue, toPurchaseActionError } from '../lib/action-errors';
+import { isUuid } from '@/shared/lib/uuid';
+import { revalidatePath } from 'next/cache';
+import { NO_PERMISSION, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import { PurchaseError } from '../lib/purchase-errors';
+import { SUPPLIER_FILES_BUCKET, safeFileName } from '../lib/storage-files';
 import { formatCuit, normalizeCbu, normalizeSupplierCuit } from '../lib/supplier-ids';
 import {
   SUPPLIER_DOCUMENT_MAX_BYTES,
@@ -64,7 +65,9 @@ async function applyCategoryChanges(tx: Tx, companyId: string, supplierId: strin
   const add = [...new Set(changes.add)];
   const remove = [...new Set(changes.remove)].filter((id) => !add.includes(id));
   if (add.length > 0) {
-    const valid = await tx.supplier_categories.count({ where: { id: { in: add }, company_id: companyId, is_active: true } });
+    const valid = await tx.supplier_categories.count({
+      where: { id: { in: add }, company_id: companyId, is_active: true },
+    });
     if (valid !== add.length) throw new PurchaseError('Uno de los rubros no existe o está inactivo');
     await tx.supplier_category_links.createMany({
       data: add.map((category_id) => ({ supplier_id: supplierId, category_id })),
@@ -96,7 +99,10 @@ async function applyContacts(
   if (removedContactIds.length > 0) {
     await tx.supplier_contacts.deleteMany({ where: { id: { in: removedContactIds }, supplier_id: supplierId } });
   }
-  await tx.supplier_contacts.updateMany({ where: { supplier_id: supplierId, is_primary: true }, data: { is_primary: false } });
+  await tx.supplier_contacts.updateMany({
+    where: { supplier_id: supplierId, is_primary: true },
+    data: { is_primary: false },
+  });
   for (const contact of contacts) {
     const data = {
       name: contact.name.trim(),
@@ -125,7 +131,7 @@ export async function createSupplier(
     const created = await prisma.$transaction(async (tx) => {
       const data = supplierData(parsed.data);
       await assertCuitFree(tx, companyId, data.cuit, null);
-      const supplier = await tx.suppliers.create({ data: { ...data, }, select: { id: true } });
+      const supplier = await tx.suppliers.create({ data: { ...data }, select: { id: true } });
       await applyContacts(tx, supplier.id, parsed.data.contacts, []);
       await applyCategoryChanges(tx, companyId, supplier.id, categories.data);
       return supplier;
@@ -143,7 +149,7 @@ export async function updateSupplier(
   changes: { removedContactIds: string[]; categories: IdChanges }
 ): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'proveedores', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('El proveedor no existe');
+  if (!isUuid(id)) return fail('El proveedor no existe');
   const parsed = supplierFormSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
   const categories = idChangesSchema.safeParse(changes.categories);
@@ -173,7 +179,7 @@ export type RemovalMode = 'delete' | 'deactivate';
 /** Un proveedor sin uso (sin solicitudes ni documentos) se borra; con uso, se desactiva. */
 export async function removeSupplier(id: string): Promise<ActionResult<{ mode: RemovalMode }>> {
   if (!(await checkPermissionServer('compras', 'proveedores', 'delete'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('El proveedor no existe');
+  if (!isUuid(id)) return fail('El proveedor no existe');
   const companyId = await getActiveCompanyId();
   try {
     const supplier = await prisma.suppliers.findFirst({
@@ -193,10 +199,13 @@ export async function removeSupplier(id: string): Promise<ActionResult<{ mode: R
 
 export async function reactivateSupplier(id: string): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'proveedores', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('El proveedor no existe');
+  if (!isUuid(id)) return fail('El proveedor no existe');
   const companyId = await getActiveCompanyId();
   try {
-    const { count } = await prisma.suppliers.updateMany({ where: { id, company_id: companyId }, data: { is_active: true } });
+    const { count } = await prisma.suppliers.updateMany({
+      where: { id, company_id: companyId },
+      data: { is_active: true },
+    });
     if (count === 0) return fail('El proveedor no existe');
     revalidatePath(PURCHASES_PATH);
     return ok(null);
@@ -211,13 +220,17 @@ export async function reactivateSupplier(id: string): Promise<ActionResult> {
  * Sube un documento del proveedor. `replacesId` marca el documento que reemplaza: el anterior
  * queda en el historial y su archivo no se borra. Si la base falla, se borra el archivo subido.
  */
-export async function uploadSupplierDocument(supplierId: string, formData: FormData): Promise<ActionResult<{ id: string }>> {
+export async function uploadSupplierDocument(
+  supplierId: string,
+  formData: FormData
+): Promise<ActionResult<{ id: string }>> {
   if (!(await checkPermissionServer('compras', 'proveedores', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(supplierId)) return fail('El proveedor no existe');
+  if (!isUuid(supplierId)) return fail('El proveedor no existe');
   const file = formData.get('file');
   if (!(file instanceof File) || file.size === 0) return fail('Elegí el archivo');
   if (file.size > SUPPLIER_DOCUMENT_MAX_BYTES) return fail('El archivo supera los 10 MB');
-  if (!(SUPPLIER_DOCUMENT_TYPES as readonly string[]).includes(file.type)) return fail('El archivo tiene que ser PDF o imagen');
+  if (!(SUPPLIER_DOCUMENT_TYPES as readonly string[]).includes(file.type))
+    return fail('El archivo tiene que ser PDF o imagen');
   const parsed = supplierDocumentSchema.safeParse({
     name: String(formData.get('name') ?? ''),
     expiresAt: String(formData.get('expiresAt') ?? ''),
@@ -228,7 +241,10 @@ export async function uploadSupplierDocument(supplierId: string, formData: FormD
   const profile = await getServerAuthProfile();
   if (!profile) return fail('Tu sesión expiró. Volvé a ingresar.');
   const companyId = await getActiveCompanyId();
-  const supplier = await prisma.suppliers.findFirst({ where: { id: supplierId, company_id: companyId }, select: { id: true } });
+  const supplier = await prisma.suppliers.findFirst({
+    where: { id: supplierId, company_id: companyId },
+    select: { id: true },
+  });
   if (!supplier) return fail('El proveedor no existe');
 
   const path = `${companyId}/${supplierId}/${Date.now()}-${safeFileName(file.name)}`;
@@ -270,7 +286,7 @@ export async function uploadSupplierDocument(supplierId: string, formData: FormD
 /** Ficha del proveedor: datos, contactos, rubros y documentos (vigentes e historial). */
 export async function getSupplierDetail(id: string) {
   if (!(await checkPermissionServer('compras', 'proveedores', 'view'))) return null;
-  if (!UUID_RE.test(id)) return null;
+  if (!isUuid(id)) return null;
   const companyId = await getActiveCompanyId();
   const supplier = await prisma.suppliers.findFirst({
     where: { id, company_id: companyId },

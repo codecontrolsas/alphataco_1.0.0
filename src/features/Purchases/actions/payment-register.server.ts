@@ -32,8 +32,9 @@ import { getServerAuthProfile } from '@/shared/actions/auth.actions';
 import { withActor } from '@/shared/lib/actor';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { isUuid } from '@/shared/lib/uuid';
 import { revalidatePath } from 'next/cache';
-import { NO_PERMISSION, UUID_RE, firstIssue, toPurchaseActionError } from '../lib/action-errors';
+import { NO_PERMISSION, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import {
   NOT_FOUND,
   SESSION_EXPIRED,
@@ -132,7 +133,7 @@ export async function registerPayment(
   values: RegisterPaymentFormValues
 ): Promise<ActionResult<{ number: string; certificates: string[] }>> {
   if (!(await checkPermissionServer('compras', 'pagos', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail(NOT_FOUND);
+  if (!isUuid(id)) return fail(NOT_FOUND);
   const parsed = registerPaymentFormSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
   const profile = await getServerAuthProfile();
@@ -312,7 +313,7 @@ export async function registerPayment(
  */
 export async function cancelPaymentOrder(id: string, reason: string): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'pagos', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail(NOT_FOUND);
+  if (!isUuid(id)) return fail(NOT_FOUND);
   const motive = requiredReasonSchema.safeParse(reason);
   if (!motive.success) return fail(firstIssue(motive.error));
   const profile = await getServerAuthProfile();

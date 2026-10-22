@@ -1,24 +1,34 @@
 'use server';
 
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
+import { DESTINATION_SELECT, destinationLabel } from '@/features/Warehouses/lib/labels';
 import { STOCK_DESTINATION_TYPES } from '@/features/Warehouses/schemas/stock-movement';
 import { Prisma } from '@/generated/prisma/client';
 import { Logger } from '@/lib/logger';
 import {
+  NULL_FILTER_VALUE,
   buildDateRangeFiltersWhere,
   buildFiltersWhere,
   buildSearchWhere,
   buildTextFiltersWhere,
-  NULL_FILTER_VALUE,
-  parseSearchParams,
   stateToPrismaParams,
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { ExportTooLargeError, fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
-import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
-import { DESTINATION_SELECT, destinationLabel } from '@/features/Warehouses/lib/labels';
+import { profileFacetOptions } from '@/shared/lib/table-facet-lookups';
+import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
+import { dateRangeKeys } from '@/shared/lib/table-filters';
+import {
+  containsInsensitive as contains,
+  isOneOf,
+  parseValidatedListState,
+  profileDisplayName,
+  resolveSorts,
+  type SingleFacetResult,
+} from '@/shared/lib/table-list-query';
+import { isUuid } from '@/shared/lib/uuid';
 import { orderedQuantitySql } from '../../lib/ordered-quantity-sql';
 import {
   purchaseRequestScopeConditions,
@@ -68,13 +78,11 @@ const ALLOWED_FILTER_KEYS: ReadonlySet<string> = new Set([
 /** Tope de filas del export. */
 const EXPORT_MAX_ROWS = 10_000;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /** Valores validos por columna con lista cerrada (un valor ajeno haria fallar a Prisma y tumbaria la lista). */
 const VALID_VALUES: Record<string, (value: string) => boolean> = {
-  status: (v) => (PURCHASE_REQUEST_STATUSES as readonly string[]).includes(v),
+  status: isOneOf(PURCHASE_REQUEST_STATUSES),
   destination_type: (v) => v === NULL_FILTER_VALUE || (STOCK_DESTINATION_TYPES as readonly string[]).includes(v),
-  requester: (v) => UUID_RE.test(v),
+  requester: isUuid,
 };
 
 /** columnId (URL) -> campo Prisma, solo donde difieren. */
@@ -82,23 +90,13 @@ const COLUMN_MAP: Record<string, string> = {
   requester: 'requested_by',
 };
 
-const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
-
 // ============================================================================
 // HELPERS INTERNOS
 // ============================================================================
 
 /** Estado de la tabla ya parseado, con solo los filtros permitidos y sus valores validos. */
 function parseListState(searchParams: DataTableSearchParams) {
-  const state = sanitizeFilters(parseSearchParams(searchParams), ALLOWED_FILTER_KEYS);
-  for (const [column, isValid] of Object.entries(VALID_VALUES)) {
-    const values = state.filters[column];
-    if (!values) continue;
-    const valid = values.filter(isValid);
-    if (valid.length > 0) state.filters[column] = valid;
-    else delete state.filters[column];
-  }
-  return state;
+  return parseValidatedListState(searchParams, ALLOWED_FILTER_KEYS, VALID_VALUES);
 }
 
 /** WHERE compartido entre paginated, export y facets (incluye la visibilidad). */
@@ -108,7 +106,11 @@ function buildWhereClause(scope: Scope, state: FilterState): RequestWhere {
   const and: RequestWhere[] = purchaseRequestScopeConditions(scope);
 
   and.push(buildSearchWhere(state.search, ['number', 'notes']) as RequestWhere);
-  and.push(buildFiltersWhere(f, COLUMN_MAP, { exclude: [...TEXT_FILTER_COLUMNS, ORIGIN_FILTER, DESTINATION_FILTER] }) as RequestWhere);
+  and.push(
+    buildFiltersWhere(f, COLUMN_MAP, {
+      exclude: [...TEXT_FILTER_COLUMNS, ORIGIN_FILTER, DESTINATION_FILTER],
+    }) as RequestWhere
+  );
   and.push(buildTextFiltersWhere(f, TEXT_FILTER_COLUMNS) as RequestWhere);
   and.push(buildDateRangeFiltersWhere(f, DATE_RANGE_COLUMNS) as RequestWhere);
 
@@ -145,8 +147,6 @@ const REQUEST_SELECT = {
   ...DESTINATION_SELECT,
 } as const;
 
-const profileName = (p: { fullname: string | null; email: string | null }) => p.fullname ?? p.email ?? '-';
-
 /** Estados en los que "Avance" no tiene sentido (todavia no se puede pedir, o ya no se va a pedir). */
 const NO_PROGRESS_STATUSES = new Set(['DRAFT', 'PENDING_APPROVAL', 'REJECTED', 'CANCELLED']);
 
@@ -182,11 +182,11 @@ async function shape(rows: Prisma.purchase_requestsGetPayload<{ select: typeof R
     needed_by: r.needed_by,
     destination_type: r.destination_type,
     destination: destinationLabel(r),
-    requester: { id: r.requester.id, name: profileName(r.requester), email: r.requester.email },
+    requester: { id: r.requester.id, name: profileDisplayName(r.requester), email: r.requester.email },
     material_request: r.material_request,
     lines_count: r._count.lines,
     // null = no aplica por el estado (borrador, pendiente, rechazada, anulada)
-    progress: NO_PROGRESS_STATUSES.has(r.status) ? null : (progress.get(r.id) ?? 0),
+    progress: NO_PROGRESS_STATUSES.has(r.status) ? null : progress.get(r.id) ?? 0,
   }));
 }
 
@@ -203,14 +203,11 @@ export async function getPurchaseRequestsPaginated(searchParams: DataTableSearch
     const { skip, take } = stateToPrismaParams(state);
     const where = buildWhereClause(scope, state);
 
-    const resolvedSorts: RequestOrderBy[] = [];
-    for (const s of state.sorting) {
-      const dir: 'asc' | 'desc' = s.desc ? 'desc' : 'asc';
-      const fkMapper = FK_SORT_MAP[s.id];
-      if (fkMapper) resolvedSorts.push(fkMapper(dir));
-      else if (VALID_SORT_FIELDS.has(s.id)) resolvedSorts.push({ [s.id]: dir });
-    }
-    const orderBy: RequestOrderBy[] = [...resolvedSorts, { created_at: 'desc' }, { number: 'desc' }];
+    const orderBy: RequestOrderBy[] = [
+      ...resolveSorts<RequestOrderBy>(state.sorting, VALID_SORT_FIELDS, FK_SORT_MAP),
+      { created_at: 'desc' },
+      { number: 'desc' },
+    ];
 
     const [rows, total] = await Promise.all([
       prisma.purchase_requests.findMany({ where, orderBy, skip, take, select: REQUEST_SELECT }),
@@ -270,7 +267,7 @@ export async function getAllPurchaseRequestsForExport(
 export async function getPurchaseRequestSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
-): Promise<{ counts: Map<string, number>; resolvedOptions?: Array<{ id: string; name: string | null }> } | null> {
+): Promise<SingleFacetResult> {
   const scope = await resolveScope();
   if (!scope) return null;
 
@@ -278,19 +275,7 @@ export async function getPurchaseRequestSingleFacet(
 
   /** WHERE con todos los filtros activos MENOS el de la columna que se esta abriendo. */
   function crossWhere(excludeColumn: string): RequestWhere {
-    const base: FilterState = parsed ?? parseListState({});
-    const filters = { ...base.filters };
-    delete filters[excludeColumn];
-    return buildWhereClause(scope as Scope, { ...base, filters });
-  }
-
-  function toFacetMap(rows: { key: string | null; count: number }[]): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const { key, count } of rows) {
-      const k = key == null ? NULL_FILTER_VALUE : key;
-      map.set(k, (map.get(k) ?? 0) + count);
-    }
-    return map;
+    return buildWhereClause(scope as Scope, withoutOwnFilter(parsed ?? parseListState({}), excludeColumn));
   }
 
   try {
@@ -308,17 +293,9 @@ export async function getPurchaseRequestSingleFacet(
 
     if (columnId === 'requester') {
       const rows = await prisma.purchase_requests.groupBy({ by: ['requested_by'], where, _count: true });
-      const ids = rows.map((r) => r.requested_by);
-      const profiles = ids.length
-        ? await prisma.profile.findMany({
-            where: { id: { in: ids } },
-            select: { id: true, fullname: true, email: true },
-            orderBy: { fullname: 'asc' },
-          })
-        : [];
       return {
         counts: toFacetMap(rows.map((r) => ({ key: r.requested_by, count: r._count }))),
-        resolvedOptions: profiles.map((p) => ({ id: p.id, name: profileName(p) })),
+        resolvedOptions: await profileFacetOptions(rows.map((r) => r.requested_by)),
       };
     }
 

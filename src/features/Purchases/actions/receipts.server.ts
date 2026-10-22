@@ -14,8 +14,9 @@ import { prisma } from '@/shared/lib/prisma';
 import { storageRemove, storageUpload } from '@/shared/lib/storage';
 import { buildStorageFileUrl } from '@/shared/lib/storage-url';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { isUuid } from '@/shared/lib/uuid';
 import { revalidatePath } from 'next/cache';
-import { NO_PERMISSION, UUID_RE, firstIssue, toPurchaseActionError } from '../lib/action-errors';
+import { NO_PERMISSION, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import { nextPurchaseDocumentNumber } from '../lib/document-number';
 import { assertReceiptCancellationKeepsInvoicesCovered } from '../lib/invoices';
 import { lockRequestsForLines, recomputeRequestProgress, remainingOf, requestLineLabel } from '../lib/order-progress';
@@ -77,9 +78,7 @@ const ORDER_LINE_SELECT = {
  * material) y alta de cubiertas en Gomeria -> estado de la OC y avance de las solicitudes. Si el
  * motor rechaza algo, no queda nada.
  */
-export async function createPurchaseReceipt(
-  values: PurchaseReceiptFormValues
-): Promise<
+export async function createPurchaseReceipt(values: PurchaseReceiptFormValues): Promise<
   ActionResult<{
     id: string;
     number: string;
@@ -128,7 +127,7 @@ export async function createPurchaseReceipt(
         const materialLines = input.lines.filter((line) => byId.get(line.orderLineId)!.request_line.material);
         let warehouse: { id: string; name: string } | null = null;
         if (materialLines.length > 0) {
-          if (!input.warehouseId || !UUID_RE.test(input.warehouseId))
+          if (!input.warehouseId || !isUuid(input.warehouseId))
             throw new PurchaseError('Elegí el depósito donde entra el material');
           const found = await tx.warehouses.findFirst({
             where: { id: input.warehouseId, company_id: companyId },
@@ -303,7 +302,7 @@ export async function createPurchaseReceipt(
 /** Adjunta el remito escaneado. El archivo anterior no se borra (queda en el storage). */
 export async function uploadPurchaseReceiptAttachment(id: string, formData: FormData): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'recepciones', 'create'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('La recepción no existe');
+  if (!isUuid(id)) return fail('La recepción no existe');
   const file = formData.get('file');
   if (!(file instanceof File) || file.size === 0) return fail('Elegí el archivo');
   if (file.size > RECEIPT_ATTACHMENT_MAX_BYTES) return fail('El archivo supera los 10 MB');
@@ -338,7 +337,7 @@ export async function uploadPurchaseReceiptAttachment(id: string, formData: Form
  */
 export async function cancelPurchaseReceipt(id: string, reason: string): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'recepciones', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail('La recepción no existe');
+  if (!isUuid(id)) return fail('La recepción no existe');
   const motive = requiredReasonSchema.safeParse(reason);
   if (!motive.success) return fail(firstIssue(motive.error));
   const profile = await getServerAuthProfile();
@@ -445,7 +444,7 @@ export async function cancelPurchaseReceipt(id: string, reason: string): Promise
 /** Datos para el formulario: la OC, sus lineas con algo por recibir y los depositos activos. */
 export async function getReceiptFormData(orderId: string) {
   if (!(await checkPermissionServer('compras', 'recepciones', 'create'))) return null;
-  if (!UUID_RE.test(orderId)) return null;
+  if (!isUuid(orderId)) return null;
   const companyId = await getActiveCompanyId();
   const order = await prisma.purchase_orders.findFirst({
     where: { id: orderId, company_id: companyId },
@@ -509,7 +508,7 @@ const userName = (p: { fullname: string | null; email: string | null } | null) =
 
 /** Detalle de la recepcion: OC, deposito, remito, lineas, movimientos, complementaria e historial. */
 export async function getPurchaseReceiptDetail(id: string) {
-  if (!UUID_RE.test(id)) return null;
+  if (!isUuid(id)) return null;
   const [canView, canUpdate] = await Promise.all([
     checkPermissionServer('compras', 'recepciones', 'view'),
     checkPermissionServer('compras', 'recepciones', 'update'),

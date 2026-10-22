@@ -10,7 +10,8 @@ import { toPdfDownload } from '@/shared/lib/pdf/react-pdf.server';
 import type { PdfDownload } from '@/shared/lib/pdf/types';
 import { prisma } from '@/shared/lib/prisma';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
-import { NO_PERMISSION, UUID_RE, firstIssue, toPurchaseActionError } from '../lib/action-errors';
+import { isUuid } from '@/shared/lib/uuid';
+import { NO_PERMISSION, firstIssue, toPurchaseActionError } from '../lib/action-errors';
 import { nextPurchaseDocumentNumber } from '../lib/document-number';
 import {
   NOT_FOUND,
@@ -53,7 +54,7 @@ export async function previewPaymentOrder(
     const built = await prisma.$transaction(async (tx) => {
       const supplier = await lockSupplier(tx, companyId, parsed.data.supplierId);
       return buildPaymentOrder(tx, companyId, supplier, parsed.data, {
-        orderId: options.orderId && UUID_RE.test(options.orderId) ? options.orderId : undefined,
+        orderId: options.orderId && isUuid(options.orderId) ? options.orderId : undefined,
       });
     });
     return ok({ totals: built.totals, withholdings: built.withholdings });
@@ -109,7 +110,7 @@ export async function createPaymentOrder(
 /** Edita un borrador: reemplaza lineas y retenciones. */
 export async function updatePaymentOrder(id: string, values: PaymentOrderFormValues): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'pagos', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail(NOT_FOUND);
+  if (!isUuid(id)) return fail(NOT_FOUND);
   const parsed = paymentOrderFormSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
   const profile = await getServerAuthProfile();
@@ -149,7 +150,7 @@ export async function updatePaymentOrder(id: string, values: PaymentOrderFormVal
 
 export async function submitPaymentOrder(id: string): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'pagos', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail(NOT_FOUND);
+  if (!isUuid(id)) return fail(NOT_FOUND);
   const profile = await getServerAuthProfile();
   if (!profile) return fail(SESSION_EXPIRED);
   const companyId = await getActiveCompanyId();
@@ -168,7 +169,7 @@ export async function submitPaymentOrder(id: string): Promise<ActionResult> {
 /** Aprueba: congela las retenciones. Vuelve a validar comprobantes y anticipos. */
 export async function approvePaymentOrder(id: string): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'pagos', 'approve'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail(NOT_FOUND);
+  if (!isUuid(id)) return fail(NOT_FOUND);
   const profile = await getServerAuthProfile();
   if (!profile) return fail(SESSION_EXPIRED);
   const companyId = await getActiveCompanyId();
@@ -191,7 +192,7 @@ export async function approvePaymentOrder(id: string): Promise<ActionResult> {
 
 export async function rejectPaymentOrder(id: string, reason: string): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'pagos', 'approve'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail(NOT_FOUND);
+  if (!isUuid(id)) return fail(NOT_FOUND);
   const motive = requiredReasonSchema.safeParse(reason);
   if (!motive.success) return fail(firstIssue(motive.error));
   const profile = await getServerAuthProfile();
@@ -222,7 +223,7 @@ export async function rejectPaymentOrder(id: string, reason: string): Promise<Ac
 /** Vuelve a borrador (para recalcular o corregir) desde pendiente o aprobada. */
 export async function backToDraftPaymentOrder(id: string): Promise<ActionResult> {
   if (!(await checkPermissionServer('compras', 'pagos', 'update'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail(NOT_FOUND);
+  if (!isUuid(id)) return fail(NOT_FOUND);
   const profile = await getServerAuthProfile();
   if (!profile) return fail(SESSION_EXPIRED);
   const companyId = await getActiveCompanyId();
@@ -244,7 +245,7 @@ export async function backToDraftPaymentOrder(id: string): Promise<ActionResult>
 /** PDF de la orden de pago con sus certificados (marca de agua si no esta pagada). */
 export async function getPaymentOrderPdf(id: string): Promise<ActionResult<PdfDownload>> {
   if (!(await checkPermissionServer('compras', 'pagos', 'view'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail(NOT_FOUND);
+  if (!isUuid(id)) return fail(NOT_FOUND);
   const companyId = await getActiveCompanyId();
   try {
     const pdf = await renderPaymentOrderPdf(id, companyId);
@@ -261,7 +262,7 @@ export async function getPaymentOrderPdf(id: string): Promise<ActionResult<PdfDo
 export async function sendPaymentOrder(id: string, values: SendDocumentValues): Promise<ActionResult> {
   // Pagos no tiene `view_prices` (ver la pestaña implica ver importes): enviar exige solo `send`.
   if (!(await checkPermissionServer('compras', 'pagos', 'send'))) return fail(NO_PERMISSION);
-  if (!UUID_RE.test(id)) return fail(NOT_FOUND);
+  if (!isUuid(id)) return fail(NOT_FOUND);
   const parsed = sendDocumentSchema.safeParse(values);
   if (!parsed.success) return fail(firstIssue(parsed.error));
   const companyId = await getActiveCompanyId();

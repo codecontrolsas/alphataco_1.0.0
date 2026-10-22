@@ -1,7 +1,6 @@
 'use server';
 
 import { checkPermissionServer } from '@/features/Permissions/actions/permissions.server';
-import { UUID_RE } from '@/features/Purchases/lib/action-errors';
 import type { Prisma } from '@/generated/prisma/client';
 import { certification_status } from '@/generated/prisma/enums';
 import { Logger } from '@/lib/logger';
@@ -20,6 +19,7 @@ import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
+import { isUuid } from '@/shared/lib/uuid';
 import { PENDING_INVOICING_STATUS } from '../lib/attention';
 
 const logger = new Logger('Comercial/Certificaciones/list/actions.server');
@@ -159,7 +159,7 @@ function sanitizeUuidFilters(filters: Record<string, string[]>): Record<string, 
   const result = { ...filters };
   for (const key of ['customer', 'contract']) {
     const values = result[key];
-    if (values?.length) result[key] = values.filter((v) => UUID_RE.test(v));
+    if (values?.length) result[key] = values.filter(isUuid);
     // Todos inválidos: que no se quite el filtro, que no encuentre nada
     if (values?.length && result[key].length === 0) result[key] = ['00000000-0000-0000-0000-000000000000'];
   }
