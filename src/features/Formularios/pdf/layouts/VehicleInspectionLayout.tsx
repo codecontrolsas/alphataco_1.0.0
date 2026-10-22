@@ -312,37 +312,26 @@ export const VehicleInspectionLayout = ({
     </View>
   );
 
+  const renderInfoRow = (label: string, value?: string) => (
+    <View style={styles.infoRow}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={styles.infoValue}>{value}</Text>
+    </View>
+  );
+
   const renderInfoGrid = () => (
     <View style={styles.infoGrid}>
       <View style={styles.infoColumn}>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Fecha:</Text>
-          <Text style={styles.infoValue}>{data?.fecha}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Conductor:</Text>
-          <Text style={styles.infoValue}>{data?.conductor}</Text>
-        </View>
+        {renderInfoRow('Fecha:', data?.fecha)}
+        {renderInfoRow('Conductor:', data?.conductor)}
       </View>
       <View style={styles.infoColumn}>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Interno:</Text>
-          <Text style={styles.infoValue}>{data?.interno}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Dominio:</Text>
-          <Text style={styles.infoValue}>{data?.dominio}</Text>
-        </View>
+        {renderInfoRow('Interno:', data?.interno)}
+        {renderInfoRow('Dominio:', data?.dominio)}
       </View>
       <View style={styles.infoColumn}>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Kilometraje:</Text>
-          <Text style={styles.infoValue}>{data?.kilometraje}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Hora:</Text>
-          <Text style={styles.infoValue}>{data?.hora}</Text>
-        </View>
+        {renderInfoRow('Kilometraje:', data?.kilometraje)}
+        {renderInfoRow('Hora:', data?.hora)}
       </View>
     </View>
   );
@@ -361,49 +350,33 @@ export const VehicleInspectionLayout = ({
     </View>
   );
 
+  const renderTableColumn = (columnItems: typeof items) => (
+    <View style={styles.tableColumn}>
+      <View style={styles.table}>
+        {columnItems.map((item, index) =>
+          item.title ? (
+            <View key={`title-${index}`} style={styles.tableHeader}>
+              <Text style={styles.tableHeaderText}>{item.label}</Text>
+            </View>
+          ) : (
+            <View key={`row-${index}`} style={styles.tableRow}>
+              <View style={styles.tableCellLeft}>
+                <Text style={styles.tableCellText}>{item.label}</Text>
+              </View>
+              <View style={styles.tableCellRight}>
+                <Text style={styles.tableCellText}>{item.result}</Text>
+              </View>
+            </View>
+          )
+        )}
+      </View>
+    </View>
+  );
+
   const renderTableColumns = (pageItems: { leftItems: typeof items; rightItems: typeof items }) => (
     <View style={styles.tablesContainer}>
-      <View style={styles.tableColumn}>
-        <View style={styles.table}>
-          {pageItems.leftItems.map((item, index) =>
-            item.title ? (
-              <View key={`title-${index}`} style={styles.tableHeader}>
-                <Text style={styles.tableHeaderText}>{item.label}</Text>
-              </View>
-            ) : (
-              <View key={`row-${index}`} style={styles.tableRow}>
-                <View style={styles.tableCellLeft}>
-                  <Text style={styles.tableCellText}>{item.label}</Text>
-                </View>
-                <View style={styles.tableCellRight}>
-                  <Text style={styles.tableCellText}>{item.result}</Text>
-                </View>
-              </View>
-            )
-          )}
-        </View>
-      </View>
-
-      <View style={styles.tableColumn}>
-        <View style={styles.table}>
-          {pageItems.rightItems.map((item, index) =>
-            item.title ? (
-              <View key={`title-${index}`} style={styles.tableHeader}>
-                <Text style={styles.tableHeaderText}>{item.label}</Text>
-              </View>
-            ) : (
-              <View key={`row-${index}`} style={styles.tableRow}>
-                <View style={styles.tableCellLeft}>
-                  <Text style={styles.tableCellText}>{item.label}</Text>
-                </View>
-                <View style={styles.tableCellRight}>
-                  <Text style={styles.tableCellText}>{item.result}</Text>
-                </View>
-              </View>
-            )
-          )}
-        </View>
-      </View>
+      {renderTableColumn(pageItems.leftItems)}
+      {renderTableColumn(pageItems.rightItems)}
     </View>
   );
 

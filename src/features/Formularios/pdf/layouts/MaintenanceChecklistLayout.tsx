@@ -380,6 +380,13 @@ export const MaintenanceChecklistLayout = ({
     </View>
   );
 
+  const renderInfoRow = (label: string, value?: string) => (
+    <View style={styles.infoRow}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={styles.infoValue}>{value || ''}</Text>
+    </View>
+  );
+
   const renderSignature = () => (
     <View style={styles.signatureContainer}>
       {singurl && !singurl.endsWith('_files/') ? (
@@ -407,29 +414,14 @@ export const MaintenanceChecklistLayout = ({
 
           <View style={styles.infoGrid}>
             <View style={styles.infoColumn}>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Fecha:</Text>
-                <Text style={styles.infoValue}>{data?.fecha || ''}</Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Dominio:</Text>
-                <Text style={styles.infoValue}>{data?.dominio || ''}</Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Chofer:</Text>
-                <Text style={styles.infoValue}>{data?.chofer || ''}</Text>
-              </View>
+              {renderInfoRow('Fecha:', data?.fecha)}
+              {renderInfoRow('Dominio:', data?.dominio)}
+              {renderInfoRow('Chofer:', data?.chofer)}
             </View>
 
             <View style={styles.infoColumn}>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Kilometraje:</Text>
-                <Text style={styles.infoValue}>{data?.kilometraje || ''}</Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Hora:</Text>
-                <Text style={styles.infoValue}>{data?.hora || ''}</Text>
-              </View>
+              {renderInfoRow('Kilometraje:', data?.kilometraje)}
+              {renderInfoRow('Hora:', data?.hora)}
             </View>
           </View>
 
