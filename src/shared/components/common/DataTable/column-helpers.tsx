@@ -7,11 +7,11 @@ import type { FilterFn, Row } from '@tanstack/react-table';
 /**
  * Título de columna: lo que lee el selector de columnas (`meta.title`) y el encabezado ordenable. Se
  * esparce en la definición (`{ id, accessorKey, ...titled('Número'), cell }`) para no repetir las dos
- * líneas en cada columna.
+ * líneas en cada columna. `extraMeta` suma banderas de la columna (por ejemplo `excludeFromExport`).
  */
-export function titled(title: string) {
+export function titled(title: string, extraMeta?: { excludeFromExport?: boolean }) {
   return {
-    meta: { title },
+    meta: { title, ...extraMeta },
     // El encabezado solo usa `column`: no depende de la fila, así que sirve para cualquier tabla.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     header: ({ column }: { column: any }) => <DataTableColumnHeader column={column} title={title} />,

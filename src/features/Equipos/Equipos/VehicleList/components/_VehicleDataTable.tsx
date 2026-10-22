@@ -17,7 +17,11 @@ import {
   status_type,
 } from '@/generated/prisma/enums';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
+import {
+  type DataTableFacetedFilterConfig,
+  type DataTableSearchParams,
+  type FacetResult,
+} from '@/shared/components/common/DataTable/types';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import {
   conditionLabels,
@@ -31,13 +35,14 @@ import type { LucideIcon } from 'lucide-react';
 import { Check, Plus, X } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
+import { conditionIcons } from '../../../lib/condition-config';
 import {
   getAllVehiclesForExport,
   getVehicleSingleFacet,
   getVehiclesPaginated,
   type VehicleListItem,
 } from '../actions/actions.server';
-import { HIDDEN_COLUMNS_BY_DEFAULT, columns, conditionIcons } from '../columns';
+import { HIDDEN_COLUMNS_BY_DEFAULT, columns } from '../columns';
 
 // ============================================================================
 // TYPES

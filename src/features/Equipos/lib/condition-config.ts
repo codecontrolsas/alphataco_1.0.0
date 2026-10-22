@@ -5,7 +5,7 @@ import type React from 'react';
 // CONDITION CONFIG
 // ============================================================================
 // Íconos y variantes de badge por condición del equipo. Los usan las columnas, los filtros y los listados de
-// dados de baja y de equipamiento; viven acá y `columns.tsx` los re-exporta para no romper esos imports.
+// vehículos, otros equipos y dados de baja.
 
 type ConditionIconMap = Record<string, React.ComponentType<{ className?: string }>>;
 

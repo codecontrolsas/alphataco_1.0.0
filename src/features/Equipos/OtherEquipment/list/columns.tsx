@@ -1,13 +1,11 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import {
   matchesNullableColumnValue,
   matchesNullableId,
   titled,
 } from '@/shared/components/common/DataTable/column-helpers';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import {
   conditionLabels,
@@ -20,18 +18,22 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { Check, X } from 'lucide-react';
 import moment from 'moment';
 import Link from 'next/link';
-import type { OtherEquipmentListItem } from './actions.server';
 import {
+  ConditionCell,
   ContractorsCell,
   EmptyCell,
+  EquipmentIdentity,
+  LabelBadgeCell,
   MonoCell,
-  conditionIcons,
-  conditionVariants,
-  getEquipmentHref,
-  type BadgeVariant,
-} from './column-helpers';
+  NameBadgeCell,
+  NameCell,
+  contractorNames,
+  equipmentTitle,
+  matchesContractor,
+} from '../../components/cells';
+import type { OtherEquipmentListItem } from './actions.server';
 
-export { conditionIcons };
+const getEquipmentHref = (id: string) => `/dashboard/equipment/action?action=view&id=${id}&type=other`;
 
 // ============================================================================
 // HIDDEN COLUMNS BY DEFAULT
@@ -86,22 +88,14 @@ export const columns: ColumnDef<OtherEquipmentListItem>[] = [
   // ─── Equipo (identidad compuesta: Marca Modelo / Tipo · Año · N° interno) ─
   {
     id: 'equipment',
-    accessorFn: (row) => [row.brand_vehicles?.name, row.model_vehicles?.name].filter(Boolean).join(' '),
-    meta: { title: 'Equipo', excludeFromExport: true },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Equipo" />,
+    accessorFn: (row) => equipmentTitle(row),
+    ...titled('Equipo', { excludeFromExport: true }),
     cell: ({ row }) => {
       const e = row.original;
-      const title = [e.brand_vehicles?.name, e.model_vehicles?.name].filter(Boolean).join(' ');
       const details = [e.type?.name, e.year, e.intern_number ? `N° ${e.intern_number}` : null]
         .filter(Boolean)
         .join(' · ');
-      if (!title && !details) return <EmptyCell />;
-      return (
-        <div className="min-w-0">
-          <div className="font-semibold text-foreground">{title || '-'}</div>
-          {details && <div className="truncate text-sm text-muted-foreground">{details}</div>}
-        </div>
-      );
+      return <EquipmentIdentity title={equipmentTitle(e)} details={details} />;
     },
     // 'equipment' no es un campo ordenable en actions.server.ts (VALID_SORT_FIELDS)
     enableSorting: false,
@@ -111,19 +105,7 @@ export const columns: ColumnDef<OtherEquipmentListItem>[] = [
   {
     accessorKey: 'condition',
     ...titled('Condición'),
-    cell: ({ row }) => {
-      const cond = row.original.condition;
-      if (!cond) return <span className="text-muted-foreground">-</span>;
-      const variant = (conditionVariants[cond] ?? 'default') as BadgeVariant;
-      const IconComponent = conditionIcons[cond];
-      const label = conditionLabels[cond] ?? cond;
-      return (
-        <Badge variant={variant as 'default'}>
-          {IconComponent && <IconComponent className="mr-1 size-3 inline" />}
-          {label}
-        </Badge>
-      );
-    },
+    cell: ({ row }) => <ConditionCell condition={row.original.condition} labels={conditionLabels} />,
     filterFn: matchesNullableColumnValue,
   },
 
@@ -131,11 +113,7 @@ export const columns: ColumnDef<OtherEquipmentListItem>[] = [
   {
     accessorKey: 'status',
     ...titled('Documentación'),
-    cell: ({ row }) => {
-      const s = row.original.status;
-      if (!s) return <span className="text-muted-foreground">-</span>;
-      return <Badge variant="outline">{otherEquipmentStatusLabels[s] ?? s}</Badge>;
-    },
+    cell: ({ row }) => <LabelBadgeCell value={row.original.status} labels={otherEquipmentStatusLabels} />,
     filterFn: matchesNullableColumnValue,
   },
 
@@ -156,30 +134,16 @@ export const columns: ColumnDef<OtherEquipmentListItem>[] = [
   // ─── Afectado a (M:M) ───────────────────────────────────────────────────
   {
     id: 'contractor_other_equipment',
-    accessorFn: (row) =>
-      (row.contractor_other_equipment ?? [])
-        .map((c) => c.customers?.name ?? '')
-        .filter(Boolean)
-        .join(', '),
+    accessorFn: (row) => contractorNames(row.contractor_other_equipment).join(', '),
     ...titled('Afectado a'),
-    cell: ({ row }) => {
-      const contractors = (row.original.contractor_other_equipment ?? [])
-        .map((c) => c.customers?.name ?? '')
-        .filter(Boolean);
-
-      return <ContractorsCell names={contractors} />;
-    },
-    filterFn: (row, _id, filterValue) => {
-      if (!filterValue || !Array.isArray(filterValue) || filterValue.length === 0) return true;
-      const contractors = row.original.contractor_other_equipment ?? [];
-      if (contractors.length === 0) {
-        return (filterValue as string[]).includes(NULL_FILTER_VALUE);
-      }
-      return contractors.some((c) => {
-        const id = c.customers?.id;
-        return id && (filterValue as string[]).includes(id);
-      });
-    },
+    cell: ({ row }) => (
+      <ContractorsCell
+        names={contractorNames(row.original.contractor_other_equipment)}
+        emptyText="Sin afectar"
+        tooltipClassName="bg-black text-white rounded-lg p-2"
+      />
+    ),
+    filterFn: matchesContractor((row) => row.contractor_other_equipment),
     enableSorting: false,
   },
 
@@ -199,12 +163,7 @@ export const columns: ColumnDef<OtherEquipmentListItem>[] = [
     id: 'type',
     accessorFn: (row) => row.type?.name ?? '',
     ...titled('Tipo'),
-    cell: ({ row }) =>
-      row.original.type?.name ? (
-        <Badge>{row.original.type.name}</Badge>
-      ) : (
-        <span className="text-muted-foreground">-</span>
-      ),
+    cell: ({ row }) => <NameBadgeCell name={row.original.type?.name} />,
     filterFn: matchesNullableId((row) => row.type?.id),
   },
 
@@ -213,12 +172,7 @@ export const columns: ColumnDef<OtherEquipmentListItem>[] = [
     id: 'sub_type',
     accessorFn: (row) => row.sub_type?.name ?? '',
     ...titled('Subtipo'),
-    cell: ({ row }) =>
-      row.original.sub_type?.name ? (
-        <Badge variant="secondary">{row.original.sub_type.name}</Badge>
-      ) : (
-        <span className="text-muted-foreground">-</span>
-      ),
+    cell: ({ row }) => <NameBadgeCell name={row.original.sub_type?.name} variant="secondary" />,
     filterFn: matchesNullableId((row) => row.sub_type?.id),
   },
 
@@ -227,9 +181,7 @@ export const columns: ColumnDef<OtherEquipmentListItem>[] = [
     id: 'model',
     accessorFn: (row) => row.model_vehicles?.name ?? '',
     ...titled('Modelo'),
-    cell: ({ row }) => (
-      <span>{row.original.model_vehicles?.name ?? <span className="text-muted-foreground">-</span>}</span>
-    ),
+    cell: ({ row }) => <NameCell name={row.original.model_vehicles?.name} />,
     filterFn: matchesNullableId((row) => (row.model_id == null ? null : String(row.model_id))),
   },
 
@@ -238,9 +190,7 @@ export const columns: ColumnDef<OtherEquipmentListItem>[] = [
     id: 'owner',
     accessorFn: (row) => row.equipment_owners?.name ?? '',
     ...titled('Propietario'),
-    cell: ({ row }) => (
-      <span>{row.original.equipment_owners?.name ?? <span className="text-muted-foreground">-</span>}</span>
-    ),
+    cell: ({ row }) => <NameCell name={row.original.equipment_owners?.name} />,
     filterFn: matchesNullableId((row) => row.equipment_owners?.id),
   },
 
@@ -248,11 +198,7 @@ export const columns: ColumnDef<OtherEquipmentListItem>[] = [
   {
     accessorKey: 'type_of_contract',
     ...titled('Tipo de contrato'),
-    cell: ({ row }) => {
-      const tc = row.original.type_of_contract;
-      if (!tc) return <span className="text-muted-foreground">-</span>;
-      return <Badge variant="outline">{contractTypeVehiclesLabels[tc] ?? tc}</Badge>;
-    },
+    cell: ({ row }) => <LabelBadgeCell value={row.original.type_of_contract} labels={contractTypeVehiclesLabels} />,
     filterFn: matchesNullableColumnValue,
   },
 
@@ -261,9 +207,7 @@ export const columns: ColumnDef<OtherEquipmentListItem>[] = [
     id: 'brand',
     accessorFn: (row) => row.brand_vehicles?.name ?? '',
     ...titled('Marca'),
-    cell: ({ row }) => (
-      <span>{row.original.brand_vehicles?.name ?? <span className="text-muted-foreground">-</span>}</span>
-    ),
+    cell: ({ row }) => <NameCell name={row.original.brand_vehicles?.name} />,
     filterFn: matchesNullableId((row) => (row.brand_id == null ? null : String(row.brand_id))),
   },
 
@@ -320,7 +264,7 @@ export const columns: ColumnDef<OtherEquipmentListItem>[] = [
     id: 'linked_vehicle',
     accessorFn: (row) => row.vehicles?.domain ?? '',
     ...titled('Vinculado a'),
-    cell: ({ row }) => <span>{row.original.vehicles?.domain ?? <span className="text-muted-foreground">-</span>}</span>,
+    cell: ({ row }) => <NameCell name={row.original.vehicles?.domain} />,
     filterFn: matchesNullableId((row) => row.vehicles?.id),
   },
 
@@ -329,12 +273,7 @@ export const columns: ColumnDef<OtherEquipmentListItem>[] = [
     id: 'sector',
     accessorFn: (row) => row.hierarchy?.name ?? '',
     ...titled('Sector'),
-    cell: ({ row }) =>
-      row.original.hierarchy?.name ? (
-        <Badge variant="secondary">{row.original.hierarchy.name}</Badge>
-      ) : (
-        <span className="text-muted-foreground">-</span>
-      ),
+    cell: ({ row }) => <NameBadgeCell name={row.original.hierarchy?.name} variant="secondary" />,
     filterFn: matchesNullableId((row) => row.hierarchy?.id),
   },
 
@@ -342,11 +281,7 @@ export const columns: ColumnDef<OtherEquipmentListItem>[] = [
   {
     accessorKey: 'cost_type',
     ...titled('Tipo de costo'),
-    cell: ({ row }) => {
-      const ct = row.original.cost_type;
-      if (!ct) return <span className="text-muted-foreground">-</span>;
-      return <Badge variant="outline">{costTypeLabels[ct] ?? ct}</Badge>;
-    },
+    cell: ({ row }) => <LabelBadgeCell value={row.original.cost_type} labels={costTypeLabels} />,
     filterFn: matchesNullableColumnValue,
   },
 
@@ -355,9 +290,7 @@ export const columns: ColumnDef<OtherEquipmentListItem>[] = [
     id: 'cost_center',
     accessorFn: (row) => row.cost_center?.name ?? '',
     ...titled('Centro de costo'),
-    cell: ({ row }) => (
-      <span>{row.original.cost_center?.name ?? <span className="text-muted-foreground">-</span>}</span>
-    ),
+    cell: ({ row }) => <NameCell name={row.original.cost_center?.name} />,
     filterFn: matchesNullableId((row) => row.cost_center?.id),
   },
 
@@ -398,11 +331,7 @@ export const columns: ColumnDef<OtherEquipmentListItem>[] = [
   {
     accessorKey: 'currency',
     ...titled('Moneda'),
-    cell: ({ row }) => {
-      const c = row.original.currency;
-      if (!c) return <span className="text-muted-foreground">-</span>;
-      return <Badge variant="outline">{currencyLabels[c] ?? c}</Badge>;
-    },
+    cell: ({ row }) => <LabelBadgeCell value={row.original.currency} labels={currencyLabels} />,
     filterFn: matchesNullableColumnValue,
   },
 

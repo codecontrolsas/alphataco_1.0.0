@@ -15,7 +15,11 @@ import {
   termination_reason_enum,
 } from '@/generated/prisma/enums';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
+import {
+  type DataTableFacetedFilterConfig,
+  type DataTableSearchParams,
+  type FacetResult,
+} from '@/shared/components/common/DataTable/types';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import {
   conditionLabels,
@@ -27,7 +31,7 @@ import {
 } from '@/shared/utils/mappers';
 import type { LucideIcon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
-import { conditionIcons } from '../../../VehicleList/lib/condition-config';
+import { conditionIcons } from '../../../../lib/condition-config';
 import {
   getAllInactiveVehiclesForExport,
   getInactiveVehicleSingleFacet,
