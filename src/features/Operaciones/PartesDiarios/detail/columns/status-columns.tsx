@@ -15,6 +15,37 @@ import type { Permissions, RowActionHandlers } from './types';
 // COLUMNAS — Jornada/horarios, estado, descripción, remito, completados
 // ============================================================================
 
+/** Columna booleana nullable "Completado" (día o noche): sí / no, o "—" si el campo no está cargado. */
+function completedColumn(key: 'completed_day' | 'completed_night', title: string): ColumnDef<DailyReportDetailRow> {
+  return {
+    accessorKey: key,
+    meta: { title },
+    header: ({ column }) => <DataTableColumnHeader column={column} title={title} />,
+    cell: ({ row }) => {
+      const val = row.original[key];
+      if (val === null || val === undefined) {
+        return <span className="text-muted-foreground text-xs">—</span>;
+      }
+      return (
+        <Badge variant={val ? 'success' : 'secondary'}>
+          {val ? (
+            <span className="flex items-center gap-1">
+              <CheckCircle2 className="h-3 w-3" /> Sí
+            </span>
+          ) : (
+            'No'
+          )}
+        </Badge>
+      );
+    },
+    filterFn: (row, id, value: string[]) => {
+      const val = row.getValue(id);
+      if (val === null || val === undefined) return value.includes(NULL_FILTER_VALUE);
+      return value.includes(String(val));
+    },
+  };
+}
+
 export function getStatusColumns(): ColumnDef<DailyReportDetailRow>[] {
   return [
     // ── Jornada (texto — valores discretos como turnos o fechas) ─────────────
@@ -141,63 +172,8 @@ export function getStatusColumns(): ColumnDef<DailyReportDetailRow>[] {
       cell: ({ row }) => <span>{row.original.remit_number ?? '—'}</span>,
     },
 
-    // ── Completado Día (booleano nullable) ────────────────────────────────────
-    {
-      accessorKey: 'completed_day',
-      meta: { title: 'Completado Día' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Completado Día" />,
-      cell: ({ row }) => {
-        const val = row.original.completed_day;
-        if (val === null || val === undefined) {
-          return <span className="text-muted-foreground text-xs">—</span>;
-        }
-        return (
-          <Badge variant={val ? 'success' : 'secondary'}>
-            {val ? (
-              <span className="flex items-center gap-1">
-                <CheckCircle2 className="h-3 w-3" /> Sí
-              </span>
-            ) : (
-              'No'
-            )}
-          </Badge>
-        );
-      },
-      filterFn: (row, id, value: string[]) => {
-        const val = row.getValue(id);
-        if (val === null || val === undefined) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(String(val));
-      },
-    },
-
-    // ── Completado Noche (booleano nullable) ──────────────────────────────────
-    {
-      accessorKey: 'completed_night',
-      meta: { title: 'Completado Noche' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Completado Noche" />,
-      cell: ({ row }) => {
-        const val = row.original.completed_night;
-        if (val === null || val === undefined) {
-          return <span className="text-muted-foreground text-xs">—</span>;
-        }
-        return (
-          <Badge variant={val ? 'success' : 'secondary'}>
-            {val ? (
-              <span className="flex items-center gap-1">
-                <CheckCircle2 className="h-3 w-3" /> Sí
-              </span>
-            ) : (
-              'No'
-            )}
-          </Badge>
-        );
-      },
-      filterFn: (row, id, value: string[]) => {
-        const val = row.getValue(id);
-        if (val === null || val === undefined) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(String(val));
-      },
-    },
+    completedColumn('completed_day', 'Completado Día'),
+    completedColumn('completed_night', 'Completado Noche'),
   ];
 }
 

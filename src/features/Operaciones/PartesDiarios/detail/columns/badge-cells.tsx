@@ -11,6 +11,73 @@ import { buildEmployeeLabel, buildRowDescription } from './helpers';
 import type { DeviationGetters } from './types';
 
 // ============================================================================
+// BADGES COMPARTIDOS (empleados y equipos)
+// ============================================================================
+
+/** Badge gris mientras se cargan los desvíos del parte. */
+function LoadingBadge({ label }: { label: string }) {
+  return (
+    <Badge
+      variant="secondary"
+      className="text-xs font-normal bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400 cursor-default"
+    >
+      {label}
+    </Badge>
+  );
+}
+
+/** Badge sólido de un recurso sin desvíos, con el tooltip de confirmación. */
+function AssignedBadge({ label, message, delayDuration }: { label: string; message: string; delayDuration: number }) {
+  return (
+    <TooltipProvider delayDuration={delayDuration}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge variant="default" className="text-xs font-normal select-none text-nowrap cursor-default">
+            {label}
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent className="bg-black text-white rounded-lg p-2">
+          <p className="text-xs">{message}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+/** Badge de borde coloreado de un recurso con desvíos: el tooltip lista un mensaje por desvío. */
+function DeviationBadge({
+  label,
+  className,
+  messages,
+  withIcon = false,
+}: {
+  label: string;
+  className: string;
+  messages: string[];
+  withIcon?: boolean;
+}) {
+  return (
+    <TooltipProvider delayDuration={100}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge variant="outline" className={cn('text-xs font-normal cursor-default', className)}>
+            {withIcon && <AlertTriangle className="h-3 w-3 mr-1" />}
+            {label}
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent className="bg-black text-white rounded-lg p-2 max-w-xs">
+          {messages.map((msg, i) => (
+            <p key={i} className="text-xs">
+              {msg}
+            </p>
+          ))}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+// ============================================================================
 // EMPLOYEE BADGE CELL (with RPC deviation data)
 // ============================================================================
 
@@ -21,36 +88,13 @@ export function renderEmployeeBadge(
   deviations: DeviationGetters,
   key: string
 ): React.ReactNode {
-  if (deviations.loadingValidations) {
-    return (
-      <Badge
-        key={key}
-        variant="secondary"
-        className="text-xs font-normal bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400 cursor-default"
-      >
-        {label}
-      </Badge>
-    );
-  }
+  if (deviations.loadingValidations) return <LoadingBadge key={key} label={label} />;
 
   const dev = deviations.getEmployeeDeviation(employeeId, rowId);
 
   if (!dev) {
     // Sin desviaciones — badge default (sólido, igual que prod)
-    return (
-      <TooltipProvider key={key} delayDuration={100}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Badge variant="default" className="text-xs font-normal select-none text-nowrap cursor-default">
-              {label}
-            </Badge>
-          </TooltipTrigger>
-          <TooltipContent className="bg-black text-white rounded-lg p-2">
-            <p className="text-xs">Empleado asignado correctamente</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    );
+    return <AssignedBadge key={key} label={label} message="Empleado asignado correctamente" delayDuration={100} />;
   }
 
   // Desvíos (aditivos: un empleado puede tener varios a la vez) — fuente única de la regla
@@ -72,24 +116,7 @@ export function renderEmployeeBadge(
             ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-950 dark:border-yellow-400'
             : 'dark:text-black';
 
-  return (
-    <TooltipProvider key={key} delayDuration={100}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Badge variant="outline" className={cn('text-xs font-normal cursor-default', badgeClass)}>
-            {label}
-          </Badge>
-        </TooltipTrigger>
-        <TooltipContent className="bg-black text-white rounded-lg p-2 max-w-xs">
-          {messages.map((msg, i) => (
-            <p key={i} className="text-xs">
-              {msg}
-            </p>
-          ))}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
+  return <DeviationBadge key={key} label={label} className={badgeClass} messages={messages} />;
 }
 
 export function EmployeeBadgeCell({ row, deviations }: { row: DailyReportDetailRow; deviations: DeviationGetters }) {
@@ -131,36 +158,13 @@ export function renderEquipmentBadge(
   deviations: DeviationGetters,
   key: string
 ): React.ReactNode {
-  if (deviations.loadingValidations) {
-    return (
-      <Badge
-        key={key}
-        variant="secondary"
-        className="text-xs font-normal bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400 cursor-default"
-      >
-        {label}
-      </Badge>
-    );
-  }
+  if (deviations.loadingValidations) return <LoadingBadge key={key} label={label} />;
 
   const dev = deviations.getEquipmentDeviation(equipmentId, rowId);
 
   if (!dev) {
     // Sin desviaciones — badge default (sólido, igual que prod)
-    return (
-      <TooltipProvider key={key} delayDuration={300}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Badge variant="default" className="text-xs font-normal select-none text-nowrap cursor-default">
-              {label}
-            </Badge>
-          </TooltipTrigger>
-          <TooltipContent className="bg-black text-white rounded-lg p-2">
-            <p className="text-xs">Equipo asignado correctamente</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    );
+    return <AssignedBadge key={key} label={label} message="Equipo asignado correctamente" delayDuration={300} />;
   }
 
   // Desvíos (aditivos: un equipo puede tener varios a la vez) — fuente única de la regla en
@@ -193,25 +197,7 @@ export function renderEquipmentBadge(
     );
   }
 
-  return (
-    <TooltipProvider key={key} delayDuration={100}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Badge variant="outline" className={cn('text-xs font-normal cursor-default', badgeClass)}>
-            <AlertTriangle className="h-3 w-3 mr-1" />
-            {label}
-          </Badge>
-        </TooltipTrigger>
-        <TooltipContent className="bg-black text-white rounded-lg p-2 max-w-xs">
-          {tooltipMessages.map((msg, i) => (
-            <p key={i} className="text-xs">
-              {msg}
-            </p>
-          ))}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
+  return <DeviationBadge key={key} label={label} className={badgeClass} messages={tooltipMessages} withIcon />;
 }
 
 export function EquipmentBadgeCell({ row, deviations }: { row: DailyReportDetailRow; deviations: DeviationGetters }) {

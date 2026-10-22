@@ -14,183 +14,114 @@ import type { DeviationGetters } from './types';
 // equipos)
 // ============================================================================
 
+/** Jornadas en las que aplican los roles de día (12 y 24 h) y los de noche (solo 24 h). */
+const DAY_WORKDAYS = ['jornada 12 horas', 'jornada 24 horas'];
+const NIGHT_WORKDAYS = ['jornada 24 horas'];
+
+const dashCell = <span className="text-muted-foreground text-xs">—</span>;
+
+/** Columna de un rol con un solo empleado (chofer): badge con desvíos, "—" fuera de la jornada que lo admite. */
+function driverColumn(
+  role: 'chofer_dia' | 'chofer_noche',
+  title: string,
+  workdays: string[],
+  deviations: DeviationGetters
+): ColumnDef<DailyReportDetailRow> {
+  const findRel = (row: DailyReportDetailRow) => row.dailyreportemployeerelations.find((r) => r.role === role);
+  return {
+    id: role,
+    accessorFn: (row) => {
+      const rel = findRel(row);
+      if (!rel?.employees) return '';
+      return buildEmployeeLabel(rel.employees);
+    },
+    meta: { title },
+    enableSorting: true,
+    sortingFn: (rowA, rowB) => {
+      const a = findRel(rowA.original)?.employees?.lastname ?? '';
+      const b = findRel(rowB.original)?.employees?.lastname ?? '';
+      return a.localeCompare(b);
+    },
+    header: ({ column }) => <DataTableColumnHeader column={column} title={title} />,
+    cell: ({ row }) => {
+      const wday = row.original.working_day?.toLowerCase();
+      if (!wday || !workdays.includes(wday)) return dashCell;
+      const rel = findRel(row.original);
+      if (!rel?.employees) {
+        return <span className="text-muted-foreground text-xs italic">Sin asignar</span>;
+      }
+      return renderEmployeeBadge(
+        rel.employee_id ?? '',
+        buildEmployeeLabel(rel.employees),
+        row.original.id,
+        deviations,
+        `${role}_${rel.employee_id ?? rel.id}`
+      );
+    },
+  };
+}
+
+/** Columna de un rol que admite varios empleados (ayudantes): lista con desvíos, "Opcional" si no hay ninguno. */
+function helperColumn(
+  role: 'ayudante_dia' | 'ayudante_noche',
+  title: string,
+  dialogTitle: string,
+  workdays: string[],
+  deviations: DeviationGetters
+): ColumnDef<DailyReportDetailRow> {
+  return {
+    id: role,
+    accessorFn: (row) =>
+      row.dailyreportemployeerelations
+        .filter((r) => r.role === role && r.employees)
+        .map((r) => buildEmployeeLabel(r.employees!))
+        .join(', '),
+    meta: { title },
+    enableSorting: true,
+    sortingFn: (rowA, rowB) => {
+      const firstLastname = (row: typeof rowA) =>
+        row.original.dailyreportemployeerelations
+          .filter((r) => r.role === role)
+          .map((r) => r.employees?.lastname ?? '')
+          .sort()[0] ?? '';
+      return firstLastname(rowA).localeCompare(firstLastname(rowB));
+    },
+    header: ({ column }) => <DataTableColumnHeader column={column} title={title} />,
+    cell: ({ row }) => {
+      const wday = row.original.working_day?.toLowerCase();
+      if (!wday || !workdays.includes(wday)) return dashCell;
+      const rels = row.original.dailyreportemployeerelations.filter((r) => r.role === role && r.employees);
+      if (rels.length === 0) {
+        return <span className="text-muted-foreground text-xs italic">Opcional</span>;
+      }
+      const items = rels.map((rel) =>
+        renderEmployeeBadge(
+          rel.employee_id ?? '',
+          buildEmployeeLabel(rel.employees!),
+          row.original.id,
+          deviations,
+          `${role}_${rel.employee_id ?? rel.id}`
+        )
+      );
+      return (
+        <ResourceCell
+          items={items}
+          title={dialogTitle}
+          buttonLabel="Ver ayudantes"
+          description={buildRowDescription(row.original)}
+        />
+      );
+    },
+  };
+}
+
 export function getEmployeeColumns(deviations: DeviationGetters): ColumnDef<DailyReportDetailRow>[] {
   return [
-    // ── Chofer Día (rol de empleado — jornada 12h o 24h) ─────────────────────
-    {
-      id: 'chofer_dia',
-      accessorFn: (row) => {
-        const rel = row.dailyreportemployeerelations.find((r) => r.role === 'chofer_dia');
-        if (!rel?.employees) return '';
-        return buildEmployeeLabel(rel.employees);
-      },
-      meta: { title: 'Chofer Día' },
-      enableSorting: true,
-      sortingFn: (rowA, rowB) => {
-        const a =
-          rowA.original.dailyreportemployeerelations.find((r) => r.role === 'chofer_dia')?.employees?.lastname ?? '';
-        const b =
-          rowB.original.dailyreportemployeerelations.find((r) => r.role === 'chofer_dia')?.employees?.lastname ?? '';
-        return a.localeCompare(b);
-      },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Chofer Día" />,
-      cell: ({ row }) => {
-        const wday = row.original.working_day?.toLowerCase();
-        if (wday !== 'jornada 12 horas' && wday !== 'jornada 24 horas') {
-          return <span className="text-muted-foreground text-xs">—</span>;
-        }
-        const rel = row.original.dailyreportemployeerelations.find((r) => r.role === 'chofer_dia');
-        if (!rel?.employees) {
-          return <span className="text-muted-foreground text-xs italic">Sin asignar</span>;
-        }
-        const emp = rel.employees;
-        const label = buildEmployeeLabel(emp);
-        return renderEmployeeBadge(
-          rel.employee_id ?? '',
-          label,
-          row.original.id,
-          deviations,
-          `chofer_dia_${rel.employee_id ?? rel.id}`
-        );
-      },
-    },
-
-    // ── Ayudante Día (rol de empleado — jornada 12h o 24h, admite varios) ────
-    {
-      id: 'ayudante_dia',
-      accessorFn: (row) =>
-        row.dailyreportemployeerelations
-          .filter((r) => r.role === 'ayudante_dia' && r.employees)
-          .map((r) => buildEmployeeLabel(r.employees!))
-          .join(', '),
-      meta: { title: 'Ayudante Día' },
-      enableSorting: true,
-      sortingFn: (rowA, rowB) => {
-        const firstLastname = (row: typeof rowA) =>
-          row.original.dailyreportemployeerelations
-            .filter((r) => r.role === 'ayudante_dia')
-            .map((r) => r.employees?.lastname ?? '')
-            .sort()[0] ?? '';
-        return firstLastname(rowA).localeCompare(firstLastname(rowB));
-      },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Ayudante Día" />,
-      cell: ({ row }) => {
-        const wday = row.original.working_day?.toLowerCase();
-        if (wday !== 'jornada 12 horas' && wday !== 'jornada 24 horas') {
-          return <span className="text-muted-foreground text-xs">—</span>;
-        }
-        const rels = row.original.dailyreportemployeerelations.filter((r) => r.role === 'ayudante_dia' && r.employees);
-        if (rels.length === 0) {
-          return <span className="text-muted-foreground text-xs italic">Opcional</span>;
-        }
-        const items = rels.map((rel) =>
-          renderEmployeeBadge(
-            rel.employee_id ?? '',
-            buildEmployeeLabel(rel.employees!),
-            row.original.id,
-            deviations,
-            `ayudante_dia_${rel.employee_id ?? rel.id}`
-          )
-        );
-        return (
-          <ResourceCell
-            items={items}
-            title="Ayudantes Día"
-            buttonLabel="Ver ayudantes"
-            description={buildRowDescription(row.original)}
-          />
-        );
-      },
-    },
-
-    // ── Chofer Noche (rol de empleado — solo jornada 24h) ────────────────────
-    {
-      id: 'chofer_noche',
-      accessorFn: (row) => {
-        const rel = row.dailyreportemployeerelations.find((r) => r.role === 'chofer_noche');
-        if (!rel?.employees) return '';
-        return buildEmployeeLabel(rel.employees);
-      },
-      meta: { title: 'Chofer Noche' },
-      enableSorting: true,
-      sortingFn: (rowA, rowB) => {
-        const a =
-          rowA.original.dailyreportemployeerelations.find((r) => r.role === 'chofer_noche')?.employees?.lastname ?? '';
-        const b =
-          rowB.original.dailyreportemployeerelations.find((r) => r.role === 'chofer_noche')?.employees?.lastname ?? '';
-        return a.localeCompare(b);
-      },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Chofer Noche" />,
-      cell: ({ row }) => {
-        const wday = row.original.working_day?.toLowerCase();
-        if (wday !== 'jornada 24 horas') {
-          return <span className="text-muted-foreground text-xs">—</span>;
-        }
-        const rel = row.original.dailyreportemployeerelations.find((r) => r.role === 'chofer_noche');
-        if (!rel?.employees) {
-          return <span className="text-muted-foreground text-xs italic">Sin asignar</span>;
-        }
-        const emp = rel.employees;
-        const label = buildEmployeeLabel(emp);
-        return renderEmployeeBadge(
-          rel.employee_id ?? '',
-          label,
-          row.original.id,
-          deviations,
-          `chofer_noche_${rel.employee_id ?? rel.id}`
-        );
-      },
-    },
-
-    // ── Ayudante Noche (rol de empleado — solo jornada 24h, admite varios) ───
-    {
-      id: 'ayudante_noche',
-      accessorFn: (row) =>
-        row.dailyreportemployeerelations
-          .filter((r) => r.role === 'ayudante_noche' && r.employees)
-          .map((r) => buildEmployeeLabel(r.employees!))
-          .join(', '),
-      meta: { title: 'Ayudante Noche' },
-      enableSorting: true,
-      sortingFn: (rowA, rowB) => {
-        const firstLastname = (row: typeof rowA) =>
-          row.original.dailyreportemployeerelations
-            .filter((r) => r.role === 'ayudante_noche')
-            .map((r) => r.employees?.lastname ?? '')
-            .sort()[0] ?? '';
-        return firstLastname(rowA).localeCompare(firstLastname(rowB));
-      },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Ayudante Noche" />,
-      cell: ({ row }) => {
-        const wday = row.original.working_day?.toLowerCase();
-        if (wday !== 'jornada 24 horas') {
-          return <span className="text-muted-foreground text-xs">—</span>;
-        }
-        const rels = row.original.dailyreportemployeerelations.filter(
-          (r) => r.role === 'ayudante_noche' && r.employees
-        );
-        if (rels.length === 0) {
-          return <span className="text-muted-foreground text-xs italic">Opcional</span>;
-        }
-        const items = rels.map((rel) =>
-          renderEmployeeBadge(
-            rel.employee_id ?? '',
-            buildEmployeeLabel(rel.employees!),
-            row.original.id,
-            deviations,
-            `ayudante_noche_${rel.employee_id ?? rel.id}`
-          )
-        );
-        return (
-          <ResourceCell
-            items={items}
-            title="Ayudantes Noche"
-            buttonLabel="Ver ayudantes"
-            description={buildRowDescription(row.original)}
-          />
-        );
-      },
-    },
+    // Roles de empleado: los de día valen en jornada de 12 y 24 h; los de noche, solo en la de 24 h.
+    driverColumn('chofer_dia', 'Chofer Día', DAY_WORKDAYS, deviations),
+    helperColumn('ayudante_dia', 'Ayudante Día', 'Ayudantes Día', DAY_WORKDAYS, deviations),
+    driverColumn('chofer_noche', 'Chofer Noche', NIGHT_WORKDAYS, deviations),
+    helperColumn('ayudante_noche', 'Ayudante Noche', 'Ayudantes Noche', NIGHT_WORKDAYS, deviations),
 
     // ── Empleados (M:M — todos los empleados de la fila, virtual) ────────────
     {
