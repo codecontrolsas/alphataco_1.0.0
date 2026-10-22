@@ -14,6 +14,7 @@ import {
 import { DocumentEquipmentCell, DocumentRowActions } from '@/features/Documentacion/shared/components/DocumentCells';
 import { RequirementUpload } from '@/features/Documentacion/shared/components/RequirementUpload';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import type { ColumnDef } from '@tanstack/react-table';
 import Link from 'next/link';
 import type { MonthlyEquipmentDocumentListItem } from './actions.server';
@@ -73,8 +74,7 @@ export const columns: ColumnDef<MonthlyEquipmentDocumentListItem>[] = [
   {
     id: 'vehicle',
     accessorFn: (row) => row.vehicles?.domain ?? row.vehicles?.serie ?? row.vehicles?.intern_number ?? '',
-    meta: { title: 'Dominio' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Dominio" />,
+    ...titled('Dominio'),
     cell: ({ row }) => {
       const vehicle = row.original.vehicles;
       if (!vehicle) return <span className="text-muted-foreground">-</span>;

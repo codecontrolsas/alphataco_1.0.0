@@ -1,7 +1,7 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { StackedCell } from '@/shared/components/common/StackedCell';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
@@ -48,26 +48,22 @@ function CustomerNameCell({ customer }: { customer: CustomersListItem }) {
 export const columns: ColumnDef<CustomersListItem>[] = [
   {
     accessorKey: 'name',
-    meta: { title: 'Nombre' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
+    ...titled('Nombre'),
     cell: ({ row }) => <CustomerNameCell customer={row.original} />,
   },
   {
     accessorKey: 'cuit',
-    meta: { title: 'CUIT' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="CUIT" />,
+    ...titled('CUIT'),
     cell: ({ row }) => <span className="max-md:hidden font-mono tabular-nums">{row.original.cuit}</span>,
   },
   {
     accessorKey: 'client_email',
-    meta: { title: 'Email' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Email" />,
+    ...titled('Email'),
     cell: ({ row }) => row.original.client_email || <span className="text-muted-foreground">-</span>,
   },
   {
     accessorKey: 'client_phone',
-    meta: { title: 'Teléfono' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Teléfono" />,
+    ...titled('Teléfono'),
     cell: ({ row }) =>
       row.original.client_phone ? (
         <span className="font-mono tabular-nums">{row.original.client_phone}</span>
@@ -77,8 +73,7 @@ export const columns: ColumnDef<CustomersListItem>[] = [
   },
   {
     accessorKey: 'is_active',
-    meta: { title: 'Estado' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+    ...titled('Estado'),
     enableSorting: false,
     cell: ({ row }) =>
       row.original.is_active === false ? (
@@ -100,14 +95,12 @@ export const columns: ColumnDef<CustomersListItem>[] = [
   },
   {
     accessorKey: 'address',
-    meta: { title: 'Dirección' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Dirección" />,
+    ...titled('Dirección'),
     cell: ({ row }) => row.original.address || <span className="text-muted-foreground">-</span>,
   },
   {
     accessorKey: 'created_at',
-    meta: { title: 'Alta' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Alta" />,
+    ...titled('Alta'),
     cell: ({ row }) => formatArgentinaDay(row.original.created_at),
   },
 ];

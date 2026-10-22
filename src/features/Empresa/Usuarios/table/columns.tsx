@@ -3,7 +3,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -127,8 +127,7 @@ export function getCompanyUsersColumns(permissions: Permissions): ColumnDef<Comp
     {
       id: 'fullname',
       accessorFn: (row) => row.profile?.fullname ?? '',
-      meta: { title: 'Nombre' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
+      ...titled('Nombre'),
       cell: ({ row }) => {
         const profile = row.original.profile;
         const fullname = profile?.fullname || 'Sin nombre';
@@ -178,8 +177,7 @@ export function getCompanyUsersColumns(permissions: Permissions): ColumnDef<Comp
     {
       id: 'email',
       accessorFn: (row) => row.profile?.email ?? '',
-      meta: { title: 'Correo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Correo" />,
+      ...titled('Correo'),
       cell: ({ row }) => {
         const email = row.original.profile?.email || '';
         return <span className="max-w-[300px] truncate text-sm">{email || '-'}</span>;
@@ -190,8 +188,7 @@ export function getCompanyUsersColumns(permissions: Permissions): ColumnDef<Comp
     {
       id: 'is_active',
       accessorFn: (row) => row.is_active,
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => {
         const isActive = row.original.is_active;
         return <Badge variant={isActive ? 'success' : 'destructive'}>{isActive ? 'Activo' : 'Baneado'}</Badge>;
@@ -213,8 +210,7 @@ export function getCompanyUsersColumns(permissions: Permissions): ColumnDef<Comp
           .filter(Boolean)
           .join(', ');
       },
-      meta: { title: 'Rol' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Rol" />,
+      ...titled('Rol'),
       cell: ({ row }) => <RoleCell row={row.original} />,
       filterFn: (row, _id, value: string[]) => {
         const userRoles = row.original.profile?.user_roles ?? [];
@@ -231,8 +227,7 @@ export function getCompanyUsersColumns(permissions: Permissions): ColumnDef<Comp
         if (!emp) return '';
         return `[${emp.file}] ${emp.lastname ?? ''} ${emp.firstname ?? ''}`.trim();
       },
-      meta: { title: 'Empleado vinculado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Empleado vinculado" />,
+      ...titled('Empleado vinculado'),
       cell: ({ row }) => {
         const profile = row.original.profile;
         const employee = profile?.employees
@@ -261,8 +256,7 @@ export function getCompanyUsersColumns(permissions: Permissions): ColumnDef<Comp
     {
       id: 'created_at',
       accessorFn: (row) => (row.created_at ? row.created_at.toISOString() : ''),
-      meta: { title: 'Fecha de alta' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de alta" />,
+      ...titled('Fecha de alta'),
       cell: ({ row }) => {
         const date = row.original.created_at;
         // El propietario no figura en `share_company_users`: su fecha es un centinela (epoch 0).

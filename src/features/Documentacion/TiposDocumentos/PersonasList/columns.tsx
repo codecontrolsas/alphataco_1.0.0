@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { formatArgentinaDay } from '@/features/Treasury/lib/today';
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Check, MoreHorizontal, Pencil, X } from 'lucide-react';
 import type { DocumentTypeListItem } from '../actions/queries.server';
@@ -60,8 +61,7 @@ export function getDocTypeColumns(
     {
       accessorKey: 'name',
       id: 'name',
-      meta: { title: 'Nombre' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
+      ...titled('Nombre'),
       cell: ({ row }) => (
         <div className="min-w-0">
           <div
@@ -80,8 +80,7 @@ export function getDocTypeColumns(
     {
       accessorKey: 'mandatory',
       id: 'mandatory',
-      meta: { title: 'Obligatorio' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Obligatorio" />,
+      ...titled('Obligatorio'),
       cell: ({ row }) => <YesNo value={row.original.mandatory} />,
       filterFn: (row, id, value: string[]) => {
         const val = row.getValue(id);
@@ -93,8 +92,7 @@ export function getDocTypeColumns(
     {
       accessorKey: 'explired',
       id: 'explired',
-      meta: { title: 'Vencimiento' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Vencimiento" />,
+      ...titled('Vencimiento'),
       cell: ({ row }) =>
         row.original.explired ? (
           <Badge variant="info">Con vencimiento</Badge>
@@ -111,8 +109,7 @@ export function getDocTypeColumns(
     {
       accessorKey: 'is_it_montlhy',
       id: 'is_it_montlhy',
-      meta: { title: 'Periodicidad' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Periodicidad" />,
+      ...titled('Periodicidad'),
       cell: ({ row }) => <span>{row.original.is_it_montlhy ? 'Mensual' : 'Permanente'}</span>,
       filterFn: (row, id, value: string[]) => {
         const val = (row.getValue(id) as boolean | null) ?? false;
@@ -124,8 +121,7 @@ export function getDocTypeColumns(
     {
       accessorKey: 'special',
       id: 'special',
-      meta: { title: 'Se exige a' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Se exige a" />,
+      ...titled('Se exige a'),
       cell: ({ row }) => {
         if (!row.original.special) {
           return (
@@ -147,8 +143,7 @@ export function getDocTypeColumns(
     cols.push({
       accessorKey: 'equipment_type',
       id: 'equipment_type',
-      meta: { title: 'Tipo de equipo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo de equipo" />,
+      ...titled('Tipo de equipo'),
       cell: ({ row }) => <div>{getEquipmentTypeLabel(row.original.equipment_type)}</div>,
       filterFn: (row, id, value: string[]) => {
         const val = row.getValue(id) as string | null;
@@ -162,8 +157,7 @@ export function getDocTypeColumns(
   cols.push({
     accessorKey: 'multiresource',
     id: 'multiresource',
-    meta: { title: 'Multirrecurso' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Multirrecurso" />,
+    ...titled('Multirrecurso'),
     cell: ({ row }) => <YesNo value={row.original.multiresource} />,
     filterFn: (row, id, value: string[]) => {
       const val = row.getValue(id);
@@ -175,8 +169,7 @@ export function getDocTypeColumns(
   cols.push({
     accessorKey: 'is_active',
     id: 'is_active',
-    meta: { title: 'Estado' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+    ...titled('Estado'),
     cell: ({ row }) => (
       <Badge variant={row.original.is_active ? 'success' : 'secondary'}>
         {row.original.is_active ? 'Activo' : 'Inactivo'}
@@ -192,8 +185,7 @@ export function getDocTypeColumns(
   cols.push({
     accessorKey: 'private',
     id: 'private',
-    meta: { title: 'Privado' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Privado" />,
+    ...titled('Privado'),
     cell: ({ row }) => <BoolBadge value={row.original.private} />,
     filterFn: (row, id, value: string[]) => {
       const val = (row.getValue(id) as boolean | null) ?? false;
@@ -205,8 +197,7 @@ export function getDocTypeColumns(
   cols.push({
     accessorKey: 'down_document',
     id: 'down_document',
-    meta: { title: 'Doc. de baja' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Doc. de baja" />,
+    ...titled('Doc. de baja'),
     cell: ({ row }) => <BoolBadge value={row.original.down_document} />,
     filterFn: (row, id, value: string[]) => {
       const val = (row.getValue(id) as boolean | null) ?? false;
@@ -219,8 +210,7 @@ export function getDocTypeColumns(
     cols.push({
       accessorKey: 'has_policy_number',
       id: 'has_policy_number',
-      meta: { title: 'N° de Póliza' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="N° de Póliza" />,
+      ...titled('N° de Póliza'),
       cell: ({ row }) => <BoolBadge value={row.original.has_policy_number} />,
       filterFn: (row, id, value: string[]) => {
         const val = (row.getValue(id) as boolean | null) ?? false;
@@ -245,8 +235,7 @@ export function getDocTypeColumns(
   cols.push({
     accessorKey: 'created_at',
     id: 'created_at',
-    meta: { title: 'Fecha de creación' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de creación" />,
+    ...titled('Fecha de creación'),
     cell: ({ row }) =>
       row.original.created_at ? (
         <div className="font-mono tabular-nums">{formatArgentinaDay(row.original.created_at)}</div>

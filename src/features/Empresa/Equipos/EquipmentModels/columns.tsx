@@ -1,11 +1,14 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import {
+  activeStatusColumn,
+  createdAtColumn,
+  editActionColumn,
+  nameColumn,
+} from '@/features/Empresa/components/catalog-columns';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
-import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ActiveStatusBadge } from '../../components/ActiveStatusBadge';
 import type { EquipmentModelListItem } from './actions.server';
 
 // ============================================================================
@@ -34,20 +37,13 @@ export function getColumns(
 
   return [
     // ── Nombre ──────────────────────────────────────────────────────────────
-    {
-      accessorKey: 'name',
-      meta: { title: 'Nombre' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Nombre" />,
-      cell: ({ row }) => <span className="font-medium">{row.original.name ?? '-'}</span>,
-      // filterFn no necesario para filtros text
-    },
+    nameColumn<EquipmentModelListItem>('-'),
 
     // ── Marca (FK BigInt a brand_vehicles) ───────────────────────────────────
     {
       id: 'brand',
       accessorFn: (row) => row.brand_vehicles?.name ?? '',
-      meta: { title: 'Marca' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Marca" />,
+      ...titled('Marca'),
       cell: ({ row }) => {
         const brandName = row.original.brand_vehicles?.name;
         if (!brandName) {
@@ -64,51 +60,16 @@ export function getColumns(
     },
 
     // ── Estado (is_active — booleano nullable) ───────────────────────────────
-    {
-      accessorKey: 'is_active',
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
-      cell: ({ row }) => <ActiveStatusBadge value={row.original.is_active} />,
-      filterFn: (row, id, value: string[]) => {
-        const val = row.getValue(id);
-        if (val === null || val === undefined) return value.includes(NULL_FILTER_VALUE);
-        return value.includes(String(val));
-      },
-    },
+    activeStatusColumn<EquipmentModelListItem>(),
 
     // ── Fecha de creación (oculta por defecto) ────────────────────────────────
-    {
-      accessorKey: 'created_at',
-      meta: { title: 'Fecha de creación' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de creación" />,
-      cell: ({ row }) => {
-        const val = row.original.created_at;
-        return <span>{val ? formatArgentinaDay(val) : '-'}</span>;
-      },
-    },
+    createdAtColumn<EquipmentModelListItem>(),
 
     // ── Acciones ─────────────────────────────────────────────────────────────
-    ...(canUpdate
-      ? ([
-          {
-            id: 'actions',
-            meta: { title: '', excludeFromExport: true },
-            enableSorting: false,
-            enableHiding: false,
-            cell: ({ row }) => (
-              <Button
-                size="sm"
-                variant="link"
-                type="button"
-                className="h-auto p-0"
-                aria-label={`Editar ${row.original.name ?? 'modelo'}`}
-                onClick={() => onEdit(row.original)}
-              >
-                Editar
-              </Button>
-            ),
-          },
-        ] as ColumnDef<EquipmentModelListItem>[])
-      : []),
+    ...editActionColumn<EquipmentModelListItem>({
+      canEdit: canUpdate,
+      onEdit,
+      getName: (item) => item.name ?? 'modelo',
+    }),
   ];
 }

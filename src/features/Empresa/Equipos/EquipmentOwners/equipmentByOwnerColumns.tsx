@@ -2,7 +2,7 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { conditionLabels, otherEquipmentStatusLabels } from '@/shared/utils/mappers';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -76,8 +76,7 @@ export function getVehicleByOwnerColumns(): ColumnDef<VehicleByOwnerListItem>[] 
     // ── Dominio ──────────────────────────────────────────────────────────────
     {
       accessorKey: 'domain',
-      meta: { title: 'Dominio' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Dominio" />,
+      ...titled('Dominio'),
       cell: ({ row }) => (
         <Link
           href={`/dashboard/equipment/action?action=view&id=${row.original.id}`}
@@ -91,8 +90,7 @@ export function getVehicleByOwnerColumns(): ColumnDef<VehicleByOwnerListItem>[] 
     // ── Número interno ───────────────────────────────────────────────────────
     {
       accessorKey: 'intern_number',
-      meta: { title: 'Número interno' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Número interno" />,
+      ...titled('Número interno'),
       cell: ({ row }) => (
         <Link href={`/dashboard/equipment/action?action=view&id=${row.original.id}`} className="hover:underline">
           {row.original.intern_number ?? '-'}
@@ -104,8 +102,7 @@ export function getVehicleByOwnerColumns(): ColumnDef<VehicleByOwnerListItem>[] 
     {
       id: 'type',
       accessorFn: (row) => row.type_vehicles_typeTotype?.name ?? '',
-      meta: { title: 'Tipo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo" />,
+      ...titled('Tipo'),
       cell: ({ row }) => {
         const name = row.original.type_vehicles_typeTotype?.name;
         return name ? <Badge variant="outline">{name}</Badge> : <span className="text-muted-foreground">-</span>;
@@ -121,8 +118,7 @@ export function getVehicleByOwnerColumns(): ColumnDef<VehicleByOwnerListItem>[] 
     {
       id: 'subType',
       accessorFn: (row) => row.sub_type?.name ?? '',
-      meta: { title: 'Subtipo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Subtipo" />,
+      ...titled('Subtipo'),
       cell: ({ row }) => {
         const name = row.original.sub_type?.name;
         return name ? <Badge variant="outline">{name}</Badge> : <span className="text-muted-foreground">-</span>;
@@ -138,8 +134,7 @@ export function getVehicleByOwnerColumns(): ColumnDef<VehicleByOwnerListItem>[] 
     {
       id: 'brand',
       accessorFn: (row) => row.brand_vehicles?.name ?? '',
-      meta: { title: 'Marca' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Marca" />,
+      ...titled('Marca'),
       cell: ({ row }) => <span>{row.original.brand_vehicles?.name ?? '-'}</span>,
       enableSorting: false,
     },
@@ -148,8 +143,7 @@ export function getVehicleByOwnerColumns(): ColumnDef<VehicleByOwnerListItem>[] 
     {
       id: 'model',
       accessorFn: (row) => row.model_vehicles?.name ?? '',
-      meta: { title: 'Modelo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Modelo" />,
+      ...titled('Modelo'),
       cell: ({ row }) => <span>{row.original.model_vehicles?.name ?? '-'}</span>,
       enableSorting: false,
     },
@@ -157,16 +151,14 @@ export function getVehicleByOwnerColumns(): ColumnDef<VehicleByOwnerListItem>[] 
     // ── Año ──────────────────────────────────────────────────────────────────
     {
       accessorKey: 'year',
-      meta: { title: 'Año' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Año" />,
+      ...titled('Año'),
       cell: ({ row }) => <span>{row.original.year ?? '-'}</span>,
     },
 
     // ── Condición (enum nullable) ────────────────────────────────────────────
     {
       accessorKey: 'condition',
-      meta: { title: 'Condición' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Condición" />,
+      ...titled('Condición'),
       cell: ({ row }) => {
         const val = row.original.condition as string | null;
         if (!val) return <span className="text-muted-foreground">-</span>;
@@ -190,8 +182,7 @@ export function getVehicleByOwnerColumns(): ColumnDef<VehicleByOwnerListItem>[] 
     // ── Estado documental (enum nullable) ────────────────────────────────────
     {
       accessorKey: 'status',
-      meta: { title: 'Estado documental' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado documental" />,
+      ...titled('Estado documental'),
       cell: ({ row }) => {
         const val = row.original.status as string | null;
         if (!val) return <span className="text-muted-foreground">-</span>;
@@ -215,40 +206,35 @@ export function getVehicleByOwnerColumns(): ColumnDef<VehicleByOwnerListItem>[] 
     // ── Chassis (oculta por defecto) ──────────────────────────────────────────
     {
       accessorKey: 'chassis',
-      meta: { title: 'Chassis' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Chassis" />,
+      ...titled('Chassis'),
       cell: ({ row }) => <span>{row.original.chassis ?? '-'}</span>,
     },
 
     // ── Motor (oculta por defecto) ────────────────────────────────────────────
     {
       accessorKey: 'engine',
-      meta: { title: 'Motor' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Motor" />,
+      ...titled('Motor'),
       cell: ({ row }) => <span>{row.original.engine ?? '-'}</span>,
     },
 
     // ── Serie (oculta por defecto) ────────────────────────────────────────────
     {
       accessorKey: 'serie',
-      meta: { title: 'Serie' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Serie" />,
+      ...titled('Serie'),
       cell: ({ row }) => <span>{row.original.serie ?? '-'}</span>,
     },
 
     // ── Kilómetros (oculta por defecto) ──────────────────────────────────────
     {
       accessorKey: 'kilometer',
-      meta: { title: 'Kilómetros' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Kilómetros" />,
+      ...titled('Kilómetros'),
       cell: ({ row }) => <Badge variant="outline">{row.original.kilometer ?? '0'} km</Badge>,
     },
 
     // ── Horómetro (oculta por defecto) ───────────────────────────────────────
     {
       accessorKey: 'engine_hours',
-      meta: { title: 'Horómetro' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Horómetro" />,
+      ...titled('Horómetro'),
       cell: ({ row }) => <Badge variant="outline">{row.original.engine_hours ?? '0'} hs</Badge>,
     },
 
@@ -260,8 +246,7 @@ export function getVehicleByOwnerColumns(): ColumnDef<VehicleByOwnerListItem>[] 
           ?.map((c) => c.customers?.name ?? '')
           .filter(Boolean)
           .join(', ') ?? '',
-      meta: { title: 'Afectado a' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Afectado a" />,
+      ...titled('Afectado a'),
       cell: ({ row }) => {
         const contractors = row.original.contractor_equipment ?? [];
         const names = contractors.map((c) => c.customers?.name ?? '').filter(Boolean);
@@ -293,8 +278,7 @@ export function getVehicleByOwnerColumns(): ColumnDef<VehicleByOwnerListItem>[] 
     // ── Estado activo (oculta por defecto) ────────────────────────────────────
     {
       accessorKey: 'is_active',
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => <ActiveStatusBadge value={row.original.is_active} />,
       filterFn: (row, id, value: string[]) => {
         const val = row.getValue(id);

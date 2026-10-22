@@ -4,10 +4,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
+import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { inMemoryFacetedFilterFn, inMemoryTextFilterFn } from '@/shared/components/common/DataTable/in-memory';
 import { type DataTableFacetedFilterConfig } from '@/shared/components/common/DataTable/types';
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { argentinaDate } from '@/shared/lib/argentina-time';
 import type { ColumnDef, Row } from '@tanstack/react-table';
 import { AlertCircle, Building2, CheckCircle2, CircleOff, Clock, Eye, Layers, MapPin, XCircle } from 'lucide-react';
@@ -126,8 +126,7 @@ export function getServiceColumns(
   const columns: ColumnDef<CustomerServiceRow>[] = [
     {
       accessorKey: 'service_name',
-      meta: { title: 'Contrato' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Contrato" />,
+      ...titled('Contrato'),
       cell: ({ row }) => (
         <Button
           type="button"
@@ -146,8 +145,7 @@ export function getServiceColumns(
     columns.push({
       id: 'customer',
       accessorFn: (row) => row.customers?.name ?? '',
-      meta: { title: 'Cliente' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Cliente" />,
+      ...titled('Cliente'),
       cell: ({ row }) => row.original.customers?.name || emptyValue,
       filterFn: inMemoryFacetedFilterFn,
     });
@@ -157,16 +155,14 @@ export function getServiceColumns(
     {
       id: 'contract_number',
       accessorFn: (row) => row.contract_number ?? '',
-      meta: { title: 'N° Contrato' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="N° Contrato" />,
+      ...titled('N° Contrato'),
       cell: ({ row }) => row.original.contract_number || emptyValue,
       filterFn: inMemoryTextFilterFn,
     },
     {
       id: 'areas',
       accessorFn: (row) => areaNames(row),
-      meta: { title: 'Áreas' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Áreas" />,
+      ...titled('Áreas'),
       enableSorting: false,
       cell: ({ row }) => <NamesBadge names={areaNames(row.original)} label="Áreas" />,
       filterFn: namesFilterFn,
@@ -174,8 +170,7 @@ export function getServiceColumns(
     {
       id: 'sectors',
       accessorFn: (row) => sectorNames(row),
-      meta: { title: 'Sectores' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Sectores" />,
+      ...titled('Sectores'),
       enableSorting: false,
       cell: ({ row }) => <NamesBadge names={sectorNames(row.original)} label="Sectores" />,
       filterFn: namesFilterFn,
@@ -184,15 +179,13 @@ export function getServiceColumns(
       id: 'service_start',
       // `YYYY-MM-DD`: ordena bien como texto; la celda muestra DD/MM/YYYY.
       accessorFn: (row) => dbDateToIso(row.service_start),
-      meta: { title: 'Inicio' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Inicio" />,
+      ...titled('Inicio'),
       cell: ({ row }) => <span className="tabular-nums">{formatDbDate(row.original.service_start)}</span>,
     },
     {
       id: 'service_validity',
       accessorFn: (row) => dbDateToIso(row.service_validity),
-      meta: { title: 'Vigencia' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Vigencia" />,
+      ...titled('Vigencia'),
       cell: ({ row }) => (
         <ValidityCell
           service={row.original}
@@ -204,8 +197,7 @@ export function getServiceColumns(
     {
       id: 'status',
       accessorFn: (row) => String(isServiceActive(row)),
-      meta: { title: 'Estado' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
+      ...titled('Estado'),
       cell: ({ row }) => {
         const active = isServiceActive(row.original);
         const key = String(active) as keyof typeof STATUS_LABELS;

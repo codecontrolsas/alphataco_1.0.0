@@ -1,7 +1,7 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { formatArgentinaDay } from '@/shared/lib/argentina-time';
 import { employeeStatusBadges, employeeStatusLabels } from '@/shared/utils/mappers';
@@ -42,15 +42,13 @@ export const columns: ColumnDef<CustomerEmployeeItem>[] = [
   {
     // El legajo identifica al empleado (el nombre puede repetirse): columna propia, antes del nombre.
     accessorKey: 'file',
-    meta: { title: 'Legajo' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Legajo" />,
+    ...titled('Legajo'),
     cell: ({ row }) => <span className="font-mono tabular-nums">{row.original.file}</span>,
   },
   {
     id: 'fullname',
     accessorFn: (row) => `${row.lastname} ${row.firstname}`,
-    meta: { title: 'Apellido y nombre' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Apellido y nombre" />,
+    ...titled('Apellido y nombre'),
     cell: ({ row }) => (
       <Link
         href={`/dashboard/employee/action?action=view&employee_id=${row.original.id}`}
@@ -63,31 +61,27 @@ export const columns: ColumnDef<CustomerEmployeeItem>[] = [
   {
     id: 'company_position',
     accessorFn: (row) => row.company_positions?.name ?? '',
-    meta: { title: 'Puesto' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Puesto" />,
+    ...titled('Puesto'),
     cell: ({ row }) => row.original.company_positions?.name || EMPTY,
     filterFn: relationFilter((row) => row.company_positions?.id),
   },
   {
     id: 'hierarchical_position',
     accessorFn: (row) => row.hierarchy?.name ?? '',
-    meta: { title: 'Sector' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Sector" />,
+    ...titled('Sector'),
     cell: ({ row }) => row.original.hierarchy?.name || EMPTY,
     filterFn: relationFilter((row) => row.hierarchy?.id),
   },
   {
     id: 'type_of_contract',
     accessorFn: (row) => row.types_of_contract?.name ?? '',
-    meta: { title: 'Tipo de contrato' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo de contrato" />,
+    ...titled('Tipo de contrato'),
     cell: ({ row }) => row.original.types_of_contract?.name || EMPTY,
     filterFn: relationFilter((row) => row.types_of_contract?.id),
   },
   {
     accessorKey: 'status',
-    meta: { title: 'Estado documental' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Estado documental" />,
+    ...titled('Estado documental'),
     cell: ({ row }) => {
       const status = row.original.status;
       if (!status) return EMPTY;
@@ -107,8 +101,7 @@ export const columns: ColumnDef<CustomerEmployeeItem>[] = [
   },
   {
     accessorKey: 'is_active',
-    meta: { title: 'Situación' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Situación" />,
+    ...titled('Situación'),
     enableSorting: false,
     cell: ({ row }) =>
       row.original.is_active === false ? (
@@ -130,40 +123,34 @@ export const columns: ColumnDef<CustomerEmployeeItem>[] = [
   },
   {
     accessorKey: 'cuil',
-    meta: { title: 'CUIL' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="CUIL" />,
+    ...titled('CUIL'),
     cell: ({ row }) => <span className="font-mono tabular-nums">{row.original.cuil}</span>,
   },
   {
     accessorKey: 'document_number',
-    meta: { title: 'Documento' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Documento" />,
+    ...titled('Documento'),
     cell: ({ row }) => <span className="font-mono tabular-nums">{row.original.document_number}</span>,
   },
   {
     accessorKey: 'date_of_admission',
-    meta: { title: 'Fecha de ingreso' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Fecha de ingreso" />,
+    ...titled('Fecha de ingreso'),
     cell: ({ row }) => formatDbDate(row.original.date_of_admission),
   },
   {
     // Fecha de la afectación a este cliente (no se ordena: está en la pivote, una relación 1:N).
     accessorKey: 'affected_since',
-    meta: { title: 'Afectado desde' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Afectado desde" />,
+    ...titled('Afectado desde'),
     enableSorting: false,
     cell: ({ row }) => (row.original.affected_since ? formatArgentinaDay(row.original.affected_since) : EMPTY),
   },
   {
     accessorKey: 'phone',
-    meta: { title: 'Teléfono' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Teléfono" />,
+    ...titled('Teléfono'),
     cell: ({ row }) => row.original.phone || EMPTY,
   },
   {
     accessorKey: 'email',
-    meta: { title: 'Email' },
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Email" />,
+    ...titled('Email'),
     cell: ({ row }) => row.original.email || EMPTY,
   },
 ];

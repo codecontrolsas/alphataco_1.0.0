@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
+import { titled } from '@/shared/components/common/DataTable/column-helpers';
 import type { ColumnDef } from '@tanstack/react-table';
 import { PencilIcon, TrashIcon } from 'lucide-react';
 import type { MeasureUnitListItem } from '../../actions/measure-units.server';
@@ -24,20 +24,17 @@ export function getColumns(
   return [
     {
       accessorKey: 'simbol',
-      meta: { title: 'Símbolo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Símbolo" />,
+      ...titled('Símbolo'),
       cell: ({ row }) => <span className="font-medium">{row.original.simbol}</span>,
     },
     {
       accessorKey: 'unit',
-      meta: { title: 'Unidad' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Unidad" />,
+      ...titled('Unidad'),
       cell: ({ row }) => <span>{row.original.unit}</span>,
     },
     {
       accessorKey: 'tipo',
-      meta: { title: 'Tipo' },
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo" />,
+      ...titled('Tipo'),
       cell: ({ row }) => <span>{row.original.tipo}</span>,
       filterFn: (row, id, value: string[]) => value.includes(row.getValue(id) as string),
     },
