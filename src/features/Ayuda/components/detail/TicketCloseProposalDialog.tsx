@@ -4,11 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import type { CloseProposalTarget } from '@/shared/lib/taskapp/types';
 import { Loader2 } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { FormEvent, PointerEvent, SyntheticEvent } from 'react';
-import { useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { CLOSE_REASON_MAX, CLOSE_REASON_MIN, closeReasonError } from '../../constants/ticket-copy';
-import { useNativeModal } from '../../hooks/useNativeModal';
 import { useProposeTicketClose } from '../../hooks/useProposeTicketClose';
 
 /**
@@ -55,7 +54,14 @@ interface Props {
  * No reusa `ConfirmDialog` porque ese recibe título y descripción como texto:
  * acá hay un formulario adentro.
  */
-export function TicketCloseProposalDialog({ ticketId, open, onOpenChange, onProposed, stale = false }: Props) {
+export function TicketCloseProposalDialog({
+  ticketId,
+  open,
+  onOpenChange,
+  onProposed,
+  stale = false,
+}: Props) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const id = useId();
   const titleId = `${id}-title`;
@@ -87,12 +93,58 @@ export function TicketCloseProposalDialog({ ticketId, open, onOpenChange, onProp
   const reasonError = attempted || overMax ? reasonValidation : null;
   const reasonRequired = target === 'cancelled';
 
-  // Apertura, foco inicial y restauración: mismo mecanismo que ConfirmDialog. El foco va a la primera opción y
-  // no a "Volver": acá lo primero que hay que hacer es elegir, y con Tab desde el título se llegaría igual.
-  const dialogRef = useNativeModal(open, {
-    initialFocusSelector: 'input[type="radio"]:not([disabled])',
-    stopEscapeInCapture: true,
-  });
+  // Apertura, foco inicial y restauración: mismo mecanismo que ConfirmDialog.
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!open || dialog === null) return;
+
+    const opener =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    dialog.showModal();
+    // Foco en la primera opción y no en "Volver": acá lo primero que hay que
+    // hacer es elegir, y con Tab desde el título se llegaría igual.
+    dialog.querySelector<HTMLElement>('input[type="radio"]:not([disabled])')?.focus();
+
+    // El sheet de Radix escucha Escape en `document` en fase de CAPTURA, antes
+    // de que el evento llegue al diálogo, así que un `stopPropagation` en el
+    // onKeyDown de React llega tarde y una sola tecla cerraba también el panel
+    // de atrás. Se corta en `window`, que captura antes que `document`. No se
+    // llama a preventDefault: el cierre nativo (evento `cancel`) tiene que
+    // seguir ocurriendo, y lo maneja handleCancel.
+    const stopEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') event.stopPropagation();
+    };
+    window.addEventListener('keydown', stopEscape, { capture: true });
+
+    return () => {
+      window.removeEventListener('keydown', stopEscape, { capture: true });
+      if (dialog.open) dialog.close();
+      if (opener !== null && opener.isConnected && document.activeElement === document.body) {
+        opener.focus();
+      }
+    };
+  }, [open]);
+
+  // Bloqueo del scroll del fondo, devolviendo el body exactamente como estaba.
+  useEffect(() => {
+    if (!open) return;
+
+    const { body } = document;
+    const previousOverflow = body.style.overflow;
+    const previousPaddingRight = body.style.paddingRight;
+    const gap = window.innerWidth - document.documentElement.clientWidth;
+    if (gap > 0) {
+      const current = Number.parseFloat(window.getComputedStyle(body).paddingRight) || 0;
+      body.style.paddingRight = `${current + gap}px`;
+    }
+    body.style.overflow = 'hidden';
+
+    return () => {
+      body.style.overflow = previousOverflow;
+      body.style.paddingRight = previousPaddingRight;
+    };
+  }, [open]);
 
   function reset() {
     setTarget(null);
@@ -161,7 +213,9 @@ export function TicketCloseProposalDialog({ ticketId, open, onOpenChange, onProp
       // El diálogo queda abierto y el texto intacto: reintentar no puede
       // obligar a escribir todo de nuevo.
       setSending(false);
-      setServerError(error instanceof Error ? error.message : 'No se pudo enviar la propuesta. Probá de nuevo.');
+      setServerError(
+        error instanceof Error ? error.message : 'No se pudo enviar la propuesta. Probá de nuevo.'
+      );
     }
   }
 
@@ -191,8 +245,8 @@ export function TicketCloseProposalDialog({ ticketId, open, onOpenChange, onProp
             Proponer el cierre del TKT-{ticketId}
           </h2>
           <p id={descriptionId} className="mt-2 text-sm text-pretty text-muted-foreground">
-            El equipo revisa tu propuesta antes de cerrarlo. Hasta que responda, el ticket sigue en curso y no cambia de
-            estado.
+            El equipo revisa tu propuesta antes de cerrarlo. Hasta que responda, el ticket sigue en
+            curso y no cambia de estado.
           </p>
         </div>
 
@@ -221,7 +275,10 @@ export function TicketCloseProposalDialog({ ticketId, open, onOpenChange, onProp
                 />
                 <span className="min-w-0">
                   <span className="block text-sm font-medium">{option.title}</span>
-                  <span id={hintId} className="mt-0.5 block text-pretty text-xs leading-relaxed text-muted-foreground">
+                  <span
+                    id={hintId}
+                    className="mt-0.5 block text-pretty text-xs leading-relaxed text-muted-foreground"
+                  >
                     {option.hint}
                   </span>
                 </span>
@@ -240,7 +297,9 @@ export function TicketCloseProposalDialog({ ticketId, open, onOpenChange, onProp
               cambia según la opción y tiene que leerse, no adivinarse. */}
           <label htmlFor={reasonId} className="text-sm font-medium">
             {reasonRequired ? 'Motivo' : 'Comentario para el equipo'}{' '}
-            <span className="font-normal text-muted-foreground">{reasonRequired ? '(obligatorio)' : '(opcional)'}</span>
+            <span className="font-normal text-muted-foreground">
+              {reasonRequired ? '(obligatorio)' : '(opcional)'}
+            </span>
           </label>
           <Textarea
             ref={textareaRef}
@@ -278,7 +337,8 @@ export function TicketCloseProposalDialog({ ticketId, open, onOpenChange, onProp
 
         {stale && !sending && (
           <p role="status" className="rounded-md bg-muted p-3 text-sm text-pretty">
-            El ticket cambió mientras escribías y ya no admite una propuesta de cierre. Volvé para ver cómo quedó.
+            El ticket cambió mientras escribías y ya no admite una propuesta de cierre. Volvé para
+            ver cómo quedó.
           </p>
         )}
 

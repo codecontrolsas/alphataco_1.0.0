@@ -2,9 +2,8 @@
 
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
+import { useEffect, useId, useRef } from 'react';
 import type { KeyboardEvent, PointerEvent, SyntheticEvent } from 'react';
-import { useId } from 'react';
-import { useNativeModal } from '../hooks/useNativeModal';
 
 /**
  * Diálogo de confirmación propio del módulo. No sale de
@@ -68,13 +67,63 @@ export function ConfirmDialog({
   busy = false,
   onConfirm,
 }: Props) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const descriptionId = useId();
 
-  // Foco inicial en el primer control, que por orden de DOM es siempre
-  // "Cancelar": en una confirmación el foco no puede nacer sobre la acción
-  // que confirma.
-  const dialogRef = useNativeModal(open, { initialFocusSelector: 'button:not([disabled])' });
+  // Sincroniza el prop `open` con el estado nativo del <dialog>. Acá no hay
+  // ningún `setState`: sólo llamadas al DOM.
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!open || dialog === null) return;
+
+    // Quién tenía el foco antes de abrir. `close()` lo devuelve solo, pero si
+    // el diálogo se desmonta abierto (se cierra el sheet, se navega) esa
+    // restauración nativa no ocurre y el foco se cae al <body>.
+    const opener =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    dialog.showModal();
+
+    // Foco inicial en el primer control, que por orden de DOM es siempre
+    // "Cancelar": en una confirmación el foco no puede nacer sobre la acción
+    // que confirma.
+    dialog.querySelector<HTMLElement>('button:not([disabled])')?.focus();
+
+    return () => {
+      if (dialog.open) dialog.close();
+      if (opener !== null && opener.isConnected && document.activeElement === document.body) {
+        opener.focus();
+      }
+    };
+  }, [open]);
+
+  // Bloqueo del scroll del fondo, en su propio efecto porque tiene su propio
+  // ciclo de vida: hay que devolver el body EXACTAMENTE como estaba, incluso
+  // si el diálogo se desmonta abierto.
+  useEffect(() => {
+    if (!open) return;
+
+    const { body } = document;
+    const previousOverflow = body.style.overflow;
+    const previousPaddingRight = body.style.paddingRight;
+
+    // Compensar el ancho de la barra ANTES de ocultarla, o el fondo salta unos
+    // píxeles a la derecha al abrir. Si el hueco es 0 no se toca nada: pasa con
+    // las barras superpuestas de macOS y también cuando el sheet del host ya
+    // bloqueó el scroll y compensó él.
+    const gap = window.innerWidth - document.documentElement.clientWidth;
+    if (gap > 0) {
+      const current = Number.parseFloat(window.getComputedStyle(body).paddingRight) || 0;
+      body.style.paddingRight = `${current + gap}px`;
+    }
+    body.style.overflow = 'hidden';
+
+    return () => {
+      body.style.overflow = previousOverflow;
+      body.style.paddingRight = previousPaddingRight;
+    };
+  }, [open]);
 
   function requestClose() {
     // Mientras la mutación corre no se cierra: cerrar dejaría la acción en el
@@ -137,7 +186,12 @@ export function ConfirmDialog({
           <Button type="button" variant="outline" onClick={requestClose} disabled={busy}>
             {cancelLabel}
           </Button>
-          <Button type="button" variant={destructive ? 'destructive' : 'default'} onClick={onConfirm} disabled={busy}>
+          <Button
+            type="button"
+            variant={destructive ? 'destructive' : 'default'}
+            onClick={onConfirm}
+            disabled={busy}
+          >
             {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             {confirmLabel}
           </Button>
