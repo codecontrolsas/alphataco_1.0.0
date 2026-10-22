@@ -1,4 +1,5 @@
-import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
+import { NULL_FILTER_VALUE, parseSearchParams } from '@/shared/components/common/DataTable/helpers';
+import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 
 /**
  * Arma el mapa de conteos de una faceta (`valor → cantidad`). Una clave `null` o `undefined` se cuenta
@@ -30,6 +31,23 @@ export function withoutOwnFilter<State extends { filters: Record<string, unknown
   delete filters[`${excludeColumn}_from`];
   delete filters[`${excludeColumn}_to`];
   return { ...state, filters };
+}
+
+/**
+ * Arma el `where` de las facetas de una tabla: sin filtros activos es el `base`; con filtros, el de la
+ * tabla sin el filtro propio de la columna (cross-filter). Devuelve una función `columna → where`.
+ */
+export function createCrossWhere<Where>(
+  searchParams: DataTableSearchParams | undefined,
+  base: Where,
+  buildWhere: (state: ReturnType<typeof parseSearchParams>) => Where
+) {
+  const parsedState = searchParams && Object.keys(searchParams).length > 0 ? parseSearchParams(searchParams) : null;
+  const hasActiveFilters = parsedState && (Object.keys(parsedState.filters).length > 0 || parsedState.search);
+  return (excludeColumn: string): Where => {
+    if (!parsedState || !hasActiveFilters) return base;
+    return buildWhere(withoutOwnFilter(parsedState, excludeColumn));
+  };
 }
 
 // ============================================================================

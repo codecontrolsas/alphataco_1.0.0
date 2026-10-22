@@ -7,10 +7,9 @@
  */
 import { DELIVERY_STATUS_ACTIVE, DELIVERY_STATUS_CANCELLED } from '@/features/Clothing/lib/delivery-stock-where';
 import type { Prisma } from '@/generated/prisma/client';
-import { NULL_FILTER_VALUE, parseSearchParams } from '@/shared/components/common/DataTable/helpers';
-import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { prisma } from '@/shared/lib/prisma';
-import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
+import { toFacetMap } from '@/shared/lib/table-facets';
 import { containsInsensitive, type SingleFacetResult } from '@/shared/lib/table-list-query';
 
 /** Las dos relaciones de la entrega con un empleado. */
@@ -61,23 +60,6 @@ export function buildPersonFileWhere(
 /** "[legajo] Apellido Nombre", la etiqueta de las opciones de los filtros por persona. */
 function personFacetName(e: { file: string | null; lastname: string | null; firstname: string | null }) {
   return `[${e.file ?? ''}] ${e.lastname ?? ''} ${e.firstname ?? ''}`.trim();
-}
-
-/**
- * Función que arma el `where` de una faceta: sin filtros activos es el `base`; con filtros, el de la tabla
- * sin el filtro propio de la columna (cross-filter).
- */
-export function createCrossWhere(
-  searchParams: DataTableSearchParams | undefined,
-  base: Prisma.clothing_deliveriesWhereInput,
-  buildWhere: (state: ReturnType<typeof parseSearchParams>) => Prisma.clothing_deliveriesWhereInput
-) {
-  const parsedState = searchParams && Object.keys(searchParams).length > 0 ? parseSearchParams(searchParams) : null;
-  const hasActiveFilters = parsedState && (Object.keys(parsedState.filters).length > 0 || parsedState.search);
-  return (excludeColumn: string): Prisma.clothing_deliveriesWhereInput => {
-    if (!parsedState || !hasActiveFilters) return base;
-    return buildWhere(withoutOwnFilter(parsedState, excludeColumn));
-  };
 }
 
 /** Faceta del tipo de entrega (enum). */

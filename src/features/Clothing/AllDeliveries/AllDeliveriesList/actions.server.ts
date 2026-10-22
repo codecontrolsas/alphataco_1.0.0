@@ -3,7 +3,6 @@
 import {
   buildNullableEmployeeIdWhere,
   buildPersonFileWhere,
-  createCrossWhere,
   DELIVERED_BY_RELATION,
   DELIVERY_ITEMS_SELECT,
   DELIVERY_PERSON_SELECT,
@@ -24,6 +23,7 @@ import {
 } from '@/shared/components/common/DataTable/helpers';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import { prisma } from '@/shared/lib/prisma';
+import { createCrossWhere } from '@/shared/lib/table-facets';
 import { resolveSorts, type SingleFacetResult } from '@/shared/lib/table-list-query';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 
@@ -197,8 +197,10 @@ export async function getAllDeliveriesSingleFacet(
   searchParams?: DataTableSearchParams
 ): Promise<SingleFacetResult> {
   const companyId = await getActiveCompanyId();
-  const crossWhere = createCrossWhere(searchParams, { company_id: companyId }, (state) =>
-    buildWhereClause(companyId, state)
+  const crossWhere = createCrossWhere<Prisma.clothing_deliveriesWhereInput>(
+    searchParams,
+    { company_id: companyId },
+    (state) => buildWhereClause(companyId, state)
   );
 
   try {

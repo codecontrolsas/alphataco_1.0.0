@@ -1,5 +1,5 @@
-import { EmployeeDeliveriesTableSkeleton } from '@/features/Clothing/EmployeeDeliveries/EmployeeDeliveriesList/fallback/EmployeeDeliveriesTableSkeleton';
 import { EmployeeDeliveriesTabContent } from '@/features/Clothing/EmployeeDeliveries/EmployeeDeliveriesTabContent';
+import { ClothingTableSkeleton } from '@/features/Clothing/fallback/ClothingTableSkeleton';
 import { getUserPermissionsMapServer } from '@/features/Permissions/actions/permissions.server';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import { createTabVisibilityChecker } from '@/features/Permissions/lib/tab-visibility';
@@ -135,7 +135,7 @@ export async function EmployeeReadView({ employee, searchParams }: EmployeeReadV
             moduleSlug: 'empleados',
             tabSlug: 'indumentaria_empleado',
             content: (
-              <Suspense fallback={<EmployeeDeliveriesTableSkeleton />}>
+              <Suspense fallback={<ClothingTableSkeleton />}>
                 <EmployeeDeliveriesTabContent employeeId={employeeId} searchParams={searchParams} />
               </Suspense>
             ),

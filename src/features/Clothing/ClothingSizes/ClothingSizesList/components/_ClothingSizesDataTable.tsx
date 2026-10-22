@@ -2,13 +2,18 @@
 
 import { Button } from '@/components/ui/button';
 import { toggleClothingSizeActive } from '@/features/Clothing/actions/catalog.server';
+import { useCatalogTable } from '@/features/Clothing/hooks/useCatalogTable';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
-import { type DataTableFacetedFilterConfig, type DataTableSearchParams, type FacetResult } from '@/shared/components/common/DataTable/types';
+import { createFacetFilters, dateRangeFilter, textFilter } from '@/shared/components/common/DataTable/facet-filters';
+import {
+  type DataTableFacetedFilterConfig,
+  type DataTableSearchParams,
+} from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import moment from 'moment';
-import { useCallback, useMemo, useState } from 'react';
-import { toast } from 'sonner';
+import { useCallback, useMemo } from 'react';
 import { ClothingSizeForm } from '../../components/ClothingSizeForm';
 import {
   getAllClothingSizesForExport,
@@ -34,6 +39,29 @@ interface ClothingSizesDataTableProps {
 }
 
 // ============================================================================
+// FILTERS
+// ============================================================================
+
+const DEFAULT_VISIBLE_FILTERS = ['is_active'];
+
+const facets = createFacetFilters(getClothingSizesSingleFacet);
+
+const FACETED_FILTERS: DataTableFacetedFilterConfig[] = [
+  facets.fixed('is_active', 'Estado', [
+    { value: 'true', label: 'Activo' },
+    { value: 'false', label: 'Inactivo' },
+  ]),
+  textFilter('name', 'Nombre', 'Buscar por nombre...'),
+  dateRangeFilter('created_at', 'Fecha de creación'),
+];
+
+const TOGGLE_MESSAGES = {
+  activated: 'Talle activado',
+  deactivated: 'Talle desactivado',
+  error: 'Error al cambiar el estado del talle',
+};
+
+// ============================================================================
 // COMPONENT
 // ============================================================================
 
@@ -46,127 +74,44 @@ export default function _ClothingSizesDataTable({
   initialColumnVisibility,
   initialFilterVisibility,
 }: ClothingSizesDataTableProps) {
-  // Build hasPermission helper from serializable map
-  const permissions = useMemo(
-    () => ({
-      hasPermission: (module: string, tab: string, action: string) =>
-        permissionsMap[`${module}:${tab}:${action}`] === true,
-    }),
-    [permissionsMap]
-  );
-
   const queryClient = useQueryClient();
-
-  // ─── Dialog state ──────────────────────────────────────────────────────────
-  const [formOpen, setFormOpen] = useState(false);
-  const [editingSize, setEditingSize] = useState<ClothingSizeListItem | null>(null);
-
-  const handleCreate = useCallback(() => {
-    setEditingSize(null);
-    setFormOpen(true);
-  }, []);
-
-  const handleEdit = useCallback((size: ClothingSizeListItem) => {
-    setEditingSize(size);
-    setFormOpen(true);
-  }, []);
-
-  const handleToggleActive = useCallback(
-    async (size: ClothingSizeListItem) => {
-      try {
-        await toggleClothingSizeActive(size.id, !size.is_active);
-        await queryClient.invalidateQueries({ queryKey: ['clothing-sizes'] });
-        toast.success(size.is_active ? 'Talle desactivado' : 'Talle activado');
-      } catch {
-        toast.error('Error al cambiar el estado del talle');
-      }
-    },
-    [queryClient]
-  );
+  const { permissions, formOpen, setFormOpen, editing, openCreate, openEdit, closeForm, handleToggleActive } =
+    useCatalogTable<ClothingSizeListItem>({
+      permissionsMap,
+      queryKey: 'clothing-sizes',
+      loggerName: '_ClothingSizesDataTable',
+      toggleActive: toggleClothingSizeActive,
+      messages: TOGGLE_MESSAGES,
+    });
 
   const handleFormSuccess = useCallback(() => {
-    setFormOpen(false);
-    setEditingSize(null);
+    closeForm();
     queryClient.invalidateQueries({ queryKey: ['clothing-sizes'] });
-  }, [queryClient]);
-
-  // ─── Client-side navigation ────────────────────────────────────────────────
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-
-  const handleStateChange = useCallback((params: DataTableSearchParams) => {
-    setCurrentParams(params);
-  }, []);
+  }, [closeForm, queryClient]);
 
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getClothingSizesPaginated(params), []);
 
   // ─── Columns ──────────────────────────────────────────────────────────────
   const columns = useMemo(
-    () =>
-      getColumns(permissions, {
-        onEdit: handleEdit,
-        onToggleActive: handleToggleActive,
-      }),
-    [permissions, handleEdit, handleToggleActive]
+    () => getColumns(permissions, { onEdit: openEdit, onToggleActive: handleToggleActive }),
+    [permissions, openEdit, handleToggleActive]
   );
 
-  // ─── Column visibility ─────────────────────────────────────────────────────
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults: Record<string, boolean> = {};
-    for (const col of HIDDEN_COLUMNS_BY_DEFAULT) {
-      defaults[col] = false;
-    }
-    return { ...defaults, ...initialColumnVisibility };
-  }, [initialColumnVisibility]);
-
-  // ─── Filter visibility (max 3 visibles por defecto) ───────────────────────
-  const DEFAULT_VISIBLE_FILTERS = ['is_active'];
-
-  const mergedFilterVisibility = useMemo(() => {
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
-      return initialFilterVisibility;
-    }
-    const allFilterIds = ['is_active', 'name', 'created_at'];
-    return Object.fromEntries(allFilterIds.map((id) => [id, DEFAULT_VISIBLE_FILTERS.includes(id)]));
-  }, [initialFilterVisibility]);
-
-  // ─── Lazy-load facets ──────────────────────────────────────────────────────
-  const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
-    () => [
-      {
-        columnId: 'is_active',
-        title: 'Estado',
-        fetchFacet: async (params: DataTableSearchParams): Promise<FacetResult> => {
-          const result = await getClothingSizesSingleFacet('is_active', params);
-          if (!result) return { options: [], counts: new Map() };
-          return {
-            options: [
-              { value: 'true', label: 'Activo' },
-              { value: 'false', label: 'Inactivo' },
-            ],
-            counts: result.counts,
-          };
-        },
-      },
-      {
-        columnId: 'name',
-        title: 'Nombre',
-        type: 'text' as const,
-        placeholder: 'Buscar por nombre...',
-      },
-      {
-        columnId: 'created_at',
-        title: 'Fecha de creación',
-        type: 'dateRange' as const,
-      },
-    ],
-    []
-  );
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters: FACETED_FILTERS,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
 
   // ─── Toolbar actions ───────────────────────────────────────────────────────
   const canCreate = permissions.hasPermission('configuracion', 'talles_indumentaria', 'create');
 
   const toolbarActions = canCreate ? (
-    <Button variant="brand" size="sm" onClick={handleCreate}>
+    <Button variant="brand" size="sm" onClick={openCreate}>
       <Plus className="mr-2 h-4 w-4" />
       Nuevo Talle
     </Button>
@@ -179,19 +124,12 @@ export default function _ClothingSizesDataTable({
         columns={columns}
         data={data}
         totalRows={totalRows}
-        searchParams={searchParams}
-        tableId={tableId}
-        paramNamespace={tableId}
-        facetedFilters={facetedFilters}
-        initialColumnVisibility={mergedColumnVisibility}
-        initialFilterVisibility={mergedFilterVisibility}
+        {...tableProps}
         toolbarActions={toolbarActions}
-        showFilterToggle
         searchPlaceholder="Buscar talles..."
         emptyMessage="No se encontraron talles"
         queryFn={tableQueryFn}
         queryKey={['clothing-sizes']}
-        onStateChange={handleStateChange}
         exportConfig={{
           fetchAllData: () => getAllClothingSizesForExport(currentParams),
           options: {
@@ -207,7 +145,7 @@ export default function _ClothingSizesDataTable({
         }}
       />
 
-      <ClothingSizeForm open={formOpen} onOpenChange={setFormOpen} size={editingSize} onSuccess={handleFormSuccess} />
+      <ClothingSizeForm open={formOpen} onOpenChange={setFormOpen} size={editing} onSuccess={handleFormSuccess} />
     </>
   );
 }
