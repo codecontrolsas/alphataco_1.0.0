@@ -20,21 +20,6 @@ const logger = new Logger('features/Empresa/AccesosExternos');
  * unica vez a quien lo creo, y NUNCA se persiste ni se pasa al logger.
  */
 
-/** Campos que se pueden leer sin riesgo: nunca incluye `secret_hash` */
-const CLIENT_SELECT = {
-  id: true,
-  name: true,
-  client_id: true,
-  secret_prefix: true,
-  is_active: true,
-  revoked_at: true,
-  last_used_at: true,
-  notes: true,
-  created_at: true,
-  creator: { select: { id: true, fullname: true } },
-  revoker: { select: { id: true, fullname: true } },
-} as const;
-
 /** `created_by`/`revoked_by` apuntan a `profile.id`, no al id de la credencial de sesión. */
 async function getCurrentProfileId(): Promise<string> {
   return (await requireServerAuthProfile()).id;

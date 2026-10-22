@@ -77,8 +77,6 @@ export default function EquipmentModelForm({ editingItem, onReset }: EquipmentMo
     handleSubmit,
     reset,
     formState: { isSubmitting },
-    watch,
-    setValue,
   } = form;
 
   // Sincronizar formulario cuando cambia el item a editar

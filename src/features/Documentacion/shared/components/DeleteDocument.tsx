@@ -21,12 +21,10 @@ export default function DeleteDocument({
   documentName,
   resource,
   id,
-  expires,
 }: {
   documentName: string | null;
   resource: string | null;
   id: string;
-  expires: boolean;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const FormSchema = z.object({

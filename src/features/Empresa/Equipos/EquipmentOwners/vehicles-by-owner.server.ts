@@ -1,8 +1,8 @@
 'use server';
 
 import { Logger } from '@/lib/logger';
-import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable/types';
 import { NULL_FILTER_VALUE, stateToPrismaParams } from '@/shared/components/common/DataTable/helpers';
+import type { DataTableSearchParams, FacetResult } from '@/shared/components/common/DataTable/types';
 import { fetchExportRowsInBatches } from '@/shared/lib/export-batches';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
@@ -197,7 +197,6 @@ export async function getVehicleByOwnerSingleFacet(
             ? await prisma.type.findMany({ where: { id: { in: typeIds } }, select: { id: true, name: true } })
             : [];
 
-        const nameMap = new Map(types.map((t) => [t.id, t.name]));
         const counts = new Map<string, number>();
         for (const r of rows) {
           counts.set(r.type as string, r._count);
