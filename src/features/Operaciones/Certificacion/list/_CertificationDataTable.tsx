@@ -2,18 +2,23 @@
 
 import { Button } from '@/components/ui/button';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { DETAIL_QUERY_PREFIX } from '@/features/Operaciones/PartesDiarios/detail/constants';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import { usePermissions } from '@/features/Permissions/hooks/usePermissions';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
 import { type DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { unwrapExportResult } from '@/shared/lib/export-result';
 import { useDailyReportFormStore } from '@/shared/store/useDailyReportFormStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, Plus, X } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useCallback, useMemo, useState } from 'react';
-import { DETAIL_QUERY_PREFIX } from '@/features/Operaciones/PartesDiarios/detail/constants';
-import { unwrapExportResult } from '@/shared/lib/export-result';
-import { getCertificationRowsForExport, getCertificationRowsPaginated, type CertificationRow } from '../actions/queries.server';
+import { RowColorLegend } from '../../PartesDiarios/detail/components/RowColorLegend';
+import {
+  getCertificationRowsForExport,
+  getCertificationRowsPaginated,
+  type CertificationRow,
+} from '../actions/queries.server';
 import { BulkCertificacionModal } from '../components/BulkCertificacionModal';
 import { certificationExportFormatters } from '../components/export-formatters';
 import { getCertificationColumns, getCertificationRowClassName, type CertificationRowHandlers } from './columns';
@@ -22,11 +27,17 @@ import { useCertificationFacets } from './useCertificationFacets';
 
 // Los modales pesados se cargan al abrirse, no con la tabla.
 const HistoryDialog = dynamic(
-  () => import('@/features/Operaciones/PartesDiarios/detail/components/HistoryDialog').then((m) => ({ default: m.HistoryDialog })),
+  () =>
+    import('@/features/Operaciones/PartesDiarios/detail/components/HistoryDialog').then((m) => ({
+      default: m.HistoryDialog,
+    })),
   { ssr: false }
 );
 const RemitosManagerModal = dynamic(
-  () => import('@/features/Operaciones/PartesDiarios/remitManager/components/RemitosManagerModal').then((m) => ({ default: m.RemitosManagerModal })),
+  () =>
+    import('@/features/Operaciones/PartesDiarios/remitManager/components/RemitosManagerModal').then((m) => ({
+      default: m.RemitosManagerModal,
+    })),
   { ssr: false }
 );
 
@@ -37,22 +48,6 @@ interface Props {
   tableId: string;
   initialColumnVisibility: Record<string, boolean>;
   initialFilterVisibility: Record<string, boolean>;
-}
-
-/** Leyenda de los colores de fila (muestra + texto: el color solo no comunica). */
-function RowColorLegend() {
-  return (
-    <ul className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 text-xs" aria-label="Referencias de colores">
-      <li className="flex items-center gap-1.5">
-        <span className="bg-brand-subtle border-border size-3 rounded-sm border" aria-hidden="true" />
-        Editada por Comercial
-      </li>
-      <li className="flex items-center gap-1.5">
-        <span className="bg-warn-subtle border-border size-3 rounded-sm border" aria-hidden="true" />
-        Agregada después de la fecha del parte
-      </li>
-    </ul>
-  );
 }
 
 export function _CertificationDataTable({
@@ -152,7 +147,7 @@ export function _CertificationDataTable({
           ) : null}
         </div>
 
-        <RowColorLegend />
+        <RowColorLegend showDeviations={false} />
 
         <DataTable
           columns={columns}

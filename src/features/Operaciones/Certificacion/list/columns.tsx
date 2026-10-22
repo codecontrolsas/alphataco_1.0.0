@@ -8,12 +8,16 @@ import { ServiceDetailModal } from '@/features/Operaciones/PartesDiarios/compone
 import { DataTableColumnHeader } from '@/shared/components/common/DataTable/DataTableColumnHeader';
 import { NULL_FILTER_VALUE } from '@/shared/components/common/DataTable/helpers';
 import { argentinaDate, formatDateAr } from '@/shared/lib/argentina-time';
-import { dailyReportRowStatusLabels, dailyReportRowStatusTones, dailyReportTypeServiceLabels } from '@/shared/utils/mappers';
+import { employeeLabel } from '@/shared/lib/resource-labels';
+import {
+  dailyReportRowStatusLabels,
+  dailyReportRowStatusTones,
+  dailyReportTypeServiceLabels,
+} from '@/shared/utils/mappers';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Edit, FileText, History } from 'lucide-react';
+import { rowStatusIcons } from '../../lib/row-facet-options';
 import type { CertificationRow } from '../actions/queries.server';
-import { employeeLabel } from '@/shared/lib/resource-labels';
-import { certificationStatusIcons } from './useCertificationFacets';
 
 // ============================================================================
 // TIPOS
@@ -97,7 +101,10 @@ function IconAction({
 // COLUMNAS
 // ============================================================================
 
-export function getCertificationColumns(canEdit: boolean, handlers: CertificationRowHandlers): ColumnDef<CertificationRow>[] {
+export function getCertificationColumns(
+  canEdit: boolean,
+  handlers: CertificationRowHandlers
+): ColumnDef<CertificationRow>[] {
   return [
     // ── Selección (solo con permiso de edición; solo líneas ejecutadas) ──────
     {
@@ -226,7 +233,11 @@ export function getCertificationColumns(canEdit: boolean, handlers: Certificatio
       header: ({ column }) => <DataTableColumnHeader column={column} title="Tipo de servicio" />,
       cell: ({ row }) => {
         const type = row.original.type_service;
-        return type ? <span>{dailyReportTypeServiceLabels[type] ?? type}</span> : <span className="text-muted-foreground text-xs">—</span>;
+        return type ? (
+          <span>{dailyReportTypeServiceLabels[type] ?? type}</span>
+        ) : (
+          <span className="text-muted-foreground text-xs">—</span>
+        );
       },
       filterFn: (row, _id, value: string[]) => matchesNullable(row.original.type_service, value),
     },
@@ -257,7 +268,7 @@ export function getCertificationColumns(canEdit: boolean, handlers: Certificatio
       header: ({ column }) => <DataTableColumnHeader column={column} title="Estado" />,
       cell: ({ row }) => {
         const status = row.original.status;
-        const Icon = certificationStatusIcons[status];
+        const Icon = rowStatusIcons[status];
         return (
           <Badge variant={dailyReportRowStatusTones[status] ?? 'default'}>
             {Icon ? <Icon className="size-3" aria-hidden="true" /> : null}
@@ -275,7 +286,9 @@ export function getCertificationColumns(canEdit: boolean, handlers: Certificatio
       meta: { title: 'Empleados' },
       enableSorting: false,
       header: ({ column }) => <DataTableColumnHeader className="min-w-[200px]" column={column} title="Empleados" />,
-      cell: ({ row }) => <ChipList items={row.original.employees_references.map((employee) => employeeLabel(employee))} />,
+      cell: ({ row }) => (
+        <ChipList items={row.original.employees_references.map((employee) => employeeLabel(employee))} />
+      ),
       filterFn: (row, _id, value: string[]) =>
         matchesAny(
           row.original.employees_references.map((employee) => employee.id),

@@ -12,10 +12,16 @@ export function getRowClassName(row: DailyReportDetailRow, reportDate: string): 
   return '';
 }
 
-/** Leyenda de colores de fila (muestra + texto: el color solo no comunica). */
-export function RowColorLegend() {
+/**
+ * Leyenda de colores de fila (muestra + texto: el color solo no comunica). El tablero de certificación
+ * la usa sin la referencia de desvíos (sus filas no los marcan).
+ */
+export function RowColorLegend({ showDeviations = true }: { showDeviations?: boolean }) {
   return (
-    <ul className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 text-xs" aria-label="Referencias de colores">
+    <ul
+      className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 text-xs"
+      aria-label="Referencias de colores"
+    >
       <li className="flex items-center gap-1.5">
         <span className="bg-brand-subtle border-border size-3 rounded-sm border" aria-hidden="true" />
         Editada por Comercial
@@ -24,10 +30,12 @@ export function RowColorLegend() {
         <span className="bg-warn-subtle border-border size-3 rounded-sm border" aria-hidden="true" />
         Agregada después de la fecha del parte
       </li>
-      <li className="flex items-center gap-1.5">
-        <AlertTriangle className="size-3.5" aria-hidden="true" />
-        Con desvíos de personal o equipos
-      </li>
+      {showDeviations && (
+        <li className="flex items-center gap-1.5">
+          <AlertTriangle className="size-3.5" aria-hidden="true" />
+          Con desvíos de personal o equipos
+        </li>
+      )}
     </ul>
   );
 }
