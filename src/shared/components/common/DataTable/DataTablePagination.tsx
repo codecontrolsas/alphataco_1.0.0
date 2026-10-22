@@ -31,10 +31,6 @@ export function DataTablePagination<TData>({
   const pageSize = table.getState().pagination.pageSize;
   const pageCount = table.getPageCount();
 
-  // Calcular rango de filas mostradas
-  const startRow = pageIndex * pageSize + 1;
-  const endRow = Math.min((pageIndex + 1) * pageSize, totalRows);
-
   return (
     <div className="flex flex-col gap-3 px-2 sm:flex-row sm:items-center sm:justify-between">
       {/* Información de total + selección */}

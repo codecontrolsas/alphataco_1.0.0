@@ -1,15 +1,3 @@
-
-/** Shape mínimo (PostgREST legacy o Prisma) que necesita `setEmployeesToShow`. */
-type Named = { id?: string | null; name?: string | null } | null | undefined;
-/** En las filas planas de PostgREST las FK vienen como id (string o number) en vez de objeto. */
-type Ref = Named | string | number;
-
-const nameOf = (value: Ref | undefined) =>
-  typeof value === 'string' ? value : typeof value === 'number' ? undefined : value?.name?.trim();
-const idOf = (value: Ref | undefined) =>
-  typeof value === 'string' ? value : typeof value === 'number' ? String(value) : value?.id;
-const capitalize = (value: string | null | undefined) =>
-  value ? `${value.charAt(0).toUpperCase()}${value.slice(1)}` : '';
 /**
  * Normaliza un texto para usarlo como segmento de una ruta de Supabase Storage.
  *

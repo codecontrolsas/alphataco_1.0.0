@@ -96,7 +96,6 @@ export async function exportToExcel<T extends Record<string, unknown>>(
   // Header con logo y título (opcional)
   if (title || companyBranding) {
     const hasLogo = !!companyBranding?.logo;
-    const headerRows = 3; // Logo + Título + Fecha
 
     // Logo (si existe)
     if (hasLogo && companyBranding?.logo) {
