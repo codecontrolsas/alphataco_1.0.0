@@ -7,6 +7,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } f
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { categoricalColorVar } from '@/features/Dashboard/shared/charts/ChartColorVars';
 import { ChartSummary } from '@/features/Dashboard/shared/charts/ChartSummary';
+import { donutCenterContent } from '@/features/Dashboard/shared/charts/DonutCenter';
 import { StateBlock } from '@/shared/components/common/StateBlock';
 import { Eye } from 'lucide-react';
 import dynamic from 'next/dynamic';
@@ -186,24 +187,10 @@ export function ServicesSection({ date, today, servicesSummary, clientDetail }: 
                             <Cell key={entry.name} fill={entry.fill} />
                           ))}
                           <Label
-                            content={({ viewBox }) => {
-                              if (viewBox && 'cx' in viewBox && 'cy' in viewBox) {
-                                return (
-                                  <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
-                                    <tspan x={viewBox.cx} y={viewBox.cy} className="fill-foreground text-2xl font-bold">
-                                      {totalClientServices.toLocaleString('es-AR')}
-                                    </tspan>
-                                    <tspan
-                                      x={viewBox.cx}
-                                      y={(viewBox.cy ?? 0) + 20}
-                                      className="fill-muted-foreground text-xs"
-                                    >
-                                      Servicios
-                                    </tspan>
-                                  </text>
-                                );
-                              }
-                            }}
+                            content={donutCenterContent({
+                              value: totalClientServices.toLocaleString('es-AR'),
+                              caption: 'Servicios',
+                            })}
                           />
                         </Pie>
                       </PieChart>

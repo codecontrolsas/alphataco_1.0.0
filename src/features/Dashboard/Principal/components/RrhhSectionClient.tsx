@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { statusColorVar } from '@/features/Dashboard/shared/charts/ChartColorVars';
 import { ChartSummary } from '@/features/Dashboard/shared/charts/ChartSummary';
+import { donutCenterContent } from '@/features/Dashboard/shared/charts/DonutCenter';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import * as React from 'react';
@@ -148,26 +149,7 @@ export function RrhhSectionClient({
                           {chartData.map((entry) => (
                             <Cell key={entry.name} fill={entry.fill} />
                           ))}
-                          <Label
-                            content={({ viewBox }) => {
-                              if (viewBox && 'cx' in viewBox && 'cy' in viewBox) {
-                                return (
-                                  <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
-                                    <tspan x={viewBox.cx} y={viewBox.cy} className="fill-foreground text-2xl font-bold">
-                                      {totalDiagramEmployees}
-                                    </tspan>
-                                    <tspan
-                                      x={viewBox.cx}
-                                      y={(viewBox.cy ?? 0) + 20}
-                                      className="fill-muted-foreground text-xs"
-                                    >
-                                      Empleados
-                                    </tspan>
-                                  </text>
-                                );
-                              }
-                            }}
-                          />
+                          <Label content={donutCenterContent({ value: totalDiagramEmployees, caption: 'Empleados' })} />
                         </Pie>
                       </PieChart>
                     </ChartContainer>
