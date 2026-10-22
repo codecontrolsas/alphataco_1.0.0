@@ -3,6 +3,8 @@
 import { EnhancedDatePicker } from '@/components/ui/enhanced-datepicket';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import moment from 'moment';
 import type { ComponentProps, ReactNode } from 'react';
@@ -111,6 +113,60 @@ export function DateFormField<T extends FieldValues, N extends FieldPath<T>>({
             />
           </FormControl>
           {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+}
+
+/**
+ * Selector de un catálogo `{ id, name }` conectado a react-hook-form. Mientras `loading` muestra un
+ * skeleton; `onValueChange` reemplaza al cambio por defecto cuando el valor dispara otros efectos
+ * (por ejemplo, reiniciar los campos que dependen de este).
+ */
+export function SelectFormField<T extends FieldValues, N extends FieldPath<T>>({
+  control,
+  name,
+  label,
+  placeholder,
+  options,
+  loading = false,
+  disabled,
+  onValueChange,
+  itemClassName,
+}: FieldBase<T, N> & {
+  placeholder: string;
+  options: ReadonlyArray<{ id: string; name: string | null }>;
+  loading?: boolean;
+  disabled?: boolean;
+  onValueChange?: (value: string) => void;
+}) {
+  return (
+    <FormField
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <FormItem className={itemClassName}>
+          <FormLabel>{label}</FormLabel>
+          {loading ? (
+            <Skeleton className="h-9 w-full" />
+          ) : (
+            <Select onValueChange={onValueChange ?? field.onChange} defaultValue={field.value} disabled={disabled}>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue placeholder={placeholder} />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {options.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <FormMessage />
         </FormItem>
       )}
