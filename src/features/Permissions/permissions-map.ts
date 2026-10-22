@@ -1621,6 +1621,3 @@ export type AllTabSlugs<M extends ModuleSlug> =
 // Tipo helper para distribuir AllTabSlugs sobre uniones de módulos
 // Esto permite que funcione correctamente cuando M es una unión como 'empleados' | 'documentacion'
 export type AllTabSlugsUnion<M extends ModuleSlug> = M extends any ? AllTabSlugs<M> : never;
-
-/** Forma mínima de una tab indexable por slug arbitrario (helpers `getTabId`/`getSubtabId`). */
-type TabsByKey = Record<string, { tabId: string; subtabs?: Record<string, { tabId: string }> }>;
