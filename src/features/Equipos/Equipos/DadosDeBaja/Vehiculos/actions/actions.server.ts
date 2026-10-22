@@ -12,6 +12,7 @@ import { Logger } from '@/lib/logger';
 import type { DataTableSearchParams } from '@/shared/components/common/DataTable/types';
 import type { ExportResult } from '@/shared/lib/export-result';
 import { prisma } from '@/shared/lib/prisma';
+import type { SingleFacetResult } from '@/shared/lib/table-list-query';
 import { clampedPageParams } from '@/shared/lib/table-pagination';
 import { getActiveCompanyId } from '@/shared/lib/tenant';
 
@@ -213,10 +214,7 @@ export async function getAllInactiveVehiclesForExport(
 export async function getInactiveVehicleSingleFacet(
   columnId: string,
   searchParams?: DataTableSearchParams
-): Promise<{
-  counts: Map<string, number>;
-  resolvedOptions?: { value: string; label: string }[];
-} | null> {
+): Promise<SingleFacetResult> {
   if (!(await checkPermissionServer(MODULE_SLUG, TAB_SLUG, 'view'))) return null;
 
   const companyId = await getActiveCompanyId();

@@ -11,6 +11,7 @@ import type { DataTableSearchParams } from '@/shared/components/common/DataTable
 import { prisma } from '@/shared/lib/prisma';
 import { toFacetMap, withoutOwnFilter } from '@/shared/lib/table-facets';
 import { dateRangeKeys, sanitizeFilters } from '@/shared/lib/table-filters';
+import type { SingleFacetResult } from '@/shared/lib/table-list-query';
 
 /**
  * Armado de consultas compartido por los listados de vehículos (activos y dados de baja).
@@ -182,13 +183,10 @@ async function buildChecklistCountCondition(
 // FACETAS
 // ============================================================================
 
-type FacetOutput = {
-  counts: Map<string, number>;
-  resolvedOptions?: { value: string; label: string }[];
-};
+type FacetOutput = NonNullable<SingleFacetResult>;
 
 function nameOptions(rows: { id: string | number; name: string | null }[]) {
-  return rows.map((o) => ({ value: String(o.id), label: o.name ?? '' }));
+  return rows.map((o) => ({ id: String(o.id), name: o.name }));
 }
 
 /** Facetas de las columnas que existen en los listados de vehículos. Devuelve `null` si la columna no es facetable. */

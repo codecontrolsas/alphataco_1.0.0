@@ -21,6 +21,29 @@ const nullOptionIfCounted = (counts: Map<string, number>, nullOption?: NullOptio
     ? [{ value: NULL_FILTER_VALUE, label: nullOption.label, icon: nullOption.icon ?? CircleOff }]
     : [];
 
+/** Opciones de un enum con la etiqueta (y el ícono, si lo tiene) de cada valor. */
+export function enumFilterOptions(
+  values: readonly string[],
+  labels: Record<string, string>,
+  icons?: Record<string, LucideIcon | undefined>
+): DataTableFilterOption[] {
+  return values.map((value) => ({
+    value,
+    label: labels[value] ?? value,
+    ...(icons?.[value] ? { icon: icons[value] } : {}),
+  }));
+}
+
+/** Filtro de texto libre de una columna. */
+export function textFilter(columnId: string, title: string, placeholder: string): DataTableFacetedFilterConfig {
+  return { columnId, title, type: 'text', placeholder };
+}
+
+/** Filtro por rango de fechas de una columna. */
+export function dateRangeFilter(columnId: string, title: string): DataTableFacetedFilterConfig {
+  return { columnId, title, type: 'dateRange' };
+}
+
 /**
  * Fábrica de filtros facetados cargados por demanda desde una acción `get…SingleFacet`. Evita repetir en
  * cada tabla el `fetchFacet` (pedir conteos, caer a `EMPTY_FACET` y armar las opciones).

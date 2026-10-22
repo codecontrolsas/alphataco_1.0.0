@@ -1,13 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import {
-  buildBooleanFacetResult,
-  buildEnumFacetResult,
-  buildFkFacetResult,
-  formatDbDate,
-  formatTimestampDay,
-} from '@/features/Equipos/lib/vehicle-list-client';
+import { formatDbDate, formatTimestampDay } from '@/features/Equipos/lib/vehicle-list-client';
 import { PermissionGuard } from '@/features/Permissions/components/PermissionGuard';
 import {
   condition_enum,
@@ -18,10 +12,13 @@ import {
 } from '@/generated/prisma/enums';
 import { DataTable } from '@/shared/components/common/DataTable/DataTable';
 import {
-  type DataTableFacetedFilterConfig,
-  type DataTableSearchParams,
-  type FacetResult,
-} from '@/shared/components/common/DataTable/types';
+  createFacetFilters,
+  dateRangeFilter,
+  enumFilterOptions,
+  textFilter,
+} from '@/shared/components/common/DataTable/facet-filters';
+import { type DataTableSearchParams } from '@/shared/components/common/DataTable/types';
+import { useServerTableView } from '@/shared/components/common/DataTable/useServerTableView';
 import { unwrapExportResult } from '@/shared/lib/export-result';
 import {
   conditionLabels,
@@ -34,7 +31,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { Check, Plus, X } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback } from 'react';
 import { conditionIcons } from '../../../lib/condition-config';
 import {
   getAllVehiclesForExport,
@@ -57,7 +54,77 @@ interface Props {
   initialFilterVisibility: Record<string, boolean>;
 }
 
+// ============================================================================
+// FILTROS
+// ============================================================================
+
+const facets = createFacetFilters(getVehicleSingleFacet);
+const NULL_OPTION = { label: 'Sin asignar' };
+
+// Filtros visibles por defecto: solo los 3 más comunes (condición, tipo, afectación).
+// El resto existe pero oculto — el usuario lo activa con el toggle de filtros.
 const DEFAULT_VISIBLE_FILTERS = ['condition', 'type', 'contractor_equipment'];
+
+const FACETED_FILTERS = [
+  facets.fixed(
+    'condition',
+    'Condición',
+    enumFilterOptions(
+      Object.values(condition_enum),
+      conditionLabels,
+      conditionIcons as Record<string, LucideIcon | undefined>
+    ),
+    NULL_OPTION
+  ),
+  facets.fixed(
+    'status',
+    'Estado',
+    enumFilterOptions(Object.values(status_type), otherEquipmentStatusLabels),
+    NULL_OPTION
+  ),
+  facets.lookup('type', 'Tipo', undefined, NULL_OPTION),
+  facets.lookup('sub_type', 'Subtipo', undefined, NULL_OPTION),
+  facets.lookup('brand', 'Marca', undefined, NULL_OPTION),
+  facets.lookup('model', 'Modelo', undefined, NULL_OPTION),
+  facets.lookup('owner', 'Propietario', undefined, NULL_OPTION),
+  facets.lookup('sector', 'Sector', undefined, NULL_OPTION),
+  facets.lookup('cost_center', 'Centro de costo', undefined, NULL_OPTION),
+  facets.lookup('contractor_equipment', 'Afectaciones', undefined, { label: 'Sin afectar' }),
+  facets.fixed(
+    'type_of_contract',
+    'Tipo de contrato',
+    enumFilterOptions(Object.values(contract_type_vehicles_enum), contractTypeVehiclesLabels),
+    NULL_OPTION
+  ),
+  facets.fixed(
+    'cost_type',
+    'Tipo de costo',
+    enumFilterOptions(Object.values(cost_type_enum), costTypeLabels),
+    NULL_OPTION
+  ),
+  facets.fixed('currency', 'Moneda', enumFilterOptions(Object.values(currency_enum), currencyLabels), NULL_OPTION),
+  facets.fixed('has_certification', 'Posee certificación', [
+    { value: 'true', label: 'Sí', icon: Check },
+    { value: 'false', label: 'No', icon: X },
+  ]),
+  textFilter('domain', 'Dominio', 'Buscar por dominio...'),
+  textFilter('chassis', 'Chassis', 'Buscar por chassis...'),
+  textFilter('engine', 'Motor', 'Buscar por motor...'),
+  textFilter('serie', 'Serie', 'Buscar por serie...'),
+  textFilter('intern_number', 'N° Interno', 'Buscar por N° Interno...'),
+  textFilter('contract_number', 'N° Contrato', 'Buscar por N° de contrato...'),
+  textFilter('year', 'Año', 'Buscar por año...'),
+  textFilter('kilometer', 'Kilómetros', 'Buscar por kilómetros...'),
+  textFilter('engine_hours', 'Horómetro', 'Buscar por horómetro...'),
+  textFilter('price', 'Precio', 'Buscar por precio...'),
+  textFilter('checklist_count', 'Cantidad de Checklist', 'Ej: 0 = sin checklist...'),
+  textFilter('certification_number', 'N° de certificación', 'Buscar por N° de certificación...'),
+  dateRangeFilter('contract_expiration_date', 'Vencimiento contrato'),
+  dateRangeFilter('contract_start_date', 'Inicio contrato'),
+  dateRangeFilter('created_at', 'Creado'),
+  dateRangeFilter('last_checklist_date', 'Último Checklist'),
+  dateRangeFilter('certification_expiration_date', 'Vencimiento de certificación'),
+];
 
 // ============================================================================
 // CLIENT COMPONENT
@@ -71,281 +138,17 @@ export function _VehicleDataTable({
   initialColumnVisibility,
   initialFilterVisibility,
 }: Props) {
-  // ─── Client-side navigation mode ─────────────────────────────────────────
-  const [currentParams, setCurrentParams] = useState<DataTableSearchParams>(searchParams);
-
-  const handleStateChange = useCallback((params: DataTableSearchParams) => {
-    setCurrentParams(params);
-  }, []);
+  const { currentParams, tableProps } = useServerTableView({
+    searchParams,
+    tableId,
+    hiddenColumnsByDefault: HIDDEN_COLUMNS_BY_DEFAULT,
+    defaultVisibleFilters: DEFAULT_VISIBLE_FILTERS,
+    facetedFilters: FACETED_FILTERS,
+    initialColumnVisibility,
+    savedFilterVisibility: initialFilterVisibility,
+  });
 
   const tableQueryFn = useCallback((params: DataTableSearchParams) => getVehiclesPaginated(params), []);
-
-  // ─── Lazy-load facet factories ────────────────────────────────────────────
-
-  const makeFkFetchFacet = useCallback(
-    (columnId: string, nullLabel?: string) =>
-      async (params: DataTableSearchParams): Promise<FacetResult> => {
-        const result = await getVehicleSingleFacet(columnId, params);
-        if (!result) return { options: [], counts: new Map() };
-        return buildFkFacetResult(result.resolvedOptions, result.counts, nullLabel);
-      },
-    []
-  );
-
-  const makeEnumFetchFacet = useCallback(
-    (
-      columnId: string,
-      enumValues: string[],
-      labels: Record<string, string>,
-      icons?: Record<string, LucideIcon | undefined>
-    ) =>
-      async (params: DataTableSearchParams): Promise<FacetResult> => {
-        const result = await getVehicleSingleFacet(columnId, params);
-        if (!result) return { options: [], counts: new Map() };
-        return buildEnumFacetResult(enumValues, labels, result.counts, icons);
-      },
-    []
-  );
-
-  const makeBooleanFetchFacet = useCallback(
-    (columnId: string, trueLabel: string, falseLabel: string, trueIcon: LucideIcon, falseIcon: LucideIcon) =>
-      async (params: DataTableSearchParams): Promise<FacetResult> => {
-        const result = await getVehicleSingleFacet(columnId, params);
-        if (!result) return { options: [], counts: new Map() };
-        return buildBooleanFacetResult(trueLabel, falseLabel, trueIcon, falseIcon, result.counts);
-      },
-    []
-  );
-
-  // Columnas ocultas por defecto (unir preferencias guardadas con las del sistema)
-  const mergedColumnVisibility = useMemo(() => {
-    const defaults = Object.fromEntries(HIDDEN_COLUMNS_BY_DEFAULT.map((col) => [col, false]));
-    return { ...defaults, ...initialColumnVisibility };
-  }, [initialColumnVisibility]);
-
-  // ─── Filtros facetados — lazy-load con fetchFacet ─────────────────────────
-  const facetedFilters: DataTableFacetedFilterConfig[] = useMemo(
-    () => [
-      // condition (enum nullable) — con iconos que coinciden con las celdas
-      {
-        columnId: 'condition',
-        title: 'Condición',
-        fetchFacet: makeEnumFetchFacet(
-          'condition',
-          Object.values(condition_enum),
-          conditionLabels,
-          conditionIcons as Record<string, LucideIcon | undefined>
-        ),
-      },
-
-      // status (enum nullable)
-      {
-        columnId: 'status',
-        title: 'Estado',
-        fetchFacet: makeEnumFetchFacet('status', Object.values(status_type), otherEquipmentStatusLabels),
-      },
-
-      // type (FK UUID nullable)
-      {
-        columnId: 'type',
-        title: 'Tipo',
-        fetchFacet: makeFkFetchFacet('type'),
-      },
-
-      // sub_type (FK UUID nullable)
-      {
-        columnId: 'sub_type',
-        title: 'Subtipo',
-        fetchFacet: makeFkFetchFacet('sub_type'),
-      },
-
-      // brand (FK BigInt nullable)
-      {
-        columnId: 'brand',
-        title: 'Marca',
-        fetchFacet: makeFkFetchFacet('brand'),
-      },
-
-      // model (FK BigInt nullable)
-      {
-        columnId: 'model',
-        title: 'Modelo',
-        fetchFacet: makeFkFetchFacet('model'),
-      },
-
-      // owner (FK UUID nullable)
-      {
-        columnId: 'owner',
-        title: 'Propietario',
-        fetchFacet: makeFkFetchFacet('owner'),
-      },
-
-      // sector (FK UUID nullable → hierarchy)
-      {
-        columnId: 'sector',
-        title: 'Sector',
-        fetchFacet: makeFkFetchFacet('sector'),
-      },
-
-      // cost_center (FK UUID nullable)
-      {
-        columnId: 'cost_center',
-        title: 'Centro de costo',
-        fetchFacet: makeFkFetchFacet('cost_center'),
-      },
-
-      // contractor_equipment (M:M → customers)
-      {
-        columnId: 'contractor_equipment',
-        title: 'Afectaciones',
-        fetchFacet: makeFkFetchFacet('contractor_equipment', 'Sin afectar'),
-      },
-
-      // type_of_contract (enum nullable)
-      {
-        columnId: 'type_of_contract',
-        title: 'Tipo de contrato',
-        fetchFacet: makeEnumFetchFacet(
-          'type_of_contract',
-          Object.values(contract_type_vehicles_enum),
-          contractTypeVehiclesLabels
-        ),
-      },
-
-      // cost_type (enum nullable)
-      {
-        columnId: 'cost_type',
-        title: 'Tipo de costo',
-        fetchFacet: makeEnumFetchFacet('cost_type', Object.values(cost_type_enum), costTypeLabels),
-      },
-
-      // currency (enum nullable)
-      {
-        columnId: 'currency',
-        title: 'Moneda',
-        fetchFacet: makeEnumFetchFacet('currency', Object.values(currency_enum), currencyLabels),
-      },
-
-      // has_certification (boolean)
-      {
-        columnId: 'has_certification',
-        title: 'Posee certificación',
-        fetchFacet: makeBooleanFetchFacet('has_certification', 'Sí', 'No', Check, X),
-      },
-
-      // Filtros de texto libre por columna
-      {
-        columnId: 'domain',
-        title: 'Dominio',
-        type: 'text' as const,
-        placeholder: 'Buscar por dominio...',
-      },
-      {
-        columnId: 'chassis',
-        title: 'Chassis',
-        type: 'text' as const,
-        placeholder: 'Buscar por chassis...',
-      },
-      {
-        columnId: 'engine',
-        title: 'Motor',
-        type: 'text' as const,
-        placeholder: 'Buscar por motor...',
-      },
-      {
-        columnId: 'serie',
-        title: 'Serie',
-        type: 'text' as const,
-        placeholder: 'Buscar por serie...',
-      },
-      {
-        columnId: 'intern_number',
-        title: 'N° Interno',
-        type: 'text' as const,
-        placeholder: 'Buscar por N° Interno...',
-      },
-      {
-        columnId: 'contract_number',
-        title: 'N° Contrato',
-        type: 'text' as const,
-        placeholder: 'Buscar por N° de contrato...',
-      },
-      {
-        columnId: 'year',
-        title: 'Año',
-        type: 'text' as const,
-        placeholder: 'Buscar por año...',
-      },
-      {
-        columnId: 'kilometer',
-        title: 'Kilómetros',
-        type: 'text' as const,
-        placeholder: 'Buscar por kilómetros...',
-      },
-      {
-        columnId: 'engine_hours',
-        title: 'Horómetro',
-        type: 'text' as const,
-        placeholder: 'Buscar por horómetro...',
-      },
-      {
-        columnId: 'price',
-        title: 'Precio',
-        type: 'text' as const,
-        placeholder: 'Buscar por precio...',
-      },
-      {
-        columnId: 'checklist_count',
-        title: 'Cantidad de Checklist',
-        type: 'text' as const,
-        placeholder: 'Ej: 0 = sin checklist...',
-      },
-      {
-        columnId: 'certification_number',
-        title: 'N° de certificación',
-        type: 'text' as const,
-        placeholder: 'Buscar por N° de certificación...',
-      },
-
-      // Filtros de rango de fechas
-      {
-        columnId: 'contract_expiration_date',
-        title: 'Vencimiento contrato',
-        type: 'dateRange' as const,
-      },
-      {
-        columnId: 'contract_start_date',
-        title: 'Inicio contrato',
-        type: 'dateRange' as const,
-      },
-      {
-        columnId: 'created_at',
-        title: 'Creado',
-        type: 'dateRange' as const,
-      },
-      {
-        columnId: 'last_checklist_date',
-        title: 'Último Checklist',
-        type: 'dateRange' as const,
-      },
-      {
-        columnId: 'certification_expiration_date',
-        title: 'Vencimiento de certificación',
-        type: 'dateRange' as const,
-      },
-    ],
-    [makeFkFetchFacet, makeEnumFetchFacet, makeBooleanFetchFacet]
-  );
-
-  // Filtros visibles por defecto: solo los 3 más comunes (condición, tipo, afectación).
-  // El resto existe pero oculto — el usuario lo activa con el toggle de filtros.
-  const mergedFilterVisibility = useMemo(() => {
-    // Si el usuario ya tiene preferencias guardadas, usarlas
-    if (initialFilterVisibility && Object.keys(initialFilterVisibility).length > 0) {
-      return initialFilterVisibility;
-    }
-    return Object.fromEntries(facetedFilters.map((f) => [f.columnId, DEFAULT_VISIBLE_FILTERS.includes(f.columnId)]));
-  }, [initialFilterVisibility, facetedFilters]);
 
   // ─── Botón "Nuevo vehículo" protegido por permisos ────────────────────────
   const toolbarActions = (
@@ -362,22 +165,15 @@ export function _VehicleDataTable({
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <DataTable
+      {...tableProps}
       columns={columns}
       data={data}
       totalRows={totalRows}
-      searchParams={searchParams}
       queryFn={tableQueryFn}
       queryKey={['vehicles-list']}
-      onStateChange={handleStateChange}
       searchPlaceholder="Buscar por dominio, interno, chasis o motor"
       showSearch
       mobileCards
-      facetedFilters={facetedFilters}
-      initialColumnVisibility={mergedColumnVisibility}
-      initialFilterVisibility={mergedFilterVisibility}
-      tableId={tableId}
-      paramNamespace={tableId}
-      showFilterToggle={true}
       toolbarActions={toolbarActions}
       emptyMessage="No hay vehículos registrados"
       data-testid="vehicles-table"
