@@ -54,14 +54,10 @@ export function DataTableDateRangeFilter({ columnId, title, paramNamespace }: Da
 
   const hasValue = !!(fromValue || toValue);
 
-  const updateParam = (key: string, value: string | null) => {
+  /** Aplica `mutate` a los parámetros de la URL, vuelve a la página 1 y actualiza la ruta. */
+  const updateParams = (mutate: (params: URLSearchParams) => void) => {
     const params = new URLSearchParams(isClientSide ? window.location.search : searchParams.toString());
-
-    if (value) {
-      params.set(key, value);
-    } else {
-      params.delete(key);
-    }
+    mutate(params);
     params.set(pageKey, '1');
 
     if (isClientSide) {
@@ -74,20 +70,21 @@ export function DataTableDateRangeFilter({ columnId, title, paramNamespace }: Da
     }
   };
 
-  const clearFilter = () => {
-    const params = new URLSearchParams(isClientSide ? window.location.search : searchParams.toString());
-    params.delete(fromKey);
-    params.delete(toKey);
-    params.set(pageKey, '1');
+  const updateParam = (key: string, value: string | null) => {
+    updateParams((params) => {
+      if (value) {
+        params.set(key, value);
+      } else {
+        params.delete(key);
+      }
+    });
+  };
 
-    if (isClientSide) {
-      window.history.replaceState(window.history.state, '', `${pathname}?${params.toString()}`);
-      notifyUrlChange();
-    } else {
-      startTransition(() => {
-        router.replace(`${pathname}?${params.toString()}`);
-      });
-    }
+  const clearFilter = () => {
+    updateParams((params) => {
+      params.delete(fromKey);
+      params.delete(toKey);
+    });
   };
 
   return (

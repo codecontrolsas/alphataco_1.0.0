@@ -1,5 +1,5 @@
-import 'server-only';
 import { Logger } from '@/lib/logger';
+import 'server-only';
 import { TaskAppError } from './errors';
 import type {
   Comment,
@@ -25,21 +25,11 @@ function apiKey(): string {
   return key;
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const url = `${baseURL()}/api/public/v1${path}`;
-  const key = apiKey();
-
+/** `fetch` contra TaskApp: errores de red y respuestas no exitosas se convierten en `TaskAppError`. */
+async function fetchOrThrow(url: string, init: RequestInit): Promise<Response> {
   let res: Response;
   try {
-    res = await fetch(url, {
-      ...init,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Project-Key': key,
-        ...init.headers,
-      },
-      cache: 'no-store',
-    });
+    res = await fetch(url, { ...init, cache: 'no-store' });
   } catch (error) {
     if (error instanceof TaskAppError) throw error;
     logger.error('taskApp network error', { data: { url, error } });
@@ -52,12 +42,31 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new TaskAppError(res.status, 'http', body || res.statusText);
   }
 
+  return res;
+}
+
+async function readJson<T>(res: Response, url: string): Promise<T> {
   try {
     return (await res.json()) as T;
   } catch (error) {
     logger.error('taskApp invalid JSON', { data: { url, error } });
     throw new TaskAppError(res.status, 'parse', 'invalid JSON');
   }
+}
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const url = `${baseURL()}/api/public/v1${path}`;
+  const key = apiKey();
+
+  const res = await fetchOrThrow(url, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Project-Key': key,
+      ...init.headers,
+    },
+  });
+  return readJson<T>(res, url);
 }
 
 export interface PagedTickets {
@@ -91,36 +100,17 @@ async function requestPaged(path: string): Promise<PagedTickets> {
   const url = `${baseURL()}/api/public/v1${path}`;
   const key = apiKey();
 
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      headers: { 'Content-Type': 'application/json', 'X-Project-Key': key },
-      cache: 'no-store',
-    });
-  } catch (error) {
-    if (error instanceof TaskAppError) throw error;
-    logger.error('taskApp network error', { data: { url, error } });
-    throw new TaskAppError(0, 'network', error instanceof Error ? error.message : 'network error');
-  }
-
-  if (!res.ok) {
-    const body = await res.text();
-    logger.error('taskApp request failed', { data: { url, status: res.status, body } });
-    throw new TaskAppError(res.status, 'http', body || res.statusText);
-  }
-
-  let tickets: Ticket[];
-  try {
-    tickets = (await res.json()) as Ticket[];
-  } catch (error) {
-    logger.error('taskApp invalid JSON', { data: { url, error } });
-    throw new TaskAppError(res.status, 'parse', 'invalid JSON');
-  }
+  const res = await fetchOrThrow(url, { headers: { 'Content-Type': 'application/json', 'X-Project-Key': key } });
+  const tickets = await readJson<Ticket[]>(res, url);
 
   // Backends viejos no mandan los headers: degradamos al length de la página.
   const total = Number(res.headers.get('X-Total-Count') ?? tickets.length);
   const completed = Number(res.headers.get('X-Completed-Count') ?? 0);
-  return { tickets, total: Number.isFinite(total) ? total : tickets.length, completed: Number.isFinite(completed) ? completed : 0 };
+  return {
+    tickets,
+    total: Number.isFinite(total) ? total : tickets.length,
+    completed: Number.isFinite(completed) ? completed : 0,
+  };
 }
 
 async function requestMultipart<T>(path: string, formData: FormData): Promise<T> {
@@ -169,11 +159,9 @@ export const taskAppClient = {
   listTicketsForApprover: (approverEmail: string, opts?: PageOpts) =>
     requestPaged(`/tickets/for-approver?approver_email=${encodeURIComponent(approverEmail)}${pageQuery(opts)}`),
 
-  getTicketById: (id: number) =>
-    request<Ticket>(`/tickets/${id}`),
+  getTicketById: (id: number) => request<Ticket>(`/tickets/${id}`),
 
-  listComments: (ticketId: number) =>
-    request<Comment[]>(`/tickets/${ticketId}/comments`),
+  listComments: (ticketId: number) => request<Comment[]>(`/tickets/${ticketId}/comments`),
 
   createComment: (ticketId: number, body: CreateCommentRequest) =>
     request<Comment>(`/tickets/${ticketId}/comments`, {
@@ -221,15 +209,9 @@ export const taskAppClient = {
   // Recorrido del ticket, ya filtrado a los hitos que el cliente puede ver.
   // Se pide aparte del ticket porque la tarjeta sólo lo muestra al abrirla:
   // traerlo en el listado sería una consulta de eventos por fila.
-  getTicketTimeline: (ticketId: number) =>
-    request<TicketTimeline>(`/tickets/${ticketId}/timeline`),
+  getTicketTimeline: (ticketId: number) => request<TicketTimeline>(`/tickets/${ticketId}/timeline`),
 
-  requestTicketReopen: (
-    ticketId: number,
-    reporterEmail: string,
-    reason: string,
-    attachmentKeys: string[]
-  ) =>
+  requestTicketReopen: (ticketId: number, reporterEmail: string, reason: string, attachmentKeys: string[]) =>
     request<Ticket>(`/tickets/${ticketId}/request-reopen`, {
       method: 'POST',
       body: JSON.stringify({
@@ -242,10 +224,7 @@ export const taskAppClient = {
   uploadFile: (file: File, ticketId?: number) => {
     const formData = new FormData();
     formData.append('file', file);
-    const path =
-      ticketId != null
-        ? `/api/public/v1/upload?ticket_id=${ticketId}`
-        : '/api/public/v1/upload';
+    const path = ticketId != null ? `/api/public/v1/upload?ticket_id=${ticketId}` : '/api/public/v1/upload';
     return requestMultipart<UploadResult>(path, formData);
   },
 };
